@@ -14,7 +14,6 @@ export type {
   ActionOk,
   ContractOf,
   EmptyInput,
-  EndpointDsl,
   ErrorEnvelope,
   Prettify,
   QueryRow,

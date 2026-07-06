@@ -5,5 +5,5 @@ export type { MetricsBoundary, MetricsModuleConfig, MetricsPayload } from "./met
 export { createReadinessProbe } from "./readiness-probe.ts";
 export type { CriticalCollection, MigrationStatus, ReadinessProbeConfig } from "./readiness-probe.ts";
 export { SchedulerModule } from "./scheduler-module.ts";
-export type { SchedulerModuleConfig } from "./scheduler-module.ts";
+export type { ScheduledJob, SchedulerLogger } from "./scheduler-module.ts";
 export type { InfraModule, InfraResponse, InfraRoute, JobStatus } from "./types.ts";
