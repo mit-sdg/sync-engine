@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { Lifecycle, type Stoppable } from "@sync-engine/runtime/lifecycle.ts";
 
 describe("Lifecycle", () => {

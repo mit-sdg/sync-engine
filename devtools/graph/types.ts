@@ -18,9 +18,7 @@
  */
 export interface RequestBoundary {
   /** The boundary concept's class (e.g. the app's `RequestingConcept`). */
-  conceptClass: new (
-    ...args: never[]
-  ) => object;
+  conceptClass: new (...args: never[]) => object;
   /** Action that anchors an endpoint on a sync's `when` side (e.g. `"request"`). */
   entryAction: string;
   /** Terminal response action on a sync's `then` side (e.g. `"respond"`). */
@@ -232,8 +230,5 @@ export interface DiagnosticPlugin {
   /** Unique name for this plugin. */
   name: string;
   /** Produce findings from the graph and reachability results. */
-  detect(
-    graph: SyncGraph,
-    reachability: EndpointReachability[],
-  ): DiagnosticFinding[];
+  detect(graph: SyncGraph, reachability: EndpointReachability[]): DiagnosticFinding[];
 }

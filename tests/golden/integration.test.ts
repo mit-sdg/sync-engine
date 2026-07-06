@@ -6,7 +6,7 @@
  * automatically audited by declarative synchronization rules.
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { Logging, SyncConcept } from "@sync-engine/engine";
 import { AuditConcept, TodoConcept } from "./concepts";
 import { makeTodoSyncs } from "./syncs";
@@ -99,12 +99,7 @@ describe("golden: todo app", () => {
     expect(Audit.log).toHaveLength(4);
 
     const events = Audit.log.map((e) => e.event);
-    expect(events).toEqual([
-      "TODO_CREATED",
-      "TODO_CREATED",
-      "TODO_COMPLETED",
-      "TODO_DELETED",
-    ]);
+    expect(events).toEqual(["TODO_CREATED", "TODO_CREATED", "TODO_COMPLETED", "TODO_DELETED"]);
 
     // Queries return current state
     const pending = Todo._getPending({});

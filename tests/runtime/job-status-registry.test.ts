@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import type { JobStatus } from "@sync-engine/infra/types.ts";
 import { JobStatusRegistry } from "@sync-engine/runtime/job-status-registry.ts";
 

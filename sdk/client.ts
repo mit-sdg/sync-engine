@@ -92,10 +92,7 @@ export type IndexedClient<C extends ContractShape> = {
 /** The grouped surface: `client.auth.login(input)`. */
 export type GroupedClient<C extends ContractShape> = {
   [G in Group<keyof C & string>]: {
-    [P in keyof C & string as Group<P> extends G ? Method<P> : never]: Endpoint<
-      C,
-      P
-    >;
+    [P in keyof C & string as Group<P> extends G ? Method<P> : never]: Endpoint<C, P>;
   };
 };
 
@@ -104,8 +101,7 @@ export type GroupedClient<C extends ContractShape> = {
  * the contract paths (`/group/method`) cleanly split into a flat index and a
  * two-level grouping.
  */
-export type Client<C extends ContractShape> = IndexedClient<C> &
-  GroupedClient<C>;
+export type Client<C extends ContractShape> = IndexedClient<C> & GroupedClient<C>;
 
 const FALLBACK_BASE_URL = "/api";
 
@@ -123,11 +119,7 @@ function configuredBaseUrl(): string | undefined {
 }
 
 function resolveBaseUrl(baseUrl: string | undefined): string {
-  return (
-    cleanBaseUrl(baseUrl) ??
-    configuredBaseUrl() ??
-    FALLBACK_BASE_URL
-  ).replace(/\/$/, "");
+  return (cleanBaseUrl(baseUrl) ?? configuredBaseUrl() ?? FALLBACK_BASE_URL).replace(/\/$/, "");
 }
 
 /**
@@ -156,9 +148,7 @@ async function request(
   let extraHeaders: Record<string, string> = {};
   try {
     extraHeaders =
-      typeof headersOption === "function"
-        ? await headersOption()
-        : (headersOption ?? {});
+      typeof headersOption === "function" ? await headersOption() : (headersOption ?? {});
   } catch (e) {
     return {
       error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED,
@@ -195,10 +185,7 @@ async function request(
   // Pass the body through when it is already a usable object (success payload
   // or the backend's own `{ error }` envelope). Only synthesize an error when a
   // non-2xx response carried nothing actionable.
-  if (
-    !response.ok &&
-    (typeof data !== "object" || data === null || !("error" in data))
-  ) {
+  if (!response.ok && (typeof data !== "object" || data === null || !("error" in data))) {
     return {
       error: FrameworkErrorCode.BAD_STATUS,
       detail: `Request to ${path} failed with status ${response.status}.`,
@@ -244,9 +231,7 @@ function makeProxy(
  * Callers pass their app contract type explicitly, e.g.
  * `createClient<EdumenApi>()`.
  */
-export function createClient<C extends ContractShape>(
-  options: ClientOptions = {},
-): Client<C> {
+export function createClient<C extends ContractShape>(options: ClientOptions = {}): Client<C> {
   const baseUrl = resolveBaseUrl(options.baseUrl);
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const credentials = options.credentials;

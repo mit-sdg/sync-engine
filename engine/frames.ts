@@ -29,10 +29,7 @@ export interface Frames<TFrame extends Frame = Frame> {
     callbackfn: (value: TFrame, index: number, array: TFrame[]) => U,
     thisArg?: unknown,
   ): Frames<U>;
-  map<U>(
-    callbackfn: (value: TFrame, index: number, array: TFrame[]) => U,
-    thisArg?: unknown,
-  ): U[];
+  map<U>(callbackfn: (value: TFrame, index: number, array: TFrame[]) => U, thisArg?: unknown): U[];
   filter<S extends TFrame>(
     predicate: (value: TFrame, index: number, array: TFrame[]) => value is S,
     thisArg?: unknown,
@@ -43,19 +40,11 @@ export interface Frames<TFrame extends Frame = Frame> {
   ): this;
 
   flatMap<U extends Frame>(
-    callback: (
-      value: TFrame,
-      index: number,
-      array: TFrame[],
-    ) => U | ReadonlyArray<U>,
+    callback: (value: TFrame, index: number, array: TFrame[]) => U | ReadonlyArray<U>,
     thisArg?: unknown,
   ): Frames<U>;
   flatMap<U>(
-    callback: (
-      value: TFrame,
-      index: number,
-      array: TFrame[],
-    ) => U | ReadonlyArray<U>,
+    callback: (value: TFrame, index: number, array: TFrame[]) => U | ReadonlyArray<U>,
     thisArg?: unknown,
   ): U[];
 
@@ -91,9 +80,7 @@ export interface Frames<TFrame extends Frame = Frame> {
   guard<S extends TFrame>(
     predicate: (value: TFrame, index: number, array: TFrame[]) => value is S,
   ): Frames<S>;
-  guard(
-    predicate: (value: TFrame, index: number, array: TFrame[]) => unknown,
-  ): this;
+  guard(predicate: (value: TFrame, index: number, array: TFrame[]) => unknown): this;
 
   /** Run a side effect for each frame and pass the frames through unchanged. */
   tap(effect: (frame: TFrame) => void): this;
@@ -103,9 +90,7 @@ export interface Frames<TFrame extends Frame = Frame> {
    * Calls `fn` for each frame in parallel; the string keys of each result
    * become new symbol bindings on the corresponding frame.
    */
-  enrich(
-    fn: (frame: TFrame) => Promise<Record<string, unknown>>,
-  ): Promise<Frames>;
+  enrich(fn: (frame: TFrame) => Promise<Record<string, unknown>>): Promise<Frames>;
 
   /**
    * Inner join: fan each frame over a query result, dropping frames
@@ -116,8 +101,7 @@ export interface Frames<TFrame extends Frame = Frame> {
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
     TFunctionOutput = ReturnType<TFunction> extends (infer U)[] ? U : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
   >(
     queryFn: TFunction,
     input: TInputMapping,
@@ -127,11 +111,8 @@ export interface Frames<TFrame extends Frame = Frame> {
     TFunction extends (...args: never[]) => Promise<unknown[]>,
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
-    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[]
-      ? U
-      : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[] ? U : never,
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
   >(
     queryFn: TFunction,
     input: TInputMapping,
@@ -147,8 +128,7 @@ export interface Frames<TFrame extends Frame = Frame> {
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
     TFunctionOutput = ReturnType<TFunction> extends (infer U)[] ? U : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
   >(
     queryFn: TFunction,
     input: TInputMapping,
@@ -158,11 +138,8 @@ export interface Frames<TFrame extends Frame = Frame> {
     TFunction extends (...args: never[]) => Promise<unknown[]>,
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
-    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[]
-      ? U
-      : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[] ? U : never,
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
   >(
     queryFn: TFunction,
     input: TInputMapping,
@@ -253,12 +230,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     for (const row of rows) {
       const newFrame: Record<symbol, unknown> = { ...frame };
       for (const [outputKey, symbolKey] of Object.entries(output)) {
-        if (
-          typeof symbolKey === "symbol" &&
-          row &&
-          typeof row === "object" &&
-          outputKey in row
-        ) {
+        if (typeof symbolKey === "symbol" && row && typeof row === "object" && outputKey in row) {
           newFrame[symbolKey] = (row as Record<string, unknown>)[outputKey];
         }
       }
@@ -290,27 +262,15 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
     TFunctionOutput = ReturnType<TFunction> extends (infer U)[] ? U : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
-  >(
-    f: TFunction,
-    input: TInputMapping,
-    output: TOutputMapping,
-  ): Frames<TNewFrame>;
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+  >(f: TFunction, input: TInputMapping, output: TOutputMapping): Frames<TNewFrame>;
   query<
     TFunction extends (...args: never[]) => Promise<unknown[]>,
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
-    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[]
-      ? U
-      : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
-  >(
-    f: TFunction,
-    input: TInputMapping,
-    output: TOutputMapping,
-  ): Promise<Frames<TNewFrame>>;
+    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[] ? U : never,
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+  >(f: TFunction, input: TInputMapping, output: TOutputMapping): Promise<Frames<TNewFrame>>;
   /**
    * Fan each frame out over the rows returned by `f`.
    *
@@ -331,9 +291,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
       const boundInput = Frames.bindInput(frame, input);
       const rows = f(boundInput as never);
       if (rows instanceof Promise) {
-        promises.push(
-          rows.then((arr) => Frames.expandOutputs(result, frame, arr, output)),
-        );
+        promises.push(rows.then((arr) => Frames.expandOutputs(result, frame, arr, output)));
       } else {
         Frames.expandOutputs(result, frame, rows, output);
       }
@@ -353,16 +311,9 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     TFunction extends (...args: never[]) => Promise<unknown[]>,
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
-    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[]
-      ? U
-      : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
-  >(
-    f: TFunction,
-    input: TInputMapping,
-    output: TOutputMapping,
-  ): Promise<Frames<TNewFrame>> {
+    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[] ? U : never,
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+  >(f: TFunction, input: TInputMapping, output: TOutputMapping): Promise<Frames<TNewFrame>> {
     const result = new Frames<TNewFrame>();
     for (const frame of this) {
       const boundInput = Frames.bindInput(frame, input);
@@ -378,27 +329,15 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
     TFunctionOutput = ReturnType<TFunction> extends (infer U)[] ? U : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
-  >(
-    f: TFunction,
-    input: TInputMapping,
-    output: TOutputMapping,
-  ): Frames<TNewFrame>;
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+  >(f: TFunction, input: TInputMapping, output: TOutputMapping): Frames<TNewFrame>;
   queryOptional<
     TFunction extends (...args: never[]) => Promise<unknown[]>,
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
-    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[]
-      ? U
-      : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
-  >(
-    f: TFunction,
-    input: TInputMapping,
-    output: TOutputMapping,
-  ): Promise<Frames<TNewFrame>>;
+    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[] ? U : never,
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+  >(f: TFunction, input: TInputMapping, output: TOutputMapping): Promise<Frames<TNewFrame>>;
   /**
    * Fan each frame out over the rows returned by `f`, or preserve the source
    * frame when `f` returns zero rows (left-join semantics).
@@ -420,11 +359,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
       const boundInput = Frames.bindInput(frame, input);
       const rows = f(boundInput as never);
       if (rows instanceof Promise) {
-        promises.push(
-          rows.then((arr) =>
-            Frames.expandOptionalOutputs(result, frame, arr, output),
-          ),
-        );
+        promises.push(rows.then((arr) => Frames.expandOptionalOutputs(result, frame, arr, output)));
       } else {
         Frames.expandOptionalOutputs(result, frame, rows, output);
       }
@@ -445,16 +380,9 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     TFunction extends (...args: never[]) => Promise<unknown[]>,
     TInputMapping extends Record<string, unknown>,
     TOutputMapping extends Record<string, symbol>,
-    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[]
-      ? U
-      : never,
-    TNewFrame extends Frame = TFrame &
-      ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
-  >(
-    f: TFunction,
-    input: TInputMapping,
-    output: TOutputMapping,
-  ): Promise<Frames<TNewFrame>> {
+    TFunctionOutput = Awaited<ReturnType<TFunction>> extends (infer U)[] ? U : never,
+    TNewFrame extends Frame = TFrame & ExtractSymbolMappings<TOutputMapping, TFunctionOutput>,
+  >(f: TFunction, input: TInputMapping, output: TOutputMapping): Promise<Frames<TNewFrame>> {
     const result = new Frames<TNewFrame>();
     for (const frame of this) {
       const boundInput = Frames.bindInput(frame, input);
@@ -475,14 +403,8 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
    * allows {@link queryOptional} to preserve parent rows that later flow
    * through `collectAs` without introducing phantom collected entries.
    */
-  collectAs<TAsSymbol extends symbol>(
-    collect: symbol[],
-    as: TAsSymbol,
-  ): Frames {
-    const groups = new Map<
-      string,
-      { groupFrame: Frame; collected: Record<string, unknown>[] }
-    >();
+  collectAs<TAsSymbol extends symbol>(collect: symbol[], as: TAsSymbol): Frames {
+    const groups = new Map<string, { groupFrame: Frame; collected: Record<string, unknown>[] }>();
 
     for (const frame of this) {
       const groupKeys: Frame = {};
@@ -526,7 +448,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
   /**
    * Like {@link collectAs}, but guarantees exactly one output frame even when
    * `this` is empty — the common cause of a synchronization silently failing to
-   * fire (see `design/memories/sync-learnings.md`, "Zero Matches").
+   * fire.
    *
    * A list endpoint typically starts from a single request frame, fans out via
    * `.query` (which drops the frame when a query returns nothing), then collects
@@ -558,9 +480,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
   ): Frames {
     const result = new Frames();
     const fn =
-      typeof valueOrFn === "function"
-        ? (valueOrFn as (frame: TFrame) => unknown)
-        : undefined;
+      typeof valueOrFn === "function" ? (valueOrFn as (frame: TFrame) => unknown) : undefined;
     for (const frame of this) {
       result.push({
         ...frame,
@@ -574,9 +494,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
    * Filter frames by a predicate — delegates to `this.filter`.
    * Provided as a named convenience for readability in `where` clauses.
    */
-  guard(
-    predicate: (value: TFrame, index: number, array: TFrame[]) => unknown,
-  ): this {
+  guard(predicate: (value: TFrame, index: number, array: TFrame[]) => unknown): this {
     // SAFETY: `this.filter` returns `Frames<TFrame>` (re-wrapped by the Proxy).
     // The cast to `this` is required because TypeScript cannot prove that a
     // polymorphic `this` type (which may be a narrower subclass of Frames) is
@@ -602,9 +520,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
    * converted to symbols via `Symbol.for` so they are consistently accessible
    * across frames.
    */
-  async enrich(
-    fn: (frame: TFrame) => Promise<Record<string, unknown>>,
-  ): Promise<Frames> {
+  async enrich(fn: (frame: TFrame) => Promise<Record<string, unknown>>): Promise<Frames> {
     const frames = [...this];
     const enriched = await Promise.all(
       frames.map(async (frame) => {
@@ -628,11 +544,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     input: Record<string, unknown>,
     output: Record<string, symbol>,
   ): Frames | Promise<Frames> {
-    return this.query(
-      queryFn as (...args: never[]) => unknown[],
-      input,
-      output,
-    );
+    return this.query(queryFn as (...args: never[]) => unknown[], input, output);
   }
 
   /**
@@ -644,11 +556,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     input: Record<string, unknown>,
     output: Record<string, symbol>,
   ): Frames | Promise<Frames> {
-    return this.queryOptional(
-      queryFn as (...args: never[]) => unknown[],
-      input,
-      output,
-    );
+    return this.queryOptional(queryFn as (...args: never[]) => unknown[], input, output);
   }
 
   /**
@@ -658,10 +566,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
    * Frames where `key` is unbound are skipped during collection. When no frames
    * carry the key, the output frame is still emitted with an empty array.
    */
-  collectOne<TSymbol extends symbol, TKey extends symbol>(
-    symbol: TSymbol,
-    key: TKey,
-  ): Frames {
+  collectOne<TSymbol extends symbol, TKey extends symbol>(symbol: TSymbol, key: TKey): Frames {
     const collected: unknown[] = [];
     for (const frame of this) {
       const v = (frame as Record<symbol, unknown>)[key as symbol];

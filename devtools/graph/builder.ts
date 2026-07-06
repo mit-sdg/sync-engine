@@ -29,11 +29,7 @@ function classifyValue(v: unknown): BindingSource {
   if (typeof v === "symbol") {
     return { kind: "var", name: v.description ?? "" };
   }
-  if (
-    typeof v === "string" ||
-    typeof v === "number" ||
-    typeof v === "boolean"
-  ) {
+  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
     return { kind: "literal", value: String(v) };
   }
   return { kind: "expr" };
@@ -48,12 +44,10 @@ function buildActionBinding(
   input: Record<string, unknown>,
   output?: Record<string, unknown>,
 ): ActionBinding {
-  const inputBindings: PatternBinding[] = Object.entries(input).map(
-    ([key, val]) => ({
-      key,
-      source: classifyValue(val),
-    }),
-  );
+  const inputBindings: PatternBinding[] = Object.entries(input).map(([key, val]) => ({
+    key,
+    source: classifyValue(val),
+  }));
   const outputBindings: PatternBinding[] = output
     ? Object.entries(output).map(([key, val]) => ({
         key,
@@ -119,10 +113,7 @@ function mergeBindings(bindings: ActionBinding[]): ActionBinding[] {
  * Input-key inference is also performed: any keys appearing in
  * `ActionPattern.input` are collected via {@link addInputs}.
  */
-export function buildSyncGraph(
-  engine: SyncConcept,
-  boundary: RequestBoundary,
-): SyncGraph {
+export function buildSyncGraph(engine: SyncConcept, boundary: RequestBoundary): SyncGraph {
   const nodes = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
 
@@ -135,11 +126,7 @@ export function buildSyncGraph(
    * Return the existing node for `id`, or create one with the given `kind`
    * and optional `concept` name.
    */
-  function ensureNode(
-    id: string,
-    kind: GraphNode["kind"],
-    concept?: string,
-  ): GraphNode {
+  function ensureNode(id: string, kind: GraphNode["kind"], concept?: string): GraphNode {
     let node = nodes.get(id);
     if (!node) {
       node = { id, kind, concept };
@@ -205,18 +192,10 @@ export function buildSyncGraph(
       }
 
       const id = actionNodeId(pattern);
-      const node = ensureNode(
-        id,
-        "concept-action",
-        conceptNameOf(pattern.concept),
-      );
+      const node = ensureNode(id, "concept-action", conceptNameOf(pattern.concept));
       fromIds.push(node.id);
 
-      const actionBinding = buildActionBinding(
-        id,
-        pattern.input,
-        pattern.output,
-      );
+      const actionBinding = buildActionBinding(id, pattern.input, pattern.output);
       whenBindings.push(actionBinding);
       const inputKeys = Object.keys(pattern.input);
       if (inputKeys.length > 0) {
@@ -238,18 +217,10 @@ export function buildSyncGraph(
         actionNameOf(pattern.action) === boundary.exitAction;
       const id = isExitAction ? responseSinkId : actionNodeId(pattern);
 
-      const node = ensureNode(
-        id,
-        "concept-action",
-        conceptNameOf(pattern.concept),
-      );
+      const node = ensureNode(id, "concept-action", conceptNameOf(pattern.concept));
       toIds.push(node.id);
 
-      const actionBinding = buildActionBinding(
-        id,
-        pattern.input,
-        pattern.output,
-      );
+      const actionBinding = buildActionBinding(id, pattern.input, pattern.output);
       thenBindings.push(actionBinding);
       const inputKeys = Object.keys(pattern.input);
       if (inputKeys.length > 0) {

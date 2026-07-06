@@ -45,9 +45,7 @@ export class Lifecycle {
       ordered.map((s) => Promise.resolve().then(() => s.stop())),
     );
 
-    const firstFailure = results.find(
-      (r): r is PromiseRejectedResult => r.status === "rejected",
-    );
+    const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
     if (firstFailure) throw firstFailure.reason;
   }
 }

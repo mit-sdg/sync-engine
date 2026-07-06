@@ -12,11 +12,11 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "types": ["bun"],
-    "baseUrl": ".",
+    "types": ["node"],
     "paths": {
-      "@sync-engine/engine": ["./engine/mod.ts"],
+      "@sync-engine/engine": ["./engine/index.ts"],
       "@sync-engine/engine/*": ["./engine/*"],
+      "@sync-engine/sdk": ["./sdk/index.ts"],
       "@sync-engine/sdk/*": ["./sdk/*"],
       "@sync-engine/infra/*": ["./infra/*"],
       "@sync-engine/runtime/*": ["./runtime/*"],
@@ -25,13 +25,5 @@
       "@sync-engine/transport/*": ["./transport/*"]
     }
   },
-  "include": [
-    "engine",
-    "infra",
-    "runtime",
-    "sdk",
-    "devtools",
-    "utils",
-    "tests"
-  ]
+  "include": ["engine", "infra", "runtime", "sdk", "devtools", "utils", "tests"]
 }

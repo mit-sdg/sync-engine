@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { redact, serializeError } from "./redaction.ts";
 
 export { serializeError };
@@ -14,8 +13,7 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 };
 
 const MIN_LEVEL =
-  LOG_LEVELS[(process.env.LOG_LEVEL?.toLowerCase() ?? "info") as LogLevel] ??
-  LOG_LEVELS.info;
+  LOG_LEVELS[(process.env.LOG_LEVEL?.toLowerCase() ?? "info") as LogLevel] ?? LOG_LEVELS.info;
 
 const FORMAT = process.env.LOGGING_FORMAT === "pretty" ? "pretty" : "json";
 
@@ -73,7 +71,7 @@ export function formatLogEntry(entry: LogEntry): string {
 }
 
 export function generateRequestId(): string {
-  return uuidv4();
+  return crypto.randomUUID();
 }
 
 export interface Logger {
@@ -86,11 +84,7 @@ export interface Logger {
 }
 
 function createLogger(requestId?: string | null): Logger {
-  function log(
-    level: LogLevel,
-    message: string,
-    meta?: Record<string, unknown>,
-  ) {
+  function log(level: LogLevel, message: string, meta?: Record<string, unknown>) {
     if (LOG_LEVELS[level] < MIN_LEVEL) return;
 
     const redacted = redact(meta ?? {}) as Record<string, unknown>;

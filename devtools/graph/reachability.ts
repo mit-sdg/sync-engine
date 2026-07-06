@@ -53,12 +53,7 @@ export function computeReachability(graph: SyncGraph): EndpointReachability[] {
     }
 
     const respondsReachable = reachable.has(responseSinkId);
-    const longestChain = computeLongestPath(
-      endpoint.id,
-      responseSinkId,
-      outgoing,
-      reachable,
-    );
+    const longestChain = computeLongestPath(endpoint.id, responseSinkId, outgoing, reachable);
 
     results.push({
       endpoint: endpoint.id,
@@ -106,10 +101,7 @@ function buildOutgoingMap(edges: GraphEdge[]): Map<string, string[]> {
  * Returns the set of all node IDs reachable from `startId` (including
  * `startId` itself).
  */
-function bfsReachable(
-  startId: string,
-  outgoing: Map<string, string[]>,
-): Set<string> {
+function bfsReachable(startId: string, outgoing: Map<string, string[]>): Set<string> {
   const visited = new Set<string>();
   const queue: string[] = [startId];
   visited.add(startId);

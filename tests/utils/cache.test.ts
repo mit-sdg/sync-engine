@@ -1,9 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import {
-  cached,
-  DEFAULT_CACHE_MAX_SIZE,
-  DEFAULT_CACHE_TTL_MS,
-} from "@sync-engine/utils/cache.ts";
+import { describe, expect, test } from "vite-plus/test";
+import { cached, DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_TTL_MS } from "@sync-engine/utils/cache.ts";
 
 describe("cached", () => {
   test("memoizes results for identical arguments", () => {
@@ -122,7 +118,7 @@ describe("cached", () => {
     expect(calls).toBe(1);
     fn(1);
     expect(calls).toBe(1);
-    await Bun.sleep(40);
+    await new Promise((r) => setTimeout(r, 40));
     fn(1);
     expect(calls).toBe(2);
   });

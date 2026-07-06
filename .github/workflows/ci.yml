@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Lint & Type-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install dependencies
+        run: |
+          curl -fsSL https://vite.plus | bash
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+          vp install --frozen-lockfile
+      - name: Check
+        run: |
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+          vp check
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        node-version: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install dependencies
+        run: |
+          curl -fsSL https://vite.plus | bash
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+          vp install --frozen-lockfile
+      - name: Test
+        run: |
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+          vp test

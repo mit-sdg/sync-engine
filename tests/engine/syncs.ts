@@ -23,14 +23,9 @@ export function makeSyncs(
 
   // Notify when count crosses threshold (use query; no imperative state)
   const NotifyOn3 = ({ count }: Vars) => ({
-    when: actions(
-      [Button.clicked, { kind: "inc" }, {}],
-      [Counter.increment, {}, {}],
-    ),
+    when: actions([Button.clicked, { kind: "inc" }, {}], [Counter.increment, {}, {}]),
     where: (frames: Frames) =>
-      frames
-        .query(Counter._getCount, {}, { count })
-        .filter(($) => $[count] === 3),
+      frames.query(Counter._getCount, {}, { count }).filter(($) => $[count] === 3),
     then: actions([Notification.notify, { message: "reached 3" }]),
   });
 
@@ -79,10 +74,7 @@ export function makeSyncs(
   });
 
   const PreventDoubleFire = ({ tag1, tag2, done }: Vars) => ({
-    when: actions(
-      [Recorder.record, { tag: tag1 }, {}],
-      [Recorder.record, { tag: tag2 }, {}],
-    ),
+    when: actions([Recorder.record, { tag: tag1 }, {}], [Recorder.record, { tag: tag2 }, {}]),
     where: (frames: Frames) =>
       frames
         // only consider simple base tags, and exact a-suffix pair

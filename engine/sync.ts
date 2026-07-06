@@ -95,20 +95,16 @@ export class SyncConcept {
   /** Registered synchronizations, by name. */
   public syncs: Record<string, Synchronization> = {};
   /** Inverted index: which syncs care about each `when` action. */
-  public syncsByAction: Map<InstrumentedAction, Set<Synchronization>> =
-    new Map();
+  public syncsByAction: Map<InstrumentedAction, Set<Synchronization>> = new Map();
   /** The action journal backing all matching. */
   public Action: ActionConcept;
   /** Current verbosity. */
   public logging = Logging.OFF;
   /** Memoizes bound/instrumented wrappers per concept instance. */
-  private boundActionsByConcept: WeakMap<
-    object,
-    Map<AnyAction, InstrumentedAction>
-  > = new WeakMap();
-  /** Tracks query cache invalidators per concept instance. */
-  private queryCaches: WeakMap<object, Array<{ invalidate: () => void }>> =
+  private boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>> =
     new WeakMap();
+  /** Tracks query cache invalidators per concept instance. */
+  private queryCaches: WeakMap<object, Array<{ invalidate: () => void }>> = new WeakMap();
   /** All raw concept instances known to this engine (for bulk invalidation). */
   private concepts = new Set<object>();
   /** Engine-level observers (passive sinks). */
@@ -182,8 +178,7 @@ export class SyncConcept {
       let frames = matched;
       if (sync.where !== undefined) {
         const maybeFrames = sync.where(frames);
-        frames =
-          maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+        frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
         this.logFrames(`After processing \`where\`:`, frames);
       }
       await this.addThen(frames, sync, actionSymbols);
@@ -200,10 +195,7 @@ export class SyncConcept {
    * binding logic variables along the way. Returns the resulting frames and the
    * per-clause symbols under which each matched record's id was stored.
    */
-  matchWhen(
-    record: ActionRecord,
-    sync: Synchronization,
-  ): [Frames<Frame>, symbol[]] {
+  matchWhen(record: ActionRecord, sync: Synchronization): [Frames<Frame>, symbol[]] {
     const flowActions = this.Action._getByFlow(record.flow);
     if (flowActions === undefined) return [new Frames(), []];
 
@@ -219,12 +211,7 @@ export class SyncConcept {
         for (const candidate of flowActions) {
           // Skip records this sync has already consumed (double-fire guard).
           if (candidate.synced?.has(sync.sync)) continue;
-          const matched = this.matchArguments(
-            candidate,
-            when,
-            frame,
-            actionSymbol,
-          );
+          const matched = this.matchArguments(candidate, when, frame, actionSymbol);
           if (matched !== undefined) joined.push(matched);
         }
       }
@@ -240,11 +227,7 @@ export class SyncConcept {
    * effect, mark each consumed `when` record `synced` for this sync so it can't
    * be matched again. All produced actions are awaited in order afterward.
    */
-  async addThen(
-    frames: Frames,
-    sync: Synchronization,
-    actionSymbols: symbol[],
-  ): Promise<void> {
+  async addThen(frames: Frames, sync: Synchronization, actionSymbols: symbol[]): Promise<void> {
     const thens: [InstrumentedAction, ActionArguments, ActionRecord[]][] = [];
 
     for (const frame of frames) {
@@ -283,9 +266,7 @@ export class SyncConcept {
           record: thenRecord,
         });
       }
-      const runThen = thenAction as unknown as (
-        args: ActionArguments,
-      ) => Promise<unknown>;
+      const runThen = thenAction as unknown as (args: ActionArguments) => Promise<unknown>;
       try {
         await runThen(thenRecord);
       } catch (err) {
@@ -301,10 +282,7 @@ export class SyncConcept {
   }
 
   /** Recover the `when` records a frame matched, ready to be marked synced. */
-  private resolveWhenActions(
-    frame: Frame,
-    actionSymbols: symbol[],
-  ): ActionRecord[] {
+  private resolveWhenActions(frame: Frame, actionSymbols: symbol[]): ActionRecord[] {
     return actionSymbols.map((actionSymbol) => {
       const id = frame[actionSymbol];
       if (typeof id !== "string") {
@@ -312,9 +290,7 @@ export class SyncConcept {
       }
       const action = this.Action._getById(id);
       if (action?.synced === undefined) {
-        throw new Error(
-          `Action ${String(action)} missing or missing synced Map.`,
-        );
+        throw new Error(`Action ${String(action)} missing or missing synced Map.`);
       }
       return action;
     });
@@ -388,9 +364,7 @@ export class SyncConcept {
     newFrame = unified;
 
     if (when.output === undefined) {
-      throw new Error(
-        `When pattern: ${String(when)} is missing output pattern.`,
-      );
+      throw new Error(`When pattern: ${String(when)} is missing output pattern.`);
     }
     if (record.output === undefined) return undefined;
     const unifiedOut = this.unifyPattern(record.output, when.output, newFrame);
@@ -443,10 +417,7 @@ export class SyncConcept {
   }
 
   /** Build a JournalEvent from an action record and measured duration. */
-  private toJournalEvent(
-    record: ActionRecord,
-    durationMs: number,
-  ): JournalEvent {
+  private toJournalEvent(record: ActionRecord, durationMs: number): JournalEvent {
     const conceptName = conceptNameOf(record.concept);
     const boundName = actionNameOf(record.action);
     return {
@@ -492,9 +463,7 @@ export class SyncConcept {
     if (this.logging === Logging.TRACE) {
       const { concept, action, input, output } = this.toJournalEvent(record, 0);
       logger.debug(
-        `\n${concept}.${action} ${inspect(sanitize(input))} => ${inspect(
-          sanitize(output),
-        )}\n`,
+        `\n${concept}.${action} ${inspect(sanitize(input))} => ${inspect(sanitize(output))}\n`,
       );
     }
   }
@@ -533,10 +502,7 @@ export class SyncConcept {
 
           const queryFn = value.bind(concept);
           const withCache = cached(queryFn);
-          boundActions.set(
-            actionKey,
-            withCache as unknown as InstrumentedAction,
-          );
+          boundActions.set(actionKey, withCache as unknown as InstrumentedAction);
 
           let caches = queryCaches.get(concept);
           if (!caches) {
@@ -560,12 +526,7 @@ export class SyncConcept {
             c.invalidate();
           });
 
-          let {
-            [flow]: flowToken,
-            [synced]: syncedMap,
-            [actionId]: id,
-            ...input
-          } = args;
+          let { [flow]: flowToken, [synced]: syncedMap, [actionId]: id, ...input } = args;
 
           if (flowToken === undefined) flowToken = uuid();
           if (typeof flowToken !== "string") {
@@ -625,10 +586,7 @@ export class SyncConcept {
   /** Instrument every concept in a record, preserving keys. */
   instrument<T extends Record<string, object>>(concepts: T): T {
     return Object.fromEntries(
-      Object.entries(concepts).map(([key, concept]) => [
-        key,
-        this.instrumentConcept(concept),
-      ]),
+      Object.entries(concepts).map(([key, concept]) => [key, this.instrumentConcept(concept)]),
     ) as T;
   }
 }

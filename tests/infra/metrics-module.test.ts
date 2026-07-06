@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { MetricsModule } from "@sync-engine/infra/metrics-module.ts";
 import type { JobStatus } from "@sync-engine/infra/types.ts";
 

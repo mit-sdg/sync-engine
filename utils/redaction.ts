@@ -1,7 +1,4 @@
-export function serializeError(
-  err: unknown,
-  depth = 0,
-): Record<string, unknown> {
+export function serializeError(err: unknown, depth = 0): Record<string, unknown> {
   if (depth > 10) return { message: "[max error depth]" };
   if (err instanceof Error) {
     const result: Record<string, unknown> = {
@@ -56,13 +53,8 @@ let policyPatterns: readonly RegExp[] = UNIVERSAL_SENSITIVE_PATTERNS;
  * replaces the registered domain policy; the universal patterns persist.
  */
 export function configureRedaction(policy: RedactionPolicy): void {
-  policyFields = new Set(
-    Array.from(policy.fields ?? [], (field) => field.toLowerCase()),
-  );
-  policyPatterns = [
-    ...UNIVERSAL_SENSITIVE_PATTERNS,
-    ...(policy.patterns ?? []),
-  ];
+  policyFields = new Set(Array.from(policy.fields ?? [], (field) => field.toLowerCase()));
+  policyPatterns = [...UNIVERSAL_SENSITIVE_PATTERNS, ...(policy.patterns ?? [])];
 }
 
 function isSensitive(key: string): boolean {

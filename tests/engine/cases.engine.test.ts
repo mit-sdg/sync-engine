@@ -1,11 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import {
-  actions,
-  type Frames,
-  Logging,
-  SyncConcept,
-  type Vars,
-} from "@sync-engine/engine";
+import { describe, expect, test } from "vite-plus/test";
+import { actions, type Frames, Logging, SyncConcept, type Vars } from "@sync-engine/engine";
 import { FrameworkErrorCode } from "@sync-engine/sdk/error-codes.ts";
 import {
   ButtonConcept,
@@ -136,10 +130,7 @@ describe("engine: edge cases", () => {
     Sync.register({
       ChainWithThrow: ({ kind }: Vars) => ({
         when: actions([Button.clicked, { kind }, {}]),
-        then: actions(
-          [Throwing.explode, {}],
-          [Recorder.record, { tag: "after-throw" }],
-        ),
+        then: actions([Throwing.explode, {}], [Recorder.record, { tag: "after-throw" }]),
       }),
     });
 

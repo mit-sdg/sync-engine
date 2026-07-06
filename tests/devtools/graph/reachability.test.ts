@@ -4,12 +4,9 @@
  * @covers-devtools sync-graph/reachability
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { computeReachability } from "@sync-engine/devtools/graph/reachability.ts";
-import type {
-  EndpointReachability,
-  SyncGraph,
-} from "@sync-engine/devtools/graph/types.ts";
+import type { EndpointReachability, SyncGraph } from "@sync-engine/devtools/graph/types.ts";
 
 // ── Helpers ─────────────────────────────────────────────────────
 

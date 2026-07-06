@@ -13,11 +13,7 @@
  *     validation failures, rate-limited).
  */
 
-import type {
-  EngineObserver,
-  JournalEvent,
-  SyncConcept,
-} from "@sync-engine/engine";
+import type { EngineObserver, JournalEvent, SyncConcept } from "@sync-engine/engine";
 import type {
   InfraModule,
   InfraResponse,
@@ -176,10 +172,7 @@ export class MetricsModule implements InfraModule {
       // Only observe the request boundary's respond action for domain error
       // breakdown. Errors flow through its input (the error key is part of
       // the response payload), not the output.
-      if (
-        ev.concept === this.boundary.conceptName &&
-        ev.action === this.boundary.respondAction
-      ) {
+      if (ev.concept === this.boundary.conceptName && ev.action === this.boundary.respondAction) {
         const errCode = ev.input?.error;
         if (typeof errCode === "string") {
           this.recordError(errCode);

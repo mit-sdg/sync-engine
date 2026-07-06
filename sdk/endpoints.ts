@@ -10,18 +10,8 @@
  * can supply a thin adapter.
  */
 
-import type {
-  Frames,
-  InstrumentedAction,
-  Mapping,
-  Sync,
-  Vars,
-} from "@sync-engine/engine";
-import {
-  type ActionList,
-  type ActionPattern,
-  actions,
-} from "@sync-engine/engine";
+import type { Frames, InstrumentedAction, Mapping, Sync, Vars } from "@sync-engine/engine";
+import { type ActionList, type ActionPattern, actions } from "@sync-engine/engine";
 
 declare const requestInput: unique symbol;
 declare const responseOutput: unique symbol;
@@ -39,9 +29,7 @@ export type ErrorEnvelope = { error: string; detail?: string };
 
 export type Prettify<T> = { [K in keyof T]: T[K] } & {};
 
-type Fn<C, K extends keyof C> = C[K] extends (...args: never[]) => unknown
-  ? C[K]
-  : never;
+type Fn<C, K extends keyof C> = C[K] extends (...args: never[]) => unknown ? C[K] : never;
 
 export type ActionOk<C, K extends keyof C, E = ErrorEnvelope> = Exclude<
   Awaited<ReturnType<Fn<C, K>>>,
@@ -74,11 +62,7 @@ type EndpointSync<TInput extends object = never, TOutput = never> = Sync &
   RequestInputMeta<TInput> &
   ResponseOutputMeta<TOutput>;
 
-interface EndpointDefinition<
-  TPath extends string,
-  TInput extends object,
-  TOutput,
-> {
+interface EndpointDefinition<TPath extends string, TInput extends object, TOutput> {
   readonly path: TPath;
   readonly syncs: Record<string, Sync>;
   readonly [endpointContract]: {
@@ -95,9 +79,7 @@ interface EndpointDsl {
   ): ActionList & RequestInputMeta<RequestInputFromPattern<TInput>>;
   Request(): ActionList & RequestInputMeta<EmptyInput>;
 
-  Respond<TOutput extends object>(
-    body: Mapping,
-  ): ActionList & ResponseOutputMeta<TOutput>;
+  Respond<TOutput extends object>(body: Mapping): ActionList & ResponseOutputMeta<TOutput>;
   Respond<const TBody extends Mapping>(
     body: TBody,
   ): ActionList & ResponseOutputMeta<ResponseBodyFromPattern<TBody>>;
@@ -112,10 +94,7 @@ interface EndpointDsl {
 
   Sync<const TDeclaration extends EndpointSyncDeclaration>(
     fn: (vars: Vars) => TDeclaration,
-  ): EndpointSync<
-    InputFromDeclaration<TDeclaration>,
-    OutputFromDeclaration<TDeclaration>
-  >;
+  ): EndpointSync<InputFromDeclaration<TDeclaration>, OutputFromDeclaration<TDeclaration>>;
 }
 
 type EndpointSyncDeclaration = {
@@ -135,23 +114,21 @@ type ResponseBodyFromPattern<TBody extends Mapping> = Prettify<{
 }>;
 
 type InputOf<T> = T extends RequestInputMeta<infer TInput> ? TInput : never;
-type OutputOf<T> =
-  T extends ResponseOutputMeta<infer TOutput> ? TOutput : never;
+type OutputOf<T> = T extends ResponseOutputMeta<infer TOutput> ? TOutput : never;
 
-type InputUnionFromPatterns<TPatterns extends readonly unknown[]> = InputOf<
-  TPatterns[number]
+type InputUnionFromPatterns<TPatterns extends readonly unknown[]> = InputOf<TPatterns[number]>;
+type OutputUnionFromPatterns<TPatterns extends readonly unknown[]> = OutputOf<TPatterns[number]>;
+
+type InputFromDeclaration<TDeclaration extends EndpointSyncDeclaration> = InputOf<
+  TDeclaration["when"]
 >;
-type OutputUnionFromPatterns<TPatterns extends readonly unknown[]> = OutputOf<
-  TPatterns[number]
+type OutputFromDeclaration<TDeclaration extends EndpointSyncDeclaration> = OutputOf<
+  TDeclaration["then"]
 >;
 
-type InputFromDeclaration<TDeclaration extends EndpointSyncDeclaration> =
-  InputOf<TDeclaration["when"]>;
-type OutputFromDeclaration<TDeclaration extends EndpointSyncDeclaration> =
-  OutputOf<TDeclaration["then"]>;
-
-type EndpointInputFromSyncs<TSyncs extends Record<string, unknown>> =
-  MergeInputUnion<InputOf<TSyncs[keyof TSyncs]>>;
+type EndpointInputFromSyncs<TSyncs extends Record<string, unknown>> = MergeInputUnion<
+  InputOf<TSyncs[keyof TSyncs]>
+>;
 type EndpointOutputFromSyncs<TSyncs extends Record<string, unknown>> = OutputOf<
   TSyncs[keyof TSyncs]
 >;
@@ -166,11 +143,9 @@ type MergeInputUnion<TInput> = [KeysOfUnion<TInput>] extends [never]
       }>
     >;
 
-type UnionToIntersection<T> = (
-  T extends unknown
-    ? (value: T) => void
-    : never
-) extends (value: infer I) => void
+type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
+  value: infer I,
+) => void
   ? I
   : never;
 
@@ -194,11 +169,7 @@ export function createEndpointDsl(boundary: RequestBoundaryActions) {
   >(
     path: TPath,
     build: (helpers: EndpointDsl) => TSyncs,
-  ): EndpointDefinition<
-    TPath,
-    EndpointInputFromSyncs<TSyncs>,
-    EndpointOutputFromSyncs<TSyncs>
-  > {
+  ): EndpointDefinition<TPath, EndpointInputFromSyncs<TSyncs>, EndpointOutputFromSyncs<TSyncs>> {
     let activeRequest: symbol | undefined;
 
     // SAFETY: The returned tuple structurally matches ActionList
@@ -222,9 +193,7 @@ export function createEndpointDsl(boundary: RequestBoundaryActions) {
 
     const getActiveRequest = (): symbol => {
       if (activeRequest === undefined) {
-        throw new Error(
-          "Endpoint helper used outside Sync declaration construction.",
-        );
+        throw new Error("Endpoint helper used outside Sync declaration construction.");
       }
       return activeRequest;
     };
@@ -260,8 +229,7 @@ export function createEndpointDsl(boundary: RequestBoundaryActions) {
     // valid because the underlying function shape (parameter/return arity)
     // matches exactly; the phantom `never` brand has no runtime footprint.
 
-    const Actions = ((...patterns: ActionList[]) =>
-      actions(...patterns)) as EndpointDsl["Actions"];
+    const Actions = ((...patterns: ActionList[]) => actions(...patterns)) as EndpointDsl["Actions"];
     // SAFETY: `actions(...)` returns `ActionPattern[]`. The `EndpointDsl`
     // signature additionally brands the result with phantom input/output
     // union metadata (InputUnionFromPatterns / OutputUnionFromPatterns).
@@ -353,15 +321,9 @@ export function syncMap(api: Record<string, unknown>): Record<string, Sync> {
 function isEndpointDefinition(
   value: unknown,
 ): value is EndpointDefinition<string, object, unknown> {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "path" in value &&
-    "syncs" in value
-  );
+  return value !== null && typeof value === "object" && "path" in value && "syncs" in value;
 }
 
 function isPlainMapping(value: unknown): value is Mapping {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-

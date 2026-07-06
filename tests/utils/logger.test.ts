@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { serializeError } from "@sync-engine/utils/logger.ts";
 
 describe("serializeError", () => {
@@ -7,8 +7,8 @@ describe("serializeError", () => {
     const result = serializeError(err);
     expect(result.name).toBe("Error");
     expect(result.message).toBe("something broke");
-    expect(result.stack).toBeString();
-    expect(result.stack).toInclude("something broke");
+    expect(typeof result.stack).toBe("string");
+    expect(result.stack).toContain("something broke");
   });
 
   test("serializes non-Error as { message: String(err) }", () => {
@@ -21,11 +21,9 @@ describe("serializeError", () => {
     const err = new Error("wrapper", { cause });
     const result = serializeError(err);
     expect(result.message).toBe("wrapper");
-    expect(result.cause).toBeObject();
-    expect((result.cause as Record<string, unknown>).message).toBe(
-      "root cause",
-    );
-    expect((result.cause as Record<string, unknown>).stack).toBeString();
+    expect(typeof result.cause).toBe("object");
+    expect((result.cause as Record<string, unknown>).message).toBe("root cause");
+    expect(typeof (result.cause as Record<string, unknown>).stack).toBe("string");
   });
 
   test("serializes nested cause chain", () => {
@@ -38,7 +36,7 @@ describe("serializeError", () => {
     expect(middleResult.message).toBe("middle");
     const deepestResult = middleResult.cause as Record<string, unknown>;
     expect(deepestResult.message).toBe("deepest");
-    expect(deepestResult.stack).toBeString();
+    expect(typeof deepestResult.stack).toBe("string");
   });
 
   test("serializes TypeError with name preserved", () => {

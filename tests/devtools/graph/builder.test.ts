@@ -4,7 +4,7 @@
  * @covers-devtools sync-graph/builder
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { buildSyncGraph } from "@sync-engine/devtools/graph/builder.ts";
 import type {
   GraphEdge,
@@ -219,25 +219,17 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       EndpointA: ({ result }: Vars) => ({
-        when: actions(
-          [req.request, { path: "/a" }, {}],
-          [tc.doSomething, {}, { result }],
-        ),
+        when: actions([req.request, { path: "/a" }, {}], [tc.doSomething, {}, { result }]),
         then: actions([tc.failAction, {}, {}]),
       }),
       EndpointB: ({ result }: Vars) => ({
-        when: actions(
-          [req.request, { path: "/b" }, {}],
-          [tc.doSomething, {}, { result }],
-        ),
+        when: actions([req.request, { path: "/b" }, {}], [tc.doSomething, {}, { result }]),
         then: actions([tc.noOutput, {}, {}]),
       }),
     });
 
     const graph = buildSyncGraph(engine, boundary);
-    const endpoints: GraphNode[] = graph.nodes.filter(
-      (n: GraphNode) => n.kind === "endpoint",
-    );
+    const endpoints: GraphNode[] = graph.nodes.filter((n: GraphNode) => n.kind === "endpoint");
     expect(endpoints.length).toBe(2);
     const endpointIds: string[] = endpoints.map((n: GraphNode) => n.id).sort();
     expect(endpointIds).toEqual(["/a", "/b"]);
@@ -282,8 +274,9 @@ describe("buildSyncGraph", () => {
     const edge: GraphEdge | undefined = graph.edges[0];
     expect(edge).toBeDefined();
 
-    const literalBinding: PatternBinding | undefined =
-      edge.when[0]?.input?.find((b: PatternBinding) => b.key === "path");
+    const literalBinding: PatternBinding | undefined = edge.when[0]?.input?.find(
+      (b: PatternBinding) => b.key === "path",
+    );
     expect(literalBinding).toBeDefined();
     expect(literalBinding?.source).toEqual({ kind: "literal", value: "/test" });
   });
@@ -294,11 +287,7 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       ExprSync: ({ result }: Vars) => ({
-        when: actions([
-          tc.doSomething,
-          { config: { timeout: 1000 } },
-          { result },
-        ]),
+        when: actions([tc.doSomething, { config: { timeout: 1000 } }, { result }]),
         then: actions([tc.failAction, {}, {}]),
       }),
     });
@@ -345,11 +334,7 @@ describe("buildSyncGraph", () => {
         then: actions([tc.failAction, {}, {}]),
       }),
       SyncTwo: ({ result }: Vars) => ({
-        when: actions([
-          tc.doSomething,
-          { action: "do", extra: true },
-          { result },
-        ]),
+        when: actions([tc.doSomething, { action: "do", extra: true }, { result }]),
         then: actions([tc.failAction, {}, {}]),
       }),
     });

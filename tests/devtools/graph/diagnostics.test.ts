@@ -5,7 +5,7 @@
  * @covers-devtools sync-graph/diagnostics
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { runDiagnostics } from "@sync-engine/devtools/graph/diagnostics.ts";
 import type {
   DiagnosticFinding,
@@ -31,28 +31,20 @@ function g(
       kind: "concept-action" as const,
       ...n,
     })),
-    edges: edges.map(
-      (
-        e: Partial<GraphEdge> & { from: string[]; to: string[] },
-        i: number,
-      ) => ({
-        syncName: e.syncName ?? `Edge${i}`,
-        when: e.when ?? [],
-        then: e.then ?? [],
-        hasWhere: e.hasWhere ?? false,
-        endpoint: e.endpoint,
-        from: e.from,
-        to: e.to,
-      }),
-    ),
+    edges: edges.map((e: Partial<GraphEdge> & { from: string[]; to: string[] }, i: number) => ({
+      syncName: e.syncName ?? `Edge${i}`,
+      when: e.when ?? [],
+      then: e.then ?? [],
+      hasWhere: e.hasWhere ?? false,
+      endpoint: e.endpoint,
+      from: e.from,
+      to: e.to,
+    })),
     responseSinkId: "Requesting.respond",
   };
 }
 
-function findCode(
-  haystack: DiagnosticFinding[],
-  code: string,
-): DiagnosticFinding[] {
+function findCode(haystack: DiagnosticFinding[], code: string): DiagnosticFinding[] {
   return haystack.filter((f: DiagnosticFinding) => f.code === code);
 }
 
@@ -206,11 +198,7 @@ describe("runDiagnostics", () => {
     );
     const r = runDiagnostics(graph, []);
     const findings = findCode(r.findings, "orphan-action");
-    expect(
-      findings.some((f: DiagnosticFinding) =>
-        f.nodeIds.includes("OrphanAction"),
-      ),
-    ).toBe(true);
+    expect(findings.some((f: DiagnosticFinding) => f.nodeIds.includes("OrphanAction"))).toBe(true);
   });
 
   test("orphan-action: no finding when all nodes are referenced", () => {
@@ -342,8 +330,8 @@ describe("runDiagnostics", () => {
     const r = runDiagnostics(graph, []);
     const findings = findCode(r.findings, "high-fan");
     expect(findings.length).toBeGreaterThanOrEqual(1);
-    const fanIn: DiagnosticFinding | undefined = findings.find(
-      (f: DiagnosticFinding) => f.syncNames.includes("FanInSync"),
+    const fanIn: DiagnosticFinding | undefined = findings.find((f: DiagnosticFinding) =>
+      f.syncNames.includes("FanInSync"),
     );
     expect(fanIn).toBeDefined();
   });
@@ -361,8 +349,8 @@ describe("runDiagnostics", () => {
     );
     const r = runDiagnostics(graph, []);
     const findings = findCode(r.findings, "high-fan");
-    const fanOut: DiagnosticFinding | undefined = findings.find(
-      (f: DiagnosticFinding) => f.syncNames.includes("FanOutSync"),
+    const fanOut: DiagnosticFinding | undefined = findings.find((f: DiagnosticFinding) =>
+      f.syncNames.includes("FanOutSync"),
     );
     expect(fanOut).toBeDefined();
   });
@@ -380,8 +368,7 @@ describe("runDiagnostics", () => {
     const r = runDiagnostics(graph, []);
     const findings = findCode(r.findings, "high-fan");
     const hubFinding: DiagnosticFinding | undefined = findings.find(
-      (f: DiagnosticFinding) =>
-        f.nodeIds.includes("HubAction") && f.syncNames.length === 0,
+      (f: DiagnosticFinding) => f.nodeIds.includes("HubAction") && f.syncNames.length === 0,
     );
     expect(hubFinding).toBeDefined();
   });

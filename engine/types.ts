@@ -19,9 +19,7 @@ export type Mapping = Record<string, unknown>;
 export type Frame = Record<symbol, unknown>;
 
 /** A concept action: a function from an input mapping to an output mapping. */
-export type ActionFunction<TInput = Mapping, TOutput = Mapping> = (
-  input: TInput,
-) => TOutput;
+export type ActionFunction<TInput = Mapping, TOutput = Mapping> = (input: TInput) => TOutput;
 
 /** A concept method reference stored as identity, not called through this type. */
 export type AnyAction = (...args: never[]) => unknown;

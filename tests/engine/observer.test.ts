@@ -1,10 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import {
-  actions,
-  type JournalEvent,
-  Logging,
-  SyncConcept,
-} from "@sync-engine/engine";
+import { describe, expect, test } from "vite-plus/test";
+import { actions, type JournalEvent, Logging, SyncConcept } from "@sync-engine/engine";
 import { FrameworkErrorCode } from "@sync-engine/sdk/error-codes.ts";
 import {
   ButtonConcept,
@@ -66,7 +61,7 @@ describe("engine observer", () => {
     const ev = events[0];
     expect(ev.concept).toBe("Button");
     expect(ev.action).toBe("clicked");
-    expect(ev.flow).toBeString();
+    expect(typeof ev.flow).toBe("string");
     expect(ev.flow.length).toBeGreaterThan(0);
     expect(ev.input).toEqual({ kind: "inc" });
     expect(ev.output).toEqual({ kind: "inc" });

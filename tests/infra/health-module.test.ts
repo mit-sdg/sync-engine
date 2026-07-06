@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { HealthModule } from "@sync-engine/infra/health-module.ts";
 import type { InfraRoute, JobStatus } from "@sync-engine/infra/types.ts";
 
@@ -86,9 +86,7 @@ describe("HealthModule", () => {
     expect(body.status).toBe("degraded");
     expect(body.ready).toBe(false);
     expect(body.jobs.failing).toBe(1);
-    expect(body.jobs.details).toEqual([
-      { name: "daily_obligations", lastError: "timeout" },
-    ]);
+    expect(body.jobs.details).toEqual([{ name: "daily_obligations", lastError: "timeout" }]);
   });
 
   test("GET /ready with readinessCheck — healthy — returns 200", async () => {

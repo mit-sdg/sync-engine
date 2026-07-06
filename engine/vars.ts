@@ -52,9 +52,7 @@ export type TypedVars<TSchema extends Record<string, unknown>> = {
  * const { session, amount, group } = v;
  * ```
  */
-export function declareVars<
-  TSchema extends Record<string, unknown>,
->(): TypedVars<TSchema> {
+export function declareVars<TSchema extends Record<string, unknown>>(): TypedVars<TSchema> {
   const cache = new Map<string, symbol>();
   return new Proxy({} as TypedVars<TSchema>, {
     get(_target, prop) {

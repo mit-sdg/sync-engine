@@ -97,10 +97,7 @@ export class SchedulerModule implements InfraModule {
   /** Load persisted job statuses from MongoDB (called at startup). */
   async loadJobStatusesFromDb(): Promise<void> {
     try {
-      const docs = await this.db
-        .collection<JobLeaseDoc>(JOB_LEASES_COLLECTION)
-        .find({})
-        .toArray();
+      const docs = await this.db.collection<JobLeaseDoc>(JOB_LEASES_COLLECTION).find({}).toArray();
       for (const doc of docs) {
         const logicalName =
           this.leasePrefix && doc._id.startsWith(this.leasePrefix)
@@ -161,10 +158,7 @@ export class SchedulerModule implements InfraModule {
 
   // ── Lease helpers (identical semantics to current jobs.ts) ──
 
-  private async acquireJobLease(
-    jobName: string,
-    ttlMs: number,
-  ): Promise<boolean> {
+  private async acquireJobLease(jobName: string, ttlMs: number): Promise<boolean> {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + ttlMs);
 
@@ -202,10 +196,7 @@ export class SchedulerModule implements InfraModule {
   private async releaseJobLease(jobName: string): Promise<void> {
     await this.db
       .collection<JobLeaseDoc>(JOB_LEASES_COLLECTION)
-      .updateOne(
-        { _id: jobName, owner: INSTANCE_ID },
-        { $set: { expiresAt: new Date() } },
-      );
+      .updateOne({ _id: jobName, owner: INSTANCE_ID }, { $set: { expiresAt: new Date() } });
   }
 
   private async syncJobLeaseStatus(
@@ -215,8 +206,7 @@ export class SchedulerModule implements InfraModule {
     durationMs: number,
   ): Promise<void> {
     const now = new Date().toISOString();
-    const lastStatus: "success" | "failure" =
-      status === "completed" ? "success" : "failure";
+    const lastStatus: "success" | "failure" = status === "completed" ? "success" : "failure";
     try {
       await this.db.collection<JobLeaseDoc>(JOB_LEASES_COLLECTION).updateOne(
         { _id: jobName, owner: INSTANCE_ID },
@@ -245,11 +235,7 @@ export class SchedulerModule implements InfraModule {
     this.logger?.info("job completed", { job: name, durationMs });
   }
 
-  private recordJobFailure(
-    name: string,
-    err: unknown,
-    durationMs: number,
-  ): void {
+  private recordJobFailure(name: string, err: unknown, durationMs: number): void {
     const status = this.ensureJobStatus(name);
     status.lastRun = new Date().toISOString();
     status.lastStatus = "failure";

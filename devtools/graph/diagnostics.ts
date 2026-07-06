@@ -92,9 +92,7 @@ export function runDiagnostics(
  * syncs) that coexist with a working response path are reported separately
  * by {@link detectDeadEndSideEffects}.
  */
-function detectUnreachableResponses(
-  reachability: EndpointReachability[],
-): DiagnosticFinding[] {
+function detectUnreachableResponses(reachability: EndpointReachability[]): DiagnosticFinding[] {
   // ── Hoisted helper ──
   function format(r: EndpointReachability): DiagnosticFinding {
     return {
@@ -118,9 +116,7 @@ function detectUnreachableResponses(
  *
  * These are normal for fire-and-forget patterns and are informational only.
  */
-function detectDeadEndSideEffects(
-  reachability: EndpointReachability[],
-): DiagnosticFinding[] {
+function detectDeadEndSideEffects(reachability: EndpointReachability[]): DiagnosticFinding[] {
   // ── Hoisted helper ──
   function format(r: EndpointReachability): DiagnosticFinding {
     const n = r.deadEndNodes.length;
@@ -135,9 +131,7 @@ function detectDeadEndSideEffects(
     };
   }
 
-  return reachability
-    .filter((r) => r.respondsReachable && r.deadEndNodes.length > 0)
-    .map(format);
+  return reachability.filter((r) => r.respondsReachable && r.deadEndNodes.length > 0).map(format);
 }
 
 /**
@@ -242,8 +236,7 @@ function detectDanglingReferences(graph: SyncGraph): DiagnosticFinding[] {
           message: `Sync "${edge.syncName}" references non-existent source node "${id}".`,
           syncNames: [edge.syncName],
           nodeIds: [id],
-          suggestion:
-            "Check that the action name is correct and the concept is registered.",
+          suggestion: "Check that the action name is correct and the concept is registered.",
         });
       }
     }
@@ -255,8 +248,7 @@ function detectDanglingReferences(graph: SyncGraph): DiagnosticFinding[] {
           message: `Sync "${edge.syncName}" references non-existent target node "${id}".`,
           syncNames: [edge.syncName],
           nodeIds: [id],
-          suggestion:
-            "Check that the action name is correct and the concept is registered.",
+          suggestion: "Check that the action name is correct and the concept is registered.",
         });
       }
     }
@@ -275,10 +267,7 @@ function detectDanglingReferences(graph: SyncGraph): DiagnosticFinding[] {
  * syncs with where clauses that reference many unique actions as a rough
  * complexity proxy.
  */
-function detectHeavyWhere(
-  graph: SyncGraph,
-  config: DiagnosticsConfig,
-): DiagnosticFinding[] {
+function detectHeavyWhere(graph: SyncGraph, config: DiagnosticsConfig): DiagnosticFinding[] {
   const findings: DiagnosticFinding[] = [];
 
   for (const edge of graph.edges) {
@@ -306,10 +295,7 @@ function detectHeavyWhere(
  * High fan-in / fan-out: syncs with many when/then clauses, and hub actions
  * referenced by many syncs.
  */
-function detectHighFan(
-  graph: SyncGraph,
-  config: DiagnosticsConfig,
-): DiagnosticFinding[] {
+function detectHighFan(graph: SyncGraph, config: DiagnosticsConfig): DiagnosticFinding[] {
   const findings: DiagnosticFinding[] = [];
 
   for (const edge of graph.edges) {

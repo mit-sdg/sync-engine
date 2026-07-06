@@ -75,12 +75,12 @@ import { actions, type Vars } from "sync-engine/engine";
 // "Whenever Counter.increment executes and the count reaches 10, log it."
 const LogAt10 = ({ count, msg }: Vars) => ({
   when: actions(
-    [Counter.increment, {}, {}],       // match any increment
+    [Counter.increment, {}, {}], // match any increment
   ),
   where: (frames) =>
     frames
-      .query(Counter._getCount, {}, { count })  // read current count
-      .filter(($) => $[count] === 10)           // only when it's 10
+      .query(Counter._getCount, {}, { count }) // read current count
+      .filter(($) => $[count] === 10) // only when it's 10
       .map(($) => ({ ...$, [msg]: "Reached 10!" })),
   then: actions([Logger.log, { message: msg }]),
 });
@@ -126,17 +126,18 @@ Concepts **never import each other**. All cross-concept behavior lives in syncs.
 
 A sync is a declarative `when → where → then` rule:
 
-| Clause | Purpose |
-|--------|---------|
-| `when` | Action patterns matched against the journal. Binds **logic variables** (symbols) to matched values. |
-| `where` | Optional pure transform over matched frames — filter, query, map, aggregate. Typed end-to-end. |
-| `then` | Actions to invoke, one per surviving frame. Inputs resolve from the frame's variable bindings. |
+| Clause  | Purpose                                                                                             |
+| ------- | --------------------------------------------------------------------------------------------------- |
+| `when`  | Action patterns matched against the journal. Binds **logic variables** (symbols) to matched values. |
+| `where` | Optional pure transform over matched frames — filter, query, map, aggregate. Typed end-to-end.      |
+| `then`  | Actions to invoke, one per surviving frame. Inputs resolve from the frame's variable bindings.      |
 
 Syncs are **reactive** — they fire automatically after every action, and only within the same causal chain (flow).
 
 ### Action Journal
 
 The engine maintains an append-only journal of every action invocation. Syncs match against this journal (not live state), which makes the system:
+
 - **Replayable** — given the same journal, the same syncs produce the same effects.
 - **Debuggable** — every action has a stable id, flow token, and synced map.
 - **Safe from double-fire** — a sync marks consumed records so it never matches them twice.
@@ -148,6 +149,7 @@ A **flow** is a causal chain: an action triggered from a sync's `then` inherits 
 ### Frames
 
 The working set of a synchronization. A frame is a bag of variable bindings (keyed by symbol). `Frames` extends `Array` with relational-style helpers:
+
 - `.query(fn, input, output)` — fan out over query results (inner join)
 - `.queryOptional(fn, input, output)` — like query but preserves unmatched frames (left join)
 - `.filter(…)` / `.guard(…)` / `.map(…)` — standard array transforms
@@ -232,10 +234,7 @@ class SyncConcept {
 Normalizes sync clauses into `ActionPattern[]`:
 
 ```ts
-actions(
-  [Concept.action, inputMapping, outputMapping],
-  [OtherConcept.action, inputMapping],
-)
+actions([Concept.action, inputMapping, outputMapping], [OtherConcept.action, inputMapping]);
 ```
 
 ### `Frames`

@@ -40,10 +40,7 @@ function stableKey(args: unknown[]): string {
   return args.map(serialize).join("|");
 }
 
-export function cached<T extends AnyFn>(
-  fn: T,
-  options?: CacheOptions,
-): CachedFn<T> {
+export function cached<T extends AnyFn>(fn: T, options?: CacheOptions): CachedFn<T> {
   const maxSize = options?.maxSize ?? DEFAULT_CACHE_MAX_SIZE;
   const ttlMs = options?.ttlMs ?? DEFAULT_CACHE_TTL_MS;
   let cache = new Map<string, CacheEntry>();
@@ -61,10 +58,7 @@ export function cached<T extends AnyFn>(
     }
   };
 
-  const wrapper = function (
-    this: ThisParameterType<T>,
-    ...args: Parameters<T>
-  ): ReturnType<T> {
+  const wrapper = function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
     const key = stableKey(args as unknown[]);
     const existing = cache.get(key);
     if (existing !== undefined) {

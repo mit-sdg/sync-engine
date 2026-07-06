@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import { SchedulerModule } from "@sync-engine/infra/scheduler-module.ts";
 import { setupTestDb, type TestMongo } from "@sync-engine/utils/testing.ts";
 

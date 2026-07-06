@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { Frames, Logging, SyncConcept } from "@sync-engine/engine";
 import {
   ButtonConcept,
@@ -81,10 +81,7 @@ describe("engine: basic synchronizations", () => {
 
     test("bind: computes value per frame via function", () => {
       const frames = new Frames({ [SymA]: 1 }, { [SymA]: 2 });
-      const result = frames.bind(
-        SymB,
-        (f: Record<symbol, unknown>) => (f[SymA] as number) * 10,
-      );
+      const result = frames.bind(SymB, (f: Record<symbol, unknown>) => (f[SymA] as number) * 10);
       expect(result[0][SymB]).toBe(10);
       expect(result[1][SymB]).toBe(20);
     });
@@ -98,13 +95,9 @@ describe("engine: basic synchronizations", () => {
     });
 
     test("guard: type-narrowing works with frames", () => {
-      const frames = new Frames<Record<symbol, unknown>>(
-        { [SymA]: "hello" },
-        { [SymA]: 42 },
-      );
+      const frames = new Frames<Record<symbol, unknown>>({ [SymA]: "hello" }, { [SymA]: 42 });
       const result = frames.guard(
-        (f): f is Record<symbol, unknown> & { [SymA]: string } =>
-          typeof f[SymA] === "string",
+        (f): f is Record<symbol, unknown> & { [SymA]: string } => typeof f[SymA] === "string",
       );
       expect(result.length).toBe(1);
     });
@@ -179,11 +172,7 @@ describe("engine: basic synchronizations", () => {
     });
 
     test("collectOne: skips frames with missing key", () => {
-      const frames = new Frames(
-        { [SymA]: 10 },
-        { [SymB]: "other" },
-        { [SymA]: 30 },
-      );
+      const frames = new Frames({ [SymA]: 10 }, { [SymB]: "other" }, { [SymA]: 30 });
       const result = frames.collectOne(Symbol("collected"), SymA);
       expect(result.length).toBe(1);
       for (const frame of result) {

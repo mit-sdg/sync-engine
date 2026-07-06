@@ -11,14 +11,8 @@
  * The Frames-level cases exercise {@link Frames} directly; the engine-level
  * cases wire small mock concepts together with inline, declarative syncs.
  */
-import { describe, expect, test } from "bun:test";
-import {
-  actions,
-  Frames,
-  Logging,
-  SyncConcept,
-  type Vars,
-} from "@sync-engine/engine";
+import { describe, expect, test } from "vite-plus/test";
+import { actions, Frames, Logging, SyncConcept, type Vars } from "@sync-engine/engine";
 import { CounterConcept, GateConcept, RecorderConcept } from "./mocks.ts";
 
 describe("engine: Frames query/aggregate/collectAs", () => {
@@ -83,9 +77,7 @@ describe("engine: Frames query/aggregate/collectAs", () => {
     const out = frames.collectAs([value], items);
 
     expect(out.length).toBe(2);
-    const byGroup = new Map(
-      out.map(($): [unknown, unknown] => [$[group], $[items]]),
-    );
+    const byGroup = new Map(out.map(($): [unknown, unknown] => [$[group], $[items]]));
     expect(byGroup.get("x")).toEqual([{ value: 1 }, { value: 2 }]);
     expect(byGroup.get("y")).toEqual([{ value: 3 }]);
   });
@@ -97,8 +89,7 @@ describe("engine: Frames query/aggregate/collectAs", () => {
 
     const children: Record<string, string[]> = { a: ["a1", "a2"], b: [] };
     const out = frames.queryOptional(
-      ({ id: idVal }: { id: string }) =>
-        children[idVal].map((value) => ({ value })),
+      ({ id: idVal }: { id: string }) => children[idVal].map((value) => ({ value })),
       { id },
       { value: item },
     );
@@ -123,14 +114,12 @@ describe("engine: Frames query/aggregate/collectAs", () => {
 
     const children: Record<string, string[]> = { a: ["x", "y"] };
     const expected = frames.query(
-      ({ id: idVal }: { id: string }) =>
-        children[idVal].map((value) => ({ value })),
+      ({ id: idVal }: { id: string }) => children[idVal].map((value) => ({ value })),
       { id },
       { value: item },
     );
     const actual = frames.queryOptional(
-      ({ id: idVal }: { id: string }) =>
-        children[idVal].map((value) => ({ value })),
+      ({ id: idVal }: { id: string }) => children[idVal].map((value) => ({ value })),
       { id },
       { value: item },
     );
@@ -160,9 +149,7 @@ describe("engine: Frames query/aggregate/collectAs", () => {
     const out = frames.collectAs([member], memberList);
 
     expect(out.length).toBe(2);
-    const byGroup = new Map(
-      out.map(($): [unknown, unknown] => [$[group], $[memberList]]),
-    );
+    const byGroup = new Map(out.map(($): [unknown, unknown] => [$[group], $[memberList]]));
     expect(byGroup.get("g1")).toEqual([{ member: "alice" }, { member: "bob" }]);
     // g2 had no member symbols so it contributes nothing to collected array
     expect(byGroup.get("g2")).toEqual([]);
@@ -236,10 +223,7 @@ describe("engine: synced double-fire prevention", () => {
 
     // Pair: matches the (base, base:a) pair exactly once and bumps a counter.
     const Pair = ({ tag1, tag2 }: Vars) => ({
-      when: actions(
-        [Recorder.record, { tag: tag1 }, {}],
-        [Recorder.record, { tag: tag2 }, {}],
-      ),
+      when: actions([Recorder.record, { tag: tag1 }, {}], [Recorder.record, { tag: tag2 }, {}]),
       where: (frames: Frames) =>
         frames
           .filter(($) => !String($[tag1]).includes(":"))

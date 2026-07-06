@@ -9,12 +9,7 @@
  * imports from `@concepts` or `@sdk`.
  */
 
-import type {
-  ActionBinding,
-  DiagnosticFinding,
-  GraphNode,
-  SyncGraphReport,
-} from "./types.ts";
+import type { ActionBinding, DiagnosticFinding, GraphNode, SyncGraphReport } from "./types.ts";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -90,9 +85,7 @@ export function toMermaid(report: SyncGraphReport): string {
         // Add edge with label — include carried variables when present
         const cvars = carriedVars(edge.when, edge.then);
         const labelText =
-          cvars.length > 0
-            ? `${edge.syncName} · ${cvars.join(", ")}`
-            : edge.syncName;
+          cvars.length > 0 ? `${edge.syncName} · ${cvars.join(", ")}` : edge.syncName;
         const label = escapeLabel(labelText);
         lines.push(`    ${from} -->|"${label}"| ${to}`);
       }
@@ -156,9 +149,7 @@ export function toDot(report: SyncGraphReport): string {
         if (!seen.has(fromId)) {
           seen.add(fromId);
           const node = nodes.find((n) => n.id === fromId);
-          lines.push(
-            `  ${from} [label="${dotLabel(fromId)}"${dotAttrs(node)}];`,
-          );
+          lines.push(`  ${from} [label="${dotLabel(fromId)}"${dotAttrs(node)}];`);
         }
         if (!seen.has(toId)) {
           seen.add(toId);
@@ -168,9 +159,7 @@ export function toDot(report: SyncGraphReport): string {
 
         const cvars = carriedVars(edge.when, edge.then);
         const labelText =
-          cvars.length > 0
-            ? `${edge.syncName} · ${cvars.join(", ")}`
-            : edge.syncName;
+          cvars.length > 0 ? `${edge.syncName} · ${cvars.join(", ")}` : edge.syncName;
         lines.push(`  ${from} -> ${to} [label="${dotLabel(labelText)}"];`);
       }
     }
@@ -194,9 +183,7 @@ function dotAttrs(node: GraphNode | undefined): string {
     case "endpoint":
       return ', fillcolor="#4a90d9", fontcolor="white"';
     case "concept-action":
-      return node.producesError
-        ? ', fillcolor="#e8a838"'
-        : ', fillcolor="#6abf6a"';
+      return node.producesError ? ', fillcolor="#e8a838"' : ', fillcolor="#6abf6a"';
     case "query":
       return ', fillcolor="#d4d4d4", fontcolor="#666"';
     default:

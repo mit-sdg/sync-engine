@@ -11,11 +11,7 @@ import type { SyncConcept } from "@sync-engine/engine";
 import { buildSyncGraph } from "./builder.ts";
 import { runDiagnostics } from "./diagnostics.ts";
 import { computeReachability } from "./reachability.ts";
-import type {
-  DiagnosticPlugin,
-  RequestBoundary,
-  SyncGraphReport,
-} from "./types.ts";
+import type { DiagnosticPlugin, RequestBoundary, SyncGraphReport } from "./types.ts";
 
 /**
  * Build the complete sync graph report for an engine: graph, endpoint

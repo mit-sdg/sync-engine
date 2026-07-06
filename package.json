@@ -2,36 +2,51 @@
   "name": "sync-engine",
   "version": "0.1.0",
   "description": "Declarative synchronization engine — compose independent concepts with when/where/then rules, driven by an append-only action journal.",
-  "type": "module",
+  "keywords": [
+    "concept",
+    "declarative",
+    "engine",
+    "journal",
+    "reactive",
+    "state-machine",
+    "synchronization"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BarishNamazov/sync-engine"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./engine/index.ts",
+    "./engine": "./engine/index.ts",
+    "./engine/*": "./engine/*",
+    "./sdk": "./sdk/index.ts",
+    "./sdk/*": "./sdk/*",
+    "./infra": "./infra/index.ts",
+    "./infra/*": "./infra/*",
+    "./runtime": "./runtime/index.ts",
+    "./runtime/*": "./runtime/*",
+    "./transport": "./transport/index.ts",
+    "./transport/*": "./transport/*",
+    "./utils": "./utils/index.ts",
+    "./utils/*": "./utils/*",
+    "./devtools/graph": "./devtools/graph/index.ts",
+    "./devtools/graph/*": "./devtools/graph/*"
+  },
   "scripts": {
-    "test": "LOG_LEVEL=error bun test tests",
+    "test": "LOG_LEVEL=error vitest run tests",
     "typecheck": "tsc --noEmit"
   },
-  "exports": {
-    ".": "./engine/mod.ts",
-    "./engine": "./engine/mod.ts",
-    "./engine/*": "./engine/*",
-    "./sdk": "./sdk/mod.ts",
-    "./sdk/*": "./sdk/*",
-    "./infra": "./infra/mod.ts",
-    "./infra/*": "./infra/*",
-    "./runtime": "./runtime/mod.ts",
-    "./runtime/*": "./runtime/*",
-    "./transport": "./transport/mod.ts",
-    "./transport/*": "./transport/*",
-    "./utils": "./utils/mod.ts",
-    "./utils/*": "./utils/*",
-    "./devtools/graph": "./devtools/graph/mod.ts"
-  },
   "dependencies": {
-    "mongodb": "^7.2.0",
-    "uuid": "^14.0.0"
+    "mongodb": "^7.2.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.14",
+    "@types/node": "^24.0.0",
     "mongodb-memory-server": "^11.2.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.2",
+    "vite-plus": "0.2.2"
   },
   "peerDependencies": {
     "mongodb": "^7.0.0"
@@ -41,17 +56,14 @@
       "optional": true
     }
   },
-  "keywords": [
-    "synchronization",
-    "state-machine",
-    "concept",
-    "declarative",
-    "engine",
-    "reactive",
-    "journal"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/BarishNamazov/sync-engine"
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.2"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.3.14",
+      "onFail": "download"
+    }
   }
 }

@@ -36,11 +36,8 @@ export interface ReadinessProbeConfig {
 }
 
 /** Build a readiness check function from probe config. */
-export function createReadinessProbe(
-  config: ReadinessProbeConfig,
-): () => Promise<ReadinessResult> {
-  const { database, collections, getMigrationStatus, requireMigrations } =
-    config;
+export function createReadinessProbe(config: ReadinessProbeConfig): () => Promise<ReadinessResult> {
+  const { database, collections, getMigrationStatus, requireMigrations } = config;
 
   return async () => {
     const details: Record<string, string> = {};
@@ -66,18 +63,14 @@ export function createReadinessProbe(
     for (const cc of collections) {
       const collectionName = `${cc.namespace}.${cc.collection}`;
       try {
-        const found = await database
-          .listCollections({ name: collectionName })
-          .toArray();
+        const found = await database.listCollections({ name: collectionName }).toArray();
         if (found.length === 0) {
           details[collectionName] = "not yet created";
           continue;
         }
 
         const indexDocs = await database.collection(collectionName).indexes();
-        const indexKeys = indexDocs.flatMap((idx) =>
-          Object.keys(idx.key ?? {}),
-        );
+        const indexKeys = indexDocs.flatMap((idx) => Object.keys(idx.key ?? {}));
         const missing = cc.indexes.filter((i) => !indexKeys.includes(i));
 
         if (missing.length > 0) {
@@ -104,8 +97,7 @@ export function createReadinessProbe(
       }
     }
 
-    const ready =
-      mongodbOk && indexesOk && (!requireMigrations || migrationsOk);
+    const ready = mongodbOk && indexesOk && (!requireMigrations || migrationsOk);
 
     return {
       ready,

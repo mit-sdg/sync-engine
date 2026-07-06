@@ -28,10 +28,7 @@ export interface CreatedApp<TApp> extends HostedApp<TApp> {
 
 export interface AppHostHooks<TApp, TParams> {
   /** Build the app instance and its teardownable resources for a namespace. */
-  create(
-    prefix: string,
-    params: TParams,
-  ): CreatedApp<TApp> | Promise<CreatedApp<TApp>>;
+  create(prefix: string, params: TParams): CreatedApp<TApp> | Promise<CreatedApp<TApp>>;
 }
 
 /** Downstream consumer notified as apps register / unregister (e.g. server). */

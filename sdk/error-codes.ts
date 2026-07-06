@@ -26,5 +26,4 @@ export const FrameworkErrorCode = {
   NETWORK_ERROR: "NETWORK_ERROR",
 } as const;
 
-export type FrameworkErrorCode =
-  (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode];
+export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode];

@@ -4,13 +4,8 @@
  * @covers-devtools sync-graph/exporters
  */
 
-import { describe, expect, test } from "bun:test";
-import {
-  toDot,
-  toJson,
-  toMermaid,
-  toReport,
-} from "@sync-engine/devtools/graph/exporters.ts";
+import { describe, expect, test } from "vite-plus/test";
+import { toDot, toJson, toMermaid, toReport } from "@sync-engine/devtools/graph/exporters.ts";
 import type { SyncGraphReport } from "@sync-engine/devtools/graph/types.ts";
 
 // ── Fixtures ────────────────────────────────────────────────────
@@ -135,9 +130,7 @@ const reportWithCarriedVars: SyncGraphReport = {
           {
             nodeId: "Sessioning.createSession",
             input: [{ key: "user", source: { kind: "var", name: "user" } }],
-            output: [
-              { key: "sessionId", source: { kind: "var", name: "sessionId" } },
-            ],
+            output: [{ key: "sessionId", source: { kind: "var", name: "sessionId" } }],
           },
         ],
         hasWhere: false,

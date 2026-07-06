@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vite-plus/test";
 import { declareVars, Frames, Where } from "@sync-engine/engine";
 
 const { pipe, read } = Where;
@@ -33,8 +33,7 @@ describe("Where.pipe", () => {
     const frames = new Frames({ [n]: 1 }, { [n]: 2 }, { [n]: 3 });
 
     const keepEven = (fs: Frames) => fs.filter(($) => read($, n) % 2 === 0);
-    const doubleAsync = async (fs: Frames) =>
-      fs.map(($) => ({ ...$, [n]: read($, n) * 2 }));
+    const doubleAsync = async (fs: Frames) => fs.map(($) => ({ ...$, [n]: read($, n) * 2 }));
 
     const result = await pipe(keepEven, doubleAsync)(frames);
     expect([...result].map(($) => read($, n))).toEqual([4]);
