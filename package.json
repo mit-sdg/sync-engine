@@ -1,0 +1,57 @@
+{
+  "name": "sync-engine",
+  "version": "0.1.0",
+  "description": "Declarative synchronization engine — compose independent concepts with when/where/then rules, driven by an append-only action journal.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "LOG_LEVEL=error bun test tests",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./engine/mod.ts",
+    "./engine": "./engine/mod.ts",
+    "./engine/*": "./engine/*",
+    "./sdk": "./sdk/mod.ts",
+    "./sdk/*": "./sdk/*",
+    "./infra": "./infra/mod.ts",
+    "./infra/*": "./infra/*",
+    "./runtime": "./runtime/mod.ts",
+    "./runtime/*": "./runtime/*",
+    "./transport": "./transport/mod.ts",
+    "./transport/*": "./transport/*",
+    "./utils": "./utils/mod.ts",
+    "./utils/*": "./utils/*",
+    "./devtools/graph": "./devtools/graph/mod.ts"
+  },
+  "dependencies": {
+    "mongodb": "^7.2.0",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "mongodb-memory-server": "^11.2.0",
+    "typescript": "^5.9.0"
+  },
+  "peerDependencies": {
+    "mongodb": "^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "mongodb": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "synchronization",
+    "state-machine",
+    "concept",
+    "declarative",
+    "engine",
+    "reactive",
+    "journal"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BarishNamazov/sync-engine"
+  }
+}

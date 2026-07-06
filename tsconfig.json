@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["bun"],
+    "baseUrl": ".",
+    "paths": {
+      "@sync-engine/engine": ["./engine/mod.ts"],
+      "@sync-engine/engine/*": ["./engine/*"],
+      "@sync-engine/sdk/*": ["./sdk/*"],
+      "@sync-engine/infra/*": ["./infra/*"],
+      "@sync-engine/runtime/*": ["./runtime/*"],
+      "@sync-engine/devtools/*": ["./devtools/*"],
+      "@sync-engine/utils/*": ["./utils/*"],
+      "@sync-engine/transport/*": ["./transport/*"]
+    }
+  },
+  "include": [
+    "engine",
+    "infra",
+    "runtime",
+    "sdk",
+    "devtools",
+    "utils",
+    "tests"
+  ]
+}

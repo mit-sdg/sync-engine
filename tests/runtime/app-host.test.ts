@@ -1,0 +1,144 @@
+import { describe, expect, test } from "bun:test";
+import {
+  AppHost,
+  type AppSink,
+  type CreatedApp,
+} from "@sync-engine/runtime/app-host.ts";
+
+interface FakeApp {
+  id: string;
+}
+
+function recordingSink(events: string[]): AppSink<FakeApp> {
+  return {
+    registerApp: (prefix) => void events.push(`+${prefix}`),
+    unregisterApp: (prefix) => void events.push(`-${prefix}`),
+  };
+}
+
+describe("AppHost", () => {
+  test("register builds the app, tracks it, and notifies the sink", async () => {
+    const events: string[] = [];
+    const host = new AppHost<FakeApp, { id: string }>(
+      {
+        create: (_prefix, params): CreatedApp<FakeApp> => ({
+          app: { id: params.id },
+          type: "tenant",
+          resources: [],
+        }),
+      },
+      recordingSink(events),
+    );
+
+    const entry = await host.register("ted", { id: "course-1" });
+
+    expect(entry.app.id).toBe("course-1");
+    expect(host.has("ted")).toBe(true);
+    expect(host.get("ted")?.app.id).toBe("course-1");
+    expect(host.entries()).toEqual({
+      ted: { app: { id: "course-1" }, type: "tenant" },
+    });
+    expect(events).toEqual(["+ted"]);
+  });
+
+  test("register is idempotent — second call reuses entry, no rebuild or sink", async () => {
+    const events: string[] = [];
+    let builds = 0;
+    const host = new AppHost<FakeApp, { id: string }>(
+      {
+        create: (_prefix, params): CreatedApp<FakeApp> => {
+          builds += 1;
+          return { app: { id: params.id }, type: "tenant", resources: [] };
+        },
+      },
+      recordingSink(events),
+    );
+
+    const first = await host.register("ted", { id: "course-1" });
+    const second = await host.register("ted", { id: "course-2" });
+
+    expect(builds).toBe(1);
+    expect(second).toBe(first);
+    expect(events).toEqual(["+ted"]);
+  });
+
+  test("unregister stops resources in reverse order, drops the app, notifies sink", async () => {
+    const events: string[] = [];
+    const stops: string[] = [];
+    const host = new AppHost<FakeApp, undefined>(
+      {
+        create: (prefix): CreatedApp<FakeApp> => ({
+          app: { id: prefix },
+          type: "tenant",
+          resources: [
+            { stop: () => void stops.push(`${prefix}:1`) },
+            { stop: () => void stops.push(`${prefix}:2`) },
+          ],
+        }),
+      },
+      recordingSink(events),
+    );
+
+    await host.register("ted", undefined);
+    await host.unregister("ted");
+
+    expect(stops).toEqual(["ted:2", "ted:1"]);
+    expect(host.has("ted")).toBe(false);
+    expect(events).toEqual(["+ted", "-ted"]);
+  });
+
+  test("unregister is a no-op for an unknown prefix", async () => {
+    const events: string[] = [];
+    const host = new AppHost<FakeApp, undefined>(
+      {
+        create: (prefix) => ({
+          app: { id: prefix },
+          type: "tenant",
+          resources: [],
+        }),
+      },
+      recordingSink(events),
+    );
+
+    await host.unregister("missing");
+    expect(events).toEqual([]);
+  });
+
+  test("stopAll stops every tenant's resources without notifying the sink", async () => {
+    const events: string[] = [];
+    const stops: string[] = [];
+    const host = new AppHost<FakeApp, undefined>(
+      {
+        create: (prefix): CreatedApp<FakeApp> => ({
+          app: { id: prefix },
+          type: "tenant",
+          resources: [{ stop: () => void stops.push(prefix) }],
+        }),
+      },
+      recordingSink(events),
+    );
+
+    await host.register("a", undefined);
+    await host.register("b", undefined);
+    await host.stopAll();
+
+    expect(stops.sort()).toEqual(["a", "b"]);
+    // stopAll does not unregister, so no "-" sink events.
+    expect(events).toEqual(["+a", "+b"]);
+  });
+
+  test("works without a sink", async () => {
+    const host = new AppHost<FakeApp, undefined>({
+      create: (prefix) => ({
+        app: { id: prefix },
+        type: "tenant",
+        resources: [],
+      }),
+    });
+
+    await host.register("solo", undefined);
+    expect(host.values().map((e) => e.app.id)).toEqual(["solo"]);
+    await host.unregister("solo");
+    expect(host.values()).toEqual([]);
+  });
+});

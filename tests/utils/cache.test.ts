@@ -1,0 +1,139 @@
+import { describe, expect, test } from "bun:test";
+import {
+  cached,
+  DEFAULT_CACHE_MAX_SIZE,
+  DEFAULT_CACHE_TTL_MS,
+} from "@sync-engine/utils/cache.ts";
+
+describe("cached", () => {
+  test("memoizes results for identical arguments", () => {
+    let calls = 0;
+    const fn = cached((a: number, b: number) => {
+      calls++;
+      return a + b;
+    });
+    expect(fn(1, 2)).toBe(3);
+    expect(fn(1, 2)).toBe(3);
+    expect(calls).toBe(1);
+    expect(fn(2, 2)).toBe(4);
+    expect(calls).toBe(2);
+  });
+
+  test("caches resolved promise values", async () => {
+    let calls = 0;
+    const fn = cached(async (x: number) => {
+      calls++;
+      return x * 2;
+    });
+    const a = await fn(5);
+    const b = await fn(5);
+    expect(a).toBe(10);
+    expect(b).toBe(10);
+    expect(calls).toBe(1);
+  });
+
+  test("does not cache rejected promises", async () => {
+    let calls = 0;
+    const fn = cached(async (fail: boolean) => {
+      calls++;
+      if (fail) throw new Error("boom");
+      return "ok";
+    });
+    await expect(fn(true)).rejects.toThrow("boom");
+    await expect(fn(true)).rejects.toThrow("boom");
+    expect(calls).toBe(2);
+  });
+
+  test("exposes a size getter", () => {
+    const fn = cached((x: number) => x);
+    expect(fn.size).toBe(0);
+    fn(1);
+    fn(2);
+    expect(fn.size).toBe(2);
+    fn(1);
+    expect(fn.size).toBe(2);
+  });
+
+  test("clear() empties the cache", () => {
+    let calls = 0;
+    const fn = cached((x: number) => {
+      calls++;
+      return x;
+    });
+    fn(1);
+    fn(2);
+    expect(fn.size).toBe(2);
+    fn.clear();
+    expect(fn.size).toBe(0);
+    fn(1);
+    expect(calls).toBe(3);
+  });
+
+  test("invalidate() empties the cache", () => {
+    const fn = cached((x: number) => x);
+    fn(1);
+    fn(2);
+    expect(fn.size).toBe(2);
+    fn.invalidate();
+    expect(fn.size).toBe(0);
+  });
+
+  test("evicts the oldest entry when maxSize is exceeded", () => {
+    const fn = cached((x: number) => x, { maxSize: 2 });
+    fn(1);
+    fn(2);
+    expect(fn.size).toBe(2);
+    fn(3);
+    expect(fn.size).toBe(2);
+  });
+
+  test("recently-read entries survive eviction (LRU)", () => {
+    let calls = 0;
+    const fn = cached(
+      (x: number) => {
+        calls++;
+        return x;
+      },
+      { maxSize: 2 },
+    );
+    fn(1);
+    fn(2);
+    // Touch key 1 so it becomes most-recently-used.
+    fn(1);
+    // Insert key 3 — should evict key 2 (the least-recently-used).
+    fn(3);
+    const before = calls;
+    fn(1); // still cached → no recompute
+    expect(calls).toBe(before);
+    fn(2); // evicted → recompute
+    expect(calls).toBe(before + 1);
+  });
+
+  test("invalidates entries after TTL expires", async () => {
+    let calls = 0;
+    const fn = cached(
+      (x: number) => {
+        calls++;
+        return x;
+      },
+      { ttlMs: 20 },
+    );
+    fn(1);
+    expect(calls).toBe(1);
+    fn(1);
+    expect(calls).toBe(1);
+    await Bun.sleep(40);
+    fn(1);
+    expect(calls).toBe(2);
+  });
+
+  test("uses defaults when no options are passed", () => {
+    expect(DEFAULT_CACHE_MAX_SIZE).toBe(1000);
+    expect(DEFAULT_CACHE_TTL_MS).toBe(300000);
+    const fn = cached((x: number) => x);
+    for (let i = 0; i < DEFAULT_CACHE_MAX_SIZE + 10; i++) {
+      fn(i);
+    }
+    expect(fn.size).toBe(DEFAULT_CACHE_MAX_SIZE);
+  });
+});
