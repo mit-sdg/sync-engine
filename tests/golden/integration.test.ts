@@ -108,13 +108,13 @@ describe("golden: todo app", () => {
 
     // Queries return current state
     const pending = Todo._getPending({});
-    expect(pending).toHaveLength(1);
-    expect(pending[0].id).toBe("a");
-    expect(pending[0].completed).toBe(false);
+    expect(pending).toHaveLength(0); // "a" was completed, "b" was deleted
 
-    // getAll returns all (including completed but not deleted)
+    // getAll returns all non-deleted todos (including completed)
     const all = Todo._getAll({});
     expect(all).toHaveLength(1); // only "a" remains; "b" was deleted
+    expect(all[0].id).toBe("a");
+    expect(all[0].completed).toBe(true);
   });
 
   test("queries are cached between mutations", async () => {
