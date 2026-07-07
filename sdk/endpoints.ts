@@ -10,7 +10,14 @@
  * can supply a thin adapter.
  */
 
-import type { Frames, InstrumentedAction, Mapping, Sync, Vars } from "@sync-engine/engine";
+import type {
+  Frames,
+  InstrumentedAction,
+  Mapping,
+  Sync,
+  ThenClause,
+  Vars,
+} from "@sync-engine/engine";
 import { type ActionList, type ActionPattern, actions } from "@sync-engine/engine";
 
 declare const requestInput: unique symbol;
@@ -100,7 +107,7 @@ interface EndpointDsl {
 type EndpointSyncDeclaration = {
   when: ActionPattern[];
   where?: (frames: Frames) => Frames | Promise<Frames>;
-  then: ActionPattern[];
+  then: ThenClause;
 };
 
 type AllowableInput = string | string[] | number | boolean | undefined | null;

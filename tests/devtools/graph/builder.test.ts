@@ -12,7 +12,7 @@ import type {
   PatternBinding,
   RequestBoundary,
 } from "@sync-engine/devtools/graph/types.ts";
-import { actions, SyncConcept, type Vars } from "@sync-engine/engine";
+import { actions, branch, step, SyncConcept, type Vars } from "@sync-engine/engine";
 
 // ── Mock concepts ────────────────────────────────────────────────
 
@@ -384,5 +384,40 @@ describe("buildSyncGraph", () => {
     );
     expect(errorBinding).toBeDefined();
     expect(errorBinding?.source).toEqual({ kind: "literal", value: "bad" });
+  });
+
+  test("flattens nested workflow steps into graph nodes and then bindings", () => {
+    const engine = new SyncConcept();
+    const tc = engine.instrumentConcept(new TestConcept());
+
+    engine.register({
+      NestedSync: ({ result }: Vars) => ({
+        when: actions([tc.doSomething, {}, { result }]),
+        then: [
+          step([tc.noOutput, {}, {}], {
+            then: [
+              branch(
+                {},
+                {
+                  then: [step([tc.failAction, { result }, { error: "bad" }])],
+                },
+              ),
+            ],
+          }),
+        ],
+      }),
+    });
+
+    const graph = buildSyncGraph(engine, boundary);
+    const nodeIds = graph.nodes.map((node: GraphNode) => node.id);
+    expect(nodeIds).toContain("Test.doSomething");
+    expect(nodeIds).toContain("Test.noOutput");
+    expect(nodeIds).toContain("Test.failAction");
+
+    const edge = graph.edges[0];
+    expect(edge.then.map((binding: { nodeId: string }) => binding.nodeId)).toEqual([
+      "Test.noOutput",
+      "Test.failAction",
+    ]);
   });
 });

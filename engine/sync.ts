@@ -33,16 +33,45 @@ import type {
   ActionList,
   ActionPattern,
   AnyAction,
+  BranchNode,
   Frame,
   InstrumentedAction,
+  Mapping,
+  NestedThenOptions,
+  OutcomeKind,
+  SyncFunction,
+  StepNode,
   SyncFunctionMap,
   Synchronization,
+  ThenNode,
 } from "./types.ts";
 import { inspect, inspectCustom, uuid } from "./util.ts";
 import { $vars } from "./vars.ts";
 
 export function sanitize(obj: unknown): unknown {
   return redactValue(obj);
+}
+
+function errorOutputFromThrown(err: unknown): Record<string, unknown> {
+  if (err !== null && typeof err === "object") {
+    const thrown = err as Record<string, unknown>;
+    const error =
+      typeof thrown.error === "string"
+        ? thrown.error
+        : typeof thrown.code === "string"
+          ? thrown.code
+          : FrameworkErrorCode.UNKNOWN_ERROR;
+    const detail =
+      typeof thrown.detail === "string"
+        ? thrown.detail
+        : typeof thrown.message === "string"
+          ? thrown.message
+          : undefined;
+
+    return detail === undefined ? { error } : { error, detail };
+  }
+
+  return { error: FrameworkErrorCode.UNKNOWN_ERROR, detail: String(err) };
 }
 
 /**
@@ -76,6 +105,43 @@ export function actions(...actions: ActionList[]): ActionPattern[] {
       ...(output ? { output } : {}),
     };
   });
+}
+
+export function step(action: ActionList, options: NestedThenOptions = {}): StepNode {
+  const [pattern] = actions(action);
+  return { kind: "step", action: pattern, ...options };
+}
+
+export function branch(pattern: Mapping, options: NestedThenOptions = {}): BranchNode {
+  return { kind: "branch", outcome: "any", pattern, ...options };
+}
+
+function outcomeBranch(
+  outcome: OutcomeKind,
+  patternOrOptions: Mapping | NestedThenOptions = {},
+  maybeOptions?: NestedThenOptions,
+): BranchNode {
+  const firstArgIsOptions =
+    maybeOptions === undefined &&
+    patternOrOptions !== null &&
+    typeof patternOrOptions === "object" &&
+    ("then" in patternOrOptions || "where" in patternOrOptions);
+  const pattern = firstArgIsOptions ? {} : (patternOrOptions as Mapping);
+  const options =
+    maybeOptions ?? (firstArgIsOptions ? (patternOrOptions as NestedThenOptions) : {});
+  return { kind: "branch", outcome, pattern, ...options };
+}
+
+export const outcome = {
+  result: (patternOrOptions?: Mapping | NestedThenOptions, options?: NestedThenOptions) =>
+    outcomeBranch("result", patternOrOptions ?? {}, options),
+  error: (patternOrOptions?: Mapping | NestedThenOptions, options?: NestedThenOptions) =>
+    outcomeBranch("error", patternOrOptions ?? {}, options),
+  complete: (options: NestedThenOptions = {}) => outcomeBranch("complete", {}, options),
+} as const;
+
+export function workflow(fn: SyncFunction): SyncFunction {
+  return fn;
 }
 
 /** The internal shape of an instrumented action's argument object. */
@@ -228,6 +294,22 @@ export class SyncConcept {
    * be matched again. All produced actions are awaited in order afterward.
    */
   async addThen(frames: Frames, sync: Synchronization, actionSymbols: symbol[]): Promise<void> {
+    if (this.isNestedThen(sync.then)) {
+      for (const frame of frames) {
+        let whenActions: ActionRecord[];
+        try {
+          whenActions = this.resolveWhenActions(frame, actionSymbols);
+        } catch (err) {
+          logger.warn(
+            `Sync "${sync.sync}": skipping frame — ${err instanceof Error ? err.message : String(err)}`,
+          );
+          continue;
+        }
+        await this.runThenNodes(new Frames(frame), sync.then, sync, whenActions);
+      }
+      return;
+    }
+
     const thens: [InstrumentedAction, ActionArguments, ActionRecord[]][] = [];
 
     for (const frame of frames) {
@@ -279,6 +361,151 @@ export class SyncConcept {
         }
       }
     }
+  }
+
+  private isNestedThen(then: Synchronization["then"]): then is ThenNode[] {
+    return then.some((item) => "kind" in item);
+  }
+
+  private async runThenNodes(
+    frames: Frames,
+    nodes: ThenNode[],
+    sync: Synchronization,
+    whenActions: ActionRecord[],
+    previousOutput?: Record<string, unknown>,
+    blockDirectStepsOnError = false,
+  ): Promise<void> {
+    for (const frame of frames) {
+      for (const node of nodes) {
+        if (node.kind === "branch") {
+          await this.runBranchNode(frame, node, sync, whenActions, previousOutput);
+          continue;
+        }
+        if (blockDirectStepsOnError && previousOutput !== undefined && "error" in previousOutput) {
+          continue;
+        }
+        await this.runStepNode(frame, node, sync, whenActions);
+      }
+    }
+  }
+
+  private async runStepNode(
+    frame: Frame,
+    node: StepNode,
+    sync: Synchronization,
+    whenActions: ActionRecord[],
+  ): Promise<void> {
+    let matched: ActionArguments;
+    try {
+      matched = this.matchThen(node.action, frame);
+    } catch {
+      return;
+    }
+
+    const id = matched[actionId];
+    if (typeof id !== "string") {
+      throw new Error("Action produced from `then` is missing an id.");
+    }
+
+    for (const whenAction of whenActions) {
+      whenAction.synced?.set(sync.sync, id);
+    }
+
+    let output: Record<string, unknown>;
+    const runThen = node.action.action as unknown as (args: ActionArguments) => Promise<unknown>;
+    try {
+      output = (await runThen(matched)) as Record<string, unknown>;
+    } catch (err) {
+      logger.error(`Error in then action ${String(node.action.action)}:`, {
+        error: serializeError(err),
+      });
+      for (const whenAction of whenActions) {
+        whenAction.synced?.delete(sync.sync);
+      }
+      return;
+    }
+
+    if (node.then === undefined || node.then.length === 0) return;
+
+    const childFrame = this.frameWithStepOutput(frame, node.action, output);
+    if (childFrame === undefined) return;
+
+    let childFrames = new Frames(childFrame);
+    if (node.where !== undefined) {
+      const maybeFrames = node.where(childFrames);
+      childFrames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+    }
+
+    await this.runThenNodes(childFrames, node.then, sync, whenActions, output, true);
+  }
+
+  private async runBranchNode(
+    frame: Frame,
+    node: BranchNode,
+    sync: Synchronization,
+    whenActions: ActionRecord[],
+    previousOutput?: Record<string, unknown>,
+  ): Promise<void> {
+    if (previousOutput === undefined || node.then === undefined || node.then.length === 0) return;
+    const branchedFrame = this.frameWithBranchOutput(frame, previousOutput, node);
+    if (branchedFrame === undefined) return;
+
+    let frames = new Frames(branchedFrame);
+    if (node.where !== undefined) {
+      const maybeFrames = node.where(frames);
+      frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+    }
+
+    await this.runThenNodes(frames, node.then, sync, whenActions);
+  }
+
+  private frameWithStepOutput(
+    frame: Frame,
+    pattern: ActionPattern,
+    output: Record<string, unknown>,
+  ): Frame | undefined {
+    if (pattern.output === undefined) {
+      return { ...frame };
+    }
+    return this.unifyOutputPattern(output, pattern.output, frame);
+  }
+
+  private frameWithBranchOutput(
+    frame: Frame,
+    output: Record<string, unknown>,
+    branch: BranchNode,
+  ): Frame | undefined {
+    if (!this.matchesOutcome(output, branch.outcome, branch.pattern)) return undefined;
+    return this.unifyOutputPattern(output, branch.pattern, frame);
+  }
+
+  private matchesOutcome(
+    output: Record<string, unknown>,
+    outcomeKind: OutcomeKind,
+    pattern: Mapping,
+  ): boolean {
+    const hasError = "error" in output;
+    switch (outcomeKind) {
+      case "error":
+        return hasError;
+      case "complete":
+        return !hasError && Object.keys(output).length === 0;
+      case "result":
+        return !hasError;
+      case "any":
+        return Object.keys(pattern).length > 0 || (!hasError && Object.keys(output).length === 0);
+    }
+  }
+
+  private unifyOutputPattern(
+    output: Record<string, unknown>,
+    pattern: Mapping,
+    frame: Frame,
+  ): Frame | undefined {
+    if (Object.keys(pattern).length === 0 && "error" in output) {
+      return undefined;
+    }
+    return this.unifyPattern(output, pattern, frame);
   }
 
   /** Recover the `when` records a frame matched, ready to be marked synced. */
@@ -556,10 +783,7 @@ export class SyncConcept {
           try {
             output = (await action(input)) as Record<string, unknown>;
           } catch (err) {
-            output = {
-              error: FrameworkErrorCode.UNKNOWN_ERROR,
-              detail: err instanceof Error ? err.message : String(err),
-            };
+            output = errorOutputFromThrown(err);
           }
           const durationMs = performance.now() - started;
           Action.invoked({ id, output });

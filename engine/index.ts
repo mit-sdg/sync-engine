@@ -8,15 +8,30 @@
 export { Frames } from "./frames.ts";
 export { actionNameOf, actionNodeId, conceptNameOf } from "./introspect.ts";
 export type { EngineObserver, JournalEvent } from "./observer.ts";
-export { actions, Logging, SyncConcept, sanitize } from "./sync.ts";
+export {
+  actions,
+  branch,
+  Logging,
+  outcome,
+  sanitize,
+  step,
+  SyncConcept,
+  workflow,
+} from "./sync.ts";
 export type {
   ActionList,
   ActionPattern,
+  BranchNode,
   Empty,
   Frame,
   InstrumentedAction,
   Mapping,
+  NestedThenOptions,
+  OutcomeKind,
+  StepNode,
   SyncFunction as Sync,
+  ThenClause,
+  ThenNode,
   Vars,
 } from "./types.ts";
 export type { TypedVars, Var } from "./vars.ts";

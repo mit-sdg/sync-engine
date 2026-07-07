@@ -270,6 +270,52 @@ const result = await pipe(
 )(frames);
 ```
 
+### Nested Workflows
+
+Use nested `then` clauses when several syncs only exist to describe one workflow.
+Branches match any action outcome, not only errors:
+
+```ts
+import { actions, branch, outcome, step, workflow, type Vars } from "sync-engine/engine";
+
+const ReviewWorkflow = workflow(({ requestId, route, reason }: Vars) => ({
+  when: actions([Request.submitted, { requestId }, {}]),
+  then: [
+    step([Review.classify, { requestId }, { route }], {
+      then: [
+        branch(
+          { route: "approved" },
+          {
+            then: [step([Request.approve, { requestId }])],
+          },
+        ),
+        branch(
+          { route: "manual" },
+          {
+            then: [step([Queue.enqueue, { requestId }])],
+          },
+        ),
+        outcome.error(
+          { detail: reason },
+          {
+            then: [step([Audit.record, { event: "REVIEW_FAILED", payload: reason }])],
+          },
+        ),
+      ],
+    }),
+  ],
+}));
+```
+
+Concept actions may throw domain errors instead of returning error records. The
+engine records thrown failures as error outcomes, so workflows can handle them
+with `outcome.error(...)`. Empty action outputs are completion outcomes; they are
+also successful results, so `outcome.result(...)` matches both data-bearing
+results and completion.
+
+Use standalone syncs for reusable policies. Use nested workflows when the syncs
+are only meaningful as ordered steps of one request or business process.
+
 ## Example: Todo App
 
 See [`tests/golden/`](tests/golden/) for a complete, self-contained example:

@@ -43,11 +43,33 @@ export interface ActionPattern {
   flow: symbol;
 }
 
+export type OutcomeKind = "any" | "result" | "error" | "complete";
+
+export type ThenClause = ActionPattern[] | ThenNode[];
+
+export type ThenNode = StepNode | BranchNode;
+
+export interface NestedThenOptions {
+  where?: (frames: Frames) => Frames | Promise<Frames>;
+  then?: ThenNode[];
+}
+
+export interface StepNode extends NestedThenOptions {
+  kind: "step";
+  action: ActionPattern;
+}
+
+export interface BranchNode extends NestedThenOptions {
+  kind: "branch";
+  outcome: OutcomeKind;
+  pattern: Mapping;
+}
+
 /** The raw object a sync function returns before it is registered by name. */
 interface SyncDeclaration {
   when: ActionPattern[];
   where?: (frames: Frames) => Frames | Promise<Frames>;
-  then: ActionPattern[];
+  then: ThenClause;
 }
 
 /** A registered synchronization: a {@link SyncDeclaration} plus its name. */

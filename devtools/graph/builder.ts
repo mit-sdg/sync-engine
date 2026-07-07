@@ -7,7 +7,7 @@
  * `./types.ts`.  Zero imports from `@concepts` or `@sdk`.
  */
 
-import type { SyncConcept } from "@sync-engine/engine";
+import type { ActionPattern, SyncConcept, ThenClause, ThenNode } from "@sync-engine/engine";
 import { actionNameOf, actionNodeId, conceptNameOf } from "@sync-engine/engine";
 import type {
   ActionBinding,
@@ -92,6 +92,25 @@ function mergeBindings(bindings: ActionBinding[]): ActionBinding[] {
   }
   // SAFETY: every id in `order` was set via `merged.set(b.nodeId, b)` above.
   return order.map((id) => merged.get(id) as ActionBinding);
+}
+
+function flattenThenPatterns(then: ThenClause): ActionPattern[] {
+  if (!then.some((item) => "kind" in item)) return then as ActionPattern[];
+
+  const patterns: ActionPattern[] = [];
+  const visit = (node: ThenNode): void => {
+    if (node.kind === "step") {
+      patterns.push(node.action);
+    }
+    for (const child of node.then ?? []) {
+      visit(child);
+    }
+  };
+
+  for (const node of then as ThenNode[]) {
+    visit(node);
+  }
+  return patterns;
 }
 
 /**
@@ -209,7 +228,7 @@ export function buildSyncGraph(engine: SyncConcept, boundary: RequestBoundary): 
 
     // ── `then` side: create target nodes ──
     const toIds: string[] = [];
-    for (const pattern of sync.then) {
+    for (const pattern of flattenThenPatterns(sync.then)) {
       // The boundary's exit action is terminal — collapse it to a stable sink
       // id regardless of which boundary instance it came from.
       const isExitAction =
