@@ -1,13 +1,12 @@
 /**
- * Framework-owned error codes emitted by the engine, transport client,
- * and generic infrastructure — never by domain rules.
+ * Framework-owned error codes emitted by the engine, SDK client,
+ * and generic server layer — never by domain rules.
  *
- * These codes are the "Infrastructure" and "Transport" groups from the
- * shared error-code contract.  Their string values are part of the
- * stable wire protocol and must never change.
+ * Their string values are part of the stable wire protocol and
+ * must never change.
  */
 export const FrameworkErrorCode = {
-  // ═══ Infrastructure ═══
+  // ═══ Server / Framework ═══
   BODY_TOO_LARGE: "BODY_TOO_LARGE",
   INTERNAL_ERROR: "INTERNAL_ERROR",
   INVALID_BODY: "INVALID_BODY",
@@ -19,7 +18,7 @@ export const FrameworkErrorCode = {
   UNSUPPORTED_MEDIA_TYPE: "UNSUPPORTED_MEDIA_TYPE",
   VALIDATION_FAILED: "VALIDATION_FAILED",
 
-  // ═══ Transport (SDK client only) ═══
+  // ═══ Network / Wire (SDK client only) ═══
   BAD_JSON: "BAD_JSON",
   BAD_STATUS: "BAD_STATUS",
   HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED",

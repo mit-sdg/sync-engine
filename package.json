@@ -23,12 +23,8 @@
     "./engine/*": "./engine/*",
     "./sdk": "./sdk/index.ts",
     "./sdk/*": "./sdk/*",
-    "./infra": "./infra/index.ts",
-    "./infra/*": "./infra/*",
     "./runtime": "./runtime/index.ts",
     "./runtime/*": "./runtime/*",
-    "./transport": "./transport/index.ts",
-    "./transport/*": "./transport/*",
     "./utils": "./utils/index.ts",
     "./utils/*": "./utils/*",
     "./devtools/graph": "./devtools/graph/index.ts",
@@ -39,23 +35,12 @@
     "test": "LOG_LEVEL=error vp test",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "mongodb": "^7.2.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "mongodb-memory-server": "^11.2.0",
     "typescript": "^5.9.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.2",
     "vite-plus": "0.2.2"
-  },
-  "peerDependencies": {
-    "mongodb": "^7.0.0"
-  },
-  "peerDependenciesMeta": {
-    "mongodb": {
-      "optional": true
-    }
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.2"

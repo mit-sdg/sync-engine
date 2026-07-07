@@ -1,7 +1,7 @@
 /**
  * Lifecycle — a uniform teardown registry.
  *
- * Every long-lived resource (timer, scheduler, infra module, HTTP server, db
+ * Every long-lived resource (timer, scheduler, HTTP server, db
  * client) registers itself once as a {@link Stoppable}. Shutdown is a single
  * call to {@link Lifecycle.stopAll}, which stops everything in reverse
  * registration order and waits for all stops to settle. Adding a resource

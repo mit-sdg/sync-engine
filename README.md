@@ -177,17 +177,10 @@ sync-engine/
     client.ts        Type-safe HTTP client (Eden Treaty style)
     endpoints.ts     Typed endpoint authoring DSL
     error-codes.ts   Framework-level error codes
-  infra/          Infrastructure modules (optional, require MongoDB)
-    scheduler.ts     Distributed job scheduler with MongoDB leases
-    health.ts        Liveness + readiness probes
-    metrics.ts        Observability sink (counters, histograms)
-    readiness.ts     Generic MongoDB + index health check
   runtime/        Application runtime
     app-host.ts      Multi-tenant app registry
     lifecycle.ts     Uniform teardown registry
     job-status.ts    Lazily-read job-status aggregator
-  transport/      Transport-layer types
-    types.ts         AppRequest, AppResponse, Driver
   utils/          Shared utilities
     cache.ts         Generic memoization with TTL + LRU eviction
     logger.ts        Structured JSON + pretty logger
@@ -201,7 +194,6 @@ sync-engine/
   tests/           Framework-level tests
     engine/          Core engine tests (matching, frames, syncs, observer)
     runtime/         AppHost, Lifecycle, JobStatusRegistry
-    infra/           Scheduler, Health, Metrics
     utils/           Cache, Logger
     devtools/graph/  Graph builder, diagnostics, exporters, reachability
     golden/          Self-contained Todo app example (concepts + syncs)

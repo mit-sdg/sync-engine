@@ -7,10 +7,16 @@
  * scheduler registers itself as a source here, and the metrics/health modules
  * read the aggregate lazily via {@link JobStatusRegistry.all}.
  *
- * App-agnostic: depends only on the framework infra `JobStatus` type.
+ * App-agnostic: depends only on its own `JobStatus` type.
  */
 
-import type { JobStatus } from "@sync-engine/infra/types.ts";
+export interface JobStatus {
+  name: string;
+  lastRun: string | null;
+  lastStatus: "success" | "failure" | null;
+  lastError: string | null;
+  lastDurationMs: number | null;
+}
 
 export interface JobStatusSource {
   getJobStatuses(): JobStatus[];
