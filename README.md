@@ -70,20 +70,18 @@ class LoggerConcept {
 Syncs are `when → where → then` declarations:
 
 ```ts
-import { actions, type Vars } from "sync-engine/engine";
+import { act, type Vars, when } from "sync-engine/engine";
 
 // "Whenever Counter.increment executes and the count reaches 10, log it."
-const LogAt10 = ({ count, msg }: Vars) => ({
-  when: actions(
-    [Counter.increment, {}, {}], // match any increment
-  ),
-  where: (frames) =>
-    frames
-      .query(Counter._getCount, {}, { count }) // read current count
-      .filter(($) => $[count] === 10) // only when it's 10
-      .map(($) => ({ ...$, [msg]: "Reached 10!" })),
-  then: actions([Logger.log, { message: msg }]),
-});
+const LogAt10 = ({ count, msg }: Vars) =>
+  when(Counter.increment, {}) // match any increment
+    .where((frames) =>
+      frames
+        .query(Counter._getCount, {}, { count }) // read current count
+        .filter(($) => $[count] === 10) // only when it's 10
+        .map(($) => ({ ...$, [msg]: "Reached 10!" })),
+    )
+    .then(act(Logger.log, { message: msg }));
 ```
 
 ### 3. Wire everything together
@@ -221,13 +219,75 @@ class SyncConcept {
 }
 ```
 
-### `actions(...tuples)`
+### `sync(fn)`
 
-Normalizes sync clauses into `ActionPattern[]`:
+Declares a sync rule. An identity wrapper that gives TypeScript a place to infer
+the `Vars` parameter and keeps every rule greppable by one name:
 
 ```ts
-actions([Concept.action, inputMapping, outputMapping], [OtherConcept.action, inputMapping]);
+const MyRule = sync(({ userId }: Vars) => when(...).then(...));
 ```
+
+### `when(action, input, output?)`
+
+Starts a rule by matching an action against the journal, returning a builder.
+Chain `.and(...)` to join more patterns, an optional `.where(...)` to transform
+frames, and `.then(...)` to dispatch. The clause order `when → and* → where? →
+then` is enforced by the builder's types.
+
+```ts
+// single pattern
+when(Concept.action, { inputKey: symVar }, { outputKey: symVar }).then(act(...));
+
+// join across two actions, filtered
+when(Concept.a, { x: varX })
+  .and(Concept.b, { y: varY })
+  .where((frames) => frames.filter(($) => $[varX] === $[varY]))
+  .then(act(Concept.c, { x: varX }));
+```
+
+### `act(action, input)`
+
+A dispatch step. Refine it with `.as(bindings)` to bind its output into the
+frame, `.where(fn)` to transform the frames before its children run, and
+`.branch(...)` to react to its outcome:
+
+```ts
+act(Payment.charge, { total }).as({ paymentId }).branch(
+  on(act(Receipt.send, { paymentId })),  // .as() already bound paymentId
+  onError({ code: "CARD_DECLINED" }, ...),
+)
+```
+
+### `on` / `onError`
+
+Outcome branches, attached via `act(...).branch(...)` (or as steps inside
+`seq(...)`). They partition an action's outcome:
+
+- `on(...nodes)` / `on(pattern, ...nodes)` — the action produced a value or completed (any
+  **non-error** outcome). The optional pattern filters or extracts further bindings.
+  Omit it when `.as()` already bound what you need.
+- `onError(pattern?, ...nodes)` — the action failed, whether it threw or
+  returned an error record. The optional pattern unifies against the error.
+
+### `seq(...steps)` / `par(...steps)`
+
+Control sibling execution order inside a `then`:
+
+```ts
+// sequential: each step's `.as()` bindings feed the next; stops on error
+seq(
+  act(Inventory.reserve, { items }).as({ holdId }),
+  act(Payment.charge, { total }).as({ paymentId }),
+);
+
+// concurrent: each child starts from the same input frame
+par(act(Receipt.email, { userId }), act(Audit.record, { event: "ORDER_CREATED" }));
+```
+
+A plain `.then(act(...), act(...))` runs its siblings sequentially and
+deterministically — `seq` is only needed to forward `.as()` bindings between
+steps.
 
 ### `Frames`
 
@@ -264,46 +324,47 @@ const result = await pipe(
 
 ### Nested Workflows
 
-Use nested `then` clauses when several syncs only exist to describe one workflow.
-Branches match any action outcome, not only errors:
+Use a nested `act(...).branch(...)` when several syncs only exist to describe one
+workflow. Branches match on the step's outcome — result, error, or completion:
 
 ```ts
-import { actions, branch, outcome, step, workflow, type Vars } from "sync-engine/engine";
+import { act, on, onError, seq, sync, type Vars, when } from "sync-engine/engine";
 
-const ReviewWorkflow = workflow(({ requestId, route, reason }: Vars) => ({
-  when: actions([Request.submitted, { requestId }, {}]),
-  then: [
-    step([Review.classify, { requestId }, { route }], {
-      then: [
-        branch(
-          { route: "approved" },
-          {
-            then: [step([Request.approve, { requestId }])],
-          },
-        ),
-        branch(
-          { route: "manual" },
-          {
-            then: [step([Queue.enqueue, { requestId }])],
-          },
-        ),
-        outcome.error(
-          { detail: reason },
-          {
-            then: [step([Audit.record, { event: "REVIEW_FAILED", payload: reason }])],
-          },
-        ),
-      ],
-    }),
-  ],
-}));
+const ReviewWorkflow = sync(({ requestId, route, reason }: Vars) =>
+  when(Request.submitted, { requestId }).then(
+    act(Review.classify, { requestId })
+      .as({ route })
+      .branch(
+        on({ route: "approved" }, act(Request.approve, { requestId })),
+        on({ route: "manual" }, act(Queue.enqueue, { requestId })),
+        onError({ detail: reason }, act(Audit.record, { event: "REVIEW_FAILED", payload: reason })),
+      ),
+  ),
+);
 ```
 
+Steps can be sequenced explicitly with `seq(...)` — each step's output feeds into
+the next step's input frame via `.as()` bindings, and the sequence stops on the
+first error:
+
+```ts
+then: seq(
+  act(Inventory.reserve, { items }).as({ holdId }),
+  act(Payment.charge, { total }).as({ paymentId }),
+  act(Order.create, { holdId, paymentId }),
+);
+```
+
+Use `par(...)` to declare sibling actions safe for concurrent execution. A plain
+`.then(act(...), act(...))` executes its siblings sequentially for deterministic
+safety.
+
 Concept actions may throw domain errors instead of returning error records. The
-engine records thrown failures as error outcomes, so workflows can handle them
-with `outcome.error(...)`. Empty action outputs are completion outcomes; they are
-also successful results, so `outcome.result(...)` matches both data-bearing
-results and completion.
+engine records thrown failures as `{ kind: "error" }` outcomes, picked up by
+`onError(...)` branches. `on(...)` (with or without a pattern) matches any
+non-error outcome — it never fires on a failure, so it and `onError(...)` never
+overlap. When `.as()` already bound the values you need, omit the pattern:
+`on(act(Receipt.send, { paymentId }))`.
 
 Use standalone syncs for reusable policies. Use nested workflows when the syncs
 are only meaningful as ordered steps of one request or business process.

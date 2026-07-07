@@ -15,7 +15,7 @@
  *    flow, which keeps independent invocations from cross-matching.
  */
 
-import type { InstrumentedAction } from "./types.ts";
+import type { ActionOutcome, InstrumentedAction } from "./types.ts";
 import { uuid } from "./util.ts";
 
 /**
@@ -31,8 +31,26 @@ export interface ActionRecord {
   concept: object;
   input: Record<string, unknown>;
   output?: Record<string, unknown>;
+  outcome?: ActionOutcome;
   synced?: Map<string, string>;
   flow: string;
+}
+
+/**
+ * Normalise a raw action output record into a first-class {@link ActionOutcome}.
+ *
+ * The engine calls this once per invocation so every downstream site —
+ * matching, branching, observer events — works with a discriminated union
+ * instead of ad-hoc `"error" in output` checks.
+ */
+export function normalizeOutcome(output: Record<string, unknown>): ActionOutcome {
+  if ("error" in output) {
+    return { kind: "error", error: output };
+  }
+  if (Object.keys(output).length === 0) {
+    return { kind: "complete" };
+  }
+  return { kind: "result", value: output };
 }
 
 /**
@@ -69,6 +87,7 @@ export class ActionConcept {
       throw new Error(`Action with id ${id} not found.`);
     }
     action.output = output;
+    action.outcome = normalizeOutcome(output);
     return { id };
   }
 

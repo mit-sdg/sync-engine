@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { assembleReport } from "@sync-engine/devtools/graph/report.ts";
-import { actions, SyncConcept } from "@sync-engine/engine";
+import { act, SyncConcept, when } from "@sync-engine/engine";
 import type { RequestBoundary } from "@sync-engine/devtools/graph/types.ts";
 import type { Vars } from "@sync-engine/engine";
 
@@ -39,10 +39,7 @@ describe("assembleReport", () => {
     const { Counter } = instrumented;
 
     sync.register({
-      Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
-      }),
+      Increment: (_vars: Vars) => when(Counter.increment, {}).then(act(Counter.increment, {})),
     });
 
     const report = assembleReport(sync, boundary);
@@ -61,10 +58,7 @@ describe("assembleReport", () => {
     const { Counter } = instrumented;
 
     sync.register({
-      Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
-      }),
+      Increment: (_vars: Vars) => when(Counter.increment, {}).then(act(Counter.increment, {})),
     });
 
     const report = assembleReport(sync, boundary);
@@ -83,10 +77,7 @@ describe("assembleReport", () => {
     const { Counter } = instrumented;
 
     sync.register({
-      Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
-      }),
+      Increment: (_vars: Vars) => when(Counter.increment, {}).then(act(Counter.increment, {})),
     });
 
     const report = assembleReport(sync, boundary);
@@ -103,10 +94,7 @@ describe("assembleReport", () => {
     const { Counter } = instrumented;
 
     sync.register({
-      Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
-      }),
+      Increment: (_vars: Vars) => when(Counter.increment, {}).then(act(Counter.increment, {})),
     });
 
     const report = assembleReport(sync, boundary);
@@ -122,10 +110,7 @@ describe("assembleReport", () => {
     const { Counter } = instrumented;
 
     sync.register({
-      Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
-      }),
+      Increment: (_vars: Vars) => when(Counter.increment, {}).then(act(Counter.increment, {})),
     });
 
     const report = assembleReport(sync, boundary);
@@ -144,10 +129,7 @@ describe("assembleReport", () => {
     const { Counter } = instrumented;
 
     sync.register({
-      Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
-      }),
+      Increment: (_vars: Vars) => when(Counter.increment, {}).then(act(Counter.increment, {})),
     });
 
     let pluginCalled = false;
@@ -181,14 +163,9 @@ describe("assembleReport", () => {
     const { Counter } = instrumented;
 
     sync.register({
-      Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
-      }),
-      DoubleIncrement: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}], [Counter.increment, {}]),
-      }),
+      Increment: (_vars: Vars) => when(Counter.increment, {}).then(act(Counter.increment, {})),
+      DoubleIncrement: (_vars: Vars) =>
+        when(Counter.increment, {}).then(act(Counter.increment, {}), act(Counter.increment, {})),
     });
 
     const report = assembleReport(sync, boundary);

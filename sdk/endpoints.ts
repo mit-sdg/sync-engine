@@ -18,7 +18,11 @@ import type {
   ThenClause,
   Vars,
 } from "@sync-engine/engine";
-import { type ActionList, type ActionPattern, actions } from "@sync-engine/engine";
+import type { ActionList, ActionPattern } from "@sync-engine/engine";
+// The endpoint DSL builds tuple patterns programmatically; it uses the engine's
+// lower-level `actions()` primitive directly rather than the fluent `when(...)`
+// authoring surface, which is shaped for hand-written syncs.
+import { actions } from "@sync-engine/engine/sync.ts";
 
 declare const requestInput: unique symbol;
 declare const responseOutput: unique symbol;
@@ -252,7 +256,9 @@ export function createEndpointDsl(boundary: RequestBoundaryActions) {
 
         try {
           const declaration = fn(vars);
-          const [requestAnchor] = actions(requestPattern({}, { request }));
+          const [requestAnchor] = actions(
+            requestPattern({}, { request }) as unknown as [any, any, any],
+          );
           return {
             ...declaration,
             when: [requestAnchor, ...declaration.when],

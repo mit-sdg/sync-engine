@@ -25,25 +25,32 @@ import { FrameworkErrorCode } from "../sdk/error-codes.ts";
 import { cached } from "../utils/cache.ts";
 import { logger } from "../utils/logger.ts";
 import { redact as redactValue, serializeError } from "../utils/redaction.ts";
-import { ActionConcept, type ActionRecord } from "./actions.ts";
+import { ActionConcept, type ActionRecord, normalizeOutcome } from "./actions.ts";
 import { Frames } from "./frames.ts";
 import { actionNameOf, conceptNameOf } from "./introspect.ts";
 import type { EngineObserver, JournalEvent } from "./observer.ts";
 import type {
+  ActChain,
   ActionList,
+  ActionOutcome,
   ActionPattern,
   AnyAction,
   BranchNode,
   Frame,
   InstrumentedAction,
   Mapping,
-  NestedThenOptions,
   OutcomeKind,
-  SyncFunction,
+  ParallelNode,
+  SequenceNode,
   StepNode,
+  SyncDeclaration,
+  SyncFunction,
   SyncFunctionMap,
   Synchronization,
   ThenNode,
+  WhenBuilder,
+  WhenBuilderWithWhere,
+  WhereFn,
 } from "./types.ts";
 import { inspect, inspectCustom, uuid } from "./util.ts";
 import { $vars } from "./vars.ts";
@@ -107,41 +114,216 @@ export function actions(...actions: ActionList[]): ActionPattern[] {
   });
 }
 
-export function step(action: ActionList, options: NestedThenOptions = {}): StepNode {
-  const [pattern] = actions(action);
-  return { kind: "step", action: pattern, ...options };
+// ── Fluent authoring DSL ──────────────────────────────────────────────────
+//
+// A sync reads as one sentence:
+//
+//   sync(({ requestId, route }) =>
+//     when(Request.submitted, { requestId })
+//       .then(
+//         act(Review.classify, { requestId }).as({ route }).branch(
+//           on({ route: "approved" }, act(Request.approve, { requestId })),
+//           onError({ detail }, act(Audit.record, { event: "FAILED" })),
+//           on(act(Audit.record, { event: "EMPTY" })),
+//         ),
+//       ),
+//   );
+//
+// Every constructor produces the same internal node vocabulary the engine
+// already executes (StepNode / BranchNode / SequenceNode / ParallelNode). The
+// DSL only adds a legible surface plus construction-time checks for shapes
+// that would otherwise fail silently at runtime.
+
+/**
+ * Brand marking a value as a DSL-constructed node. Lets {@link onError} tell a
+ * user pattern (a plain {@link Mapping}, which may itself contain a `kind`
+ * key) apart from a node, without a fragile `"kind" in x` duck-test. Defined
+ * non-enumerable so it never leaks into spreads, serialization, or inspection.
+ */
+const NodeBrand: unique symbol = Symbol("NodeBrand");
+
+function brand<T extends object>(node: T): T {
+  Object.defineProperty(node, NodeBrand, { value: true, enumerable: false });
+  return node;
 }
 
-export function branch(pattern: Mapping, options: NestedThenOptions = {}): BranchNode {
-  return { kind: "branch", outcome: "any", pattern, ...options };
+function isNode(value: unknown): value is ThenNode {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as Record<symbol, unknown>)[NodeBrand] === true
+  );
 }
 
-function outcomeBranch(
-  outcome: OutcomeKind,
-  patternOrOptions: Mapping | NestedThenOptions = {},
-  maybeOptions?: NestedThenOptions,
-): BranchNode {
-  const firstArgIsOptions =
-    maybeOptions === undefined &&
-    patternOrOptions !== null &&
-    typeof patternOrOptions === "object" &&
-    ("then" in patternOrOptions || "where" in patternOrOptions);
-  const pattern = firstArgIsOptions ? {} : (patternOrOptions as Mapping);
-  const options =
-    maybeOptions ?? (firstArgIsOptions ? (patternOrOptions as NestedThenOptions) : {});
-  return { kind: "branch", outcome, pattern, ...options };
-}
-
-export const outcome = {
-  result: (patternOrOptions?: Mapping | NestedThenOptions, options?: NestedThenOptions) =>
-    outcomeBranch("result", patternOrOptions ?? {}, options),
-  error: (patternOrOptions?: Mapping | NestedThenOptions, options?: NestedThenOptions) =>
-    outcomeBranch("error", patternOrOptions ?? {}, options),
-  complete: (options: NestedThenOptions = {}) => outcomeBranch("complete", {}, options),
-} as const;
-
-export function workflow(fn: SyncFunction): SyncFunction {
+/**
+ * Declares a sync function. An identity wrapper — like {@link workflow} — that
+ * gives TypeScript a place to infer the {@link Vars} parameter and makes every
+ * rule greppable by a single name.
+ */
+export function sync(fn: SyncFunction): SyncFunction {
   return fn;
+}
+
+/**
+ * Start a sync rule by matching `action` against the journal. Chain `.and(...)`
+ * to join further patterns, an optional `.where(...)` to transform frames, and
+ * `.then(...)` to dispatch. See {@link WhenBuilder}.
+ */
+export function when(action: InstrumentedAction, input: Mapping, output?: Mapping): WhenBuilder {
+  return createWhenBuilder(actions([action, input, output ?? {}]));
+}
+
+function createWhenBuilder(patterns: ActionPattern[]): WhenBuilder {
+  let where: WhereFn | undefined;
+  const builder: WhenBuilder = {
+    and(action, input, output) {
+      // A `when` pattern always carries an output pattern (an empty one rejects
+      // error outputs); default it here so callers may omit the third argument.
+      patterns.push(...actions([action, input, output ?? {}]));
+      return builder;
+    },
+    where(fn) {
+      if (where !== undefined) {
+        throw new Error(
+          "when(...).where() called twice — combine the transforms into one function.",
+        );
+      }
+      where = fn;
+      // The narrowed type hides `.and`/`.where`, enforcing `when → where → then`.
+      return builder as unknown as WhenBuilderWithWhere;
+    },
+    then(...nodes) {
+      assertTopLevelThen(nodes);
+      const decl: SyncDeclaration = { when: patterns, then: nodes };
+      if (where !== undefined) decl.where = where;
+      return decl;
+    },
+  };
+  return builder;
+}
+
+/**
+ * A dispatch step. `act(action, input)` invokes `action` once per surviving
+ * frame; refine it with `.as(...)`, `.where(...)`, and `.branch(...)`. See
+ * {@link ActChain}.
+ */
+export function act(action: InstrumentedAction, input: Mapping): ActChain {
+  const node: StepNode = { kind: "step", action: actions([action, input])[0] };
+  const chain = brand(node) as unknown as ActChain;
+  chain.as = (outputMapping) => {
+    node.action = { ...node.action, output: { ...node.action.output, ...outputMapping } };
+    return chain;
+  };
+  chain.where = (fn) => {
+    node.transform = fn;
+    return chain;
+  };
+  chain.branch = (...nodes) => {
+    if (nodes.length === 0) {
+      throw new Error("act(...).branch() requires at least one node (on/onError/act/…).");
+    }
+    node.nested = [...(node.nested ?? []), ...nodes];
+    return chain;
+  };
+  return chain;
+}
+
+/**
+ * Success branch: fires when the preceding step produced a value or completed
+ * (any non-error outcome). Pattern is optional — omit it when `.as()` already
+ * bound what you need. Pass one to filter or extract further bindings. Use
+ * {@link onError} to catch failures.
+ *
+ *   on(act(Receipt.send, { paymentId }))            // .as() already had paymentId
+ *   on({ route: "approved" }, act(Request.approve))  // filter on outcome value
+ */
+export function on(...args: [Mapping, ...ThenNode[]] | ThenNode[]): BranchNode {
+  const [first, ...rest] = args;
+  const hasPattern = first !== undefined && !isNode(first);
+  const pattern = hasPattern ? (first as Mapping) : {};
+  const nodes = hasPattern ? (rest as ThenNode[]) : (args as ThenNode[]);
+  if (nodes.length === 0) throw new Error("on(...) requires at least one node.");
+  return brand({ kind: "branch", outcome: "result", pattern, nested: nodes });
+}
+
+/**
+ * Error branch: fires when the preceding step failed — whether it threw or
+ * returned an error record (both normalise to a `{ kind: "error" }` outcome).
+ *
+ * The optional first argument is a pattern unified against the error record.
+ * It is distinguished from a node by the DSL brand, so `onError({ kind: x })`
+ * is unambiguously a pattern even though a node also carries a `kind`.
+ */
+export function onError(...args: [Mapping, ...ThenNode[]] | ThenNode[]): BranchNode {
+  const [first, ...rest] = args;
+  const hasPattern = first !== undefined && !isNode(first);
+  const pattern = hasPattern ? (first as Mapping) : {};
+  const nodes = hasPattern ? (rest as ThenNode[]) : (args as ThenNode[]);
+  if (nodes.length === 0) throw new Error("onError(...) requires at least one node.");
+  return brand({ kind: "branch", outcome: "error", pattern, nested: nodes });
+}
+
+/**
+ * Run steps in order, forwarding each step's `.as(...)` bindings into the next
+ * step's frame. Stops at the first error outcome. A branch may follow a step
+ * (it dispatches on that step's outcome) but may not lead — a leading branch
+ * has no outcome to match and would be dead.
+ */
+export function seq(...nodes: ThenNode[]): SequenceNode {
+  if (nodes.length === 0) throw new Error("seq(...) requires at least one node.");
+  let sawStep = false;
+  for (const node of nodes) {
+    if (node.kind === "branch" && !sawStep) {
+      throw new Error("seq(...): a branch (on/onError) must follow an act(), not lead.");
+    }
+    if (node.kind !== "branch") sawStep = true;
+  }
+  return brand({ kind: "sequence", nodes });
+}
+
+/**
+ * Run steps concurrently, each from the same input frame. Branches are
+ * rejected: a parallel child never receives a preceding outcome, so an
+ * outcome branch here would be silently dead — attach it via
+ * `act(...).branch(...)` instead.
+ */
+export function par(...nodes: ThenNode[]): ParallelNode {
+  if (nodes.length === 0) throw new Error("par(...) requires at least one node.");
+  for (const node of nodes) {
+    if (node.kind === "branch") {
+      throw new Error(
+        "par(...): outcome branches are not allowed — parallel children receive no outcome; " +
+          "attach the branch to a specific step via act(...).branch(...).",
+      );
+    }
+  }
+  return brand({ kind: "parallel", nodes });
+}
+
+/**
+ * Validate the top-level nodes of `.then(...)`. Two silent failures become loud
+ * construction-time errors:
+ *  - `await when(...)` treats the builder as a promise, calling `.then` with
+ *    resolve/reject functions — caught here as non-nodes;
+ *  - a top-level outcome branch never receives an outcome (top-level siblings
+ *    are not threaded), so it would be dead — it must be nested under an act.
+ */
+function assertTopLevelThen(nodes: ThenNode[]): void {
+  if (nodes.length === 0) {
+    throw new Error(".then(...) requires at least one node (act/seq/par).");
+  }
+  for (const node of nodes) {
+    if (!isNode(node)) {
+      throw new Error(
+        "a sync rule is not a promise — pass act()/seq()/par() nodes to .then() (did you `await` a when(...) chain?).",
+      );
+    }
+    if (node.kind === "branch") {
+      throw new Error(
+        "on()/onError() cannot be a top-level `.then(...)` node — nest it via act(...).branch(...).",
+      );
+    }
+  }
 }
 
 /** The internal shape of an instrumented action's argument object. */
@@ -208,7 +390,12 @@ export class SyncConcept {
    */
   register(syncs: SyncFunctionMap): void {
     for (const [name, syncFunction] of Object.entries(syncs)) {
-      const sync: Synchronization = { sync: name, ...syncFunction($vars) };
+      const raw = syncFunction($vars);
+      const sync: Synchronization = {
+        sync: name,
+        ...raw,
+        then: Array.isArray(raw.then) ? raw.then : [raw.then],
+      };
       this.syncs[name] = sync;
       for (const { action } of sync.when) {
         let mapped = this.syncsByAction.get(action);
@@ -323,7 +510,8 @@ export class SyncConcept {
         continue;
       }
 
-      for (const then of sync.then) {
+      const flat = sync.then as ActionPattern[];
+      for (const then of flat) {
         let matched: ActionArguments;
         try {
           matched = this.matchThen(then, frame);
@@ -364,7 +552,7 @@ export class SyncConcept {
   }
 
   private isNestedThen(then: Synchronization["then"]): then is ThenNode[] {
-    return then.some((item) => "kind" in item);
+    return Array.isArray(then) && then.length > 0 && "kind" in then[0];
   }
 
   private async runThenNodes(
@@ -372,16 +560,24 @@ export class SyncConcept {
     nodes: ThenNode[],
     sync: Synchronization,
     whenActions: ActionRecord[],
-    previousOutput?: Record<string, unknown>,
+    previousOutcome?: ActionOutcome,
     blockDirectStepsOnError = false,
   ): Promise<void> {
     for (const frame of frames) {
       for (const node of nodes) {
-        if (node.kind === "branch") {
-          await this.runBranchNode(frame, node, sync, whenActions, previousOutput);
+        if (node.kind === "sequence") {
+          await this.runSequenceNode(frame, node, sync, whenActions);
           continue;
         }
-        if (blockDirectStepsOnError && previousOutput !== undefined && "error" in previousOutput) {
+        if (node.kind === "parallel") {
+          await this.runParallelNode(frame, node, sync, whenActions);
+          continue;
+        }
+        if (node.kind === "branch") {
+          await this.runBranchNode(frame, node, sync, whenActions, previousOutcome);
+          continue;
+        }
+        if (blockDirectStepsOnError && previousOutcome?.kind === "error") {
           continue;
         }
         await this.runStepNode(frame, node, sync, whenActions);
@@ -394,12 +590,12 @@ export class SyncConcept {
     node: StepNode,
     sync: Synchronization,
     whenActions: ActionRecord[],
-  ): Promise<void> {
+  ): Promise<ActionOutcome | undefined> {
     let matched: ActionArguments;
     try {
       matched = this.matchThen(node.action, frame);
     } catch {
-      return;
+      return undefined;
     }
 
     const id = matched[actionId];
@@ -422,21 +618,24 @@ export class SyncConcept {
       for (const whenAction of whenActions) {
         whenAction.synced?.delete(sync.sync);
       }
-      return;
+      return undefined;
     }
 
-    if (node.then === undefined || node.then.length === 0) return;
+    const outcome = normalizeOutcome(output);
 
-    const childFrame = this.frameWithStepOutput(frame, node.action, output);
-    if (childFrame === undefined) return;
+    if (node.nested === undefined || node.nested.length === 0) return outcome;
+
+    const childFrame = this.frameWithStepOutput(frame, node.action, outcome);
+    if (childFrame === undefined) return outcome;
 
     let childFrames = new Frames(childFrame);
-    if (node.where !== undefined) {
-      const maybeFrames = node.where(childFrames);
+    if (node.transform !== undefined) {
+      const maybeFrames = node.transform(childFrames);
       childFrames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
     }
 
-    await this.runThenNodes(childFrames, node.then, sync, whenActions, output, true);
+    await this.runThenNodes(childFrames, node.nested, sync, whenActions, outcome, true);
+    return outcome;
   }
 
   private async runBranchNode(
@@ -444,68 +643,120 @@ export class SyncConcept {
     node: BranchNode,
     sync: Synchronization,
     whenActions: ActionRecord[],
-    previousOutput?: Record<string, unknown>,
+    previousOutcome?: ActionOutcome,
   ): Promise<void> {
-    if (previousOutput === undefined || node.then === undefined || node.then.length === 0) return;
-    const branchedFrame = this.frameWithBranchOutput(frame, previousOutput, node);
+    if (previousOutcome === undefined || node.nested === undefined || node.nested.length === 0)
+      return;
+    const branchedFrame = this.frameWithBranchOutput(frame, previousOutcome, node);
     if (branchedFrame === undefined) return;
 
     let frames = new Frames(branchedFrame);
-    if (node.where !== undefined) {
-      const maybeFrames = node.where(frames);
+    if (node.transform !== undefined) {
+      const maybeFrames = node.transform(frames);
       frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
     }
 
-    await this.runThenNodes(frames, node.then, sync, whenActions);
+    await this.runThenNodes(frames, node.nested, sync, whenActions);
+  }
+
+  private async runSequenceNode(
+    frame: Frame,
+    node: SequenceNode,
+    sync: Synchronization,
+    whenActions: ActionRecord[],
+  ): Promise<void> {
+    let currentFrame = frame;
+    let currentOutcome: ActionOutcome | undefined;
+
+    for (const subNode of node.nodes) {
+      if (subNode.kind === "step") {
+        currentOutcome = await this.runStepNode(currentFrame, subNode, sync, whenActions);
+        if (currentOutcome === undefined || currentOutcome.kind === "error") break;
+        if (subNode.action.output) {
+          const nextFrame = this.frameWithStepOutput(currentFrame, subNode.action, currentOutcome);
+          if (nextFrame) currentFrame = nextFrame;
+        }
+      } else if (subNode.kind === "branch") {
+        await this.runBranchNode(currentFrame, subNode, sync, whenActions, currentOutcome);
+      } else if (subNode.kind === "sequence") {
+        await this.runSequenceNode(currentFrame, subNode, sync, whenActions);
+      } else if (subNode.kind === "parallel") {
+        await this.runParallelNode(currentFrame, subNode, sync, whenActions);
+      }
+    }
+  }
+
+  private async runParallelNode(
+    frame: Frame,
+    node: ParallelNode,
+    sync: Synchronization,
+    whenActions: ActionRecord[],
+  ): Promise<void> {
+    const tasks = node.nodes.map(async (subNode) => {
+      if (subNode.kind === "step") {
+        await this.runStepNode(frame, subNode, sync, whenActions);
+      } else if (subNode.kind === "branch") {
+        await this.runBranchNode(frame, subNode, sync, whenActions, undefined);
+      } else if (subNode.kind === "sequence") {
+        await this.runSequenceNode(frame, subNode, sync, whenActions);
+      } else if (subNode.kind === "parallel") {
+        await this.runParallelNode(frame, subNode, sync, whenActions);
+      }
+    });
+    await Promise.all(tasks);
   }
 
   private frameWithStepOutput(
     frame: Frame,
     pattern: ActionPattern,
-    output: Record<string, unknown>,
+    outcome: ActionOutcome,
   ): Frame | undefined {
     if (pattern.output === undefined) {
       return { ...frame };
     }
-    return this.unifyOutputPattern(output, pattern.output, frame);
+    return this.unifyOutputPattern(outcome, pattern.output, frame);
   }
 
   private frameWithBranchOutput(
     frame: Frame,
-    output: Record<string, unknown>,
+    outcome: ActionOutcome,
     branch: BranchNode,
   ): Frame | undefined {
-    if (!this.matchesOutcome(output, branch.outcome, branch.pattern)) return undefined;
-    return this.unifyOutputPattern(output, branch.pattern, frame);
+    if (!this.matchesOutcome(outcome, branch.outcome, branch.pattern)) return undefined;
+    return this.unifyOutputPattern(outcome, branch.pattern, frame);
   }
 
   private matchesOutcome(
-    output: Record<string, unknown>,
+    outcome: ActionOutcome,
     outcomeKind: OutcomeKind,
-    pattern: Mapping,
+    _pattern: Mapping,
   ): boolean {
-    const hasError = "error" in output;
     switch (outcomeKind) {
       case "error":
-        return hasError;
+        return outcome.kind === "error";
       case "complete":
-        return !hasError && Object.keys(output).length === 0;
+        return outcome.kind === "complete";
       case "result":
-        return !hasError;
+        return outcome.kind !== "error";
       case "any":
-        return Object.keys(pattern).length > 0 || (!hasError && Object.keys(output).length === 0);
+        return true;
     }
   }
 
   private unifyOutputPattern(
-    output: Record<string, unknown>,
+    outcome: ActionOutcome,
     pattern: Mapping,
     frame: Frame,
   ): Frame | undefined {
-    if (Object.keys(pattern).length === 0 && "error" in output) {
-      return undefined;
+    switch (outcome.kind) {
+      case "error":
+        return this.unifyPattern(outcome.error, pattern, frame);
+      case "result":
+        return this.unifyPattern(outcome.value, pattern, frame);
+      case "complete":
+        if (Object.keys(pattern).length === 0) return { ...frame };
+        return undefined;
     }
-    return this.unifyPattern(output, pattern, frame);
   }
 
   /** Recover the `when` records a frame matched, ready to be marked synced. */
@@ -593,14 +844,14 @@ export class SyncConcept {
     if (when.output === undefined) {
       throw new Error(`When pattern: ${String(when)} is missing output pattern.`);
     }
-    if (record.output === undefined) return undefined;
-    const unifiedOut = this.unifyPattern(record.output, when.output, newFrame);
-    if (unifiedOut === undefined) return undefined;
-    newFrame = unifiedOut;
+    if (record.outcome === undefined) return undefined;
 
-    if (Object.keys(when.output).length === 0 && "error" in record.output) {
+    if (Object.keys(when.output).length === 0 && record.outcome.kind === "error") {
       return undefined;
     }
+    const unifiedOut = this.unifyOutputPattern(record.outcome, when.output, newFrame);
+    if (unifiedOut === undefined) return undefined;
+    newFrame = unifiedOut;
 
     return { ...newFrame, [actionSymbol]: record.id };
   }

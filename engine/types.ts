@@ -43,15 +43,34 @@ export interface ActionPattern {
   flow: symbol;
 }
 
+/**
+ * The canonical outcome of an action execution.
+ *
+ * Rather than inferring outcome semantics from raw output records
+ * (e.g. `{ error: … }` → error, `{}` → complete), the engine normalises
+ * every action result into a first-class discriminated union so branches,
+ * observers and devtools can type-narrow on {@link ActionOutcome.kind}.
+ */
+export type ActionOutcome =
+  | { kind: "result"; value: Mapping }
+  | { kind: "error"; error: Mapping }
+  | { kind: "complete" };
+
 export type OutcomeKind = "any" | "result" | "error" | "complete";
 
-export type ThenClause = ActionPattern[] | ThenNode[];
+export type ThenClause = ActionPattern[] | ThenNode[] | ThenNode;
 
-export type ThenNode = StepNode | BranchNode;
+export type ThenNode = StepNode | BranchNode | SequenceNode | ParallelNode;
 
 export interface NestedThenOptions {
-  where?: (frames: Frames) => Frames | Promise<Frames>;
-  then?: ThenNode[];
+  /**
+   * A transform applied to this node's frames before its `nested` children run
+   * — the per-step analogue of a sync's `where`. Named `transform` at the node
+   * level (not `where`) so the fluent `ActChain.where(...)` method that sets it
+   * does not collide with a same-named data field.
+   */
+  transform?: WhereFn;
+  nested?: ThenNode[];
 }
 
 export interface StepNode extends NestedThenOptions {
@@ -65,10 +84,23 @@ export interface BranchNode extends NestedThenOptions {
   pattern: Mapping;
 }
 
+export interface SequenceNode {
+  kind: "sequence";
+  nodes: ThenNode[];
+}
+
+export interface ParallelNode {
+  kind: "parallel";
+  nodes: ThenNode[];
+}
+
+/** A pure transform over matched frames — the `where` clause. */
+export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
+
 /** The raw object a sync function returns before it is registered by name. */
-interface SyncDeclaration {
+export interface SyncDeclaration {
   when: ActionPattern[];
-  where?: (frames: Frames) => Frames | Promise<Frames>;
+  where?: WhereFn;
   then: ThenClause;
 }
 
@@ -102,3 +134,42 @@ export type SyncFunctionMap = Record<string, SyncFunction>;
 
 /** The canonical "no fields" mapping, used for empty action inputs/outputs. */
 export type Empty = Record<PropertyKey, never>;
+
+/**
+ * A chainable dispatch step, returned by `act(action, input)`.
+ *
+ * Carries the base {@link StepNode} fields plus fluent refinements:
+ *  - `.as(output)`    binds the step's output into the frame for later steps;
+ *  - `.where(fn)`     transforms the frames before the step's children run;
+ *  - `.branch(...n)`  attaches outcome branches (`on`/`onError`) and
+ *                     follow-up nodes, dispatched on this step's outcome.
+ *
+ * Every method returns the same chain, so refinements read left-to-right.
+ */
+export interface ActChain extends StepNode {
+  as(outputMapping: Mapping): ActChain;
+  where(fn: WhereFn): ActChain;
+  branch(...nodes: ThenNode[]): ActChain;
+}
+
+/**
+ * The builder returned by `when(action, input, output?)`. Accumulates the
+ * match patterns (`.and(...)` adds join clauses), an optional `.where(...)`
+ * transform, and terminates with `.then(...)`, which produces the finished
+ * {@link SyncDeclaration}.
+ *
+ * The clause order `when → and* → where? → then` is enforced by the return
+ * types: `.where(...)` narrows to {@link WhenBuilderWithWhere} (only `.then`
+ * remains) so `.and`/`.where` cannot follow a `where`, and `.then(...)` ends
+ * the chain entirely.
+ */
+export interface WhenBuilder {
+  and(action: InstrumentedAction, input: Mapping, output?: Mapping): WhenBuilder;
+  where(fn: WhereFn): WhenBuilderWithWhere;
+  then(...nodes: ThenNode[]): SyncDeclaration;
+}
+
+/** A {@link WhenBuilder} after `.where(...)` — only `.then(...)` remains. */
+export interface WhenBuilderWithWhere {
+  then(...nodes: ThenNode[]): SyncDeclaration;
+}

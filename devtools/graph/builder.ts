@@ -7,7 +7,14 @@
  * `./types.ts`.  Zero imports from `@concepts` or `@sdk`.
  */
 
-import type { ActionPattern, SyncConcept, ThenClause, ThenNode } from "@sync-engine/engine";
+import type {
+  ActionPattern,
+  BranchNode,
+  StepNode,
+  SyncConcept,
+  ThenClause,
+  ThenNode,
+} from "@sync-engine/engine";
 import { actionNameOf, actionNodeId, conceptNameOf } from "@sync-engine/engine";
 import type {
   ActionBinding,
@@ -95,14 +102,21 @@ function mergeBindings(bindings: ActionBinding[]): ActionBinding[] {
 }
 
 function flattenThenPatterns(then: ThenClause): ActionPattern[] {
-  if (!then.some((item) => "kind" in item)) return then as ActionPattern[];
+  const thenArr = Array.isArray(then) ? then : [then];
+  if (!thenArr.some((item) => "kind" in item)) return thenArr as ActionPattern[];
 
   const patterns: ActionPattern[] = [];
   const visit = (node: ThenNode): void => {
-    if (node.kind === "step") {
-      patterns.push(node.action);
+    switch (node.kind) {
+      case "step":
+        patterns.push(node.action);
+        break;
+      case "sequence":
+      case "parallel":
+        for (const child of node.nodes) visit(child);
+        return;
     }
-    for (const child of node.then ?? []) {
+    for (const child of (node as StepNode | BranchNode).nested ?? []) {
       visit(child);
     }
   };
