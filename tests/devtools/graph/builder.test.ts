@@ -110,9 +110,10 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       EndpointSync: ({ result }: Vars) =>
-        when(req.request, { path: "/test/endpoint" }, {})
-          .and(tc.doSomething, {}, { result })
-          .then(act(req.respond, { result, ok: true })),
+        when([
+          [req.request, { path: "/test/endpoint" }],
+          [tc.doSomething, {}, { result }],
+        ]).then(act(req.respond, { result, ok: true })),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -207,13 +208,15 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       EndpointA: ({ result }: Vars) =>
-        when(req.request, { path: "/a" }, {})
-          .and(tc.doSomething, {}, { result })
-          .then(act(tc.failAction, {})),
+        when([
+          [req.request, { path: "/a" }],
+          [tc.doSomething, {}, { result }],
+        ]).then(act(tc.failAction, {})),
       EndpointB: ({ result }: Vars) =>
-        when(req.request, { path: "/b" }, {})
-          .and(tc.doSomething, {}, { result })
-          .then(act(tc.noOutput, {})),
+        when([
+          [req.request, { path: "/b" }],
+          [tc.doSomething, {}, { result }],
+        ]).then(act(tc.noOutput, {})),
     });
 
     const graph = buildSyncGraph(engine, boundary);

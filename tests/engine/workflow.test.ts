@@ -190,7 +190,7 @@ describe("fluent DSL", () => {
     expect(Recorder.order).toEqual(["ping", "pong"]);
   });
 
-  test("when(...).and(...) matches multiple journal entries", async () => {
+  test("when([...]) matches multiple journal entries", async () => {
     const Sync = new SyncConcept();
     Sync.logging = Logging.OFF;
     const { Button, Recorder } = Sync.instrument({
@@ -206,9 +206,10 @@ describe("fluent DSL", () => {
 
     Sync.register({
       MultiWhen: sync(({ tag }: Vars) =>
-        when(Button.clicked, { kind: "seed" }, {})
-          .and(Recorder.record, { tag }, {})
-          .then(act(Recorder.record, { tag: "multi-fire" })),
+        when([
+          [Button.clicked, { kind: "seed" }],
+          [Recorder.record, { tag }],
+        ]).then(act(Recorder.record, { tag: "multi-fire" })),
       ),
     });
 

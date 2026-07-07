@@ -32,6 +32,7 @@ export type {
   Vars,
   WhenBuilder,
   WhenBuilderWithWhere,
+  WhenClause,
   WhereFn,
 } from "./types.ts";
 export type { TypedVars, Var } from "./vars.ts";

@@ -155,10 +155,11 @@ describe("engine: edge cases", () => {
       StartWorkflow: ({ kind }: Vars) =>
         when(Button.clicked, { kind }, {}).then(act(Throwing.safe, {}), act(Throwing.explode, {})),
       Response: ({ ok }: Vars) =>
-        when(Button.clicked, { kind: "test" }, {})
-          .and(Throwing.safe, {}, { ok })
-          .and(Throwing.explode, {}, {})
-          .then(act(Recorder.record, { tag: "response" })),
+        when([
+          [Button.clicked, { kind: "test" }],
+          [Throwing.safe, {}, { ok }],
+          [Throwing.explode, {}],
+        ]).then(act(Recorder.record, { tag: "response" })),
       ErrorResponse: ({ error }: Vars) =>
         when(Throwing.explode, {}, { error }).then(act(Recorder.record, { tag: "error" })),
     });

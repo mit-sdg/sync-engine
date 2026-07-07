@@ -19,8 +19,10 @@ export function makeSyncs(
     when(Button.clicked, { kind: "inc" }, {}).then(act(Counter.increment, {}));
 
   const NotifyOn3 = ({ count }: Vars) =>
-    when(Button.clicked, { kind: "inc" }, {})
-      .and(Counter.increment, {}, {})
+    when([
+      [Button.clicked, { kind: "inc" }],
+      [Counter.increment, {}],
+    ])
       .where((frames: Frames) =>
         frames.query(Counter._getCount, {}, { count }).filter(($) => $[count] === 3),
       )
@@ -60,8 +62,10 @@ export function makeSyncs(
       .then(act(Recorder.record, { tag: next }));
 
   const PreventDoubleFire = ({ tag1, tag2, done }: Vars) =>
-    when(Recorder.record, { tag: tag1 }, {})
-      .and(Recorder.record, { tag: tag2 }, {})
+    when([
+      [Recorder.record, { tag: tag1 }],
+      [Recorder.record, { tag: tag2 }],
+    ])
       .where((frames: Frames) =>
         frames
           .filter(($) => !String($[tag1]).includes(":"))

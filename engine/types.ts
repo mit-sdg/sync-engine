@@ -30,6 +30,9 @@ export type AnyAction = (...args: never[]) => unknown;
  */
 export type ActionList = [InstrumentedAction, Mapping, Mapping?];
 
+/** One `when` clause as authored by the public DSL. */
+export type WhenClause = ActionList;
+
 /**
  * A normalized clause produced by {@link actions}. In a `when` it describes a
  * pattern to match against the action log; in a `then` it describes an action
@@ -153,18 +156,15 @@ export interface ActChain extends StepNode {
 }
 
 /**
- * The builder returned by `when(action, input, output?)`. Accumulates the
- * match patterns (`.and(...)` adds join clauses), an optional `.where(...)`
- * transform, and terminates with `.then(...)`, which produces the finished
+ * The builder returned by `when(...)`. Accumulates an optional `.where(...)`
+ * transform and terminates with `.then(...)`, which produces the finished
  * {@link SyncDeclaration}.
  *
- * The clause order `when → and* → where? → then` is enforced by the return
- * types: `.where(...)` narrows to {@link WhenBuilderWithWhere} (only `.then`
- * remains) so `.and`/`.where` cannot follow a `where`, and `.then(...)` ends
- * the chain entirely.
+ * The clause order `when → where? → then` is enforced by the return types:
+ * `.where(...)` narrows to {@link WhenBuilderWithWhere} (only `.then` remains)
+ * so `.where` cannot be repeated, and `.then(...)` ends the chain entirely.
  */
 export interface WhenBuilder {
-  and(action: InstrumentedAction, input: Mapping, output?: Mapping): WhenBuilder;
   where(fn: WhereFn): WhenBuilderWithWhere;
   then(...nodes: ThenNode[]): SyncDeclaration;
 }

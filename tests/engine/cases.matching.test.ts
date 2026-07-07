@@ -219,8 +219,10 @@ describe("engine: synced double-fire prevention", () => {
 
     // Pair: matches the (base, base:a) pair exactly once and bumps a counter.
     const Pair = ({ tag1, tag2 }: Vars) =>
-      when(Recorder.record, { tag: tag1 }, {})
-        .and(Recorder.record, { tag: tag2 }, {})
+      when([
+        [Recorder.record, { tag: tag1 }],
+        [Recorder.record, { tag: tag2 }],
+      ])
         .where((frames: Frames) =>
           frames
             .filter(($) => !String($[tag1]).includes(":"))

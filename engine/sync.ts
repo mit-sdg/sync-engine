@@ -50,6 +50,7 @@ import type {
   ThenNode,
   WhenBuilder,
   WhenBuilderWithWhere,
+  WhenClause,
   WhereFn,
 } from "./types.ts";
 import { inspect, inspectCustom, uuid } from "./util.ts";
@@ -165,23 +166,34 @@ export function sync(fn: SyncFunction): SyncFunction {
 }
 
 /**
- * Start a sync rule by matching `action` against the journal. Chain `.and(...)`
- * to join further patterns, an optional `.where(...)` to transform frames, and
- * `.then(...)` to dispatch. See {@link WhenBuilder}.
+ * Start a sync rule by matching one or more action clauses against the journal.
+ * Pass a single action as `when(action, input, output?)`, or join multiple
+ * clauses with `when([[action, input, output?], ...])`. Chain an optional
+ * `.where(...)` to transform frames, then `.then(...)` to dispatch.
  */
-export function when(action: InstrumentedAction, input: Mapping, output?: Mapping): WhenBuilder {
-  return createWhenBuilder(actions([action, input, output ?? {}]));
+export function when(clauses: WhenClause[]): WhenBuilder;
+export function when(action: InstrumentedAction, input: Mapping, output?: Mapping): WhenBuilder;
+export function when(
+  actionOrClauses: InstrumentedAction | WhenClause[],
+  input?: Mapping,
+  output?: Mapping,
+): WhenBuilder {
+  if (Array.isArray(actionOrClauses)) {
+    if (actionOrClauses.length === 0) throw new Error("when([...]) requires at least one clause.");
+    return createWhenBuilder(...actionOrClauses);
+  }
+  if (input === undefined) throw new Error("when(action, input) requires an input pattern.");
+  return createWhenBuilder([actionOrClauses, input, output]);
 }
 
-function createWhenBuilder(patterns: ActionPattern[]): WhenBuilder {
+function createWhenBuilder(...clauses: WhenClause[]): WhenBuilder {
+  // A `when` pattern always carries an output pattern (an empty one rejects
+  // error outputs); default it here so callers may omit the third tuple entry.
+  const patterns: ActionPattern[] = actions(
+    ...clauses.map(([action, input, output]) => [action, input, output ?? {}] as ActionList),
+  );
   let where: WhereFn | undefined;
   const builder: WhenBuilder = {
-    and(action, input, output) {
-      // A `when` pattern always carries an output pattern (an empty one rejects
-      // error outputs); default it here so callers may omit the third argument.
-      patterns.push(...actions([action, input, output ?? {}]));
-      return builder;
-    },
     where(fn) {
       if (where !== undefined) {
         throw new Error(
@@ -189,7 +201,7 @@ function createWhenBuilder(patterns: ActionPattern[]): WhenBuilder {
         );
       }
       where = fn;
-      // The narrowed type hides `.and`/`.where`, enforcing `when → where → then`.
+      // The narrowed type hides `.where`, enforcing `when → where → then`.
       return builder as unknown as WhenBuilderWithWhere;
     },
     then(...nodes) {

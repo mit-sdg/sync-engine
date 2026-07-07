@@ -228,20 +228,23 @@ the `Vars` parameter and keeps every rule greppable by one name:
 const MyRule = sync(({ userId }: Vars) => when(...).then(...));
 ```
 
-### `when(action, input, output?)`
+### `when(action, input, output?)` / `when([...clauses])`
 
-Starts a rule by matching an action against the journal, returning a builder.
-Chain `.and(...)` to join more patterns, an optional `.where(...)` to transform
-frames, and `.then(...)` to dispatch. The clause order `when → and* → where? →
-then` is enforced by the builder's types.
+Starts a rule by matching one or more actions against the journal, returning a
+builder. Use the single-action form for simple rules and the array form for
+joins. Chain an optional `.where(...)` to transform frames, then `.then(...)` to
+dispatch. The clause order `when → where? → then` is enforced by the builder's
+types.
 
 ```ts
 // single pattern
 when(Concept.action, { inputKey: symVar }, { outputKey: symVar }).then(act(...));
 
 // join across two actions, filtered
-when(Concept.a, { x: varX })
-  .and(Concept.b, { y: varY })
+when([
+  [Concept.a, { x: varX }],
+  [Concept.b, { y: varY }],
+])
   .where((frames) => frames.filter(($) => $[varX] === $[varY]))
   .then(act(Concept.c, { x: varX }));
 ```
