@@ -12,7 +12,7 @@
  * cases wire small mock concepts together with inline, declarative syncs.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { actions, Frames, Logging, SyncConcept, type Vars } from "@sync-engine/engine";
+import { When, Then, Frames, Logging, SyncConcept, type Vars } from "@sync-engine/engine";
 import { CounterConcept, GateConcept, RecorderConcept } from "./mocks.ts";
 
 describe("engine: Frames query/aggregate/collectAs", () => {
@@ -167,12 +167,12 @@ function gateSetup() {
 
   // Mutually exclusive: only one of these can ever match a single check.
   const OnError = ({ error }: Vars) => ({
-    when: actions([Gate.check, {}, { error }]),
-    then: actions([Gate.record, { msg: error }]),
+    when: When([Gate.check, {}, { error }]),
+    then: Then([Gate.record, { msg: error }]),
   });
   const OnQuestion = ({ question }: Vars) => ({
-    when: actions([Gate.check, {}, { question }]),
-    then: actions([Gate.record, { msg: question }]),
+    when: When([Gate.check, {}, { question }]),
+    then: Then([Gate.record, { msg: question }]),
   });
   Sync.register({ OnError, OnQuestion });
   return { Gate, Recorder };
@@ -213,22 +213,22 @@ describe("engine: synced double-fire prevention", () => {
 
     // Cascade: a simple tag produces its ":a" successor (same flow).
     const Cascade = ({ tag, next }: Vars) => ({
-      when: actions([Recorder.record, { tag }, {}]),
+      when: When([Recorder.record, { tag }, {}]),
       where: (frames: Frames) =>
         frames
           .filter(($) => !String($[tag]).includes(":"))
           .map((frame) => ({ ...frame, [next]: `${String(frame[tag])}:a` })),
-      then: actions([Recorder.record, { tag: next }]),
+      then: Then([Recorder.record, { tag: next }]),
     });
 
     // Pair: matches the (base, base:a) pair exactly once and bumps a counter.
     const Pair = ({ tag1, tag2 }: Vars) => ({
-      when: actions([Recorder.record, { tag: tag1 }, {}], [Recorder.record, { tag: tag2 }, {}]),
+      when: When([Recorder.record, { tag: tag1 }, {}], [Recorder.record, { tag: tag2 }, {}]),
       where: (frames: Frames) =>
         frames
           .filter(($) => !String($[tag1]).includes(":"))
           .filter(($) => String($[tag2]) === `${String($[tag1])}:a`),
-      then: actions([Counter.increment, {}]),
+      then: Then([Counter.increment, {}]),
     });
     Sync.register({ Cascade, Pair });
 
@@ -249,7 +249,7 @@ describe("engine: optional field matching", () => {
     });
 
     const OptionalFieldSync = ({ tag, optional, next }: Vars) => ({
-      when: actions([Recorder.record, { tag, optional }, {}]),
+      when: When([Recorder.record, { tag, optional }, {}]),
       where: (frames: Frames) =>
         frames
           .filter(($) => !String($[tag]).includes(":"))
@@ -257,7 +257,7 @@ describe("engine: optional field matching", () => {
             ...frame,
             [next]: `optional:${String(frame[tag])}`,
           })),
-      then: actions([Recorder.record, { tag: next }]),
+      then: Then([Recorder.record, { tag: next }]),
     });
     Sync.register({ OptionalFieldSync });
 
@@ -274,8 +274,8 @@ describe("engine: optional field matching", () => {
     });
 
     const OutputRequiredSync = ({ out }: Vars) => ({
-      when: actions([Gate.record, {}, { out }]),
-      then: actions([Recorder.record, { tag: "never" }]),
+      when: When([Gate.record, {}, { out }]),
+      then: Then([Recorder.record, { tag: "never" }]),
     });
     Sync.register({ OutputRequiredSync });
 
@@ -291,7 +291,7 @@ describe("engine: optional field matching", () => {
     });
 
     const NestedThenSync = ({ tag, inner, next }: Vars) => ({
-      when: actions([Recorder.record, { tag, inner }, {}]),
+      when: When([Recorder.record, { tag, inner }, {}]),
       where: (frames: Frames) =>
         frames
           .filter(($) => !String($[tag]).includes(":"))
@@ -299,7 +299,7 @@ describe("engine: optional field matching", () => {
             ...frame,
             [next]: `nested:${String(frame[tag])}`,
           })),
-      then: actions([Recorder.record, { tag: next, extra: { inner } }]),
+      then: Then([Recorder.record, { tag: next, extra: { inner } }]),
     });
     Sync.register({ NestedThenSync });
 
@@ -315,7 +315,7 @@ describe("engine: optional field matching", () => {
     });
 
     const UnboundOptionalSync = ({ present, next }: Vars) => ({
-      when: actions([Recorder.record, { tag: present }, {}]),
+      when: When([Recorder.record, { tag: present }, {}]),
       where: (frames: Frames) =>
         frames
           .filter(($) => !String($[present]).includes(":"))
@@ -323,7 +323,7 @@ describe("engine: optional field matching", () => {
             ...frame,
             [next]: `unbound:${String(frame[present])}`,
           })),
-      then: actions([Recorder.record, { tag: next }]),
+      then: Then([Recorder.record, { tag: next }]),
     });
     Sync.register({ UnboundOptionalSync });
 

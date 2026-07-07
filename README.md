@@ -70,19 +70,17 @@ class LoggerConcept {
 Syncs are `when → where → then` declarations:
 
 ```ts
-import { actions, type Vars } from "sync-engine/engine";
+import { When, type Vars } from "sync-engine/engine";
 
 // "Whenever Counter.increment executes and the count reaches 10, log it."
 const LogAt10 = ({ count, msg }: Vars) => ({
-  when: actions(
-    [Counter.increment, {}, {}], // match any increment
-  ),
+  when: When(Counter.increment, {}, {}), // match any increment
   where: (frames) =>
     frames
       .query(Counter._getCount, {}, { count }) // read current count
       .filter(($) => $[count] === 10) // only when it's 10
       .map(($) => ({ ...$, [msg]: "Reached 10!" })),
-  then: actions([Logger.log, { message: msg }]),
+  then: Then(Logger.log, { message: msg }),
 });
 ```
 
@@ -221,13 +219,49 @@ class SyncConcept {
 }
 ```
 
-### `actions(...tuples)`
+### `When(action, input, output?)` / `When(...clauses)`
 
-Normalizes sync clauses into `ActionPattern[]`:
+Declares `when` or `then` patterns. Single-pattern shorthand:
 
 ```ts
-actions([Concept.action, inputMapping, outputMapping], [OtherConcept.action, inputMapping]);
+When(Concept.action, { inputKey: symVar }, { outputKey: symVar });
 ```
+
+Multi-pattern for joins:
+
+```ts
+When([Concept.a, { x: varX }, {}], [Concept.b, { y: varY }, {}]);
+```
+
+Under the hood `When(...)` calls {@link actions}. Prefer `When` in new code; use
+`actions(...tuples)` for the low-level tuple form when needed.
+
+### `Do(action, input, output?)`
+
+Creates a workflow step with an optional chainable builder:
+
+```ts
+Do(Payment.charge, { total }).as({ paymentId }).then(
+  On({ paymentId }, ...),
+  Err({ code: "CARD_DECLINED" }, ...),
+  Done(...),
+)
+```
+
+### `Sequence(...steps)` / `Parallel(...steps)`
+
+Control sibling execution order inside a `then` clause:
+
+```ts
+then: Sequence(
+  Do(Inventory.reserve, { items }).as({ holdId }),
+  Do(Payment.charge, { total }).as({ paymentId }),
+);
+
+then: Parallel(Do(Receipt.email, { userId }), Do(Audit.record, { event: "ORDER_CREATED" }));
+```
+
+Default `then: [...]` arrays are sequential and deterministic.
 
 ### `Frames`
 
@@ -265,45 +299,41 @@ const result = await pipe(
 ### Nested Workflows
 
 Use nested `then` clauses when several syncs only exist to describe one workflow.
-Branches match any action outcome, not only errors:
+Branches match on action outcomes — result, error, or completion:
 
 ```ts
-import { actions, branch, outcome, step, workflow, type Vars } from "sync-engine/engine";
+import { Do, Done, Err, On, When, Workflow, type Vars } from "sync-engine/engine";
 
-const ReviewWorkflow = workflow(({ requestId, route, reason }: Vars) => ({
-  when: actions([Request.submitted, { requestId }, {}]),
-  then: [
-    step([Review.classify, { requestId }, { route }], {
-      then: [
-        branch(
-          { route: "approved" },
-          {
-            then: [step([Request.approve, { requestId }])],
-          },
-        ),
-        branch(
-          { route: "manual" },
-          {
-            then: [step([Queue.enqueue, { requestId }])],
-          },
-        ),
-        outcome.error(
-          { detail: reason },
-          {
-            then: [step([Audit.record, { event: "REVIEW_FAILED", payload: reason }])],
-          },
-        ),
-      ],
-    }),
-  ],
+const ReviewWorkflow = Workflow(({ requestId, route, reason }: Vars) => ({
+  when: When(Request.submitted, { requestId }),
+  then: Do(Review.classify, { requestId })
+    .as({ route })
+    .then(
+      On({ route: "approved" }, Do(Request.approve, { requestId })),
+      On({ route: "manual" }, Do(Queue.enqueue, { requestId })),
+      Err({ detail: reason }, Do(Audit.record, { event: "REVIEW_FAILED", payload: reason })),
+    ),
 }));
 ```
 
+Steps can be sequenced explicitly with `Sequence(...)` — each step's output
+feeds into the next step's input frame via `.as()` bindings:
+
+```ts
+then: Sequence(
+  Do(Inventory.reserve, { items }).as({ holdId }),
+  Do(Payment.charge, { total }).as({ paymentId }),
+  Do(Order.create, { holdId, paymentId }),
+);
+```
+
+Use `Parallel(...)` to declare sibling actions safe for concurrent execution.
+The default `then: [...]` array executes sequentially for deterministic safety.
+
 Concept actions may throw domain errors instead of returning error records. The
-engine records thrown failures as error outcomes, so workflows can handle them
-with `outcome.error(...)`. Empty action outputs are completion outcomes; they are
-also successful results, so `outcome.result(...)` matches both data-bearing
-results and completion.
+engine records thrown failures as `{ kind: "error" }` outcomes, picked up by
+`Err(...)` branches. Empty action outputs are completion outcomes matched by
+`Done(...)`. `On({...}, ...)` matches data-bearing results.
 
 Use standalone syncs for reusable policies. Use nested workflows when the syncs
 are only meaningful as ordered steps of one request or business process.

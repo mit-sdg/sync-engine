@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { actions, type Frames, Logging, SyncConcept, type Vars } from "@sync-engine/engine";
+import { When, Then, type Frames, Logging, SyncConcept, type Vars } from "@sync-engine/engine";
 import { FrameworkErrorCode } from "@sync-engine/sdk/error-codes.ts";
 import {
   ButtonConcept,
@@ -80,7 +80,7 @@ describe("engine: edge cases", () => {
 
     // Extra sync that only records even values produced by FanoutOverList.
     const OnlyEven = ({ tag, value, evenTag }: Vars) => ({
-      when: actions([Recorder.record, { tag }, {}]),
+      when: When([Recorder.record, { tag }, {}]),
       where: (frames: Frames) =>
         frames
           .filter(($) => String($[tag]).startsWith("v:"))
@@ -93,7 +93,7 @@ describe("engine: edge cases", () => {
             ...frame,
             [evenTag]: `even:${String(frame[value])}`,
           })),
-      then: actions([Recorder.record, { tag: evenTag }]),
+      then: Then([Recorder.record, { tag: evenTag }]),
     });
     Sync.register({ OnlyEven });
 
@@ -129,8 +129,8 @@ describe("engine: edge cases", () => {
     // Uses Button.clicked as the trigger (one-shot, no self-loop).
     Sync.register({
       ChainWithThrow: ({ kind }: Vars) => ({
-        when: actions([Button.clicked, { kind }, {}]),
-        then: actions([Throwing.explode, {}], [Recorder.record, { tag: "after-throw" }]),
+        when: When([Button.clicked, { kind }, {}]),
+        then: Then([Throwing.explode, {}], [Recorder.record, { tag: "after-throw" }]),
       }),
     });
 
@@ -152,20 +152,20 @@ describe("engine: edge cases", () => {
 
     Sync.register({
       StartWorkflow: ({ kind }: Vars) => ({
-        when: actions([Button.clicked, { kind }, {}]),
-        then: actions([Throwing.safe, {}], [Throwing.explode, {}]),
+        when: When([Button.clicked, { kind }, {}]),
+        then: Then([Throwing.safe, {}], [Throwing.explode, {}]),
       }),
       Response: ({ ok }: Vars) => ({
-        when: actions(
+        when: When(
           [Button.clicked, { kind: "test" }, {}],
           [Throwing.safe, {}, { ok }],
           [Throwing.explode, {}, {}],
         ),
-        then: actions([Recorder.record, { tag: "response" }]),
+        then: Then([Recorder.record, { tag: "response" }]),
       }),
       ErrorResponse: ({ error }: Vars) => ({
-        when: actions([Throwing.explode, {}, { error }]),
-        then: actions([Recorder.record, { tag: "error" }]),
+        when: When([Throwing.explode, {}, { error }]),
+        then: Then([Recorder.record, { tag: "error" }]),
       }),
     });
 

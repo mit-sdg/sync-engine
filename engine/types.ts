@@ -43,15 +43,28 @@ export interface ActionPattern {
   flow: symbol;
 }
 
+/**
+ * The canonical outcome of an action execution.
+ *
+ * Rather than inferring outcome semantics from raw output records
+ * (e.g. `{ error: … }` → error, `{}` → complete), the engine normalises
+ * every action result into a first-class discriminated union so branches,
+ * observers and devtools can type-narrow on {@link ActionOutcome.kind}.
+ */
+export type ActionOutcome =
+  | { kind: "result"; value: Mapping }
+  | { kind: "error"; error: Mapping }
+  | { kind: "complete" };
+
 export type OutcomeKind = "any" | "result" | "error" | "complete";
 
-export type ThenClause = ActionPattern[] | ThenNode[];
+export type ThenClause = ActionPattern[] | ThenNode[] | ThenNode;
 
-export type ThenNode = StepNode | BranchNode;
+export type ThenNode = StepNode | BranchNode | SequenceNode | ParallelNode;
 
 export interface NestedThenOptions {
   where?: (frames: Frames) => Frames | Promise<Frames>;
-  then?: ThenNode[];
+  nested?: ThenNode[];
 }
 
 export interface StepNode extends NestedThenOptions {
@@ -63,6 +76,16 @@ export interface BranchNode extends NestedThenOptions {
   kind: "branch";
   outcome: OutcomeKind;
   pattern: Mapping;
+}
+
+export interface SequenceNode {
+  kind: "sequence";
+  nodes: ThenNode[];
+}
+
+export interface ParallelNode {
+  kind: "parallel";
+  nodes: ThenNode[];
 }
 
 /** The raw object a sync function returns before it is registered by name. */
@@ -102,3 +125,15 @@ export type SyncFunctionMap = Record<string, SyncFunction>;
 
 /** The canonical "no fields" mapping, used for empty action inputs/outputs. */
 export type Empty = Record<PropertyKey, never>;
+
+/**
+ * A chainable wrapper returned by {@link Do}.
+ *
+ * Carries the base {@link StepNode} fields plus two fluent methods:
+ * `.as(output)` sets the step's output-binding pattern and `.then(...nodes)`
+ * appends nested continuation nodes.
+ */
+export interface DoChain extends StepNode {
+  as(outputMapping: Mapping): DoChain;
+  then(...nodes: ThenNode[]): DoChain;
+}

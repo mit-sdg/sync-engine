@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { assembleReport } from "@sync-engine/devtools/graph/report.ts";
-import { actions, SyncConcept } from "@sync-engine/engine";
+import { When, Then, SyncConcept } from "@sync-engine/engine";
 import type { RequestBoundary } from "@sync-engine/devtools/graph/types.ts";
 import type { Vars } from "@sync-engine/engine";
 
@@ -40,8 +40,8 @@ describe("assembleReport", () => {
 
     sync.register({
       Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
+        when: When([Counter.increment, {}]),
+        then: Then([Counter.increment, {}]),
       }),
     });
 
@@ -62,8 +62,8 @@ describe("assembleReport", () => {
 
     sync.register({
       Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
+        when: When([Counter.increment, {}]),
+        then: Then([Counter.increment, {}]),
       }),
     });
 
@@ -84,8 +84,8 @@ describe("assembleReport", () => {
 
     sync.register({
       Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
+        when: When([Counter.increment, {}]),
+        then: Then([Counter.increment, {}]),
       }),
     });
 
@@ -104,8 +104,8 @@ describe("assembleReport", () => {
 
     sync.register({
       Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
+        when: When([Counter.increment, {}]),
+        then: Then([Counter.increment, {}]),
       }),
     });
 
@@ -123,8 +123,8 @@ describe("assembleReport", () => {
 
     sync.register({
       Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
+        when: When([Counter.increment, {}]),
+        then: Then([Counter.increment, {}]),
       }),
     });
 
@@ -145,8 +145,8 @@ describe("assembleReport", () => {
 
     sync.register({
       Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
+        when: When([Counter.increment, {}]),
+        then: Then([Counter.increment, {}]),
       }),
     });
 
@@ -182,12 +182,12 @@ describe("assembleReport", () => {
 
     sync.register({
       Increment: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}]),
+        when: When([Counter.increment, {}]),
+        then: Then([Counter.increment, {}]),
       }),
       DoubleIncrement: (_vars: Vars) => ({
-        when: actions([Counter.increment, {}]),
-        then: actions([Counter.increment, {}], [Counter.increment, {}]),
+        when: When([Counter.increment, {}]),
+        then: Then([Counter.increment, {}], [Counter.increment, {}]),
       }),
     });
 

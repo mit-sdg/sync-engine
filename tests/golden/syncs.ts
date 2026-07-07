@@ -7,7 +7,7 @@
  *  - then   — actions to dispatch per surviving frame
  */
 
-import { actions, type Vars } from "@sync-engine/engine";
+import { When, Then, type Vars } from "@sync-engine/engine";
 import type { AuditConcept, TodoConcept } from "./concepts.ts";
 
 export function makeTodoSyncs(Todo: TodoConcept, Audit: AuditConcept) {
@@ -15,8 +15,8 @@ export function makeTodoSyncs(Todo: TodoConcept, Audit: AuditConcept) {
    * When a todo is created, record an audit entry with the todo's data.
    */
   const CreateRecordsAudit = ({ entity }: Vars) => ({
-    when: actions([Todo.create, { id: entity }, {}]),
-    then: actions([
+    when: When([Todo.create, { id: entity }, {}]),
+    then: Then([
       Audit.record,
       {
         id: entity,
@@ -31,8 +31,8 @@ export function makeTodoSyncs(Todo: TodoConcept, Audit: AuditConcept) {
    * When a todo is completed (successfully), audit it.
    */
   const CompleteRecordsAudit = ({ id: todoId }: Vars) => ({
-    when: actions([Todo.complete, { id: todoId }, { id: todoId }]),
-    then: actions([
+    when: When([Todo.complete, { id: todoId }, { id: todoId }]),
+    then: Then([
       Audit.record,
       {
         id: todoId,
@@ -47,8 +47,8 @@ export function makeTodoSyncs(Todo: TodoConcept, Audit: AuditConcept) {
    * When a todo is deleted, audit the event.
    */
   const DeleteRecordsAudit = ({ id: todoId }: Vars) => ({
-    when: actions([Todo.delete, { id: todoId }, {}]),
-    then: actions([
+    when: When([Todo.delete, { id: todoId }, {}]),
+    then: Then([
       Audit.record,
       {
         id: todoId,

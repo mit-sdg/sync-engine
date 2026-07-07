@@ -12,7 +12,7 @@ import type {
   PatternBinding,
   RequestBoundary,
 } from "@sync-engine/devtools/graph/types.ts";
-import { actions, branch, step, SyncConcept, type Vars } from "@sync-engine/engine";
+import { Do, On, When, Then, SyncConcept, type Vars } from "@sync-engine/engine";
 
 // ── Mock concepts ────────────────────────────────────────────────
 
@@ -63,8 +63,8 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       TestSync: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
-        then: actions([tc.failAction, { result }, { error: "bad" }]),
+        when: When([tc.doSomething, {}, { result }]),
+        then: Then([tc.failAction, { result }, { error: "bad" }]),
       }),
     });
 
@@ -93,9 +93,9 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       FilteredSync: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
+        when: When([tc.doSomething, {}, { result }]),
         where: (frames) => frames,
-        then: actions([tc.failAction, {}, {}]),
+        then: Then([tc.failAction, {}, {}]),
       }),
     });
 
@@ -111,11 +111,8 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       EndpointSync: ({ result }: Vars) => ({
-        when: actions(
-          [req.request, { path: "/test/endpoint" }, {}],
-          [tc.doSomething, {}, { result }],
-        ),
-        then: actions([req.respond, { result, ok: true }]),
+        when: When([req.request, { path: "/test/endpoint" }, {}], [tc.doSomething, {}, { result }]),
+        then: Then([req.respond, { result, ok: true }]),
       }),
     });
 
@@ -142,12 +139,12 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       SyncA: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, {}, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
       SyncB: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, {}, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
     });
 
@@ -164,8 +161,8 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       OutputSync: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
-        then: actions([tc.failAction, {}, { error: "sample" }]),
+        when: When([tc.doSomething, {}, { result }]),
+        then: Then([tc.failAction, {}, { error: "sample" }]),
       }),
     });
 
@@ -190,12 +187,12 @@ describe("buildSyncGraph", () => {
     // Two syncs that both produce the same action but with different keys
     engine.register({
       SyncX: ({ result, detail }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
-        then: actions([tc.failAction, {}, { error: "bad", detail }]),
+        when: When([tc.doSomething, {}, { result }]),
+        then: Then([tc.failAction, {}, { error: "bad", detail }]),
       }),
       SyncY: ({ result, code }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result, code }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, {}, { result, code }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
     });
 
@@ -219,12 +216,12 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       EndpointA: ({ result }: Vars) => ({
-        when: actions([req.request, { path: "/a" }, {}], [tc.doSomething, {}, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([req.request, { path: "/a" }, {}], [tc.doSomething, {}, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
       EndpointB: ({ result }: Vars) => ({
-        when: actions([req.request, { path: "/b" }, {}], [tc.doSomething, {}, { result }]),
-        then: actions([tc.noOutput, {}, {}]),
+        when: When([req.request, { path: "/b" }, {}], [tc.doSomething, {}, { result }]),
+        then: Then([tc.noOutput, {}, {}]),
       }),
     });
 
@@ -241,8 +238,8 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       VarSync: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, {}, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
     });
 
@@ -265,8 +262,8 @@ describe("buildSyncGraph", () => {
     // Use a literal path in the input (simulating endpoint-style literal)
     engine.register({
       LiteralSync: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, { path: "/test" }, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, { path: "/test" }, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
     });
 
@@ -287,8 +284,8 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       ExprSync: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, { config: { timeout: 1000 } }, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, { config: { timeout: 1000 } }, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
     });
 
@@ -309,8 +306,8 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       InputSync: ({ result, detail }: Vars) => ({
-        when: actions([tc.doSomething, { method: "POST", detail }, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, { method: "POST", detail }, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
     });
 
@@ -330,12 +327,12 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       SyncOne: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, { action: "do" }, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, { action: "do" }, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
       SyncTwo: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, { action: "do", extra: true }, { result }]),
-        then: actions([tc.failAction, {}, {}]),
+        when: When([tc.doSomething, { action: "do", extra: true }, { result }]),
+        then: Then([tc.failAction, {}, {}]),
       }),
     });
 
@@ -359,8 +356,8 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       BindingSync: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
-        then: actions([tc.failAction, { result }, { error: "bad" }]),
+        when: When([tc.doSomething, {}, { result }]),
+        then: Then([tc.failAction, { result }, { error: "bad" }]),
       }),
     });
 
@@ -392,19 +389,8 @@ describe("buildSyncGraph", () => {
 
     engine.register({
       NestedSync: ({ result }: Vars) => ({
-        when: actions([tc.doSomething, {}, { result }]),
-        then: [
-          step([tc.noOutput, {}, {}], {
-            then: [
-              branch(
-                {},
-                {
-                  then: [step([tc.failAction, { result }, { error: "bad" }])],
-                },
-              ),
-            ],
-          }),
-        ],
+        when: When(tc.doSomething, {}, { result }),
+        then: Do(tc.noOutput, {}, {}).then(On({}, Do(tc.failAction, { result }, { error: "bad" }))),
       }),
     });
 

@@ -5,29 +5,38 @@
  * model (flow, frames, when/where/then, synced marks).
  */
 
+export { normalizeOutcome } from "./actions.ts";
 export { Frames } from "./frames.ts";
 export { actionNameOf, actionNodeId, conceptNameOf } from "./introspect.ts";
 export type { EngineObserver, JournalEvent } from "./observer.ts";
 export {
-  actions,
-  branch,
+  Do,
+  Done,
+  Err,
   Logging,
-  outcome,
+  On,
+  Parallel,
   sanitize,
-  step,
+  Sequence,
   SyncConcept,
-  workflow,
+  Then,
+  When,
+  Workflow,
 } from "./sync.ts";
 export type {
   ActionList,
+  ActionOutcome,
   ActionPattern,
   BranchNode,
+  DoChain,
   Empty,
   Frame,
   InstrumentedAction,
   Mapping,
   NestedThenOptions,
   OutcomeKind,
+  ParallelNode,
+  SequenceNode,
   StepNode,
   SyncFunction as Sync,
   ThenClause,
