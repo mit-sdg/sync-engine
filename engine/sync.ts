@@ -124,7 +124,7 @@ export function actions(...actions: ActionList[]): ActionPattern[] {
 //         act(Review.classify, { requestId }).as({ route }).branch(
 //           on({ route: "approved" }, act(Request.approve, { requestId })),
 //           onError({ detail }, act(Audit.record, { event: "FAILED" })),
-//           on({}, act(Audit.record, { event: "EMPTY" })),
+//           on(act(Audit.record, { event: "EMPTY" })),
 //         ),
 //       ),
 //   );
@@ -230,11 +230,19 @@ export function act(action: InstrumentedAction, input: Mapping): ActChain {
 
 /**
  * Success branch: fires when the preceding step produced a value or completed
- * (any non-error outcome) and `pattern` unifies against it. Use `on({}, …)` to
- * match empty completions. Use {@link onError} to catch failures.
+ * (any non-error outcome). Pattern is optional — omit it when `.as()` already
+ * bound what you need. Pass one to filter or extract further bindings. Use
+ * {@link onError} to catch failures.
+ *
+ *   on(act(Receipt.send, { paymentId }))            // .as() already had paymentId
+ *   on({ route: "approved" }, act(Request.approve))  // filter on outcome value
  */
-export function on(pattern: Mapping, ...nodes: ThenNode[]): BranchNode {
-  if (nodes.length === 0) throw new Error("on(pattern, ...nodes) requires at least one node.");
+export function on(...args: [Mapping, ...ThenNode[]] | ThenNode[]): BranchNode {
+  const [first, ...rest] = args;
+  const hasPattern = first !== undefined && !isNode(first);
+  const pattern = hasPattern ? (first as Mapping) : {};
+  const nodes = hasPattern ? (rest as ThenNode[]) : (args as ThenNode[]);
+  if (nodes.length === 0) throw new Error("on(...) requires at least one node.");
   return brand({ kind: "branch", outcome: "result", pattern, nested: nodes });
 }
 

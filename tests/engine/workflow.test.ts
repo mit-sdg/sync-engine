@@ -125,15 +125,15 @@ describe("nested outcome branching", () => {
     expect(Recorder.order).toEqual(["inventory unavailable"]);
   });
 
-  test("on({}, …) and on({}) both fire for completion outputs", async () => {
+  test("on() without pattern fires for completion outputs", async () => {
     const { Sync, Button, Completion, Recorder } = setup();
 
     Sync.register({
       CompletionWorkflow: sync((_vars: Vars) =>
         when(Button.clicked, { kind: "complete" }).then(
           act(Completion.finish, {}).branch(
-            on({}, act(Recorder.record, { tag: "complete" })),
-            on({}, act(Recorder.record, { tag: "result" })),
+            on(act(Recorder.record, { tag: "complete" })),
+            on(act(Recorder.record, { tag: "result" })),
           ),
         ),
       ),
@@ -154,7 +154,7 @@ describe("nested outcome branching", () => {
       OnSkipsErrors: sync(({ detail }: Vars) =>
         when(Button.clicked, { kind: "throw" }).then(
           act(Throwing.explode, {}).branch(
-            on({}, act(Recorder.record, { tag: "on-fired" })),
+            on(act(Recorder.record, { tag: "on-fired" })),
             onError({ detail }, act(Recorder.record, { tag: "err-fired" })),
           ),
         ),
@@ -383,13 +383,13 @@ describe("ActionOutcome normalisation", () => {
     expect(Recorder.order).toEqual(["kaboom"]);
   });
 
-  test("complete outcome triggers on({}, …) branch", async () => {
+  test("complete outcome triggers on() without pattern", async () => {
     const { Sync, Button, Completion, Recorder } = setup();
 
     Sync.register({
       CompletionOnly: sync((_vars: Vars) =>
         when(Button.clicked, { kind: "done-test" }).then(
-          act(Completion.finish, {}).branch(on({}, act(Recorder.record, { tag: "completed" }))),
+          act(Completion.finish, {}).branch(on(act(Recorder.record, { tag: "completed" }))),
         ),
       ),
     });
