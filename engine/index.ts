@@ -9,19 +9,7 @@ export { normalizeOutcome } from "./actions.ts";
 export { Frames } from "./frames.ts";
 export { actionNameOf, actionNodeId, conceptNameOf } from "./introspect.ts";
 export type { EngineObserver, JournalEvent } from "./observer.ts";
-export {
-  act,
-  Logging,
-  on,
-  onDone,
-  onError,
-  par,
-  sanitize,
-  seq,
-  sync,
-  SyncConcept,
-  when,
-} from "./sync.ts";
+export { act, Logging, on, onError, par, sanitize, seq, sync, SyncConcept, when } from "./sync.ts";
 export type {
   ActChain,
   ActionList,

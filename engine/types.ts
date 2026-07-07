@@ -141,7 +141,7 @@ export type Empty = Record<PropertyKey, never>;
  * Carries the base {@link StepNode} fields plus fluent refinements:
  *  - `.as(output)`    binds the step's output into the frame for later steps;
  *  - `.where(fn)`     transforms the frames before the step's children run;
- *  - `.branch(...n)`  attaches outcome branches (`on`/`onError`/`onDone`) and
+ *  - `.branch(...n)`  attaches outcome branches (`on`/`onError`) and
  *                     follow-up nodes, dispatched on this step's outcome.
  *
  * Every method returns the same chain, so refinements read left-to-right.

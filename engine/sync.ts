@@ -124,7 +124,7 @@ export function actions(...actions: ActionList[]): ActionPattern[] {
 //         act(Review.classify, { requestId }).as({ route }).branch(
 //           on({ route: "approved" }, act(Request.approve, { requestId })),
 //           onError({ detail }, act(Audit.record, { event: "FAILED" })),
-//           onDone(act(Audit.record, { event: "EMPTY" })),
+//           on({}, act(Audit.record, { event: "EMPTY" })),
 //         ),
 //       ),
 //   );
@@ -220,7 +220,7 @@ export function act(action: InstrumentedAction, input: Mapping): ActChain {
   };
   chain.branch = (...nodes) => {
     if (nodes.length === 0) {
-      throw new Error("act(...).branch() requires at least one node (on/onError/onDone/act/…).");
+      throw new Error("act(...).branch() requires at least one node (on/onError/act/…).");
     }
     node.nested = [...(node.nested ?? []), ...nodes];
     return chain;
@@ -230,8 +230,8 @@ export function act(action: InstrumentedAction, input: Mapping): ActChain {
 
 /**
  * Success branch: fires when the preceding step produced a value or completed
- * (any non-error outcome) and `pattern` unifies against it. To catch failures
- * use {@link onError}; for empty completions specifically use {@link onDone}.
+ * (any non-error outcome) and `pattern` unifies against it. Use `on({}, …)` to
+ * match empty completions. Use {@link onError} to catch failures.
  */
 export function on(pattern: Mapping, ...nodes: ThenNode[]): BranchNode {
   if (nodes.length === 0) throw new Error("on(pattern, ...nodes) requires at least one node.");
@@ -255,12 +255,6 @@ export function onError(...args: [Mapping, ...ThenNode[]] | ThenNode[]): BranchN
   return brand({ kind: "branch", outcome: "error", pattern, nested: nodes });
 }
 
-/** Completion branch: fires when the preceding step returned an empty output. */
-export function onDone(...nodes: ThenNode[]): BranchNode {
-  if (nodes.length === 0) throw new Error("onDone(...) requires at least one node.");
-  return brand({ kind: "branch", outcome: "complete", pattern: {}, nested: nodes });
-}
-
 /**
  * Run steps in order, forwarding each step's `.as(...)` bindings into the next
  * step's frame. Stops at the first error outcome. A branch may follow a step
@@ -272,7 +266,7 @@ export function seq(...nodes: ThenNode[]): SequenceNode {
   let sawStep = false;
   for (const node of nodes) {
     if (node.kind === "branch" && !sawStep) {
-      throw new Error("seq(...): a branch (on/onError/onDone) must follow an act(), not lead.");
+      throw new Error("seq(...): a branch (on/onError) must follow an act(), not lead.");
     }
     if (node.kind !== "branch") sawStep = true;
   }
@@ -318,7 +312,7 @@ function assertTopLevelThen(nodes: ThenNode[]): void {
     }
     if (node.kind === "branch") {
       throw new Error(
-        "on()/onError()/onDone() cannot be a top-level `.then(...)` node — nest it via act(...).branch(...).",
+        "on()/onError() cannot be a top-level `.then(...)` node — nest it via act(...).branch(...).",
       );
     }
   }

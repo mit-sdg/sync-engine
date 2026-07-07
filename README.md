@@ -256,20 +256,20 @@ frame, `.where(fn)` to transform the frames before its children run, and
 act(Payment.charge, { total }).as({ paymentId }).branch(
   on({ paymentId }, ...),          // any non-error outcome
   onError({ code: "CARD_DECLINED" }, ...),
-  onDone(...),                     // empty completion
+  on({}, ...),                     // empty completion
 )
 ```
 
-### `on` / `onError` / `onDone`
+### `on` / `onError`
 
 Outcome branches, attached via `act(...).branch(...)` (or as steps inside
 `seq(...)`). They partition an action's outcome:
 
 - `on(pattern, ...nodes)` — the action produced a value or completed (any
-  **non-error** outcome) and `pattern` unifies against it;
+  **non-error** outcome) and `pattern` unifies against it. Use `on({}, …)` for
+  empty completions.
 - `onError(pattern?, ...nodes)` — the action failed, whether it threw or
-  returned an error record. The optional pattern unifies against the error;
-- `onDone(...nodes)` — the action completed with an empty output.
+  returned an error record. The optional pattern unifies against the error.
 
 ### `seq(...steps)` / `par(...steps)`
 
@@ -362,9 +362,9 @@ safety.
 
 Concept actions may throw domain errors instead of returning error records. The
 engine records thrown failures as `{ kind: "error" }` outcomes, picked up by
-`onError(...)` branches. Empty action outputs are completion outcomes matched by
-`onDone(...)`. `on({...}, ...)` matches any non-error outcome — it never fires on
-a failure, so it and `onError(...)` never overlap.
+`onError(...)` branches. Empty action outputs are matched by `on({}, …)`.
+`on({...}, ...)` matches any non-error outcome — it never fires on a failure,
+so it and `onError(...)` never overlap.
 
 Use standalone syncs for reusable policies. Use nested workflows when the syncs
 are only meaningful as ordered steps of one request or business process.
