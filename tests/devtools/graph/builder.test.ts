@@ -12,7 +12,7 @@ import type {
   PatternBinding,
   RequestBoundary,
 } from "@sync-engine/devtools/graph/types.ts";
-import { Do, On, When, Then, SyncConcept, type Vars } from "@sync-engine/engine";
+import { act, on, SyncConcept, type Vars, when } from "@sync-engine/engine";
 
 // ── Mock concepts ────────────────────────────────────────────────
 
@@ -62,10 +62,10 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      TestSync: ({ result }: Vars) => ({
-        when: When([tc.doSomething, {}, { result }]),
-        then: Then([tc.failAction, { result }, { error: "bad" }]),
-      }),
+      TestSync: ({ result }: Vars) =>
+        when(tc.doSomething, {}, { result }).then(
+          act(tc.failAction, { result }).as({ error: "bad" }),
+        ),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -92,11 +92,10 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      FilteredSync: ({ result }: Vars) => ({
-        when: When([tc.doSomething, {}, { result }]),
-        where: (frames) => frames,
-        then: Then([tc.failAction, {}, {}]),
-      }),
+      FilteredSync: ({ result }: Vars) =>
+        when(tc.doSomething, {}, { result })
+          .where((frames) => frames)
+          .then(act(tc.failAction, {})),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -110,10 +109,10 @@ describe("buildSyncGraph", () => {
     const req = engine.instrumentConcept(new RequestingConcept());
 
     engine.register({
-      EndpointSync: ({ result }: Vars) => ({
-        when: When([req.request, { path: "/test/endpoint" }, {}], [tc.doSomething, {}, { result }]),
-        then: Then([req.respond, { result, ok: true }]),
-      }),
+      EndpointSync: ({ result }: Vars) =>
+        when(req.request, { path: "/test/endpoint" }, {})
+          .and(tc.doSomething, {}, { result })
+          .then(act(req.respond, { result, ok: true })),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -138,14 +137,10 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      SyncA: ({ result }: Vars) => ({
-        when: When([tc.doSomething, {}, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
-      SyncB: ({ result }: Vars) => ({
-        when: When([tc.doSomething, {}, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
+      SyncA: ({ result }: Vars) =>
+        when(tc.doSomething, {}, { result }).then(act(tc.failAction, {})),
+      SyncB: ({ result }: Vars) =>
+        when(tc.doSomething, {}, { result }).then(act(tc.failAction, {})),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -160,10 +155,8 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      OutputSync: ({ result }: Vars) => ({
-        when: When([tc.doSomething, {}, { result }]),
-        then: Then([tc.failAction, {}, { error: "sample" }]),
-      }),
+      OutputSync: ({ result }: Vars) =>
+        when(tc.doSomething, {}, { result }).then(act(tc.failAction, {}).as({ error: "sample" })),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -186,14 +179,12 @@ describe("buildSyncGraph", () => {
 
     // Two syncs that both produce the same action but with different keys
     engine.register({
-      SyncX: ({ result, detail }: Vars) => ({
-        when: When([tc.doSomething, {}, { result }]),
-        then: Then([tc.failAction, {}, { error: "bad", detail }]),
-      }),
-      SyncY: ({ result, code }: Vars) => ({
-        when: When([tc.doSomething, {}, { result, code }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
+      SyncX: ({ result, detail }: Vars) =>
+        when(tc.doSomething, {}, { result }).then(
+          act(tc.failAction, {}).as({ error: "bad", detail }),
+        ),
+      SyncY: ({ result, code }: Vars) =>
+        when(tc.doSomething, {}, { result, code }).then(act(tc.failAction, {})),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -215,14 +206,14 @@ describe("buildSyncGraph", () => {
     const req = engine.instrumentConcept(new RequestingConcept());
 
     engine.register({
-      EndpointA: ({ result }: Vars) => ({
-        when: When([req.request, { path: "/a" }, {}], [tc.doSomething, {}, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
-      EndpointB: ({ result }: Vars) => ({
-        when: When([req.request, { path: "/b" }, {}], [tc.doSomething, {}, { result }]),
-        then: Then([tc.noOutput, {}, {}]),
-      }),
+      EndpointA: ({ result }: Vars) =>
+        when(req.request, { path: "/a" }, {})
+          .and(tc.doSomething, {}, { result })
+          .then(act(tc.failAction, {})),
+      EndpointB: ({ result }: Vars) =>
+        when(req.request, { path: "/b" }, {})
+          .and(tc.doSomething, {}, { result })
+          .then(act(tc.noOutput, {})),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -237,10 +228,8 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      VarSync: ({ result }: Vars) => ({
-        when: When([tc.doSomething, {}, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
+      VarSync: ({ result }: Vars) =>
+        when(tc.doSomething, {}, { result }).then(act(tc.failAction, {})),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -261,10 +250,8 @@ describe("buildSyncGraph", () => {
 
     // Use a literal path in the input (simulating endpoint-style literal)
     engine.register({
-      LiteralSync: ({ result }: Vars) => ({
-        when: When([tc.doSomething, { path: "/test" }, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
+      LiteralSync: ({ result }: Vars) =>
+        when(tc.doSomething, { path: "/test" }, { result }).then(act(tc.failAction, {})),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -283,10 +270,10 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      ExprSync: ({ result }: Vars) => ({
-        when: When([tc.doSomething, { config: { timeout: 1000 } }, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
+      ExprSync: ({ result }: Vars) =>
+        when(tc.doSomething, { config: { timeout: 1000 } }, { result }).then(
+          act(tc.failAction, {}),
+        ),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -305,10 +292,8 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      InputSync: ({ result, detail }: Vars) => ({
-        when: When([tc.doSomething, { method: "POST", detail }, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
+      InputSync: ({ result, detail }: Vars) =>
+        when(tc.doSomething, { method: "POST", detail }, { result }).then(act(tc.failAction, {})),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -326,14 +311,12 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      SyncOne: ({ result }: Vars) => ({
-        when: When([tc.doSomething, { action: "do" }, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
-      SyncTwo: ({ result }: Vars) => ({
-        when: When([tc.doSomething, { action: "do", extra: true }, { result }]),
-        then: Then([tc.failAction, {}, {}]),
-      }),
+      SyncOne: ({ result }: Vars) =>
+        when(tc.doSomething, { action: "do" }, { result }).then(act(tc.failAction, {})),
+      SyncTwo: ({ result }: Vars) =>
+        when(tc.doSomething, { action: "do", extra: true }, { result }).then(
+          act(tc.failAction, {}),
+        ),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -355,10 +338,10 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      BindingSync: ({ result }: Vars) => ({
-        when: When([tc.doSomething, {}, { result }]),
-        then: Then([tc.failAction, { result }, { error: "bad" }]),
-      }),
+      BindingSync: ({ result }: Vars) =>
+        when(tc.doSomething, {}, { result }).then(
+          act(tc.failAction, { result }).as({ error: "bad" }),
+        ),
     });
 
     const graph = buildSyncGraph(engine, boundary);
@@ -388,10 +371,10 @@ describe("buildSyncGraph", () => {
     const tc = engine.instrumentConcept(new TestConcept());
 
     engine.register({
-      NestedSync: ({ result }: Vars) => ({
-        when: When(tc.doSomething, {}, { result }),
-        then: Do(tc.noOutput, {}, {}).then(On({}, Do(tc.failAction, { result }, { error: "bad" }))),
-      }),
+      NestedSync: ({ result }: Vars) =>
+        when(tc.doSomething, {}, { result }).then(
+          act(tc.noOutput, {}).branch(on({}, act(tc.failAction, { result }).as({ error: "bad" }))),
+        ),
     });
 
     const graph = buildSyncGraph(engine, boundary);

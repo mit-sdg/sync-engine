@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { When, Then, type JournalEvent, Logging, SyncConcept } from "@sync-engine/engine";
+import { act, type JournalEvent, Logging, SyncConcept, when } from "@sync-engine/engine";
 import { FrameworkErrorCode } from "@sync-engine/sdk/error-codes.ts";
 import {
   ButtonConcept,
@@ -33,10 +33,8 @@ function engineWithSyncs() {
 
   // Simple sync: button click increments counter (uses proper $vars/actions pattern)
   Sync.register({
-    ButtonIncrements: (_vars: Record<string, symbol>) => ({
-      when: When([Button.clicked, { kind: "inc" }, {}]),
-      then: Then([Counter.increment, {}]),
-    }),
+    ButtonIncrements: (_vars: Record<string, symbol>) =>
+      when(Button.clicked, { kind: "inc" }, {}).then(act(Counter.increment, {})),
   });
 
   return { Sync, Button, Counter, Notification, Recorder };

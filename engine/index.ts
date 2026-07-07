@@ -10,25 +10,24 @@ export { Frames } from "./frames.ts";
 export { actionNameOf, actionNodeId, conceptNameOf } from "./introspect.ts";
 export type { EngineObserver, JournalEvent } from "./observer.ts";
 export {
-  Do,
-  Done,
-  Err,
+  act,
   Logging,
-  On,
-  Parallel,
+  on,
+  onDone,
+  onError,
+  par,
   sanitize,
-  Sequence,
+  seq,
+  sync,
   SyncConcept,
-  Then,
-  When,
-  Workflow,
+  when,
 } from "./sync.ts";
 export type {
+  ActChain,
   ActionList,
   ActionOutcome,
   ActionPattern,
   BranchNode,
-  DoChain,
   Empty,
   Frame,
   InstrumentedAction,
@@ -38,10 +37,14 @@ export type {
   ParallelNode,
   SequenceNode,
   StepNode,
+  SyncDeclaration,
   SyncFunction as Sync,
   ThenClause,
   ThenNode,
   Vars,
+  WhenBuilder,
+  WhenBuilderWithWhere,
+  WhereFn,
 } from "./types.ts";
 export type { TypedVars, Var } from "./vars.ts";
 export { declareVars } from "./vars.ts";

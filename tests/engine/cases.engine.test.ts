@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { When, Then, type Frames, Logging, SyncConcept, type Vars } from "@sync-engine/engine";
+import { act, type Frames, Logging, SyncConcept, type Vars, when } from "@sync-engine/engine";
 import { FrameworkErrorCode } from "@sync-engine/sdk/error-codes.ts";
 import {
   ButtonConcept,
@@ -79,22 +79,22 @@ describe("engine: edge cases", () => {
     List.add({ value: 3 });
 
     // Extra sync that only records even values produced by FanoutOverList.
-    const OnlyEven = ({ tag, value, evenTag }: Vars) => ({
-      when: When([Recorder.record, { tag }, {}]),
-      where: (frames: Frames) =>
-        frames
-          .filter(($) => String($[tag]).startsWith("v:"))
-          .map((frame) => {
-            const num = Number(String(frame[tag]).split(":")[1] ?? "NaN");
-            return { ...frame, [value]: num } as typeof frame;
-          })
-          .filter(($) => Number($[value]) % 2 === 0)
-          .map((frame) => ({
-            ...frame,
-            [evenTag]: `even:${String(frame[value])}`,
-          })),
-      then: Then([Recorder.record, { tag: evenTag }]),
-    });
+    const OnlyEven = ({ tag, value, evenTag }: Vars) =>
+      when(Recorder.record, { tag }, {})
+        .where((frames: Frames) =>
+          frames
+            .filter(($) => String($[tag]).startsWith("v:"))
+            .map((frame) => {
+              const num = Number(String(frame[tag]).split(":")[1] ?? "NaN");
+              return { ...frame, [value]: num } as typeof frame;
+            })
+            .filter(($) => Number($[value]) % 2 === 0)
+            .map((frame) => ({
+              ...frame,
+              [evenTag]: `even:${String(frame[value])}`,
+            })),
+        )
+        .then(act(Recorder.record, { tag: evenTag }));
     Sync.register({ OnlyEven });
 
     await Button.clicked({ kind: "fanout" });
@@ -128,10 +128,11 @@ describe("engine: edge cases", () => {
     // Register a one-shot sync whose `then` fires two actions; the first throws.
     // Uses Button.clicked as the trigger (one-shot, no self-loop).
     Sync.register({
-      ChainWithThrow: ({ kind }: Vars) => ({
-        when: When([Button.clicked, { kind }, {}]),
-        then: Then([Throwing.explode, {}], [Recorder.record, { tag: "after-throw" }]),
-      }),
+      ChainWithThrow: ({ kind }: Vars) =>
+        when(Button.clicked, { kind }, {}).then(
+          act(Throwing.explode, {}),
+          act(Recorder.record, { tag: "after-throw" }),
+        ),
     });
 
     await Button.clicked({ kind: "test" });
@@ -151,22 +152,15 @@ describe("engine: edge cases", () => {
     });
 
     Sync.register({
-      StartWorkflow: ({ kind }: Vars) => ({
-        when: When([Button.clicked, { kind }, {}]),
-        then: Then([Throwing.safe, {}], [Throwing.explode, {}]),
-      }),
-      Response: ({ ok }: Vars) => ({
-        when: When(
-          [Button.clicked, { kind: "test" }, {}],
-          [Throwing.safe, {}, { ok }],
-          [Throwing.explode, {}, {}],
-        ),
-        then: Then([Recorder.record, { tag: "response" }]),
-      }),
-      ErrorResponse: ({ error }: Vars) => ({
-        when: When([Throwing.explode, {}, { error }]),
-        then: Then([Recorder.record, { tag: "error" }]),
-      }),
+      StartWorkflow: ({ kind }: Vars) =>
+        when(Button.clicked, { kind }, {}).then(act(Throwing.safe, {}), act(Throwing.explode, {})),
+      Response: ({ ok }: Vars) =>
+        when(Button.clicked, { kind: "test" }, {})
+          .and(Throwing.safe, {}, { ok })
+          .and(Throwing.explode, {}, {})
+          .then(act(Recorder.record, { tag: "response" })),
+      ErrorResponse: ({ error }: Vars) =>
+        when(Throwing.explode, {}, { error }).then(act(Recorder.record, { tag: "error" })),
     });
 
     await Button.clicked({ kind: "test" });

@@ -1,18 +1,18 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
-  Done,
-  Do,
-  Err,
-  Logging,
-  On,
-  Sequence,
-  SyncConcept,
-  Then,
-  When,
-  Workflow,
+  act,
   type Empty,
   type Frames,
+  Logging,
+  on,
+  onDone,
+  onError,
+  par,
+  seq,
+  sync,
+  SyncConcept,
   type Vars,
+  when,
 } from "@sync-engine/engine";
 import { ButtonConcept, ListConcept, RecorderConcept, ThrowingConcept } from "./mocks.ts";
 
@@ -67,19 +67,20 @@ function setup() {
 // ── Outcome branching ─────────────────────────────────────────────────────
 
 describe("nested outcome branching", () => {
-  test("branches on ordinary result values via On", async () => {
+  test("branches on ordinary result values via on()", async () => {
     const { Sync, Button, Decision, Recorder } = setup();
 
     Sync.register({
-      ApprovalWorkflow: Workflow(({ kind, route }: Vars) => ({
-        when: When(Button.clicked, { kind }),
-        then: Do(Decision.decide, { kind })
-          .as({ route })
-          .then(
-            On({ route: "approved" }, Do(Recorder.record, { tag: "approved" })),
-            On({ route: "rejected" }, Do(Recorder.record, { tag: "rejected" })),
-          ),
-      })),
+      ApprovalWorkflow: sync(({ kind, route }: Vars) =>
+        when(Button.clicked, { kind }).then(
+          act(Decision.decide, { kind })
+            .as({ route })
+            .branch(
+              on({ route: "approved" }, act(Recorder.record, { tag: "approved" })),
+              on({ route: "rejected" }, act(Recorder.record, { tag: "rejected" })),
+            ),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "approve" });
@@ -88,14 +89,17 @@ describe("nested outcome branching", () => {
     expect(Recorder.order).toEqual(["approved", "rejected"]);
   });
 
-  test("routes thrown concept errors through Err branch", async () => {
+  test("routes thrown concept errors through onError() branch", async () => {
     const { Sync, Button, Recorder, Throwing } = setup();
 
     Sync.register({
-      ThrowingWorkflow: Workflow(({ detail }: Vars) => ({
-        when: When(Button.clicked, { kind: "throw" }),
-        then: Do(Throwing.explode, {}).then(Err({ detail }, Do(Recorder.record, { tag: detail }))),
-      })),
+      ThrowingWorkflow: sync(({ detail }: Vars) =>
+        when(Button.clicked, { kind: "throw" }).then(
+          act(Throwing.explode, {}).branch(
+            onError({ detail }, act(Recorder.record, { tag: detail })),
+          ),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "throw" });
@@ -108,12 +112,13 @@ describe("nested outcome branching", () => {
     const { Sync, Button, DomainFailure, Recorder } = setup();
 
     Sync.register({
-      DomainErrorWorkflow: Workflow(({ detail }: Vars) => ({
-        when: When(Button.clicked, { kind: "domain-error" }),
-        then: Do(DomainFailure.fail, {}).then(
-          Err({ error: "OUT_OF_STOCK", detail }, Do(Recorder.record, { tag: detail })),
+      DomainErrorWorkflow: sync(({ detail }: Vars) =>
+        when(Button.clicked, { kind: "domain-error" }).then(
+          act(DomainFailure.fail, {}).branch(
+            onError({ error: "OUT_OF_STOCK", detail }, act(Recorder.record, { tag: detail })),
+          ),
         ),
-      })),
+      ),
     });
 
     await Button.clicked({ kind: "domain-error" });
@@ -121,29 +126,52 @@ describe("nested outcome branching", () => {
     expect(Recorder.order).toEqual(["inventory unavailable"]);
   });
 
-  test("Done and On result both fire for completion outputs", async () => {
+  test("onDone and on() both fire for completion outputs", async () => {
     const { Sync, Button, Completion, Recorder } = setup();
 
     Sync.register({
-      CompletionWorkflow: Workflow((_vars: Vars) => ({
-        when: When(Button.clicked, { kind: "complete" }),
-        then: Do(Completion.finish, {}, {}).then(
-          Done(Do(Recorder.record, { tag: "complete" })),
-          On({}, Do(Recorder.record, { tag: "result" })),
+      CompletionWorkflow: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "complete" }).then(
+          act(Completion.finish, {}).branch(
+            onDone(act(Recorder.record, { tag: "complete" })),
+            on({}, act(Recorder.record, { tag: "result" })),
+          ),
         ),
-      })),
+      ),
     });
 
     await Button.clicked({ kind: "complete" });
 
     expect(Recorder.order).toEqual(["complete", "result"]);
   });
+
+  test("on() does not fire on an error outcome", async () => {
+    const { Sync, Button, Recorder, Throwing } = setup();
+
+    // A success branch and an error branch on the same failing step: only the
+    // error branch should fire. Under the old `outcome: "any"` semantics the
+    // success branch would have matched (and bound from) the error record.
+    Sync.register({
+      OnSkipsErrors: sync(({ detail }: Vars) =>
+        when(Button.clicked, { kind: "throw" }).then(
+          act(Throwing.explode, {}).branch(
+            on({}, act(Recorder.record, { tag: "on-fired" })),
+            onError({ detail }, act(Recorder.record, { tag: "err-fired" })),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "throw" });
+
+    expect(Recorder.order).toEqual(["err-fired"]);
+  });
 });
 
-// ── DSL sugar ─────────────────────────────────────────────────────────────
+// ── DSL surface ─────────────────────────────────────────────────────────────
 
-describe("DSL sugar (#2)", () => {
-  test("Workflow registers and triggers a simple sync", async () => {
+describe("fluent DSL", () => {
+  test("sync() registers and triggers a simple rule", async () => {
     const Sync = new SyncConcept();
     Sync.logging = Logging.OFF;
     const { Button, Recorder } = Sync.instrument({
@@ -152,10 +180,9 @@ describe("DSL sugar (#2)", () => {
     });
 
     Sync.register({
-      PingPong: Workflow(({ kind }: Vars) => ({
-        when: When(Button.clicked, { kind }, {}),
-        then: Then(Recorder.record, { tag: kind }),
-      })),
+      PingPong: sync(({ kind }: Vars) =>
+        when(Button.clicked, { kind }, {}).then(act(Recorder.record, { tag: kind })),
+      ),
     });
 
     await Button.clicked({ kind: "ping" });
@@ -164,7 +191,7 @@ describe("DSL sugar (#2)", () => {
     expect(Recorder.order).toEqual(["ping", "pong"]);
   });
 
-  test("When multi-pattern matches multiple journal entries", async () => {
+  test("when(...).and(...) matches multiple journal entries", async () => {
     const Sync = new SyncConcept();
     Sync.logging = Logging.OFF;
     const { Button, Recorder } = Sync.instrument({
@@ -173,17 +200,17 @@ describe("DSL sugar (#2)", () => {
     });
 
     Sync.register({
-      Seed: Workflow(({ tag, kind }: Vars) => ({
-        when: When(Button.clicked, { kind: "seed" }, {}),
-        then: Then(Recorder.record, { tag: "tok" }),
-      })),
+      Seed: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "seed" }, {}).then(act(Recorder.record, { tag: "tok" })),
+      ),
     });
 
     Sync.register({
-      MultiWhen: Workflow(({ kind, tag }: Vars) => ({
-        when: When([Button.clicked, { kind: "seed" }, {}], [Recorder.record, { tag }, {}]),
-        then: Then(Recorder.record, { tag: "multi-fire" }),
-      })),
+      MultiWhen: sync(({ tag }: Vars) =>
+        when(Button.clicked, { kind: "seed" }, {})
+          .and(Recorder.record, { tag }, {})
+          .then(act(Recorder.record, { tag: "multi-fire" })),
+      ),
     });
 
     await Button.clicked({ kind: "seed" });
@@ -191,49 +218,41 @@ describe("DSL sugar (#2)", () => {
     expect(Recorder.order).toContain("multi-fire");
   });
 
-  test("Do with as() binds step output to variables", async () => {
+  test("act(...).as() binds step output to variables", async () => {
     const { Sync, Button, Decision, Recorder } = setup();
 
     Sync.register({
-      AsBinding: Workflow(({ kind, route }: Vars) => ({
-        when: When(Button.clicked, { kind }),
-        then: Do(Decision.decide, { kind })
-          .as({ route })
-          .then(Do(Recorder.record, { tag: route })),
-      })),
+      AsBinding: sync(({ kind, route }: Vars) =>
+        when(Button.clicked, { kind }).then(
+          act(Decision.decide, { kind })
+            .as({ route })
+            .branch(act(Recorder.record, { tag: route })),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "approve" });
     expect(Recorder.order).toEqual(["approved"]);
   });
 
-  test("supports nested where fanout after a step completes", async () => {
+  test("act(...).where() fans out after a step completes", async () => {
     const { Sync, Button, Completion, List, Recorder } = setup();
     await List.add({ value: 1 });
     await List.add({ value: 2 });
 
     Sync.register({
-      FanoutWorkflow: Workflow(({ value, tag }: Vars) => {
-        const stepNode = {
-          kind: "step" as const,
-          action: {
-            action: Completion.finish as any,
-            concept: Completion,
-            input: {},
-            flow: Symbol("flow"),
-          },
-          where: (frames: Frames) =>
-            frames.query(List._items, {}, { value }).map((frame: any) => ({
-              ...frame,
-              [tag]: "v:" + String(frame[value]),
-            })),
-          nested: [Do(Recorder.record, { tag })],
-        };
-        return {
-          when: When(Button.clicked, { kind: "fanout" }),
-          then: stepNode,
-        };
-      }),
+      FanoutWorkflow: sync(({ value, tag }: Vars) =>
+        when(Button.clicked, { kind: "fanout" }).then(
+          act(Completion.finish, {})
+            .where((frames: Frames) =>
+              frames.query(List._items, {}, { value }).map((frame: any) => ({
+                ...frame,
+                [tag]: "v:" + String(frame[value]),
+              })),
+            )
+            .branch(act(Recorder.record, { tag })),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "fanout" });
@@ -242,17 +261,18 @@ describe("DSL sugar (#2)", () => {
   });
 });
 
-// ── Sequence / Parallel ───────────────────────────────────────────────────
+// ── seq / par ───────────────────────────────────────────────────────────────
 
-describe("Sequence and Parallel execution (#1)", () => {
-  test("Sequence carries output bindings forward between steps", async () => {
+describe("seq and par execution", () => {
+  test("seq carries output bindings forward between steps", async () => {
     const { Sync, Button, StepRecorder: SR } = setup();
 
     Sync.register({
-      Sequential: Workflow(({ data }: Vars) => ({
-        when: When(Button.clicked, { kind: "seq-test" }),
-        then: Sequence(Do((SR as any).step1, {}, {}).as({ data }), Do((SR as any).step2, { data })),
-      })),
+      Sequential: sync(({ data }: Vars) =>
+        when(Button.clicked, { kind: "seq-test" }).then(
+          seq(act((SR as any).step1, {}).as({ data }), act((SR as any).step2, { data })),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "seq-test" });
@@ -268,14 +288,13 @@ describe("Sequence and Parallel execution (#1)", () => {
     });
 
     Sync.register({
-      SequentialSiblings: Workflow(({ kind }: Vars) => ({
-        when: When(Button.clicked, { kind }, {}),
-        then: [
-          Do(Recorder.record, { tag: "first" }),
-          Do(Recorder.record, { tag: "second" }),
-          Do(Recorder.record, { tag: "third" }),
-        ] as any,
-      })),
+      SequentialSiblings: sync(({ kind }: Vars) =>
+        when(Button.clicked, { kind }, {}).then(
+          act(Recorder.record, { tag: "first" }),
+          act(Recorder.record, { tag: "second" }),
+          act(Recorder.record, { tag: "third" }),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "start" });
@@ -314,10 +333,12 @@ describe("Sequence and Parallel execution (#1)", () => {
     };
 
     Sync.register({
-      DefaultSeq: Workflow((_vars: Vars) => ({
-        when: When(Recorder.record, { tag: "go" }, {}),
-        then: [Do((TA as any).slow, {}, {}), Do((TA as any).fast, {}, {})] as any,
-      })),
+      DefaultSeq: sync((_vars: Vars) =>
+        when(Recorder.record, { tag: "go" }, {}).then(
+          act((TA as any).slow, {}),
+          act((TA as any).fast, {}),
+        ),
+      ),
     });
 
     await Recorder.record({ tag: "go" });
@@ -328,45 +349,50 @@ describe("Sequence and Parallel execution (#1)", () => {
 
 // ── ActionOutcome / edge cases ────────────────────────────────────────────
 
-describe("ActionOutcome normalisation (#3)", () => {
-  test("result outcome fires On branches", async () => {
+describe("ActionOutcome normalisation", () => {
+  test("result outcome fires on() branches", async () => {
     const { Sync, Button, Decision, Recorder } = setup();
 
     Sync.register({
-      ResultBranch: Workflow(({ kind, route }: Vars) => ({
-        when: When(Button.clicked, { kind }, {}),
-        then: Do(Decision.decide, { kind })
-          .as({ route })
-          .then(On({ route: "approved" }, Do(Recorder.record, { tag: "result-match" }))),
-      })),
+      ResultBranch: sync(({ kind, route }: Vars) =>
+        when(Button.clicked, { kind }, {}).then(
+          act(Decision.decide, { kind })
+            .as({ route })
+            .branch(on({ route: "approved" }, act(Recorder.record, { tag: "result-match" }))),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "approve" });
     expect(Recorder.order).toEqual(["result-match"]);
   });
 
-  test("error outcome triggers Err branch", async () => {
+  test("error outcome triggers onError() branch", async () => {
     const { Sync, Button, Recorder, Throwing } = setup();
 
     Sync.register({
-      ErrOnly: Workflow(({ detail }: Vars) => ({
-        when: When(Button.clicked, { kind: "err-test" }),
-        then: Do(Throwing.explode, {}).then(Err({ detail }, Do(Recorder.record, { tag: detail }))),
-      })),
+      ErrOnly: sync(({ detail }: Vars) =>
+        when(Button.clicked, { kind: "err-test" }).then(
+          act(Throwing.explode, {}).branch(
+            onError({ detail }, act(Recorder.record, { tag: detail })),
+          ),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "err-test" });
     expect(Recorder.order).toEqual(["kaboom"]);
   });
 
-  test("complete outcome triggers Done branch", async () => {
+  test("complete outcome triggers onDone() branch", async () => {
     const { Sync, Button, Completion, Recorder } = setup();
 
     Sync.register({
-      CompletionOnly: Workflow((_vars: Vars) => ({
-        when: When(Button.clicked, { kind: "done-test" }),
-        then: Do(Completion.finish, {}, {}).then(Done(Do(Recorder.record, { tag: "completed" }))),
-      })),
+      CompletionOnly: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "done-test" }).then(
+          act(Completion.finish, {}).branch(onDone(act(Recorder.record, { tag: "completed" }))),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "done-test" });
@@ -374,19 +400,20 @@ describe("ActionOutcome normalisation (#3)", () => {
   });
 });
 
-describe("Sequence and Parallel edge cases", () => {
-  test("Sequence stops executing after an error step", async () => {
+describe("seq and par edge cases", () => {
+  test("seq stops executing after an error step", async () => {
     const { Sync, Button, Recorder, Throwing } = setup();
 
     Sync.register({
-      SeqWithError: Workflow((_vars: Vars) => ({
-        when: When(Button.clicked, { kind: "seq-err" }),
-        then: Sequence(
-          Do(Recorder.record, { tag: "before" }),
-          Do(Throwing.explode, {}),
-          Do(Recorder.record, { tag: "after-error" }),
+      SeqWithError: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "seq-err" }).then(
+          seq(
+            act(Recorder.record, { tag: "before" }),
+            act(Throwing.explode, {}),
+            act(Recorder.record, { tag: "after-error" }),
+          ),
         ),
-      })),
+      ),
     });
 
     await Button.clicked({ kind: "seq-err" });
@@ -394,24 +421,25 @@ describe("Sequence and Parallel edge cases", () => {
     expect(Throwing.hit).toBe(true);
   });
 
-  test("Sequence propagates data from result outcomes", async () => {
+  test("seq propagates data from result outcomes", async () => {
     const { Sync, Button, Decision, Recorder } = setup();
 
     Sync.register({
-      SeqWithData: Workflow(({ kind, route }: Vars) => ({
-        when: When(Button.clicked, { kind }),
-        then: Sequence(
-          Do(Decision.decide, { kind: "approve" }).as({ route }),
-          Do(Recorder.record, { tag: route }),
+      SeqWithData: sync(({ kind, route }: Vars) =>
+        when(Button.clicked, { kind }).then(
+          seq(
+            act(Decision.decide, { kind: "approve" }).as({ route }),
+            act(Recorder.record, { tag: route }),
+          ),
         ),
-      })),
+      ),
     });
 
     await Button.clicked({ kind: "any" });
     expect(Recorder.order).toEqual(["approved"]);
   });
 
-  test("nested Sequence inside Sequence executes correctly", async () => {
+  test("nested seq inside seq executes correctly", async () => {
     const Sync = new SyncConcept();
     Sync.logging = Logging.OFF;
     const { Button, Recorder } = Sync.instrument({
@@ -420,17 +448,15 @@ describe("Sequence and Parallel edge cases", () => {
     });
 
     Sync.register({
-      NestedSeq: Workflow(({ kind }: Vars) => ({
-        when: When(Button.clicked, { kind: "nested-seq" }, {}),
-        then: Sequence(
-          Do(Recorder.record, { tag: "outer-1" }),
-          Sequence(
-            Do(Recorder.record, { tag: "inner-1" }),
-            Do(Recorder.record, { tag: "inner-2" }),
+      NestedSeq: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "nested-seq" }, {}).then(
+          seq(
+            act(Recorder.record, { tag: "outer-1" }),
+            seq(act(Recorder.record, { tag: "inner-1" }), act(Recorder.record, { tag: "inner-2" })),
+            act(Recorder.record, { tag: "outer-2" }),
           ),
-          Do(Recorder.record, { tag: "outer-2" }),
         ),
-      })),
+      ),
     });
 
     await Button.clicked({ kind: "nested-seq" });
@@ -441,14 +467,76 @@ describe("Sequence and Parallel edge cases", () => {
     const { Sync, Button, Recorder, Throwing } = setup();
 
     Sync.register({
-      ErrorInNested: Workflow((_vars: Vars) => ({
-        when: When(Button.clicked, { kind: "error-direct" }),
-        then: Do(Throwing.explode, {}).then(Do(Recorder.record, { tag: "after-error-direct" })),
-      })),
+      ErrorInNested: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "error-direct" }).then(
+          act(Throwing.explode, {}).branch(act(Recorder.record, { tag: "after-error-direct" })),
+        ),
+      ),
     });
 
     await Button.clicked({ kind: "error-direct" });
     expect(Throwing.hit).toBe(true);
     expect(Recorder.order).toEqual([]);
+  });
+});
+
+// ── Construction-time guards ──────────────────────────────────────────────
+
+describe("DSL construction guards", () => {
+  test("awaiting a when(...) chain throws instead of silently resolving", async () => {
+    const { Button } = setup();
+    const builder = when(Button.clicked, { kind: "x" });
+    await expect(Promise.resolve(builder as unknown as Promise<unknown>)).rejects.toThrow(
+      "not a promise",
+    );
+  });
+
+  test(".then() rejects a top-level outcome branch", () => {
+    const { Button, Recorder } = setup();
+    expect(() => when(Button.clicked, {}).then(on({}, act(Recorder.record, { tag: "x" })))).toThrow(
+      "top-level",
+    );
+  });
+
+  test(".then() requires at least one node", () => {
+    const { Button } = setup();
+    expect(() => when(Button.clicked, {}).then()).toThrow("at least one node");
+  });
+
+  test("seq() rejects a leading branch", () => {
+    const { Recorder } = setup();
+    expect(() => seq(on({}, act(Recorder.record, { tag: "x" })), act(Recorder.record, {}))).toThrow(
+      "must follow an act()",
+    );
+  });
+
+  test("par() rejects outcome branches", () => {
+    const { Recorder } = setup();
+    expect(() => par(on({}, act(Recorder.record, { tag: "x" })))).toThrow("not allowed");
+  });
+
+  test("when(...).where() twice throws", () => {
+    const { Button } = setup();
+    expect(() =>
+      (when(Button.clicked, {}) as any).where((f: Frames) => f).where((f: Frames) => f),
+    ).toThrow("twice");
+  });
+
+  test("onError() distinguishes a pattern from a node", () => {
+    const { Recorder } = setup();
+
+    // A plain mapping (even one containing a `kind` key) is a pattern.
+    const withPattern = onError({ kind: "boom" }, act(Recorder.record, { tag: "x" }));
+    expect(withPattern.pattern).toEqual({ kind: "boom" });
+
+    // A leading node means "no pattern".
+    const withoutPattern = onError(act(Recorder.record, { tag: "x" }));
+    expect(withoutPattern.pattern).toEqual({});
+  });
+
+  test("act(...).as() merges successive calls", () => {
+    const { Decision } = setup();
+    const chain = act(Decision.decide, {}).as({ a: "1" }).as({ b: "2" });
+    expect(chain.action.output).toEqual({ a: "1", b: "2" });
   });
 });

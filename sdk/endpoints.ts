@@ -18,7 +18,11 @@ import type {
   ThenClause,
   Vars,
 } from "@sync-engine/engine";
-import { type ActionList, type ActionPattern, When } from "@sync-engine/engine";
+import type { ActionList, ActionPattern } from "@sync-engine/engine";
+// The endpoint DSL builds tuple patterns programmatically; it uses the engine's
+// lower-level `actions()` primitive directly rather than the fluent `when(...)`
+// authoring surface, which is shaped for hand-written syncs.
+import { actions } from "@sync-engine/engine/sync.ts";
 
 declare const requestInput: unique symbol;
 declare const responseOutput: unique symbol;
@@ -236,7 +240,7 @@ export function createEndpointDsl(boundary: RequestBoundaryActions) {
     // valid because the underlying function shape (parameter/return arity)
     // matches exactly; the phantom `never` brand has no runtime footprint.
 
-    const Actions = ((...patterns: ActionList[]) => When(...patterns)) as EndpointDsl["Actions"];
+    const Actions = ((...patterns: ActionList[]) => actions(...patterns)) as EndpointDsl["Actions"];
     // SAFETY: `actions(...)` returns `ActionPattern[]`. The `EndpointDsl`
     // signature additionally brands the result with phantom input/output
     // union metadata (InputUnionFromPatterns / OutputUnionFromPatterns).
@@ -252,7 +256,7 @@ export function createEndpointDsl(boundary: RequestBoundaryActions) {
 
         try {
           const declaration = fn(vars);
-          const [requestAnchor] = When(
+          const [requestAnchor] = actions(
             requestPattern({}, { request }) as unknown as [any, any, any],
           );
           return {
