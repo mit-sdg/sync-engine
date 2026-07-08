@@ -52,7 +52,7 @@ export interface ActionPattern {
  * Rather than inferring outcome semantics from raw output records
  * (e.g. `{ error: … }` → error, `{}` → complete), the engine normalises
  * every action result into a first-class discriminated union so branches,
- * observers and devtools can type-narrow on {@link ActionOutcome.kind}.
+ * observers can type-narrow on {@link ActionOutcome.kind}.
  */
 export type ActionOutcome =
   | { kind: "result"; value: Mapping }

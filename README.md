@@ -179,17 +179,10 @@ sync-engine/
     cache.ts         Generic memoization with TTL + LRU eviction
     logger.ts        Structured JSON + pretty logger
     redaction.ts     Sensitive-field redaction
-  devtools/
-    graph/         Sync-graph analyzer
-      builder.ts     Build a causal graph from registered syncs
-      reachability.ts BFS-based respond/fail reachability analysis
-      diagnostics.ts Advisory correctness smells + complexity heuristics
-      exporters.ts   JSON, Mermaid, Graphviz DOT, CLI report
   tests/           Framework-level tests
     engine/          Core engine tests (matching, frames, syncs, observer)
     runtime/         AppHost, Lifecycle, JobStatusRegistry
     utils/           Cache, Logger
-    devtools/graph/  Graph builder, diagnostics, exporters, reachability
     golden/          Self-contained Todo app example (concepts + syncs)
 ```
 

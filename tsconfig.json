@@ -20,11 +20,11 @@
       "@sync-engine/sdk/*": ["./sdk/*"],
       "@sync-engine/runtime": ["./runtime/index.ts"],
       "@sync-engine/runtime/*": ["./runtime/*"],
-      "@sync-engine/devtools": ["./devtools/index.ts"],
-      "@sync-engine/devtools/*": ["./devtools/*"],
+      "@sync-engine": ["./index.ts"],
+
       "@sync-engine/utils": ["./utils/index.ts"],
       "@sync-engine/utils/*": ["./utils/*"]
     }
   },
-  "include": ["engine", "runtime", "sdk", "devtools", "utils", "tests"]
+  "include": ["index.ts", "engine", "runtime", "sdk", "utils", "tests"]
 }
