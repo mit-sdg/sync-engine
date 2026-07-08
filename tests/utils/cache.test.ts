@@ -132,4 +132,39 @@ describe("cached", () => {
     }
     expect(fn.size).toBe(DEFAULT_CACHE_MAX_SIZE);
   });
+
+  // Non-plain objects (Map, Set, Buffer, etc.) all serialize to "{}",
+  // causing every such argument to map to the same cache key.
+  test("should distinguish Map arguments from Set arguments in the cache key", () => {
+    let calls = 0;
+    const fn = cached(
+      (obj: unknown) => {
+        calls++;
+        return obj;
+      },
+      { maxSize: 10 },
+    );
+
+    fn(new Map([["a", 1]]));
+    fn(new Set([1, 2, 3]));
+
+    // Both serialize to "{}" because the key builder only inspects
+    // Object.keys(), which is empty for Map and Set.
+    expect(calls).toBe(2);
+  });
+
+  test("should distinguish the value undefined from the string 'undefined' in the cache key", () => {
+    let calls = 0;
+    const fn = cached((x: unknown) => {
+      calls++;
+      return x;
+    });
+
+    fn("undefined");
+    fn(undefined);
+
+    // Both serialize to the literal string "undefined", causing a false
+    // cache hit where the second call should have been a miss.
+    expect(calls).toBe(2);
+  });
 });

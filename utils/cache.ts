@@ -26,14 +26,20 @@ interface CacheEntry {
 }
 
 function serialize(arg: unknown): string {
-  if (arg === null) return "null";
-  if (arg === undefined) return "undefined";
-  if (arg instanceof Date) return arg.getTime().toString();
+  if (arg === null) return "@null";
+  if (arg === undefined) return "@undefined";
+  if (arg instanceof Date) return `@date:${arg.getTime()}`;
   if (typeof arg === "object") {
+    const tag = arg.constructor?.name || "Object";
     const keys = Object.keys(arg).sort();
-    return `{${keys.map((k) => `${k}:${serialize((arg as Record<string, unknown>)[k])}`).join(",")}}`;
+    const inner = keys
+      .map((k) => `${k}:${serialize((arg as Record<string, unknown>)[k])}`)
+      .join(",");
+    return `@${tag}{${inner}}`;
   }
-  return String(arg);
+  if (typeof arg === "function") return `@fn:${String(arg)}`;
+  if (typeof arg === "symbol") return `@sym:${String(arg)}`;
+  return `@${typeof arg}:${String(arg)}`;
 }
 
 function stableKey(args: unknown[]): string {

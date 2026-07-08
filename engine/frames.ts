@@ -203,10 +203,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     const bound: Mapping = {};
     for (const [key, binding] of Object.entries(input)) {
       if (typeof binding === "symbol") {
-        const value = frame[binding];
-        if (value !== undefined) {
-          bound[key] = value;
-        }
+        bound[key] = frame[binding];
       } else {
         bound[key] = binding;
       }

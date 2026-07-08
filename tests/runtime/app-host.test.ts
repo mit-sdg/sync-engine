@@ -137,4 +137,38 @@ describe("AppHost", () => {
     await host.unregister("solo");
     expect(host.values()).toEqual([]);
   });
+
+  // unregister() stops resources in reverse order, but the loop exits on the
+  // first rejected stop(), leaving earlier-registered resources unstopped.
+  test("should stop all resources even when one stop() throws", async () => {
+    const events: string[] = [];
+    const stopped: string[] = [];
+    const host = new AppHost<FakeApp, undefined>(
+      {
+        create: (prefix): CreatedApp<FakeApp> => ({
+          app: { id: prefix },
+          type: "tenant",
+          resources: [
+            { stop: () => void stopped.push(`${prefix}:1`) },
+            {
+              stop: () => {
+                stopped.push(`${prefix}:fails`);
+                throw new Error("stop failed");
+              },
+            },
+            { stop: () => void stopped.push(`${prefix}:3`) },
+          ],
+        }),
+      },
+      recordingSink(events),
+    );
+
+    await host.register("ted", undefined);
+
+    await expect(host.unregister("ted")).rejects.toThrow("stop failed");
+
+    // Resource at index 0 is last in reverse order. When the resource at
+    // index 1 throws, the loop exits before reaching index 0 — leaking it.
+    expect(stopped).toContain("ted:1");
+  });
 });

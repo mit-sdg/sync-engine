@@ -26,7 +26,9 @@ export function conceptNameOf(concept: object): string {
  */
 export function actionNameOf(action: InstrumentedAction): string {
   const bound = action.action;
-  return bound ? bound.name.slice("bound ".length) : "UNDEFINED";
+  if (!bound) return "UNDEFINED";
+  const name = bound.name;
+  return name.startsWith("bound ") ? name.slice("bound ".length) : name;
 }
 
 /**

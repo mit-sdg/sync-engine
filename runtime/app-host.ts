@@ -88,12 +88,15 @@ export class AppHost<TApp, TParams> {
     if (!this.apps.has(prefix)) return;
 
     const resources = this.resources.get(prefix) ?? [];
-    for (const resource of [...resources].reverse()) {
-      await resource.stop();
-    }
+    const ordered = [...resources].reverse();
+    const results = await Promise.allSettled(
+      ordered.map((r) => Promise.resolve().then(() => r.stop())),
+    );
     this.resources.delete(prefix);
     this.apps.delete(prefix);
     this.sink?.unregisterApp(prefix);
+    const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (firstFailure) throw firstFailure.reason;
   }
 
   /**

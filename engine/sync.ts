@@ -705,14 +705,30 @@ export class SyncConcept {
     whenActions: ActionRecord[],
   ): Promise<void> {
     const tasks = node.nodes.map(async (subNode) => {
+      // Each parallel branch gets its own synced map copy so sibling
+      // failures cannot erase another branch's consumption mark.
+      const ownWhenActions = whenActions.map((wa) => ({
+        ...wa,
+        synced: new Map(wa.synced),
+      }));
       if (subNode.kind === "step") {
-        await this.runStepNode(frame, subNode, sync, whenActions);
+        await this.runStepNode(frame, subNode, sync, ownWhenActions);
       } else if (subNode.kind === "branch") {
-        await this.runBranchNode(frame, subNode, sync, whenActions, undefined);
+        await this.runBranchNode(frame, subNode, sync, ownWhenActions, undefined);
       } else if (subNode.kind === "sequence") {
-        await this.runSequenceNode(frame, subNode, sync, whenActions);
+        await this.runSequenceNode(frame, subNode, sync, ownWhenActions);
       } else if (subNode.kind === "parallel") {
-        await this.runParallelNode(frame, subNode, sync, whenActions);
+        await this.runParallelNode(frame, subNode, sync, ownWhenActions);
+      }
+      // Reconcile successful synced entries back to originals so the
+      // caller can see which actions were consumed.
+      for (let i = 0; i < whenActions.length; i++) {
+        const target = whenActions[i].synced;
+        if (target) {
+          for (const [k, v] of ownWhenActions[i].synced) {
+            target.set(k, v);
+          }
+        }
       }
     });
     await Promise.all(tasks);
@@ -802,10 +818,7 @@ export class SyncConcept {
       if (value !== null && typeof value === "object") {
         const result: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-          const resolved = resolve(v);
-          if (resolved !== undefined) {
-            result[k] = resolved;
-          }
+          result[k] = resolve(v);
         }
         return result;
       }
@@ -815,9 +828,7 @@ export class SyncConcept {
     const input: ActionArguments = {};
     for (const [key, value] of Object.entries(then.input)) {
       const resolved = resolve(value);
-      if (resolved !== undefined) {
-        input[key] = resolved;
-      }
+      input[key] = resolved;
     }
     input[flow] = frame[flow];
     input[actionId] = uuid();
