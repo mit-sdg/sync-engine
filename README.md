@@ -38,20 +38,19 @@ Requires **Bun** or a modern TypeScript runtime (Node 20+ with `--experimental-s
 Each concept is a plain class. **Actions** mutate state; **queries** (prefixed with `_`) read it:
 
 ```ts
-import type { Empty } from "sync-engine/engine";
-
 class CounterConcept {
-  count = 0;
+  counts = new Map<string, number>();
 
   // Actions — mutate state
-  increment(_: Empty) {
-    this.count++;
-    return { count: this.count };
+  increment({ name }: { name: string }) {
+    const count = (this.counts.get(name) ?? 0) + 1;
+    this.counts.set(name, count);
+    return { name, count };
   }
 
   // Queries — prefixed with _, read-only, auto-cached
-  _getCount(_: Empty): { count: number }[] {
-    return [{ count: this.count }];
+  _getCount({ name }: { name: string }): { count: number }[] {
+    return [{ count: this.counts.get(name) ?? 0 }];
   }
 }
 
@@ -72,14 +71,11 @@ Syncs are `when → where → then` declarations:
 ```ts
 import { act, type Vars, when } from "sync-engine/engine";
 
-// "Whenever Counter.increment executes and the count reaches 10, log it."
+// "Whenever the 'main' counter reaches 10, log it."
 const LogAt10 = ({ count, msg }: Vars) =>
-  when(Counter.increment, {}) // match any increment
+  when(Counter.increment, { name: "main" }, { count })
     .where((frames) =>
-      frames
-        .query(Counter._getCount, {}, { count }) // read current count
-        .filter(($) => $[count] === 10) // only when it's 10
-        .map(($) => ({ ...$, [msg]: "Reached 10!" })),
+      frames.filter(($) => $[count] === 10).map(($) => ({ ...$, [msg]: "Reached 10!" })),
     )
     .then(act(Logger.log, { message: msg }));
 ```
@@ -103,7 +99,7 @@ engine.register({ LogAt10 });
 
 // Drive actions — syncs fire automatically
 for (let i = 0; i < 10; i++) {
-  await Counter.increment({});
+  await Counter.increment({ name: "main" });
 }
 
 console.log(Logger.messages); // ["Reached 10!"]
