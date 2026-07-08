@@ -1,5 +1,5 @@
 {
-  "name": "sync-engine",
+  "name": "@mit-sdg/sync-engine",
   "version": "0.1.0",
   "description": "TypeScript-first synchronization engine — compose independent concepts with when/where/then rules over an append-only action journal",
   "keywords": [
@@ -37,6 +37,9 @@
     "./utils/*": "./utils/*",
     "./devtools/graph": "./devtools/graph/index.ts",
     "./devtools/graph/*": "./devtools/graph/*"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "check": "vp check",
