@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { createEndpointDsl, syncMap } from "@sync-engine/sdk/endpoints.ts";
-import type { RequestBoundaryActions } from "@sync-engine/sdk/endpoints.ts";
+import { createEndpointDsl, syncMap } from "@sync-engine/sdk";
+import type { RequestBoundaryActions } from "@sync-engine/sdk";
 import { SyncConcept } from "@sync-engine/engine";
 
 class BoundaryConcept {

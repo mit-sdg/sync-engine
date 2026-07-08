@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { AppHost, type AppSink, type CreatedApp } from "@sync-engine/runtime/app-host.ts";
+import { AppHost, type AppSink, type CreatedApp } from "@sync-engine/runtime";
 
 interface FakeApp {
   id: string;

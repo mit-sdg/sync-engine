@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import type { JobStatus } from "@sync-engine/runtime/job-status-registry.ts";
-import { JobStatusRegistry } from "@sync-engine/runtime/job-status-registry.ts";
+import type { JobStatus } from "@sync-engine/runtime";
+import { JobStatusRegistry } from "@sync-engine/runtime";
 
 function status(name: string): JobStatus {
   return {

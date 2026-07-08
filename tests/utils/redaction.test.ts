@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { configureRedaction, redact } from "@sync-engine/utils/redaction.ts";
+import { configureRedaction, redact } from "@sync-engine/utils";
 
 afterEach(() => configureRedaction({ fields: [] }));
 

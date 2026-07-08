@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { createClient } from "@sync-engine/sdk/client.ts";
-import { FrameworkErrorCode } from "@sync-engine/sdk/error-codes.ts";
+import { createClient } from "@sync-engine/sdk";
+import { FrameworkErrorCode } from "@sync-engine/sdk";
 
 type TestApi = {
   "/auth/login": { input: { username: string; password: string }; output: { token: string } };

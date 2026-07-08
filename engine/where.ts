@@ -56,5 +56,3 @@ export function read<T>(frame: Frame, variable: Var<T>): T {
 
 /** The opt-in namespace for the otherwise collision-prone `where` helpers. */
 export const Where = { pipe, read } as const;
-
-export { Frames };

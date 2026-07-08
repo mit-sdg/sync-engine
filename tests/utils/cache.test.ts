@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { cached, DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_TTL_MS } from "@sync-engine/utils/cache.ts";
+import { cached, DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_TTL_MS } from "@sync-engine/utils";
 
 describe("cached", () => {
   test("memoizes results for identical arguments", () => {

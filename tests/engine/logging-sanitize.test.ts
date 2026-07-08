@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { Logging, SyncConcept, sanitize } from "@sync-engine/engine";
-import { configureRedaction, UNIVERSAL_SENSITIVE_PATTERNS } from "@sync-engine/utils/redaction.ts";
+import { configureRedaction, UNIVERSAL_SENSITIVE_PATTERNS } from "@sync-engine/utils";
 
 // The framework owns only the universal credential patterns; domain fields
 // (PII, financials) are the app's policy and are tested app-side. Each test

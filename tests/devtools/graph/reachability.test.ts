@@ -5,8 +5,8 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { computeReachability } from "@sync-engine/devtools/graph/reachability.ts";
-import type { EndpointReachability, SyncGraph } from "@sync-engine/devtools/graph/types.ts";
+import { computeReachability } from "@sync-engine/devtools/graph";
+import type { EndpointReachability, SyncGraph } from "@sync-engine/devtools/graph";
 
 // ── Helpers ─────────────────────────────────────────────────────
 

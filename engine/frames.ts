@@ -15,8 +15,6 @@
  */
 import type { Frame, Mapping } from "./types.ts";
 
-export type { Frame, Mapping } from "./types.ts";
-
 /** Infers the new frame keys contributed by a query's `output` mapping. */
 type ExtractSymbolMappings<TOutputMapping, TFunctionOutput> = {
   [K in keyof TOutputMapping as TOutputMapping[K] extends symbol

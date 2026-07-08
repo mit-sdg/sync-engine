@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
-import { assembleReport } from "@sync-engine/devtools/graph/report.ts";
+import { assembleReport } from "@sync-engine/devtools/graph";
 import { act, SyncConcept, when } from "@sync-engine/engine";
-import type { RequestBoundary } from "@sync-engine/devtools/graph/types.ts";
+import type { RequestBoundary } from "@sync-engine/devtools/graph";
 import type { Vars } from "@sync-engine/engine";
 
 class CounterConcept {

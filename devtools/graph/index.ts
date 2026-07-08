@@ -29,6 +29,7 @@ export type {
   GraphEdge,
   GraphNode,
   NodeKind,
+  PatternBinding,
   RequestBoundary,
   SyncGraph,
   SyncGraphReport,

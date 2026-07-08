@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { serializeError } from "@sync-engine/utils/logger.ts";
+import { serializeError } from "@sync-engine/utils";
 
 describe("serializeError", () => {
   test("serializes Error with message, name, and stack", () => {

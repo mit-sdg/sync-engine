@@ -6,14 +6,14 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { runDiagnostics } from "@sync-engine/devtools/graph/diagnostics.ts";
+import { runDiagnostics } from "@sync-engine/devtools/graph";
 import type {
   DiagnosticFinding,
   EndpointReachability,
   GraphEdge,
   GraphNode,
   SyncGraph,
-} from "@sync-engine/devtools/graph/types.ts";
+} from "@sync-engine/devtools/graph";
 
 // ── Test fixture helpers ────────────────────────────────────────
 

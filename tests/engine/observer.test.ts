@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { act, type JournalEvent, Logging, SyncConcept, when } from "@sync-engine/engine";
-import { FrameworkErrorCode } from "@sync-engine/sdk/error-codes.ts";
+import { FrameworkErrorCode } from "@sync-engine/sdk";
 import {
   ButtonConcept,
   CounterConcept,

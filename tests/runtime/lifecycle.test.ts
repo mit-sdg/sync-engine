@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Lifecycle, type Stoppable } from "@sync-engine/runtime/lifecycle.ts";
+import { Lifecycle, type Stoppable } from "@sync-engine/runtime";
 
 describe("Lifecycle", () => {
   test("stops resources in reverse registration order", async () => {

@@ -5,8 +5,8 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { toDot, toJson, toMermaid, toReport } from "@sync-engine/devtools/graph/exporters.ts";
-import type { SyncGraphReport } from "@sync-engine/devtools/graph/types.ts";
+import { toDot, toJson, toMermaid, toReport } from "@sync-engine/devtools/graph";
+import type { SyncGraphReport } from "@sync-engine/devtools/graph";
 
 // ── Fixtures ────────────────────────────────────────────────────
 

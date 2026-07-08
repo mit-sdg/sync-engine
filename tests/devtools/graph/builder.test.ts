@@ -5,13 +5,13 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { buildSyncGraph } from "@sync-engine/devtools/graph/builder.ts";
+import { buildSyncGraph } from "@sync-engine/devtools/graph";
 import type {
   GraphEdge,
   GraphNode,
   PatternBinding,
   RequestBoundary,
-} from "@sync-engine/devtools/graph/types.ts";
+} from "@sync-engine/devtools/graph";
 import { act, on, SyncConcept, type Vars, when } from "@sync-engine/engine";
 
 // ── Mock concepts ────────────────────────────────────────────────
