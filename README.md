@@ -26,7 +26,7 @@ The result: **code that reads like a spec**.
 ## Installation
 
 ```bash
-bun add sync-engine       # or npm / pnpm / yarn
+bun add @mit-sdg/sync-engine       # or npm / pnpm / yarn
 ```
 
 Requires **Bun** or a modern TypeScript runtime (Node 20+ with `--experimental-strip-types`).
@@ -69,7 +69,7 @@ class LoggerConcept {
 Syncs are `when → where → then` declarations:
 
 ```ts
-import { act, type Vars, when } from "sync-engine/engine";
+import { act, type Vars, when } from "@mit-sdg/sync-engine/engine";
 
 // "Whenever the 'main' counter reaches 10, log it."
 const LogAt10 = ({ count, msg }: Vars) =>
@@ -83,7 +83,7 @@ const LogAt10 = ({ count, msg }: Vars) =>
 ### 3. Wire everything together
 
 ```ts
-import { Logging, SyncConcept } from "sync-engine/engine";
+import { Logging, SyncConcept } from "@mit-sdg/sync-engine/engine";
 
 const engine = new SyncConcept();
 engine.logging = Logging.TRACE;
@@ -327,7 +327,7 @@ Use a nested `act(...).branch(...)` when several syncs only exist to describe on
 workflow. Branches match on the step's outcome — result, error, or completion:
 
 ```ts
-import { act, on, onError, seq, sync, type Vars, when } from "sync-engine/engine";
+import { act, on, onError, seq, sync, type Vars, when } from "@mit-sdg/sync-engine/engine";
 
 const ReviewWorkflow = sync(({ requestId, route, reason }: Vars) =>
   when(Request.submitted, { requestId }).then(
