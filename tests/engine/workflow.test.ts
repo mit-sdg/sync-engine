@@ -95,7 +95,7 @@ describe("nested outcome branching", () => {
       ThrowingWorkflow: sync(({ detail }: Vars) =>
         when(Button.clicked, { kind: "throw" }).then(
           act(Throwing.explode, {}).branch(
-            onError({ detail }, act(Recorder.record, { tag: detail })),
+            onError({ detail: [detail] }, act(Recorder.record, { tag: detail })),
           ),
         ),
       ),
@@ -114,7 +114,10 @@ describe("nested outcome branching", () => {
       DomainErrorWorkflow: sync(({ detail }: Vars) =>
         when(Button.clicked, { kind: "domain-error" }).then(
           act(DomainFailure.fail, {}).branch(
-            onError({ error: "OUT_OF_STOCK", detail }, act(Recorder.record, { tag: detail })),
+            onError(
+              { error: "OUT_OF_STOCK", detail: [detail] },
+              act(Recorder.record, { tag: detail }),
+            ),
           ),
         ),
       ),
@@ -155,7 +158,7 @@ describe("nested outcome branching", () => {
         when(Button.clicked, { kind: "throw" }).then(
           act(Throwing.explode, {}).branch(
             on(act(Recorder.record, { tag: "on-fired" })),
-            onError({ detail }, act(Recorder.record, { tag: "err-fired" })),
+            onError({ detail: [detail] }, act(Recorder.record, { tag: "err-fired" })),
           ),
         ),
       ),
@@ -164,6 +167,107 @@ describe("nested outcome branching", () => {
     await Button.clicked({ kind: "throw" });
 
     expect(Recorder.order).toEqual(["err-fired"]);
+  });
+
+  test("bracket extractor [var] binds outcome values", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
+
+    Sync.register({
+      BracketExtract: sync(({ route }: Vars) =>
+        when(Button.clicked, {}).then(
+          act(Decision.decide, { kind: "approve" }).branch(
+            on({ route: [route] }, act(Recorder.record, { tag: route })),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "go" });
+    expect(Recorder.order).toEqual(["approved"]);
+  });
+
+  test("bracket extractor coexists with literal patterns", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
+
+    Sync.register({
+      MixedPatterns: sync(({ route }: Vars) =>
+        when(Button.clicked, {}).then(
+          act(Decision.decide, { kind: "approve" }).branch(
+            on({ route: "approved" }, act(Recorder.record, { tag: "literal-match" })),
+            on({ route: [route] }, act(Recorder.record, { tag: "extracted" })),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "approve" });
+    expect(Recorder.order).toContain("literal-match");
+  });
+
+  test("function predicate on on() filters branch matching", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
+
+    Sync.register({
+      PredicateBranch: sync(({ route }: Vars) =>
+        when(Button.clicked, { kind: "approve" }).then(
+          act(Decision.decide, { kind: "approve" })
+            .as({ route })
+            .branch(
+              on(
+                (f) => f[route] === "approved",
+                act(Recorder.record, { tag: "approved-by-predicate" }),
+              ),
+              on((_f) => false, act(Recorder.record, { tag: "never" })),
+            ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "approve" });
+    expect(Recorder.order).toEqual(["approved-by-predicate"]);
+  });
+
+  test("function predicate on onError() with pattern + predicate", async () => {
+    const { Sync, Button, Recorder, Throwing } = setup();
+
+    Sync.register({
+      PredicateWithPattern: sync(({ detail }: Vars) =>
+        when(Button.clicked, { kind: "throw" }).then(
+          act(Throwing.explode, {}).branch(
+            onError(
+              { detail: [detail] },
+              (f) => String(f[detail]) === "kaboom",
+              act(Recorder.record, { tag: "predicate-matched" }),
+            ),
+            onError(
+              { detail: [detail] },
+              (f) => String(f[detail]) !== "kaboom",
+              act(Recorder.record, { tag: "predicate-wrong" }),
+            ),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "throw" });
+    expect(Recorder.order).toEqual(["predicate-matched"]);
+  });
+
+  test("predicate on() without pattern handles completion", async () => {
+    const { Sync, Button, Completion, Recorder } = setup();
+
+    Sync.register({
+      PredicateComplete: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "complete" }).then(
+          act(Completion.finish, {}).branch(
+            on((_f) => true, act(Recorder.record, { tag: "predicated-complete" })),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "complete" });
+    expect(Recorder.order).toEqual(["predicated-complete"]);
   });
 });
 
@@ -374,7 +478,7 @@ describe("ActionOutcome normalisation", () => {
       ErrOnly: sync(({ detail }: Vars) =>
         when(Button.clicked, { kind: "err-test" }).then(
           act(Throwing.explode, {}).branch(
-            onError({ detail }, act(Recorder.record, { tag: detail })),
+            onError({ detail: [detail] }, act(Recorder.record, { tag: detail })),
           ),
         ),
       ),

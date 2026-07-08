@@ -7,6 +7,7 @@
  * `when` / `where` / `then` clauses over these structures.
  */
 import type { Frames } from "./frames.ts";
+import type { Var } from "./vars.ts";
 
 /** A plain, string-keyed record — the shape an action's input/output takes. */
 export type Mapping = Record<string, unknown>;
@@ -85,6 +86,7 @@ export interface BranchNode extends NestedThenOptions {
   kind: "branch";
   outcome: OutcomeKind;
   pattern: Mapping;
+  predicate?: BranchPredicate;
 }
 
 export interface SequenceNode {
@@ -99,6 +101,22 @@ export interface ParallelNode {
 
 /** A pure transform over matched frames — the `where` clause. */
 export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
+
+/** A per-frame predicate for complex branch matching — like a `where` that returns a boolean. */
+export type BranchPredicate = (frame: Frame) => boolean;
+
+/**
+ * A bracket extractor in a branch pattern.
+ *
+ * Where a string/number literal in a pattern does equality matching,
+ * `[Var<T>]` extracts (binds) the outcome value into the variable.
+ * Use the literal array syntax `[myVar]` — no helper function needed.
+ *
+ * ```ts
+ * on({ detail: [reason] }, act(handle))
+ * ```
+ */
+export type Extractor<T = unknown> = readonly [Var<T>];
 
 /** The raw object a sync function returns before it is registered by name. */
 export interface SyncDeclaration {

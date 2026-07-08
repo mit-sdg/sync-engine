@@ -247,7 +247,7 @@ frame, `.where(fn)` to transform the frames before its children run, and
 ```ts
 act(Payment.charge, { total }).as({ paymentId }).branch(
   on(act(Receipt.send, { paymentId })),  // .as() already bound paymentId
-  onError({ code: "CARD_DECLINED" }, ...),
+  onError({ code: [code] }, (f) => f[code] === "CARD_DECLINED", ...),
 )
 ```
 
@@ -261,6 +261,28 @@ Outcome branches, attached via `act(...).branch(...)` (or as steps inside
   Omit it when `.as()` already bound what you need.
 - `onError(pattern?, ...nodes)` — the action failed, whether it threw or
   returned an error record. The optional pattern unifies against the error.
+
+**Pattern values** use `[var]` bracket syntax to extract (bind) outcome values
+into variables; string/number/boolean values perform literal equality matching:
+
+```ts
+on({ route: [route] }, act(Notify.approve, {})); // extract
+on({ status: "active" }, act(Process.active, {})); // literal match
+```
+
+**When simple pattern matching is not enough**, pass a **predicate function**
+`(frame) => boolean` for complex per-frame filtering. Place it as the first
+argument (no pattern) or second argument (after a pattern). The predicate
+receives the frame **after** pattern unification — all extractors are already
+bound.
+
+```ts
+// predicate only: fire when the outcome has a count > 5
+on((f) => f[count] > 5, act(HandleLarge, {})),
+
+// pattern + predicate: extract error, then check it's a retriable code
+onError({ code: [code] }, (f) => f[code] === "TIMEOUT" || f[code] === "RATE_LIMITED", act(Retry, {})),
+```
 
 ### `seq(...steps)` / `par(...steps)`
 
@@ -327,9 +349,12 @@ const ReviewWorkflow = sync(({ requestId, route, reason }: Vars) =>
     act(Review.classify, { requestId })
       .as({ route })
       .branch(
-        on({ route: "approved" }, act(Request.approve, { requestId })),
+        on({ route: [route] }, act(Request.approve, { requestId })),
         on({ route: "manual" }, act(Queue.enqueue, { requestId })),
-        onError({ detail: reason }, act(Audit.record, { event: "REVIEW_FAILED", payload: reason })),
+        onError(
+          { detail: [reason] },
+          act(Audit.record, { event: "REVIEW_FAILED", payload: reason }),
+        ),
       ),
   ),
 );

@@ -91,7 +91,7 @@ export function makeLMSSyncs(
             }),
           ),
           onError(
-            { error },
+            { error: [error] },
             act(Audit.record, {
               id: enrollmentId,
               event: "ENROLLMENT_CASCADE_DROP_FAILED",
@@ -120,7 +120,7 @@ export function makeLMSSyncs(
             }),
           ),
           onError(
-            { error },
+            { error: [error] },
             act(Audit.record, {
               id: obligationId,
               event: "OBLIGATION_CASCADE_CANCEL_FAILED",
@@ -206,7 +206,7 @@ export function makeLMSSyncs(
             }),
           ),
           onError(
-            { error },
+            { error: [error] },
             act(Audit.record, {
               id: groupId,
               event: "GROUP_CASCADE_ARCHIVE_FAILED",
@@ -235,7 +235,7 @@ export function makeLMSSyncs(
             }),
           ),
           onError(
-            { error },
+            { error: [error] },
             act(Audit.record, {
               id: obligationId,
               event: "OBLIGATION_CASCADE_CANCEL_FAILED",

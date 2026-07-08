@@ -277,7 +277,7 @@ describe("collectAs produces unstable group keys for certain value types", () =>
     let didThrow = false;
     try {
       frames.collectAs([big], items);
-    } catch (e) {
+    } catch {
       didThrow = true;
     }
 

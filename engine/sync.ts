@@ -36,6 +36,7 @@ import type {
   ActionPattern,
   AnyAction,
   BranchNode,
+  BranchPredicate,
   Frame,
   InstrumentedAction,
   Mapping,
@@ -123,8 +124,8 @@ export function actions(...actions: ActionList[]): ActionPattern[] {
 //     when(Request.submitted, { requestId })
 //       .then(
 //         act(Review.classify, { requestId }).as({ route }).branch(
-//           on({ route: "approved" }, act(Request.approve, { requestId })),
-//           onError({ detail }, act(Audit.record, { event: "FAILED" })),
+//           on({ route: [route] }, act(Request.approve, { requestId })),
+//           onError({ detail: [reason] }, act(Audit.record, { event: "FAILED" })),
 //           on(act(Audit.record, { event: "EMPTY" })),
 //         ),
 //       ),
@@ -246,33 +247,122 @@ export function act(action: InstrumentedAction, input: Mapping): ActChain {
  * bound what you need. Pass one to filter or extract further bindings. Use
  * {@link onError} to catch failures.
  *
- *   on(act(Receipt.send, { paymentId }))            // .as() already had paymentId
- *   on({ route: "approved" }, act(Request.approve))  // filter on outcome value
+ * Pattern values use `[var]` bracket syntax to extract values into variables
+ * (e.g. `{ route: [route] }`). String/number/boolean values perform literal
+ * matching. An optional predicate function `(frame) => boolean` enables
+ * complex per-frame filtering — pass it as the first argument (no pattern)
+ * or as the second argument after a pattern.
+ *
+ *   on(act(Receipt.send, { paymentId }))                    // .as() already had paymentId
+ *   on({ route: [route] }, act(Request.approve))            // extract value into route
+ *   on({ status: "active" }, act(Process.active))           // literal string match
+ *   on((f) => f[someVar] > 10, act(HandleLarge))            // predicate-only filter
+ *   on({ kind: [kind] }, (f) => f[kind] === "VALID", act(Process.valid))
  */
-export function on(...args: [Mapping, ...ThenNode[]] | ThenNode[]): BranchNode {
-  const [first, ...rest] = args;
-  const hasPattern = first !== undefined && !isNode(first);
-  const pattern = hasPattern ? (first as Mapping) : {};
-  const nodes = hasPattern ? (rest as ThenNode[]) : (args as ThenNode[]);
+export function on(...args: ThenNode[]): BranchNode;
+export function on(pattern: Mapping, ...nodes: ThenNode[]): BranchNode;
+export function on(predicate: BranchPredicate, ...nodes: ThenNode[]): BranchNode;
+export function on(pattern: Mapping, predicate: BranchPredicate, ...nodes: ThenNode[]): BranchNode;
+export function on(...args: unknown[]): BranchNode {
+  const [first, second, ...rest] = args;
+  // No args beyond nodes
+  if (first !== undefined && isNode(first)) {
+    return brand({
+      kind: "branch",
+      outcome: "result",
+      pattern: {},
+      nested: args as ThenNode[],
+    });
+  }
+  // Predicate-only: on(fn, ...nodes)
+  if (typeof first === "function") {
+    const nodes = [second, ...rest] as ThenNode[];
+    if (nodes.length === 0) throw new Error("on(...) requires at least one node.");
+    return brand({
+      kind: "branch",
+      outcome: "result",
+      pattern: {},
+      predicate: first as BranchPredicate,
+      nested: nodes,
+    });
+  }
+  // Pattern + optional predicate: on(pattern, fn?, ...nodes)
+  const pattern = first as Mapping;
+  let predicate: BranchPredicate | undefined;
+  let nodes: ThenNode[];
+  if (typeof second === "function") {
+    predicate = second as BranchPredicate;
+    nodes = rest.length > 0 ? (rest as ThenNode[]) : [];
+  } else {
+    nodes = [second, ...rest] as ThenNode[];
+  }
   if (nodes.length === 0) throw new Error("on(...) requires at least one node.");
-  return brand({ kind: "branch", outcome: "result", pattern, nested: nodes });
+  const branch: BranchNode = {
+    kind: "branch",
+    outcome: "result",
+    pattern,
+    nested: nodes,
+  };
+  if (predicate !== undefined) branch.predicate = predicate;
+  return brand(branch);
 }
 
 /**
  * Error branch: fires when the preceding step failed — whether it threw or
  * returned an error record (both normalise to a `{ kind: "error" }` outcome).
  *
- * The optional first argument is a pattern unified against the error record.
- * It is distinguished from a node by the DSL brand, so `onError({ kind: x })`
- * is unambiguously a pattern even though a node also carries a `kind`.
+ * The optional first argument is a pattern unified against the error record,
+ * using `[var]` bracket syntax for extraction. The optional predicate
+ * function `(frame) => boolean` enables complex per-frame filtering — pass it
+ * as the first argument (no pattern) or as the second argument after a pattern.
  */
-export function onError(...args: [Mapping, ...ThenNode[]] | ThenNode[]): BranchNode {
-  const [first, ...rest] = args;
-  const hasPattern = first !== undefined && !isNode(first);
-  const pattern = hasPattern ? (first as Mapping) : {};
-  const nodes = hasPattern ? (rest as ThenNode[]) : (args as ThenNode[]);
+export function onError(...args: ThenNode[]): BranchNode;
+export function onError(pattern: Mapping, ...nodes: ThenNode[]): BranchNode;
+export function onError(predicate: BranchPredicate, ...nodes: ThenNode[]): BranchNode;
+export function onError(
+  pattern: Mapping,
+  predicate: BranchPredicate,
+  ...nodes: ThenNode[]
+): BranchNode;
+export function onError(...args: unknown[]): BranchNode {
+  const [first, second, ...rest] = args;
+  if (first !== undefined && isNode(first)) {
+    return brand({
+      kind: "branch",
+      outcome: "error",
+      pattern: {},
+      nested: args as ThenNode[],
+    });
+  }
+  if (typeof first === "function") {
+    const nodes = [second, ...rest] as ThenNode[];
+    if (nodes.length === 0) throw new Error("onError(...) requires at least one node.");
+    return brand({
+      kind: "branch",
+      outcome: "error",
+      pattern: {},
+      predicate: first as BranchPredicate,
+      nested: nodes,
+    });
+  }
+  const pattern = first as Mapping;
+  let predicate: BranchPredicate | undefined;
+  let nodes: ThenNode[];
+  if (typeof second === "function") {
+    predicate = second as BranchPredicate;
+    nodes = rest.length > 0 ? (rest as ThenNode[]) : [];
+  } else {
+    nodes = [second, ...rest] as ThenNode[];
+  }
   if (nodes.length === 0) throw new Error("onError(...) requires at least one node.");
-  return brand({ kind: "branch", outcome: "error", pattern, nested: nodes });
+  const branch: BranchNode = {
+    kind: "branch",
+    outcome: "error",
+    pattern,
+    nested: nodes,
+  };
+  if (predicate !== undefined) branch.predicate = predicate;
+  return brand(branch);
 }
 
 /**
@@ -751,7 +841,10 @@ export class SyncConcept {
     branch: BranchNode,
   ): Frame | undefined {
     if (!this.matchesOutcome(outcome, branch.outcome, branch.pattern)) return undefined;
-    return this.unifyOutputPattern(outcome, branch.pattern, frame);
+    const extendedFrame = this.unifyOutputPattern(outcome, branch.pattern, frame);
+    if (extendedFrame === undefined) return undefined;
+    if (branch.predicate !== undefined && !branch.predicate(extendedFrame)) return undefined;
+    return extendedFrame;
   }
 
   private matchesOutcome(
@@ -893,10 +986,23 @@ export class SyncConcept {
     for (const [key, value] of Object.entries(pattern)) {
       const recordValue = recordValues[key];
       if (recordValue === undefined) {
-        if (allowMissingKeys && typeof value === "symbol") continue;
+        if (
+          allowMissingKeys &&
+          (typeof value === "symbol" ||
+            (Array.isArray(value) && value.length === 1 && typeof value[0] === "symbol"))
+        )
+          continue;
         return undefined;
       }
-      if (typeof value === "symbol") {
+      if (Array.isArray(value) && value.length === 1 && typeof value[0] === "symbol") {
+        const sym = value[0];
+        const bound = next[sym];
+        if (bound === undefined) {
+          next = { ...next, [sym]: recordValue };
+        } else if (bound !== recordValue) {
+          return undefined;
+        }
+      } else if (typeof value === "symbol") {
         const bound = next[value];
         if (bound === undefined) {
           next = { ...next, [value]: recordValue };
