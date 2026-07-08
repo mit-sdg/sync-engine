@@ -69,8 +69,8 @@ function buildActionBinding(
  * input/output keys (preserving order, deduplicating by key name).
  *
  * This handles cases where a sync references the same action more than once,
- * e.g. duplicate endpoint anchors from an auto-prepended bare request anchor
- * plus the user's explicit `Request()` call.
+ * e.g. the same boundary request action appearing in multiple `when` patterns
+ * within one endpoint cluster.
  */
 function mergeBindings(bindings: ActionBinding[]): ActionBinding[] {
   const merged = new Map<string, ActionBinding>();
@@ -199,7 +199,7 @@ export function buildSyncGraph(engine: SyncConcept, boundary: RequestBoundary): 
     const fromIds: string[] = [];
     for (const pattern of sync.when) {
       // Detect endpoint request anchor: the boundary's entry action whose
-      // input carries a literal path string (injected by createEndpointDsl).
+      // input carries a literal path string (injected by endpoint authoring).
       const inputPath = pattern.input[boundary.pathKey];
       if (
         typeof inputPath === "string" &&
@@ -266,8 +266,7 @@ export function buildSyncGraph(engine: SyncConcept, boundary: RequestBoundary): 
     }
 
     // Merge bindings that share the same nodeId — a sync may reference the
-    // same action more than once (e.g. duplicate endpoint anchors from the
-    // auto-prepended bare request anchor + the user's explicit Request() call).
+    // same action more than once within a single clause.
     const mergedWhen = mergeBindings(whenBindings);
     const mergedThen = mergeBindings(thenBindings);
 

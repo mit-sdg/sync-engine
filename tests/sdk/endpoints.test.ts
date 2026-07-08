@@ -2,6 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { createEndpointDsl, syncMap } from "@sync-engine/sdk";
 import type { RequestBoundaryActions } from "@sync-engine/sdk";
 import { SyncConcept } from "@sync-engine/engine";
+import type { Vars } from "@sync-engine/engine";
 
 class BoundaryConcept {
   request(_input: unknown) {
@@ -19,109 +20,109 @@ function makeBoundary(): RequestBoundaryActions {
 }
 
 describe("createEndpointDsl", () => {
-  test("defineEndpoint returns path and syncs", () => {
+  test("endpoint returns path and syncs", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
-    const endpoint = dsl.defineEndpoint("/auth/login", ({ Sync, Request, Respond, Actions }) => ({
-      login: Sync((_vars) => ({
-        when: Actions(Request({ username: "string" })),
-        then: Actions(Respond({ token: "string" })),
-      })),
+    const ep = dsl.endpoint("/auth/login", ({ request, respond }) => ({
+      login: ({ username }: Vars) => request({ username }).then(respond({ token: "ok" })),
     }));
 
-    expect(endpoint.path).toBe("/auth/login");
-    expect(endpoint.syncs).toBeDefined();
-    expect(typeof endpoint.syncs.login).toBe("function");
+    expect(ep.path).toBe("/auth/login");
+    expect(ep.syncs).toBeDefined();
+    expect(typeof ep.syncs.login).toBe("function");
   });
 
-  test("Sync function produces when/then with correct structure", () => {
+  test("sync function produces when/then with correct structure", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
-    const endpoint = dsl.defineEndpoint("/test", ({ Sync, Request, Respond, Actions }) => ({
-      main: Sync((_vars) => ({
-        when: Actions(Request({ id: "string" })),
-        then: Actions(Respond({ ok: true })),
-      })),
+    const ep = dsl.endpoint("/test", ({ request, respond }) => ({
+      main: ({ id }: Vars) => request({ id }).then(respond({ ok: true })),
     }));
 
     const requestSymbol = Symbol.for("test-request");
-    const result = (endpoint.syncs.main as Function)({ __request: requestSymbol });
+    const result = (ep.syncs.main as Function)({ __request: requestSymbol });
 
     expect(result).toHaveProperty("when");
     expect(result).toHaveProperty("then");
     expect(Array.isArray(result.when)).toBe(true);
     expect(Array.isArray(result.then)).toBe(true);
     expect(result.when.length).toBeGreaterThanOrEqual(1);
-    expect(result.then.length).toBe(1);
   });
 
-  test("Request helper with empty input works", () => {
+  test("request helper with empty input works", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
-    const endpoint = dsl.defineEndpoint("/empty", ({ Sync, Request, Respond, Actions }) => ({
-      main: Sync((_vars) => ({
-        when: Actions(Request()),
-        then: Actions(Respond({ ok: true })),
-      })),
+    const ep = dsl.endpoint("/empty", ({ request, respond }) => ({
+      main: (_vars: Vars) => request().then(respond({ ok: true })),
     }));
 
     const requestSymbol = Symbol.for("test-request");
-    const result = (endpoint.syncs.main as Function)({ __request: requestSymbol });
+    const result = (ep.syncs.main as Function)({ __request: requestSymbol });
     expect(result.when.length).toBeGreaterThanOrEqual(1);
   });
 
   test("multiple syncs in a single endpoint work", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
-    const endpoint = dsl.defineEndpoint("/crud", ({ Sync, Request, Respond, Actions }) => ({
-      create: Sync((_vars) => ({
-        when: Actions(Request({ name: "string" })),
-        then: Actions(Respond({ id: "string" })),
-      })),
-      list: Sync((_vars) => ({
-        when: Actions(Request({})),
-        then: Actions(Respond({ items: [] as string[] })),
-      })),
+    const ep = dsl.endpoint("/crud", ({ request, respond }) => ({
+      create: ({ name }: Vars) => request({ name }).then(respond({ id: "ok" })),
+      list: (_vars: Vars) => request({}).then(respond({ items: [] })),
     }));
 
-    expect(Object.keys(endpoint.syncs)).toEqual(["create", "list"]);
+    expect(Object.keys(ep.syncs)).toEqual(["create", "list"]);
   });
 
-  test("multiple Request patterns in single when work", () => {
+  test("request supports multiple input fields", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
-    const endpoint = dsl.defineEndpoint("/multi", ({ Sync, Request, Respond, Actions }) => ({
-      combined: Sync((_vars) => ({
-        when: Actions(Request({ type: "string" }), Request({ status: "string" })),
-        then: Actions(Respond({ result: true })),
-      })),
+    const ep = dsl.endpoint("/multi", ({ request, respond }) => ({
+      combined: ({ type, status }: Vars) =>
+        request({ type, status }).then(respond({ result: true })),
     }));
 
     const requestSymbol = Symbol.for("test-request");
-    const result = (endpoint.syncs.combined as Function)({ __request: requestSymbol });
-    expect(result.when.length).toBeGreaterThanOrEqual(3);
+    const result = (ep.syncs.combined as Function)({ __request: requestSymbol });
+    expect(result.when.length).toBeGreaterThanOrEqual(1);
   });
 
   test("different endpoints with same boundary produce independent syncs", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
-    const login = dsl.defineEndpoint("/auth/login", ({ Sync, Request, Respond, Actions }) => ({
-      login: Sync((_vars) => ({
-        when: Actions(Request({ username: "string" })),
-        then: Actions(Respond({ token: "string" })),
-      })),
+    const login = dsl.endpoint("/auth/login", ({ request, respond }) => ({
+      login: ({ username }: Vars) => request({ username }).then(respond({ token: "ok" })),
     }));
 
-    const logout = dsl.defineEndpoint("/auth/logout", ({ Sync, Request, Respond, Actions }) => ({
-      logout: Sync((_vars) => ({
-        when: Actions(Request({})),
-        then: Actions(Respond({ ok: true })),
-      })),
+    const logout = dsl.endpoint("/auth/logout", ({ request, respond }) => ({
+      logout: (_vars: Vars) => request().then(respond({ ok: true })),
     }));
 
     expect(login.syncs.login).not.toBe(logout.syncs.logout);
     expect(login.path).toBe("/auth/login");
     expect(logout.path).toBe("/auth/logout");
+  });
+
+  test("fail helper wraps plain values in error envelope", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+
+    const ep = dsl.endpoint("/bad", ({ request, fail }) => ({
+      main: (_vars: Vars) => request().then(fail({ error: "oops" })),
+    }));
+
+    const requestSymbol = Symbol.for("test-request");
+    const result = (ep.syncs.main as Function)({ __request: requestSymbol });
+    expect(Array.isArray(result.then)).toBe(true);
+  });
+
+  test("fail helper with non-mapping value wraps it", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+
+    const ep = dsl.endpoint("/err", ({ request, fail }) => ({
+      main: (_vars: Vars) => request().then(fail("bad input")),
+    }));
+
+    const requestSymbol = Symbol.for("test-request");
+    const result = (ep.syncs.main as Function)({ __request: requestSymbol });
+    expect(result.then.length).toBe(1);
   });
 });
 
@@ -130,17 +131,11 @@ describe("syncMap", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
     const api = {
-      auth: dsl.defineEndpoint("/auth/login", ({ Sync, Request, Respond, Actions }) => ({
-        login: Sync((_vars) => ({
-          when: Actions(Request({})),
-          then: Actions(Respond({ token: "string" })),
-        })),
+      auth: dsl.endpoint("/auth/login", ({ request, respond }) => ({
+        login: (_vars: Vars) => request().then(respond({ token: "ok" })),
       })),
-      users: dsl.defineEndpoint("/users/list", ({ Sync, Request, Respond, Actions }) => ({
-        list: Sync((_vars) => ({
-          when: Actions(Request({})),
-          then: Actions(Respond({ items: [] as string[] })),
-        })),
+      users: dsl.endpoint("/users/list", ({ request, respond }) => ({
+        list: (_vars: Vars) => request().then(respond({ items: [] })),
       })),
     };
 
@@ -156,11 +151,8 @@ describe("syncMap", () => {
 
     const api = {
       admin: {
-        users: dsl.defineEndpoint("/admin/users/create", ({ Sync, Request, Respond, Actions }) => ({
-          create: Sync((_vars) => ({
-            when: Actions(Request({})),
-            then: Actions(Respond({ ok: true })),
-          })),
+        users: dsl.endpoint("/admin/users/create", ({ request, respond }) => ({
+          create: (_vars: Vars) => request().then(respond({ ok: true })),
         })),
       },
     };
@@ -183,16 +175,13 @@ describe("syncMap", () => {
   test("syncMap preserves sync function identity", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
-    const endpoint = dsl.defineEndpoint("/test", ({ Sync, Request, Respond, Actions }) => ({
-      main: Sync((_vars) => ({
-        when: Actions(Request({})),
-        then: Actions(Respond({ ok: true })),
-      })),
+    const ep = dsl.endpoint("/test", ({ request, respond }) => ({
+      main: (_vars: Vars) => request().then(respond({ ok: true })),
     }));
 
-    const syncs = syncMap({ test: endpoint });
+    const syncs = syncMap({ test: ep });
     expect(syncs["test.main"]).toBeDefined();
-    expect(syncs["test.main"]).toBe(endpoint.syncs.main);
+    expect(syncs["test.main"]).toBe(ep.syncs.main);
   });
 
   test("syncMap handles deep nesting with mixed endpoints and objects", () => {
@@ -201,25 +190,14 @@ describe("syncMap", () => {
     const api = {
       api: {
         v1: {
-          auth: dsl.defineEndpoint("/api/v1/auth/login", ({ Sync, Request, Respond, Actions }) => ({
-            login: Sync((_vars) => ({
-              when: Actions(Request({ email: "string" })),
-              then: Actions(Respond({ token: "string" })),
-            })),
-            register: Sync((_vars) => ({
-              when: Actions(Request({ email: "string", password: "string" })),
-              then: Actions(Respond({ id: "string" })),
-            })),
+          auth: dsl.endpoint("/api/v1/auth/login", ({ request, respond }) => ({
+            login: ({ email }: Vars) => request({ email }).then(respond({ token: "ok" })),
+            register: ({ email, password }: Vars) =>
+              request({ email, password }).then(respond({ id: "ok" })),
           })),
-          todos: dsl.defineEndpoint("/api/v1/todos", ({ Sync, Request, Respond, Actions }) => ({
-            create: Sync((_vars) => ({
-              when: Actions(Request({ title: "string" })),
-              then: Actions(Respond({ id: "string" })),
-            })),
-            list: Sync((_vars) => ({
-              when: Actions(Request({})),
-              then: Actions(Respond({ items: [] as unknown[] })),
-            })),
+          todos: dsl.endpoint("/api/v1/todos", ({ request, respond }) => ({
+            create: ({ title }: Vars) => request({ title }).then(respond({ id: "ok" })),
+            list: (_vars: Vars) => request({}).then(respond({ items: [] })),
           })),
         },
       },

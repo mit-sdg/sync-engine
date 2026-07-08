@@ -6,7 +6,7 @@
  * originating from the endpoint can reach the response sink node.
  *
  * This analysis catches the class of bugs where a sync branch never calls
- * `Respond` (or `Respond({ error: ... })`), causing the request to hang until
+ * `respond` (or `fail`), causing the request to hang until
  * the configured `REQUESTING_TIMEOUT` triggers a `NoResponseGuard`.
  *
  * This module is **app-agnostic**: it imports only from `./types.ts`.  Zero

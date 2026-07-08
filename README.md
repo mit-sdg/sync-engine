@@ -169,7 +169,7 @@ sync-engine/
     util.ts         uuid, inspect
   sdk/            Client + endpoint DSL
     client.ts        Type-safe HTTP client (Eden Treaty style)
-    endpoints.ts     Typed endpoint authoring DSL
+    endpoints.ts     Typed endpoint authoring DSL (endpoint, request, respond, fail)
     error-codes.ts   Framework-level error codes
   runtime/        Application runtime
     app-host.ts      Multi-tenant app registry
@@ -182,7 +182,7 @@ sync-engine/
   devtools/
     graph/         Sync-graph analyzer
       builder.ts     Build a causal graph from registered syncs
-      reachability.ts BFS-based Respond reachability analysis
+      reachability.ts BFS-based respond/fail reachability analysis
       diagnostics.ts Advisory correctness smells + complexity heuristics
       exporters.ts   JSON, Mermaid, Graphviz DOT, CLI report
   tests/           Framework-level tests
@@ -367,6 +367,110 @@ overlap. When `.as()` already bound the values you need, omit the pattern:
 
 Use standalone syncs for reusable policies. Use nested workflows when the syncs
 are only meaningful as ordered steps of one request or business process.
+
+## SDK
+
+The SDK provides the glue between the engine and HTTP: a **typed endpoint authoring
+DSL** and a **type-safe client** that share a single contract, giving you e2e
+type safety without code generation.
+
+### Endpoint authoring
+
+Define endpoints with the same `when → then` syntax you already know from the
+engine. The `endpoint()` helper anchors your syncs to a request-boundary concept
+and optionally carries a contract type:
+
+```ts
+import { createEndpointDsl } from "@mit-sdg/sync-engine/sdk";
+import type { EndpointContract } from "@mit-sdg/sync-engine/sdk";
+import { act, on, onError, type Vars } from "@mit-sdg/sync-engine/engine";
+
+const dsl = createEndpointDsl(Requesting);
+
+export const api = {
+  auth: dsl.endpoint<{
+    input: { username: string; password: string };
+    output: { token: string };
+    error: { error: string };
+  }>("/auth/login", ({ request, respond, fail }) => ({
+    login: ({ username, password, token, error }: Vars) =>
+      request({ username, password }).then(
+        act(Auth.authenticate, { username, password })
+          .as({ token })
+          .branch(on(respond({ token })), onError({ error }, fail({ error }))),
+      ),
+  })),
+} as const;
+```
+
+**Helpers** provided to the `endpoint` builder:
+
+| Helper            | Returns       | Purpose                                                                                                                                                                                               |
+| ----------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request(input?)` | `WhenBuilder` | Anchors the sync on the boundary's request action with the path and input bindings. Returns an engine `when()` builder — chain `.where()` and `.then()` exactly as you would in a normal sync.        |
+| `respond(body?)`  | `ThenNode`    | Invokes the boundary's respond action to send a success payload. Use inside `.then()` or as a branch child of `on()`.                                                                                 |
+| `fail(error?)`    | `ThenNode`    | Invokes the boundary's respond action with an error payload. Plain values are auto-wrapped: `fail("bad input")` → `{ error: "bad input" }`. Use inside `.then()` or as a branch child of `onError()`. |
+
+The **contract generic** on `endpoint<C>()` is optional — without it the input,
+output, and error types default to `Record<string, never>`, and the client's
+types will reflect that.
+
+### Extracting the contract
+
+`ContractOf<typeof api>` walks the tree of endpoint definitions and produces the
+flat contract shape the client consumes:
+
+```ts
+import type { ContractOf } from "@mit-sdg/sync-engine/sdk";
+
+export type Api = ContractOf<typeof api>;
+// {
+//   "/auth/login": {
+//     input: { username: string; password: string };
+//     output: { token: string };
+//     error: { error: string };
+//   };
+// }
+```
+
+### syncMap — registering endpoint syncs
+
+`syncMap` recursively flattens nested endpoint definitions into a flat
+`Record<string, Sync>` you can pass to `engine.register()`:
+
+```ts
+engine.register(syncMap(api));
+```
+
+### Typed HTTP client
+
+`createClient<Api>()` produces a Proxy-based client fully inferred from the
+contract:
+
+```ts
+import { createClient } from "@mit-sdg/sync-engine/sdk";
+
+const client = createClient<Api>({ baseUrl: "http://localhost:3000/api" });
+
+// Grouped style — mirrors path segments, works for any depth
+const { token } = await client.auth.login({ username: "alice", password: "secret" });
+
+// Indexed style — the full path as a single key
+const { token } = await client["/auth/login"]({ username: "alice", password: "secret" });
+```
+
+Every method resolves to the success payload or a `{ error, detail? }` envelope
+and **never throws**. Transport failures (network down, non-JSON response,
+non-2xx without an error body) are normalized into the same error shape.
+
+### Client options
+
+| Option        | Default                        | Description                                                                      |
+| ------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| `baseUrl`     | `API_BASE_URL` env or `"/api"` | Base URL prefixed to every request path. Trailing slash is stripped.             |
+| `fetch`       | `globalThis.fetch`             | Fetch implementation — useful for mocks or server-side polyfills.                |
+| `headers`     | —                              | Static header bag, or a (possibly async) function producing headers per request. |
+| `credentials` | `"include"`                    | Request credentials mode. Override with `"omit"` or `"same-origin"`.             |
 
 ## Example: Todo App
 

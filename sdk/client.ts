@@ -15,7 +15,7 @@
  *
  * // grouped — property access mirrors the path segments
  * await api.auth.login({ username, password });
- * await api.students.create({ session, name, surname });
+ * await api.admin.users.roles.assign({ userId, role });
  *
  * // indexed — the full path as a single key
  * await api["/auth/login"]({ username, password });
@@ -37,10 +37,10 @@ export type ClientError = { error: string; detail?: string };
 
 /**
  * The structural shape any contract type must satisfy: a record mapping each
- * path to its `{ input; output }` pair. {@link createClient} is generic over a
- * concrete contract assignable to this.
+ * path to its `{ input; output; error }` triple. {@link createClient} is
+ * generic over a concrete contract assignable to this.
  */
-export type ContractShape = Record<string, { input: unknown; output: unknown }>;
+export type ContractShape = Record<string, { input: unknown; output: unknown; error?: unknown }>;
 
 /** A header bag, or a (possibly async) function producing one per request. */
 export type HeadersOption =
@@ -74,32 +74,51 @@ export interface ClientOptions {
 
 /**
  * A terminal endpoint method: takes the path's typed input and resolves to its
- * success payload or a {@link ClientError}.
+ * success payload or a {@link ClientError}. When the contract declares an
+ * empty input (`Record<string, never>`) the parameter is optional.
  */
-export type Endpoint<C extends ContractShape, P extends keyof C> = (
-  input: C[P]["input"],
-) => Promise<C[P]["output"] | ClientError>;
-
-// Path-string surgery used to build the grouped view from the flat contract.
-type Group<P extends string> = P extends `/${infer G}/${string}` ? G : never;
-type Method<P extends string> = P extends `/${string}/${infer M}` ? M : never;
+export type Endpoint<C extends ContractShape, P extends keyof C> = [C[P]["input"]] extends [
+  Record<string, never>,
+]
+  ? (input?: C[P]["input"]) => Promise<C[P]["output"] | ClientError>
+  : (input: C[P]["input"]) => Promise<C[P]["output"] | ClientError>;
 
 /** The indexed surface: `client["/auth/login"](input)`. */
 export type IndexedClient<C extends ContractShape> = {
   [P in keyof C & string]: Endpoint<C, P>;
 };
 
-/** The grouped surface: `client.auth.login(input)`. */
-export type GroupedClient<C extends ContractShape> = {
-  [G in Group<keyof C & string>]: {
-    [P in keyof C & string as Group<P> extends G ? Method<P> : never]: Endpoint<C, P>;
-  };
-};
+/**
+ * The grouped surface: `client.auth.login(input)`. Works for paths of any
+ * depth — `/admin/users/roles/assign` becomes `admin.users.roles.assign`.
+ */
+export type GroupedClient<C extends ContractShape> = Prettify<
+  UnionToIntersection<PathChain<keyof C & string, C>>
+>;
+
+/** Flattens an intersection into a single object for readable IntelliSense. */
+type Prettify<T> = { [K in keyof T]: T[K] } & {};
+
+type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
+  value: infer I,
+) => void
+  ? I
+  : never;
+
+/**
+ * Build a chain of nested property types for a single path.
+ * `"/admin/users/roles/assign"` → `{ admin: { users: { roles: { assign: Endpoint } } } }`.
+ */
+type PathChain<P extends string, C extends ContractShape> = P extends `/${infer S}/${infer R}`
+  ? { [K in S]: PathChain<`/${R}`, C> }
+  : P extends `/${infer S}`
+    ? { [K in S]: Endpoint<C, P> }
+    : {};
 
 /**
  * The full client type for a contract `C`. Both calling styles coexist because
- * the contract paths (`/group/method`) cleanly split into a flat index and a
- * two-level grouping.
+ * the contract paths (`/group/method`) cleanly split into a flat index and an
+ * arbitrarily-deep grouped tree.
  */
 export type Client<C extends ContractShape> = IndexedClient<C> & GroupedClient<C>;
 
@@ -182,9 +201,6 @@ async function request(
     };
   }
 
-  // Pass the body through when it is already a usable object (success payload
-  // or the backend's own `{ error }` envelope). Only synthesize an error when a
-  // non-2xx response carried nothing actionable.
   if (!response.ok && (typeof data !== "object" || data === null || !("error" in data))) {
     return {
       error: FrameworkErrorCode.BAD_STATUS,
@@ -212,8 +228,6 @@ function makeProxy(
   const fn = (body: unknown) => call(buildPath(segments), body);
   return new Proxy(fn, {
     get(_target, prop) {
-      // Symbols and promise-detection keys must not extend the path, otherwise
-      // an intermediate proxy could be mistaken for a thenable and awaited.
       if (typeof prop !== "string" || prop === "then") return undefined;
       return makeProxy([...segments, prop], call);
     },

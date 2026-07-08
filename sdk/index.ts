@@ -11,12 +11,10 @@ export type {
 } from "./client.ts";
 export { createEndpointDsl, syncMap } from "./endpoints.ts";
 export type {
-  ActionOk,
   ContractOf,
-  EmptyInput,
-  ErrorEnvelope,
+  EndpointContract,
+  EndpointHelpers,
   Prettify,
-  QueryRow,
   RequestBoundaryActions,
 } from "./endpoints.ts";
 export { FrameworkErrorCode } from "./error-codes.ts";

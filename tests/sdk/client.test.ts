@@ -6,6 +6,8 @@ type TestApi = {
   "/auth/login": { input: { username: string; password: string }; output: { token: string } };
   "/users/list": { input: { page: number }; output: { users: string[] } };
   "/todos/create": { input: { title: string }; output: { id: string } };
+  "/admin/users/roles/assign": { input: { userId: string; role: string }; output: { ok: boolean } };
+  "/ping": { input: Record<string, never>; output: { ok: boolean } };
 };
 
 function mockFetch(body: Record<string, unknown>): typeof fetch {
@@ -39,7 +41,7 @@ describe("createClient", () => {
     const fetch = mockFetch({ token: "abc123" });
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any).auth.login({ username: "alice", password: "secret" });
+    const result = await client.auth.login({ username: "alice", password: "secret" });
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/auth/login",
@@ -56,7 +58,7 @@ describe("createClient", () => {
     const fetch = mockFetch({ token: "abc123" });
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any)["/auth/login"]({ username: "alice", password: "secret" });
+    const result = await client["/auth/login"]({ username: "alice", password: "secret" });
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/auth/login",
@@ -68,12 +70,11 @@ describe("createClient", () => {
     expect(result).toEqual({ token: "abc123" });
   });
 
-  test("sends empty object body when input is undefined", async () => {
+  test("sends empty object body when input is empty", async () => {
     const fetch = mockFetch({ ok: true });
-    type NoInputApi = { "/ping": { input: Record<string, never>; output: { ok: true } } };
-    const client = createClient<NoInputApi>({ baseUrl: "http://localhost", fetch });
+    const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    await (client as any).ping();
+    await client.ping();
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/ping",
@@ -87,7 +88,7 @@ describe("createClient", () => {
     const fetch = mockFetch({ id: "42", title: "Hello" });
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any).todos.create({ title: "Hello" });
+    const result = await client.todos.create({ title: "Hello" });
 
     expect(result).toEqual({ id: "42", title: "Hello" });
   });
@@ -96,7 +97,7 @@ describe("createClient", () => {
     const fetch = mockFetch({ token: "x" });
     const client = createClient<TestApi>({ baseUrl: "http://localhost/", fetch });
 
-    await (client as any).auth.login({ username: "a", password: "b" });
+    await client.auth.login({ username: "a", password: "b" });
 
     expect(fetch).toHaveBeenCalledWith("http://localhost/auth/login", expect.any(Object));
   });
@@ -105,7 +106,7 @@ describe("createClient", () => {
     const fetch = mockFetch({ token: "x" });
     const client = createClient<TestApi>({ fetch });
 
-    await (client as any).auth.login({ username: "a", password: "b" });
+    await client.auth.login({ username: "a", password: "b" });
 
     expect(fetch).toHaveBeenCalledWith("/api/auth/login", expect.any(Object));
   });
@@ -115,7 +116,7 @@ describe("createClient", () => {
     process.env.API_BASE_URL = "http://custom/api";
     const client = createClient<TestApi>({ fetch });
 
-    await (client as any).auth.login({ username: "a", password: "b" });
+    await client.auth.login({ username: "a", password: "b" });
 
     expect(fetch).toHaveBeenCalledWith("http://custom/api/auth/login", expect.any(Object));
     delete process.env.API_BASE_URL;
@@ -132,7 +133,7 @@ describe("createClient", () => {
     ) as unknown as typeof fetch;
 
     const client = createClient<TestApi>({ baseUrl: "http://localhost" });
-    await (client as any).auth.login({ username: "a", password: "b" });
+    await client.auth.login({ username: "a", password: "b" });
 
     expect(globalThis.fetch).toHaveBeenCalled();
     globalThis.fetch = originalFetch;
@@ -144,7 +145,7 @@ describe("createClient", () => {
     ) as unknown as typeof fetch;
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any).auth.login({ username: "a", password: "b" });
+    const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({
       error: FrameworkErrorCode.NETWORK_ERROR,
@@ -156,7 +157,7 @@ describe("createClient", () => {
     const fetch = mockFetchText("plain text not json", 200, true);
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any).auth.login({ username: "a", password: "b" });
+    const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({
       error: FrameworkErrorCode.BAD_JSON,
@@ -168,7 +169,7 @@ describe("createClient", () => {
     const fetch = mockFetchText('{"status":"unauthorized"}', 401, false);
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any).auth.login({ username: "a", password: "b" });
+    const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({
       error: FrameworkErrorCode.BAD_STATUS,
@@ -184,7 +185,7 @@ describe("createClient", () => {
     );
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any).auth.login({ username: "a", password: "b" });
+    const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({ error: "INVALID_CREDENTIALS", detail: "bad password" });
   });
@@ -193,7 +194,7 @@ describe("createClient", () => {
     const fetch = mockFetch({ users: ["alice", "bob"], total: 2 });
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any).users.list({ page: 1 });
+    const result = await client.users.list({ page: 1 });
 
     expect(result).toEqual({ users: ["alice", "bob"], total: 2 });
   });
@@ -208,7 +209,7 @@ describe("createClient", () => {
       },
     });
 
-    const result = await (client as any).auth.login({ username: "a", password: "b" });
+    const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({
       error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED,
@@ -224,7 +225,7 @@ describe("createClient", () => {
       headers: { Authorization: "Bearer secret" },
     });
 
-    await (client as any).auth.login({ username: "a", password: "b" });
+    await client.auth.login({ username: "a", password: "b" });
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/auth/login",
@@ -245,7 +246,7 @@ describe("createClient", () => {
       headers: async () => ({ "X-Trace": "trace-1" }),
     });
 
-    await (client as any).auth.login({ username: "a", password: "b" });
+    await client.auth.login({ username: "a", password: "b" });
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/auth/login",
@@ -262,7 +263,7 @@ describe("createClient", () => {
     const fetch = mockFetch({ token: "x" });
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    await (client as any).auth.login({ username: "a", password: "b" });
+    await client.auth.login({ username: "a", password: "b" });
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/auth/login",
@@ -278,7 +279,7 @@ describe("createClient", () => {
       credentials: "omit",
     });
 
-    await (client as any).auth.login({ username: "a", password: "b" });
+    await client.auth.login({ username: "a", password: "b" });
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/auth/login",
@@ -288,15 +289,9 @@ describe("createClient", () => {
 
   test("deeply nested grouped path builds correct URL", async () => {
     const fetch = mockFetch({ ok: true });
-    type DeepApi = {
-      "/admin/users/roles/assign": {
-        input: { userId: string; role: string };
-        output: { ok: true };
-      };
-    };
-    const client = createClient<DeepApi>({ baseUrl: "http://localhost", fetch });
+    const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    await (client as any).admin.users.roles.assign({ userId: "1", role: "admin" });
+    await client.admin.users.roles.assign({ userId: "1", role: "admin" });
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/admin/users/roles/assign",
@@ -314,7 +309,7 @@ describe("createClient", () => {
     ) as unknown as typeof fetch;
     const client = createClient<TestApi>({ baseUrl: "http://localhost", fetch });
 
-    const result = await (client as any).auth.login({ username: "a", password: "b" });
+    const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({});
   });
