@@ -168,7 +168,9 @@ sync-engine/
     introspect.ts   conceptNameOf, actionNameOf
     util.ts         uuid, inspect
   sdk/            Client + endpoint DSL
-    client.ts        Type-safe HTTP client (Eden Treaty style)
+    client.ts        Transport-agnostic typed client core
+    http-client.ts   HTTP transport adapter (fetch, baseUrl, headers)
+    cli-client.ts    CLI transport adapter (spawn, stdin/stdout JSON)
     endpoints.ts     Typed endpoint authoring DSL (endpoint, request, respond, fail)
     error-codes.ts   Framework-level error codes
   runtime/        Application runtime
@@ -388,9 +390,10 @@ are only meaningful as ordered steps of one request or business process.
 
 ## SDK
 
-The SDK provides the glue between the engine and HTTP: a **typed endpoint authoring
-DSL** and a **type-safe client** that share a single contract, giving you e2e
-type safety without code generation.
+The SDK provides the glue between the engine and the outside world: a **typed endpoint
+authoring DSL** and a **type-safe transport-agnostic client** that share a single contract,
+giving you e2e type safety without code generation. Transports plug in as adapters — HTTP
+and CLI are included; WebSocket, worker, or in-memory harnesses follow the same pattern.
 
 ### Endpoint authoring
 
@@ -460,28 +463,39 @@ export type Api = ContractOf<typeof api>;
 engine.register(syncMap(api));
 ```
 
-### Typed HTTP client
+### Typed client
 
-`createClient<Api>()` produces a Proxy-based client fully inferred from the
-contract:
+The core `createClient<C>({ transport })` is **transport-agnostic**. It produces a
+Proxy-based client fully inferred from the contract, then delegates every call to
+the transport:
 
 ```ts
 import { createClient } from "@mit-sdg/sync-engine/sdk";
 
-const client = createClient<Api>({ baseUrl: "http://localhost:3000/api" });
+const client = createClient<Api>({ transport: myTransport });
 
 // Grouped style — mirrors path segments, works for any depth
-const { token } = await client.auth.login({ username: "alice", password: "secret" });
+const result = await client.auth.login({ username: "alice", password: "secret" });
 
 // Indexed style — the full path as a single key
-const { token } = await client["/auth/login"]({ username: "alice", password: "secret" });
+const result = await client["/auth/login"]({ username: "alice", password: "secret" });
 ```
 
-Every method resolves to the success payload or a `{ error, detail? }` envelope
-and **never throws**. Transport failures (network down, non-JSON response,
-non-2xx without an error body) are normalized into the same error shape.
+Both styles send `{ path: "/auth/login", input: { username, password } }` to the
+transport. The transport returns the success payload or an `{ error, detail? }`
+envelope. Every method **never throws** — transport failures arrive as error
+envelopes that callers discriminate with `"error" in result`.
 
-### Client options
+### HTTP transport
+
+`createHttpClient<C>()` is the HTTP adapter. It wraps `fetch`, base URL
+resolution, JSON encoding, headers, and HTTP error normalization:
+
+```ts
+import { createHttpClient } from "@mit-sdg/sync-engine/sdk";
+
+const client = createHttpClient<Api>({ baseUrl: "http://localhost:3000/api" });
+```
 
 | Option        | Default                        | Description                                                                      |
 | ------------- | ------------------------------ | -------------------------------------------------------------------------------- |
@@ -489,6 +503,46 @@ non-2xx without an error body) are normalized into the same error shape.
 | `fetch`       | `globalThis.fetch`             | Fetch implementation — useful for mocks or server-side polyfills.                |
 | `headers`     | —                              | Static header bag, or a (possibly async) function producing headers per request. |
 | `credentials` | `"include"`                    | Request credentials mode. Override with `"omit"` or `"same-origin"`.             |
+
+Use `createHttpTransport(options)` when you need the transport function alone,
+e.g. to compose with `createClient` or inject test doubles.
+
+### CLI transport
+
+`createCliClient<C>()` spawns a command-line process per request, writes a JSON
+request to stdin, and reads the JSON response from stdout:
+
+```ts
+import { createCliClient } from "@mit-sdg/sync-engine/sdk/cli-client";
+
+const client = createCliClient<Api>({ command: "my-app", args: ["rpc"] });
+```
+
+| Option      | Default    | Description                                                |
+| ----------- | ---------- | ---------------------------------------------------------- |
+| `command`   | (required) | The command to spawn.                                      |
+| `args`      | `[]`       | Arguments passed to the command.                           |
+| `cwd`       | —          | Working directory for the spawned process.                 |
+| `env`       | —          | Environment variables merged into the process environment. |
+| `timeoutMs` | —          | Maximum time in milliseconds to wait for the process.      |
+
+Use `createCliTransport(options)` when you need the transport function alone.
+
+### Custom transports
+
+Write any adapter by implementing `ClientTransport`:
+
+```ts
+import { createClient } from "@mit-sdg/sync-engine/sdk";
+import type { ClientTransport } from "@mit-sdg/sync-engine/sdk";
+
+const myTransport: ClientTransport = async ({ path, input }) => {
+  // call anything — WebSocket, IPC, message queue, test harness, …
+  return { ok: true };
+};
+
+const client = createClient<Api>({ transport: myTransport });
+```
 
 ## Example: Todo App
 
