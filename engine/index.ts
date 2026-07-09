@@ -18,7 +18,6 @@ export type {
   BranchNode,
   BranchPredicate,
   Empty,
-  Extractor,
   Frame,
   InstrumentedAction,
   Mapping,

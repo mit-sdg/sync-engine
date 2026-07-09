@@ -5,13 +5,13 @@
  * inferred from a contract type parameter**. This module is entirely generic and
  * app-agnostic: it is never edited when endpoints are added or changed. The
  * concrete binding to an app contract happens at the call site, e.g.
- * `createClient<EdumenApi>()`.
+ * `createClient<MyApi>()`.
  *
  * Two equivalent calling styles are supported, both terminating in a single
  * `POST {baseUrl}{path}` request:
  *
  * ```ts
- * const api = createClient<EdumenApi>();
+ * const api = createClient<MyApi>();
  *
  * // grouped — property access mirrors the path segments
  * await api.auth.login({ username, password });

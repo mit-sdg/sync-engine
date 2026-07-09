@@ -50,7 +50,7 @@ describe("cached", () => {
     expect(fn.size).toBe(2);
   });
 
-  test("clear() empties the cache", () => {
+  test("invalidate() empties the cache", () => {
     let calls = 0;
     const fn = cached((x: number) => {
       calls++;
@@ -59,19 +59,10 @@ describe("cached", () => {
     fn(1);
     fn(2);
     expect(fn.size).toBe(2);
-    fn.clear();
+    fn.invalidate();
     expect(fn.size).toBe(0);
     fn(1);
     expect(calls).toBe(3);
-  });
-
-  test("invalidate() empties the cache", () => {
-    const fn = cached((x: number) => x);
-    fn(1);
-    fn(2);
-    expect(fn.size).toBe(2);
-    fn.invalidate();
-    expect(fn.size).toBe(0);
   });
 
   test("evicts the oldest entry when maxSize is exceeded", () => {

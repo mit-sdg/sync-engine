@@ -12,10 +12,8 @@ export const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export interface CachedFn<T extends AnyFn> {
   (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
-  /** Drop every cached entry (alias of {@link clear}). */
-  invalidate: () => void;
   /** Drop every cached entry. */
-  clear: () => void;
+  invalidate: () => void;
   /** Number of entries currently held. */
   readonly size: number;
 }
@@ -118,10 +116,6 @@ export function cached<T extends AnyFn>(fn: T, options?: CacheOptions): CachedFn
   };
 
   wrapper.invalidate = () => {
-    cache = new Map();
-  };
-
-  wrapper.clear = () => {
     cache = new Map();
   };
 

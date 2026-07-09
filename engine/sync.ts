@@ -158,9 +158,8 @@ function isNode(value: unknown): value is ThenNode {
 }
 
 /**
- * Declares a sync function. An identity wrapper — like {@link workflow} — that
- * gives TypeScript a place to infer the {@link Vars} parameter and makes every
- * rule greppable by a single name.
+ * Declares a sync function. An identity wrapper that gives TypeScript a place to
+ * infer the {@link Vars} parameter and makes every rule greppable by a single name.
  */
 export function sync(fn: SyncFunction): SyncFunction {
   return fn;

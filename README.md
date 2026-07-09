@@ -349,7 +349,7 @@ const ReviewWorkflow = sync(({ requestId, route, reason }: Vars) =>
     act(Review.classify, { requestId })
       .as({ route })
       .branch(
-        on({ route: [route] }, act(Request.approve, { requestId })),
+        on({ route: "approved" }, act(Request.approve, { requestId })),
         on({ route: "manual" }, act(Queue.enqueue, { requestId })),
         onError(
           { detail: [reason] },
@@ -492,11 +492,11 @@ non-2xx without an error body) are normalized into the same error shape.
 
 ## Example: Todo App
 
-See [`tests/golden/`](tests/golden/) for a complete, self-contained example:
+See [`tests/golden/todo/`](tests/golden/todo/) for a complete, self-contained example:
 
-- [`concepts.ts`](tests/golden/concepts.ts) — `TodoConcept` (create, complete, delete, queries) + `AuditConcept` (immutable event log)
-- [`syncs.ts`](tests/golden/syncs.ts) — syncs that automatically audit every mutation: create, complete, delete
-- [`integration.test.ts`](tests/golden/integration.test.ts) — demonstrates the full pattern end-to-end
+- [`concepts.ts`](tests/golden/todo/concepts.ts) — `TodoConcept` (create, complete, delete, queries) + `AuditConcept` (immutable event log)
+- [`syncs.ts`](tests/golden/todo/syncs.ts) — syncs that automatically audit every mutation: create, complete, delete
+- [`integration.test.ts`](tests/golden/todo/integration.test.ts) — demonstrates the full pattern end-to-end
 
 ## Design Rules
 

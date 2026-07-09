@@ -70,10 +70,6 @@ export function formatLogEntry(entry: LogEntry): string {
   return JSON.stringify(entry);
 }
 
-export function generateRequestId(): string {
-  return crypto.randomUUID();
-}
-
 export interface Logger {
   debug(msg: string, meta?: Record<string, unknown>): void;
   info(msg: string, meta?: Record<string, unknown>): void;
