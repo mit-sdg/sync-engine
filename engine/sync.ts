@@ -525,18 +525,27 @@ export class SyncConcept {
     }
 
     for (const sync of syncs) {
-      const [matched, actionSymbols] = this.matchWhen(record, sync);
-      if (matched.length === 0) continue;
+      try {
+        const [matched, actionSymbols] = this.matchWhen(record, sync);
+        if (matched.length === 0) continue;
 
-      this.logFrames(`Matched \`sync\`: ${sync.sync} with \`when\`:`, matched);
+        this.logFrames(`Matched \`sync\`: ${sync.sync} with \`when\`:`, matched);
 
-      let frames = matched;
-      if (sync.where !== undefined) {
-        const maybeFrames = sync.where(frames);
-        frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
-        this.logFrames(`After processing \`where\`:`, frames);
+        let frames = matched;
+        if (sync.where !== undefined) {
+          try {
+            const maybeFrames = sync.where(frames);
+            frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+          } catch (err) {
+            logger.error(`Sync "${sync.sync}": where() threw — ${serializeError(err)}`);
+            continue;
+          }
+          this.logFrames(`After processing \`where\`:`, frames);
+        }
+        await this.addThen(frames, sync, actionSymbols);
+      } catch (err) {
+        logger.error(`Sync "${sync.sync}": processing threw — ${serializeError(err)}`);
       }
-      await this.addThen(frames, sync, actionSymbols);
     }
 
     this.emitObserverEvents(record, durationMs);
@@ -617,7 +626,10 @@ export class SyncConcept {
         let matched: ActionArguments;
         try {
           matched = this.matchThen(then, frame);
-        } catch {
+        } catch (err) {
+          logger.warn(
+            `Sync "${sync.sync}": matchThen failed for ${String(then.action)} — ${serializeError(err)}`,
+          );
           continue;
         }
         const id = matched[actionId];
@@ -696,7 +708,10 @@ export class SyncConcept {
     let matched: ActionArguments;
     try {
       matched = this.matchThen(node.action, frame);
-    } catch {
+    } catch (err) {
+      logger.warn(
+        `Sync "${sync.sync}": matchThen failed for step ${String(node.action.action)} — ${serializeError(err)}`,
+      );
       return undefined;
     }
 
@@ -732,8 +747,15 @@ export class SyncConcept {
 
     let childFrames = new Frames(childFrame);
     if (node.transform !== undefined) {
-      const maybeFrames = node.transform(childFrames);
-      childFrames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+      try {
+        const maybeFrames = node.transform(childFrames);
+        childFrames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+      } catch (err) {
+        logger.error(
+          `Sync "${sync.sync}": act(...).where() threw for ${String(node.action.action)} — ${serializeError(err)}`,
+        );
+        return outcome;
+      }
     }
 
     await this.runThenNodes(childFrames, node.nested, sync, whenActions, outcome, true);
@@ -754,8 +776,15 @@ export class SyncConcept {
 
     let frames = new Frames(branchedFrame);
     if (node.transform !== undefined) {
-      const maybeFrames = node.transform(frames);
-      frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+      try {
+        const maybeFrames = node.transform(frames);
+        frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+      } catch (err) {
+        logger.error(
+          `Sync "${sync.sync}": branch.where() threw for outcome "${node.outcome}" — ${serializeError(err)}`,
+        );
+        return;
+      }
     }
 
     await this.runThenNodes(frames, node.nested, sync, whenActions);
@@ -1089,6 +1118,7 @@ export class SyncConcept {
     this.concepts.add(concept);
     const Action = this.Action;
     const synchronize = this.synchronize.bind(this);
+    const emitObserverEvents = this.emitObserverEvents.bind(this);
     const queryCaches = this.queryCaches;
     let boundActions = this.boundActionsByConcept.get(concept);
     if (boundActions === undefined) {
@@ -1167,7 +1197,17 @@ export class SyncConcept {
           }
           const durationMs = performance.now() - started;
           Action.invoked({ id, output });
-          await synchronize({ ...actionRecord, output }, durationMs);
+          try {
+            await synchronize({ ...actionRecord, output }, durationMs);
+          } catch (err) {
+            logger.error("synchronize threw after action was recorded", {
+              actionId: id,
+              concept: concept.constructor.name,
+              action: action.name,
+              error: serializeError(err),
+            });
+            emitObserverEvents({ ...actionRecord, output }, durationMs);
+          }
           return output;
         } as InstrumentedAction;
 
