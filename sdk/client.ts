@@ -3,15 +3,15 @@
  *
  * {@link createClient} returns a Proxy-based client whose **types are fully
  * inferred from a contract type parameter**. This module is entirely generic and
- * app-agnostic: it is never edited when endpoints are added or changed. The
- * concrete binding to an app contract happens at the call site, e.g.
- * `createClient<MyApi>()`.
+ * transport-agnostic: it is never edited when endpoints are added or changed.
+ * The concrete binding to a transport happens at the call site, e.g.
+ * `createClient<MyApi>({ transport })`.
  *
  * Two equivalent calling styles are supported, both terminating in a single
- * `POST {baseUrl}{path}` request:
+ * call to the transport:
  *
  * ```ts
- * const api = createClient<MyApi>();
+ * const api = createClient<MyApi>({ transport });
  *
  * // grouped — property access mirrors the path segments
  * await api.auth.login({ username, password });
@@ -21,20 +21,28 @@
  * await api["/auth/login"]({ username, password });
  * ```
  *
- * ## Error handling
+ * Both styles call the same transport:
  *
- * Every method resolves to the endpoint's success payload **or** an `{ error }`
- * envelope, and **never throws**. Backend-shaped errors (invalid session, not
- * found, ...) arrive as `{ error }` unchanged; transport failures (network down,
- * non-JSON body, non-2xx without an error body) are normalized into the same
- * `{ error }` shape. Callers discriminate with `"error" in result`.
+ * ```ts
+ * transport({ path: "/auth/login", input: { username, password } });
+ * ```
  */
 
-import { FrameworkErrorCode } from "./error-codes.ts";
 import type { Prettify } from "./endpoints.ts";
 
-/** The error shape the client normalizes transport failures into. */
+/** The normalized error envelope transports use for outside-world failures. */
 export type ClientError = { error: string; detail?: string };
+
+/** A transport-agnostic request descriptor passed to {@link ClientTransport}. */
+export interface ClientRequest {
+  path: string;
+  input: unknown;
+}
+
+/** A transport function that executes a {@link ClientRequest} and resolves to its result. */
+export type ClientTransport<TError = ClientError> = (
+  request: ClientRequest,
+) => Promise<unknown | TError>;
 
 /**
  * The structural shape any contract type must satisfy: a record mapping each
@@ -43,58 +51,43 @@ export type ClientError = { error: string; detail?: string };
  */
 export type ContractShape = Record<string, { input: unknown; output: unknown; error?: unknown }>;
 
-/** A header bag, or a (possibly async) function producing one per request. */
-export type HeadersOption =
-  | Record<string, string>
-  | (() => Record<string, string> | Promise<Record<string, string>>);
-
-/** Options for {@link createClient}. All fields are optional. */
-export interface ClientOptions {
-  /**
-   * Base URL every request is prefixed with, including the `/api` segment.
-   * Defaults to `API_BASE_URL`, then `/api`.
-   */
-  baseUrl?: string;
-  /**
-   * `fetch` implementation to use. Defaults to the global `fetch`. Useful for
-   * injecting a mock or a server-side polyfill.
-   */
-  fetch?: typeof fetch;
-  /**
-   * Extra headers merged into every request (after `Content-Type`). Provide a
-   * function to compute them per call, e.g. to attach a rotating auth token.
-   */
-  headers?: HeadersOption;
-  /**
-   * Request credentials mode. Defaults to `"include"` so cookies (including
-   * HttpOnly session cookies) are sent automatically. Override with `"omit"`
-   * or `"same-origin"` if needed.
-   */
-  credentials?: "include" | "omit" | "same-origin";
+/** Options for {@link createClient}. */
+export interface ClientOptions<TError = ClientError> {
+  /** Transport function that executes endpoint calls. */
+  transport: ClientTransport<TError>;
 }
+
+type ContractError<C extends ContractShape, P extends keyof C> = C[P] extends { error: infer E }
+  ? E
+  : never;
+
+type EndpointResult<C extends ContractShape, P extends keyof C, TError> =
+  | C[P]["output"]
+  | ContractError<C, P>
+  | TError;
 
 /**
  * A terminal endpoint method: takes the path's typed input and resolves to its
- * success payload or a {@link ClientError}. When the contract declares an
+ * success payload or the transport's result. When the contract declares an
  * empty input (`Record<string, never>`) the parameter is optional.
  */
-export type Endpoint<C extends ContractShape, P extends keyof C> = [C[P]["input"]] extends [
-  Record<string, never>,
-]
-  ? (input?: C[P]["input"]) => Promise<C[P]["output"] | ClientError>
-  : (input: C[P]["input"]) => Promise<C[P]["output"] | ClientError>;
+export type Endpoint<C extends ContractShape, P extends keyof C, TError = ClientError> = [
+  C[P]["input"],
+] extends [Record<string, never>]
+  ? (input?: C[P]["input"]) => Promise<EndpointResult<C, P, TError>>
+  : (input: C[P]["input"]) => Promise<EndpointResult<C, P, TError>>;
 
 /** The indexed surface: `client["/auth/login"](input)`. */
-export type IndexedClient<C extends ContractShape> = {
-  [P in keyof C & string]: Endpoint<C, P>;
+export type IndexedClient<C extends ContractShape, TError = ClientError> = {
+  [P in keyof C & string]: Endpoint<C, P, TError>;
 };
 
 /**
  * The grouped surface: `client.auth.login(input)`. Works for paths of any
  * depth — `/admin/users/roles/assign` becomes `admin.users.roles.assign`.
  */
-export type GroupedClient<C extends ContractShape> = Prettify<
-  UnionToIntersection<PathChain<keyof C & string, C>>
+export type GroupedClient<C extends ContractShape, TError = ClientError> = Prettify<
+  UnionToIntersection<PathChain<keyof C & string, C, TError>>
 >;
 
 /** Flattens an intersection into a single object for readable IntelliSense. */
@@ -108,10 +101,14 @@ type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) e
  * Build a chain of nested property types for a single path.
  * `"/admin/users/roles/assign"` → `{ admin: { users: { roles: { assign: Endpoint } } } }`.
  */
-type PathChain<P extends string, C extends ContractShape> = P extends `/${infer S}/${infer R}`
-  ? { [K in S]: PathChain<`/${R}`, C> }
+type PathChain<
+  P extends string,
+  C extends ContractShape,
+  TError = ClientError,
+> = P extends `/${infer S}/${infer R}`
+  ? { [K in S]: PathChain<`/${R}`, C, TError> }
   : P extends `/${infer S}`
-    ? { [K in S]: Endpoint<C, P> }
+    ? { [K in S]: Endpoint<C, P, TError> }
     : {};
 
 /**
@@ -119,26 +116,8 @@ type PathChain<P extends string, C extends ContractShape> = P extends `/${infer 
  * the contract paths (`/group/method`) cleanly split into a flat index and an
  * arbitrarily-deep grouped tree.
  */
-export type Client<C extends ContractShape> = IndexedClient<C> & GroupedClient<C>;
-
-const FALLBACK_BASE_URL = "/api";
-
-function cleanBaseUrl(value: string | undefined): string | undefined {
-  const trimmed = value?.trim().replace(/\/$/, "");
-  return trimmed === "" ? undefined : trimmed;
-}
-
-function configuredBaseUrl(): string | undefined {
-  try {
-    return cleanBaseUrl(process.env.API_BASE_URL);
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveBaseUrl(baseUrl: string | undefined): string {
-  return cleanBaseUrl(baseUrl) ?? configuredBaseUrl() ?? FALLBACK_BASE_URL;
-}
+export type Client<C extends ContractShape, TError = ClientError> = IndexedClient<C, TError> &
+  GroupedClient<C, TError>;
 
 /**
  * Builds the request path from accumulated proxy segments. A single segment
@@ -149,69 +128,6 @@ function resolveBaseUrl(baseUrl: string | undefined): string {
 function buildPath(segments: string[]): string {
   if (segments.length === 1 && segments[0].startsWith("/")) return segments[0];
   return `/${segments.join("/")}`;
-}
-
-/**
- * Performs the actual POST and normalizes the outcome into a `Result`-shaped
- * value. Never throws: transport/parse failures become `{ error }`.
- */
-async function request(
-  fetchImpl: typeof fetch,
-  baseUrl: string,
-  headersOption: HeadersOption | undefined,
-  credentials: "include" | "omit" | "same-origin" | undefined,
-  path: string,
-  body: unknown,
-): Promise<unknown> {
-  let extraHeaders: Record<string, string> = {};
-  try {
-    extraHeaders =
-      typeof headersOption === "function" ? await headersOption() : (headersOption ?? {});
-  } catch (e) {
-    return {
-      error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED,
-      detail: describe(e),
-    };
-  }
-
-  let response: Response;
-  try {
-    response = await fetchImpl(baseUrl + path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...extraHeaders },
-      body: JSON.stringify(body ?? {}),
-      credentials: credentials ?? "include",
-    });
-  } catch (e) {
-    return {
-      error: FrameworkErrorCode.NETWORK_ERROR,
-      detail: `Network request to ${path} failed: ${describe(e)}`,
-    };
-  }
-
-  const text = await response.text().catch(() => "");
-  let data: unknown;
-  try {
-    data = text === "" ? {} : JSON.parse(text);
-  } catch {
-    return {
-      error: FrameworkErrorCode.BAD_JSON,
-      detail: `Invalid JSON response from ${path} (status ${response.status}).`,
-    };
-  }
-
-  if (!response.ok && (typeof data !== "object" || data === null || !("error" in data))) {
-    return {
-      error: FrameworkErrorCode.BAD_STATUS,
-      detail: `Request to ${path} failed with status ${response.status}.`,
-    };
-  }
-  return data;
-}
-
-/** Renders an unknown thrown value as a short string for error envelopes. */
-function describe(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 /**
@@ -241,14 +157,12 @@ function makeProxy(
  * both the grouped (`client.auth.login(...)`) and indexed
  * (`client["/auth/login"](...)`) styles, each fully inferred from `C`.
  *
- * Callers pass their app contract type explicitly, e.g.
- * `createClient<EdumenApi>()`.
+ * Callers pass their app contract type and a transport, e.g.
+ * `createClient<EdumenApi>({ transport })`.
  */
-export function createClient<C extends ContractShape>(options: ClientOptions = {}): Client<C> {
-  const baseUrl = resolveBaseUrl(options.baseUrl);
-  const fetchImpl = options.fetch ?? globalThis.fetch;
-  const credentials = options.credentials;
-  const call = (path: string, body: unknown) =>
-    request(fetchImpl, baseUrl, options.headers, credentials, path, body);
-  return makeProxy([], call) as Client<C>;
+export function createClient<C extends ContractShape, TError = ClientError>(
+  options: ClientOptions<TError>,
+): Client<C, TError> {
+  const call = (path: string, body: unknown) => options.transport({ path, input: body ?? {} });
+  return makeProxy([], call) as Client<C, TError>;
 }

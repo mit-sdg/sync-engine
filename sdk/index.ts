@@ -3,12 +3,15 @@ export type {
   Client,
   ClientError,
   ClientOptions,
+  ClientRequest,
+  ClientTransport,
   ContractShape,
   Endpoint,
   GroupedClient,
-  HeadersOption,
   IndexedClient,
 } from "./client.ts";
+export { createHttpTransport, createHttpClient } from "./http-client.ts";
+export type { HeadersOption, HttpClientOptions } from "./http-client.ts";
 export { createEndpointDsl, syncMap } from "./endpoints.ts";
 export type {
   ContractOf,

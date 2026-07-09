@@ -18,11 +18,16 @@ export const FrameworkErrorCode = {
   UNSUPPORTED_MEDIA_TYPE: "UNSUPPORTED_MEDIA_TYPE",
   VALIDATION_FAILED: "VALIDATION_FAILED",
 
-  // ═══ Network / Wire (SDK client only) ═══
+  // ═══ Network / Wire (HTTP client only) ═══
   BAD_JSON: "BAD_JSON",
   BAD_STATUS: "BAD_STATUS",
   HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED",
   NETWORK_ERROR: "NETWORK_ERROR",
+
+  // ═══ CLI (CLI client only) ═══
+  COMMAND_FAILED: "COMMAND_FAILED",
+  COMMAND_TIMED_OUT: "COMMAND_TIMED_OUT",
+  PROCESS_ERROR: "PROCESS_ERROR",
 } as const;
 
 export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode];

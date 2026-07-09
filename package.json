@@ -25,7 +25,13 @@
   ],
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./engine": "./engine/index.ts",
+    "./runtime": "./runtime/index.ts",
+    "./sdk": "./sdk/index.ts",
+    "./sdk/client": "./sdk/client.ts",
+    "./sdk/http-client": "./sdk/http-client.ts",
+    "./sdk/cli-client": "./sdk/cli-client.ts"
   },
   "publishConfig": {
     "access": "public"
