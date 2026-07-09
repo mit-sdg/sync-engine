@@ -31,6 +31,7 @@
  */
 
 import { FrameworkErrorCode } from "./error-codes.ts";
+import type { Prettify } from "./endpoints.ts";
 
 /** The error shape the client normalizes transport failures into. */
 export type ClientError = { error: string; detail?: string };
@@ -97,8 +98,6 @@ export type GroupedClient<C extends ContractShape> = Prettify<
 >;
 
 /** Flattens an intersection into a single object for readable IntelliSense. */
-type Prettify<T> = { [K in keyof T]: T[K] } & {};
-
 type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
   value: infer I,
 ) => void
@@ -125,7 +124,7 @@ export type Client<C extends ContractShape> = IndexedClient<C> & GroupedClient<C
 const FALLBACK_BASE_URL = "/api";
 
 function cleanBaseUrl(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
+  const trimmed = value?.trim().replace(/\/$/, "");
   return trimmed === "" ? undefined : trimmed;
 }
 
@@ -138,7 +137,7 @@ function configuredBaseUrl(): string | undefined {
 }
 
 function resolveBaseUrl(baseUrl: string | undefined): string {
-  return (cleanBaseUrl(baseUrl) ?? configuredBaseUrl() ?? FALLBACK_BASE_URL).replace(/\/$/, "");
+  return cleanBaseUrl(baseUrl) ?? configuredBaseUrl() ?? FALLBACK_BASE_URL;
 }
 
 /**

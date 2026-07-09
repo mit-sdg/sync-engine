@@ -154,6 +154,31 @@ export interface Frames<TFrame extends Frame = Frame> {
   ): Frames<Record<TSymbol, unknown[]>>;
 }
 
+function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
+  if (value === null) return "@null";
+  if (value === undefined) return "@undefined";
+  if (typeof value === "bigint") return `@bigint:${String(value)}`;
+  if (typeof value !== "object") return `@${typeof value}:${String(value)}`;
+  if (seen.has(value)) return "@circular";
+  seen.add(value);
+  if (Array.isArray(value)) {
+    const items = value.map((v) => stableSerialize(v, seen)).join(",");
+    return `@A{${items}}`;
+  }
+  const keys = Object.keys(value).sort();
+  const inner = keys
+    .map((k) => `${k}:${stableSerialize((value as Record<string, unknown>)[k], seen)}`)
+    .join(",");
+  const symKeys = Object.getOwnPropertySymbols(value).sort((a, b) =>
+    String(a).localeCompare(String(b)),
+  );
+  const symInner = symKeys
+    .map((s) => `${String(s)}:${stableSerialize((value as Record<symbol, unknown>)[s], seen)}`)
+    .join(",");
+  const combined = [inner, symInner].filter(Boolean).join(",");
+  return `@O{${combined}}`;
+}
+
 /** Methods that own their return value and must NOT be auto-rewrapped. */
 const UNWRAPPED_METHODS = new Set<PropertyKey>([
   "query",
@@ -293,7 +318,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     }
 
     if (promises.length > 0) {
-      return Promise.all(promises).then(() => result);
+      return Promise.allSettled(promises).then(() => result);
     }
     return result;
   }
@@ -361,7 +386,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     }
 
     if (promises.length > 0) {
-      return Promise.all(promises).then(() => result);
+      return Promise.allSettled(promises).then(() => result);
     }
     return result;
   }
@@ -415,12 +440,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
         }
       }
 
-      // Stable, order-independent key over the group's surviving bindings.
-      const groupKey = JSON.stringify(
-        Object.getOwnPropertySymbols(groupKeys)
-          .sort((a, b) => String(a).localeCompare(String(b)))
-          .map((sym) => [String(sym), groupKeys[sym]]),
-      );
+      const groupKey = stableSerialize(groupKeys);
 
       let group = groups.get(groupKey);
       if (group === undefined) {
@@ -510,22 +530,32 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
   /**
    * Enrich every frame with the result of an async operation.
    *
-   * Calls `fn` for each frame in parallel via `Promise.all` and spreads the
-   * returned keys onto each frame. String keys from the result object are
-   * converted to symbols via `Symbol.for` so they are consistently accessible
-   * across frames.
+   * Calls `fn` for each frame in parallel and spreads the returned keys onto
+   * each frame. String keys from the result object are converted to symbols
+   * so they are consistently accessible across frames within this call. A
+   * single failure does not discard sibling results — the original frame is
+   * preserved.
    */
   async enrich(fn: (frame: TFrame) => Promise<Record<string, unknown>>): Promise<Frames> {
     const frames = [...this];
-    const enriched = await Promise.all(
+    const symMap = new Map<string, symbol>();
+    const results = await Promise.allSettled(
       frames.map(async (frame) => {
         const extra = await fn(frame);
         const symbolized: Record<symbol, unknown> = {};
         for (const [key, value] of Object.entries(extra)) {
-          symbolized[Symbol.for(key)] = value;
+          let sym = symMap.get(key);
+          if (sym === undefined) {
+            sym = Symbol(key);
+            symMap.set(key, sym);
+          }
+          symbolized[sym] = value;
         }
         return { ...frame, ...symbolized } as Frame;
       }),
+    );
+    const enriched = results.map((r, i) =>
+      r.status === "fulfilled" ? r.value : ({ ...frames[i] } as Frame),
     );
     return new Frames(...enriched);
   }

@@ -183,5 +183,12 @@ function isEndpointDefinition(
 }
 
 function isPlainMapping(value: unknown): value is Mapping {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return false;
+  if (value instanceof Date) return false;
+  if (value instanceof Map) return false;
+  if (value instanceof Set) return false;
+  if (value instanceof RegExp) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === null || proto === Object.prototype;
 }

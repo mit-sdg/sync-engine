@@ -164,20 +164,16 @@ describe("flat then-list marks consumption pre-emptively", () => {
   });
 });
 
-// ── enrich() uses global Symbol registry, leaking keys across contexts ──────
+// ── enrich() symbols are per-call, avoiding cross-context leaks ────────────
 
-describe("enrich shares symbol keys across unrelated enrichments", () => {
-  test("should not use globally-registered symbols for enrichment result keys", async () => {
+describe("enrich uses per-call local symbols", () => {
+  test("does not use globally-registered symbols for enrichment result keys", async () => {
     const frames1 = new Frames({ [Symbol("a")]: 1 } as Record<symbol, unknown>);
     const frames2 = new Frames({ [Symbol("b")]: 2 } as Record<symbol, unknown>);
 
     await frames1.enrich(async () => ({ sharedKey: "value1" }));
     await frames2.enrich(async () => ({ sharedKey: "value2" }));
 
-    // enrich() calls Symbol.for(key) internally. Symbol.for registers the key
-    // in the global symbol registry, so two unrelated enrichments that happen
-    // to use the same string key produce the SAME symbol. If frames from both
-    // ever merge, their bindings silently collide.
     const globalSym = Symbol.for("sharedKey");
     const localSym = Symbol("sharedKey");
 
@@ -247,8 +243,8 @@ describe("unbound frame variables are silently dropped", () => {
 
 // ── collectAs group keys are unstable for object/BigInt values ──────────────
 
-describe("collectAs produces unstable group keys for certain value types", () => {
-  test("should group equivalent object values together regardless of key order", () => {
+describe("collectAs produces stable group keys", () => {
+  test("groups equivalent object values together regardless of key order", () => {
     const group = Symbol("group");
     const value = Symbol("value");
     const items = Symbol("items");
@@ -260,30 +256,19 @@ describe("collectAs produces unstable group keys for certain value types", () =>
 
     const out = frames.collectAs([value], items);
 
-    // The group key is built via JSON.stringify, whose output order for
-    // plain objects depends on property insertion order. Equivalent objects
-    // with different key orders can produce different group keys, splitting
-    // frames that logically belong together.
     expect(out.length).toBe(1);
   });
 
-  test("should not throw when a non-collected value is a BigInt", () => {
+  test("handles BigInt values in non-collected keys", () => {
     const g = Symbol("g");
     const big = Symbol("big");
     const items = Symbol("items");
 
     const frames = new Frames({ [g]: BigInt(42), [big]: "val" } as Record<symbol, unknown>);
 
-    let didThrow = false;
-    try {
-      frames.collectAs([big], items);
-    } catch {
-      didThrow = true;
-    }
+    const out = frames.collectAs([big], items);
 
-    // Non-collected symbol values end up in the group key, which is built
-    // with JSON.stringify — and JSON.stringify throws on BigInt.
-    expect(didThrow).toBe(true);
+    expect(out.length).toBe(1);
   });
 });
 
@@ -358,10 +343,10 @@ describe("actionNameOf corrupts non-bound function names", () => {
   });
 });
 
-// ── One failing query/enrich discards results from all successful siblings ──
+// ── One failing query/enrich does not discard sibling results ──────────────
 
-describe("single query or enrich failure discards all sibling results", () => {
-  test("should not discard results of successful queries when one query fails", async () => {
+describe("single query or enrich failure does not discard sibling results", () => {
+  test("does not discard results of successful queries when one query fails", async () => {
     const id = Symbol("id");
     const result = Symbol("result");
 
@@ -379,19 +364,14 @@ describe("single query or enrich failure discards all sibling results", () => {
       return [{ doubled: idVal * 2 }];
     };
 
-    try {
-      await frames.query(queryFn, { id }, { doubled: result });
-    } catch {
-      // Expected: the whole query rejects
-    }
+    const out = await frames.query(queryFn, { id }, { doubled: result });
 
-    // Both frame 1 and frame 3 queried successfully, but their results are
-    // discarded because Promise.all rejects when any single query fails.
     expect(successes).toBe(2);
     expect(failures).toBe(1);
+    expect(out.length).toBe(2);
   });
 
-  test("should not discard results of successful enrich calls when one fails", async () => {
+  test("does not discard results of successful enrich calls when one fails", async () => {
     const frames = new Frames(
       { [Symbol("n")]: 1 } as Record<symbol, unknown>,
       { [Symbol("n")]: 2 } as Record<symbol, unknown>,
@@ -399,20 +379,15 @@ describe("single query or enrich failure discards all sibling results", () => {
     );
 
     let processed = 0;
-    try {
-      await frames.enrich(async (f) => {
-        const n = (f as Record<symbol, unknown>)[Object.getOwnPropertySymbols(f)[0]];
-        if (n === 2) throw new Error("enrich failed");
-        processed++;
-        return { doubled: Number(n) * 2 };
-      });
-    } catch {
-      // Expected: the whole enrich rejects
-    }
+    const out = await frames.enrich(async (f) => {
+      const n = (f as Record<symbol, unknown>)[Object.getOwnPropertySymbols(f)[0]];
+      if (n === 2) throw new Error("enrich failed");
+      processed++;
+      return { doubled: Number(n) * 2 };
+    });
 
-    // Frames 1 and 3 were successfully enriched, but their work is thrown
-    // away because Promise.all rejects on the first failure.
     expect(processed).toBe(2);
+    expect(out.length).toBe(3);
   });
 });
 
@@ -442,9 +417,9 @@ describe("observers cannot be removed in bulk", () => {
   });
 });
 
-// ── evictSyncedFlows mutates the Map it is iterating over ───────────────────
+// ── evictSyncedFlows snapshots keys before eviction ──────────────────────────
 
-describe("evictSyncedFlows mutates the flow index during iteration", () => {
+describe("evictSyncedFlows safely evicts without iterating a mutating map", () => {
   test("evictSyncedFlows processes flows with synced last records", async () => {
     const Sync = new SyncConcept();
     Sync.logging = Logging.OFF;
@@ -463,10 +438,6 @@ describe("evictSyncedFlows mutates the flow index during iteration", () => {
 
     const evicted = Sync.Action.evictSyncedFlows();
 
-    // The loop iterates over flowIndex with for…of while evictFlow deletes
-    // entries from that same Map. The pattern works today but is brittle:
-    // if evictFlow ever changes how it mutates flowIndex, entries could be
-    // skipped or wrong flows evicted.
     expect(evicted).toBeGreaterThanOrEqual(0);
     expect(Sync.Action.flowIndex.size).toBeLessThan(before);
   });

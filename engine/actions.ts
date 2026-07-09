@@ -115,12 +115,16 @@ export class ActionConcept {
   /** Evict all flows whose last action has been synced. */
   evictSyncedFlows(): number {
     let evicted = 0;
+    const toEvict: string[] = [];
     for (const [flow, records] of this.flowIndex) {
       const lastRecord = records[records.length - 1];
       if (lastRecord?.synced && lastRecord.synced.size > 0) {
-        this.evictFlow(flow);
-        evicted++;
+        toEvict.push(flow);
       }
+    }
+    for (const flow of toEvict) {
+      this.evictFlow(flow);
+      evicted++;
     }
     return evicted;
   }

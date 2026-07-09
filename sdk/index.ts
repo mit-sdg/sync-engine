@@ -18,4 +18,3 @@ export type {
   RequestBoundaryActions,
 } from "./endpoints.ts";
 export { FrameworkErrorCode } from "./error-codes.ts";
-export type { FrameworkErrorCode as FrameworkErrorCodeType } from "./error-codes.ts";

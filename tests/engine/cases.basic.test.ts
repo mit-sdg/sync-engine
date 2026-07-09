@@ -108,7 +108,8 @@ describe("engine: basic synchronizations", () => {
         doubled: (f[SymA] as number) * 2,
       }));
       expect(result.length).toBe(2);
-      const DoubledSym = Symbol.for("doubled");
+      const symbols0 = Object.getOwnPropertySymbols(result[0]);
+      const DoubledSym = symbols0.find((s) => s.description === "doubled") as symbol;
       expect(result[0][DoubledSym]).toBe(2);
       expect(result[1][DoubledSym]).toBe(4);
       // Original bindings preserved

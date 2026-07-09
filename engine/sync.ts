@@ -241,6 +241,47 @@ export function act(action: InstrumentedAction, input: Mapping): ActChain {
   return chain;
 }
 
+function buildBranch(outcome: "result" | "error", args: unknown[]): BranchNode {
+  const [first, second, ...rest] = args;
+  if (first !== undefined && isNode(first)) {
+    return brand({
+      kind: "branch",
+      outcome,
+      pattern: {},
+      nested: args as ThenNode[],
+    });
+  }
+  if (typeof first === "function") {
+    const nodes = [second, ...rest] as ThenNode[];
+    if (nodes.length === 0) throw new Error("on(...)/onError(...) requires at least one node.");
+    return brand({
+      kind: "branch",
+      outcome,
+      pattern: {},
+      predicate: first as BranchPredicate,
+      nested: nodes,
+    });
+  }
+  const pattern = first as Mapping;
+  let predicate: BranchPredicate | undefined;
+  let nodes: ThenNode[];
+  if (typeof second === "function") {
+    predicate = second as BranchPredicate;
+    nodes = rest.length > 0 ? (rest as ThenNode[]) : [];
+  } else {
+    nodes = [second, ...rest] as ThenNode[];
+  }
+  if (nodes.length === 0) throw new Error("on(...)/onError(...) requires at least one node.");
+  const branch: BranchNode = {
+    kind: "branch",
+    outcome,
+    pattern,
+    nested: nodes,
+  };
+  if (predicate !== undefined) branch.predicate = predicate;
+  return brand(branch);
+}
+
 /**
  * Success branch: fires when the preceding step produced a value or completed
  * (any non-error outcome). Pattern is optional — omit it when `.as()` already
@@ -264,47 +305,7 @@ export function on(pattern: Mapping, ...nodes: ThenNode[]): BranchNode;
 export function on(predicate: BranchPredicate, ...nodes: ThenNode[]): BranchNode;
 export function on(pattern: Mapping, predicate: BranchPredicate, ...nodes: ThenNode[]): BranchNode;
 export function on(...args: unknown[]): BranchNode {
-  const [first, second, ...rest] = args;
-  // No args beyond nodes
-  if (first !== undefined && isNode(first)) {
-    return brand({
-      kind: "branch",
-      outcome: "result",
-      pattern: {},
-      nested: args as ThenNode[],
-    });
-  }
-  // Predicate-only: on(fn, ...nodes)
-  if (typeof first === "function") {
-    const nodes = [second, ...rest] as ThenNode[];
-    if (nodes.length === 0) throw new Error("on(...) requires at least one node.");
-    return brand({
-      kind: "branch",
-      outcome: "result",
-      pattern: {},
-      predicate: first as BranchPredicate,
-      nested: nodes,
-    });
-  }
-  // Pattern + optional predicate: on(pattern, fn?, ...nodes)
-  const pattern = first as Mapping;
-  let predicate: BranchPredicate | undefined;
-  let nodes: ThenNode[];
-  if (typeof second === "function") {
-    predicate = second as BranchPredicate;
-    nodes = rest.length > 0 ? (rest as ThenNode[]) : [];
-  } else {
-    nodes = [second, ...rest] as ThenNode[];
-  }
-  if (nodes.length === 0) throw new Error("on(...) requires at least one node.");
-  const branch: BranchNode = {
-    kind: "branch",
-    outcome: "result",
-    pattern,
-    nested: nodes,
-  };
-  if (predicate !== undefined) branch.predicate = predicate;
-  return brand(branch);
+  return buildBranch("result", args);
 }
 
 /**
@@ -325,44 +326,7 @@ export function onError(
   ...nodes: ThenNode[]
 ): BranchNode;
 export function onError(...args: unknown[]): BranchNode {
-  const [first, second, ...rest] = args;
-  if (first !== undefined && isNode(first)) {
-    return brand({
-      kind: "branch",
-      outcome: "error",
-      pattern: {},
-      nested: args as ThenNode[],
-    });
-  }
-  if (typeof first === "function") {
-    const nodes = [second, ...rest] as ThenNode[];
-    if (nodes.length === 0) throw new Error("onError(...) requires at least one node.");
-    return brand({
-      kind: "branch",
-      outcome: "error",
-      pattern: {},
-      predicate: first as BranchPredicate,
-      nested: nodes,
-    });
-  }
-  const pattern = first as Mapping;
-  let predicate: BranchPredicate | undefined;
-  let nodes: ThenNode[];
-  if (typeof second === "function") {
-    predicate = second as BranchPredicate;
-    nodes = rest.length > 0 ? (rest as ThenNode[]) : [];
-  } else {
-    nodes = [second, ...rest] as ThenNode[];
-  }
-  if (nodes.length === 0) throw new Error("onError(...) requires at least one node.");
-  const branch: BranchNode = {
-    kind: "branch",
-    outcome: "error",
-    pattern,
-    nested: nodes,
-  };
-  if (predicate !== undefined) branch.predicate = predicate;
-  return brand(branch);
+  return buildBranch("error", args);
 }
 
 /**
@@ -468,6 +432,11 @@ export class SyncConcept {
     };
   }
 
+  /** Remove all registered observers. */
+  clearObservers(): void {
+    this.observers.clear();
+  }
+
   constructor(actionConcept: ActionConcept = new ActionConcept()) {
     this.Action = actionConcept;
   }
@@ -515,7 +484,7 @@ export class SyncConcept {
    * that action whose `when` matches within the action's flow.
    */
   async synchronize(record: ActionRecord, durationMs?: number): Promise<void> {
-    this.logAction(record);
+    this.logAction(record, durationMs);
 
     const syncs = this.syncsByAction.get(record.action as InstrumentedAction);
     if (syncs === undefined) {
@@ -869,18 +838,14 @@ export class SyncConcept {
     outcome: ActionOutcome,
     branch: BranchNode,
   ): Frame | undefined {
-    if (!this.matchesOutcome(outcome, branch.outcome, branch.pattern)) return undefined;
+    if (!this.matchesOutcome(outcome, branch.outcome)) return undefined;
     const extendedFrame = this.unifyOutputPattern(outcome, branch.pattern, frame);
     if (extendedFrame === undefined) return undefined;
     if (branch.predicate !== undefined && !branch.predicate(extendedFrame)) return undefined;
     return extendedFrame;
   }
 
-  private matchesOutcome(
-    outcome: ActionOutcome,
-    outcomeKind: OutcomeKind,
-    _pattern: Mapping,
-  ): boolean {
+  private matchesOutcome(outcome: ActionOutcome, outcomeKind: OutcomeKind): boolean {
     switch (outcomeKind) {
       case "error":
         return outcome.kind === "error";
@@ -1085,7 +1050,7 @@ export class SyncConcept {
   }
 
   /** Per-action logging honouring the current {@link Logging} level. */
-  private logAction(record: ActionRecord): void {
+  private logAction(record: ActionRecord, durationMs?: number): void {
     if (this.logging === Logging.VERBOSE) {
       const { concept, input, output, ...rest } = record;
       logger.debug("Synchronizing action:", {
@@ -1097,7 +1062,7 @@ export class SyncConcept {
       return;
     }
     if (this.logging === Logging.TRACE) {
-      const { concept, action, input, output } = this.toJournalEvent(record, 0);
+      const { concept, action, input, output } = this.toJournalEvent(record, durationMs ?? 0);
       logger.debug(
         `\n${concept}.${action} ${inspect(sanitize(input))} => ${inspect(sanitize(output))}\n`,
       );

@@ -13,7 +13,7 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 };
 
 const MIN_LEVEL =
-  LOG_LEVELS[(process.env.LOG_LEVEL?.toLowerCase() ?? "info") as LogLevel] ?? LOG_LEVELS.info;
+  LOG_LEVELS[String(process.env.LOG_LEVEL ?? "info").toLowerCase() as LogLevel] ?? LOG_LEVELS.info;
 
 const FORMAT = process.env.LOGGING_FORMAT === "pretty" ? "pretty" : "json";
 

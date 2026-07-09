@@ -53,7 +53,13 @@ let policyPatterns: readonly RegExp[] = UNIVERSAL_SENSITIVE_PATTERNS;
  * replaces the registered domain policy; the universal patterns persist.
  */
 export function configureRedaction(policy: RedactionPolicy): void {
-  policyFields = new Set(Array.from(policy.fields ?? [], (field) => field.toLowerCase()));
+  let fields: string[] = [];
+  try {
+    fields = Array.from(policy.fields ?? [], (field) => String(field).toLowerCase());
+  } catch {
+    // Non-iterable fields value — ignore.
+  }
+  policyFields = new Set(fields);
   policyPatterns = [...UNIVERSAL_SENSITIVE_PATTERNS, ...(policy.patterns ?? [])];
 }
 

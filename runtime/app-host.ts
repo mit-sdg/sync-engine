@@ -104,10 +104,16 @@ export class AppHost<TApp, TParams> {
    * sink or mutate the map — the process is exiting.
    */
   async stopAll(): Promise<void> {
+    const allResources: Stoppable[] = [];
     for (const resources of this.resources.values()) {
       for (const resource of [...resources].reverse()) {
-        await resource.stop();
+        allResources.push(resource);
       }
     }
+    const results = await Promise.allSettled(
+      allResources.map((r) => Promise.resolve().then(() => r.stop())),
+    );
+    const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (firstFailure) throw firstFailure.reason;
   }
 }

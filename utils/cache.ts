@@ -25,25 +25,42 @@ interface CacheEntry {
   expiresAt: number;
 }
 
-function serialize(arg: unknown): string {
+function serialize(arg: unknown, seen = new WeakSet<object>()): string {
   if (arg === null) return "@null";
   if (arg === undefined) return "@undefined";
   if (arg instanceof Date) return `@date:${arg.getTime()}`;
+  if (typeof arg === "function") return `@fn:${String(arg)}`;
+  if (typeof arg === "symbol") return `@sym:${String(arg)}`;
+  if (typeof arg === "bigint") return `@bigint:${String(arg)}`;
   if (typeof arg === "object") {
+    if (seen.has(arg)) return "@circular";
+    seen.add(arg);
+    if (arg instanceof Map) {
+      const entries = [...arg.entries()].map(
+        ([k, v]) => `${serialize(k, seen)}:${serialize(v, seen)}`,
+      );
+      return `@Map{${entries.join(",")}}`;
+    }
+    if (arg instanceof Set) {
+      const values = [...arg.values()].map((v) => serialize(v, seen));
+      return `@Set{${values.join(",")}}`;
+    }
+    if (Array.isArray(arg)) {
+      const inner = arg.map((v) => serialize(v, seen)).join(",");
+      return `@Array{${inner}}`;
+    }
     const tag = arg.constructor?.name || "Object";
     const keys = Object.keys(arg).sort();
     const inner = keys
-      .map((k) => `${k}:${serialize((arg as Record<string, unknown>)[k])}`)
+      .map((k) => `${k}:${serialize((arg as Record<string, unknown>)[k], seen)}`)
       .join(",");
     return `@${tag}{${inner}}`;
   }
-  if (typeof arg === "function") return `@fn:${String(arg)}`;
-  if (typeof arg === "symbol") return `@sym:${String(arg)}`;
   return `@${typeof arg}:${String(arg)}`;
 }
 
 function stableKey(args: unknown[]): string {
-  return args.map(serialize).join("|");
+  return args.map((a) => serialize(a)).join("|");
 }
 
 export function cached<T extends AnyFn>(fn: T, options?: CacheOptions): CachedFn<T> {
