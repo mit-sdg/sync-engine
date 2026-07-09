@@ -560,7 +560,3 @@ See [`tests/golden/todo/`](tests/golden/todo/) for a complete, self-contained ex
 4. **Syncs are declarative** — no side effects in `when` or the `where` clause. Side effects live in `then`.
 5. **One sync, one responsibility.** A sync that creates a session, sends an email, and updates metrics should be three syncs.
 6. **The engine is single-flow safe.** Actions from different causal chains never cross-match.
-
-## License
-
-MIT
