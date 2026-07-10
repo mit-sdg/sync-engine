@@ -309,9 +309,19 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
 
     for (const frame of this) {
       const boundInput = Frames.bindInput(frame, input);
-      const rows = f(boundInput as never);
+      let rows: unknown[] | Promise<unknown[]>;
+      try {
+        rows = f(boundInput as never);
+      } catch {
+        continue;
+      }
       if (rows instanceof Promise) {
-        promises.push(rows.then((arr) => Frames.expandOutputs(result, frame, arr, output)));
+        promises.push(
+          rows.then(
+            (arr) => Frames.expandOutputs(result, frame, arr, output),
+            () => {},
+          ),
+        );
       } else {
         Frames.expandOutputs(result, frame, rows, output);
       }
@@ -377,9 +387,20 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
 
     for (const frame of this) {
       const boundInput = Frames.bindInput(frame, input);
-      const rows = f(boundInput as never);
+      let rows: unknown[] | Promise<unknown[]>;
+      try {
+        rows = f(boundInput as never);
+      } catch {
+        Frames.expandOptionalOutputs(result, frame, [], output);
+        continue;
+      }
       if (rows instanceof Promise) {
-        promises.push(rows.then((arr) => Frames.expandOptionalOutputs(result, frame, arr, output)));
+        promises.push(
+          rows.then(
+            (arr) => Frames.expandOptionalOutputs(result, frame, arr, output),
+            () => Frames.expandOptionalOutputs(result, frame, [], output),
+          ),
+        );
       } else {
         Frames.expandOptionalOutputs(result, frame, rows, output);
       }
