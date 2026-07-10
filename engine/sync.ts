@@ -471,6 +471,12 @@ export class SyncConcept {
         ...raw,
         then: Array.isArray(raw.then) ? raw.then : [raw.then],
       };
+      const old = this.syncs[name];
+      if (old) {
+        for (const { action } of old.when) {
+          this.syncsByAction.get(action)?.delete(old);
+        }
+      }
       this.syncs[name] = sync;
       for (const { action } of sync.when) {
         let mapped = this.syncsByAction.get(action);
