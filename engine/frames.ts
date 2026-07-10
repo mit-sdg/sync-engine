@@ -63,8 +63,8 @@ export interface Frames<TFrame extends Frame = Frame> {
   reverse(): this;
   sort(compareFn?: (a: TFrame, b: TFrame) => number): this;
 
-  splice(start: number, deleteCount?: number): this;
-  splice(start: number, deleteCount: number, ...items: TFrame[]): this;
+  splice(start: number, deleteCount?: number): Frames<TFrame>;
+  splice(start: number, deleteCount: number, ...items: TFrame[]): Frames<TFrame>;
 
   // --- Frames enrichment helpers ---
 
