@@ -138,8 +138,8 @@ describe("AppHost", () => {
     expect(host.values()).toEqual([]);
   });
 
-  // unregister() stops resources in reverse order, but the loop exits on the
-  // first rejected stop(), leaving earlier-registered resources unstopped.
+  // unregister() stops all resources via allSettled and collects failures
+  // into an AggregateError so no error is silently discarded.
   test("should stop all resources even when one stop() throws", async () => {
     const events: string[] = [];
     const stopped: string[] = [];
@@ -165,10 +165,13 @@ describe("AppHost", () => {
 
     await host.register("ted", undefined);
 
-    await expect(host.unregister("ted")).rejects.toThrow("stop failed");
+    const err = await host.unregister("ted").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AggregateError);
+    expect((err as AggregateError).errors.some((e) => String(e).includes("stop failed"))).toBe(
+      true,
+    );
 
-    // Resource at index 0 is last in reverse order. When the resource at
-    // index 1 throws, the loop exits before reaching index 0 — leaking it.
+    // All resources still ran despite the failure.
     expect(stopped).toContain("ted:1");
   });
 });

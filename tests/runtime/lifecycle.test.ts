@@ -42,7 +42,9 @@ describe("Lifecycle", () => {
     });
     lifecycle.add({ stop: () => void stopped.push("c") });
 
-    await expect(lifecycle.stopAll()).rejects.toThrow("boom");
+    const err = await lifecycle.stopAll().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AggregateError);
+    expect((err as AggregateError).errors.some((e) => String(e).includes("boom"))).toBe(true);
     // Both non-throwing resources still ran.
     expect(stopped).toEqual(["c", "a"]);
   });

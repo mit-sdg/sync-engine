@@ -95,8 +95,13 @@ export class AppHost<TApp, TParams> {
     this.resources.delete(prefix);
     this.apps.delete(prefix);
     this.sink?.unregisterApp(prefix);
-    const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
-    if (firstFailure) throw firstFailure.reason;
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures.map((f) => f.reason),
+        `unregister("${prefix}"): some resources failed to stop`,
+      );
+    }
   }
 
   /**
@@ -113,7 +118,12 @@ export class AppHost<TApp, TParams> {
     const results = await Promise.allSettled(
       allResources.map((r) => Promise.resolve().then(() => r.stop())),
     );
-    const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
-    if (firstFailure) throw firstFailure.reason;
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures.map((f) => f.reason),
+        "stopAll: some resources failed to stop",
+      );
+    }
   }
 }

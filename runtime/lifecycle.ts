@@ -45,7 +45,12 @@ export class Lifecycle {
       ordered.map((s) => Promise.resolve().then(() => s.stop())),
     );
 
-    const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
-    if (firstFailure) throw firstFailure.reason;
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures.map((f) => f.reason),
+        "stopAll: some resources failed to stop",
+      );
+    }
   }
 }
