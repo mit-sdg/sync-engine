@@ -1208,9 +1208,18 @@ export class SyncConcept {
   }
 
   /** Instrument every concept in a record, preserving keys. */
-  instrument<T extends Record<string, object>>(concepts: T): T {
-    return Object.fromEntries(
-      Object.entries(concepts).map(([key, concept]) => [key, this.instrumentConcept(concept)]),
-    ) as T;
+  instrument<T extends Record<string, object>>(concepts: T): T;
+  /** Instrument a single concept instance. */
+  instrument<T extends object>(concept: T): T;
+  instrument(concepts: Record<string, object> | object): any {
+    if (concepts !== null && typeof concepts === "object") {
+      const entries = Object.entries(concepts);
+      if (entries.length > 0 && entries.every(([, v]) => typeof v === "object" && v !== null)) {
+        return Object.fromEntries(
+          entries.map(([key, concept]) => [key, this.instrumentConcept(concept as object)]),
+        );
+      }
+    }
+    return this.instrumentConcept(concepts as object);
   }
 }
