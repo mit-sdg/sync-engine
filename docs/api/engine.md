@@ -139,7 +139,11 @@ Catch-all fall-through. Must be the last case in a match (if present).
 A synchronous cross-binding match guard. The `fn` receives a `GuardReader` — a function `(variable: Var<T>) => T` that reads a binding from the current frame.
 
 ```ts
-const { route, amount } = declareVars<{ route: string; amount: number }>();
+const { route, amount, requestId } = declareVars<{
+  route: string;
+  amount: number;
+  requestId: string;
+}>();
 
 act(Review.classify, { requestId }).match(
   on(
@@ -156,9 +160,13 @@ act(Review.classify, { requestId }).match(
 Run children concurrently from the same input frame. Each child is either a node or a local pipeline array.
 
 ```ts
-when(Task.create, { id }).then(
-  par([act(Audit.record, { event: "task_created", id })], act(Project.updateStats, { projectId })),
-);
+const OnTaskCreated = ({ id, projectId }: Vars) =>
+  when(Task.create, { id }, { id }).then(
+    par(
+      [act(Audit.record, { event: "task_created", id })],
+      act(Project.updateStats, { projectId }),
+    ),
+  );
 ```
 
 ### oneOf(...candidates) / is(predicate, label?) → Matcher
@@ -215,7 +223,9 @@ when(Request.submit, { id })
 const v = declareVars<{ user: string }>();
 const { user } = v;
 
-where: (frames) => frames.guard((f) => Where.read(f, user) !== "blocked");
+when(Auth.login, { user })
+  .where((frames) => frames.guard((f) => Where.read(f, user) !== "blocked"))
+  .then(act(Session.start, { user }));
 ```
 
 ---
@@ -241,7 +251,7 @@ Like `query` but preserves source frames even when the query returns zero rows (
 
 ### queryAsync / queryOptionalAsync
 
-Always-async variants for query functions that return `Promise<unknown[]>`.
+Always-async variants for query functions that return a `Promise`.
 
 ### innerJoin / leftJoin
 
@@ -303,7 +313,14 @@ when(List.get, {}, { request })
 
 ### enrich(fn) → Promise\<Frames\>
 
-Add data asynchronously in parallel. Calls `fn` for each frame concurrently and merges the returned keys.
+Add data asynchronously in parallel. Calls `fn` for each frame concurrently
+and merges the returned keys.
+
+Returned string keys are converted to fresh internal symbols. The enriched
+fields are accessible when further processing frames inside the same
+`where` clause (e.g. chaining `.bind`, `.guard`, or `.map`), but they
+cannot be referenced by declared `Var` variables in downstream DSL steps
+such as `on(...)`, `act(...)`, or `.then(...)`.
 
 ```ts
 await frames.enrich(async (f) => {
@@ -330,11 +347,14 @@ Collect one value from each frame into an array, bound to `symbol`. Produces a s
 
 ### sanitize(obj)
 
-Redact sensitive data (passthrough to `utils/redaction`).
+Redact sensitive data. Delegates directly to `utils/redaction`'s `redact()`
+function — use whichever name is more convenient for your calling context.
 
-### actions(...clauses) — internal
+### actions(...clauses)
 
-Normalize action clauses into `ActionPattern[]`. Used internally by `when` and `then`; not re-exported from the public barrel.
+Normalize action clauses into `ActionPattern[]`. Used internally by `when`
+and `then`. **Not re-exported from the public barrel** — listed here for
+completeness when reading the engine source.
 
 ### normalizeOutcome(output)
 

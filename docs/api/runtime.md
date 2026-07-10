@@ -34,7 +34,8 @@ const entry = await host.register("tenant-a", { dbUrl: "..." });
 
 ### unregister(prefix) → Promise\<void\>
 
-Stops the tenant's resources (reverse order) and notifies the sink. No-op if not registered.
+Stops the tenant's resources concurrently (in reverse registration order)
+and notifies the sink. No-op if not registered.
 
 ### has(prefix) / get(prefix) / entries() / values()
 
@@ -42,7 +43,8 @@ Snapshot access to registered apps.
 
 ### stopAll() → Promise\<void\>
 
-Stops every tenant's resources (for process shutdown). Does not notify the sink.
+Stops every tenant's resources concurrently (for process shutdown). Does not
+notify the sink. All failures (if any) are thrown as an `AggregateError`.
 
 ---
 
@@ -101,7 +103,10 @@ Register a `Stoppable` resource or wrap a `setInterval`/`setTimeout` return valu
 
 ### stopAll() → Promise\<void\>
 
-Stops every resource in reverse registration order. A failure in one does not prevent the others; the first error (if any) is re-thrown as an `AggregateError`.
+Stops every resource in reverse registration order. All `stop()` calls are
+started concurrently; do not rely on reverse **completion** order between
+dependent resources. A failure in one does not prevent the others; all
+failures (if any) are thrown as an `AggregateError`.
 
 ### Stoppable
 

@@ -35,7 +35,10 @@ expensive.size; // current entry count
 | `maxSize` | `1000`           | Max entries before LRU eviction |
 | `ttlMs`   | `300000` (5 min) | Entry lifetime in milliseconds  |
 
-A synchronous function is memoized directly. An async function is memoized as a promise; the promise is cached immediately (preventing concurrent duplicate calls), then refreshed with the resolved value once it settles. Rejected promises are evicted.
+A synchronous function is memoized directly. An async function is memoized
+as a promise; the promise is cached immediately (preventing concurrent
+duplicate calls). Once the promise settles successfully its TTL and LRU
+recency are refreshed. Rejected promises are evicted.
 
 ---
 
@@ -85,7 +88,9 @@ Recursive redaction for logging and journal sanitization. Universal credential p
 
 ### redact(obj) → unknown
 
-Recursively redact sensitive fields (up to depth 5). Replaces matched values with `"[redacted]"`.
+Recursively redact sensitive fields (up to depth 5). Replaces matched values
+with `"[redacted]"`. Also exported from `@mit-sdg/sync-engine/engine` as
+`sanitize`.
 
 ```ts
 redact({ password: "secret", name: "Alice" });

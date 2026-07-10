@@ -35,7 +35,7 @@ Concepts are plain classes. Public methods are actions; methods beginning with
 `_` are read-only queries.
 
 ```ts
-import type { Empty } from "@mit-sdg/sync-engine/engine";
+import type { Empty } from "@mit-sdg/sync-engine/engine"; // canonical "no input" type for queries
 
 export class TodoConcept {
   private items = new Map<string, { id: string; title: string; done: boolean }>();
@@ -84,7 +84,9 @@ export function makeSyncs(Todo: TodoConcept, Audit: AuditConcept) {
 ```
 
 Finally, instrument the concept instances and register the rules. Always give
-syncs the instrumented instances returned by `instrument`.
+syncs the instrumented instances returned by `instrument`. `instrument()`
+preserves the original type, so `makeSyncs` accepts the raw class types in its
+signature — but at runtime the sync functions receive instrumented proxies.
 
 ```ts
 import { Logging, SyncConcept } from "@mit-sdg/sync-engine/engine";
@@ -196,13 +198,14 @@ safe to run concurrently.
 ```ts
 import { act, declareVars, guard, on, onError } from "@mit-sdg/sync-engine/engine";
 
-when(Order.checkout, { items, total }).then(
-  act(Inventory.reserve, { items }, { reservation }),
-  act(Payment.charge, { total }, { payment }).match(
-    onError({ error: reason }, act(Inventory.release, { reservation, reason })),
-  ),
-  act(Order.place, { reservation, payment }),
-);
+const OnCheckout = ({ items, total, reservation, payment, reason }: Vars) =>
+  when(Order.checkout, { items, total }).then(
+    act(Inventory.reserve, { items }, { reservation }),
+    act(Payment.charge, { total }, { payment }).match(
+      onError({ error: reason }, act(Inventory.release, { reservation, reason })),
+    ),
+    act(Order.place, { reservation, payment }),
+  );
 ```
 
 `on(...)` handles non-error outcomes. `onError(...)` handles returned or thrown
@@ -211,10 +214,15 @@ handles outcomes not claimed by an earlier case.
 
 Put the most-specific success cases first. Use `guard(...)` after a pattern for
 conditions involving several bindings. `declareVars` carries binding types into
-the guard reader:
+the guard reader (this example is a `then` step inside a sync; the enclosing
+`when(...).then(...)` is omitted):
 
 ```ts
-const { route, amount } = declareVars<{ route: string; amount: number }>();
+const { route, amount, requestId } = declareVars<{
+  route: string;
+  amount: number;
+  requestId: string;
+}>();
 
 act(Review.classify, { requestId }).match(
   on(
@@ -235,7 +243,8 @@ Set `engine.logging` while developing a rule:
 engine.logging = Logging.TRACE;
 ```
 
-Trace logs show action records, flow ids, matches, and dispatched actions. For
+Trace logs show per-action input/output. VERBOSE logs add action records,
+flow ids, matched frames, and dispatched actions. For
 programmatic tooling, `engine.addObserver(observer)` subscribes to journal
 events and returns an unsubscribe function.
 

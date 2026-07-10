@@ -4,6 +4,7 @@ Typed endpoint DSL and transport-agnostic client. No code generation.
 
 ```ts
 import { createEndpointDsl, createHttpClient, createCliClient } from "@mit-sdg/sync-engine/sdk";
+import { act, sync } from "@mit-sdg/sync-engine/engine";
 ```
 
 ---
@@ -17,6 +18,8 @@ Define typed endpoint contracts from sync-engine syncs. The DSL builds on a requ
 Returns an `endpoint()` builder and `syncMap()` flattener.
 
 ```ts
+// Requesting is an instrumented concept with `request`/`respond` actions.
+// Auth is an instrumented domain concept (e.g. a user-authentication concept).
 const { endpoint, syncMap } = createEndpointDsl(Requesting);
 
 const api = {
@@ -28,13 +31,14 @@ const api = {
         output: { token: string };
         error: { error: string };
       }
-    >("/auth/login", ({ request, respond }) => ({
+    >({ request, respond }) => ({
       OnLoginRequest: sync(({ email, password }) =>
-        request({ email, password })
-          .then(act(Auth.authenticate, { email, password }, { token }))
-          .then(respond({ token })),
+        request({ email, password }).then(
+          act(Auth.authenticate, { email, password }, { token }),
+          respond({ token }),
+        ),
       ),
-    })),
+    }),
   },
 };
 ```
@@ -141,6 +145,10 @@ const client = createHttpClient<MyApi>({
 
 Creates a `fetch`-based transport for use with `createClient`.
 
+Every request is a `POST` with `Content-Type: application/json`. The input
+is JSON-stringified as the request body (`{}` when the input is absent).
+Credentials default to `"include"`.
+
 ```ts
 const transport = createHttpTransport({ baseUrl: "http://localhost:3000/api" });
 const client = createClient<MyApi>({ transport });
@@ -200,6 +208,8 @@ import { FrameworkErrorCode } from "@mit-sdg/sync-engine/sdk";
 Framework-owned error codes (never domain rules). Values are part of the stable wire protocol.
 
 **Server / Framework**: `BODY_TOO_LARGE`, `INTERNAL_ERROR`, `INVALID_BODY`, `NOT_FOUND`, `RATE_LIMITED`, `TIMED_OUT`, `UNKNOWN_APP`, `UNKNOWN_ERROR`, `UNSUPPORTED_MEDIA_TYPE`, `VALIDATION_FAILED`
+
+**Client (generic)**: `TRANSPORT_ERROR` — transport-level throw caught and wrapped by `createClient`
 
 **HTTP client**: `BAD_JSON`, `BAD_STATUS`, `HEADER_RESOLUTION_FAILED`, `NETWORK_ERROR`
 
