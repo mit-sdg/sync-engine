@@ -14,6 +14,7 @@
  * already construct and return `Frames` themselves (possibly inside a Promise).
  */
 import type { Frame, Mapping } from "./types.ts";
+import { logger } from "../utils/logger.ts";
 
 /** Infers the new frame keys contributed by a query's `output` mapping. */
 type ExtractSymbolMappings<TOutputMapping, TFunctionOutput> = {
@@ -226,7 +227,9 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     const bound: Mapping = {};
     for (const [key, binding] of Object.entries(input)) {
       if (typeof binding === "symbol") {
-        bound[key] = frame[binding];
+        if (binding in frame) {
+          bound[key] = frame[binding];
+        }
       } else {
         bound[key] = binding;
       }
@@ -312,14 +315,17 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
       let rows: unknown[] | Promise<unknown[]>;
       try {
         rows = f(boundInput as never);
-      } catch {
+      } catch (err) {
+        logger.warn("query threw", { error: String(err) });
         continue;
       }
       if (rows instanceof Promise) {
         promises.push(
           rows.then(
             (arr) => Frames.expandOutputs(result, frame, arr, output),
-            () => {},
+            (err) => {
+              logger.warn("query promise rejected", { error: String(err) });
+            },
           ),
         );
       } else {

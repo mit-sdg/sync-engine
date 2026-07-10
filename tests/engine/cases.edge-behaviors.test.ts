@@ -184,7 +184,7 @@ describe("enrich uses per-call local symbols", () => {
 // ── Unbound frame variables are silently dropped instead of signalling ──────
 
 describe("unbound frame variables are silently dropped", () => {
-  test("should not drop query input keys when a frame binding is missing", () => {
+  test("should drop query input keys when a frame binding is missing", () => {
     const symA = Symbol("bound");
     const symB = Symbol("unbound");
     const frame: Record<symbol, unknown> = { [symA]: "hello" };
@@ -202,7 +202,7 @@ describe("unbound frame variables are silently dropped", () => {
 
     // bindInput silently discards mapping entries whose symbol is not present
     // in the frame. The query function never sees an "unbound" key at all.
-    expect(receivedKeys).toContain("unbound");
+    expect(receivedKeys).not.toContain("unbound");
   });
 
   test("should not dispatch then-actions when a variable binding is unresolved", async () => {

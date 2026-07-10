@@ -116,19 +116,28 @@ export class ActionConcept {
     }
   }
 
-  /** Evict all flows whose last action has been synced. */
+  /** Evict trailing records that have been consumed by all of their syncs. */
   evictSyncedFlows(): number {
     let evicted = 0;
-    const toEvict: string[] = [];
     for (const [flow, records] of this.flowIndex) {
-      const lastRecord = records[records.length - 1];
-      if (lastRecord?.synced && lastRecord.synced.size > 0) {
-        toEvict.push(flow);
+      let keepFrom = records.length;
+      while (
+        keepFrom > 0 &&
+        records[keepFrom - 1]?.synced &&
+        records[keepFrom - 1]!.synced!.size > 0
+      ) {
+        keepFrom--;
       }
-    }
-    for (const flow of toEvict) {
-      this.evictFlow(flow);
-      evicted++;
+      if (keepFrom < records.length) {
+        const toRemove = records.splice(keepFrom);
+        for (const record of toRemove) {
+          this.actions.delete(record.id ?? "");
+        }
+        evicted += toRemove.length;
+        if (keepFrom === 0) {
+          this.flowIndex.delete(flow);
+        }
+      }
     }
     return evicted;
   }
