@@ -988,8 +988,7 @@ export class SyncConcept {
   ): Frame | undefined {
     let next: Frame = frame;
     for (const [key, value] of Object.entries(pattern)) {
-      const recordValue = recordValues[key];
-      if (recordValue === undefined) {
+      if (!(key in recordValues)) {
         if (
           allowMissingKeys &&
           (typeof value === "symbol" ||
@@ -998,19 +997,18 @@ export class SyncConcept {
           continue;
         return undefined;
       }
+      const recordValue = recordValues[key];
       if (Array.isArray(value) && value.length === 1 && typeof value[0] === "symbol") {
         const sym = value[0];
-        const bound = next[sym];
-        if (bound === undefined) {
+        if (!(sym in next)) {
           next = { ...next, [sym]: recordValue };
-        } else if (bound !== recordValue) {
+        } else if (next[sym] !== recordValue) {
           return undefined;
         }
       } else if (typeof value === "symbol") {
-        const bound = next[value];
-        if (bound === undefined) {
+        if (!(value in next)) {
           next = { ...next, [value]: recordValue };
-        } else if (bound !== recordValue) {
+        } else if (next[value] !== recordValue) {
           return undefined;
         }
       } else if (recordValue !== value) {
