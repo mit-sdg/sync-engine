@@ -21,7 +21,8 @@
     "index.ts",
     "engine/",
     "sdk/",
-    "runtime/"
+    "runtime/",
+    "utils/"
   ],
   "type": "module",
   "exports": {
