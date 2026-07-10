@@ -16,7 +16,7 @@ import type { ActionPattern, InstrumentedAction } from "./types.ts";
  * that concept classes are named e.g. `AuthenticatingConcept`).
  */
 export function conceptNameOf(concept: object): string {
-  const n = concept.constructor.name;
+  const n = concept.constructor?.name ?? "Unknown";
   return n.endsWith("Concept") ? n.slice(0, -"Concept".length) : n;
 }
 
