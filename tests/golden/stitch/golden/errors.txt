@@ -1,0 +1,11 @@
+$ stitch add
+error: usage: stitch add <title> [--priority low|normal|high]
+$ stitch add Fix tests --priority urgent
+error: priority must be low, normal, or high
+$ stitch start W404
+error: No work item named W404
+$ stitch wat
+error: unknown command: wat
+Run 'stitch help' for usage.
+$ stitch list
+No work in the queue.

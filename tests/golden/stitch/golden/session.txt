@@ -1,0 +1,25 @@
+$ stitch add Ship release --priority high
+Added W001 [high] Ship release
+$ stitch add Write release notes
+Added W002 [normal] Write release notes
+$ stitch start W001
+Focusing W001: Ship release
+$ stitch start W002
+Focusing W002: Write release notes
+$ stitch list
+  W001  high    Ship release
+> W002  normal  Write release notes
+$ stitch done W002
+Completed W002
+$ stitch status
+Nothing in focus.
+$ stitch list --all
+  W001  high    Ship release
+x W002  normal  Write release notes
+$ stitch log
+ 1  added     W001  Ship release
+ 2  added     W002  Write release notes
+ 3  started   W001  Ship release
+ 4  paused    W001  Ship release
+ 5  started   W002  Write release notes
+ 6  completed W002  Write release notes
