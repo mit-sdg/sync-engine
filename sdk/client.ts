@@ -163,6 +163,15 @@ function makeProxy(
 export function createClient<C extends ContractShape, TError = ClientError>(
   options: ClientOptions<TError>,
 ): Client<C, TError> {
-  const call = (path: string, body: unknown) => options.transport({ path, input: body ?? {} });
+  const call = async (path: string, body: unknown) => {
+    try {
+      return await options.transport({ path, input: body ?? {} });
+    } catch (e) {
+      return {
+        error: "TRANSPORT_ERROR",
+        detail: e instanceof Error ? e.message : String(e),
+      };
+    }
+  };
   return makeProxy([], call) as Client<C, TError>;
 }

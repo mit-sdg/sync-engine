@@ -43,14 +43,18 @@ export interface ActionRecord {
  * matching, branching, observer events — works with a discriminated union
  * instead of ad-hoc `"error" in output` checks.
  */
-export function normalizeOutcome(output: Record<string, unknown>): ActionOutcome {
-  if ("error" in output) {
-    return { kind: "error", error: output };
-  }
-  if (Object.keys(output).length === 0) {
+export function normalizeOutcome(output: unknown): ActionOutcome {
+  if (typeof output !== "object" || output === null) {
     return { kind: "complete" };
   }
-  return { kind: "result", value: output };
+  const obj = output as Record<string, unknown>;
+  if ("error" in obj) {
+    return { kind: "error", error: obj };
+  }
+  if (Object.keys(obj).length === 0) {
+    return { kind: "complete" };
+  }
+  return { kind: "result", value: obj };
 }
 
 /**
