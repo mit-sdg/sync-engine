@@ -23,7 +23,8 @@ interface CacheEntry {
   expiresAt: number;
 }
 
-function serialize(arg: unknown, seen = new WeakSet<object>()): string {
+function serialize(arg: unknown, seen = new WeakSet<object>(), depth = 0): string {
+  if (depth > 10) return "@maxdepth";
   if (arg === null) return "@null";
   if (arg === undefined) return "@undefined";
   if (arg instanceof Date) return `@date:${arg.getTime()}`;
@@ -35,22 +36,22 @@ function serialize(arg: unknown, seen = new WeakSet<object>()): string {
     seen.add(arg);
     if (arg instanceof Map) {
       const entries = [...arg.entries()].map(
-        ([k, v]) => `${serialize(k, seen)}:${serialize(v, seen)}`,
+        ([k, v]) => `${serialize(k, seen, depth + 1)}:${serialize(v, seen, depth + 1)}`,
       );
       return `@Map{${entries.join(",")}}`;
     }
     if (arg instanceof Set) {
-      const values = [...arg.values()].map((v) => serialize(v, seen));
+      const values = [...arg.values()].map((v) => serialize(v, seen, depth + 1));
       return `@Set{${values.join(",")}}`;
     }
     if (Array.isArray(arg)) {
-      const inner = arg.map((v) => serialize(v, seen)).join(",");
+      const inner = arg.map((v) => serialize(v, seen, depth + 1)).join(",");
       return `@Array{${inner}}`;
     }
     const tag = arg.constructor?.name || "Object";
     const keys = Object.keys(arg).sort();
     const inner = keys
-      .map((k) => `${k}:${serialize((arg as Record<string, unknown>)[k], seen)}`)
+      .map((k) => `${k}:${serialize((arg as Record<string, unknown>)[k], seen, depth + 1)}`)
       .join(",");
     return `@${tag}{${inner}}`;
   }
