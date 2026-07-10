@@ -40,6 +40,7 @@ export interface AppSink<TApp> {
 export class AppHost<TApp, TParams> {
   private readonly apps = new Map<string, HostedApp<TApp>>();
   private readonly resources = new Map<string, Stoppable[]>();
+  private readonly pendingRegistrations = new Map<string, Promise<HostedApp<TApp>>>();
 
   constructor(
     private readonly hooks: AppHostHooks<TApp, TParams>,
@@ -72,12 +73,26 @@ export class AppHost<TApp, TParams> {
     const existing = this.apps.get(prefix);
     if (existing) return existing;
 
-    const { app, type, resources } = await this.hooks.create(prefix, params);
-    const entry: HostedApp<TApp> = { app, type };
-    this.apps.set(prefix, entry);
-    this.resources.set(prefix, resources);
-    this.sink?.registerApp(prefix, entry);
-    return entry;
+    const inFlight = this.pendingRegistrations.get(prefix);
+    if (inFlight !== undefined) return inFlight;
+
+    const promise = (async () => {
+      try {
+        const { app, type, resources } = await this.hooks.create(prefix, params);
+        const recheck = this.apps.get(prefix);
+        if (recheck) return recheck;
+        const entry: HostedApp<TApp> = { app, type };
+        this.apps.set(prefix, entry);
+        this.resources.set(prefix, resources);
+        this.sink?.registerApp(prefix, entry);
+        return entry;
+      } finally {
+        this.pendingRegistrations.delete(prefix);
+      }
+    })();
+
+    this.pendingRegistrations.set(prefix, promise);
+    return promise;
   }
 
   /**
