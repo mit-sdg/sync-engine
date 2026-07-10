@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript-first synchronization engine — compose independent concepts with when/where/then rules over an append-only action journal",
   "keywords": [
     "concept",
