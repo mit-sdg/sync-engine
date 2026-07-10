@@ -61,13 +61,21 @@ export function formatLogEntry(entry: LogEntry): string {
         ].includes(key) &&
         value !== undefined
       ) {
-        parts.push(`${key}=${JSON.stringify(value)}`);
+        parts.push(`${key}=${safeJSON(value)}`);
       }
     }
     return parts.join(" ");
   }
 
-  return JSON.stringify(entry);
+  return safeJSON(entry);
+}
+
+function safeJSON(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 export interface Logger {

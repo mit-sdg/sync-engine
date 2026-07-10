@@ -72,6 +72,7 @@ export function redact(obj: unknown, depth = 0): unknown {
   if (depth > 5) return "[max depth]";
   if (obj === null || obj === undefined) return obj;
   if (obj instanceof Error) return serializeError(obj);
+  if (typeof obj === "bigint") return obj.toString();
   if (typeof obj !== "object") return obj;
   if (Array.isArray(obj)) {
     return obj.map((v) => redact(v, depth + 1));
