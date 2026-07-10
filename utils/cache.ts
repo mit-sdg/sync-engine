@@ -98,11 +98,9 @@ export function cached<T extends AnyFn>(fn: T, options?: CacheOptions): CachedFn
     if (result instanceof Promise) {
       store(key, result);
       result.then(
-        (r: unknown) => {
-          // Only commit if this pending promise is still the cached entry;
-          // a concurrent invalidate/clear must not be resurrected.
+        () => {
           const entry = cache.get(key);
-          if (entry !== undefined && entry.value === result) store(key, r);
+          if (entry !== undefined && entry.value === result) store(key, result);
         },
         () => {
           const entry = cache.get(key);
