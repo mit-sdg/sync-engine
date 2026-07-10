@@ -418,8 +418,8 @@ export class SyncConcept {
     new WeakMap();
   /** Tracks query cache invalidators per concept instance. */
   private queryCaches: WeakMap<object, Array<{ invalidate: () => void }>> = new WeakMap();
-  /** All raw concept instances known to this engine (for bulk invalidation). */
-  private concepts = new Set<object>();
+  /** All raw concept instances known to this engine, via WeakRef so they can be GC'd. */
+  private concepts = new Set<WeakRef<object>>();
   /** Engine-level observers (passive sinks). */
   private observers = new Set<EngineObserver>();
 
@@ -449,8 +449,13 @@ export class SyncConcept {
 
   /** Invalidate query caches for every instrumented concept. */
   invalidateAllCaches(): void {
-    for (const concept of this.concepts) {
-      this.invalidateCaches(concept);
+    for (const ref of this.concepts) {
+      const concept = ref.deref();
+      if (concept !== undefined) {
+        this.invalidateCaches(concept);
+      } else {
+        this.concepts.delete(ref);
+      }
     }
   }
 
@@ -1081,7 +1086,7 @@ export class SyncConcept {
    * and then drives {@link synchronize}.
    */
   instrumentConcept<T extends object>(concept: T): T {
-    this.concepts.add(concept);
+    this.concepts.add(new WeakRef(concept));
     const Action = this.Action;
     const synchronize = this.synchronize.bind(this);
     const emitObserverEvents = this.emitObserverEvents.bind(this);
