@@ -194,7 +194,7 @@ step and an error stops the pipeline. Use `par(...)` only when children are
 safe to run concurrently.
 
 ```ts
-import { act, onError } from "@mit-sdg/sync-engine/engine";
+import { act, declareVars, guard, on, onError } from "@mit-sdg/sync-engine/engine";
 
 when(Order.checkout, { items, total }).then(
   act(Inventory.reserve, { items }, { reservation }),
@@ -208,6 +208,24 @@ when(Order.checkout, { items, total }).then(
 `on(...)` handles non-error outcomes. `onError(...)` handles returned or thrown
 errors. `match(...)` selects the first matching case, and `otherwise(...)`
 handles outcomes not claimed by an earlier case.
+
+Put the most-specific success cases first. Use `guard(...)` after a pattern for
+conditions involving several bindings. `declareVars` carries binding types into
+the guard reader:
+
+```ts
+const { route, amount } = declareVars<{ route: string; amount: number }>();
+
+act(Review.classify, { requestId }).match(
+  on(
+    { route: "manual", amount },
+    guard(($) => $(amount) > 1000, "amount > 1000"),
+    act(Escalate.priority, { requestId }),
+  ),
+  on({ route: "manual" }, act(Escalate.standard, { requestId })),
+  on({ route }, act(Request.approve, { requestId, route })),
+);
+```
 
 ## Seeing what the engine is doing
 
