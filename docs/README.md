@@ -265,11 +265,11 @@ them.
 
 ## Examples worth reading
 
-- [`tests/golden/stitch`](tests/golden/stitch) is a real persistent CLI with
+- [`tests/golden/stitch`](../tests/golden/stitch) is a real persistent CLI with
   `Work`, `Focus`, and `History` concepts. Its full terminal sessions are golden
-  tested..
-- [`tests/golden/todo`](tests/golden/todo) is a small todo app.
-- [`tests/golden/lms`](tests/golden/lms) demonstrates joins, fan-out, branches,
+  tested.
+- [`tests/golden/todo`](../tests/golden/todo) is a small todo app.
+- [`tests/golden/lms`](../tests/golden/lms) demonstrates joins, fan-out, branches,
   cascades, and error handling across six concepts.
 
 ## Development
@@ -293,4 +293,4 @@ utils/    cache, logging, and redaction
 tests/    unit, integration, and golden applications
 ```
 
-The project is available under the [Apache License 2.0](LICENSE).
+The project is available under the [Apache License 2.0](../LICENSE).
