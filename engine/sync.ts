@@ -1051,12 +1051,14 @@ export class SyncConcept {
   /** Per-action logging honouring the current {@link Logging} level. */
   private logAction(record: ActionRecord, durationMs?: number): void {
     if (this.logging === Logging.VERBOSE) {
-      const { concept, input, output, ...rest } = record;
+      const { concept, input, output, flow: recordFlow, id: actionRecordId, outcome } = record;
       logger.debug("Synchronizing action:", {
         concept: concept.constructor.name,
         input: sanitize(input),
         output: sanitize(output),
-        ...rest,
+        outcome: sanitize(outcome),
+        flow: recordFlow,
+        actionId: actionRecordId,
       });
       return;
     }
