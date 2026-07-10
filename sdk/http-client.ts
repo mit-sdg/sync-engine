@@ -101,7 +101,15 @@ async function httpRequest(
     };
   }
 
-  const text = await response.text().catch(() => "");
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return {
+      error: FrameworkErrorCode.BAD_JSON,
+      detail: `Failed to read response body from ${path} (status ${response.status}).`,
+    };
+  }
   let data: unknown;
   try {
     data = text === "" ? {} : JSON.parse(text);

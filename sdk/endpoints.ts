@@ -115,15 +115,15 @@ export function createEndpointDsl(boundary: RequestBoundaryActions) {
 
     const helpers: EndpointHelpers = {
       request: (input: Mapping = {}): WhenBuilder =>
-        when(boundary.request, { path, ...input }, { request: getActiveRequest() }),
+        when(boundary.request, { ...input, path }, { request: getActiveRequest() }),
 
       respond: (body: Mapping = {}): ThenNode =>
-        act(boundary.respond, { request: getActiveRequest(), ...body }),
+        act(boundary.respond, { ...body, request: getActiveRequest() }),
 
       fail: (error: unknown = {}): ThenNode => {
         const active = getActiveRequest();
         const body = isPlainMapping(error) ? error : { error };
-        return act(boundary.respond, { request: active, ...body });
+        return act(boundary.respond, { ...body, request: active });
       },
     };
 

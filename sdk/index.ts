@@ -12,6 +12,8 @@ export type {
 } from "./client.ts";
 export { createHttpTransport, createHttpClient } from "./http-client.ts";
 export type { HeadersOption, HttpClientOptions } from "./http-client.ts";
+export { createCliTransport, createCliClient } from "./cli-client.ts";
+export type { CliClientOptions } from "./cli-client.ts";
 export { createEndpointDsl, syncMap } from "./endpoints.ts";
 export type {
   ContractOf,

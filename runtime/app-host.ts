@@ -79,6 +79,8 @@ export class AppHost<TApp, TParams> {
     const promise = (async () => {
       try {
         const { app, type, resources } = await this.hooks.create(prefix, params);
+        // Unregister was called while create was still running — don't register.
+        if (!this.pendingRegistrations.has(prefix)) return { app, type };
         const recheck = this.apps.get(prefix);
         if (recheck) return recheck;
         const entry: HostedApp<TApp> = { app, type };
@@ -100,15 +102,21 @@ export class AppHost<TApp, TParams> {
    * the map, and notify the sink. No-op if the prefix is not registered.
    */
   async unregister(prefix: string): Promise<void> {
-    if (!this.apps.has(prefix)) return;
+    if (!this.apps.has(prefix)) {
+      // Bail, but clean up any pending registration that hasn't cashed yet.
+      this.pendingRegistrations.delete(prefix);
+      return;
+    }
 
     const resources = this.resources.get(prefix) ?? [];
+    this.resources.delete(prefix);
+    this.apps.delete(prefix);
+    this.pendingRegistrations.delete(prefix);
+
     const ordered = [...resources].reverse();
     const results = await Promise.allSettled(
       ordered.map((r) => Promise.resolve().then(() => r.stop())),
     );
-    this.resources.delete(prefix);
-    this.apps.delete(prefix);
     this.sink?.unregisterApp(prefix);
     const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
     if (failures.length > 0) {

@@ -82,8 +82,16 @@ export function createCliTransport(options: CliClientOptions): ClientTransport {
     child.stdin?.on("error", () => {
       // A fast process exit can close stdin before the request is fully written.
     });
-    child.stdin?.write(`${JSON.stringify(request)}\n`);
-    child.stdin?.end();
+    try {
+      child.stdin?.write(`${JSON.stringify(request)}\n`);
+      child.stdin?.end();
+    } catch (e) {
+      child.kill();
+      return {
+        error: FrameworkErrorCode.PROCESS_ERROR,
+        detail: `Failed to serialize request: ${describe(e)}.`,
+      };
+    }
 
     const result = await new Promise<CliProcessResult>((resolve) => {
       let settled = false;

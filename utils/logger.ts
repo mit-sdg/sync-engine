@@ -93,11 +93,11 @@ function createLogger(requestId?: string | null): Logger {
 
     const redacted = redact(meta ?? {}) as Record<string, unknown>;
     const entry: LogEntry = {
+      ...redacted,
       level,
       message,
       timestamp: new Date().toISOString(),
       requestId,
-      ...redacted,
     };
 
     const output = formatLogEntry(entry);
