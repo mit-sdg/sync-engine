@@ -1138,7 +1138,7 @@ export class SyncConcept {
   instrument<T extends Record<string, object>>(concepts: T): T;
   /** Instrument a single concept instance. */
   instrument<T extends object>(concept: T): T;
-  instrument(concepts: Record<string, object> | object): any {
+  instrument(concepts: Record<string, object> | object): Record<string, object> | object {
     if (concepts !== null && typeof concepts === "object" && concepts.constructor === Object) {
       const entries = Object.entries(concepts);
       if (entries.length > 0 && entries.every(([, v]) => typeof v === "object" && v !== null)) {

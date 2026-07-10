@@ -89,7 +89,7 @@ function serialize(
   return `@${typeof arg}:${String(arg)}`;
 }
 
-function stableKey(args: unknown[], symbolIds: Map<symbol, number>): string {
+function stableKey(args: readonly unknown[], symbolIds: Map<symbol, number>): string {
   return args.map((a) => serialize(a, symbolIds)).join("|");
 }
 
@@ -113,7 +113,7 @@ export function cached<T extends AnyFn>(fn: T, options?: CacheOptions): CachedFn
   };
 
   const wrapper = function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
-    const key = stableKey(args as unknown[], symbolIds);
+    const key = stableKey(args, symbolIds);
     const existing = cache.get(key);
     if (existing !== undefined) {
       if (existing.expiresAt > Date.now()) {
@@ -126,7 +126,7 @@ export function cached<T extends AnyFn>(fn: T, options?: CacheOptions): CachedFn
       cache.delete(key);
     }
 
-    const result = fn.apply(this, args) as unknown;
+    const result = fn.call(this, ...args);
     if (result instanceof Promise) {
       store(key, result);
       result.then(

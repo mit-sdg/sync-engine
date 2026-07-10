@@ -43,7 +43,7 @@ export interface Frames<TFrame extends Frame = Frame> {
     thisArg?: unknown,
   ): Frames<S>;
   filter(
-    predicate: (value: TFrame, index: number, array: TFrame[]) => unknown,
+    predicate: (value: TFrame, index: number, array: TFrame[]) => boolean,
     thisArg?: unknown,
   ): this;
 
@@ -61,7 +61,7 @@ export interface Frames<TFrame extends Frame = Frame> {
     thisArg?: unknown,
   ): S | undefined;
   find(
-    predicate: (value: TFrame, index: number, array: TFrame[]) => unknown,
+    predicate: (value: TFrame, index: number, array: TFrame[]) => boolean,
     thisArg?: unknown,
   ): TFrame | undefined;
 
@@ -85,7 +85,7 @@ export interface Frames<TFrame extends Frame = Frame> {
   guard<S extends TFrame>(
     predicate: (value: TFrame, index: number, array: TFrame[]) => value is S,
   ): Frames<S>;
-  guard(predicate: (value: TFrame, index: number, array: TFrame[]) => unknown): this;
+  guard(predicate: (value: TFrame, index: number, array: TFrame[]) => boolean): this;
 
   /** Run a side effect for each frame and pass the frames through unchanged. */
   tap(effect: (frame: TFrame) => void): this;
@@ -591,7 +591,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
    * Filter frames by a predicate — delegates to `this.filter`.
    * Provided as a named convenience for readability in `where` clauses.
    */
-  guard(predicate: (value: TFrame, index: number, array: TFrame[]) => unknown): this {
+  guard(predicate: (value: TFrame, index: number, array: TFrame[]) => boolean): this {
     // SAFETY: `this.filter` returns `Frames<TFrame>` (re-wrapped by the Proxy).
     // The cast to `this` is required because TypeScript cannot prove that a
     // polymorphic `this` type (which may be a narrower subclass of Frames) is
