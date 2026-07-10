@@ -49,10 +49,12 @@ export function createCliTransport(options: CliClientOptions): ClientTransport {
   return async (request) => {
     let child: ChildProcess;
     try {
-      const childEnv =
-        env !== undefined
+      const childEnv = {
+        ...process.env,
+        ...(env !== undefined
           ? Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined))
-          : process.env;
+          : {}),
+      };
       child = spawn(command, args, {
         cwd,
         env: childEnv as Record<string, string>,
