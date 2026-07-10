@@ -189,27 +189,25 @@ Keep `where` free of mutations. Changes belong in actions dispatched by
 
 ## Multi-step work
 
-Use `.as(...)` when a step's result feeds the next step, `seq(...)` for an
-explicit sequence, and `par(...)` only when sibling actions are safe to run
-concurrently.
+`then(...)` is a pipeline: a step's declared output bindings feed the next
+step and an error stops the pipeline. Use `par(...)` only when children are
+safe to run concurrently.
 
 ```ts
-import { act, on, onError, seq } from "@mit-sdg/sync-engine/engine";
+import { act, onError } from "@mit-sdg/sync-engine/engine";
 
-seq(
-  act(Inventory.reserve, { items }).as({ reservation }),
-  act(Payment.charge, { total })
-    .as({ payment })
-    .branch(
-      on(act(Order.place, { reservation, payment })),
-      onError({ error: [reason] }, act(Inventory.release, { reservation, reason })),
-    ),
+when(Order.checkout, { items, total }).then(
+  act(Inventory.reserve, { items }, { reservation }),
+  act(Payment.charge, { total }, { payment }).match(
+    onError({ error: reason }, act(Inventory.release, { reservation, reason })),
+  ),
+  act(Order.place, { reservation, payment }),
 );
 ```
 
 `on(...)` handles non-error outcomes. `onError(...)` handles returned or thrown
-errors. Sibling nodes passed directly to `.then(...)` run sequentially in a
-stable order.
+errors. `match(...)` selects the first matching case, and `otherwise(...)`
+handles outcomes not claimed by an earlier case.
 
 ## Seeing what the engine is doing
 

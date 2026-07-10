@@ -9,22 +9,38 @@ export { normalizeOutcome } from "./actions.ts";
 export { Frames } from "./frames.ts";
 export { actionNameOf, actionNodeId, conceptNameOf } from "./introspect.ts";
 export type { EngineObserver, JournalEvent } from "./observer.ts";
-export { act, Logging, on, onError, par, sanitize, seq, sync, SyncConcept, when } from "./sync.ts";
+export {
+  act,
+  guard,
+  is,
+  Logging,
+  on,
+  onError,
+  oneOf,
+  otherwise,
+  par,
+  sanitize,
+  sync,
+  SyncConcept,
+  when,
+} from "./sync.ts";
 export type {
   ActChain,
   ActionList,
   ActionOutcome,
   ActionPattern,
-  BranchNode,
-  BranchPredicate,
+  CaseNode,
   Empty,
   Frame,
+  Guard,
+  GuardFn,
+  GuardReader,
   InstrumentedAction,
+  Matcher,
   Mapping,
-  NestedThenOptions,
   OutcomeKind,
+  ParallelChild,
   ParallelNode,
-  SequenceNode,
   StepNode,
   SyncDeclaration,
   SyncFunction as Sync,

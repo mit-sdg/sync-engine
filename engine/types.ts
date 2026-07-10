@@ -1,21 +1,11 @@
-/**
- * Core type vocabulary for the engine.
- *
- * The engine speaks in terms of **frames** (a bag of variable bindings keyed by
- * `symbol`) and **mappings** (a plain record keyed by `string`, as seen by the
- * concept actions themselves). Synchronizations are written declaratively as
- * `when` / `where` / `then` clauses over these structures.
- */
+/** Core type vocabulary for declarative synchronizations. */
 import type { Frames } from "./frames.ts";
+import type { Var } from "./vars.ts";
 
 /** A plain, string-keyed record — the shape an action's input/output takes. */
 export type Mapping = Record<string, unknown>;
 
-/**
- * A single row of variable bindings used during matching. Keys are the unique
- * `symbol`s produced by destructuring {@link Vars}; values are whatever those
- * variables are currently bound to.
- */
+/** A single row of variable bindings keyed by logic-variable symbols. */
 export type Frame = Record<symbol, unknown>;
 
 /** A concept action: a function from an input mapping to an output mapping. */
@@ -24,20 +14,11 @@ export type ActionFunction<TInput = Mapping, TOutput = Mapping> = (input: TInput
 /** A concept method reference stored as identity, not called through this type. */
 export type AnyAction = (...args: never[]) => unknown;
 
-/**
- * A tuple passed to {@link actions}: an instrumented action plus the input
- * pattern and (optionally) the output pattern to match/produce.
- */
+/** An action plus its input pattern and optional output pattern. */
 export type ActionList = [InstrumentedAction, Mapping, Mapping?];
-
-/** One `when` clause as authored by the public DSL. */
 export type WhenClause = ActionList;
 
-/**
- * A normalized clause produced by {@link actions}. In a `when` it describes a
- * pattern to match against the action log; in a `then` it describes an action
- * to invoke with bindings resolved from the matched frame.
- */
+/** A normalized action declaration. */
 export interface ActionPattern {
   action: InstrumentedAction;
   concept: object;
@@ -46,14 +27,7 @@ export interface ActionPattern {
   flow: symbol;
 }
 
-/**
- * The canonical outcome of an action execution.
- *
- * Rather than inferring outcome semantics from raw output records
- * (e.g. `{ error: … }` → error, `{}` → complete), the engine normalises
- * every action result into a first-class discriminated union so branches,
- * observers can type-narrow on {@link ActionOutcome.kind}.
- */
+/** The normalized result of invoking an action. */
 export type ActionOutcome =
   | { kind: "result"; value: Mapping }
   | { kind: "error"; error: Mapping }
@@ -61,48 +35,68 @@ export type ActionOutcome =
 
 export type OutcomeKind = "any" | "result" | "error" | "complete";
 
-export type ThenClause = ActionPattern[] | ThenNode[] | ThenNode;
+/** A pure transform over frames — the `where` clause. */
+export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
 
-export type ThenNode = StepNode | BranchNode | SequenceNode | ParallelNode;
+/** Typed, checked access to a binding while evaluating a match guard. */
+export type GuardReader = <T>(variable: Var<T>) => T;
+export type GuardFn = (read: GuardReader) => boolean;
 
-export interface NestedThenOptions {
-  /**
-   * A transform applied to this node's frames before its `nested` children run
-   * — the per-step analogue of a sync's `where`. Named `transform` at the node
-   * level (not `where`) so the fluent `ActChain.where(...)` method that sets it
-   * does not collide with a same-named data field.
-   */
-  transform?: WhereFn;
-  nested?: ThenNode[];
+declare const MatcherBrand: unique symbol;
+declare const GuardBrand: unique symbol;
+
+/** A branded value matcher used inside a pattern mapping. */
+export interface Matcher {
+  readonly [MatcherBrand]: true;
+  readonly kind: "oneOf" | "is";
+  readonly label: string;
+  readonly candidates?: readonly unknown[];
+  readonly predicate?: (value: unknown) => boolean;
 }
 
-export interface StepNode extends NestedThenOptions {
+/** A branded, synchronous cross-variable match guard. */
+export interface Guard {
+  readonly [GuardBrand]: true;
+  readonly fn: GuardFn;
+  readonly label?: string;
+}
+
+/** A dispatch step and optional ordered outcome cases. */
+export interface StepNode {
   kind: "step";
   action: ActionPattern;
+  transform?: WhereFn;
+  cases?: CaseNode[];
 }
 
-export interface BranchNode extends NestedThenOptions {
-  kind: "branch";
-  outcome: OutcomeKind;
+/** One ordered arm of a step's outcome match. */
+export interface CaseNode {
+  kind: "case";
+  outcome: "result" | "error" | "any";
   pattern: Mapping;
-  predicate?: BranchPredicate;
+  guard?: Guard;
+  nodes: ThenNode[];
 }
 
+/** An internal normalized pipeline. No public constructor is exported. */
 export interface SequenceNode {
   kind: "sequence";
   nodes: ThenNode[];
 }
 
+/** Concurrent children, each a step/parallel node or an internal pipeline. */
 export interface ParallelNode {
   kind: "parallel";
-  nodes: ThenNode[];
+  nodes: Array<ThenNode | SequenceNode>;
 }
 
-/** A pure transform over matched frames — the `where` clause. */
-export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
+/** Public executable node accepted by `then`, cases, and `par`. */
+export type ThenNode = StepNode | ParallelNode;
 
-/** A per-frame predicate for complex branch matching — like a `where` that returns a boolean. */
-export type BranchPredicate = (frame: Frame) => boolean;
+/** An input child for `par`; arrays are normalized to internal pipelines. */
+export type ParallelChild = ThenNode | readonly ThenNode[];
+
+export type ThenClause = ThenNode[];
 
 /** The raw object a sync function returns before it is registered by name. */
 export interface SyncDeclaration {
@@ -111,69 +105,38 @@ export interface SyncDeclaration {
   then: ThenClause;
 }
 
-/** A registered synchronization: a {@link SyncDeclaration} plus its name. */
+/** A registered synchronization plus its name. */
 export interface Synchronization extends SyncDeclaration {
   sync: string;
 }
 
-/**
- * An instrumented action callable. Beyond invoking the underlying concept
- * method, it carries back-references to its `concept` and the original bound
- * `action`, which {@link actions} and the logger rely on.
- */
+/** An instrumented action callable with identity back-references. */
 export interface InstrumentedAction extends AnyAction {
   concept?: object;
   action?: AnyAction;
 }
 
-/**
- * The proxy handed to every sync function. Property access returns a fresh
- * `symbol` named after the property, so `const { user } = vars` binds `user`
- * to a unique logic variable.
- */
+/** The untyped logic-variable proxy supplied to sync functions. */
 export type Vars = Record<string, symbol>;
-
-/** A sync function: given {@link Vars}, returns its declaration. */
 export type SyncFunction = (vars: Vars) => SyncDeclaration;
-
-/** A named collection of sync functions, as passed to `register`. */
 export type SyncFunctionMap = Record<string, SyncFunction>;
 
-/** The canonical "no fields" mapping, used for empty action inputs/outputs. */
+/** The canonical no-fields mapping. */
 export type Empty = Record<PropertyKey, never>;
 
-/**
- * A chainable dispatch step, returned by `act(action, input)`.
- *
- * Carries the base {@link StepNode} fields plus fluent refinements:
- *  - `.as(output)`    binds the step's output into the frame for later steps;
- *  - `.where(fn)`     transforms the frames before the step's children run;
- *  - `.branch(...n)`  attaches outcome branches (`on`/`onError`) and
- *                     follow-up nodes, dispatched on this step's outcome.
- *
- * Every method returns the same chain, so refinements read left-to-right.
- */
+/** A chainable dispatch step returned by `act(action, input, output?)`. */
 export interface ActChain extends StepNode {
-  as(outputMapping: Mapping): ActChain;
   where(fn: WhereFn): ActChain;
-  branch(...nodes: ThenNode[]): ActChain;
+  match(...cases: CaseNode[]): ActChain;
 }
 
-/**
- * The builder returned by `when(...)`. Accumulates an optional `.where(...)`
- * transform and terminates with `.then(...)`, which produces the finished
- * {@link SyncDeclaration}.
- *
- * The clause order `when → where? → then` is enforced by the return types:
- * `.where(...)` narrows to {@link WhenBuilderWithWhere} (only `.then` remains)
- * so `.where` cannot be repeated, and `.then(...)` ends the chain entirely.
- */
+/** The builder returned by `when(...)`. */
 export interface WhenBuilder {
   where(fn: WhereFn): WhenBuilderWithWhere;
   then(...nodes: ThenNode[]): SyncDeclaration;
 }
 
-/** A {@link WhenBuilder} after `.where(...)` — only `.then(...)` remains. */
+/** A `when` builder after `.where(...)`. */
 export interface WhenBuilderWithWhere {
   then(...nodes: ThenNode[]): SyncDeclaration;
 }

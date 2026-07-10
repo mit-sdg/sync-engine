@@ -9,13 +9,13 @@
  * Key patterns demonstrated:
  *  - Success/error discrimination via output patterns in `when`
  *  - Cross-concept cascading via `frames.query()` in `where`
- *  - Branch handling via `act().branch(on(), onError())`
- *  - Sequential actions via `seq()`
+ *  - Ordered outcome matching via `act().match(on(), onError())`
+ *  - Pipeline actions via `.then(...)`
  *  - Multi-sync fan-out (multiple syncs watching the same action)
  *  - Cross-concept data creation (enrollment → obligation)
  */
 
-import { act, on, onError, seq, type Vars, when } from "@sync-engine/engine";
+import { act, on, onError, type Vars, when } from "@sync-engine/engine";
 import type {
   AuditConcept,
   EnrollingConcept,
@@ -80,7 +80,7 @@ export function makeLMSSyncs(
         ),
       )
       .then(
-        act(Enrollments.drop, { id: enrollmentId }).branch(
+        act(Enrollments.drop, { id: enrollmentId }).match(
           on(
             act(Audit.record, {
               id: enrollmentId,
@@ -91,7 +91,7 @@ export function makeLMSSyncs(
             }),
           ),
           onError(
-            { error: [error] },
+            { error },
             act(Audit.record, {
               id: enrollmentId,
               event: "ENROLLMENT_CASCADE_DROP_FAILED",
@@ -109,7 +109,7 @@ export function makeLMSSyncs(
         frames.query(Obligations._getByStudent, { student: profileId }, { id: obligationId }),
       )
       .then(
-        act(Obligations.cancelObligation, { id: obligationId }).branch(
+        act(Obligations.cancelObligation, { id: obligationId }).match(
           on(
             act(Audit.record, {
               id: obligationId,
@@ -120,7 +120,7 @@ export function makeLMSSyncs(
             }),
           ),
           onError(
-            { error: [error] },
+            { error },
             act(Audit.record, {
               id: obligationId,
               event: "OBLIGATION_CASCADE_CANCEL_FAILED",
@@ -177,16 +177,14 @@ export function makeLMSSyncs(
         frames.query(Enrollments._getCourseEnrollments, { course: courseId }, { id: enrollmentId }),
       )
       .then(
-        seq(
-          act(Enrollments.drop, { id: enrollmentId }),
-          act(Audit.record, {
-            id: enrollmentId,
-            event: "ENROLLMENT_CASCADE_DROPPED",
-            entityType: "enrollment",
-            entityId: enrollmentId,
-            data: { reason: "course_archived", courseId },
-          }),
-        ),
+        act(Enrollments.drop, { id: enrollmentId }),
+        act(Audit.record, {
+          id: enrollmentId,
+          event: "ENROLLMENT_CASCADE_DROPPED",
+          entityType: "enrollment",
+          entityId: enrollmentId,
+          data: { reason: "course_archived", courseId },
+        }),
       );
 
   const OnCourseArchived_ArchiveGroups = ({ courseId, groupId, error }: Vars) =>
@@ -195,7 +193,7 @@ export function makeLMSSyncs(
         frames.query(Groups._getGroupsByCourse, { course: courseId }, { id: groupId }),
       )
       .then(
-        act(Groups.archiveGroup, { id: groupId }).branch(
+        act(Groups.archiveGroup, { id: groupId }).match(
           on(
             act(Audit.record, {
               id: groupId,
@@ -206,7 +204,7 @@ export function makeLMSSyncs(
             }),
           ),
           onError(
-            { error: [error] },
+            { error },
             act(Audit.record, {
               id: groupId,
               event: "GROUP_CASCADE_ARCHIVE_FAILED",
@@ -224,7 +222,7 @@ export function makeLMSSyncs(
         frames.query(Obligations._getByCourse, { course: courseId }, { id: obligationId }),
       )
       .then(
-        act(Obligations.cancelObligation, { id: obligationId }).branch(
+        act(Obligations.cancelObligation, { id: obligationId }).match(
           on(
             act(Audit.record, {
               id: obligationId,
@@ -235,7 +233,7 @@ export function makeLMSSyncs(
             }),
           ),
           onError(
-            { error: [error] },
+            { error },
             act(Audit.record, {
               id: obligationId,
               event: "OBLIGATION_CASCADE_CANCEL_FAILED",

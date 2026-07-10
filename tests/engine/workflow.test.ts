@@ -1,13 +1,17 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   act,
+  declareVars,
+  guard,
+  is,
   type Empty,
   type Frames,
   Logging,
   on,
   onError,
+  oneOf,
+  otherwise,
   par,
-  seq,
   sync,
   SyncConcept,
   type Vars,
@@ -17,7 +21,7 @@ import { ButtonConcept, ListConcept, RecorderConcept, ThrowingConcept } from "./
 
 class DecisionConcept {
   decide({ kind }: { kind: string }) {
-    return { route: kind === "approve" ? "approved" : "rejected" };
+    return { route: kind === "approve" ? "approved" : kind === "manual" ? "manual" : "rejected" };
   }
 }
 
@@ -29,9 +33,7 @@ class CompletionConcept {
 
 class DomainFailureConcept {
   fail(_: Empty) {
-    const err = new Error("inventory unavailable") as Error & { code: string };
-    err.code = "OUT_OF_STOCK";
-    throw err;
+    return { error: "TIMEOUT", detail: "late" };
   }
 }
 
@@ -42,7 +44,7 @@ class StepRecorder {
     return { data: "a" };
   }
   step2({ data }: { data: string }) {
-    this.order.push("step2:" + data);
+    this.order.push(`step2:${data}`);
     return {};
   }
 }
@@ -63,584 +65,313 @@ function setup() {
   return { Sync, ...concepts };
 }
 
-// ── Outcome branching ─────────────────────────────────────────────────────
-
-describe("nested outcome branching", () => {
-  test("branches on ordinary result values via on()", async () => {
+describe("pipeline then", () => {
+  test("threads act output bindings through top-level siblings", async () => {
     const { Sync, Button, Decision, Recorder } = setup();
-
     Sync.register({
-      ApprovalWorkflow: sync(({ kind, route }: Vars) =>
+      Pipeline: sync(({ kind, route }: Vars) =>
         when(Button.clicked, { kind }).then(
-          act(Decision.decide, { kind })
-            .as({ route })
-            .branch(
-              on({ route: "approved" }, act(Recorder.record, { tag: "approved" })),
-              on({ route: "rejected" }, act(Recorder.record, { tag: "rejected" })),
-            ),
+          act(Decision.decide, { kind }, { route }),
+          act(Recorder.record, { tag: route }),
         ),
       ),
     });
 
     await Button.clicked({ kind: "approve" });
-    await Button.clicked({ kind: "reject" });
-
-    expect(Recorder.order).toEqual(["approved", "rejected"]);
-  });
-
-  test("routes thrown concept errors through onError() branch", async () => {
-    const { Sync, Button, Recorder, Throwing } = setup();
-
-    Sync.register({
-      ThrowingWorkflow: sync(({ detail }: Vars) =>
-        when(Button.clicked, { kind: "throw" }).then(
-          act(Throwing.explode, {}).branch(
-            onError({ detail: [detail] }, act(Recorder.record, { tag: detail })),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "throw" });
-
-    expect(Throwing.hit).toBe(true);
-    expect(Recorder.order).toEqual(["kaboom"]);
-  });
-
-  test("preserves domain error codes thrown by concept actions", async () => {
-    const { Sync, Button, DomainFailure, Recorder } = setup();
-
-    Sync.register({
-      DomainErrorWorkflow: sync(({ detail }: Vars) =>
-        when(Button.clicked, { kind: "domain-error" }).then(
-          act(DomainFailure.fail, {}).branch(
-            onError(
-              { error: "OUT_OF_STOCK", detail: [detail] },
-              act(Recorder.record, { tag: detail }),
-            ),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "domain-error" });
-
-    expect(Recorder.order).toEqual(["inventory unavailable"]);
-  });
-
-  test("on() without pattern fires for completion outputs", async () => {
-    const { Sync, Button, Completion, Recorder } = setup();
-
-    Sync.register({
-      CompletionWorkflow: sync((_vars: Vars) =>
-        when(Button.clicked, { kind: "complete" }).then(
-          act(Completion.finish, {}).branch(
-            on(act(Recorder.record, { tag: "complete" })),
-            on(act(Recorder.record, { tag: "result" })),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "complete" });
-
-    expect(Recorder.order).toEqual(["complete", "result"]);
-  });
-
-  test("on() does not fire on an error outcome", async () => {
-    const { Sync, Button, Recorder, Throwing } = setup();
-
-    // A success branch and an error branch on the same failing step: only the
-    // error branch should fire. Under the old `outcome: "any"` semantics the
-    // success branch would have matched (and bound from) the error record.
-    Sync.register({
-      OnSkipsErrors: sync(({ detail }: Vars) =>
-        when(Button.clicked, { kind: "throw" }).then(
-          act(Throwing.explode, {}).branch(
-            on(act(Recorder.record, { tag: "on-fired" })),
-            onError({ detail: [detail] }, act(Recorder.record, { tag: "err-fired" })),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "throw" });
-
-    expect(Recorder.order).toEqual(["err-fired"]);
-  });
-
-  test("bracket extractor [var] binds outcome values", async () => {
-    const { Sync, Button, Decision, Recorder } = setup();
-
-    Sync.register({
-      BracketExtract: sync(({ route }: Vars) =>
-        when(Button.clicked, {}).then(
-          act(Decision.decide, { kind: "approve" }).branch(
-            on({ route: [route] }, act(Recorder.record, { tag: route })),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "go" });
     expect(Recorder.order).toEqual(["approved"]);
   });
 
-  test("bracket extractor coexists with literal patterns", async () => {
-    const { Sync, Button, Decision, Recorder } = setup();
-
-    Sync.register({
-      MixedPatterns: sync(({ route }: Vars) =>
-        when(Button.clicked, {}).then(
-          act(Decision.decide, { kind: "approve" }).branch(
-            on({ route: "approved" }, act(Recorder.record, { tag: "literal-match" })),
-            on({ route: [route] }, act(Recorder.record, { tag: "extracted" })),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "approve" });
-    expect(Recorder.order).toContain("literal-match");
-  });
-
-  test("function predicate on on() filters branch matching", async () => {
-    const { Sync, Button, Decision, Recorder } = setup();
-
-    Sync.register({
-      PredicateBranch: sync(({ route }: Vars) =>
-        when(Button.clicked, { kind: "approve" }).then(
-          act(Decision.decide, { kind: "approve" })
-            .as({ route })
-            .branch(
-              on(
-                (f) => f[route] === "approved",
-                act(Recorder.record, { tag: "approved-by-predicate" }),
-              ),
-              on((_f) => false, act(Recorder.record, { tag: "never" })),
-            ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "approve" });
-    expect(Recorder.order).toEqual(["approved-by-predicate"]);
-  });
-
-  test("function predicate on onError() with pattern + predicate", async () => {
+  test("stops after an error outcome", async () => {
     const { Sync, Button, Recorder, Throwing } = setup();
-
     Sync.register({
-      PredicateWithPattern: sync(({ detail }: Vars) =>
-        when(Button.clicked, { kind: "throw" }).then(
-          act(Throwing.explode, {}).branch(
-            onError(
-              { detail: [detail] },
-              (f) => String(f[detail]) === "kaboom",
-              act(Recorder.record, { tag: "predicate-matched" }),
-            ),
-            onError(
-              { detail: [detail] },
-              (f) => String(f[detail]) !== "kaboom",
-              act(Recorder.record, { tag: "predicate-wrong" }),
-            ),
+      Stop: sync(({ detail }: Vars) =>
+        when(Button.clicked, { kind: "stop" }).then(
+          act(Recorder.record, { tag: "before" }),
+          act(Throwing.explode, {}).match(
+            onError({ detail }, act(Recorder.record, { tag: detail })),
           ),
+          act(Recorder.record, { tag: "after" }),
         ),
       ),
     });
 
-    await Button.clicked({ kind: "throw" });
-    expect(Recorder.order).toEqual(["predicate-matched"]);
+    await Button.clicked({ kind: "stop" });
+    expect(Throwing.hit).toBe(true);
+    expect(Recorder.order).toEqual(["before", "kaboom"]);
   });
 
-  test("predicate on() without pattern handles completion", async () => {
-    const { Sync, Button, Completion, Recorder } = setup();
-
+  test("drops a frame when a successful output pattern does not unify", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
     Sync.register({
-      PredicateComplete: sync((_vars: Vars) =>
+      Mismatch: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "mismatch" }).then(
+          act(Decision.decide, { kind: "approve" }, { route: "rejected" }),
+          act(Recorder.record, { tag: "unreachable" }),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "mismatch" });
+    expect(Recorder.order).toEqual([]);
+  });
+
+  test("allows only empty output mappings for completion", async () => {
+    const { Sync, Button, Completion, Recorder } = setup();
+    Sync.register({
+      Complete: sync((_vars: Vars) =>
         when(Button.clicked, { kind: "complete" }).then(
-          act(Completion.finish, {}).branch(
-            on((_f) => true, act(Recorder.record, { tag: "predicated-complete" })),
-          ),
+          act(Completion.finish, {}, {}),
+          act(Recorder.record, { tag: "ok" }),
+        ),
+      ),
+      CompleteMismatch: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "complete" }).then(
+          act(Completion.finish, {}, { absent: "value" }),
+          act(Recorder.record, { tag: "bad" }),
         ),
       ),
     });
 
     await Button.clicked({ kind: "complete" });
-    expect(Recorder.order).toEqual(["predicated-complete"]);
+    expect(Recorder.order).toEqual(["ok"]);
   });
 });
 
-// ── DSL surface ─────────────────────────────────────────────────────────────
-
-describe("fluent DSL", () => {
-  test("sync() registers and triggers a simple rule", async () => {
-    const Sync = new SyncConcept();
-    Sync.logging = Logging.OFF;
-    const { Button, Recorder } = Sync.instrument({
-      Button: new ButtonConcept(),
-      Recorder: new RecorderConcept(),
-    });
-
-    Sync.register({
-      PingPong: sync(({ kind }: Vars) =>
-        when(Button.clicked, { kind }, {}).then(act(Recorder.record, { tag: kind })),
-      ),
-    });
-
-    await Button.clicked({ kind: "ping" });
-    await Button.clicked({ kind: "pong" });
-
-    expect(Recorder.order).toEqual(["ping", "pong"]);
-  });
-
-  test("when([...]) matches multiple journal entries", async () => {
-    const Sync = new SyncConcept();
-    Sync.logging = Logging.OFF;
-    const { Button, Recorder } = Sync.instrument({
-      Button: new ButtonConcept(),
-      Recorder: new RecorderConcept(),
-    });
-
-    Sync.register({
-      Seed: sync((_vars: Vars) =>
-        when(Button.clicked, { kind: "seed" }, {}).then(act(Recorder.record, { tag: "tok" })),
-      ),
-    });
-
-    Sync.register({
-      MultiWhen: sync(({ tag }: Vars) =>
-        when([
-          [Button.clicked, { kind: "seed" }],
-          [Recorder.record, { tag }],
-        ]).then(act(Recorder.record, { tag: "multi-fire" })),
-      ),
-    });
-
-    await Button.clicked({ kind: "seed" });
-
-    expect(Recorder.order).toContain("multi-fire");
-  });
-
-  test("act(...).as() binds step output to variables", async () => {
+describe("ordered match cases", () => {
+  test("selects the first matching success case", async () => {
     const { Sync, Button, Decision, Recorder } = setup();
-
     Sync.register({
-      AsBinding: sync(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind }).then(
-          act(Decision.decide, { kind })
-            .as({ route })
-            .branch(act(Recorder.record, { tag: route })),
+      First: sync(({ route }: Vars) =>
+        when(Button.clicked, { kind: "approve" }).then(
+          act(Decision.decide, { kind: "approve" }).match(
+            on({ route }, act(Recorder.record, { tag: "first" })),
+            on({ route: "approved" }, act(Recorder.record, { tag: "second" })),
+          ),
         ),
       ),
     });
 
     await Button.clicked({ kind: "approve" });
-    expect(Recorder.order).toEqual(["approved"]);
+    expect(Recorder.order).toEqual(["first"]);
   });
 
-  test("act(...).where() fans out after a step completes", async () => {
+  test("falls through a failing guard and keeps rejected bindings local", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
+    const { route } = declareVars<{ route: string }>();
+    Sync.register({
+      GuardFallthrough: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "approve" }).then(
+          act(Decision.decide, { kind: "approve" }).match(
+            on(
+              { route },
+              guard(($) => $(route) === "rejected"),
+              act(Recorder.record, { tag: "wrong" }),
+            ),
+            on({ route: "approved" }, act(Recorder.record, { tag: "fallback" })),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "approve" });
+    expect(Recorder.order).toEqual(["fallback"]);
+  });
+
+  test("runs error cases from the pre-step frame then stops the outer pipeline", async () => {
+    const { Sync, Button, DomainFailure, Recorder } = setup();
+    Sync.register({
+      Recover: sync(({ kind, detail }: Vars) =>
+        when(Button.clicked, { kind }).then(
+          act(DomainFailure.fail, {}, { payment: detail }).match(
+            onError({ error: "TIMEOUT", detail }, act(Recorder.record, { tag: detail })),
+            otherwise(act(Recorder.record, { tag: "wrong-default" })),
+          ),
+          act(Recorder.record, { tag: "after-error" }),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "recover" });
+    expect(Recorder.order).toEqual(["late"]);
+  });
+
+  test("uses otherwise only after all earlier cases fail", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
+    Sync.register({
+      Default: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "reject" }).then(
+          act(Decision.decide, { kind: "reject" }).match(
+            on({ route: "approved" }, act(Recorder.record, { tag: "approved" })),
+            otherwise(act(Recorder.record, { tag: "default" })),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "reject" });
+    expect(Recorder.order).toEqual(["default"]);
+  });
+
+  test("runs a selected case body as a pipeline", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
+    Sync.register({
+      CasePipeline: sync(({ route }: Vars) =>
+        when(Button.clicked, { kind: "approve" }).then(
+          act(Decision.decide, { kind: "approve" }).match(
+            on(
+              { route },
+              act(Recorder.record, { tag: "case-1" }),
+              act(Recorder.record, { tag: "case-2" }),
+            ),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "approve" });
+    expect(Recorder.order).toEqual(["case-1", "case-2"]);
+  });
+});
+
+describe("matchers and guards", () => {
+  test("uses RegExp, oneOf, and is in when and match patterns", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
+    const global = /^appro/g;
+    Sync.register({
+      Matcher: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: /^appro/ }).then(
+          act(Decision.decide, { kind: "approve" }).match(
+            on({ route: global }, act(Recorder.record, { tag: "regex" })),
+            otherwise(act(Recorder.record, { tag: "default" })),
+          ),
+        ),
+      ),
+      OneOf: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: oneOf("manual", "reject") }).then(
+          act(Decision.decide, { kind: "manual" }).match(
+            on(
+              { route: is((value) => value === "manual", "manual route") },
+              act(Recorder.record, { tag: "is" }),
+            ),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "approve" });
+    await Button.clicked({ kind: "approve" });
+    await Button.clicked({ kind: "manual" });
+    expect(Recorder.order).toEqual(["regex", "regex", "is"]);
+  });
+
+  test("terminates a frame when a matcher or guard throws", async () => {
+    const { Sync, Button, Decision, Recorder } = setup();
+    Sync.register({
+      BadMatcher: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "matcher" }).then(
+          act(Decision.decide, { kind: "approve" }).match(
+            on(
+              {
+                route: is(() => {
+                  throw new Error("matcher");
+                }),
+              },
+              act(Recorder.record, { tag: "bad" }),
+            ),
+            otherwise(act(Recorder.record, { tag: "default" })),
+          ),
+        ),
+      ),
+      BadGuard: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "guard" }).then(
+          act(Decision.decide, { kind: "approve" }).match(
+            on(
+              {},
+              guard(($) => $(Symbol("unbound"))),
+              act(Recorder.record, { tag: "bad" }),
+            ),
+            otherwise(act(Recorder.record, { tag: "default" })),
+          ),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "matcher" });
+    await Button.clicked({ kind: "guard" });
+    expect(Recorder.order).toEqual([]);
+  });
+});
+
+describe("where and par", () => {
+  test("step where fan-out reaches match bodies and following siblings", async () => {
     const { Sync, Button, Completion, List, Recorder } = setup();
     await List.add({ value: 1 });
     await List.add({ value: 2 });
-
     Sync.register({
-      FanoutWorkflow: sync(({ value, tag }: Vars) =>
+      Fanout: sync(({ value, tag }: Vars) =>
         when(Button.clicked, { kind: "fanout" }).then(
           act(Completion.finish, {})
             .where((frames: Frames) =>
-              frames.query(List._items, {}, { value }).map((frame: any) => ({
-                ...frame,
-                [tag]: "v:" + String(frame[value]),
-              })),
+              frames
+                .query(List._items, {}, { value })
+                .map((frame) => ({ ...frame, [tag]: `v:${frame[value]}` })),
             )
-            .branch(act(Recorder.record, { tag })),
+            .match(on(act(Recorder.record, { tag }))),
+          act(Recorder.record, { tag }),
         ),
       ),
     });
 
     await Button.clicked({ kind: "fanout" });
-
-    expect(Recorder.order).toEqual(["v:1", "v:2"]);
-  });
-});
-
-// ── seq / par ───────────────────────────────────────────────────────────────
-
-describe("seq and par execution", () => {
-  test("seq carries output bindings forward between steps", async () => {
-    const { Sync, Button, StepRecorder: SR } = setup();
-
-    Sync.register({
-      Sequential: sync(({ data }: Vars) =>
-        when(Button.clicked, { kind: "seq-test" }).then(
-          seq(act((SR as any).step1, {}).as({ data }), act((SR as any).step2, { data })),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "seq-test" });
-    expect((SR as any).order).toEqual(["step1", "step2:a"]);
+    expect(Recorder.order).toEqual(["v:1", "v:2", "v:1", "v:2"]);
   });
 
-  test("default sibling order is deterministic sequential", async () => {
-    const Sync = new SyncConcept();
-    Sync.logging = Logging.OFF;
-    const { Button, Recorder } = Sync.instrument({
-      Button: new ButtonConcept(),
-      Recorder: new RecorderConcept(),
-    });
-
+  test("threads bindings only inside an array pipeline child of par", async () => {
+    const { Sync, Button, Recorder, StepRecorder: SR } = setup();
     Sync.register({
-      SequentialSiblings: sync(({ kind }: Vars) =>
-        when(Button.clicked, { kind }, {}).then(
-          act(Recorder.record, { tag: "first" }),
-          act(Recorder.record, { tag: "second" }),
-          act(Recorder.record, { tag: "third" }),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "start" });
-    expect(Recorder.order).toEqual(["first", "second", "third"]);
-  });
-
-  test("concurrent actions in default siblings complete before the next begins", async () => {
-    const Sync = new SyncConcept();
-    Sync.logging = Logging.OFF;
-
-    const finishes: string[] = [];
-    class TimedActor {
-      slow(_: Empty) {
-        return { done: "slow" };
-      }
-      fast(_: Empty) {
-        return { done: "fast" };
-      }
-    }
-
-    const { Recorder, TimedActor: TA } = Sync.instrument({
-      Recorder: new RecorderConcept(),
-      TimedActor: new TimedActor(),
-    });
-
-    const origSlow = (TA as any).slow;
-    (TA as any).slow = async function (...args: any[]) {
-      await new Promise((r) => setTimeout(r, 30));
-      finishes.push("slow-done");
-      return origSlow.apply(this, args);
-    };
-    const origFast = (TA as any).fast;
-    (TA as any).fast = async function (...args: any[]) {
-      finishes.push("fast-done");
-      return origFast.apply(this, args);
-    };
-
-    Sync.register({
-      DefaultSeq: sync((_vars: Vars) =>
-        when(Recorder.record, { tag: "go" }, {}).then(
-          act((TA as any).slow, {}),
-          act((TA as any).fast, {}),
-        ),
-      ),
-    });
-
-    await Recorder.record({ tag: "go" });
-
-    expect(finishes).toEqual(["slow-done", "fast-done"]);
-  });
-});
-
-// ── ActionOutcome / edge cases ────────────────────────────────────────────
-
-describe("ActionOutcome normalisation", () => {
-  test("result outcome fires on() branches", async () => {
-    const { Sync, Button, Decision, Recorder } = setup();
-
-    Sync.register({
-      ResultBranch: sync(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind }, {}).then(
-          act(Decision.decide, { kind })
-            .as({ route })
-            .branch(on({ route: "approved" }, act(Recorder.record, { tag: "result-match" }))),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "approve" });
-    expect(Recorder.order).toEqual(["result-match"]);
-  });
-
-  test("error outcome triggers onError() branch", async () => {
-    const { Sync, Button, Recorder, Throwing } = setup();
-
-    Sync.register({
-      ErrOnly: sync(({ detail }: Vars) =>
-        when(Button.clicked, { kind: "err-test" }).then(
-          act(Throwing.explode, {}).branch(
-            onError({ detail: [detail] }, act(Recorder.record, { tag: detail })),
+      ParallelPipeline: sync(({ data }: Vars) =>
+        when(Button.clicked, { kind: "parallel" }).then(
+          par(
+            [act(SR.step1, {}, { data }), act(SR.step2, { data })],
+            act(Recorder.record, { tag: "sibling" }),
           ),
         ),
       ),
     });
 
-    await Button.clicked({ kind: "err-test" });
-    expect(Recorder.order).toEqual(["kaboom"]);
-  });
-
-  test("complete outcome triggers on() without pattern", async () => {
-    const { Sync, Button, Completion, Recorder } = setup();
-
-    Sync.register({
-      CompletionOnly: sync((_vars: Vars) =>
-        when(Button.clicked, { kind: "done-test" }).then(
-          act(Completion.finish, {}).branch(on(act(Recorder.record, { tag: "completed" }))),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "done-test" });
-    expect(Recorder.order).toEqual(["completed"]);
+    await Button.clicked({ kind: "parallel" });
+    expect(SR.order).toEqual(["step1", "step2:a"]);
+    expect(Recorder.order).toEqual(["sibling"]);
   });
 });
 
-describe("seq and par edge cases", () => {
-  test("seq stops executing after an error step", async () => {
-    const { Sync, Button, Recorder, Throwing } = setup();
-
-    Sync.register({
-      SeqWithError: sync((_vars: Vars) =>
-        when(Button.clicked, { kind: "seq-err" }).then(
-          seq(
-            act(Recorder.record, { tag: "before" }),
-            act(Throwing.explode, {}),
-            act(Recorder.record, { tag: "after-error" }),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "seq-err" });
-    expect(Recorder.order).toEqual(["before"]);
-    expect(Throwing.hit).toBe(true);
-  });
-
-  test("seq propagates data from result outcomes", async () => {
-    const { Sync, Button, Decision, Recorder } = setup();
-
-    Sync.register({
-      SeqWithData: sync(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind }).then(
-          seq(
-            act(Decision.decide, { kind: "approve" }).as({ route }),
-            act(Recorder.record, { tag: route }),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "any" });
-    expect(Recorder.order).toEqual(["approved"]);
-  });
-
-  test("nested seq inside seq executes correctly", async () => {
-    const Sync = new SyncConcept();
-    Sync.logging = Logging.OFF;
-    const { Button, Recorder } = Sync.instrument({
-      Button: new ButtonConcept(),
-      Recorder: new RecorderConcept(),
-    });
-
-    Sync.register({
-      NestedSeq: sync((_vars: Vars) =>
-        when(Button.clicked, { kind: "nested-seq" }, {}).then(
-          seq(
-            act(Recorder.record, { tag: "outer-1" }),
-            seq(act(Recorder.record, { tag: "inner-1" }), act(Recorder.record, { tag: "inner-2" })),
-            act(Recorder.record, { tag: "outer-2" }),
-          ),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "nested-seq" });
-    expect(Recorder.order).toEqual(["outer-1", "inner-1", "inner-2", "outer-2"]);
-  });
-
-  test("error step blocks direct successors in nested workflow", async () => {
-    const { Sync, Button, Recorder, Throwing } = setup();
-
-    Sync.register({
-      ErrorInNested: sync((_vars: Vars) =>
-        when(Button.clicked, { kind: "error-direct" }).then(
-          act(Throwing.explode, {}).branch(act(Recorder.record, { tag: "after-error-direct" })),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "error-direct" });
-    expect(Throwing.hit).toBe(true);
-    expect(Recorder.order).toEqual([]);
-  });
-});
-
-// ── Construction-time guards ──────────────────────────────────────────────
-
-describe("DSL construction guards", () => {
-  test("awaiting a when(...) chain throws instead of silently resolving", async () => {
-    const { Button } = setup();
-    const builder = when(Button.clicked, { kind: "x" });
-    await expect(Promise.resolve(builder as unknown as Promise<unknown>)).rejects.toThrow(
-      "not a promise",
-    );
-  });
-
-  test(".then() rejects a top-level outcome branch", () => {
-    const { Button, Recorder } = setup();
-    expect(() => when(Button.clicked, {}).then(on({}, act(Recorder.record, { tag: "x" })))).toThrow(
-      "top-level",
-    );
-  });
-
-  test(".then() requires at least one node", () => {
-    const { Button } = setup();
+describe("construction guards", () => {
+  test("rejects invalid pipeline and match shapes", () => {
+    const { Button, Completion, Recorder } = setup();
     expect(() => when(Button.clicked, {}).then()).toThrow("at least one node");
-  });
-
-  test("seq() rejects a leading branch", () => {
-    const { Recorder } = setup();
-    expect(() => seq(on({}, act(Recorder.record, { tag: "x" })), act(Recorder.record, {}))).toThrow(
-      "must follow an act()",
+    expect(() => par()).toThrow("at least one child");
+    expect(() => act(Completion.finish, {}).match()).toThrow("at least one case");
+    expect(() => on({})).toThrow("at least one");
+    expect(() => onError({})).toThrow("at least one");
+    expect(() => otherwise()).toThrow("at least one");
+    expect(() => when(Button.clicked, {}).then(on(act(Recorder.record, {})) as any)).toThrow(
+      "only appear inside",
     );
-  });
-
-  test("par() rejects outcome branches", () => {
-    const { Recorder } = setup();
-    expect(() => par(on({}, act(Recorder.record, { tag: "x" })))).toThrow("not allowed");
-  });
-
-  test("when(...).where() twice throws", () => {
-    const { Button } = setup();
+    expect(() => act(Completion.finish, {}).match(act(Recorder.record, {}) as any)).toThrow("only");
     expect(() =>
-      (when(Button.clicked, {}) as any).where((f: Frames) => f).where((f: Frames) => f),
-    ).toThrow("twice");
+      act(Completion.finish, {}).match(
+        otherwise(act(Recorder.record, {})),
+        on(act(Recorder.record, {})),
+      ),
+    ).toThrow("final");
+    expect(() => par([])).toThrow("at least one");
   });
 
-  test("onError() distinguishes a pattern from a node", () => {
-    const { Recorder } = setup();
-
-    // A plain mapping (even one containing a `kind` key) is a pattern.
-    const withPattern = onError({ kind: "boom" }, act(Recorder.record, { tag: "x" }));
-    expect(withPattern.pattern).toEqual({ kind: "boom" });
-
-    // A leading node means "no pattern".
-    const withoutPattern = onError(act(Recorder.record, { tag: "x" }));
-    expect(withoutPattern.pattern).toEqual({});
-  });
-
-  test("act(...).as() merges successive calls", () => {
-    const { Decision } = setup();
-    const chain = act(Decision.decide, {}).as({ a: "1" }).as({ b: "2" });
-    expect(chain.action.output).toEqual({ a: "1", b: "2" });
+  test("when builders and action chains are not thenable", async () => {
+    const { Button, Completion } = setup();
+    await expect(
+      Promise.resolve(when(Button.clicked, {}) as unknown as Promise<unknown>),
+    ).rejects.toThrow("not a promise");
+    expect((act(Completion.finish, {}) as any).then).toBeUndefined();
   });
 });

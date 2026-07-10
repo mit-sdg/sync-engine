@@ -7,8 +7,8 @@
  *  - Success/error discrimination via output patterns in `when`
  *  - Cross-concept cascading (profile deactivate → drops/cancels)
  *  - Multi-sync fan-out (course archive → groups + enrollments + obligations)
- *  - Branch handling via `act().branch(on(), onError())`
- *  - Sequential composition via `seq()`
+ *  - Ordered outcome matching via `act().match(on(), onError())`
+ *  - Pipeline composition via `.then(...)`
  *  - Cross-concept data creation (enrollment → obligation)
  *  - Query caching and invalidation
  *  - Causal ordering and flow isolation

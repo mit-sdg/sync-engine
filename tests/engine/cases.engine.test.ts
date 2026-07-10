@@ -4,7 +4,6 @@ import {
   actionNodeId,
   type Frames,
   Logging,
-  seq,
   SyncConcept,
   type Vars,
   when,
@@ -125,7 +124,7 @@ describe("engine: edge cases", () => {
     expect(Throwing.hit).toBe(true);
   });
 
-  test("a throwing action does not abort downstream then actions in a chain", async () => {
+  test("a throwing action stops downstream pipeline actions", async () => {
     const Sync = new SyncConcept();
     Sync.logging = Logging.OFF;
     const { Button, Recorder, Throwing } = Sync.instrument({
@@ -134,7 +133,6 @@ describe("engine: edge cases", () => {
       Throwing: new ThrowingConcept(),
     });
 
-    // Register a one-shot sync whose `then` fires two actions; the first throws.
     // Uses Button.clicked as the trigger (one-shot, no self-loop).
     Sync.register({
       ChainWithThrow: ({ kind }: Vars) =>
@@ -145,10 +143,7 @@ describe("engine: edge cases", () => {
     });
 
     await Button.clicked({ kind: "test" });
-    // If the engine didn't catch the throw from `explode` inside `then`,
-    // the `then` chain would abort before running `record`. The recorder
-    // should still have the "after-throw" entry.
-    expect(Recorder.order).toContain("after-throw");
+    expect(Recorder.order).not.toContain("after-throw");
   });
 
   test("empty output pattern rejects error outputs in multi-step when clauses", async () => {
@@ -306,31 +301,6 @@ describe("engine: edge cases", () => {
     await Button.clicked({ kind: "trigger" });
     expect(Recorder.order).not.toContain("bad");
     expect(Recorder.order).toContain("good");
-  });
-
-  test("seq() with error at step 2 of 3 skips step 3", async () => {
-    const Sync = new SyncConcept();
-    Sync.logging = Logging.OFF;
-    const { Button, Recorder, Throwing } = Sync.instrument({
-      Button: new ButtonConcept(),
-      Recorder: new RecorderConcept(),
-      Throwing: new ThrowingConcept(),
-    });
-
-    Sync.register({
-      SeqWithThrow: (_vars: Vars) =>
-        when(Button.clicked, { kind: "seq-test" }, {}).then(
-          seq(
-            act(Recorder.record, { tag: "step1" }),
-            act(Throwing.explode, {}),
-            act(Recorder.record, { tag: "step3" }),
-          ),
-        ),
-    });
-
-    await Button.clicked({ kind: "seq-test" });
-    expect(Recorder.order).toContain("step1");
-    expect(Recorder.order).not.toContain("step3");
   });
 
   test("sync re-registration removes old sync from action index", async () => {
