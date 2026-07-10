@@ -143,7 +143,9 @@ function makeProxy(
   const fn = (body: unknown) => call(buildPath(segments), body);
   return new Proxy(fn, {
     get(_target, prop) {
-      if (typeof prop !== "string" || prop === "then") return undefined;
+      // The root client must not be thenable, but nested `then` is a valid
+      // endpoint path segment (for example, `/auth/then`).
+      if (typeof prop !== "string" || (prop === "then" && segments.length === 0)) return undefined;
       return makeProxy([...segments, prop], call);
     },
     apply(_target, _thisArg, args) {

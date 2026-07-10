@@ -230,11 +230,12 @@ describe("AppHost", () => {
     expect(host.values()[0].app.id).toBe("x");
   });
 
-  test("register() preempted by unregister() during async create does not add the app", async () => {
+  test("unregister() during async create stops the eventual resources", async () => {
     let resolveCreate: (v: CreatedApp<FakeApp>) => void;
     const createPromise = new Promise<CreatedApp<FakeApp>>((r) => {
       resolveCreate = r;
     });
+    const stops: string[] = [];
 
     const host = new AppHost<FakeApp, undefined>({
       create: (): CreatedApp<FakeApp> | Promise<CreatedApp<FakeApp>> => createPromise,
@@ -246,12 +247,51 @@ describe("AppHost", () => {
     resolveCreate!({
       app: { id: "ted" },
       type: "tenant",
-      resources: [],
+      resources: [{ stop: () => void stops.push("ted") }],
     });
 
     await regPromise;
 
     expect(host.has("ted")).toBe(false);
     expect(host.values()).toHaveLength(0);
+    expect(stops).toEqual(["ted"]);
+  });
+
+  test("a canceled registration cannot affect a later registration for the same prefix", async () => {
+    const events: string[] = [];
+    const stops: string[] = [];
+    const resolvers: Array<(app: CreatedApp<FakeApp>) => void> = [];
+    const host = new AppHost<FakeApp, { id: string }>(
+      {
+        create: () =>
+          new Promise<CreatedApp<FakeApp>>((resolve) => {
+            resolvers.push(resolve);
+          }),
+      },
+      recordingSink(events),
+    );
+
+    const stale = host.register("ted", { id: "stale" });
+    await host.unregister("ted");
+    const current = host.register("ted", { id: "current" });
+
+    resolvers[0]!({
+      app: { id: "stale" },
+      type: "tenant",
+      resources: [{ stop: () => void stops.push("stale") }],
+    });
+    await stale;
+
+    resolvers[1]!({
+      app: { id: "current" },
+      type: "tenant",
+      resources: [],
+    });
+    const entry = await current;
+
+    expect(entry.app.id).toBe("current");
+    expect(host.get("ted")?.app.id).toBe("current");
+    expect(events).toEqual(["+ted"]);
+    expect(stops).toEqual(["stale"]);
   });
 });

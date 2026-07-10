@@ -76,11 +76,19 @@ export class AppHost<TApp, TParams> {
     const inFlight = this.pendingRegistrations.get(prefix);
     if (inFlight !== undefined) return inFlight;
 
-    const promise = (async () => {
+    let promise!: Promise<HostedApp<TApp>>;
+    promise = (async () => {
       try {
         const { app, type, resources } = await this.hooks.create(prefix, params);
-        // Unregister was called while create was still running — don't register.
-        if (!this.pendingRegistrations.has(prefix)) return { app, type };
+        // This registration was canceled or superseded while create was running.
+        if (this.pendingRegistrations.get(prefix) !== promise) {
+          await Promise.allSettled(
+            [...resources]
+              .reverse()
+              .map((resource) => Promise.resolve().then(() => resource.stop())),
+          );
+          return { app, type };
+        }
         const recheck = this.apps.get(prefix);
         if (recheck) return recheck;
         const entry: HostedApp<TApp> = { app, type };
@@ -89,7 +97,9 @@ export class AppHost<TApp, TParams> {
         this.sink?.registerApp(prefix, entry);
         return entry;
       } finally {
-        this.pendingRegistrations.delete(prefix);
+        if (this.pendingRegistrations.get(prefix) === promise) {
+          this.pendingRegistrations.delete(prefix);
+        }
       }
     })();
 

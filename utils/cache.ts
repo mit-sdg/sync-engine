@@ -23,48 +23,80 @@ interface CacheEntry {
   expiresAt: number;
 }
 
-function serialize(arg: unknown, seen = new WeakSet<object>(), depth = 0): string {
+const functionIds = new WeakMap<Function, number>();
+let nextFunctionId = 1;
+
+function functionIdentity(value: Function): number {
+  let identity = functionIds.get(value);
+  if (identity === undefined) {
+    identity = nextFunctionId++;
+    functionIds.set(value, identity);
+  }
+  return identity;
+}
+
+function symbolIdentity(value: symbol, symbolIds: Map<symbol, number>): number {
+  let identity = symbolIds.get(value);
+  if (identity === undefined) {
+    identity = symbolIds.size + 1;
+    symbolIds.set(value, identity);
+  }
+  return identity;
+}
+
+function serialize(
+  arg: unknown,
+  symbolIds: Map<symbol, number>,
+  seen = new WeakSet<object>(),
+  depth = 0,
+): string {
   if (depth > 10) return "@maxdepth";
   if (arg === null) return "@null";
   if (arg === undefined) return "@undefined";
   if (arg instanceof Date) return `@date:${arg.getTime()}`;
-  if (typeof arg === "function") return `@fn:${String(arg)}`;
-  if (typeof arg === "symbol") return `@sym:${String(arg)}`;
+  // Source text and descriptions are not identities: distinct functions and
+  // symbols with matching text must occupy separate cache entries.
+  if (typeof arg === "function") return `@fn:${functionIdentity(arg)}`;
+  if (typeof arg === "symbol") return `@sym:${symbolIdentity(arg, symbolIds)}`;
   if (typeof arg === "bigint") return `@bigint:${String(arg)}`;
   if (typeof arg === "object") {
     if (seen.has(arg)) return "@circular";
     seen.add(arg);
     if (arg instanceof Map) {
       const entries = [...arg.entries()].map(
-        ([k, v]) => `${serialize(k, seen, depth + 1)}:${serialize(v, seen, depth + 1)}`,
+        ([k, v]) =>
+          `${serialize(k, symbolIds, seen, depth + 1)}:${serialize(v, symbolIds, seen, depth + 1)}`,
       );
       return `@Map{${entries.join(",")}}`;
     }
     if (arg instanceof Set) {
-      const values = [...arg.values()].map((v) => serialize(v, seen, depth + 1));
+      const values = [...arg.values()].map((v) => serialize(v, symbolIds, seen, depth + 1));
       return `@Set{${values.join(",")}}`;
     }
     if (Array.isArray(arg)) {
-      const inner = arg.map((v) => serialize(v, seen, depth + 1)).join(",");
+      const inner = arg.map((v) => serialize(v, symbolIds, seen, depth + 1)).join(",");
       return `@Array{${inner}}`;
     }
     const tag = arg.constructor?.name || "Object";
     const keys = Object.keys(arg).sort();
     const inner = keys
-      .map((k) => `${k}:${serialize((arg as Record<string, unknown>)[k], seen, depth + 1)}`)
+      .map(
+        (k) => `${k}:${serialize((arg as Record<string, unknown>)[k], symbolIds, seen, depth + 1)}`,
+      )
       .join(",");
     return `@${tag}{${inner}}`;
   }
   return `@${typeof arg}:${String(arg)}`;
 }
 
-function stableKey(args: unknown[]): string {
-  return args.map((a) => serialize(a)).join("|");
+function stableKey(args: unknown[], symbolIds: Map<symbol, number>): string {
+  return args.map((a) => serialize(a, symbolIds)).join("|");
 }
 
 export function cached<T extends AnyFn>(fn: T, options?: CacheOptions): CachedFn<T> {
   const maxSize = options?.maxSize ?? DEFAULT_CACHE_MAX_SIZE;
   const ttlMs = options?.ttlMs ?? DEFAULT_CACHE_TTL_MS;
+  const symbolIds = new Map<symbol, number>();
   let cache = new Map<string, CacheEntry>();
 
   // Insert (or refresh) an entry, then evict the oldest entries while over
@@ -81,7 +113,7 @@ export function cached<T extends AnyFn>(fn: T, options?: CacheOptions): CachedFn
   };
 
   const wrapper = function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
-    const key = stableKey(args as unknown[]);
+    const key = stableKey(args as unknown[], symbolIds);
     const existing = cache.get(key);
     if (existing !== undefined) {
       if (existing.expiresAt > Date.now()) {

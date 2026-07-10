@@ -237,7 +237,8 @@ describe("engine: edge cases", () => {
     const r2 = await C._data({});
     expect(r2).toEqual([{ value: 1 }]);
 
-    Sync.invalidateCaches(raw);
+    // Public callers normally retain the instrumented concept, not the raw instance.
+    Sync.invalidateCaches(C);
     const r3 = await C._data({});
     expect(r3).toEqual([{ value: 2 }]);
 

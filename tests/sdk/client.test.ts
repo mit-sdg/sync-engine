@@ -8,6 +8,7 @@ type TestApi = {
   "/todos/create": { input: { title: string }; output: { id: string } };
   "/admin/users/roles/assign": { input: { userId: string; role: string }; output: { ok: boolean } };
   "/ping": { input: Record<string, never>; output: { ok: boolean } };
+  "/auth/then": { input: { code: string }; output: { ok: boolean } };
 };
 
 function fakeTransport(response?: unknown): ClientTransport {
@@ -82,6 +83,18 @@ describe("createClient (transport-agnostic)", () => {
     // Accessing .then should not trigger a transport call (proxy handles it)
     const value = (client as Record<string, unknown>)["then"];
     expect(value).toBeUndefined();
+  });
+
+  test("grouped paths can use then as a nested endpoint segment", async () => {
+    const transport = fakeTransport({ ok: true });
+    const client = createClient<TestApi>({ transport });
+
+    await client.auth.then({ code: "continue" });
+
+    expect(transport).toHaveBeenCalledWith({
+      path: "/auth/then",
+      input: { code: "continue" },
+    });
   });
 
   test("transport errors propagate as-is", async () => {

@@ -82,6 +82,22 @@ describe("engine: Frames query/aggregate/collectAs", () => {
     expect(byGroup.get("y")).toEqual([{ value: 3 }]);
   });
 
+  test("collectAs keeps distinct same-description symbols in separate groups", () => {
+    const firstGroup = Symbol("group");
+    const secondGroup = Symbol("group");
+    const value = Symbol("value");
+    const items = Symbol("items");
+    const frames = new Frames(
+      { [firstGroup]: "first", [value]: 1 },
+      { [secondGroup]: "second", [value]: 2 },
+    );
+
+    const out = frames.collectAs([value], items);
+
+    expect(out).toHaveLength(2);
+    expect(out.map((frame) => frame[items])).toEqual([[{ value: 1 }], [{ value: 2 }]]);
+  });
+
   test("queryOptional preserves frame when child query returns no rows (left join)", () => {
     const id = Symbol("id");
     const item = Symbol("item");
@@ -131,6 +147,60 @@ describe("engine: Frames query/aggregate/collectAs", () => {
       expect(actual[i][item]).toBe(expected[i][item]);
       expect(actual[i][id]).toBe(expected[i][id]);
     }
+  });
+
+  test("async query runs frames in parallel and preserves source-frame order", async () => {
+    const id = Symbol("id");
+    const item = Symbol("item");
+    const frames = new Frames({ [id]: "first" }, { [id]: "second" });
+    let releaseFirst!: () => void;
+    let secondStarted!: () => void;
+    const secondStartedPromise = new Promise<void>((resolve) => {
+      secondStarted = resolve;
+    });
+
+    const outPromise = frames.query(
+      async ({ id: value }: { id: string }) => {
+        if (value === "first") await new Promise<void>((resolve) => (releaseFirst = resolve));
+        else secondStarted();
+        return [{ value }];
+      },
+      { id },
+      { value: item },
+    );
+    await secondStartedPromise;
+    releaseFirst();
+    const out = await outPromise;
+
+    expect(out.map((frame) => frame[id])).toEqual(["first", "second"]);
+    expect(out.map((frame) => frame[item])).toEqual(["first", "second"]);
+  });
+
+  test("async queryOptional preserves source-frame order after out-of-order completion", async () => {
+    const id = Symbol("id");
+    const item = Symbol("item");
+    const frames = new Frames({ [id]: "first" }, { [id]: "second" });
+    let releaseFirst!: () => void;
+    let secondStarted!: () => void;
+    const secondStartedPromise = new Promise<void>((resolve) => {
+      secondStarted = resolve;
+    });
+
+    const outPromise = frames.queryOptional(
+      async ({ id: value }: { id: string }) => {
+        if (value === "first") await new Promise<void>((resolve) => (releaseFirst = resolve));
+        else secondStarted();
+        return value === "first" ? [{ value }] : [];
+      },
+      { id },
+      { value: item },
+    );
+    await secondStartedPromise;
+    releaseFirst();
+    const out = await outPromise;
+
+    expect(out.map((frame) => frame[id])).toEqual(["first", "second"]);
+    expect(out.map((frame) => frame[item])).toEqual(["first", undefined]);
   });
 
   test("queryOptional + collectAs yields empty collected array for groups with no children", () => {

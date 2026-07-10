@@ -16,6 +16,15 @@
 import type { Frame, Mapping } from "./types.ts";
 import { logger } from "../utils/logger.ts";
 
+function symbolIdentity(symbol: symbol, symbolIds: Map<symbol, number>): number {
+  let identity = symbolIds.get(symbol);
+  if (identity === undefined) {
+    identity = symbolIds.size + 1;
+    symbolIds.set(symbol, identity);
+  }
+  return identity;
+}
+
 /** Infers the new frame keys contributed by a query's `output` mapping. */
 type ExtractSymbolMappings<TOutputMapping, TFunctionOutput> = {
   [K in keyof TOutputMapping as TOutputMapping[K] extends symbol
@@ -155,26 +164,38 @@ export interface Frames<TFrame extends Frame = Frame> {
   ): Frames<Record<TSymbol, unknown[]>>;
 }
 
-function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
+function stableSerialize(
+  value: unknown,
+  symbolIds: Map<symbol, number>,
+  seen = new WeakSet<object>(),
+): string {
   if (value === null) return "@null";
   if (value === undefined) return "@undefined";
   if (typeof value === "bigint") return `@bigint:${String(value)}`;
+  if (typeof value === "symbol") return `@symbol:${symbolIdentity(value, symbolIds)}`;
   if (typeof value !== "object") return `@${typeof value}:${String(value)}`;
   if (seen.has(value)) return "@circular";
   seen.add(value);
   if (Array.isArray(value)) {
-    const items = value.map((v) => stableSerialize(v, seen)).join(",");
+    const items = value.map((v) => stableSerialize(v, symbolIds, seen)).join(",");
     return `@A{${items}}`;
   }
   const keys = Object.keys(value).sort();
   const inner = keys
-    .map((k) => `${k}:${stableSerialize((value as Record<string, unknown>)[k], seen)}`)
+    .map((k) => `${k}:${stableSerialize((value as Record<string, unknown>)[k], symbolIds, seen)}`)
     .join(",");
-  const symKeys = Object.getOwnPropertySymbols(value).sort((a, b) =>
-    String(a).localeCompare(String(b)),
+  const symKeys = Object.getOwnPropertySymbols(value).sort(
+    (a, b) => symbolIdentity(a, symbolIds) - symbolIdentity(b, symbolIds),
   );
   const symInner = symKeys
-    .map((s) => `${String(s)}:${stableSerialize((value as Record<symbol, unknown>)[s], seen)}`)
+    .map(
+      (s) =>
+        `${symbolIdentity(s, symbolIds)}:${stableSerialize(
+          (value as Record<symbol, unknown>)[s],
+          symbolIds,
+          seen,
+        )}`,
+    )
     .join(",");
   const combined = [inner, symInner].filter(Boolean).join(",");
   return `@O{${combined}}`;
@@ -307,10 +328,11 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     input: Record<string, unknown>,
     output: Record<string, symbol>,
   ): Frames | Promise<Frames> {
-    const result = new Frames();
+    const frames = [...this];
+    const rowsByFrame: unknown[][] = [];
     const promises: Promise<void>[] = [];
 
-    for (const frame of this) {
+    for (const [index, frame] of frames.entries()) {
       const boundInput = Frames.bindInput(frame, input);
       let rows: unknown[] | Promise<unknown[]>;
       try {
@@ -322,21 +344,31 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
       if (rows instanceof Promise) {
         promises.push(
           rows.then(
-            (arr) => Frames.expandOutputs(result, frame, arr, output),
+            (arr) => {
+              rowsByFrame[index] = arr;
+            },
             (err) => {
               logger.warn("query promise rejected", { error: String(err) });
             },
           ),
         );
       } else {
-        Frames.expandOutputs(result, frame, rows, output);
+        rowsByFrame[index] = rows;
       }
     }
 
+    const expand = (): Frames => {
+      const result = new Frames();
+      for (const [index, frame] of frames.entries()) {
+        Frames.expandOutputs(result, frame, rowsByFrame[index] ?? [], output);
+      }
+      return result;
+    };
+
     if (promises.length > 0) {
-      return Promise.allSettled(promises).then(() => result);
+      return Promise.allSettled(promises).then(expand);
     }
-    return result;
+    return expand();
   }
 
   /**
@@ -388,34 +420,47 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     input: Record<string, unknown>,
     output: Record<string, symbol>,
   ): Frames | Promise<Frames> {
-    const result = new Frames();
+    const frames = [...this];
+    const rowsByFrame: unknown[][] = [];
     const promises: Promise<void>[] = [];
 
-    for (const frame of this) {
+    for (const [index, frame] of frames.entries()) {
       const boundInput = Frames.bindInput(frame, input);
       let rows: unknown[] | Promise<unknown[]>;
       try {
         rows = f(boundInput as never);
       } catch {
-        Frames.expandOptionalOutputs(result, frame, [], output);
+        rowsByFrame[index] = [];
         continue;
       }
       if (rows instanceof Promise) {
         promises.push(
           rows.then(
-            (arr) => Frames.expandOptionalOutputs(result, frame, arr, output),
-            () => Frames.expandOptionalOutputs(result, frame, [], output),
+            (arr) => {
+              rowsByFrame[index] = arr;
+            },
+            () => {
+              rowsByFrame[index] = [];
+            },
           ),
         );
       } else {
-        Frames.expandOptionalOutputs(result, frame, rows, output);
+        rowsByFrame[index] = rows;
       }
     }
 
+    const expand = (): Frames => {
+      const result = new Frames();
+      for (const [index, frame] of frames.entries()) {
+        Frames.expandOptionalOutputs(result, frame, rowsByFrame[index] ?? [], output);
+      }
+      return result;
+    };
+
     if (promises.length > 0) {
-      return Promise.allSettled(promises).then(() => result);
+      return Promise.allSettled(promises).then(expand);
     }
-    return result;
+    return expand();
   }
 
   /**
@@ -452,6 +497,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
    */
   collectAs<TAsSymbol extends symbol>(collect: symbol[], as: TAsSymbol): Frames {
     const groups = new Map<string, { groupFrame: Frame; collected: Record<string, unknown>[] }>();
+    const symbolIds = new Map<symbol, number>();
 
     for (const frame of this) {
       const groupKeys: Frame = {};
@@ -467,7 +513,7 @@ export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
         }
       }
 
-      const groupKey = stableSerialize(groupKeys);
+      const groupKey = stableSerialize(groupKeys, symbolIds);
 
       let group = groups.get(groupKey);
       if (group === undefined) {

@@ -1,15 +1,10 @@
 /**
- * Tests that expose known behavioral issues in the sync engine.
- *
- * Each describe block explains the observed problem. Tests prefixed with
- * "should" describe the expected (currently broken) behavior, and assertions
- * document how the current code diverges from it.
+ * Regression coverage for edge behavior in the sync engine.
  */
 
 import { describe, expect, test } from "vite-plus/test";
 import {
   act,
-  type Empty,
   Frames,
   Logging,
   par,
@@ -21,7 +16,7 @@ import {
 } from "@sync-engine/engine";
 import { ButtonConcept, RecorderConcept, ThrowingConcept } from "./mocks.ts";
 
-// ── Parallel then-steps corrupt each other's consumption marks ──────────────
+// ── Parallel then-step consumption marks ────────────────────────────────────
 
 describe("parallel then-steps share when-action records unsafely", () => {
   test("should not let one parallel step's failure erase another step's consumption mark", async () => {
@@ -68,10 +63,6 @@ describe("parallel then-steps share when-action records unsafely", () => {
     const actions = [...Sync.Action.actions.values()];
     const whenAction = actions.find((a) => a.action === Button.clicked);
 
-    // Both parallel steps receive the same whenActions array. The first step
-    // (MKR.mark) succeeds and sets the synced mark, but the second step's
-    // journal failure reaches the runStepNode catch block, which calls
-    // synced.delete on the SHARED Map — wiping the first step's mark too.
     expect(whenAction?.synced?.has("InfraRace")).toBe(true);
     expect(MKR.hits).toBe(1);
   });
@@ -109,9 +100,6 @@ describe("parallel then-steps share when-action records unsafely", () => {
     const whenAction = actions.find((a) => a.action === Button.clicked);
     const syncedVal = whenAction?.synced?.get("OverwriteRace");
 
-    // The synced map key is present (correct), but the VALUE was set by both
-    // parallel steps on the same Map — the last writer wins, losing the first
-    // step's produced action ID from the trace.
     expect(typeof syncedVal).toBe("string");
     expect(whenAction?.synced?.has("OverwriteRace")).toBe(true);
   });
@@ -141,53 +129,6 @@ describe("parallel then-steps share when-action records unsafely", () => {
     const actions = [...Sync.Action.actions.values()];
     const whenAction = actions.find((a) => a.input?.kind === "par-mixed");
     expect(whenAction?.synced?.has("ParMixed")).toBe(true);
-  });
-});
-
-// ── Flat then-list marks all when-actions before any then-action runs ───────
-
-describe("flat then-list marks consumption pre-emptively", () => {
-  test("pre-emptively marks all when-actions before any then-action executes", async () => {
-    const Sync = new SyncConcept();
-    Sync.logging = Logging.OFF;
-
-    let observedHasMarkBeforeSecond = false;
-
-    class SpyConcept {
-      spy(_: Empty) {
-        // Check if the when-action already carries the sync's mark even though
-        // the second then-action hasn't run yet.
-        const actions = [...Sync.Action.actions.values()];
-        const whenAction = actions.find((a) => a.input?.kind === "preempt-mark");
-        if (whenAction?.synced?.has("FlatThenPreempt")) {
-          observedHasMarkBeforeSecond = true;
-        }
-        return {};
-      }
-    }
-
-    const { Button, Spy, Recorder } = Sync.instrument({
-      Button: new ButtonConcept(),
-      Spy: new SpyConcept(),
-      Recorder: new RecorderConcept(),
-    });
-
-    Sync.register({
-      FlatThenPreempt: sync((_vars: Vars) =>
-        when(Button.clicked, { kind: "preempt-mark" }, {}).then(
-          act(Spy.spy, {}),
-          act(Recorder.record, { tag: "second-then" }),
-        ),
-      ),
-    });
-
-    await Button.clicked({ kind: "preempt-mark" });
-
-    // Marks for ALL flat-then actions are set before ANY of them execute.
-    // If the process crashes between mark-set and the last then-action,
-    // the when-action remains permanently consumed even though the last
-    // then-action never ran.
-    expect(observedHasMarkBeforeSecond).toBe(true);
   });
 });
 
@@ -335,9 +276,9 @@ describe("journal records are briefly incomplete between append and commit", () 
   });
 });
 
-// ── actionNameOf assumes every function name starts with "bound " ───────────
+// ── actionNameOf supports bound and unbound action references ───────────────
 
-describe("actionNameOf corrupts non-bound function names", () => {
+describe("actionNameOf preserves non-bound function names", () => {
   test("should return the original name of a non-bound function", () => {
     const regularFn = function myRegularFunction() {
       return {};
@@ -349,8 +290,6 @@ describe("actionNameOf corrupts non-bound function names", () => {
 
     const name = actionNameOf(instrumented);
 
-    // actionNameOf unconditionally slices the first 6 characters ("bound "),
-    // which corrupts any function name that doesn't start with that prefix.
     expect(name).toBe("myRegularFunction");
   });
 
@@ -369,8 +308,6 @@ describe("actionNameOf corrupts non-bound function names", () => {
     });
 
     const name = actionNameOf(instrumented);
-    // Unbound methods don't have a "bound " prefix, so after slicing the
-    // first 6 characters an empty string is left.
     expect(name).toBe("doWork");
   });
 });

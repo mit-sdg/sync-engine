@@ -418,6 +418,8 @@ export class SyncConcept {
     new WeakMap();
   /** Tracks query cache invalidators per concept instance. */
   private queryCaches: WeakMap<object, Array<{ invalidate: () => void }>> = new WeakMap();
+  /** Resolves public instrumented proxies back to their cache-owning instances. */
+  private rawConceptsByInstrumented = new WeakMap<object, object>();
   /** All raw concept instances known to this engine, via WeakRef so they can be GC'd. */
   private concepts = new Set<WeakRef<object>>();
   /** Engine-level observers (passive sinks). */
@@ -442,7 +444,8 @@ export class SyncConcept {
 
   /** Invalidate all query caches for a concept — useful after external DB mutations. */
   invalidateCaches(concept: object): void {
-    this.queryCaches.get(concept)?.forEach((c) => {
+    const rawConcept = this.rawConceptsByInstrumented.get(concept) ?? concept;
+    this.queryCaches.get(rawConcept)?.forEach((c) => {
       c.invalidate();
     });
   }
@@ -1114,7 +1117,7 @@ export class SyncConcept {
       this.boundActionsByConcept.set(concept, boundActions);
     }
 
-    return new Proxy(concept, {
+    const instrumentedConcept = new Proxy(concept, {
       get(target, prop, receiver) {
         const value = Reflect.get(target, prop, receiver);
         if (typeof value !== "function") return value;
@@ -1213,6 +1216,8 @@ export class SyncConcept {
         return instrumented;
       },
     });
+    this.rawConceptsByInstrumented.set(instrumentedConcept, concept);
+    return instrumentedConcept;
   }
 
   /** Instrument every concept in a record, preserving keys. */
