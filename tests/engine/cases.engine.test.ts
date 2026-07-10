@@ -1,5 +1,14 @@
 import { describe, expect, test } from "vite-plus/test";
-import { act, type Frames, Logging, SyncConcept, type Vars, when } from "@sync-engine/engine";
+import {
+  act,
+  actionNodeId,
+  type Frames,
+  Logging,
+  seq,
+  SyncConcept,
+  type Vars,
+  when,
+} from "@sync-engine/engine";
 import { FrameworkErrorCode } from "@sync-engine/sdk";
 import {
   ButtonConcept,
@@ -169,5 +178,207 @@ describe("engine: edge cases", () => {
     expect(Throwing.hit).toBe(true);
     expect(Recorder.order).toContain("error");
     expect(Recorder.order).not.toContain("response");
+  });
+
+  test("clearObservers removes all observers", async () => {
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const { Button } = Sync.instrument({ Button: new ButtonConcept() });
+
+    let c1 = 0;
+    let c2 = 0;
+    let c3 = 0;
+    Sync.addObserver({
+      onAction() {
+        c1++;
+      },
+    });
+    Sync.addObserver({
+      onAction() {
+        c2++;
+      },
+    });
+    Sync.addObserver({
+      onAction() {
+        c3++;
+      },
+    });
+
+    await Button.clicked({ kind: "first" });
+    expect(c1).toBe(1);
+    expect(c2).toBe(1);
+    expect(c3).toBe(1);
+
+    Sync.clearObservers();
+
+    await Button.clicked({ kind: "second" });
+    expect(c1).toBe(1);
+    expect(c2).toBe(1);
+    expect(c3).toBe(1);
+  });
+
+  test("invalidateCaches clears query cache for one concept", async () => {
+    class CachingConcept {
+      calls = 0;
+      _data(_: Record<PropertyKey, never>) {
+        this.calls++;
+        return [{ value: this.calls }];
+      }
+    }
+
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const raw = new CachingConcept();
+    const { C } = Sync.instrument({ C: raw });
+
+    const r1 = await C._data({});
+    expect(r1).toEqual([{ value: 1 }]);
+
+    const r2 = await C._data({});
+    expect(r2).toEqual([{ value: 1 }]);
+
+    Sync.invalidateCaches(raw);
+    const r3 = await C._data({});
+    expect(r3).toEqual([{ value: 2 }]);
+
+    const r4 = await C._data({});
+    expect(r4).toEqual([{ value: 2 }]);
+  });
+
+  test("invalidateAllCaches clears all concept caches", async () => {
+    class CachingA {
+      calls = 0;
+      _query(_: Record<PropertyKey, never>) {
+        this.calls++;
+        return [{ v: this.calls }];
+      }
+    }
+    class CachingB {
+      calls = 0;
+      _query(_: Record<PropertyKey, never>) {
+        this.calls++;
+        return [{ v: this.calls }];
+      }
+    }
+
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const { A, B } = Sync.instrument({ A: new CachingA(), B: new CachingB() });
+
+    const a1 = await A._query({});
+    const b1 = await B._query({});
+    expect(a1).toEqual([{ v: 1 }]);
+    expect(b1).toEqual([{ v: 1 }]);
+
+    const a2 = await A._query({});
+    const b2 = await B._query({});
+    expect(a2).toEqual([{ v: 1 }]);
+    expect(b2).toEqual([{ v: 1 }]);
+
+    Sync.invalidateAllCaches();
+
+    const a3 = await A._query({});
+    const b3 = await B._query({});
+    expect(a3).toEqual([{ v: 2 }]);
+    expect(b3).toEqual([{ v: 2 }]);
+  });
+
+  test("where() gate that throws does not break the engine", async () => {
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const { Button, Recorder } = Sync.instrument({
+      Button: new ButtonConcept(),
+      Recorder: new RecorderConcept(),
+    });
+
+    Sync.register({
+      BadWhere: (_vars: Vars) =>
+        when(Button.clicked, { kind: "trigger" }, {})
+          .where(() => {
+            throw new Error("where-explosion");
+          })
+          .then(act(Recorder.record, { tag: "bad" })),
+      GoodSync: (_vars: Vars) =>
+        when(Button.clicked, { kind: "trigger" }, {}).then(act(Recorder.record, { tag: "good" })),
+    });
+
+    await Button.clicked({ kind: "trigger" });
+    expect(Recorder.order).not.toContain("bad");
+    expect(Recorder.order).toContain("good");
+  });
+
+  test("seq() with error at step 2 of 3 skips step 3", async () => {
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const { Button, Recorder, Throwing } = Sync.instrument({
+      Button: new ButtonConcept(),
+      Recorder: new RecorderConcept(),
+      Throwing: new ThrowingConcept(),
+    });
+
+    Sync.register({
+      SeqWithThrow: (_vars: Vars) =>
+        when(Button.clicked, { kind: "seq-test" }, {}).then(
+          seq(
+            act(Recorder.record, { tag: "step1" }),
+            act(Throwing.explode, {}),
+            act(Recorder.record, { tag: "step3" }),
+          ),
+        ),
+    });
+
+    await Button.clicked({ kind: "seq-test" });
+    expect(Recorder.order).toContain("step1");
+    expect(Recorder.order).not.toContain("step3");
+  });
+
+  test("sync re-registration removes old sync from action index", async () => {
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const { Button, Recorder } = Sync.instrument({
+      Button: new ButtonConcept(),
+      Recorder: new RecorderConcept(),
+    });
+
+    Sync.register({
+      ReRegister: (_vars: Vars) =>
+        when(Button.clicked, { kind: "re-reg" }, {}).then(act(Recorder.record, { tag: "old" })),
+    });
+    await Button.clicked({ kind: "re-reg" });
+    expect(Recorder.order).toContain("old");
+
+    Sync.register({
+      ReRegister: (_vars: Vars) =>
+        when(Button.clicked, { kind: "re-reg" }, {}).then(act(Recorder.record, { tag: "new" })),
+    });
+    await Button.clicked({ kind: "re-reg" });
+
+    expect(Recorder.order.filter((t) => t === "old")).toHaveLength(1);
+    expect(Recorder.order).toContain("new");
+  });
+
+  test("actionNodeId produces correct Concept.action format", () => {
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const { Button, Recorder } = Sync.instrument({
+      Button: new ButtonConcept(),
+      Recorder: new RecorderConcept(),
+    });
+
+    const bp = {
+      action: Button.clicked,
+      concept: (Button.clicked as unknown as Record<string, unknown>).concept as object,
+      input: {},
+      flow: Symbol("flow"),
+    };
+    expect(actionNodeId(bp)).toBe("Button.clicked");
+
+    const rp = {
+      action: Recorder.record,
+      concept: (Recorder.record as unknown as Record<string, unknown>).concept as object,
+      input: { tag: "x" },
+      flow: Symbol("flow"),
+    };
+    expect(actionNodeId(rp)).toBe("Recorder.record");
   });
 });

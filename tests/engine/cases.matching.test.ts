@@ -329,3 +329,87 @@ describe("engine: optional field matching", () => {
     expect(Recorder.order).toEqual(["hello", "unbound:hello"]);
   });
 });
+
+describe("engine: queryOptionalAsync", () => {
+  test("preserves frame when async child query returns no rows", async () => {
+    const id = Symbol("id");
+    const item = Symbol("item");
+    const frames = new Frames({ [id]: "a" }, { [id]: "b" });
+
+    const children: Record<string, string[]> = { a: ["a1"], b: [] };
+    const out = await frames.queryOptionalAsync(
+      async ({ id: idVal }: { id: string }) => {
+        await Promise.resolve();
+        return children[idVal].map((v) => ({ value: v }));
+      },
+      { id },
+      { value: item },
+    );
+
+    expect(out).toBeInstanceOf(Frames);
+    expect(out.length).toBe(2);
+    const aFrames = out.filter(($) => $[id] === "a");
+    expect(aFrames.length).toBe(1);
+    expect(aFrames[0][item]).toBe("a1");
+    const bFrames = out.filter(($) => $[id] === "b");
+    expect(bFrames.length).toBe(1);
+    expect(bFrames[0][item]).toBeUndefined();
+    expect(bFrames[0][id]).toBe("b");
+  });
+});
+
+describe("engine: deeply nested then resolution", () => {
+  test("matchThen resolves symbols at depth 2 in then input", async () => {
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const { Recorder } = Sync.instrument({
+      Recorder: new RecorderConcept(),
+    });
+
+    Sync.register({
+      DeepNest: ({ tag, inner }: Vars) =>
+        when(Recorder.record, { tag }, {})
+          .where((frames: Frames) =>
+            frames
+              .filter(($) => !String($[tag]).includes(":"))
+              .map((frame) => ({
+                ...frame,
+                [inner]: `resolved-${String(frame[tag])}`,
+              })),
+          )
+          .then(
+            act(Recorder.record, {
+              tag: "@:done",
+              extra: { nested: { deep: inner } },
+            }),
+          ),
+    });
+
+    await Recorder.record({ tag: "hello" });
+    expect(Recorder.order).toEqual(["hello", "@:done"]);
+  });
+});
+
+describe("engine: symbol-keyed input pattern", () => {
+  test("symbol-keyed input pattern key is ignored by when matching", async () => {
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+    const { Recorder } = Sync.instrument({
+      Recorder: new RecorderConcept(),
+    });
+
+    const symKey = Symbol("nonExistent");
+    Sync.register({
+      SymbolKeyPat: (_vars: Vars) =>
+        when(
+          Recorder.record,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { [symKey]: "impossible", tag: "expected" } as any,
+          {},
+        ).then(act(Recorder.record, { tag: "after-sym" })),
+    });
+
+    await Recorder.record({ tag: "expected" });
+    expect(Recorder.order).toEqual(["expected", "after-sym"]);
+  });
+});

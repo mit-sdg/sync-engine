@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { createEndpointDsl, syncMap } from "@sync-engine/sdk";
-import type { RequestBoundaryActions } from "@sync-engine/sdk";
+import type { EndpointHelpers, RequestBoundaryActions } from "@sync-engine/sdk";
 import { SyncConcept } from "@sync-engine/engine";
 import type { Vars } from "@sync-engine/engine";
 
@@ -123,6 +123,78 @@ describe("createEndpointDsl", () => {
     const requestSymbol = Symbol.for("test-request");
     const result = (ep.syncs.main as Function)({ __request: requestSymbol });
     expect(result.then.length).toBe(1);
+  });
+
+  test("endpoint helpers used outside sync body throw", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+
+    let capturedHelpers: EndpointHelpers | undefined;
+    dsl.endpoint("/test", (helpers) => {
+      capturedHelpers = helpers;
+      return { main: (_vars: Vars) => helpers.request({}).then(helpers.respond({ ok: true })) };
+    });
+
+    expect(() => capturedHelpers!.request({})).toThrow("outside a sync function body");
+  });
+
+  test("endpoint helpers preserve the activeRequest symbol across function invocations", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+    const mySymbol = Symbol("activeReq");
+
+    const ep = dsl.endpoint("/test", ({ request, respond }) => ({
+      main: (_vars: Vars) => request({}).then(respond({ ok: true })),
+    }));
+
+    const result = (ep.syncs.main as Function)({ __request: mySymbol });
+
+    expect(result.when[0].output).toEqual({ request: mySymbol });
+    expect((result.then[0] as Record<string, unknown>).action).toBeDefined();
+    expect(
+      ((result.then[0] as Record<string, unknown>).action as Record<string, unknown>).input,
+    ).toHaveProperty("request");
+    expect(
+      ((result.then[0] as Record<string, unknown>).action as Record<string, unknown>).input,
+    ).toEqual(expect.objectContaining({ request: mySymbol }));
+  });
+
+  test("fail helper wraps non-plain-mapping values (Date, Map, custom class) in { error: value }", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+    const mySymbol = Symbol("test-req");
+
+    const epDate = dsl.endpoint("/date", ({ request, fail }) => ({
+      main: (_vars: Vars) => request().then(fail(new Date("2024-01-01"))),
+    }));
+    const dateThen = (
+      (epDate.syncs.main as Function)({ __request: mySymbol }) as Record<string, unknown>
+    ).then as Record<string, unknown>[];
+    expect((dateThen[0] as Record<string, unknown>).action).toBeDefined();
+    const dateInput = ((dateThen[0] as Record<string, unknown>).action as Record<string, unknown>)
+      .input as Record<string, unknown>;
+    expect(dateInput.error).toBeInstanceOf(Date);
+    expect(dateInput.request).toBe(mySymbol);
+
+    const epMap = dsl.endpoint("/map", ({ request, fail }) => ({
+      main: (_vars: Vars) => request().then(fail(new Map([["k", "v"]]))),
+    }));
+    const mapThen = (
+      (epMap.syncs.main as Function)({ __request: mySymbol }) as Record<string, unknown>
+    ).then as Record<string, unknown>[];
+    const mapInput = ((mapThen[0] as Record<string, unknown>).action as Record<string, unknown>)
+      .input as Record<string, unknown>;
+    expect(mapInput.error).toBeInstanceOf(Map);
+    expect(mapInput.request).toBe(mySymbol);
+
+    class Foo {}
+    const epClass = dsl.endpoint("/class", ({ request, fail }) => ({
+      main: (_vars: Vars) => request().then(fail(new Foo())),
+    }));
+    const classThen = (
+      (epClass.syncs.main as Function)({ __request: mySymbol }) as Record<string, unknown>
+    ).then as Record<string, unknown>[];
+    const classInput = ((classThen[0] as Record<string, unknown>).action as Record<string, unknown>)
+      .input as Record<string, unknown>;
+    expect(classInput.error).toBeInstanceOf(Foo);
+    expect(classInput.request).toBe(mySymbol);
   });
 });
 

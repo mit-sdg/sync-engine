@@ -159,3 +159,84 @@ describe("cached", () => {
     expect(calls).toBe(2);
   });
 });
+
+describe("cached async TTL", () => {
+  test("TTL expiration for async functions", async () => {
+    let calls = 0;
+    const fn = cached(
+      async (x: number) => {
+        calls++;
+        return x * 2;
+      },
+      { ttlMs: 50 },
+    );
+
+    const result1 = await fn(1);
+    expect(result1).toBe(2);
+    expect(calls).toBe(1);
+
+    await new Promise((r) => setTimeout(r, 60));
+
+    const result2 = await fn(1);
+    expect(result2).toBe(2);
+    expect(calls).toBe(2);
+  });
+
+  test("two concurrent callers share in-flight promise", async () => {
+    let calls = 0;
+    let resolvePromise!: (v: string) => void;
+    const slowFn = cached(() => {
+      calls++;
+      return new Promise<string>((resolve) => {
+        resolvePromise = resolve;
+      });
+    });
+
+    const p1 = slowFn();
+    const p2 = slowFn();
+
+    expect(calls).toBe(1);
+
+    resolvePromise("done");
+
+    const r1 = await p1;
+    const r2 = await p2;
+    expect(r1).toBe("done");
+    expect(r2).toBe("done");
+    expect(calls).toBe(1);
+  });
+});
+
+describe("serialize cache key edge cases", () => {
+  test("handles circular argument without stack overflow", () => {
+    let calls = 0;
+    const fn = cached((_obj: any) => {
+      calls++;
+      return "ok";
+    });
+
+    const circular: any = { name: "outer" };
+    circular.inner = circular;
+
+    expect(() => fn(circular)).not.toThrow();
+    expect(calls).toBe(1);
+
+    fn(circular);
+    expect(calls).toBe(1);
+  });
+
+  test("handles BigInt argument", () => {
+    let calls = 0;
+    const fn = cached((x: unknown) => {
+      calls++;
+      return String(x);
+    });
+
+    fn(42n);
+    fn(42n);
+    expect(calls).toBe(1);
+
+    fn(99n);
+    expect(calls).toBe(2);
+  });
+});

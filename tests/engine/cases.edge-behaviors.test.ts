@@ -19,7 +19,7 @@ import {
   when,
   actionNameOf,
 } from "@sync-engine/engine";
-import { ButtonConcept, RecorderConcept } from "./mocks.ts";
+import { ButtonConcept, RecorderConcept, ThrowingConcept } from "./mocks.ts";
 
 // ── Parallel then-steps corrupt each other's consumption marks ──────────────
 
@@ -114,6 +114,33 @@ describe("parallel then-steps share when-action records unsafely", () => {
     // step's produced action ID from the trace.
     expect(typeof syncedVal).toBe("string");
     expect(whenAction?.synced?.has("OverwriteRace")).toBe(true);
+  });
+
+  test("should preserve successful sibling's synced mark after error in another par child", async () => {
+    const Sync = new SyncConcept();
+    Sync.logging = Logging.OFF;
+
+    const { Button, Recorder, Throwing } = Sync.instrument({
+      Button: new ButtonConcept(),
+      Recorder: new RecorderConcept(),
+      Throwing: new ThrowingConcept(),
+    });
+
+    Sync.register({
+      ParMixed: sync((_vars: Vars) =>
+        when(Button.clicked, { kind: "par-mixed" }, {}).then(
+          par(act(Recorder.record, { tag: "good-branch" }), act(Throwing.explode, {})),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "par-mixed" });
+
+    expect(Recorder.order).toContain("good-branch");
+
+    const actions = [...Sync.Action.actions.values()];
+    const whenAction = actions.find((a) => a.input?.kind === "par-mixed");
+    expect(whenAction?.synced?.has("ParMixed")).toBe(true);
   });
 });
 

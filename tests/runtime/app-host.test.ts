@@ -174,4 +174,84 @@ describe("AppHost", () => {
     // All resources still ran despite the failure.
     expect(stopped).toContain("ted:1");
   });
+
+  test("stopAll collects both sync throws and async rejections into AggregateError", async () => {
+    const stopped: string[] = [];
+    const host = new AppHost<FakeApp, undefined>({
+      create: (prefix): CreatedApp<FakeApp> => ({
+        app: { id: prefix },
+        type: "tenant",
+        resources: [
+          {
+            stop: () => {
+              stopped.push("sync-fail");
+              throw new Error("sync boom");
+            },
+          },
+          {
+            stop: async () => {
+              stopped.push("async-fail");
+              throw new Error("async boom");
+            },
+          },
+          { stop: () => void stopped.push("ok") },
+        ],
+      }),
+    });
+
+    await host.register("a", undefined);
+
+    const err = await host.stopAll().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AggregateError);
+    expect((err as AggregateError).errors.some((e) => String(e).includes("sync boom"))).toBe(true);
+    expect((err as AggregateError).errors.some((e) => String(e).includes("async boom"))).toBe(true);
+    expect(stopped).toContain("sync-fail");
+    expect(stopped).toContain("async-fail");
+    expect(stopped).toContain("ok");
+  });
+
+  test("concurrent register() deduplicates — both calls return the same promise", async () => {
+    let creates = 0;
+    const host = new AppHost<FakeApp, { id: string }>({
+      create: (_prefix, params): CreatedApp<FakeApp> => {
+        creates += 1;
+        return { app: { id: params.id }, type: "tenant", resources: [] };
+      },
+    });
+
+    const [first, second] = await Promise.all([
+      host.register("same", { id: "x" }),
+      host.register("same", { id: "y" }),
+    ]);
+
+    expect(first).toBe(second);
+    expect(creates).toBe(1);
+    expect(host.values()).toHaveLength(1);
+    expect(host.values()[0].app.id).toBe("x");
+  });
+
+  test("register() preempted by unregister() during async create does not add the app", async () => {
+    let resolveCreate: (v: CreatedApp<FakeApp>) => void;
+    const createPromise = new Promise<CreatedApp<FakeApp>>((r) => {
+      resolveCreate = r;
+    });
+
+    const host = new AppHost<FakeApp, undefined>({
+      create: (): CreatedApp<FakeApp> | Promise<CreatedApp<FakeApp>> => createPromise,
+    });
+
+    const regPromise = host.register("ted", undefined);
+    await host.unregister("ted");
+
+    resolveCreate!({
+      app: { id: "ted" },
+      type: "tenant",
+      resources: [],
+    });
+
+    await regPromise;
+
+    expect(host.has("ted")).toBe(false);
+    expect(host.values()).toHaveLength(0);
+  });
 });

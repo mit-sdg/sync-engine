@@ -79,4 +79,26 @@ describe("Lifecycle", () => {
 
     expect(count).toBe(1);
   });
+
+  test("stopAll collects async rejected stop() into AggregateError", async () => {
+    const stopped: string[] = [];
+    const lifecycle = new Lifecycle();
+    lifecycle.add({
+      stop: async () => {
+        stopped.push("async-fail");
+        throw new Error("async fail");
+      },
+    });
+    lifecycle.add({ stop: () => void stopped.push("ok") });
+
+    const err = await lifecycle.stopAll().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AggregateError);
+    expect((err as AggregateError).errors.some((e) => String(e).includes("async fail"))).toBe(true);
+    expect(stopped).toEqual(["ok", "async-fail"]);
+  });
+
+  test("stopAll with no resources resolves cleanly", async () => {
+    const lifecycle = new Lifecycle();
+    await expect(lifecycle.stopAll()).resolves.toBeUndefined();
+  });
 });

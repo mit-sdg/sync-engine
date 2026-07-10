@@ -106,4 +106,19 @@ describe("createClient (transport-agnostic)", () => {
       input: {},
     });
   });
+
+  test("transport that throws (not resolves with error) is caught and converted to error envelope", async () => {
+    const client = createClient<TestApi>({
+      transport: () => {
+        throw new Error("boom");
+      },
+    });
+
+    const result = await client.auth.login({ username: "a", password: "b" });
+
+    expect(result).toEqual({
+      error: "TRANSPORT_ERROR",
+      detail: expect.stringContaining("boom"),
+    });
+  });
 });

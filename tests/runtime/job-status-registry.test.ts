@@ -39,4 +39,20 @@ describe("JobStatusRegistry", () => {
     remove();
     expect(registry.all()).toEqual([]);
   });
+
+  test("adding two sources then removing one still leaves one", () => {
+    const registry = new JobStatusRegistry();
+
+    const remove1 = registry.add({ getJobStatuses: () => [status("dup")] });
+    const remove2 = registry.add({ getJobStatuses: () => [status("dup")] });
+
+    expect(registry.all()).toHaveLength(2);
+
+    remove1();
+    expect(registry.all()).toHaveLength(1);
+    expect(registry.all()[0].name).toBe("dup");
+
+    remove2();
+    expect(registry.all()).toEqual([]);
+  });
 });

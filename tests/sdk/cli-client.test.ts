@@ -128,6 +128,35 @@ describe("createCliClient", () => {
 
     expect(result).toEqual({});
   });
+
+  test("returns PROCESS_ERROR when child process emits runtime error after spawn", async () => {
+    const client = createCliClient<TestApi>({
+      command: "node",
+      args: ["-e", "1"],
+      cwd: "/definitely/nonexistent/directory/path",
+    });
+
+    const result = await client.auth.login({ username: "a", password: "b" });
+
+    expect(result).toEqual({
+      error: FrameworkErrorCode.PROCESS_ERROR,
+      detail: expect.stringContaining("failed to start"),
+    });
+  });
+
+  test("returns COMMAND_FAILED when child process is terminated by signal", async () => {
+    const client = createCliClient<TestApi>({
+      command: "node",
+      args: ["-e", "process.kill(process.pid, 'SIGTERM')"],
+    });
+
+    const result = await client.auth.login({ username: "a", password: "b" });
+
+    expect(result).toEqual({
+      error: FrameworkErrorCode.COMMAND_FAILED,
+      detail: expect.stringContaining("terminated by signal"),
+    });
+  });
 });
 
 describe("createCliTransport", () => {

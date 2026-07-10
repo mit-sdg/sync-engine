@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { serializeError } from "@sync-engine/utils";
 
 describe("serializeError", () => {
@@ -54,5 +54,96 @@ describe("serializeError", () => {
   test("serializes undefined as { message: 'undefined' }", () => {
     const result = serializeError(undefined);
     expect(result).toEqual({ message: "undefined" });
+  });
+});
+
+describe("logger", () => {
+  test("withRequestId creates a child logger with distinct requestId", async () => {
+    const original = process.env.LOG_LEVEL;
+    try {
+      process.env.LOG_LEVEL = "info";
+      vi.resetModules();
+      const mod = await import("@sync-engine/utils");
+
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      const child = mod.logger.withRequestId("req-123");
+
+      expect(child.requestId).toBe("req-123");
+      expect(mod.logger.requestId).toBeUndefined();
+
+      child.info("child message");
+
+      const output = logSpy.mock.calls[0][0] as string;
+      expect(output).toContain("req-123");
+
+      logSpy.mockRestore();
+    } finally {
+      process.env.LOG_LEVEL = original;
+      vi.resetModules();
+    }
+  });
+
+  test("LOG_LEVEL=debug allows debug messages", async () => {
+    const original = process.env.LOG_LEVEL;
+    try {
+      process.env.LOG_LEVEL = "debug";
+      vi.resetModules();
+      const mod = await import("@sync-engine/utils");
+
+      const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
+      mod.logger.debug("debug msg");
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("debug msg"));
+      spy.mockRestore();
+    } finally {
+      process.env.LOG_LEVEL = original;
+      vi.resetModules();
+    }
+  });
+
+  test("LOG_LEVEL=error suppresses info and warn", async () => {
+    const original = process.env.LOG_LEVEL;
+    try {
+      process.env.LOG_LEVEL = "error";
+      vi.resetModules();
+      const mod = await import("@sync-engine/utils");
+
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      mod.logger.info("should not appear");
+      mod.logger.warn("should not appear");
+
+      expect(logSpy).not.toHaveBeenCalled();
+      expect(warnSpy).not.toHaveBeenCalled();
+
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+    } finally {
+      process.env.LOG_LEVEL = original;
+      vi.resetModules();
+    }
+  });
+
+  test("redacts sensitive metadata in log output", async () => {
+    const original = process.env.LOG_LEVEL;
+    try {
+      process.env.LOG_LEVEL = "info";
+      vi.resetModules();
+      const mod = await import("@sync-engine/utils");
+
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mod.logger.info("msg", { password: "secret" });
+
+      const output = logSpy.mock.calls[0][0] as string;
+      expect(output).not.toContain("secret");
+      expect(output).toContain("[redacted]");
+
+      logSpy.mockRestore();
+    } finally {
+      process.env.LOG_LEVEL = original;
+      vi.resetModules();
+    }
   });
 });

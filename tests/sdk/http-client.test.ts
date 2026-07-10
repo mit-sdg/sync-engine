@@ -297,6 +297,24 @@ describe("createHttpClient", () => {
 
     expect(result).toEqual({});
   });
+
+  test("returns BAD_JSON when response.text() rejects", async () => {
+    const fetch: typeof globalThis.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.reject(new Error("Read error")),
+      }),
+    ) as unknown as typeof fetch;
+    const client = makeClient(fetch);
+
+    const result = await client.auth.login({ username: "a", password: "b" });
+
+    expect(result).toEqual({
+      error: FrameworkErrorCode.BAD_JSON,
+      detail: expect.stringContaining("Failed to read"),
+    });
+  });
 });
 
 describe("createHttpTransport", () => {
