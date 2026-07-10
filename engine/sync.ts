@@ -251,7 +251,7 @@ function buildBranch(outcome: "result" | "error", args: unknown[]): BranchNode {
     });
   }
   if (typeof first === "function") {
-    const nodes = [second, ...rest] as ThenNode[];
+    const nodes = [second, ...rest].filter((n): n is ThenNode => n !== undefined);
     if (nodes.length === 0) throw new Error("on(...)/onError(...) requires at least one node.");
     return brand({
       kind: "branch",
@@ -542,25 +542,33 @@ export class SyncConcept {
     const flowActions = this.Action._getByFlow(record.flow);
     if (flowActions === undefined) return [new Frames(), []];
 
-    let frames: Frames = new Frames({ [flow]: record.flow } as Frame);
+    let framesWithConsumed: [Frame, Set<string>][] = [
+      [{ [flow]: record.flow } as Frame, new Set()],
+    ];
     const actionSymbols: symbol[] = [];
 
     sync.when.forEach((when, i) => {
       const actionSymbol = Symbol(`action_${i}`);
       actionSymbols.push(actionSymbol);
 
-      const joined = new Frames();
-      for (const frame of frames) {
+      const next: [Frame, Set<string>][] = [];
+      for (const [frame, parentConsumed] of framesWithConsumed) {
         for (const candidate of flowActions) {
           // Skip records this sync has already consumed (double-fire guard).
           if (candidate.synced?.has(sync.sync)) continue;
+          if (candidate.id !== undefined && parentConsumed.has(candidate.id)) continue;
           const matched = this.matchArguments(candidate, when, frame, actionSymbol);
-          if (matched !== undefined) joined.push(matched);
+          if (matched !== undefined) {
+            const childConsumed = new Set(parentConsumed);
+            if (candidate.id !== undefined) childConsumed.add(candidate.id);
+            next.push([matched, childConsumed]);
+          }
         }
       }
-      frames = joined;
+      framesWithConsumed = next;
     });
 
+    const frames = new Frames(...framesWithConsumed.map(([f]) => f));
     return [frames, actionSymbols];
   }
 
@@ -1113,7 +1121,7 @@ export class SyncConcept {
         const actionKey = value as AnyAction;
 
         // Queries: wrap with automatic caching.
-        if (value.name.startsWith("_")) {
+        if (String(prop).startsWith("_")) {
           const memoized = boundActions.get(actionKey);
           if (memoized !== undefined) return memoized;
 
@@ -1212,7 +1220,7 @@ export class SyncConcept {
   /** Instrument a single concept instance. */
   instrument<T extends object>(concept: T): T;
   instrument(concepts: Record<string, object> | object): any {
-    if (concepts !== null && typeof concepts === "object") {
+    if (concepts !== null && typeof concepts === "object" && concepts.constructor === Object) {
       const entries = Object.entries(concepts);
       if (entries.length > 0 && entries.every(([, v]) => typeof v === "object" && v !== null)) {
         return Object.fromEntries(
