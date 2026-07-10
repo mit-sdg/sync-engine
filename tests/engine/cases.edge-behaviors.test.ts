@@ -120,7 +120,7 @@ describe("parallel then-steps share when-action records unsafely", () => {
 // ── Flat then-list marks all when-actions before any then-action runs ───────
 
 describe("flat then-list marks consumption pre-emptively", () => {
-  test("should not set synced marks for then-actions that haven't executed yet", async () => {
+  test("pre-emptively marks all when-actions before any then-action executes", async () => {
     const Sync = new SyncConcept();
     Sync.logging = Logging.OFF;
 
@@ -167,17 +167,27 @@ describe("flat then-list marks consumption pre-emptively", () => {
 // ── enrich() symbols are per-call, avoiding cross-context leaks ────────────
 
 describe("enrich uses per-call local symbols", () => {
-  test("does not use globally-registered symbols for enrichment result keys", async () => {
-    const frames1 = new Frames({ [Symbol("a")]: 1 } as Record<symbol, unknown>);
-    const frames2 = new Frames({ [Symbol("b")]: 2 } as Record<symbol, unknown>);
+  test("creates per-call symbols that don't leak between enrich calls", async () => {
+    const symA = Symbol("a");
+    const frames1 = new Frames({ [symA]: 1 } as Record<symbol, unknown>);
+    const frames2 = new Frames({ [symA]: 2 } as Record<symbol, unknown>);
 
-    await frames1.enrich(async () => ({ sharedKey: "value1" }));
-    await frames2.enrich(async () => ({ sharedKey: "value2" }));
+    const enriched1 = await frames1.enrich(async () => ({ sharedKey: "value1" }));
+    const enriched2 = await frames2.enrich(async () => ({ sharedKey: "value2" }));
 
-    const globalSym = Symbol.for("sharedKey");
-    const localSym = Symbol("sharedKey");
+    const syms1 = Object.getOwnPropertySymbols(enriched1[0]);
+    const syms2 = Object.getOwnPropertySymbols(enriched2[0]);
 
-    expect(globalSym).not.toBe(localSym);
+    const enrichSym1 = syms1.find((s) => s.description === "sharedKey");
+    const enrichSym2 = syms2.find((s) => s.description === "sharedKey");
+
+    expect(enrichSym1).toBeDefined();
+    expect(enrichSym2).toBeDefined();
+    if (enrichSym1 && enrichSym2) {
+      expect(enrichSym1).not.toBe(enrichSym2);
+    }
+    if (enrichSym1) expect(enriched1[0][enrichSym1]).toBe("value1");
+    if (enrichSym2) expect(enriched2[0][enrichSym2]).toBe("value2");
   });
 });
 
