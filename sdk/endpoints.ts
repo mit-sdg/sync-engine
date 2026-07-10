@@ -10,19 +10,36 @@
  * can supply a thin adapter.
  */
 
-import type {
-  InstrumentedAction,
-  Mapping,
-  Sync,
-  ThenNode,
-  Vars,
-  WhenBuilder,
-} from "@sync-engine/engine";
+import type { InstrumentedAction, Mapping, Sync, ThenNode, WhenBuilder } from "@sync-engine/engine";
 import { act, when } from "@sync-engine/engine";
+
+const requestIdVar = Symbol("requestId");
 
 // ── Phantom symbols ──────────────────────────────────────────────────────
 
 declare const _contract: unique symbol;
+
+// ── Schema interface ──────────────────────────────────────────────────────
+
+export interface TypedSchema<T> {
+  readonly "~standard": {
+    readonly version: 1;
+    readonly vendor: "sync-engine";
+    readonly validate: (
+      value: unknown,
+    ) => { readonly issues?: ReadonlyArray<{ readonly message: string }> } | { readonly value: T };
+  };
+}
+
+export function unchecked<T>(): TypedSchema<T> {
+  return {
+    "~standard": {
+      version: 1,
+      vendor: "sync-engine",
+      validate: (value: unknown) => ({ value: value as T }),
+    },
+  };
+}
 
 // ── Endpoint contract shape ──────────────────────────────────────────────
 
@@ -104,45 +121,23 @@ export function createEndpointDsl(boundary: RequestBoundaryActions) {
     TContract["output"] extends object ? TContract["output"] : Record<string, never>,
     TContract["error"] extends object ? TContract["error"] : Record<string, never>
   > {
-    let activeRequest: symbol | undefined;
-
-    function getActiveRequest(): symbol {
-      if (activeRequest === undefined) {
-        throw new Error("Endpoint helper used outside a sync function body.");
-      }
-      return activeRequest;
-    }
-
     const helpers: EndpointHelpers = {
       request: (input: Mapping = {}): WhenBuilder =>
-        when(boundary.request, { ...input, path }, { request: getActiveRequest() }),
+        when(boundary.request, { ...input, path, requestId: requestIdVar }),
 
       respond: (body: Mapping = {}): ThenNode =>
-        act(boundary.respond, { ...body, request: getActiveRequest() }),
+        act(boundary.respond, { ...body, requestId: requestIdVar }),
 
-      fail: (error: unknown = {}): ThenNode => {
-        const active = getActiveRequest();
-        const body = isPlainMapping(error) ? error : { error };
-        return act(boundary.respond, { ...body, request: active });
-      },
+      fail: (error: unknown = {}): ThenNode =>
+        act(boundary.respond, {
+          error,
+          requestId: requestIdVar,
+        }),
     };
 
     const syncFns = build(helpers);
 
-    const wrappedSyncs: Record<string, Sync> = {};
-    for (const [name, fn] of Object.entries(syncFns)) {
-      wrappedSyncs[name] = ((vars: Vars) => {
-        const prev = activeRequest;
-        activeRequest = (vars as Record<string, unknown>).__request as symbol;
-        try {
-          return fn(vars);
-        } finally {
-          activeRequest = prev;
-        }
-      }) as Sync;
-    }
-
-    return { path, syncs: wrappedSyncs } as EndpointDefinition<
+    return { path, syncs: syncFns } as EndpointDefinition<
       TPath,
       TContract["input"] extends object ? TContract["input"] : Record<string, never>,
       TContract["output"] extends object ? TContract["output"] : Record<string, never>,
@@ -180,15 +175,4 @@ function isEndpointDefinition(
   value: unknown,
 ): value is EndpointDefinition<string, object, object, object> {
   return value !== null && typeof value === "object" && "path" in value && "syncs" in value;
-}
-
-function isPlainMapping(value: unknown): value is Mapping {
-  if (value === null || typeof value !== "object") return false;
-  if (Array.isArray(value)) return false;
-  if (value instanceof Date) return false;
-  if (value instanceof Map) return false;
-  if (value instanceof Set) return false;
-  if (value instanceof RegExp) return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === null || proto === Object.prototype;
 }

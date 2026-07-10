@@ -261,11 +261,18 @@ When a sync does not fire, check these in order:
 The package includes optional application-boundary utilities in addition to the
 engine:
 
-- `@mit-sdg/sync-engine/sdk` provides a typed endpoint DSL and a
-  transport-independent client with no code generation.
+- `@mit-sdg/sync-engine/sdk` provides a typed endpoint DSL, a
+  transport-independent client with no code generation, a local invoker for
+  typed request-response correlation, an HTTP client and server handler, and
+  a typed CLI app builder.
 - `createHttpClient` sends endpoint calls over `fetch`.
-- `createCliClient` sends one JSON request to a child process over stdin and
-  reads one JSON response from stdout.
+- `createHttpHandler` serves endpoint calls over HTTP using standard
+  `Request`/`Response` objects.
+- `createInvoker` provides typed local invocation with request correlation,
+  timeouts, and cancellation — the foundation shared by HTTP and CLI.
+- `createCliApp` builds a typed local CLI from command definitions with async
+  handlers, arg parsing, and auto-generated help. Can optionally use an invoker
+  for endpoint-command dispatch.
 - `@mit-sdg/sync-engine/runtime` provides app hosting, lifecycle cleanup, and
   job-status aggregation for long-running processes.
 
@@ -296,7 +303,7 @@ Source is split by responsibility:
 
 ```text
 engine/   journal, matching, frames, and the sync DSL
-sdk/      endpoint contracts and HTTP/CLI clients
+sdk/      endpoint contracts, invoker, HTTP client/handler, and CLI adapter
 runtime/  hosting and lifecycle helpers
 utils/    cache, logging, and redaction
 tests/    unit, integration, and golden applications

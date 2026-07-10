@@ -29,6 +29,7 @@
  */
 
 import type { Prettify } from "./endpoints.ts";
+import { FrameworkErrorCode } from "./errors.ts";
 
 /** The normalized error envelope transports use for outside-world failures. */
 export type ClientError = { error: string; detail?: string };
@@ -170,7 +171,7 @@ export function createClient<C extends ContractShape, TError = ClientError>(
       return await options.transport({ path, input: body ?? {} });
     } catch (e) {
       return {
-        error: "TRANSPORT_ERROR",
+        error: FrameworkErrorCode.TRANSPORT_ERROR,
         detail: e instanceof Error ? e.message : String(e),
       };
     }

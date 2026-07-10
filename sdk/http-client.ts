@@ -8,7 +8,7 @@
  * setup.
  */
 
-import { FrameworkErrorCode } from "./error-codes.ts";
+import { FrameworkErrorCode } from "./errors.ts";
 import type { Client, ClientTransport, ContractShape } from "./client.ts";
 import { createClient } from "./client.ts";
 

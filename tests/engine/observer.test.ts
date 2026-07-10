@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vite-plus/test";
-import { act, type JournalEvent, Logging, SyncConcept, when } from "@sync-engine/engine";
-import { FrameworkErrorCode } from "@sync-engine/sdk";
+import {
+  act,
+  EngineErrorCode,
+  type JournalEvent,
+  Logging,
+  SyncConcept,
+  when,
+} from "@sync-engine/engine";
 import {
   ButtonConcept,
   CounterConcept,
@@ -81,7 +87,7 @@ describe("engine observer", () => {
     const result = await Throwing.explode({});
 
     expect(result).toEqual({
-      error: FrameworkErrorCode.UNKNOWN_ERROR,
+      error: EngineErrorCode.UNKNOWN_ERROR,
       detail: "kaboom",
     });
 
@@ -89,7 +95,7 @@ describe("engine observer", () => {
     expect(events[0].concept).toBe("Throwing");
     expect(events[0].action).toBe("explode");
     expect(events[0].output).toEqual({
-      error: FrameworkErrorCode.UNKNOWN_ERROR,
+      error: EngineErrorCode.UNKNOWN_ERROR,
       detail: "kaboom",
     });
   });

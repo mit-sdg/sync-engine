@@ -6,6 +6,8 @@
  */
 
 export { normalizeOutcome } from "./actions.ts";
+export { EngineErrorCode } from "./errors.ts";
+export type { EngineErrorCode as EngineErrorCodeType } from "./errors.ts";
 export { Frames } from "./frames.ts";
 export { actionNameOf, actionNodeId, conceptNameOf } from "./introspect.ts";
 export type { EngineObserver, JournalEvent } from "./observer.ts";

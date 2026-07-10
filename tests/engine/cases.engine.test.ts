@@ -8,7 +8,7 @@ import {
   type Vars,
   when,
 } from "@sync-engine/engine";
-import { FrameworkErrorCode } from "@sync-engine/sdk";
+import { EngineErrorCode } from "@sync-engine/engine";
 import {
   ButtonConcept,
   CounterConcept,
@@ -118,7 +118,7 @@ describe("engine: edge cases", () => {
     });
     const result = await Throwing.explode({});
     expect(result).toEqual({
-      error: FrameworkErrorCode.UNKNOWN_ERROR,
+      error: EngineErrorCode.UNKNOWN_ERROR,
       detail: "kaboom",
     });
     expect(Throwing.hit).toBe(true);

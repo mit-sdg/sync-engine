@@ -21,7 +21,7 @@
  * single flow so independent invocations never cross-match.
  */
 
-import { FrameworkErrorCode } from "../sdk/error-codes.ts";
+import { EngineErrorCode } from "./errors.ts";
 import { cached } from "../utils/cache.ts";
 import { logger } from "../utils/logger.ts";
 import { redact as redactValue, serializeError } from "../utils/redaction.ts";
@@ -73,7 +73,7 @@ function errorOutputFromThrown(err: unknown): Record<string, unknown> {
         ? thrown.error
         : typeof thrown.code === "string"
           ? thrown.code
-          : FrameworkErrorCode.UNKNOWN_ERROR;
+          : EngineErrorCode.UNKNOWN_ERROR;
     const detail =
       typeof thrown.detail === "string"
         ? thrown.detail
@@ -84,7 +84,7 @@ function errorOutputFromThrown(err: unknown): Record<string, unknown> {
     return detail === undefined ? { error } : { error, detail };
   }
 
-  return { error: FrameworkErrorCode.UNKNOWN_ERROR, detail: String(err) };
+  return { error: EngineErrorCode.UNKNOWN_ERROR, detail: String(err) };
 }
 
 /**

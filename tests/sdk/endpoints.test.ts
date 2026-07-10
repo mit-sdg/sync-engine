@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { createEndpointDsl, syncMap } from "@sync-engine/sdk";
-import type { EndpointHelpers, RequestBoundaryActions } from "@sync-engine/sdk";
+import type { RequestBoundaryActions } from "@sync-engine/sdk";
 import { SyncConcept } from "@sync-engine/engine";
 import type { Vars } from "@sync-engine/engine";
 
@@ -39,8 +39,7 @@ describe("createEndpointDsl", () => {
       main: ({ id }: Vars) => request({ id }).then(respond({ ok: true })),
     }));
 
-    const requestSymbol = Symbol.for("test-request");
-    const result = (ep.syncs.main as Function)({ __request: requestSymbol });
+    const result = ep.syncs.main({} as Vars);
 
     expect(result).toHaveProperty("when");
     expect(result).toHaveProperty("then");
@@ -56,9 +55,45 @@ describe("createEndpointDsl", () => {
       main: (_vars: Vars) => request().then(respond({ ok: true })),
     }));
 
-    const requestSymbol = Symbol.for("test-request");
-    const result = (ep.syncs.main as Function)({ __request: requestSymbol });
+    const result = ep.syncs.main({} as Vars);
     expect(result.when.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("when input pattern includes path", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+
+    const ep = dsl.endpoint("/test", ({ request, respond }) => ({
+      main: (_vars: Vars) => request().then(respond({ ok: true })),
+    }));
+
+    const result = ep.syncs.main({} as Vars);
+
+    expect(result.when[0].input).toMatchObject({ path: "/test" });
+  });
+
+  test("when input pattern includes custom fields plus path", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+
+    const ep = dsl.endpoint("/search", ({ request, respond }) => ({
+      search: ({ query }: Vars) => request({ query }).then(respond({ results: [] })),
+    }));
+
+    const result = ep.syncs.search({} as Vars);
+
+    expect(result.when[0].input).toHaveProperty("path", "/search");
+    expect(result.when[0].input).toHaveProperty("query");
+  });
+
+  test("when output pattern is empty by default", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+
+    const ep = dsl.endpoint("/test", ({ request, respond }) => ({
+      main: (_vars: Vars) => request().then(respond({ ok: true })),
+    }));
+
+    const result = ep.syncs.main({} as Vars);
+
+    expect(Object.keys(result.when[0].output ?? {})).toHaveLength(0);
   });
 
   test("multiple syncs in a single endpoint work", () => {
@@ -80,8 +115,7 @@ describe("createEndpointDsl", () => {
         request({ type, status }).then(respond({ result: true })),
     }));
 
-    const requestSymbol = Symbol.for("test-request");
-    const result = (ep.syncs.combined as Function)({ __request: requestSymbol });
+    const result = ep.syncs.combined({} as Vars);
     expect(result.when.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -101,100 +135,76 @@ describe("createEndpointDsl", () => {
     expect(logout.path).toBe("/auth/logout");
   });
 
-  test("fail helper wraps plain values in error envelope", () => {
+  test("fail helper wraps error value under error key", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
     const ep = dsl.endpoint("/bad", ({ request, fail }) => ({
-      main: (_vars: Vars) => request().then(fail({ error: "oops" })),
+      main: (_vars: Vars) => request().then(fail({ code: "oops", detail: "bad" })),
     }));
 
-    const requestSymbol = Symbol.for("test-request");
-    const result = (ep.syncs.main as Function)({ __request: requestSymbol });
+    const result = ep.syncs.main({} as Vars);
     expect(Array.isArray(result.then)).toBe(true);
+
+    const thenNode = result.then[0] as unknown as Record<string, unknown>;
+    const action = thenNode.action as unknown as Record<string, unknown>;
+    expect(action.input).toMatchObject({ error: { code: "oops", detail: "bad" } });
   });
 
-  test("fail helper with non-mapping value wraps it", () => {
+  test("fail helper with non-mapping value wraps it in error envelope", () => {
     const dsl = createEndpointDsl(makeBoundary());
 
     const ep = dsl.endpoint("/err", ({ request, fail }) => ({
       main: (_vars: Vars) => request().then(fail("bad input")),
     }));
 
-    const requestSymbol = Symbol.for("test-request");
-    const result = (ep.syncs.main as Function)({ __request: requestSymbol });
+    const result = ep.syncs.main({} as Vars);
     expect(result.then.length).toBe(1);
+
+    const thenNode = result.then[0] as unknown as Record<string, unknown>;
+    const action = thenNode.action as unknown as Record<string, unknown>;
+    expect(action.input).toMatchObject({ error: "bad input" });
   });
 
-  test("endpoint helpers used outside sync body throw", () => {
+  test("fail helper wraps non-plain-mapping values in { error: value }", () => {
     const dsl = createEndpointDsl(makeBoundary());
-
-    let capturedHelpers: EndpointHelpers | undefined;
-    dsl.endpoint("/test", (helpers) => {
-      capturedHelpers = helpers;
-      return { main: (_vars: Vars) => helpers.request({}).then(helpers.respond({ ok: true })) };
-    });
-
-    expect(() => capturedHelpers!.request({})).toThrow("outside a sync function body");
-  });
-
-  test("endpoint helpers preserve the activeRequest symbol across function invocations", () => {
-    const dsl = createEndpointDsl(makeBoundary());
-    const mySymbol = Symbol("activeReq");
-
-    const ep = dsl.endpoint("/test", ({ request, respond }) => ({
-      main: (_vars: Vars) => request({}).then(respond({ ok: true })),
-    }));
-
-    const result = (ep.syncs.main as Function)({ __request: mySymbol });
-
-    expect(result.when[0].output).toEqual({ request: mySymbol });
-    expect((result.then[0] as Record<string, unknown>).action).toBeDefined();
-    expect(
-      ((result.then[0] as Record<string, unknown>).action as Record<string, unknown>).input,
-    ).toHaveProperty("request");
-    expect(
-      ((result.then[0] as Record<string, unknown>).action as Record<string, unknown>).input,
-    ).toEqual(expect.objectContaining({ request: mySymbol }));
-  });
-
-  test("fail helper wraps non-plain-mapping values (Date, Map, custom class) in { error: value }", () => {
-    const dsl = createEndpointDsl(makeBoundary());
-    const mySymbol = Symbol("test-req");
 
     const epDate = dsl.endpoint("/date", ({ request, fail }) => ({
       main: (_vars: Vars) => request().then(fail(new Date("2024-01-01"))),
     }));
-    const dateThen = (
-      (epDate.syncs.main as Function)({ __request: mySymbol }) as Record<string, unknown>
-    ).then as Record<string, unknown>[];
-    expect((dateThen[0] as Record<string, unknown>).action).toBeDefined();
-    const dateInput = ((dateThen[0] as Record<string, unknown>).action as Record<string, unknown>)
-      .input as Record<string, unknown>;
-    expect(dateInput.error).toBeInstanceOf(Date);
-    expect(dateInput.request).toBe(mySymbol);
+    const dateThen = epDate.syncs.main({} as Vars).then as unknown as Record<string, unknown>[];
+    const dateAction = (dateThen[0] as unknown as Record<string, unknown>)
+      .action as unknown as Record<string, unknown>;
+    expect((dateAction.input as Record<string, unknown>).error).toBeInstanceOf(Date);
 
     const epMap = dsl.endpoint("/map", ({ request, fail }) => ({
       main: (_vars: Vars) => request().then(fail(new Map([["k", "v"]]))),
     }));
-    const mapThen = (
-      (epMap.syncs.main as Function)({ __request: mySymbol }) as Record<string, unknown>
-    ).then as Record<string, unknown>[];
-    const mapInput = ((mapThen[0] as Record<string, unknown>).action as Record<string, unknown>)
-      .input as Record<string, unknown>;
-    expect(mapInput.error).toBeInstanceOf(Map);
-    expect(mapInput.request).toBe(mySymbol);
+    const mapThen = epMap.syncs.main({} as Vars).then as unknown as Record<string, unknown>[];
+    const mapAction = (mapThen[0] as unknown as Record<string, unknown>)
+      .action as unknown as Record<string, unknown>;
+    expect((mapAction.input as Record<string, unknown>).error).toBeInstanceOf(Map);
 
     class Foo {}
     const epClass = dsl.endpoint("/class", ({ request, fail }) => ({
       main: (_vars: Vars) => request().then(fail(new Foo())),
     }));
-    const classThen = (
-      (epClass.syncs.main as Function)({ __request: mySymbol }) as Record<string, unknown>
-    ).then as Record<string, unknown>[];
-    const classInput = ((classThen[0] as Record<string, unknown>).action as Record<string, unknown>)
-      .input as Record<string, unknown>;
-    expect(classInput.error).toBeInstanceOf(Foo);
-    expect(classInput.request).toBe(mySymbol);
+    const classThen = epClass.syncs.main({} as Vars).then as unknown as Record<string, unknown>[];
+    const classAction = (classThen[0] as unknown as Record<string, unknown>)
+      .action as unknown as Record<string, unknown>;
+    expect((classAction.input as Record<string, unknown>).error).toBeInstanceOf(Foo);
+  });
+
+  test("respond helper carries body directly in act input", () => {
+    const dsl = createEndpointDsl(makeBoundary());
+
+    const ep = dsl.endpoint("/test", ({ request, respond }) => ({
+      main: (_vars: Vars) => request().then(respond({ ok: true, id: "abc" })),
+    }));
+
+    const result = ep.syncs.main({} as Vars);
+    const thenNode = result.then[0] as unknown as Record<string, unknown>;
+    const action = thenNode.action as unknown as Record<string, unknown>;
+    expect(action.input).toMatchObject({ ok: true, id: "abc" });
   });
 });
 

@@ -370,6 +370,22 @@ actionNameOf(instrumentedAction); // "add"
 actionNodeId({ concept, action }); // "Todo.add"
 ```
 
+### EngineErrorCode
+
+Engine-owned error codes exported from the engine barrel:
+
+```ts
+import { EngineErrorCode } from "@mit-sdg/sync-engine/engine";
+```
+
+| Code             | Description                       |
+| ---------------- | --------------------------------- |
+| `UNKNOWN_ERROR`  | Action threw a non-standard error |
+| `INTERNAL_ERROR` | Internal engine failure           |
+
+The SDK exports its own `FrameworkErrorCode` for boundary-level errors (network,
+timeouts, validation, etc.). The engine does not import from the SDK.
+
 ---
 
 ## Key types
