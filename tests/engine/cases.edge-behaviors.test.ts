@@ -205,7 +205,7 @@ describe("unbound frame variables are silently dropped", () => {
     expect(receivedKeys).toContain("unbound");
   });
 
-  test("should not drop then-action input keys when a binding is unresolved", async () => {
+  test("should not dispatch then-actions when a variable binding is unresolved", async () => {
     const Sync = new SyncConcept();
     Sync.logging = Logging.OFF;
 
@@ -222,8 +222,6 @@ describe("unbound frame variables are silently dropped", () => {
       Inspector: new InspectorConcept(),
     });
 
-    // The then-action references a symbol that was never bound by the when
-    // pattern. matchThen resolves it to undefined and silently omits the key.
     Sync.register({
       MissingBinding: sync((_vars: Vars) =>
         when(Button.clicked, { kind: "test" }, {}).then(
@@ -234,10 +232,7 @@ describe("unbound frame variables are silently dropped", () => {
 
     await Button.clicked({ kind: "test" });
 
-    // The "kind" key is now included with value undefined instead of being
-    // silently dropped. The then-action can detect the missing binding.
-    expect(Inspector.received).toHaveProperty("kind");
-    expect(Inspector.received?.kind).toBeUndefined();
+    expect(Inspector.received).toBeNull();
   });
 });
 

@@ -907,6 +907,11 @@ export class SyncConcept {
   matchThen(then: ActionPattern, frame: Frame): ActionArguments {
     const resolve = (value: unknown): unknown => {
       if (typeof value === "symbol") {
+        if (!(value in frame)) {
+          throw new Error(
+            `Then clause references variable ${String(value)} which is not bound in the current frame.`,
+          );
+        }
         return frame[value];
       }
       if (Array.isArray(value)) {

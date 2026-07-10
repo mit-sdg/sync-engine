@@ -295,6 +295,7 @@ describe("engine: optional field matching", () => {
             .map((frame) => ({
               ...frame,
               [next]: `nested:${String(frame[tag])}`,
+              [inner]: `inner-${String(frame[tag])}`,
             })),
         )
         .then(act(Recorder.record, { tag: next, extra: { inner } }));
