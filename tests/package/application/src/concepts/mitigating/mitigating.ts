@@ -2,7 +2,6 @@ type Selection = { selection: string; room: string; mitigation: string };
 
 /** Keep one current mitigation for each operations room. */
 export class MitigatingConcept {
-  static readonly queries = { _current: "optional" } as const;
   private readonly selections = new Map<string, Selection>();
   private readonly current = new Map<string, string>();
 

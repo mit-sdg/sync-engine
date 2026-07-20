@@ -4,7 +4,6 @@ type Room = { room: string; name: string };
 
 /** Open and close one operations room for each distinct name. */
 export class RoomingConcept {
-  static readonly queries = { _get: "optional" } as const;
   private readonly rooms = new Map<string, Room>();
 
   constructor(private readonly freshID: () => string = () => crypto.randomUUID()) {}

@@ -7,6 +7,7 @@ import { SelectingConcept } from "./selecting.ts";
 export const selecting = registerConcept({
   class: SelectingConcept,
   spec,
+  queries: { _current: "optional", _get: "optional" },
   refusals: {
     NO_CURRENT_SELECTION: { error: NoCurrentSelection, on: ["clear"] },
   },

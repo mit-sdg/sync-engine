@@ -14,6 +14,7 @@ export type {
   ImplementationOverrides,
   Implementations,
   PublicErrorCategory,
+  QueryRegistration,
   RefusalRegistration,
   RegisteredConcept,
   RegisteredConceptSet,

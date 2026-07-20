@@ -34,7 +34,11 @@ import { parseSpecProse } from "./concept-spec.ts";
 import type { ComputationFn, ComputationRef } from "../reads/computations.ts";
 import type { ConceptMetadata } from "./concept-metadata.ts";
 import type { Mapping, Reaction } from "./types.ts";
-import type { QueryPromise } from "../reads/query-contracts.ts";
+import {
+  validateQueryContractMap,
+  type QueryPromises,
+  type QueryPromise,
+} from "../reads/query-contracts.ts";
 
 const ActionRefBrand: unique symbol = Symbol("ActionRefBrand");
 const QueryRefBrand: unique symbol = Symbol("QueryRefBrand");
@@ -179,9 +183,7 @@ type ValidConceptClass<C extends ConceptClass> =
 type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass
   ? ValidConceptClass<E>
   : E extends ConceptDeclaration<infer C>
-    ? "queries" extends keyof E
-      ? never
-      : E & { readonly class: ValidConceptClass<C> }
+    ? E & { readonly class: ValidConceptClass<C> }
     : never;
 
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
@@ -225,6 +227,7 @@ function validateConceptMetadata(
   metadata: ConceptMetadata,
 ): void {
   const prototype = cls.prototype as Record<string, unknown>;
+  validateQueryContractMap(metadata.queries, prototype, `Vocabulary: "${conceptName}"`, cls.name);
   for (const action of new Set([
     ...Object.keys(metadata.outcomes ?? {}),
     ...Object.keys(metadata.refusals ?? {}),
@@ -270,7 +273,11 @@ function validateConceptMetadata(
   }
 }
 
-function conceptRefProxy(conceptName: string, cls: ConceptClass): object {
+function conceptRefProxy(
+  conceptName: string,
+  cls: ConceptClass,
+  queryPromises?: QueryPromises,
+): object {
   const memo = new Map<string, ActionRef | QueryRef>();
   const prototype = cls.prototype as Record<string, unknown>;
   return new Proxy(
@@ -290,7 +297,8 @@ function conceptRefProxy(conceptName: string, cls: ConceptClass): object {
           ? makeQueryRef(
               conceptName,
               prop,
-              (cls as unknown as { queries?: Record<string, QueryPromise> }).queries?.[prop],
+              queryPromises?.[prop] ??
+                (cls as unknown as { queries?: Record<string, QueryPromise> }).queries?.[prop],
             )
           : makeActionRef(conceptName, prop);
         memo.set(prop, ref);
@@ -337,19 +345,14 @@ export function vocabulary(
       throw new Error(`Vocabulary: "${name}" must be a concept class.`);
     }
     classes[name] = cls;
+    let declaredMetadata: ConceptMetadata | undefined;
     if (descriptor !== undefined) {
-      if (Object.hasOwn(descriptor, "queries")) {
-        throw new Error(
-          `Vocabulary: "${name}" repeats query cardinality in metadata; return one record or an array of records from each query instead.`,
-        );
-      }
       const { class: _class, spec, ...contracts } = descriptor;
-      const declaredMetadata =
-        spec === undefined ? contracts : { ...parseSpecProse(spec), ...contracts };
+      declaredMetadata = spec === undefined ? contracts : { ...parseSpecProse(spec), ...contracts };
       validateConceptMetadata(name, cls, declaredMetadata);
       metadata[name] = declaredMetadata;
     }
-    refs[name] = conceptRefProxy(name, cls);
+    refs[name] = conceptRefProxy(name, cls, declaredMetadata?.queries);
   }
   Object.defineProperty(refs, VocabularyClasses, { value: { ...classes } });
 

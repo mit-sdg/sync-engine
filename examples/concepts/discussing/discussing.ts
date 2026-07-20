@@ -5,7 +5,6 @@ type Response = { response: string; discussion: string; author: string; text: st
 
 /** Open discussions about subjects and collect responses while they remain open. */
 export class DiscussingConcept {
-  static readonly queries = { _openFor: "optional", _responses: "many" } as const;
   private readonly discussions = new Map<string, Discussion>();
   private readonly responses: Response[] = [];
 

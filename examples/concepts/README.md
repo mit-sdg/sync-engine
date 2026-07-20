@@ -19,8 +19,8 @@ pieces in fixed seats:
 - the concept class implements its actions, state, and queries;
 - `errors.ts` defines the classes used for deliberate refusals;
 - the concept test drives its Principle and query promises directly;
-- `registry.ts` owns the specification import, stable refusal codes, and named
-  floor factories.
+- `registry.ts` owns the specification import, query promises, stable refusal
+  codes, and named floor factories.
 
 The registry imports `spec.md` as text so generated read-backs project Purpose
 and Principle from the authored source. An application's explicit concept set

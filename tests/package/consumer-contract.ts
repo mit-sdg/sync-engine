@@ -4,14 +4,15 @@ import type { InvocationResult, Invoker } from "@mit-sdg/sync-engine/boundary";
 import { vocabulary } from "@mit-sdg/sync-engine/language";
 
 class QueriedConcept {
-  static readonly queries = { _answer: "optional" } as const;
-
   _answer({ key }: { key: string }): { value: string }[] {
     return key === "present" ? [{ value: key }] : [];
   }
 }
 
-vocabulary({ concepts: { QueriedConcept }, computations: {} });
+vocabulary({
+  concepts: { QueriedConcept: { class: QueriedConcept, queries: { _answer: "optional" } } },
+  computations: {},
+});
 
 type ConsumerApi = {
   "/roster/sections/create": {

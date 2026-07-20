@@ -181,14 +181,22 @@ describe("canonical public API", () => {
   });
 
   test("vocabulary metadata names real members and one instance has one declaration", () => {
+    const reads = vocabulary({
+      concepts: {
+        Cataloging: { class: Cataloging, queries: { _titles: "many" } },
+      },
+      computations: {},
+    }).concepts.Cataloging;
+    expect((reads._titles as unknown as { queryPromise?: string }).queryPromise).toBe("many");
+
     expect(() =>
       vocabulary({
         concepts: {
-          Cataloging: { class: Cataloging, queries: { _titles: "many" } } as never,
+          Cataloging: { class: Cataloging, queries: { _missing: "many" } } as never,
         },
         computations: {},
       }),
-    ).toThrow(/repeats query cardinality/);
+    ).toThrow(/queries contract names "_missing"/);
 
     expect(() =>
       vocabulary({
@@ -259,6 +267,7 @@ const register = {
     "PersistingConcept",
     "PublicError",
     "PublicErrorCategory",
+    "QueryRegistration",
     "RefusalRegistration",
     "RegisteredConcept",
     "RegisteredConceptSet",

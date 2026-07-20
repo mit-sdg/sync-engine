@@ -4,7 +4,6 @@ type Selection = { selection: string; scope: string; item: string };
 
 /** Keep one current item selected within each scope. */
 export class SelectingConcept {
-  static readonly queries = { _current: "optional", _get: "optional" } as const;
   private readonly selections = new Map<string, Selection>();
   private readonly current = new Map<string, string>();
 

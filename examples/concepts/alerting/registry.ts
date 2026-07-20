@@ -7,6 +7,7 @@ import { AlertingConcept } from "./alerting.ts";
 export const alerting = registerConcept({
   class: AlertingConcept,
   spec,
+  queries: { _openFor: "many" },
   refusals: {
     ALERT_NOT_FOUND: { error: AlertNotFound, on: ["acknowledge"] },
   },

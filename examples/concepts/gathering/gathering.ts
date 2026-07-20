@@ -5,11 +5,6 @@ type Membership = { membership: string; gathering: string; member: string };
 
 /** Create named gatherings and let people join or leave them. */
 export class GatheringConcept {
-  static readonly queries = {
-    _get: "optional",
-    _members: "many",
-    _membership: "one",
-  } as const;
   private readonly gatherings = new Map<string, Gathering>();
   private readonly memberships = new Map<string, Membership>();
 

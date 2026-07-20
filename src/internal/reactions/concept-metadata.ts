@@ -1,4 +1,5 @@
 import type { OutcomeContracts } from "./outcomes.ts";
+import type { QueryPromise } from "../reads/query-contracts.ts";
 
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 
@@ -16,6 +17,7 @@ export type RefusalContracts = Record<string, Record<string, ErrorConstructor>>;
 export interface ConceptMetadata {
   purpose?: string;
   principle?: string;
+  queries?: Readonly<Record<string, QueryPromise>>;
   outcomes?: OutcomeContracts;
   refusals?: RefusalContracts;
   publicErrors?: Record<string, PublicErrorCategory>;

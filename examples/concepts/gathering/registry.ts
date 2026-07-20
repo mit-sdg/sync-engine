@@ -7,6 +7,11 @@ import { GatheringConcept } from "./gathering.ts";
 export const gathering = registerConcept({
   class: GatheringConcept,
   spec,
+  queries: {
+    _get: "optional",
+    _members: "many",
+    _membership: "one",
+  },
   refusals: {
     GATHERING_NOT_FOUND: { error: GatheringNotFound, on: ["join", "leave"] },
     ALREADY_JOINED: { error: AlreadyJoined, on: ["join"] },

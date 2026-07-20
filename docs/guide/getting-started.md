@@ -139,7 +139,6 @@ type Room = { room: string; name: string };
 
 /** Open and close one operations room for each distinct name. */
 export class RoomingConcept {
-  static readonly queries = { _get: "optional" } as const;
   private readonly rooms = new Map<string, Room>();
 
   constructor(private readonly freshID: () => string = () => crypto.randomUUID()) {}
@@ -165,9 +164,8 @@ export class RoomingConcept {
 }
 ```
 
-The `_get` declaration promises at most one row, and its return type carries
-that promise. Create `src/concepts/rooming/registry.ts` to give the behavior its
-application name, specification, and refusal code:
+Create `src/concepts/rooming/registry.ts` to give the behavior its application
+name, specification, query promise, and refusal code:
 
 ```ts
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
@@ -178,6 +176,7 @@ import spec from "./spec.md" with { type: "text" };
 export const rooming = registerConcept({
   class: RoomingConcept,
   spec,
+  queries: { _get: "optional" },
   refusals: {
     ROOM_ALREADY_OPEN: { error: RoomAlreadyOpen, on: ["open"] },
     ROOM_NOT_OPEN: { error: RoomNotOpen, on: ["close"] },
@@ -262,7 +261,6 @@ type Selection = { selection: string; room: string; mitigation: string };
 
 /** Keep one current mitigation for each operations room. */
 export class MitigatingConcept {
-  static readonly queries = { _current: "optional" } as const;
   private readonly selections = new Map<string, Selection>();
   private readonly current = new Map<string, string>();
 
@@ -288,7 +286,11 @@ import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { MitigatingConcept } from "./mitigating.ts";
 import spec from "./spec.md" with { type: "text" };
 
-export const mitigating = registerConcept({ class: MitigatingConcept, spec });
+export const mitigating = registerConcept({
+  class: MitigatingConcept,
+  spec,
+  queries: { _current: "optional" },
+});
 ```
 
 ## The concept set and composition

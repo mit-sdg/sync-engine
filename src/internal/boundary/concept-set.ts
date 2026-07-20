@@ -11,6 +11,11 @@ import type {
   RefusalContracts,
 } from "../reactions/concept-metadata.ts";
 import type { ComputationFn } from "../reads/computations.ts";
+import {
+  validateQueryContractMap,
+  type QueryPromises,
+  type QueryPromise,
+} from "../reads/query-contracts.ts";
 
 export type PublicErrorCategory = MetadataPublicErrorCategory;
 
@@ -88,6 +93,18 @@ type ActionName<C extends ConceptClass> = {
     : never;
 }[keyof InstanceType<C>];
 
+type QueryName<C extends ConceptClass> = {
+  [Name in keyof InstanceType<C>]: Name extends string
+    ? Name extends `_${string}`
+      ? InstanceType<C>[Name] extends (...args: never[]) => unknown
+        ? Name
+        : never
+      : never
+    : never;
+}[keyof InstanceType<C>];
+
+export type QueryRegistration<C extends ConceptClass> = Partial<Record<QueryName<C>, QueryPromise>>;
+
 type FloorFactory = (context: never) => object;
 
 export interface RefusalRegistration<C extends ConceptClass> {
@@ -102,6 +119,7 @@ export interface ConceptRegistration<
 > {
   class: C;
   spec: string;
+  queries?: QueryRegistration<C>;
   refusals?: Record<string, RefusalRegistration<C>>;
   floors?: F;
 }
@@ -128,6 +146,12 @@ export function registerConcept<
     throw new Error("registerConcept: spec must contain the concept specification.");
   }
   const prototype = registration.class.prototype as Record<string, unknown>;
+  validateQueryContractMap(
+    registration.queries,
+    prototype,
+    "registerConcept",
+    registration.class.name,
+  );
   const constructors = new Map<ErrorConstructor, string>();
   for (const [code, refusal] of Object.entries(registration.refusals ?? {})) {
     if (code === "" || !isErrorConstructor(refusal.error)) {
@@ -169,6 +193,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
   [Name in keyof S]: {
     class: ClassOfRegistration<S[Name]>;
     spec: string;
+    queries?: QueryPromises;
     refusals?: RefusalContracts;
     publicErrors?: Record<string, PublicErrorCategory>;
   };
@@ -250,6 +275,7 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
     entries[conceptName] = {
       class: registration.class,
       spec: registration.spec,
+      ...(registration.queries === undefined ? {} : { queries: registration.queries }),
       ...(Object.keys(refusals).length === 0 ? {} : { refusals }),
       ...(Object.keys(conceptPublicErrors).length === 0
         ? {}

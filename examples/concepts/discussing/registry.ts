@@ -7,6 +7,7 @@ import { DiscussingConcept } from "./discussing.ts";
 export const discussing = registerConcept({
   class: DiscussingConcept,
   spec,
+  queries: { _openFor: "optional", _responses: "many" },
   refusals: {
     DISCUSSION_ALREADY_OPEN: { error: DiscussionAlreadyOpen, on: ["open"] },
     DISCUSSION_NOT_OPEN: { error: DiscussionNotOpen, on: ["respond", "close"] },

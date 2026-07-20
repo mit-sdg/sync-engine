@@ -123,12 +123,13 @@ read-back as one string.
 
 ## Queries
 
-A concept may declare a query's promise in `static readonly queries` using
-`"one"`, `"optional"`, or `"many"`. A `one` query returns one record. An
-`optional` query returns an array containing zero or one record. A `many` query
-returns an array of records. An undeclared query may return one record or an
-array of records; because it makes no narrower promise, authoring treats it as
-potentially many. The engine checks every answer when a reaction, view, or
+A concept registry may declare each query's promise as `"one"`, `"optional"`,
+or `"many"`. A `one` query returns one record. An `optional` query returns an
+array containing zero or one record. A `many` query returns an array of
+records. An undeclared query may return one record or an array of records;
+because it makes no narrower promise, authoring treats it as potentially many.
+The engine attaches the registry's promises to whichever implementation the
+selected floor supplies and checks every answer when a reaction, view, or
 former reads it. `null`, a scalar, a malformed row, or a violation of a
 declared cardinality raises a query fault.
 

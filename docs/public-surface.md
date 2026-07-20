@@ -34,7 +34,7 @@ Use `language` to name a design: its concepts, reactions, views, and formers.
 `vocabulary({ concepts, computations })` gives plain concept classes and pure
 computations their application names. A concept entry may be the class itself,
 or a descriptor with `class` and any of `spec`, `purpose`, `principle`,
-`outcomes`, `refusals`, and `publicErrors`. `spec` contains the concept's
+`queries`, `outcomes`, `refusals`, and `publicErrors`. `spec` contains the concept's
 markdown specification; explicit `purpose` or `principle` fields replace the
 prose parsed from it. `outcomes` names action contracts, `refusals` maps each
 action's stable code to its `Error` class, and `publicErrors` maps those codes
@@ -116,10 +116,10 @@ reaction(({ refusal }) =>
 
 ### Reads and conditions
 
-A concept may declare a query in `static readonly queries` as `"one"`,
-`"optional"`, or `"many"`; `as const` preserves those inferred literals.
-`QueryPromise` names their union for framework code. An undeclared query keeps
-the general answer contract: one record or an array of records.
+A concept registry may declare a query as `"one"`, `"optional"`, or `"many"`.
+`QueryPromise` names their union and `QueryRegistration` describes the map for
+one concept class. An undeclared query keeps the general answer contract: one
+record or an array of records.
 
 Calling a concept query with its input pattern produces a `ReadLine`. Extend
 the line with `.is({ ... })` to match output slots. A fresh name opens and
@@ -217,7 +217,7 @@ fault.
 
 <!-- register:assembly:start -->
 
-`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `RefusalRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `QueryRegistration`, `RefusalRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -253,6 +253,8 @@ implementation set has been chosen.
 plugin. `registerConcept(...)` and `conceptSet(...)` provide the external
 integration seats that derive vocabulary entries and complete implementation
 sets while plain concept classes and exception classes remain framework-free.
+The registry's query promises apply to every implementation selected for that
+concept name.
 
 `MemoryStore` and `FileStore` implement `LogStore` for occurrence records.
 `LogEntry` names the store's entry union, while `FiringRecord` describes one

@@ -97,12 +97,17 @@ _Source: [`examples/concepts/alerting/alerting.ts`](../../examples/concepts/aler
 
 ## Define the query shape
 
-A **query** only reads state. A concept may promise its cardinality with
-`static readonly queries`: `one`, `optional`, or `many`. A `one` query returns
-one record. The other two return arrays containing at most one row or any
-number of rows. Without a declaration, a query may return one record or an
-array and is treated as potentially many. `_openFor` promises `many` because
-one recipient may have any number of open alerts.
+A **query** only reads state. Its registry may promise `one`, `optional`, or
+`many`. A `one` query returns one record. The other two return arrays containing
+at most one row or any number of rows. Without a declaration, a query may
+return one record or an array and is treated as potentially many. `_openFor`
+promises `many` because one recipient may have any number of open alerts:
+
+_Source: [`examples/concepts/alerting/registry.ts`](../../examples/concepts/alerting/registry.ts)_
+
+```ts
+queries: { _openFor: "many" },
+```
 
 Gathering shows both query shapes next to each other:
 
@@ -120,10 +125,10 @@ _Source: [`examples/concepts/gathering/gathering.ts`](../../examples/concepts/ga
   }
 ```
 
-Gathering declares `_members: "many"` and `_membership: "one"` on its class.
+Gathering's registry declares `_members: "many"` and `_membership: "one"`.
 The engine checks both the returned shape and each read's cardinality. A reaction
-cannot range with `each(...)` over `_membership`, and the implementation
-cannot answer `_membership` with an array.
+cannot range with `each(...)` over `_membership`, and the implementation cannot
+answer `_membership` with an array.
 
 ## Test the principle directly
 
@@ -157,8 +162,9 @@ test("its principle: keep each recipient's alerts in order until acknowledged", 
 
 ## Give the concept its public name
 
-The registry beside the concept connects the plain class to its specification
-and maps the refusal class to the stable code an application can return.
+The registry beside the concept connects the plain class to its specification,
+declares its query promises, and maps each refusal class to the stable code an
+application can return.
 The code and its public category are the machine contract. The refusal sentence
 in the specification is the normative human explanation. When detail reaches a
 caller, the implementation must use that sentence exactly; otherwise the
@@ -181,6 +187,7 @@ _Source: [`examples/concepts/alerting/registry.ts`](../../examples/concepts/aler
 export const alerting = registerConcept({
   class: AlertingConcept,
   spec,
+  queries: { _openFor: "many" },
   refusals: {
     ALERT_NOT_FOUND: { error: AlertNotFound, on: ["acknowledge"] },
   },

@@ -4,7 +4,6 @@ type Alert = { alert: string; recipient: string; subject: string };
 
 /** Keep open alerts for each recipient until they acknowledge them. */
 export class AlertingConcept {
-  static readonly queries = { _openFor: "many" } as const;
   private readonly alerts = new Map<string, Alert>();
 
   constructor(private readonly freshID: () => string = () => crypto.randomUUID()) {}

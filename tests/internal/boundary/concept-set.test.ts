@@ -14,6 +14,10 @@ class Cataloging {
   misplaced(_: Record<string, never>) {
     throw new MissingItem("same class, wrong action");
   }
+
+  _find(_: Record<string, never>): { item: string }[] {
+    return [];
+  }
 }
 
 class Remembering {
@@ -32,6 +36,7 @@ const spec =
 const cataloging = registerConcept({
   class: Cataloging,
   spec: "# Cataloging\n\n## Purpose\n\nKeep a catalog.\n\n## Principle\n\nA missing item is refused.",
+  queries: { _find: "optional" },
   refusals: {
     ITEM_NOT_FOUND: {
       error: MissingItem,
@@ -54,6 +59,7 @@ describe("external concept registration", () => {
     const application = assemble({
       vocabulary: set.vocabulary,
       composition: { Find, Misplaced },
+      instances: { Cataloging: new PersistentCataloging("primary") },
     });
 
     expect(await application.invoker.invoke("/find", {})).toEqual({
@@ -65,6 +71,10 @@ describe("external concept registration", () => {
       error: { kind: "framework", code: "INTERNAL_ERROR" },
     });
     expect(application.publicErrors).toEqual({ ITEM_NOT_FOUND: "NOT_FOUND" });
+    expect(
+      (application.concepts.Cataloging._find as unknown as { queryPromise?: string }).queryPromise,
+    ).toBe("optional");
+    expect((Catalog._find as unknown as { queryPromise?: string }).queryPromise).toBe("optional");
   });
 
   test("rejects unknown actions and incomplete concept floors", () => {
@@ -80,6 +90,14 @@ describe("external concept registration", () => {
         },
       } as never),
     ).toThrow(/unknown action "absent"/);
+
+    expect(() =>
+      registerConcept({
+        class: Cataloging,
+        spec: "spec",
+        queries: { _absent: "many" },
+      } as never),
+    ).toThrow(/queries contract names "_absent"/);
 
     const set = conceptSet({ Cataloging: cataloging });
     expect(() =>

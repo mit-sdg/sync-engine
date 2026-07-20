@@ -16,7 +16,7 @@ export type { EngineObserver, LogEvent } from "../internal/reactions/observer.ts
 export { assemble } from "../internal/boundary/assembly-facade.ts";
 export type { Assembly, AssemblyOptions } from "../internal/boundary/assembly-facade.ts";
 export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../internal/boundary/concept-set.ts";
-export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, RefusalRegistration, RegisteredConcept, RegisteredConceptSet, } from "../internal/boundary/concept-set.ts";
+export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, QueryRegistration, RefusalRegistration, RegisteredConcept, RegisteredConceptSet, } from "../internal/boundary/concept-set.ts";
 export { FileStore, PersistingConcept } from "../internal/hosting/index.ts";
 export { MemoryStore } from "../internal/reactions/log-store.ts";
 export type { FiringRecord, LogEntry, LogStore } from "../internal/reactions/log-store.ts";
@@ -367,6 +367,7 @@ export {};
 import { type ConceptClass, type ConceptClassesOf, type ConceptEntry, type DeclaredVocabulary } from "../reactions/refs.ts";
 import type { ErrorConstructor, PublicErrorCategory as MetadataPublicErrorCategory, RefusalContracts } from "../reactions/concept-metadata.ts";
 import type { ComputationFn } from "../reads/computations.ts";
+import { type QueryPromises, type QueryPromise } from "../reads/query-contracts.ts";
 export type PublicErrorCategory = MetadataPublicErrorCategory;
 export declare const PublicError: {
     readonly INVALID_REQUEST: "INVALID_REQUEST";
@@ -393,6 +394,10 @@ export declare function conceptFloor<V extends DeclaredVocabulary<Record<string,
 type ActionName<C extends ConceptClass> = {
     [Name in keyof InstanceType<C>]: Name extends string ? Name extends `_${string}` ? never : InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never : never;
 }[keyof InstanceType<C>];
+type QueryName<C extends ConceptClass> = {
+    [Name in keyof InstanceType<C>]: Name extends string ? Name extends `_${string}` ? InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never : never : never;
+}[keyof InstanceType<C>];
+export type QueryRegistration<C extends ConceptClass> = Partial<Record<QueryName<C>, QueryPromise>>;
 type FloorFactory = (context: never) => object;
 export interface RefusalRegistration<C extends ConceptClass> {
     error: ErrorConstructor;
@@ -402,6 +407,7 @@ export interface RefusalRegistration<C extends ConceptClass> {
 export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory> = Record<never, never>> {
     class: C;
     spec: string;
+    queries?: QueryRegistration<C>;
     refusals?: Record<string, RefusalRegistration<C>>;
     floors?: F;
 }
@@ -416,6 +422,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     [Name in keyof S]: {
         class: ClassOfRegistration<S[Name]>;
         spec: string;
+        queries?: QueryPromises;
         refusals?: RefusalContracts;
         publicErrors?: Record<string, PublicErrorCategory>;
     };
@@ -1306,6 +1313,7 @@ export declare function isChannelPattern(value: unknown): value is ChannelPatter
 
 === dist/internal/reactions/concept-metadata.d.ts ===
 import type { OutcomeContracts } from "./outcomes.ts";
+import type { QueryPromise } from "../reads/query-contracts.ts";
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 export type PublicErrorCategory = "INVALID_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT";
 /** Error classes admitted as refusals, grouped by the action that may throw them. */
@@ -1314,6 +1322,7 @@ export type RefusalContracts = Record<string, Record<string, ErrorConstructor>>;
 export interface ConceptMetadata {
     purpose?: string;
     principle?: string;
+    queries?: Readonly<Record<string, QueryPromise>>;
     outcomes?: OutcomeContracts;
     refusals?: RefusalContracts;
     publicErrors?: Record<string, PublicErrorCategory>;
@@ -2088,7 +2097,7 @@ import type { QueryReadLine, SlotPattern } from "../reads/lines.ts";
 import type { ComputationFn, ComputationRef } from "../reads/computations.ts";
 import type { ConceptMetadata } from "./concept-metadata.ts";
 import type { Mapping, Reaction } from "./types.ts";
-import type { QueryPromise } from "../reads/query-contracts.ts";
+import { type QueryPromise } from "../reads/query-contracts.ts";
 declare const VocabularyClasses: unique symbol;
 declare const VocabularyComputations: unique symbol;
 declare const VocabularyMetadata: unique symbol;
@@ -2154,7 +2163,7 @@ type InvalidQueryKeys<I> = {
     [K in QueryKeys<I>]: I[K] extends (...args: never[]) => infer Answer ? QueryAnswerIsValid<Answer> extends true ? never : K : K;
 }[QueryKeys<I>];
 type ValidConceptClass<C extends ConceptClass> = InvalidQueryKeys<InstanceType<C>> extends never ? C : never;
-type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass ? ValidConceptClass<E> : E extends ConceptDeclaration<infer C> ? "queries" extends keyof E ? never : E & {
+type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass ? ValidConceptClass<E> : E extends ConceptDeclaration<infer C> ? E & {
     readonly class: ValidConceptClass<C>;
 } : never;
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
@@ -3386,8 +3395,10 @@ export declare function queryRows(query: InstrumentedQuery, input: Mapping, fram
 === dist/internal/reads/query-contracts.d.ts ===
 /** The promised number of rows a concept query may answer. */
 export type QueryPromise = "one" | "optional" | "many";
+export type QueryPromises = Readonly<Record<string, QueryPromise>>;
 /** The optional promise declared for one query. An undeclared query may answer one record or an array. */
 export declare function queryPromiseOf(concept: object, query: string): QueryPromise | undefined;
+export declare function validateQueryContractMap(contracts: unknown, prototype: Record<string, unknown>, conceptName: string, className: string): void;
 /** Validate a concept's declared query promises while its vocabulary is assembled. */
 export declare function validateQueryContracts(concept: object, conceptName: string): void;
 

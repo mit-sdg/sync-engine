@@ -21,8 +21,6 @@ class ManyAnswers {
 }
 
 class QueriedConcept {
-  static readonly queries = { _answer: "optional" } as const;
-
   _answer({ key }: { key: string }): { value: string }[] {
     return key === "present" ? [{ value: key }] : [];
   }
@@ -47,7 +45,11 @@ class InvalidNestedRows {
 }
 
 const words = vocabulary({
-  concepts: { OneAnswer, ManyAnswers, QueriedConcept },
+  concepts: {
+    OneAnswer: { class: OneAnswer, queries: { _answer: "one" } },
+    ManyAnswers,
+    QueriedConcept: { class: QueriedConcept, queries: { _answer: "optional" } },
+  },
   computations: {},
 });
 const { OneAnswer: Answering } = words.concepts;
@@ -74,6 +76,3 @@ vocabulary({ concepts: { InvalidCallableAnswer }, computations: {} });
 
 // @ts-expect-error Each member of a many answer must be a record, not another array.
 vocabulary({ concepts: { InvalidNestedRows }, computations: {} });
-
-// @ts-expect-error Query cardinality is not repeated in vocabulary metadata.
-vocabulary({ concepts: { OneAnswer: { class: OneAnswer, queries: {} } }, computations: {} });
