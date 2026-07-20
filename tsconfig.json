@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
+      "@sync-engine/*": ["./src/*/index.ts"],
+      "@sync-engine/internal/reactions": ["./src/internal/reactions/index.ts"],
+      "@sync-engine/internal/reactions/*": ["./src/internal/reactions/*"],
+      "@sync-engine/internal/reads/*": ["./src/internal/reads/*"],
+      "@sync-engine/internal/boundary": ["./src/internal/boundary/index.ts"],
+      "@sync-engine/internal/boundary/*": ["./src/internal/boundary/*"],
+      "@sync-engine/internal/hosting": ["./src/internal/hosting/index.ts"],
+      "@sync-engine/internal/hosting/*": ["./src/internal/hosting/*"]
+    }
+  },
+  "include": ["examples", "scripts", "src", "tests"],
+  "exclude": ["tests/package/application"]
+}

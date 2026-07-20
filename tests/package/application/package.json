@@ -1,0 +1,17 @@
+{
+  "name": "operations-room",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "sync-engine artifacts pin --config generated.config.ts",
+    "typecheck": "tsc --noEmit",
+    "principle": "bun src/concepts/rooming/rooming.test.ts",
+    "start": "bun src/scenario.ts"
+  },
+  "dependencies": {
+    "@mit-sdg/sync-engine": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}
