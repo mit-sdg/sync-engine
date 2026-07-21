@@ -4,9 +4,13 @@ import { conditionOp } from "./where-ops.ts";
 import type { Condition, FindOp, WhereOp } from "./where-ops.ts";
 import { isReadLine } from "./lines.ts";
 import type { ReadLine } from "./lines.ts";
-import type { Vars } from "../reactions/types.ts";
 import type { ViewBlock } from "./views.ts";
-import { sentenceVars, slotVariables, slotsOf } from "./sentence.ts";
+import {
+  assertSeparateBags,
+  bindingBag,
+  type FreeBindings,
+  type InputBindings,
+} from "./sentence.ts";
 import {
   type Arranged,
   brandNode,
@@ -113,7 +117,7 @@ function buildForm(entries: Record<string, FormerEntry>, conditions: readonly Wh
         isFormerUse(value) ? value : isFusedFormer(value) ? useFormer(value) : undefined,
       );
       if (uses.some((use) => use === undefined)) {
-        throw new Error(".splicing(...) takes named formers with their slots filled.");
+        throw new Error(".splicing(...) takes named formers with their input mappings filled.");
       }
       const claimed = new Set(entryList.map(([key]) => key));
       for (const existing of splices) {
@@ -338,47 +342,56 @@ export function each(line: ReadLine): SelectionBuilder {
 // ── The former itself ──────────────────────────────────────────────────────
 
 /**
- * Define a former from a sentence with `(slot)` groups and a result builder.
+ * Define a former from a human name and explicit binding bags.
  * The builder receives stable logic variables by name and returns a formed
  * object or captured selection. Put the question this former answers in the
  * doc comment above its definition.
  */
-export function former(sentence: string, build: (vars: Vars) => FormerNode): FormerRef {
-  const optional = sentence.endsWith(", if any");
-  const name = optional ? sentence.slice(0, -", if any".length) : sentence;
-  const slots = slotsOf(name);
-  const { vars, minted } = sentenceVars();
-
-  const body = build(vars);
+export function former(
+  name: string,
+  build: (inputs: InputBindings, bindings: FreeBindings) => FormerNode,
+): FormerRef {
+  const inputs = bindingBag<InputBindings>();
+  const bindings = bindingBag<FreeBindings>();
+  const body = build(inputs.vars, bindings.vars);
   if (!isFormerNode(body)) {
-    throw new Error(`Former "${sentence}": the builder must return a former node.`);
+    throw new Error(`Former "${name}": the builder must return a former node.`);
   }
-  if (optional && body.node !== "record") {
-    throw new Error(
-      `Former "${sentence}": a selection always answers and takes no ", if any" tail.`,
-    );
-  }
-
-  const slotVars = slotVariables("Former", name, slots, minted, "shapes");
+  assertSeparateBags("Former", name, [
+    ["input", inputs.minted],
+    ["free", bindings.minted],
+  ]);
   const used = new Set<symbol>();
   symbolsUsed(body, used);
-  for (const [slot, variable] of minted) {
-    if (slots.includes(slot) && !used.has(variable)) {
+  const declared = new Set([...inputs.minted.values(), ...bindings.minted.values()]);
+  for (const variable of used) {
+    if (!declared.has(variable)) {
       throw new Error(
-        `Former "${sentence}": slot "(${slot})" is never used — a slot that ` +
-          "shapes nothing does not belong in the sentence.",
+        `Former "${name}": binding "${String(variable.description ?? variable.toString())}" is not declared in the input or free binding bag.`,
       );
     }
   }
-  assertBound(sentence, body, new Set(slotVars));
+  for (const [input, variable] of inputs.minted) {
+    if (!used.has(variable)) {
+      throw new Error(`Former "${name}": input binding "${input}" is declared but never used.`);
+    }
+  }
+  for (const [binding, variable] of bindings.minted) {
+    if (!used.has(variable)) {
+      throw new Error(`Former "${name}": free binding "${binding}" is declared but never used.`);
+    }
+  }
+  const inputVars = [...inputs.minted.values()];
+  assertBound(name, body, new Set(inputVars), new Set(bindings.minted.values()));
 
   // The definition boundary: the checked builder tree lowers to the IR here,
   // and the IR body is what registers, evaluates, exports, and renders.
   return formerRefWith(
     name,
-    slots,
-    slotVars,
-    optional ? "optional" : "one",
-    lowerFormerBody(slotVars, body),
+    [...inputs.minted.keys()],
+    inputVars,
+    [...bindings.minted.keys()],
+    "one",
+    lowerFormerBody(inputVars, body),
   );
 }

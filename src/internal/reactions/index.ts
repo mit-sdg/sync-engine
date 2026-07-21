@@ -62,6 +62,7 @@ export { count, isCountOp, view, where } from "../reads/views.ts";
 export type { CountOp, ViewOp } from "../reads/views.ts";
 export { declarationsOf, isReactionCase, isReactionPartition } from "./partitions.ts";
 export { each, form, former } from "../reads/former-builders.ts";
+export type { FreeBindings, InputBindings, OutputBindings } from "../reads/sentence.ts";
 export {
   FormerFault,
   fuseFormer,

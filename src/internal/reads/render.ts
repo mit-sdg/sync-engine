@@ -56,13 +56,9 @@ export function renderValue(value: ValueIR): string {
       case "$is":
         return `«opaque matcher: ${String(marker.payload)}»`;
       case "$former": {
-        // A former reference reads as its sentence, slots filled — the value the
-        // consequence carries is the former's tree, read at the moment of asking.
+        // The consequence carries the former's tree, read at the moment of asking.
         const former = marker.payload as { name: string; in: PatternIR };
-        return former.name.replace(/\(([^()]*)\)/g, (whole, slot: string) => {
-          const filled = former.in[slot.trim()];
-          return filled === undefined ? whole : `(${renderValue(filled)})`;
-        });
+        return `${former.name} (${renderRoles(former.in)})`;
       }
       case "$lit":
         return renderValue(marker.payload as ValueIR);
@@ -145,17 +141,9 @@ const HOLDS_SENTENCES: Record<string, (input: PatternIR) => string> = {
   among: ({ value, collection }) => `${renderValue(value)} is among ${renderValue(collection)}`,
 };
 
-/**
- * A sentence view named in a condition reads exactly as its sentence, slots
- * filled: `(workspace) has room` asked with `workspace` renders as
- * `workspace has room`. A relation view reads like a concept query.
- */
+/** Render a view's human name beside its explicit input mapping. */
 function renderViewSentence(name: string, input: PatternIR): string {
-  if (!name.includes("(")) return `${name} (${renderRoles(input)})`;
-  return name.replace(/\(([^()]*)\)/g, (whole, slot: string) => {
-    const value = input[slot.trim()];
-    return value === undefined ? whole : renderValue(value);
-  });
+  return Object.keys(input).length === 0 ? name : `${name} (${renderRoles(input)})`;
 }
 
 /** Render one plain, `no`, or `whether` read with its input and output patterns. */
@@ -207,23 +195,15 @@ export function renderWhereOp(op: WhereOpIR | ViewOpIR): string {
 
 /**
  * Render one view in a ` ```view `
- * block): the sentence with its bare slots, then each where block — one line
+ * block): the human name with its declared binding partitions, then each where block — one line
  * when the block is a single condition, an indented conjunction otherwise.
  * Stacked blocks are the alternatives; this is where disjunction lives.
  */
 export function renderView(view: ViewIR): string {
   const promiseWords = { one: "exactly one", optional: "at most one", many: "any number of" };
-  // A sentence-form name already carries its `(slot)` groups; a plain name
-  // (IR registered without a sentence) states its ins beside it.
-  const named =
-    view.ins === undefined || view.name.includes("(")
-      ? view.name
-      : `${view.name} (${view.ins.join(", ")})`;
+  const named = `${view.name} — inputs (${view.ins.join(", ")}); outputs (${view.outs.join(", ")}); bindings (${view.bindings.join(", ")})`;
   const heading =
-    view.ins !== undefined &&
-    view.outs !== undefined &&
-    view.outs.length > 0 &&
-    view.promise !== undefined
+    view.outs.length > 0 && view.promise !== undefined
       ? `${named} — answers ${promiseWords[view.promise]} (${view.outs.join(", ")})`
       : named;
   const lines: string[] = [heading];
@@ -279,19 +259,13 @@ function renderFormerNode(node: FormerNodeIR, indent: number): string[] {
       }
       for (const spliceIR of node.splices ?? []) {
         const posture = spliceIR.whether ? ", with blank leaves if absent" : "";
-        const filled = spliceIR.fragment.replace(/\(([^()]*)\)/g, (whole, slot: string) => {
-          const value = spliceIR.in[slot.trim()];
-          return value === undefined ? whole : `(${renderRole(slot.trim(), value)})`;
-        });
+        const filled = `${spliceIR.fragment} (${renderRoles(spliceIR.in)})`;
         lines.push(`${pad}  … ${filled}${posture}`);
       }
       return lines;
     }
     case "former": {
-      const filled = node.former.replace(/\(([^()]*)\)/g, (whole, slot: string) => {
-        const value = node.in[slot.trim()];
-        return value === undefined ? whole : `(${renderRole(slot.trim(), value)})`;
-      });
+      const filled = `${node.former} (${renderRoles(node.in)})`;
       return [`${pad}${node.whether ? "whether " : ""}${filled}`];
     }
     case "each": {
@@ -328,10 +302,11 @@ function renderFormerNode(node: FormerNodeIR, indent: number): string[] {
  * comprehensions, named former reads, and aggregate leaves.
  */
 export function renderFormer(formerIR: FormerIR): string {
+  const declaration = `inputs (${formerIR.ins.join(", ")}); bindings (${formerIR.bindings.join(", ")})`;
   const heading =
     formerIR.promise === "optional"
-      ? `If available, form ${formerIR.name} as follows:`
-      : `Form ${formerIR.name} as follows:`;
+      ? `If available, form ${formerIR.name} — ${declaration} as follows:`
+      : `Form ${formerIR.name} — ${declaration} as follows:`;
   return [heading, ...renderFormerNode(formerIR.body, 1)].join("\n");
 }
 

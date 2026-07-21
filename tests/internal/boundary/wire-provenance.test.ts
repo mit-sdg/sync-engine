@@ -24,6 +24,8 @@ const app: AppIR = {
   formers: [
     {
       name: "the ledger rows ()",
+      ins: [],
+      bindings: ["entry", "item", "amount"],
       promise: "one",
       body: {
         node: "each",
@@ -145,6 +147,10 @@ const branchAndConflictApp: AppIR = {
   views: [
     {
       name: "(subject) is accepted",
+      ins: ["subject"],
+      outs: [],
+      bindings: [],
+      holds: true,
       alternatives: [
         [
           {
@@ -326,6 +332,8 @@ function dependentOptionalWire() {
     formers: [
       {
         name: "the dependent rows ()",
+        ins: [],
+        bindings: ["discussion", "response"],
         promise: "one",
         body: {
           node: "record",

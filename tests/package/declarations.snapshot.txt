@@ -1464,6 +1464,7 @@ export { count, isCountOp, view, where } from "../reads/views.ts";
 export type { CountOp, ViewOp } from "../reads/views.ts";
 export { declarationsOf, isReactionCase, isReactionPartition } from "./partitions.ts";
 export { each, form, former } from "../reads/former-builders.ts";
+export type { FreeBindings, InputBindings, OutputBindings } from "../reads/sentence.ts";
 export { FormerFault, fuseFormer, isFormerNode, isFusedFormer, isFormerUse, } from "../reads/former-nodes.ts";
 export { formTree } from "../reads/former-evaluation.ts";
 export type { Arranged, CountNode, DistinctNode, EachNode, FirstNode, FormerEntry, FormerNode, FormerRef, FusedFormer, LeafNode, RecordNode, FormerUse, } from "../reads/former-nodes.ts";
@@ -2700,19 +2701,19 @@ export declare function symbolsInMapping(mapping: Mapping): symbol[];
 /** Every `{ $var }` name an IR pattern reads through, deep. */
 export declare function varNamesInPattern(pattern: PatternIR): string[];
 /**
- * Every leaf and every `value` must be traceable to a binding: a slot, an
+ * Every leaf and every `value` must be traceable to a binding: an input, an
  * enclosing selection's output, or a where line's output. A name bound by
  * nothing is a definition error — caught here, not at evaluation.
  */
-export declare function assertBound(name: string, node: FormerNode, bound: ReadonlySet<symbol>): void;
+export declare function assertBound(name: string, node: FormerNode, bound: ReadonlySet<symbol>, free?: ReadonlySet<symbol>): void;
 export declare function symbolsUsed(node: FormerNode, into: Set<symbol>): void;
 
 === dist/internal/reads/former-builders.d.ts ===
 /** Formers name and shape read answers at the edge. */
 import type { Condition, FindOp, WhereOp } from "./where-ops.ts";
 import type { ReadLine } from "./lines.ts";
-import type { Vars } from "../reactions/types.ts";
 import type { ViewBlock } from "./views.ts";
+import { type FreeBindings, type InputBindings } from "./sentence.ts";
 import { type Arranged, type CountNode, type DistinctNode, type EachNode, type FirstNode, type FormerEntry, type FormerNode, type FormerRef, type FusedFormer, type LeafNode, type RecordNode, type FormerUse } from "./former-nodes.ts";
 /** The ordering vocabulary: `arranged.oldest`, `arranged.newest`, `arranged.by(v)`. */
 export declare const arranged: {
@@ -2782,12 +2783,12 @@ export interface SelectionBuilder extends SelectionConsumers {
  */
 export declare function each(line: ReadLine): SelectionBuilder;
 /**
- * Define a former from a sentence with `(slot)` groups and a result builder.
+ * Define a former from a human name and explicit binding bags.
  * The builder receives stable logic variables by name and returns a formed
  * object or captured selection. Put the question this former answers in the
  * doc comment above its definition.
  */
-export declare function former(sentence: string, build: (vars: Vars) => FormerNode): FormerRef;
+export declare function former(name: string, build: (inputs: InputBindings, bindings: FreeBindings) => FormerNode): FormerRef;
 export {};
 
 === dist/internal/reads/former-evaluation.d.ts ===
@@ -2870,23 +2871,26 @@ export declare function isFormerNode(value: unknown): value is FormerNode;
 export declare function isFormerUse(value: unknown): value is FormerUse;
 /** Every key a record-rooted former contributes, including nested contributions. */
 export declare function contributedKeys(ref: FormerRef): string[];
-/** A defined former, callable with its slot values to produce the fused reference. */
+/** A defined former, callable with its input mapping to produce the fused reference. */
 export interface FormerRef {
-    (...slotValues: unknown[]): FusedFormer;
+    (input: Mapping): FusedFormer;
     readonly formerName: string;
-    readonly slots: readonly string[];
-    readonly slotVars: readonly symbol[];
+    readonly ins: readonly string[];
+    readonly inputVars: readonly symbol[];
+    readonly bindings: readonly string[];
     readonly promise: Exclude<QueryPromise, "many">;
     /** The former's tree, as the IR states it — the registered, exported, evaluated form. */
     readonly body: FormerNodeIR;
+    /** State that this record-rooted former may decline. */
+    optional(): FormerRef;
 }
-/** A former fused with its slot fill — what a then input or `formTree` takes. */
+/** A former fused with its input mapping — what a then input or `formTree` takes. */
 export interface FusedFormer {
     readonly former: FormerRef;
     readonly in: Mapping;
 }
 export declare function isFusedFormer(value: unknown): value is FusedFormer;
-/** Fuse a former ref with an already-shaped slot mapping for reaction IR registration. */
+/** Fuse a former ref with its object-shaped input for reaction IR registration. */
 export declare function fuseFormer(ref: FormerRef, input: Mapping): FusedFormer;
 export declare function useFormer(fused: FusedFormer, whether?: boolean): FormerUse;
 /** A former evaluation fault caused by a violated promise. */
@@ -2899,7 +2903,7 @@ export declare class FormerFault extends Error {
  * `registerFormers(...)` use this function.
  * @internal
  */
-export declare function formerRefWith(sentence: string, slots: readonly string[], slotVars: readonly symbol[], promise: Exclude<QueryPromise, "many">, body: FormerNodeIR): FormerRef;
+export declare function formerRefWith(name: string, ins: readonly string[], inputVars: readonly symbol[], bindings: readonly string[], promise: Exclude<QueryPromise, "many">, body: FormerNodeIR): FormerRef;
 
 === dist/internal/reads/frames.d.ts ===
 /**
@@ -3149,16 +3153,17 @@ export type ViewOpIR = Exclude<WhereOpIR, {
  * alternatives. A relation view declares the same three facts a concept query
  * declares: `ins` (handed to it), `outs` (handed back, bound at
  * use-sites only through `.is`), and a promise — required whenever `outs` is
- * non-empty, absent for a pure predicate view. A sentence view carries neither:
- * its slots derive from the sentence's `(slot)` groups. Slot names appear in
- * the blocks as `{ $var }` references.
+ * non-empty, absent for a pure predicate view. Free bindings stay local to the
+ * definition. Binding names appear in the blocks as `{ $var }` references.
  */
 export interface ViewIR {
     name: string;
     alternatives: ViewOpIR[][];
-    ins?: string[];
-    outs?: string[];
+    ins: string[];
+    outs: string[];
+    bindings: string[];
     promise?: "one" | "optional" | "many";
+    holds?: true;
 }
 /** How a former's comprehension orders what it kept. */
 export type ArrangedIR = {
@@ -3229,9 +3234,11 @@ export type FormerNodeIR = {
     where?: FormerWhereOpIR[];
     value: string;
 };
-/** One former: a sentence with `(slot)` groups, and the tree it states. */
+/** One former: explicit input and free bindings, its promise, and its formed tree. */
 export interface FormerIR {
     name: string;
+    ins: string[];
+    bindings: string[];
     promise: "one" | "optional";
     body: FormerNodeIR;
 }
@@ -3319,14 +3326,22 @@ import type { QueryPromise } from "./query-contracts.ts";
 export interface RelationView {
     (pattern: Mapping): ViewReadLine;
     readonly viewName: string;
-    /** Input names declared by the view sentence. */
+    /** Input names declared by the view's input bag. */
     readonly ins: readonly string[];
-    /** Output names declared by the view sentence and matched through `.is`. */
+    /** Output names declared by the view's output bag and matched through `.is`. */
     readonly outs: readonly string[];
+    /** Free names local to the view body. */
+    readonly bindings: readonly string[];
     /** The declared promise; absent for a pure predicate view (no outs). */
     readonly promise?: QueryPromise;
+    /** Whether this no-output view explicitly ends in `holds()`. */
+    readonly holdsPredicate: boolean;
     /** The where blocks, as IR — stacked blocks are alternatives. */
     readonly alternatives: readonly (readonly unknown[])[];
+    holds(): RelationView;
+    one(): RelationView;
+    optional(): RelationView;
+    many(): RelationView;
 }
 export declare function isRelationView(value: unknown): value is RelationView;
 export declare function brandRelationView<T extends object>(ref: T): T;
@@ -3434,13 +3449,13 @@ export declare function assertThenInputsAreData(reactionName: string, then: Step
 export declare function serializeReaction(reaction: LoweredReaction): ReactionIR;
 /**
  * Lower one finished view's where blocks at its definition boundary. Slot
- * symbols are named first, so a slot's `{ $var }` references carry the
- * sentence's own slot names; emitted nodes retain definition-site references
+ * symbols are named first, so `{ $var }` references carry the declaration's
+ * own binding names; emitted nodes retain definition-site references
  * ops as {@link LIVE} side channels.
  */
 export declare function lowerViewAlternatives(slotVars: readonly symbol[], alternatives: readonly (readonly ViewOp[])[]): ViewOpIR[][];
 /**
- * Lower a relation view's blocks: each in/out slot's variable is pinned to
+ * Lower a relation view's blocks: each declared variable is pinned to
  * its declared key first, so the seeded frame and the projected rows read
  * the same names the body's `{ $var }` references carry.
  */
@@ -3461,8 +3476,8 @@ export declare function viewChannelsOfView(ref: {
 export declare function collectViews(reactions: Iterable<ReactionIR[]>, formers?: Iterable<FormerRef>, viewOf?: (name: string) => RelationView | undefined): RelationView[];
 /**
  * Lower one finished former body at its definition boundary. Slot symbols
- * are named first, so slot `{ $var }` references carry the sentence's own
- * slot names; definition-site references (view templates, fragment refs,
+ * are named first, so `{ $var }` references carry the declaration's own
+ * binding names; definition-site references (view templates, fragment refs,
  * computations and opaque escapes) remain on emitted nodes as {@link LIVE}
  * side channels.
  */
@@ -3629,7 +3644,7 @@ export declare class Registry {
      */
     private readonly viewProofs;
     /**
-     * Formers by sentence, indexed as reactions referencing them register (or as
+     * Formers by name, indexed as reactions referencing them register (or as
      * the app declares them for edge/CLI reads). Engine-scoped for the same
      * reason views are: a former reads state through this engine's concepts.
      */
@@ -3786,6 +3801,8 @@ export declare class Registry {
      * registered; spliced fragments resolve against registered formers.
      */
     registerFormers(formers: FormerIR[]): void;
+    /** Validate explicit binding partitions on imported relation IR. */
+    private assertBindingPartitions;
 }
 
 === dist/internal/reads/render.d.ts ===
@@ -3812,7 +3829,7 @@ export declare function renderRoles(pattern: PatternIR): string;
 export declare function renderWhereOp(op: WhereOpIR | ViewOpIR): string;
 /**
  * Render one view in a ` ```view `
- * block): the sentence with its bare slots, then each where block — one line
+ * block): the human name with its declared binding partitions, then each where block — one line
  * when the block is a single condition, an indented conjunction otherwise.
  * Stacked blocks are the alternatives; this is where disjunction lives.
  */
@@ -3921,52 +3938,46 @@ export declare function foldView(view: ViewIR, fold: IRFold): void;
 export {};
 
 === dist/internal/reads/sentence.d.ts ===
-/** Shared slot parsing and callable-reference construction for views and formers. */
+/** Binding bags and callable references shared by views and formers. */
 import type { Mapping, Vars } from "../reactions/types.ts";
-export declare function slotsOf(sentence: string): string[];
-/**
- * Return a logic-variable proxy and the symbols it created. Repeated access to
- * one name returns the same symbol, so slots and local bindings use the same
- * representation.
- */
-export declare function sentenceVars(): {
-    vars: Vars;
-    minted: Map<string, symbol>;
-};
-/**
- * Resolve each slot to the variable its builder minted. A slot the builder
- * never read is a definition error — `kind` names the definition ("View" /
- * "Former") and `verb` what its slots are meant to do ("constrains" /
- * "shapes") in that error.
- */
-export declare function slotVariables(kind: string, sentence: string, slots: readonly string[], minted: Map<string, symbol>, verb: string): symbol[];
-/** The parts a finished sentence needs to become its callable reference. */
-export interface SentenceRefSpec<Ref, Fused> {
-    /** The definition's word, for the arity error: "View" / "Former". */
-    kind: string;
-    sentence: string;
-    slots: readonly string[];
-    slotVars: readonly symbol[];
-    /** The property the ref carries its name under: "viewName" / "formerName". */
-    nameKey: string;
-    /** The property the ref carries its tree under: "alternatives" / "body". */
-    payloadKey: string;
-    payload: unknown;
-    /** Fuse the finished ref with a slot mapping — `fuseView` / `fuseFormer`. */
-    fuse: (ref: Ref, input: Mapping) => Fused;
-    /**
-     * Answer a sentence-view call whose one argument maps slot names to values.
-     * When absent for a former, every call fills slots positionally.
-     */
-    line?: (ref: Ref, input: Mapping) => unknown;
+/** One independently declared binding bag. */
+declare const InputBindingsBrand: unique symbol;
+declare const OutputBindingsBrand: unique symbol;
+declare const FreeBindingsBrand: unique symbol;
+export interface InputBindings extends Vars {
+    readonly [InputBindingsBrand]: true;
+}
+export interface OutputBindings extends Vars {
+    readonly [OutputBindingsBrand]: true;
+}
+export interface FreeBindings extends Vars {
+    readonly [FreeBindingsBrand]: true;
+}
+export interface BindingBag<TVars extends Vars = Vars> {
+    readonly vars: TVars;
+    readonly minted: Map<string, symbol>;
 }
 /**
- * Build the callable reference a defined sentence becomes: called with its
- * slot values (arity-checked, filled positionally into a slot mapping) it
- * fuses, and it carries its name, slots, slot variables, and payload as
- * inspectable properties.
+ * Create one logic-variable proxy. Repeated access to one name returns the
+ * same symbol; separate bags keep the declaration's partitions visible.
  */
-export declare function sentenceRef<Ref extends (...slotValues: unknown[]) => Fused, Fused>(spec: SentenceRefSpec<Ref, Fused>): Ref;
+export declare function bindingBag<TVars extends Vars = Vars>(): BindingBag<TVars>;
+/** Reject one declared name appearing in two binding partitions. */
+export declare function assertSeparateBags(kind: string, name: string, bags: ReadonlyArray<readonly [label: string, minted: ReadonlyMap<string, symbol>]>): void;
+/** The parts a finished definition needs to become an object-call reference. */
+export interface ObjectRefSpec<Ref, Fused> {
+    kind: string;
+    name: string;
+    inputs: readonly string[];
+    inputVars: readonly symbol[];
+    nameKey: string;
+    payloadKey: string;
+    payload: unknown;
+    fuse: (ref: Ref, input: Mapping) => Fused;
+}
+/** Build a callable reference whose sole argument is its named input mapping. */
+export declare function objectRef<Ref extends (input: Mapping) => Fused, Fused>(spec: ObjectRefSpec<Ref, Fused>): Ref;
+export {};
 
 === dist/internal/reads/value-tree.d.ts ===
 /**
@@ -3999,29 +4010,27 @@ export declare function walkValueTree(value: unknown, visit: (node: unknown) => 
  * Define views as named relations over concept queries and other views.
  *
  * A view declares the same three facts as a concept query: inputs, outputs
- * bound or tested through `.is`, and a row-count promise. A caller uses a view
- * like a concept query. The sentence carries the declaration: its ordinary `(slot)`
- * groups are the inputs, and a sentence-final tail — `with one (…)` /
- * `with optional (…)` / `with many (…)` — states the promise and the
- * outputs. No tail means a pure predicate view: no outs, no promise.
+ * bound or tested through `.is`, and a row-count promise. Its builder receives
+ * separate input, output, and free-binding bags. The sentence is only its
+ * human name.
  *
  * ```ts
  * export const authorFaceOf = view(
- *   "the author face of (post) with optional (username, avatar)",
- *   ({ post, author, username, avatar }) =>
+ *   "the author face of a post",
+ *   ({ post }, { username, avatar }, { author }) =>
  *     where(
  *       Posting._getPost({ post }).is({ author }),
  *       Profiling._getProfile({ user: author }).is({ username, avatar }),
  *     ),
- * );
+ * ).optional();
  *
  * authorFaceOf({ post }).is({ username })   // at a use-site: the same line form
  * ```
  *
- * Only a sentence-final `with <promise-word> (…)` parses as the tail, so
- * ordinary uses of "with" stay unambiguous. Where there are outs, the
- * promise is required — no default. Several returned `where(...)` blocks are
- * the alternatives: the view holds (or answers rows) if any block does.
+ * Where there are outputs, the promise defaults to `many`; `.one()`,
+ * `.optional()`, and `.many()` state it explicitly. A view without outputs
+ * ends in `.holds()`. Several returned `where(...)` blocks are the
+ * alternatives: the view holds (or answers rows) if any block does.
  * Multiple blocks are alternatives, so callers can reuse one named policy.
  *
  * Registration infers a cardinality bound from the body and checks it against
@@ -4033,9 +4042,10 @@ export declare function walkValueTree(value: unknown, visit: (node: unknown) => 
  * the number of matching rows at the moment of asking, never stored.
  *
  */
-import type { BranchChain, InstrumentedQuery, Mapping, StepNode, Vars } from "../reactions/types.ts";
+import type { BranchChain, InstrumentedQuery, Mapping, StepNode } from "../reactions/types.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import type { ViewOpIR } from "./ir.ts";
+import { type FreeBindings, type InputBindings, type OutputBindings } from "./sentence.ts";
 import type { RelationView } from "./lines.ts";
 import type { QueryPromise } from "./query-contracts.ts";
 import type { FormNode } from "./former-builders.ts";
@@ -4068,24 +4078,19 @@ export declare function isCountOp(value: unknown): value is CountOp;
  * Counting is available inside views, not in a reaction's `.where(...)`.
  */
 export declare function count(query: InstrumentedQuery | ((...args: never[]) => unknown), input: Mapping, out: symbol): CountOp;
-export { slotsOf } from "./sentence.ts";
-/** A sentence that states a tail — the declaration form of a promised view. */
-export type TailSentence = `${string}with ${QueryPromise} (${string})`;
 /**
  * Construct a {@link RelationView} from validated parts. Both `view(...)` and
  * `registerViews(...)` use this function.
  * @internal
  */
-export declare function relationViewWith(name: string, ins: readonly string[], outs: readonly string[], promise: QueryPromise | undefined, alternatives: readonly (readonly ViewOpIR[])[]): RelationView;
+export declare function relationViewWith(name: string, ins: readonly string[], outs: readonly string[], bindings: readonly string[], promise: QueryPromise | undefined, alternatives: readonly (readonly ViewOpIR[])[], holdsPredicate?: boolean): RelationView;
 /**
- * Define a view: a sentence whose `(slot)` groups are the inputs, an
- * optional sentence-final tail — `with one|optional|many (…)` — stating the
- * promise and the outputs, and a builder from its logic variables to
- * `where(...)` blocks (several blocks are the alternatives). A tailless
- * sentence declares a pure predicate.
+ * Define a view from explicit input, output, and free-binding bags. Several
+ * returned `where(...)` blocks are alternatives. End a predicate in
+ * `holds()`. Output views default to `many()` and may state a narrower promise.
  */
-export declare function view(name: TailSentence, build: (vars: Vars) => ViewBlock | ViewBlock[]): RelationView;
-export declare function view(name: string, build: (vars: Vars) => ViewBlock | ViewBlock[]): RelationView;
+export declare function view(name: string, build: (inputs: InputBindings, outputs: OutputBindings, bindings: FreeBindings) => ViewBlock | ViewBlock[]): RelationView;
+export {};
 
 === dist/internal/reads/where-ops.d.ts ===
 /**
@@ -4343,6 +4348,7 @@ export type { ReadLine, RelationView, SlotPattern } from "../internal/reads/line
 export type { Condition } from "../internal/reads/where-ops.ts";
 export type { ActionCall, RefusedActionLine, ReturnedActionLine, Vars, } from "../internal/reactions/types.ts";
 export type { QueryPromise } from "../internal/reads/query-contracts.ts";
+export type { FreeBindings, InputBindings, OutputBindings } from "../internal/reads/sentence.ts";
 
 === dist/tooling/index.d.ts ===
 /** Supported inspection, rendering, and generated-contract tools. */

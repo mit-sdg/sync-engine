@@ -110,12 +110,12 @@ Queries (standing questions the state answers):
 _Views name reusable conditions. Multiple `where` blocks are alternatives._
 
 ```view
-(responder) may contribute in (room)
+(responder) may contribute in (room) — inputs (responder, room); outputs (); bindings ()
   where Gathering._membership (gathering: room, member: responder) has (joined: true)
 ```
 
 ```view
-(responder) may not contribute in (room)
+(responder) may not contribute in (room) — inputs (responder, room); outputs (); bindings ()
   where Gathering._membership (gathering: room, member: responder) has (joined: false)
 ```
 
@@ -125,7 +125,7 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
-Form the operations room (room) as follows:
+Form the operations room (room) — inputs (room); bindings (name, host, responder, selection, mitigation, discussion, response, author, text, alert, subject, alertedMitigation) as follows:
   a record of
     where Gathering._get (gathering: room) has (name, host)
     room
@@ -153,7 +153,7 @@ Form the operations room (room) as follows:
 ```
 
 ```former
-Form the responder roster of (room) as follows:
+Form the responder roster of (room) — inputs (room); bindings (responder) as follows:
   a record of
     responders: each Gathering._members (gathering: room) has (member: responder)
       form a record of
@@ -161,17 +161,17 @@ Form the responder roster of (room) as follows:
 ```
 
 ```former
-Form the room summary (room) as follows:
+Form the room summary (room) — inputs (room); bindings (name, host) as follows:
   a record of
     where Gathering._get (gathering: room) has (name, host)
     room
     name
     host
-    … the responder roster of (room)
+    … the responder roster of (room) (room)
 ```
 
 ```former
-Form the required current mitigation (room) as follows:
+Form the required current mitigation (room) — inputs (room); bindings (mitigation) as follows:
   a record of
     where Selecting._current (scope: room) has (item: mitigation)
     room
@@ -179,7 +179,7 @@ Form the required current mitigation (room) as follows:
 ```
 
 ```former
-If available, form the current mitigation (room) as follows:
+If available, form the current mitigation (room) — inputs (room); bindings (mitigation) as follows:
   a record of
     where Selecting._current (scope: room) has (item: mitigation)
     room
@@ -187,7 +187,7 @@ If available, form the current mitigation (room) as follows:
 ```
 
 ```former
-Form the response stats of (discussion) as follows:
+Form the response stats of (discussion) — inputs (discussion); bindings (response, responder) as follows:
   a record of
     responseCount: the count of Discussing._responses (discussion) has (response, author: responder)
     firstResponse: the response of the first Discussing._responses (discussion) has (response, author: responder)
@@ -211,7 +211,7 @@ then
 ```reaction
 when RequestBoundary.request (room, responder, text, requestId, path: "/rooms/contribute")
 where
-  responder may contribute in room
+  (responder) may contribute in (room) (responder, room)
   Selecting._current (scope: room) has (selection)
   Discussing._openFor (subject: selection) has (discussion)
 then
@@ -233,7 +233,7 @@ then
 ```reaction
 when RequestBoundary.request (room, responder, text, requestId, path: "/rooms/contribute")
 where
-  responder may not contribute in room
+  (responder) may not contribute in (room) (responder, room)
 then
   request RequestBoundary.respond (error: "RESPONDERS_ONLY", requestId)
 ```
@@ -287,7 +287,7 @@ then
 ```reaction
 when RequestBoundary.request (room, requestId, path: "/rooms/get")
 then
-  request RequestBoundary.respond (dashboard: the operations room (room), requestId)
+  request RequestBoundary.respond (dashboard: the operations room (room) (room), requestId)
 ```
 
 ### room.JoinRoom

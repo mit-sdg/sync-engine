@@ -1,33 +1,33 @@
-/** Shared slot parsing and callable-reference construction for views and formers. */
+/** Binding bags and callable references shared by views and formers. */
 
 import type { Mapping, Vars } from "../reactions/types.ts";
 import { isPlainMapping } from "./matchers.ts";
 
-const SLOT = /\(([^()]*)\)/g;
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+/** One independently declared binding bag. */
+declare const InputBindingsBrand: unique symbol;
+declare const OutputBindingsBrand: unique symbol;
+declare const FreeBindingsBrand: unique symbol;
 
-export function slotsOf(sentence: string): string[] {
-  const slots: string[] = [];
-  for (const match of sentence.matchAll(SLOT)) {
-    const slot = match[1].trim();
-    if (slot === "") continue;
-    if (!IDENTIFIER.test(slot)) {
-      throw new Error(`Sentence "${sentence}": slot "(${match[1]})" is not a single name.`);
-    }
-    if (slots.includes(slot)) {
-      throw new Error(`Sentence "${sentence}": slot "(${slot})" appears twice.`);
-    }
-    slots.push(slot);
-  }
-  return slots;
+export interface InputBindings extends Vars {
+  readonly [InputBindingsBrand]: true;
+}
+export interface OutputBindings extends Vars {
+  readonly [OutputBindingsBrand]: true;
+}
+export interface FreeBindings extends Vars {
+  readonly [FreeBindingsBrand]: true;
+}
+
+export interface BindingBag<TVars extends Vars = Vars> {
+  readonly vars: TVars;
+  readonly minted: Map<string, symbol>;
 }
 
 /**
- * Return a logic-variable proxy and the symbols it created. Repeated access to
- * one name returns the same symbol, so slots and local bindings use the same
- * representation.
+ * Create one logic-variable proxy. Repeated access to one name returns the
+ * same symbol; separate bags keep the declaration's partitions visible.
  */
-export function sentenceVars(): { vars: Vars; minted: Map<string, symbol> } {
+export function bindingBag<TVars extends Vars = Vars>(): BindingBag<TVars> {
   const minted = new Map<string, symbol>();
   const vars = new Proxy({} as Vars, {
     get(_target, prop) {
@@ -40,84 +40,67 @@ export function sentenceVars(): { vars: Vars; minted: Map<string, symbol> } {
       return existing;
     },
   });
-  return { vars, minted };
+  return { vars: vars as TVars, minted };
 }
 
-/**
- * Resolve each slot to the variable its builder minted. A slot the builder
- * never read is a definition error — `kind` names the definition ("View" /
- * "Former") and `verb` what its slots are meant to do ("constrains" /
- * "shapes") in that error.
- */
-export function slotVariables(
+/** Reject one declared name appearing in two binding partitions. */
+export function assertSeparateBags(
   kind: string,
-  sentence: string,
-  slots: readonly string[],
-  minted: Map<string, symbol>,
-  verb: string,
-): symbol[] {
-  return slots.map((slot) => {
-    const variable = minted.get(slot);
-    if (variable === undefined) {
-      throw new Error(
-        `${kind} "${sentence}": slot "(${slot})" is never used — a slot that ${verb} ` +
-          "nothing does not belong in the sentence.",
-      );
+  name: string,
+  bags: ReadonlyArray<readonly [label: string, minted: ReadonlyMap<string, symbol>]>,
+): void {
+  const seen = new Map<string, string>();
+  for (const [label, minted] of bags) {
+    for (const binding of minted.keys()) {
+      const prior = seen.get(binding);
+      if (prior !== undefined) {
+        throw new Error(
+          `${kind} "${name}": "${binding}" is declared in both the ${prior} and ${label} binding bags.`,
+        );
+      }
+      seen.set(binding, label);
     }
-    return variable;
-  });
+  }
 }
 
-/** The parts a finished sentence needs to become its callable reference. */
-export interface SentenceRefSpec<Ref, Fused> {
-  /** The definition's word, for the arity error: "View" / "Former". */
+/** The parts a finished definition needs to become an object-call reference. */
+export interface ObjectRefSpec<Ref, Fused> {
   kind: string;
-  sentence: string;
-  slots: readonly string[];
-  slotVars: readonly symbol[];
-  /** The property the ref carries its name under: "viewName" / "formerName". */
+  name: string;
+  inputs: readonly string[];
+  inputVars: readonly symbol[];
   nameKey: string;
-  /** The property the ref carries its tree under: "alternatives" / "body". */
   payloadKey: string;
   payload: unknown;
-  /** Fuse the finished ref with a slot mapping — `fuseView` / `fuseFormer`. */
   fuse: (ref: Ref, input: Mapping) => Fused;
-  /**
-   * Answer a sentence-view call whose one argument maps slot names to values.
-   * When absent for a former, every call fills slots positionally.
-   */
-  line?: (ref: Ref, input: Mapping) => unknown;
 }
 
-/**
- * Build the callable reference a defined sentence becomes: called with its
- * slot values (arity-checked, filled positionally into a slot mapping) it
- * fuses, and it carries its name, slots, slot variables, and payload as
- * inspectable properties.
- */
-export function sentenceRef<Ref extends (...slotValues: unknown[]) => Fused, Fused>(
-  spec: SentenceRefSpec<Ref, Fused>,
+/** Build a callable reference whose sole argument is its named input mapping. */
+export function objectRef<Ref extends (input: Mapping) => Fused, Fused>(
+  spec: ObjectRefSpec<Ref, Fused>,
 ): Ref {
-  const ref = ((...slotValues: unknown[]): Fused => {
-    if (spec.line !== undefined && slotValues.length === 1 && isPlainMapping(slotValues[0])) {
-      return spec.line(ref, slotValues[0]) as Fused;
+  const ref = ((input: Mapping): Fused => {
+    if (!isPlainMapping(input)) {
+      throw new Error(`${spec.kind} "${spec.name}" takes one object-shaped input mapping.`);
     }
-    if (slotValues.length !== spec.slots.length) {
-      throw new Error(
-        `${spec.kind} "${spec.sentence}" takes ${spec.slots.length} slot value(s) ` +
-          `(${spec.slots.join(", ")}), got ${slotValues.length}.`,
-      );
+    for (const key of Object.keys(input)) {
+      if (!spec.inputs.includes(key)) {
+        throw new Error(
+          `${spec.kind} "${spec.name}": "${key}" is not an input; expected (${spec.inputs.join(", ")}).`,
+        );
+      }
     }
-    const input: Mapping = {};
-    spec.slots.forEach((slot, index) => {
-      input[slot] = slotValues[index];
-    });
+    for (const inputName of spec.inputs) {
+      if (!(inputName in input)) {
+        throw new Error(`${spec.kind} "${spec.name}": required input "${inputName}" is missing.`);
+      }
+    }
     return spec.fuse(ref, input);
   }) as Ref;
   Object.defineProperties(ref, {
-    [spec.nameKey]: { value: spec.sentence, enumerable: true },
-    slots: { value: [...spec.slots], enumerable: true },
-    slotVars: { value: [...spec.slotVars], enumerable: false },
+    [spec.nameKey]: { value: spec.name, enumerable: true },
+    ins: { value: [...spec.inputs], enumerable: true },
+    inputVars: { value: [...spec.inputVars], enumerable: false },
     [spec.payloadKey]: { value: spec.payload, enumerable: false },
   });
   return ref;

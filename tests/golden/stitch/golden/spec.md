@@ -60,7 +60,7 @@ Queries (standing questions the state answers):
 _Views name reusable conditions. Multiple `where` blocks are alternatives._
 
 ```view
-(item) has focus
+(item) has focus — inputs (item); outputs (); bindings ()
   where Focus._current () has (item)
 ```
 
@@ -70,7 +70,7 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
-Form the open queue () as follows:
+Form the open queue () — inputs (); bindings (id, title, priority, status) as follows:
   each Work._list () has (id, title, priority, status) and not (status: "done")
     form a record of
       id
@@ -80,7 +80,7 @@ Form the open queue () as follows:
 ```
 
 ```former
-Form the whole queue () as follows:
+Form the whole queue () — inputs (); bindings (id, title, priority, status) as follows:
   each Work._list () has (id, title, priority, status)
     form a record of
       id
@@ -90,7 +90,7 @@ Form the whole queue () as follows:
 ```
 
 ```former
-If available, form the focus () as follows:
+If available, form the focus () — inputs (); bindings (item, title, priority, status) as follows:
   a record of
     where Focus._current () has (item)
     where Work._get (id: item) has (title, priority, status)
@@ -101,7 +101,7 @@ If available, form the focus () as follows:
 ```
 
 ```former
-Form the history () as follows:
+Form the history () — inputs (); bindings (sequence, verb, item, title) as follows:
   each History._list () has (sequence, verb, item, title)
     arranged by sequence
     form a record of
@@ -160,7 +160,7 @@ then
 ```reaction
 when Work.complete (item)
 where
-  item has focus
+  (item) has focus (item)
 then
   request Focus.finish (item)
 ```

@@ -55,17 +55,17 @@ function setup() {
   const words = vocabulary({ concepts: { Ledger: LedgerConcept }, computations: {} });
   const { Ledger } = words.concepts;
 
-  const labelOf = view("the label of (item) with optional (label)", ({ item, label }: Vars) =>
+  const labelOf = view("the label of (item)", ({ item }, { label }, _bindings) =>
     where(lineOf({ query: Ledger._labelOf }, { item }).is({ label })),
-  );
+  ).optional();
 
-  const theRows = former("the ledger rows ()", ({ entry, item, amount, label }: Vars) =>
+  const theRows = former("the ledger rows ()", (_inputs, { entry, item, amount, label }) =>
     each(lineOf({ query: Ledger._rows }, {}).is({ entry, item, amount }))
       .where(whether(labelOf({ item }).is({ label })))
       .form({ entry, item, amount, label }),
   );
 
-  const theLatest = former("the latest entry ()", ({ entry }: Vars) =>
+  const theLatest = former("the latest entry ()", (_inputs, { entry }) =>
     each(lineOf({ query: Ledger._rows }, {}).is({ entry })).first(entry),
   );
   const composition = {
@@ -80,9 +80,9 @@ function setup() {
     LedgerAddForbidden: endpoint("/ledger/add", ({ session, item, amount }: Vars) =>
       receive({ session, item, amount }).then(fail("FORBIDDEN")),
     ),
-    LedgerList: endpoint("/ledger/list", () => receive({}).then(respond({ rows: theRows() }))),
+    LedgerList: endpoint("/ledger/list", () => receive({}).then(respond({ rows: theRows({}) }))),
     LedgerLatest: endpoint("/ledger/latest", () =>
-      receive({}).then(respond({ latest: theLatest() })),
+      receive({}).then(respond({ latest: theLatest({}) })),
     ),
     LedgerLabel: endpoint("/ledger/label", ({ item, label }: Vars) =>
       receive({ item }).then(

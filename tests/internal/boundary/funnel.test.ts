@@ -193,7 +193,7 @@ describe("faults while forming response input", () => {
     });
     const { Profiling } = words.concepts;
 
-    const card = former("the card of (owner)", ({ owner, profile, bio }) =>
+    const card = former("the card of (owner)", ({ owner }, { profile, bio }) =>
       where(lineOf({ query: Profiling._ofOwner }, { owner }).is({ profile, bio })).form({
         profile,
         bio,
@@ -202,7 +202,7 @@ describe("faults while forming response input", () => {
 
     const composition = {
       Card: endpoint("/profiles/card", ({ owner }: Vars) =>
-        receive({ owner }).then(respond({ card: card(owner) })),
+        receive({ owner }).then(respond({ card: card({ owner }) })),
       ),
       card,
     };

@@ -10,10 +10,13 @@ export const RoomStartsWithInvestigation = reaction(({ room }) =>
   ),
 );
 
-export const roomDashboard = former("the operations room (room)", ({ room, name, mitigation }) =>
-  where(Rooming._get({ room }).is({ name }), Mitigating._current({ room }).is({ mitigation })).form(
-    { room, name, mitigation },
-  ),
+export const roomDashboard = former(
+  "the operations room (room)",
+  ({ room }, { name, mitigation }) =>
+    where(
+      Rooming._get({ room }).is({ name }),
+      Mitigating._current({ room }).is({ mitigation }),
+    ).form({ room, name, mitigation }),
 );
 
 export const OpenRoom = endpoint("/rooms/open", ({ name, room }) =>
@@ -21,5 +24,5 @@ export const OpenRoom = endpoint("/rooms/open", ({ name, room }) =>
 );
 
 export const GetRoom = endpoint("/rooms/get", ({ room }) =>
-  receive({ room }).then(respond({ dashboard: roomDashboard(room) })),
+  receive({ room }).then(respond({ dashboard: roomDashboard({ room }) })),
 );

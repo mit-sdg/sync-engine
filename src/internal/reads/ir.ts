@@ -156,16 +156,17 @@ export type ViewOpIR =
  * alternatives. A relation view declares the same three facts a concept query
  * declares: `ins` (handed to it), `outs` (handed back, bound at
  * use-sites only through `.is`), and a promise — required whenever `outs` is
- * non-empty, absent for a pure predicate view. A sentence view carries neither:
- * its slots derive from the sentence's `(slot)` groups. Slot names appear in
- * the blocks as `{ $var }` references.
+ * non-empty, absent for a pure predicate view. Free bindings stay local to the
+ * definition. Binding names appear in the blocks as `{ $var }` references.
  */
 export interface ViewIR {
   name: string;
   alternatives: ViewOpIR[][];
-  ins?: string[];
-  outs?: string[];
+  ins: string[];
+  outs: string[];
+  bindings: string[];
   promise?: "one" | "optional" | "many";
+  holds?: true;
 }
 
 /** How a former's comprehension orders what it kept. */
@@ -242,9 +243,11 @@ export type FormerNodeIR =
       value: string;
     };
 
-/** One former: a sentence with `(slot)` groups, and the tree it states. */
+/** One former: explicit input and free bindings, its promise, and its formed tree. */
 export interface FormerIR {
   name: string;
+  ins: string[];
+  bindings: string[];
   promise: "one" | "optional";
   body: FormerNodeIR;
 }

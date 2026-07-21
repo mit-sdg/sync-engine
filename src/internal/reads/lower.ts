@@ -389,7 +389,7 @@ function assertDataValue(reactionName: string, action: string, key: string, valu
   const kind = typeof value;
   if (kind === "boolean" || kind === "number" || kind === "string" || kind === "bigint") return;
   if (value === undefined) return;
-  // A fused former is data — a named ref plus a slot pattern, evaluated per
+  // A fused former is data — a named ref plus an input mapping, evaluated per
   // firing at the moment of asking, never a registration-time value.
   if (isFusedFormer(value)) return;
   if (Array.isArray(value)) {
@@ -432,7 +432,7 @@ class VarNames {
   private names = new Map<symbol, string>();
   private taken = new Set<string>();
 
-  /** Pin a variable to an exact name — how a relation's slots keep their keys. */
+  /** Pin a variable to an exact name — how a relation's bindings keep their keys. */
   nameAs(variable: symbol, name: string): void {
     const existing = this.names.get(variable);
     if (existing === name) return;
@@ -639,8 +639,8 @@ function encodeViewOp(op: ViewOp, vars: VarNames): ViewOpIR {
 
 /**
  * Lower one finished view's where blocks at its definition boundary. Slot
- * symbols are named first, so a slot's `{ $var }` references carry the
- * sentence's own slot names; emitted nodes retain definition-site references
+ * symbols are named first, so `{ $var }` references carry the declaration's
+ * own binding names; emitted nodes retain definition-site references
  * ops as {@link LIVE} side channels.
  */
 export function lowerViewAlternatives(
@@ -653,7 +653,7 @@ export function lowerViewAlternatives(
 }
 
 /**
- * Lower a relation view's blocks: each in/out slot's variable is pinned to
+ * Lower a relation view's blocks: each declared variable is pinned to
  * its declared key first, so the seeded frame and the projected rows read
  * the same names the body's `{ $var }` references carry.
  */
@@ -673,7 +673,9 @@ export function serializeView(ref: RelationView): ViewIR {
     alternatives: ref.alternatives as ViewOpIR[][],
     ins: [...ref.ins],
     outs: [...ref.outs],
+    bindings: [...ref.bindings],
     ...(ref.promise !== undefined ? { promise: ref.promise } : {}),
+    ...(ref.holdsPredicate ? { holds: true as const } : {}),
   };
 }
 
@@ -828,8 +830,8 @@ function encodeFormerNode(node: FormerNode, vars: VarNames): FormerNodeIR {
 
 /**
  * Lower one finished former body at its definition boundary. Slot symbols
- * are named first, so slot `{ $var }` references carry the sentence's own
- * slot names; definition-site references (view templates, fragment refs,
+ * are named first, so `{ $var }` references carry the declaration's own
+ * binding names; definition-site references (view templates, fragment refs,
  * computations and opaque escapes) remain on emitted nodes as {@link LIVE}
  * side channels.
  */
@@ -841,7 +843,13 @@ export function lowerFormerBody(slotVars: readonly symbol[], body: FormerNode): 
 
 /** Serialize one former: the registered body already is the IR. */
 export function serializeFormer(ref: FormerRef): FormerIR {
-  return { name: ref.formerName, promise: ref.promise, body: ref.body };
+  return {
+    name: ref.formerName,
+    ins: [...ref.ins],
+    bindings: [...ref.bindings],
+    promise: ref.promise,
+    body: ref.body,
+  };
 }
 
 /** One reference a former's body carries: its name, and the definition-site live value if any. */

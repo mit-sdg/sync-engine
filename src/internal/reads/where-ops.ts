@@ -178,7 +178,9 @@ export function whether(fused: FusedFormer): FormerUse;
 export function whether(line: ReadLine | FusedFormer): WhetherOp | FormerUse {
   if (isFusedFormer(line)) return useFormer(line, true);
   if (!isReadLine(line)) {
-    throw new Error("whether(...) takes a plain line or a named former with its slots filled.");
+    throw new Error(
+      "whether(...) takes a plain line or a named former with its input mapping filled.",
+    );
   }
   assertPlainLine("whether", line);
   return brandOp({ op: "whether" as const, ...refOf(line), in: line.in, out: line.out });
@@ -228,7 +230,9 @@ interface ViewShape {
   name: string;
   ins: readonly string[];
   outs: readonly string[];
+  bindings: readonly string[];
   promise?: "one" | "optional" | "many";
+  holdsPredicate: boolean;
   alternatives: readonly (readonly ViewOpIR[])[];
 }
 
@@ -237,7 +241,9 @@ function viewShapeOf(view: RelationView): ViewShape {
     name: view.viewName,
     ins: view.ins,
     outs: view.outs,
+    bindings: view.bindings,
     promise: view.promise,
+    holdsPredicate: view.holdsPredicate,
     alternatives: view.alternatives as readonly (readonly ViewOpIR[])[],
   };
 }
@@ -314,12 +320,12 @@ async function viewRows(
   }
   if (shape.promise === "one" && rows.length !== 1) {
     throw new QueryAnswerFault(
-      `View ${shape.name} promises "one" and answered ${rows.length} rows.`,
+      `View "${shape.name}" promises one row but produced ${rows.length}.`,
     );
   }
   if (shape.promise === "optional" && rows.length > 1) {
     throw new QueryAnswerFault(
-      `View ${shape.name} promises "optional" and answered ${rows.length} rows — it may answer at most one.`,
+      `View "${shape.name}" promises at most one row but produced ${rows.length}.`,
     );
   }
   return rows;

@@ -24,14 +24,22 @@ import type { QueryPromise } from "./query-contracts.ts";
 export interface RelationView {
   (pattern: Mapping): ViewReadLine;
   readonly viewName: string;
-  /** Input names declared by the view sentence. */
+  /** Input names declared by the view's input bag. */
   readonly ins: readonly string[];
-  /** Output names declared by the view sentence and matched through `.is`. */
+  /** Output names declared by the view's output bag and matched through `.is`. */
   readonly outs: readonly string[];
+  /** Free names local to the view body. */
+  readonly bindings: readonly string[];
   /** The declared promise; absent for a pure predicate view (no outs). */
   readonly promise?: QueryPromise;
+  /** Whether this no-output view explicitly ends in `holds()`. */
+  readonly holdsPredicate: boolean;
   /** The where blocks, as IR — stacked blocks are alternatives. */
   readonly alternatives: readonly (readonly unknown[])[];
+  holds(): RelationView;
+  one(): RelationView;
+  optional(): RelationView;
+  many(): RelationView;
 }
 
 export function isRelationView(value: unknown): value is RelationView {

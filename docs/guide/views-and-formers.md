@@ -21,15 +21,15 @@ _Source: [`examples/operations-room/src/composition/responders-may-contribute.ts
 ```ts
 export const responderMayContribute = view(
   "(responder) may contribute in (room)",
-  ({ responder, room }) =>
+  ({ responder, room }, _outputs, _bindings) =>
     where(Gathering._membership({ gathering: room, member: responder }).is({ joined: true })),
-);
+).holds();
 
 export const responderMayNotContribute = view(
   "(responder) may not contribute in (room)",
-  ({ responder, room }) =>
+  ({ responder, room }, _outputs, _bindings) =>
     where(Gathering._membership({ gathering: room, member: responder }).is({ joined: false })),
-);
+).holds();
 ```
 
 The membership line tests its `joined` output against a literal. The first
@@ -58,13 +58,15 @@ _Source: [`examples/operations-room/src/composition/host-may-contribute.ts`](../
 ```ts
 export const responderMayContribute = view(
   "(responder) may contribute in (room)",
-  ({ responder, room }) => where(Gathering._get({ gathering: room }).is({ host: responder })),
-);
+  ({ responder, room }, _outputs, _bindings) =>
+    where(Gathering._get({ gathering: room }).is({ host: responder })),
+).holds();
 
 export const responderMayNotContribute = view(
   "(responder) may not contribute in (room)",
-  ({ responder, room }) => where(Gathering._get({ gathering: room }).is.not({ host: responder })),
-);
+  ({ responder, room }, _outputs, _bindings) =>
+    where(Gathering._get({ gathering: room }).is.not({ host: responder })),
+).holds();
 ```
 
 Assemble with the responder policy and Lin's contribution returns a response.
@@ -81,7 +83,7 @@ former promises one roster and captures every responder.
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
-export const responderRoster = former("the responder roster of (room)", ({ room, responder }) =>
+export const responderRoster = former("the responder roster of (room)", ({ room }, { responder }) =>
   form({
     responders: each(Gathering._members({ gathering: room }).is({ member: responder })).form({
       responder,
@@ -90,7 +92,7 @@ export const responderRoster = former("the responder roster of (room)", ({ room,
 );
 ```
 
-The sentence's `(room)` slot becomes the callable former's one argument.
+The input bag makes `room` the callable former's one named input.
 `responders` uses `each(Gathering._members(...)).form(...)` to return every
 member row in the query's declared order. An empty room still has one roster,
 with an empty `responders` array.
@@ -103,22 +105,22 @@ _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/ope
 ```ts
 export const requiredCurrentMitigation = former(
   "the required current mitigation (room)",
-  ({ room, mitigation }) =>
+  ({ room }, { mitigation }) =>
     where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
 );
 ```
 
-Before the room chooses a mitigation, that read fails with `FORMER_NONE`. Add
-`, if any` to the sentence and the whole formed value is absent instead.
+Before the room chooses a mitigation, that read fails with `FORMER_NONE`. End
+the former in `optional()` and the whole formed value is absent instead.
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
 export const currentMitigation = former(
-  "the current mitigation (room), if any",
-  ({ room, mitigation }) =>
+  "the current mitigation (room)",
+  ({ room }, { mitigation }) =>
     where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
-);
+).optional();
 ```
 
 After a selection, both versions return the chosen mitigation. The difference
@@ -151,7 +153,7 @@ _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/ope
 ```ts
 export const responseStats = former(
   "the response stats of (discussion)",
-  ({ discussion, response, responder }) =>
+  ({ discussion }, { response, responder }) =>
     form({
       responseCount: each(
         Discussing._responses({ discussion }).is({ response, author: responder }),
@@ -182,10 +184,10 @@ name, and host.
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
-export const roomSummary = former("the room summary (room)", ({ room, name, host }) =>
+export const roomSummary = former("the room summary (room)", ({ room }, { name, host }) =>
   where(Gathering._get({ gathering: room }).is({ name, host }))
     .form({ room, name, host })
-    .splicing(responderRoster(room)),
+    .splicing(responderRoster({ room })),
 );
 ```
 
@@ -207,21 +209,23 @@ _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/ope
 ```ts
 export const roomDashboard = former(
   "the operations room (room)",
-  ({
-    room,
-    name,
-    host,
-    responder,
-    selection,
-    mitigation,
-    discussion,
-    response,
-    author,
-    text,
-    alert,
-    subject,
-    alertedMitigation,
-  }) =>
+  (
+    { room },
+    {
+      name,
+      host,
+      responder,
+      selection,
+      mitigation,
+      discussion,
+      response,
+      author,
+      text,
+      alert,
+      subject,
+      alertedMitigation,
+    },
+  ) =>
     where(Gathering._get({ gathering: room }).is({ name, host })).form({
       room,
       name,

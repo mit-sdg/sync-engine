@@ -86,22 +86,22 @@ describe("vocabulary refs", () => {
 
 // ── Module-level templates, shared by every engine below ──────────────────
 
-const readsAs = view("(note) reads as (text)", ({ note, text }) =>
+const readsAs = view("(note) reads as (text)", ({ note, text }, _outputs, _bindings) =>
   where(lineOf({ query: Noting._getNote }, { note }).is({ text })),
-);
+).holds();
 
-const theNotes = former("the notes ()", ({ note, text }) =>
+const theNotes = former("the notes ()", (_inputs, { note, text }) =>
   each(lineOf({ query: Noting._all }, {}).is({ note, text })).form({ note, text }),
 );
 
-const theNoteCard = former("the note card of (note), if any", ({ note, text }) =>
+const theNoteCard = former("the note card of (note)", ({ note }, { text }) =>
   where(whether(lineOf({ query: Noting._getNote }, { note }).is({ text }))).form({ text }),
-);
+).optional();
 
-const theShelf = former("the shelf ()", ({ note, text }) =>
+const theShelf = former("the shelf ()", (_inputs, { note, text }) =>
   each(lineOf({ query: Noting._all }, {}).is({ note, text: text }))
     .form({ note })
-    .splicing(whether(theNoteCard(note))),
+    .splicing(whether(theNoteCard({ note }))),
 );
 
 const EchoNote = reaction(({ note, text }) =>
@@ -136,14 +136,14 @@ describe("per-engine resolution of shared templates", () => {
     expect(a.concepts.Echoing.heard).toEqual(["alpha"]);
     expect(b.concepts.Echoing.heard).toEqual(["beta"]);
 
-    expect(await a.engine.form(theNotes())).toEqual([{ note: "a1", text: "alpha" }]);
-    expect(await b.engine.form(theNotes())).toEqual([{ note: "b1", text: "beta" }]);
+    expect(await a.engine.form(theNotes({}))).toEqual([{ note: "a1", text: "alpha" }]);
+    expect(await b.engine.form(theNotes({}))).toEqual([{ note: "b1", text: "beta" }]);
   });
 
   test("a spliced fragment resolves with its host, per engine", async () => {
     const a = build();
     await a.concepts.Noting.add({ id: "a1", text: "alpha" });
-    expect(await a.engine.form(theShelf())).toEqual([{ note: "a1", text: "alpha" }]);
+    expect(await a.engine.form(theShelf({}))).toEqual([{ note: "a1", text: "alpha" }]);
   });
 
   test("the rendered spec carries the resolved view and former by name", async () => {

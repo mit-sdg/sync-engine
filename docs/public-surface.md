@@ -23,7 +23,7 @@ update.
 
 <!-- register:language:start -->
 
-`Condition`, `ActionCall`, `QueryPromise`, `ReadLine`, `RefusedActionLine`, `RelationView`, `ReturnedActionLine`, `SlotPattern`, `Vars`, `count`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
+`Condition`, `ActionCall`, `FreeBindings`, `InputBindings`, `OutputBindings`, `QueryPromise`, `ReadLine`, `RefusedActionLine`, `RelationView`, `ReturnedActionLine`, `SlotPattern`, `Vars`, `count`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -41,9 +41,11 @@ action's stable code to its `Error` class, and `publicErrors` maps those codes
 to public boundary categories. `registerConcept(...)` and `conceptSet(...)`
 derive this descriptor for the ordinary registration path.
 
-`Vars` is the inferred variable bag used by a reaction, view, or former
-callback. Most callbacks can omit the annotation. `RelationView` is useful
-when a function accepts a policy view as an argument.
+`Vars` is the inferred variable bag used by a reaction callback.
+`InputBindings`, `OutputBindings`, and `FreeBindings` distinguish the binding
+partitions supplied to view and former callbacks; callback parameters normally
+infer them without annotations. `RelationView` is useful when a function
+accepts a policy view as an argument.
 
 ```ts
 import { vocabulary } from "@mit-sdg/sync-engine/language";
@@ -144,17 +146,17 @@ pattern.
 
 ### Views
 
-`view(sentence, callback)` gives a standing policy question a sentence with
-typed `(slots)`. Ordinary slots are inputs. A sentence-final
-`with one|optional|many (...)` tail declares output slots and their promise;
-without that tail, the view is a predicate. The callback returns one
-`where(...)` conjunction or several as alternatives. Its local bindings do
-not escape.
+`view(name, callback)` gives a standing policy question a human name. The
+callback receives separate typed proxies for input, output, and free bindings,
+then returns one `where(...)` conjunction or several as alternatives. End a
+predicate view in `.holds()`. An output view defaults to `.many()` and may
+state `.one()`, `.optional()`, or `.many()` explicitly. The name carries no
+signature or cardinality, and local bindings do not escape.
 
-At a use-site, call a view with an input pattern and read it exactly like a
-concept query. Predicate views are bare lines; output views bind or test only
-through `.is({ ... })`. `RelationView` is the type for this callable
-declaration.
+At a use-site, call a view with one object-shaped input mapping and read it
+exactly like a concept query. Predicate views are bare lines; output views bind
+or test only through `.is({ ... })`. `RelationView` is the type for this
+callable declaration.
 
 `count(query, input, outputVariable)` is the aggregate allowed inside a view's
 `where(...)`. It binds the number of matching rows, including `0`; a later
@@ -163,13 +165,15 @@ taken when the view is asked and is never stored.
 
 ### Formers
 
-`former(sentence, callback)` names a shaped read. An unmarked sentence
-promises exactly one answer; a sentence ending `, if any` promises at most
-one. The callback produces a record with `form({ ... })` or
-`where(...conditions).form({ ... })`. A plain `optional` line drops the
-candidate record when absent; wrapping it in `whether(...)` keeps the record
-and leaves its opened names blank. The former's own promise is checked against
-the body at registration and enforced when needed at run.
+`former(name, callback)` names a shaped read. The callback receives separate
+typed proxies for input and free bindings. A record-rooted former promises one
+answer unless it ends in `.optional()`; a selection-root former is many-valued
+and rejects that modifier. The name carries no signature or cardinality. The
+callback produces a record with `form({ ... })` or
+`where(...conditions).form({ ... })`. A plain optional line drops the candidate
+record when absent; wrapping it in `whether(...)` keeps the record and leaves
+its opened names blank. The former's own promise is checked against the body at
+registration and enforced when needed at run.
 
 Entries may be bound names, nested formed values, or calls to named formers.
 A named former used plainly drops the host row when it declines. Under
@@ -195,8 +199,8 @@ selection states `.arranged(variable, "ascending" | "descending")`,
 A fold over a relation promised at most one row is rejected because its
 declaration already answers how many values may be returned.
 
-A former with open slots can serve as a fragment. Fill those slots at the use
-site and pass the result to `.splicing(...)` to merge its record keys into the
+A former with inputs can serve as a fragment. Fill its object-shaped input at
+the use site and pass the result to `.splicing(...)` to merge its record keys into the
 host record. A plain fragment call drops the host row when the fragment
 declines; `whether(fragment(...))` keeps the host and fills the merged leaves
 with `null`. Registration rejects key collisions and fragments that are not
@@ -216,19 +220,19 @@ and composition. It returns an `Assembly` with `concepts`, `invoker`,
 `publicInterface`, and `form(fusedFormer)`. `AssemblyOptions` names its input
 type.
 
-A named former is callable. Its sentence slots set the call order: the former
-`"the operations room (room)"` is fused as `roomDashboard(room)`. Pass that
+A named former is callable with one object-shaped input mapping: the former
+`"the operations room"` is fused as `roomDashboard({ room })`. Pass that
 fused value to the assembly when a backend caller needs the formed answer
 directly:
 
 ```ts
-const dashboard = await application.form(roomDashboard(room));
+const dashboard = await application.form(roomDashboard({ room }));
 ```
 
 The former must be included in the assembly's composition. Passing the former
-definition without filling its slots is invalid; the runtime reports the valid
-shape as `form(roomDashboard(room))`. An endpoint normally carries the same
-fused value through `respond({ dashboard: roomDashboard(room) })`, so the
+definition without its input mapping is invalid; the runtime reports the valid
+shape as `form(roomDashboard({ room }))`. An endpoint normally carries the same
+fused value through `respond({ dashboard: roomDashboard({ room }) })`, so the
 outside caller receives the formed tree.
 
 `ConceptImplementation<Class>` describes one concrete object through the

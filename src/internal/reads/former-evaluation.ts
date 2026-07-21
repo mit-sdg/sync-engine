@@ -122,7 +122,7 @@ async function evaluateFormer(
   env: ReadEnv,
 ): Promise<unknown | typeof ABSENT> {
   const frame: Frame = {};
-  for (const slot of ref.slots) frame[slot] = input[slot];
+  for (const inputName of ref.ins) frame[inputName] = input[inputName];
   const result = await evalNode(ref.formerName, ref.body, frame, env);
   if (result !== DROP_ROW) return result;
   if (ref.promise === "optional") return ABSENT;
@@ -215,10 +215,10 @@ async function evalNode(
  * When forming a consequence input, the engine records that fault on the ask.
  */
 export async function formTree(fused: FusedFormer, env: ReadEnv): Promise<unknown> {
-  for (const slot of fused.former.slots) {
-    if (typeof fused.in[slot] === "symbol") {
+  for (const inputName of fused.former.ins) {
+    if (typeof fused.in[inputName] === "symbol") {
       throw new Error(
-        `Former "${fused.former.formerName}": slot "${slot}" is an unresolved variable — ` +
+        `Former "${fused.former.formerName}": input "${inputName}" is an unresolved variable — ` +
           "formTree evaluates concrete slot values.",
       );
     }

@@ -6,15 +6,17 @@ import { concepts } from "../concept-set.ts";
 
 const { Discussing, Gathering, Selecting } = concepts;
 
-export const memberMayRespond = view("(member) may respond in (circle)", ({ member, circle }) =>
-  where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
-);
+export const memberMayRespond = view(
+  "(member) may respond in (circle)",
+  ({ member, circle }, _outputs, _bindings) =>
+    where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
+).holds();
 
 export const nonmemberMayNotRespond = view(
   "(member) may not respond in (circle)",
-  ({ member, circle }) =>
+  ({ member, circle }, _outputs, _bindings) =>
     where(Gathering._membership({ gathering: circle, member }).is({ joined: false })),
-);
+).holds();
 
 export const SelectedReadingOpensDiscussion = reaction(({ selection }) =>
   when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
@@ -23,7 +25,7 @@ export const SelectedReadingOpensDiscussion = reaction(({ selection }) =>
 /** What should a reader see when opening a circle? */
 export const circlePage = former(
   "the circle page (circle)",
-  ({ circle, name, host, member, selection, reading, discussion, response, author, text }) =>
+  ({ circle }, { name, host, member, selection, reading, discussion, response, author, text }) =>
     where(Gathering._get({ gathering: circle }).is({ name, host })).form({
       circle,
       name,
@@ -83,5 +85,5 @@ export const RejectNonmemberResponse = endpoint(
 );
 
 export const GetCirclePage = endpoint("/circles/page", ({ circle }) =>
-  receive({ circle }).then(respond({ page: circlePage(circle) })),
+  receive({ circle }).then(respond({ page: circlePage({ circle }) })),
 );

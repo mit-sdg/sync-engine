@@ -17,3 +17,4 @@ export type {
   Vars,
 } from "../internal/reactions/types.ts";
 export type { QueryPromise } from "../internal/reads/query-contracts.ts";
+export type { FreeBindings, InputBindings, OutputBindings } from "../internal/reads/sentence.ts";

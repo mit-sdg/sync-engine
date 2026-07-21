@@ -25,9 +25,9 @@ export function makeStitchReactions(
   // The one standing question the reactions ask: is this item the current focus?
   // Bindings unify, so the already-bound `item` slot makes the read an
   // equality test — is the current focus this item — never a rebinding.
-  const hasFocus = view("(item) has focus", ({ item }) =>
+  const hasFocus = view("(item) has focus", ({ item }, _outputs, _bindings) =>
     where(lineOf({ query: Focus._current }, {}).is({ item })),
-  );
+  ).holds();
   const RecordAdded = ({ item, title }: Vars) =>
     when(Work.add, {}, { item, title }).then(
       request(History.record, { verb: "added", item, title }),
@@ -83,7 +83,7 @@ export function makeStitchFormers(
   _History: HistoryConcept,
 ) {
   // `stitch list`: the work still in play, in the record's own order.
-  const openQueue = former("the open queue ()", ({ id, title, priority, status }) =>
+  const openQueue = former("the open queue ()", (_inputs, { id, title, priority, status }) =>
     each(WorkReads._list({}).is({ id, title, priority, status }).is.not({ status: "done" })).form({
       id,
       title,
@@ -93,7 +93,7 @@ export function makeStitchFormers(
   );
 
   // `stitch list --all`: the same queue, done work included.
-  const wholeQueue = former("the whole queue ()", ({ id, title, priority, status }) =>
+  const wholeQueue = former("the whole queue ()", (_inputs, { id, title, priority, status }) =>
     each(WorkReads._list({}).is({ id, title, priority, status })).form({
       id,
       title,
@@ -106,15 +106,15 @@ export function makeStitchFormers(
   // two pick cardinalities composing. No focus leaves every leaf `null`
   // (absence propagates through the second pick); a focus naming a work item
   // that does not exist raises a fault.
-  const status = former("the focus (), if any", ({ item, title, priority, status }) =>
+  const status = former("the focus ()", (_inputs, { item, title, priority, status }) =>
     where(
       lineOf({ query: Focus._current }, {}).is({ item }),
       lineOf({ query: Work._get }, { id: item }).is({ title, priority, status }),
     ).form({ item, title, priority, status }),
-  );
+  ).optional();
 
   // `stitch log`: the whole history, oldest first.
-  const history = former("the history ()", ({ sequence, verb, item, title }) =>
+  const history = former("the history ()", (_inputs, { sequence, verb, item, title }) =>
     each(HistoryReads._list({}).is({ sequence, verb, item, title }))
       .arranged(sequence)
       .form({ sequence, verb, item, title }),

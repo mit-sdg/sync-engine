@@ -49,7 +49,7 @@ import { foldFormerNode } from "./schema.ts";
 import { varNamesInPattern } from "./former-analysis.ts";
 import { opNamesIR, scheduleBlock } from "./schedule.ts";
 import { walkValueTree } from "./value-tree.ts";
-import { relationViewWith, slotsOf } from "./views.ts";
+import { relationViewWith } from "./views.ts";
 import { applyWhereOps, brandWhereOp } from "./where-ops.ts";
 import type { AnyWhereOp, EarlierOp, WhereOp } from "./where-ops.ts";
 import type { QueryPromise } from "./query-contracts.ts";
@@ -91,7 +91,7 @@ export class Registry {
   private readonly viewProofs: Map<string, { declared?: QueryPromise; proven: QueryPromise }> =
     new Map();
   /**
-   * Formers by sentence, indexed as reactions referencing them register (or as
+   * Formers by name, indexed as reactions referencing them register (or as
    * the app declares them for edge/CLI reads). Engine-scoped for the same
    * reason views are: a former reads state through this engine's concepts.
    */
@@ -239,7 +239,7 @@ export class Registry {
   assertFormable(ref: FormerRef): void {
     if (this.formable.has(ref)) return;
     const site = ref.formerName;
-    this.assertFormerBindings(ref.body, new Set(ref.slots), site);
+    this.assertFormerBindings(ref.body, new Set(ref.ins), site);
     foldFormerNode(ref.body, {
       query: (query) => this.resolver.query(query.concept, query.query, `Former "${site}"`),
       pattern: (pattern) => this.assertPatternUsable(pattern, site, "Former"),
@@ -362,7 +362,7 @@ export class Registry {
     if (ref.body.node !== "record") return "one";
     const scheduled = scheduleBlock(
       ref.body.where ?? [],
-      new Set(ref.slots),
+      new Set(ref.ins),
       `Former "${ref.formerName}"`,
     );
     let bound: QueryPromise = "one";
@@ -420,9 +420,15 @@ export class Registry {
         }
       }
     }
+    if (outs.length === 0 && !ref.holdsPredicate) {
+      throw new Error(`View "${site}": an empty output binding bag must end in holds().`);
+    }
+    if (outs.length > 0 && ref.holdsPredicate) {
+      throw new Error(`View "${site}": holds() requires an empty output binding bag.`);
+    }
     if (outs.length > 0 && ref.promise === undefined) {
       throw new Error(
-        `View "${site}": a view with outputs declares its promise — one, optional, or many; there is no default.`,
+        `View "${site}": an output view must carry its one, optional, or many promise.`,
       );
     }
     this.viewProofs.set(site, {
@@ -930,15 +936,33 @@ export class Registry {
   registerViews(views: ViewIR[]): void {
     this.assertViewDag(views);
     for (const ir of views) {
+      this.assertBindingPartitions("View", ir.name, [
+        ["input", ir.ins],
+        ["output", ir.outs],
+        ["free", ir.bindings],
+      ]);
+      if (ir.outs.length === 0 && ir.holds !== true) {
+        throw new Error(`View "${ir.name}": an empty output binding bag must end in holds().`);
+      }
+      if (ir.outs.length > 0 && ir.holds === true) {
+        throw new Error(`View "${ir.name}": holds() requires an empty output binding bag.`);
+      }
+      if (ir.outs.length > 0 && !["one", "optional", "many"].includes(ir.promise ?? "")) {
+        throw new Error(
+          `View "${ir.name}": an output view must carry its one, optional, or many promise.`,
+        );
+      }
       if (!this.registerUnique(this.views, ir.name, ir, () => ir, serializeView, "View", false)) {
         continue;
       }
       const ref = relationViewWith(
         ir.name,
-        ir.ins ?? slotsOf(ir.name),
-        ir.outs ?? [],
+        ir.ins,
+        ir.outs,
+        ir.bindings,
         ir.promise,
         ir.alternatives,
+        ir.holds === true,
       );
       this.assertViewUsable(ref);
       this.views.set(ir.name, ref);
@@ -982,21 +1006,48 @@ export class Registry {
    */
   registerFormers(formers: FormerIR[]): void {
     for (const ir of formers) {
+      this.assertBindingPartitions("Former", ir.name, [
+        ["input", ir.ins],
+        ["free", ir.bindings],
+      ]);
       if (
         !this.registerUnique(this.formers, ir.name, ir, () => ir, serializeFormer, "Former", false)
       ) {
         continue;
       }
-      const slots = slotsOf(ir.name);
       const ref = formerRefWith(
         ir.name,
-        slots,
-        slots.map((slot) => Symbol(slot)),
+        ir.ins,
+        ir.ins.map((input) => Symbol(input)),
+        ir.bindings,
         ir.promise,
         ir.body,
       );
       this.assertFormable(ref);
       this.formers.set(ir.name, ref);
+    }
+  }
+
+  /** Validate explicit binding partitions on imported relation IR. */
+  private assertBindingPartitions(
+    kind: "View" | "Former",
+    name: string,
+    partitions: ReadonlyArray<readonly [string, unknown]>,
+  ): void {
+    const seen = new Map<string, string>();
+    for (const [label, value] of partitions) {
+      if (!Array.isArray(value) || !value.every((binding) => typeof binding === "string")) {
+        throw new Error(`${kind} "${name}": the ${label} binding bag must be an array of names.`);
+      }
+      for (const binding of value as string[]) {
+        const prior = seen.get(binding);
+        if (prior !== undefined) {
+          throw new Error(
+            `${kind} "${name}": "${binding}" is declared in both the ${prior} and ${label} binding bags.`,
+          );
+        }
+        seen.set(binding, label);
+      }
     }
   }
 }

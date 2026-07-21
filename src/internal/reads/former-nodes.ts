@@ -6,7 +6,7 @@
  */
 
 import { brand, FormerUseBrand, hasBrand } from "./brands.ts";
-import { sentenceRef } from "./sentence.ts";
+import { objectRef } from "./sentence.ts";
 import type { Mapping } from "../reactions/types.ts";
 import { liveOf } from "./ir.ts";
 import type { FormerNodeIR } from "./ir.ts";
@@ -109,18 +109,21 @@ export function contributedKeys(ref: FormerRef): string[] {
   return keys;
 }
 
-/** A defined former, callable with its slot values to produce the fused reference. */
+/** A defined former, callable with its input mapping to produce the fused reference. */
 export interface FormerRef {
-  (...slotValues: unknown[]): FusedFormer;
+  (input: Mapping): FusedFormer;
   readonly formerName: string;
-  readonly slots: readonly string[];
-  readonly slotVars: readonly symbol[];
+  readonly ins: readonly string[];
+  readonly inputVars: readonly symbol[];
+  readonly bindings: readonly string[];
   readonly promise: Exclude<QueryPromise, "many">;
   /** The former's tree, as the IR states it — the registered, exported, evaluated form. */
   readonly body: FormerNodeIR;
+  /** State that this record-rooted former may decline. */
+  optional(): FormerRef;
 }
 
-/** A former fused with its slot fill — what a then input or `formTree` takes. */
+/** A former fused with its input mapping — what a then input or `formTree` takes. */
 export interface FusedFormer {
   readonly former: FormerRef;
   readonly in: Mapping;
@@ -130,14 +133,14 @@ export function isFusedFormer(value: unknown): value is FusedFormer {
   return hasBrand(value, FusedFormerBrand);
 }
 
-/** Fuse a former ref with an already-shaped slot mapping for reaction IR registration. */
+/** Fuse a former ref with its object-shaped input for reaction IR registration. */
 export function fuseFormer(ref: FormerRef, input: Mapping): FusedFormer {
   return brand({ former: ref, in: input }, FusedFormerBrand);
 }
 
 export function useFormer(fused: FusedFormer, whether = false): FormerUse {
   if (!isFusedFormer(fused)) {
-    throw new Error("a former use takes a named former with its slots filled.");
+    throw new Error("a former use takes a named former with its input mapping filled.");
   }
   return brand({ fused, whether }, FormerUseBrand);
 }
@@ -158,22 +161,32 @@ export class FormerFault extends Error {
  * @internal
  */
 export function formerRefWith(
-  sentence: string,
-  slots: readonly string[],
-  slotVars: readonly symbol[],
+  name: string,
+  ins: readonly string[],
+  inputVars: readonly symbol[],
+  bindings: readonly string[],
   promise: Exclude<QueryPromise, "many">,
   body: FormerNodeIR,
 ): FormerRef {
-  const ref = sentenceRef<FormerRef, FusedFormer>({
+  const ref = objectRef<FormerRef, FusedFormer>({
     kind: "Former",
-    sentence,
-    slots,
-    slotVars,
+    name,
+    inputs: ins,
+    inputVars,
     nameKey: "formerName",
     payloadKey: "body",
     payload: body,
     fuse: fuseFormer,
   });
   Object.defineProperty(ref, "promise", { value: promise, enumerable: true });
+  Object.defineProperty(ref, "bindings", { value: [...bindings], enumerable: true });
+  Object.defineProperty(ref, "optional", {
+    value: (): FormerRef => {
+      if (body.node !== "record") {
+        throw new Error(`Former "${name}": a selection always answers and cannot be optional.`);
+      }
+      return formerRefWith(name, ins, inputVars, bindings, "optional", body);
+    },
+  });
   return ref;
 }

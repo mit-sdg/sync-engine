@@ -108,20 +108,26 @@ function unresolvedConditions(pending: readonly WhereOp[], scope: ReadonlySet<sy
 }
 
 /**
- * Every leaf and every `value` must be traceable to a binding: a slot, an
+ * Every leaf and every `value` must be traceable to a binding: an input, an
  * enclosing selection's output, or a where line's output. A name bound by
  * nothing is a definition error — caught here, not at evaluation.
  */
-export function assertBound(name: string, node: FormerNode, bound: ReadonlySet<symbol>): void {
+export function assertBound(
+  name: string,
+  node: FormerNode,
+  bound: ReadonlySet<symbol>,
+  free: ReadonlySet<symbol> = new Set(),
+): void {
   const requireBound = (
     variable: symbol,
     role: string,
     scope: ReadonlySet<symbol> = bound,
   ): void => {
     if (!scope.has(variable)) {
+      const partition = free.has(variable) ? "free binding" : role;
       throw new Error(
-        `Former "${name}": ${role} "${String(variable.description ?? variable.toString())}" is bound by nothing — ` +
-          "bind it as a slot, a selection's output, or a where line's output.",
+        `Former "${name}": ${partition} "${String(variable.description ?? variable.toString())}" is bound by nothing — ` +
+          "declare it as an input, or bind it as a selection or where-line output.",
       );
     }
   };
@@ -144,7 +150,7 @@ export function assertBound(name: string, node: FormerNode, bound: ReadonlySet<s
         const [op] = pending.splice(ready, 1);
         for (const variable of whereOpBindings(op)) scope.add(variable);
       }
-      for (const [, child] of node.entries) assertBound(name, child, scope);
+      for (const [, child] of node.entries) assertBound(name, child, scope, free);
       for (const use of node.splices) {
         for (const variable of symbolsInMapping(use.fused.in)) {
           requireBound(variable, `splice "${use.fused.former.formerName}" anchor`, scope);
@@ -182,7 +188,7 @@ export function assertBound(name: string, node: FormerNode, bound: ReadonlySet<s
         const [op] = pending.splice(ready, 1);
         for (const variable of whereOpBindings(op)) scope.add(variable);
       }
-      if (node.node === "each") assertBound(name, node.as, scope);
+      if (node.node === "each") assertBound(name, node.as, scope, free);
       if (node.node === "first" || node.node === "distinct") {
         requireBound(
           node.value,

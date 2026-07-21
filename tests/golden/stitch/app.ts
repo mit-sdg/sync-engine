@@ -123,7 +123,7 @@ export async function runCli(args: string[], stateFile: string): Promise<CliResu
       return fail("usage: stitch list [--all]");
     }
     const queue = args.includes("--all") ? formers.wholeQueue : formers.openQueue;
-    const items = (await engine.form(queue())) as WorkItem[];
+    const items = (await engine.form(queue({}))) as WorkItem[];
     return success(items.length > 0 ? items.map(formatItem).join("\n") : "No work in the queue.");
   }
 
@@ -137,7 +137,7 @@ export async function runCli(args: string[], stateFile: string): Promise<CliResu
   }
 
   if (command === "status") {
-    const focus = (await engine.form(formers.status())) as {
+    const focus = (await engine.form(formers.status({}))) as {
       item: string | null;
       title: string | null;
       priority: Priority | null;
@@ -154,7 +154,7 @@ export async function runCli(args: string[], stateFile: string): Promise<CliResu
   }
 
   if (command === "log") {
-    const entries = (await engine.form(formers.history())) as {
+    const entries = (await engine.form(formers.history({}))) as {
       sequence: number;
       verb: string;
       item: string;

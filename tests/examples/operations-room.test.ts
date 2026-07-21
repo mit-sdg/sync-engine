@@ -117,16 +117,16 @@ describe("operations-room composition", () => {
     const room = String((created.value as { room: unknown }).room);
     await app.invoker.invoke("/rooms/join", { room, responder: "Lin" });
 
-    await expect(app.form(roomSummary(room))).resolves.toEqual({
+    await expect(app.form(roomSummary({ room }))).resolves.toEqual({
       room,
       name: "Checkout latency",
       host: "Mara",
       responders: [{ responder: "Mara" }, { responder: "Lin" }],
     });
-    await expect(app.form(currentMitigation(room))).resolves.toBeNull();
-    await expect(app.form(requiredCurrentMitigation(room))).rejects.toThrow("FORMER_NONE");
+    await expect(app.form(currentMitigation({ room }))).resolves.toBeNull();
+    await expect(app.form(requiredCurrentMitigation({ room }))).rejects.toThrow("FORMER_NONE");
     await expect(app.form(roomSummary as never)).rejects.toThrow(
-      "form(...) takes a named former with its sentence slots filled, " +
+      "form(...) takes a named former with its input mapping filled, " +
         "for example form(roomDashboard(room)).",
     );
 
@@ -134,11 +134,11 @@ describe("operations-room composition", () => {
       room,
       mitigation: "rollback-build-842",
     });
-    await expect(app.form(currentMitigation(room))).resolves.toEqual({
+    await expect(app.form(currentMitigation({ room }))).resolves.toEqual({
       room,
       mitigation: "rollback-build-842",
     });
-    await expect(app.form(requiredCurrentMitigation(room))).resolves.toEqual({
+    await expect(app.form(requiredCurrentMitigation({ room }))).resolves.toEqual({
       room,
       mitigation: "rollback-build-842",
     });
@@ -169,7 +169,9 @@ describe("operations-room composition", () => {
         { responder: "Lin", alerts: [] },
       ],
     });
-    await expect(withDiscussion.form(responseStats("discussion-1"))).resolves.toEqual({
+    await expect(
+      withDiscussion.form(responseStats({ discussion: "discussion-1" })),
+    ).resolves.toEqual({
       responseCount: 0,
       firstResponse: null,
       responders: [],
@@ -205,7 +207,7 @@ describe("operations-room composition", () => {
     await expect(dashboard(responders, responderRoom)).resolves.toMatchObject({
       current: { responseCount: 1 },
     });
-    await expect(responders.form(responseStats("discussion-1"))).resolves.toEqual({
+    await expect(responders.form(responseStats({ discussion: "discussion-1" }))).resolves.toEqual({
       responseCount: 1,
       firstResponse: "response-1",
       responders: ["Lin"],

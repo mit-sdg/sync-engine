@@ -418,7 +418,7 @@ export class Reacting {
   async form(fused: FusedFormer): Promise<unknown> {
     if (!isFusedFormer(fused)) {
       throw new Error(
-        "form(...) takes a named former with its sentence slots filled, " +
+        "form(...) takes a named former with its input mapping filled, " +
           "for example form(roomDashboard(room)).",
       );
     }

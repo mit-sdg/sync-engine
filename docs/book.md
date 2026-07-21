@@ -90,21 +90,21 @@ standing — so a line reading it can never drop anything:
 
 ```ts
 const theStandingOf = view(
-  "the standing of (member) in (circle) with one (joined)",
-  ({ member, circle, joined }) =>
+  "the standing of (member) in (circle)",
+  ({ member, circle }, { joined }, _bindings) =>
     where(Gathering._membership({ gathering: circle, member }).is({ joined })),
-);
+).one();
 ```
 
 - **English**: whether this member has joined this circle.
 - **Runs**: both inputs are bound; the engine reads the one promised row.
 - **None / many**: neither can happen — the promise is `one`, and the view's
-  own tail (`with one (joined)`) carries that promise outward, proven at
+  own `one()` terminal carries that promise outward, proven at
   registration.
 - **Opens**: `joined`.
 
 ```
-the standing of (member) in (circle) — promises exactly one (joined); the body proves it
+the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); the body proves it
   Gathering._membership (gathering: circle, member) has (joined) — always fills; opens (joined)
 ```
 
@@ -117,13 +117,17 @@ or drops_, and _fans out_.
 _May this member respond in this circle?_
 
 ```ts
-const memberMayRespond = view("(member) may respond in (circle)", ({ member, circle }) =>
-  where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
-);
+const memberMayRespond = view(
+  "(member) may respond in (circle)",
+  ({ member, circle }, _outputs, _bindings) =>
+    where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
+).holds();
 
-const nonmemberMayNotRespond = view("(member) may not respond in (circle)", ({ member, circle }) =>
-  where(Gathering._membership({ gathering: circle, member }).is({ joined: false })),
-);
+const nonmemberMayNotRespond = view(
+  "(member) may not respond in (circle)",
+  ({ member, circle }, _outputs, _bindings) =>
+    where(Gathering._membership({ gathering: circle, member }).is({ joined: false })),
+).holds();
 ```
 
 - **English**: the member's standing says joined.
@@ -134,7 +138,7 @@ const nonmemberMayNotRespond = view("(member) may not respond in (circle)", ({ m
 - **Opens**: nothing.
 
 ```
-(member) may respond in (circle) — a predicate: holds or not
+(member) may respond in (circle) — inputs (member, circle); outputs (); bindings () — a predicate: holds or not
   Gathering._membership (gathering: circle, member) has (joined: true) — existence — fires once or drops the case
 ```
 
@@ -223,7 +227,7 @@ Reaction "bad.CloseTheAbsentDiscussion": "discussion" is new inside no Discussin
 _The circle card: name and host always, the current reading if there is one._
 
 ```ts
-const theCircleCard = former("the circle card (circle)", ({ circle, name, host, reading }) =>
+const theCircleCard = former("the circle card (circle)", ({ circle }, { name, host, reading }) =>
   where(
     Gathering._get({ gathering: circle }).is({ name, host }),
     whether(Selecting._current({ scope: circle }).is({ item: reading })),
@@ -249,7 +253,7 @@ unmarked former sentence promises exactly one. The author declares that the
 circle exists, and the engine checks that declaration at runtime:
 
 ```
-the circle card (circle) — promises exactly one; the body proves at most one — the declaration is enforced at run
+the circle card (circle) — inputs (circle); bindings (name, host, reading); promises exactly one; the body proves at most one — the declaration is enforced at run
 ```
 
 ## 7 · A view with outputs
@@ -258,52 +262,50 @@ _Which discussion is this circle's current conversation?_
 
 ```ts
 const theOpenDiscussionOf = view(
-  "the open discussion of (circle) with optional (discussion)",
-  ({ circle, selection, discussion }) =>
+  "the open discussion of (circle)",
+  ({ circle }, { discussion }, { selection }) =>
     where(
       Selecting._current({ scope: circle }).is({ selection }),
       Discussing._openFor({ subject: selection }).is({ discussion }),
     ),
-);
+).optional();
 ```
 
 - **English**: the discussion open for the circle's current selection.
 - **Runs**: two at-most-one reads chained through `selection`, which stays
   local to the view; callers see only the declared output.
 - **None / many**: a chain of at-most-one links proves at most one result, and
-  registration checks that proof against the declared `with optional` tail. A
+  registration checks that proof against the declared `optional()` terminal. A
   caller reading this view plainly drops its case when there is none; a caller
   wrapping it in `whether` gets a blank.
 - **Opens**: at a use-site, whatever fresh names the caller puts in `.is` —
   the view is read exactly like a concept query.
 
 ```
-the open discussion of (circle) — promises at most one (discussion); the body proves it
+the open discussion of (circle) — inputs (circle); outputs (discussion); bindings (selection) — promises at most one (discussion); the body proves it
   Selecting._current (scope: circle) has (selection) — fills or drops the case; opens (selection)
   Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)
 ```
 
-## 8 · A former that may decline — `, if any`
+## 8 · A former that may decline — `optional()`
 
 _The current reading, for a card that shows nothing when nothing is chosen._
 
 ```ts
-const theCurrentReadingOf = former(
-  "the current reading of (circle), if any",
-  ({ circle, reading }) =>
-    where(Selecting._current({ scope: circle }).is({ item: reading })).form({ reading }),
-);
+const theCurrentReadingOf = former("the current reading of (circle)", ({ circle }, { reading }) =>
+  where(Selecting._current({ scope: circle }).is({ item: reading })).form({ reading }),
+).optional();
 ```
 
-An unmarked former sentence promises exactly one answer; ending the sentence
-with `, if any` promises at most one. Here the body proves it outright:
+A record former promises exactly one answer unless it ends in `optional()`.
+Here the body proves the narrower promise outright:
 
 ```
-the current reading of (circle) — promises at most one; the body proves it
+the current reading of (circle) — inputs (circle); bindings (reading); promises at most one; the body proves it
 ```
 
 A host that reads this former plainly drops its row when there is no reading;
-a host that writes `whether(theCurrentReadingOf(circle))` keeps the row and
+a host that writes `whether(theCurrentReadingOf({ circle }))` keeps the row and
 takes blank leaves. Absence is declared once, here — every reader then chooses
 how to handle it.
 
@@ -311,7 +313,7 @@ how to handle it.
 for a fold to say "the first one":
 
 ```ts
-const theFirstReadingOf = former("the first reading of (circle)", ({ circle, reading }) =>
+const theFirstReadingOf = former("the first reading of (circle)", ({ circle }, { reading }) =>
   each(Selecting._current({ scope: circle }).is({ item: reading })).first(reading),
 );
 ```
@@ -330,7 +332,7 @@ _How many responses does the discussion hold?_
 ```ts
 const theResponseCountOf = former(
   "the response count of (discussion)",
-  ({ discussion, response }) =>
+  ({ discussion }, { response }) =>
     each(Discussing._responses({ discussion }).is({ response })).count(),
 );
 ```
@@ -343,14 +345,14 @@ const theResponseCountOf = former(
 - **Opens**: nothing outward; `response` ranges inside the capture.
 
 ```
-the response count of (discussion) — promises exactly one; the body proves it
+the response count of (discussion) — inputs (discussion); bindings (response); promises exactly one; the body proves it
 ```
 
 **☒ Caught mistake — a record over a crowd.** Without `each`, a formed record
 was pointed at the many-promise relation directly:
 
 ```ts
-const theMemberCard = former("the member card (circle)", ({ circle, member }) =>
+const theMemberCard = former("the member card (circle)", ({ circle }, { member }) =>
   where(Gathering._members({ gathering: circle }).is({ member })).form({ member }),
 );
 ```
@@ -397,7 +399,7 @@ nonmember answer:
 ```
 book.AddResponse
   when RequestBoundary.request — opens (circle, reading, member, text, requestId)
-  member may respond in circle — existence — fires once or drops the case
+  (member) may respond in (circle) (member, circle) — existence — fires once or drops the case
   Selecting._current (scope: circle) has (selection, item: reading) — fills or drops the case; opens (selection); tests (item) — may drop the case
   Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)
   then request Discussing.respond (discussion, author: member, text)
@@ -413,7 +415,7 @@ book.AddResponse#2
 ```
 book.RejectNonmemberResponse
   when RequestBoundary.request — opens (circle, reading, member, text, requestId)
-  member may not respond in circle — existence — fires once or drops the case
+  (member) may not respond in (circle) (member, circle) — existence — fires once or drops the case
   then request RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)
 ```
 
@@ -595,7 +597,7 @@ card. Take the anchor away and soften every line:
 ```ts
 const theCircleActivityOf = former(
   "the circle activity of (circle)",
-  ({ circle, selection, reading, discussion }) =>
+  ({ circle }, { selection, reading, discussion }) =>
     where(
       whether(Selecting._current({ scope: circle }).is({ selection, item: reading })),
       whether(Discussing._openFor({ subject: selection }).is({ discussion })),
@@ -616,13 +618,13 @@ const theCircleActivityOf = former(
 - **Opens**: `reading` and `discussion`, both possibly blank.
 
 ```
-the circle activity of (circle) — promises exactly one; the body proves it
+the circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises exactly one; the body proves it
 ```
 
 The proof cuts both ways. Nothing in this body tests that the circle exists,
 so asking about a circle nobody created still answers — a record of blanks,
 not absence. When blanks are not what you mean, the earlier entries are the
-choices: anchor the body with one plain line (entry 6), or promise `, if any`
+choices: anchor the body with one plain line (entry 6), or state `optional()`
 over a plain read and let the case drop (entry 8).
 
 This variant adds a plain `_responses` read. It returns a record only when the
@@ -630,14 +632,14 @@ open discussion has at least one response:
 
 ```ts
 const theRespondedCircleActivityOf = former(
-  "the responded circle activity of (circle), if any",
-  ({ circle, selection, reading, discussion }) =>
+  "the responded circle activity of (circle)",
+  ({ circle }, { selection, reading, discussion }) =>
     where(
       whether(Selecting._current({ scope: circle }).is({ selection, item: reading })),
       whether(Discussing._openFor({ subject: selection }).is({ discussion })),
       Discussing._responses({ discussion }),
     ).form({ reading, discussion }),
-);
+).optional();
 ```
 
 When `_current` returns no row, `selection` has no value. `_openFor` therefore
@@ -646,7 +648,7 @@ return `null`. When both queries return a row, `_responses` receives the
 `discussion` value and the former returns its record once a response exists.
 
 ```
-the responded circle activity of (circle) — promises at most one; the body proves it
+the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; the body proves it
 ```
 
 ## Summary

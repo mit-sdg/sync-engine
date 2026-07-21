@@ -2,29 +2,27 @@
  * Define views as named relations over concept queries and other views.
  *
  * A view declares the same three facts as a concept query: inputs, outputs
- * bound or tested through `.is`, and a row-count promise. A caller uses a view
- * like a concept query. The sentence carries the declaration: its ordinary `(slot)`
- * groups are the inputs, and a sentence-final tail — `with one (…)` /
- * `with optional (…)` / `with many (…)` — states the promise and the
- * outputs. No tail means a pure predicate view: no outs, no promise.
+ * bound or tested through `.is`, and a row-count promise. Its builder receives
+ * separate input, output, and free-binding bags. The sentence is only its
+ * human name.
  *
  * ```ts
  * export const authorFaceOf = view(
- *   "the author face of (post) with optional (username, avatar)",
- *   ({ post, author, username, avatar }) =>
+ *   "the author face of a post",
+ *   ({ post }, { username, avatar }, { author }) =>
  *     where(
  *       Posting._getPost({ post }).is({ author }),
  *       Profiling._getProfile({ user: author }).is({ username, avatar }),
  *     ),
- * );
+ * ).optional();
  *
  * authorFaceOf({ post }).is({ username })   // at a use-site: the same line form
  * ```
  *
- * Only a sentence-final `with <promise-word> (…)` parses as the tail, so
- * ordinary uses of "with" stay unambiguous. Where there are outs, the
- * promise is required — no default. Several returned `where(...)` blocks are
- * the alternatives: the view holds (or answers rows) if any block does.
+ * Where there are outputs, the promise defaults to `many`; `.one()`,
+ * `.optional()`, and `.many()` state it explicitly. A view without outputs
+ * ends in `.holds()`. Several returned `where(...)` blocks are the
+ * alternatives: the view holds (or answers rows) if any block does.
  * Multiple blocks are alternatives, so callers can reuse one named policy.
  *
  * Registration infers a cardinality bound from the body and checks it against
@@ -37,13 +35,7 @@
  *
  */
 
-import type {
-  BranchChain,
-  InstrumentedQuery,
-  Mapping,
-  StepNode,
-  Vars,
-} from "../reactions/types.ts";
+import type { BranchChain, InstrumentedQuery, Mapping, StepNode } from "../reactions/types.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import { conditionOp } from "./where-ops.ts";
 import { brand, CountOpBrand, hasBrand, ViewBlockBrand } from "./brands.ts";
@@ -51,13 +43,22 @@ import { branchChain } from "../reactions/nodes.ts";
 import type { ViewOpIR } from "./ir.ts";
 import { lowerRelationBlocks } from "./lower.ts";
 import { assertConceptQuery } from "./queries.ts";
-import { sentenceVars, slotVariables, slotsOf } from "./sentence.ts";
+import {
+  assertSeparateBags,
+  bindingBag,
+  type FreeBindings,
+  type InputBindings,
+  type OutputBindings,
+} from "./sentence.ts";
 import { brandRelationView, lineOf } from "./lines.ts";
 import type { RelationView } from "./lines.ts";
 import type { QueryPromise } from "./query-contracts.ts";
+import { symbolsInMapping } from "./former-analysis.ts";
+import { opNamesIR, scheduleBlock } from "./schedule.ts";
 import { formFrom } from "./former-builders.ts";
 import type { FormNode } from "./former-builders.ts";
 import type { FormerEntry } from "./former-nodes.ts";
+import { isPlainMapping } from "./matchers.ts";
 
 /**
  * An aggregation: bind the number of rows a query answers with right now.
@@ -125,9 +126,6 @@ export function count(
   return brand(op, CountOpBrand);
 }
 
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
-export { slotsOf } from "./sentence.ts";
-
 const VIEW_OPS = new Set(["find", "whether", "no", "holds", "compute", "custom", "count"]);
 
 function assertViewOps(name: string, alternatives: readonly (readonly ViewOp[])[]): void {
@@ -156,57 +154,63 @@ function assertViewOps(name: string, alternatives: readonly (readonly ViewOp[])[
   }
 }
 
-/** Validate a view call against the input names declared by its sentence. */
-function assertViewInputs(name: string, slots: readonly string[], input: Mapping): Mapping {
+/** Validate a view call against its declared input names. */
+function assertViewInputs(name: string, inputs: readonly string[], input: Mapping): Mapping {
+  if (!isPlainMapping(input)) {
+    throw new Error(`View "${name}" takes one object-shaped input mapping.`);
+  }
   for (const key of Object.keys(input)) {
-    if (!slots.includes(key)) {
-      throw new Error(`View "${name}": "${key}" is not an input; expected (${slots.join(", ")}).`);
+    if (!inputs.includes(key)) {
+      throw new Error(`View "${name}": "${key}" is not an input; expected (${inputs.join(", ")}).`);
     }
   }
-  for (const slot of slots) {
-    if (!(slot in input)) {
-      throw new Error(`View "${name}": required input "${slot}" is missing.`);
+  for (const inputName of inputs) {
+    if (!(inputName in input)) {
+      throw new Error(`View "${name}": required input "${inputName}" is missing.`);
     }
   }
   return input;
 }
 
-// ── The relation declaration: the sentence carries the tail ────────────────
-
-/** The one parse of the tail: sentence-final `with <promise-word> (…)`. */
-const TAIL = /\bwith\s+(one|optional|many)\s*\(([^()]*)\)\s*$/;
-
-/** A sentence that states a tail — the declaration form of a promised view. */
-export type TailSentence = `${string}with ${QueryPromise} (${string})`;
-
-/**
- * Split a declaration's tail off its sentence: the promise word and the
- * output names it declares. A sentence without a final tail is a pure
- * predicate declaration and answers `undefined`.
- */
-function tailOf(
-  name: string,
-): { sentence: string; promise: QueryPromise; outs: string[] } | undefined {
-  const match = TAIL.exec(name);
-  if (match === null) return undefined;
-  const sentence = name.slice(0, match.index).trim();
-  if (sentence === "") {
-    throw new Error(`View "${name}": the tail follows a sentence — nothing precedes "with".`);
-  }
-  const outs = match[2].split(",").map((part) => part.trim());
-  for (const out of outs) {
-    if (!IDENTIFIER.test(out)) {
-      throw new Error(
-        `View "${name}": declare output names as "with ${match[1]} (a, b)"; ` +
-          `"${match[2]}" does not parse as one name per comma.`,
-      );
+function symbolsInViewOps(alternatives: readonly (readonly ViewOp[])[]): Set<symbol> {
+  const used = new Set<symbol>();
+  const add = (mapping: Mapping): void => {
+    for (const variable of symbolsInMapping(mapping)) used.add(variable);
+  };
+  for (const block of alternatives) {
+    for (const op of block) {
+      if (op.op === "count") {
+        add(op.in);
+        used.add(op.out);
+      } else if (op.op === "holds") {
+        add(op.fused.in);
+      } else if (op.op === "compute") {
+        add(op.in);
+        used.add(op.out);
+      } else if (op.op === "custom") {
+        op.in.forEach((variable) => used.add(variable));
+        op.out.forEach((variable) => used.add(variable));
+      } else {
+        add(op.in);
+        add(op.out);
+        if (op.op === "find") add(op.not ?? {});
+      }
     }
   }
-  const repeated = outs.find((out, index) => outs.indexOf(out) !== index);
-  if (repeated !== undefined) {
-    throw new Error(`View "${name}": output "${repeated}" is named more than once.`);
+  return used;
+}
+
+function assertBagUsed(
+  name: string,
+  label: string,
+  minted: ReadonlyMap<string, symbol>,
+  used: ReadonlySet<symbol>,
+): void {
+  for (const [binding, variable] of minted) {
+    if (!used.has(variable)) {
+      throw new Error(`View "${name}": ${label} binding "${binding}" is declared but never used.`);
+    }
   }
-  return { sentence, promise: match[1] as QueryPromise, outs };
 }
 
 /**
@@ -218,8 +222,10 @@ export function relationViewWith(
   name: string,
   ins: readonly string[],
   outs: readonly string[],
+  bindings: readonly string[],
   promise: QueryPromise | undefined,
   alternatives: readonly (readonly ViewOpIR[])[],
+  holdsPredicate = false,
 ): RelationView {
   const ref = ((pattern: Mapping) =>
     lineOf({ view: ref }, assertViewInputs(name, ins, pattern))) as RelationView;
@@ -227,27 +233,63 @@ export function relationViewWith(
     viewName: { value: name, enumerable: true },
     ins: { value: [...ins], enumerable: true },
     outs: { value: [...outs], enumerable: true },
+    bindings: { value: [...bindings], enumerable: true },
     ...(promise !== undefined ? { promise: { value: promise, enumerable: true } } : {}),
+    holdsPredicate: { value: holdsPredicate, enumerable: true },
     alternatives: { value: alternatives, enumerable: false },
+    holds: {
+      value: (): RelationView => {
+        if (outs.length !== 0) {
+          throw new Error(`View "${name}": holds() requires an empty output binding bag.`);
+        }
+        return relationViewWith(name, ins, outs, bindings, undefined, alternatives, true);
+      },
+    },
+    one: {
+      value: (): RelationView => {
+        if (outs.length === 0) {
+          throw new Error(`View "${name}": one() requires at least one output binding.`);
+        }
+        return relationViewWith(name, ins, outs, bindings, "one", alternatives);
+      },
+    },
+    optional: {
+      value: (): RelationView => {
+        if (outs.length === 0) {
+          throw new Error(`View "${name}": optional() requires at least one output binding.`);
+        }
+        return relationViewWith(name, ins, outs, bindings, "optional", alternatives);
+      },
+    },
+    many: {
+      value: (): RelationView => {
+        if (outs.length === 0) {
+          throw new Error(`View "${name}": many() requires at least one output binding.`);
+        }
+        return relationViewWith(name, ins, outs, bindings, "many", alternatives);
+      },
+    },
   });
   return brandRelationView(ref);
 }
 
 /**
- * Define a view: a sentence whose `(slot)` groups are the inputs, an
- * optional sentence-final tail — `with one|optional|many (…)` — stating the
- * promise and the outputs, and a builder from its logic variables to
- * `where(...)` blocks (several blocks are the alternatives). A tailless
- * sentence declares a pure predicate.
+ * Define a view from explicit input, output, and free-binding bags. Several
+ * returned `where(...)` blocks are alternatives. End a predicate in
+ * `holds()`. Output views default to `many()` and may state a narrower promise.
  */
 export function view(
-  name: TailSentence,
-  build: (vars: Vars) => ViewBlock | ViewBlock[],
-): RelationView;
-export function view(name: string, build: (vars: Vars) => ViewBlock | ViewBlock[]): RelationView;
-export function view(name: string, build: (vars: Vars) => ViewBlock | ViewBlock[]): RelationView {
-  const { vars, minted } = sentenceVars();
-  const built = build(vars);
+  name: string,
+  build: (
+    inputs: InputBindings,
+    outputs: OutputBindings,
+    bindings: FreeBindings,
+  ) => ViewBlock | ViewBlock[],
+): RelationView {
+  const inputs = bindingBag<InputBindings>();
+  const outputs = bindingBag<OutputBindings>();
+  const bindings = bindingBag<FreeBindings>();
+  const built = build(inputs.vars, outputs.vars, bindings.vars);
 
   const alternatives: ViewOp[][] = hasBrand(built, ViewBlockBrand)
     ? [built as ViewBlock]
@@ -261,40 +303,57 @@ export function view(name: string, build: (vars: Vars) => ViewBlock | ViewBlock[
     );
   }
   assertViewOps(name, alternatives);
-
-  const tail = tailOf(name);
-  if (tail !== undefined) {
-    const { sentence, promise, outs } = tail;
-    const slots = slotsOf(sentence);
-    for (const out of outs) {
-      if (slots.includes(out)) {
-        throw new Error(
-          `View "${name}": "${out}" is already an input; outputs must be bound by the body.`,
-        );
-      }
+  assertSeparateBags("View", name, [
+    ["input", inputs.minted],
+    ["output", outputs.minted],
+    ["free", bindings.minted],
+  ]);
+  const used = symbolsInViewOps(alternatives);
+  const declared = new Set([
+    ...inputs.minted.values(),
+    ...outputs.minted.values(),
+    ...bindings.minted.values(),
+  ]);
+  for (const variable of used) {
+    if (!declared.has(variable)) {
+      throw new Error(
+        `View "${name}": binding "${String(variable.description ?? variable.toString())}" is not declared in the input, output, or free binding bag.`,
+      );
     }
-    const slotVars = slotVariables("View", name, slots, minted, "constrains");
-    const named = new Map<symbol, string>();
-    slots.forEach((slot, index) => named.set(slotVars[index], slot));
-    for (const out of outs) {
-      const variable = minted.get(out);
-      if (variable === undefined) {
-        throw new Error(`View "${name}": declared output "${out}" is not bound by the body.`);
-      }
-      named.set(variable, out);
-    }
-    return relationViewWith(
-      sentence,
-      slots,
-      outs,
-      promise,
-      lowerRelationBlocks(named, alternatives),
-    );
   }
-
-  const slots = slotsOf(name);
-  const slotVars = slotVariables("View", name, slots, minted, "constrains");
+  assertBagUsed(name, "input", inputs.minted, used);
+  assertBagUsed(name, "output", outputs.minted, used);
+  assertBagUsed(name, "free", bindings.minted, used);
   const named = new Map<symbol, string>();
-  slots.forEach((slot, index) => named.set(slotVars[index], slot));
-  return relationViewWith(name, slots, [], undefined, lowerRelationBlocks(named, alternatives));
+  for (const bag of [inputs.minted, outputs.minted, bindings.minted]) {
+    for (const [binding, variable] of bag) named.set(variable, binding);
+  }
+  const ins = [...inputs.minted.keys()];
+  const outs = [...outputs.minted.keys()];
+  const free = [...bindings.minted.keys()];
+  const lowered = lowerRelationBlocks(named, alternatives);
+  for (const block of lowered) {
+    const scheduled = scheduleBlock(block, new Set(ins), `View "${name}"`);
+    for (const output of outs) {
+      if (!scheduled.bound.has(output)) {
+        throw new Error(`View "${name}": an alternative never binds output binding "${output}".`);
+      }
+    }
+    const counts = new Map<string, number>();
+    for (const op of scheduled.ordered) {
+      for (const binding of opNamesIR(op)) counts.set(binding, (counts.get(binding) ?? 0) + 1);
+    }
+    for (const output of outs) counts.set(output, (counts.get(output) ?? 0) + 1);
+    for (const op of scheduled.ordered) {
+      for (const opened of scheduled.opens.get(op) ?? []) {
+        if ((counts.get(opened) ?? 0) <= 1) {
+          const partition = free.includes(opened) ? "free binding" : "binding";
+          throw new Error(
+            `View "${name}": ${partition} "${opened}" is opened and never used — omit it or use it in a later line.`,
+          );
+        }
+      }
+    }
+  }
+  return relationViewWith(name, ins, outs, free, outs.length > 0 ? "many" : undefined, lowered);
 }

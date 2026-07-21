@@ -138,12 +138,13 @@ How such a fault is delivered depends on where the read occurs. See
 
 ## Views and formers
 
-A **view** names a match. Its sentence carries its contract: the `(slot)`
-groups are inputs, and a sentence-final `with one|optional|many (…)` tail
-declares outputs and their promise; a tailless sentence is a pure predicate.
-At a use-site a view is read exactly like a concept query. At runtime a view's
-slots come from the calling row and its local bindings do not escape. Stacked
-`where` blocks are alternatives; any matching block can supply a result.
+A **view** names a match. Its builder receives separate input, output, and free
+binding bags. A predicate view ends in `.holds()`. A view with outputs defaults
+to `.many()` and may instead declare `.one()` or `.optional()`. Its human name
+carries no signature or cardinality. At a use-site a view takes one
+object-shaped input mapping and is read exactly like a concept query. Its local
+bindings do not escape. Stacked `where` blocks are alternatives; any matching
+block can supply a result.
 
 The engine checks a concept query's declared promise whenever it reads the
 query. For a view, registration infers a cardinality bound from the body and
@@ -152,10 +153,12 @@ one, an uncollapsed `many` line makes the body many, and stacked alternatives
 are treated as many. When inference cannot establish the declared bound, the
 engine checks it at runtime and notes that check in the read-back.
 
-A **former** names a formed answer. Its body matches in `where` and produces
-in `form`, and production is terminal: nothing in a `where` chooses output. A
-former's sentence promises one answer unless it ends `, if any`, which
-promises at most one; registration proves the body's bound against that
+A **former** names a formed answer. Its builder receives separate input and
+free binding bags. Its body matches in `where` and produces in `form`, and
+production is terminal: nothing in a `where` chooses output. A record former
+promises one answer unless it ends in `.optional()`. A selection-root former
+is many-valued and rejects `.optional()`. The human name carries neither its
+inputs nor its cardinality. Registration proves the body's bound against the
 promise the same way it does for views. A record's `where` cannot open a name
 from a `many` source. Use `each` when the result should contain rows.
 

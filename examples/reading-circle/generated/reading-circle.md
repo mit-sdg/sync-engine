@@ -90,12 +90,12 @@ Queries (standing questions the state answers):
 _Views name reusable conditions. Multiple `where` blocks are alternatives._
 
 ```view
-(member) may respond in (circle)
+(member) may respond in (circle) — inputs (member, circle); outputs (); bindings ()
   where Gathering._membership (gathering: circle, member) has (joined: true)
 ```
 
 ```view
-(member) may not respond in (circle)
+(member) may not respond in (circle) — inputs (member, circle); outputs (); bindings ()
   where Gathering._membership (gathering: circle, member) has (joined: false)
 ```
 
@@ -105,7 +105,7 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
-Form the circle page (circle) as follows:
+Form the circle page (circle) — inputs (circle); bindings (name, host, member, selection, reading, discussion, response, author, text) as follows:
   a record of
     where Gathering._get (gathering: circle) has (name, host)
     circle
@@ -132,7 +132,7 @@ Form the circle page (circle) as follows:
 ```reaction
 when RequestBoundary.request (circle, reading, member, text, requestId, path: "/circles/respond")
 where
-  member may respond in circle
+  (member) may respond in (circle) (member, circle)
   Selecting._current (scope: circle) has (selection, item: reading)
   Discussing._openFor (subject: selection) has (discussion)
 then
@@ -190,7 +190,7 @@ then
 ```reaction
 when RequestBoundary.request (circle, requestId, path: "/circles/page")
 then
-  request RequestBoundary.respond (page: the circle page (circle), requestId)
+  request RequestBoundary.respond (page: the circle page (circle) (circle), requestId)
 ```
 
 ### readingCircle.JoinCircle
@@ -216,7 +216,7 @@ then
 ```reaction
 when RequestBoundary.request (circle, reading, member, text, requestId, path: "/circles/respond")
 where
-  member may not respond in circle
+  (member) may not respond in (circle) (member, circle)
 then
   request RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)
 ```

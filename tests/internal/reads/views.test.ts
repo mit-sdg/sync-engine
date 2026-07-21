@@ -100,52 +100,90 @@ function setup() {
  * "the owner of file is requester" — an equality test, not a rebinding.
  */
 function mayReadView(Filing: FilingConcept) {
-  return view("(requester) may read (file)", ({ requester, file }) => [
+  return view("(requester) may read (file)", ({ requester, file }, _outputs, _bindings) => [
     where(lineOf({ query: Filing._get }, { id: file }).is({ owner: requester })),
     where(lineOf({ query: Filing._sharedWith }, { id: file }).is({ person: requester })),
-  ]);
+  ]).holds();
 }
 
 /** Aggregate example: seats filled compared with capacity. */
 function hasRoomView(Seating: SeatingConcept) {
-  return view("(venue) has room", ({ venue, filled, capacity }) =>
+  return view("(venue) has room", ({ venue }, _outputs, { filled, capacity }) =>
     where(
       count(Seating._seated, {}, filled),
       lineOf({ query: Seating._capacity }, {}).is({ venue, capacity }),
       is.lt(filled, capacity),
     ),
-  );
+  ).holds();
 }
 
 // ── Definition ─────────────────────────────────────────────────────────────
 
 describe("views: definition", () => {
-  test("the sentence's (slot) groups are the parameters, in order", () => {
+  test("the input bag declares the call parameters", () => {
     const { Filing } = setup();
     const mayRead = mayReadView(Filing);
     expect(mayRead.viewName).toBe("(requester) may read (file)");
     expect(mayRead.ins).toEqual(["requester", "file"]);
     expect(() => mayRead({ requester: "priya" })).toThrow('required input "file" is missing');
+    expect(() => mayRead("priya" as never)).toThrow("takes one object-shaped input mapping");
   });
 
-  test("a slot the body never uses is a definition error", () => {
-    expect(() => view("(ghost) haunts", () => where(is.lt(1, 2)))).toThrow("never used");
+  test("an input binding the body never uses is a definition error", () => {
+    expect(() =>
+      view("a ghost haunts", ({ ghost: _ghost }, _outputs, _bindings) =>
+        where(is.lt(1, 2)),
+      ).holds(),
+    ).toThrow('input binding "ghost" is declared but never used');
   });
 
   test("a view answers from standing state — earlier() is rejected", () => {
     const { Filing } = setup();
     expect(() =>
-      view("(file) was opened", ({ file }) =>
+      view("(file) was opened", ({ file }, _outputs, _bindings) =>
         // the runtime guard's job — the type system already refuses this
         where(earlier(Filing.open, { id: file }) as unknown as ViewOp),
-      ),
+      ).holds(),
     ).toThrow("standing state");
   });
 
-  test("a malformed slot group is a definition error", () => {
-    expect(() => view("(two words) collide", () => where(is.lt(1, 2)))).toThrow(
-      "not a single name",
+  test("name text is semantically inert", () => {
+    const named = view("(two words) with one (answer), if any", (_inputs, _outputs, _bindings) =>
+      where(is.lt(1, 2)),
+    ).holds();
+    expect(named.viewName).toBe("(two words) with one (answer), if any");
+    expect(named.ins).toEqual([]);
+    expect(named.outs).toEqual([]);
+    expect(named.holdsPredicate).toBe(true);
+  });
+
+  test("an output view defaults to many", () => {
+    const { Filing } = setup();
+    const sharedWith = view("the people sharing a file", ({ file }, { person }, _bindings) =>
+      where(lineOf({ query: Filing._sharedWith }, { id: file }).is({ person })),
     );
+    expect(sharedWith.ins).toEqual(["file"]);
+    expect(sharedWith.outs).toEqual(["person"]);
+    expect(sharedWith.promise).toBe("many");
+  });
+
+  test("a binding from outside the declaration is rejected", () => {
+    const { Filing } = setup();
+    const { owner } = $vars;
+    expect(() =>
+      view("a file has an owner", ({ file }, _outputs, _bindings) =>
+        where(lineOf({ query: Filing._get }, { id: file }).is({ owner })),
+      ).holds(),
+    ).toThrow('binding "owner" is not declared in the input, output, or free binding bag');
+  });
+
+  test("a predicate terminal rejects declared outputs", () => {
+    const { Filing } = setup();
+    expect(() =>
+      view("an owner of a file", ({ file }, { owner }, _bindings) =>
+        where(lineOf({ query: Filing._get }, { id: file }).is({ owner })),
+      ).holds(),
+    ).toThrow("holds() requires an empty output binding bag");
   });
 
   test("count outside a view is rejected where reactions are declared", () => {
@@ -206,9 +244,9 @@ describe("views: evaluation", () => {
 
   test("count with an already-bound slot is an equality test", async () => {
     const { reacting, Seating } = setup();
-    const seatsExactly = view("(venue) seats exactly (n)", ({ venue, n }) =>
+    const seatsExactly = view("(venue) seats exactly (n)", ({ venue, n }, _outputs, _bindings) =>
       where(lineOf({ query: Seating._capacity }, {}).is({ venue }), count(Seating._seated, {}, n)),
-    );
+    ).holds();
     const { v } = $vars;
     const holds = async (n: number) =>
       (
@@ -245,7 +283,9 @@ describe("views: evaluation", () => {
   test("a view may rest on another view, and locals stay inside", async () => {
     const { reacting, Seating } = setup();
     const hasRoom = hasRoomView(Seating);
-    const admits = view("(venue) admits", ({ venue }) => where(hasRoom({ venue })));
+    const admits = view("(venue) admits", ({ venue }, _outputs, _bindings) =>
+      where(hasRoom({ venue })),
+    ).holds();
     reacting.register({
       SeatOnReserve: reaction(({ person }: Vars) =>
         when(Seating.reserve, { person })
@@ -261,12 +301,12 @@ describe("views: evaluation", () => {
 
   test("two different definitions of one sentence are rejected", () => {
     const { reacting, Filing, Recorder } = setup();
-    const one = view("(file) is precious", ({ file }) =>
+    const one = view("(file) is precious", ({ file }, _outputs, _bindings) =>
       where(lineOf({ query: Filing._get }, { id: file })),
-    );
-    const two = view("(file) is precious", ({ file }) =>
+    ).holds();
+    const two = view("(file) is precious", ({ file }, _outputs, _bindings) =>
       where(lineOf({ query: Filing._sharedWith }, { id: file })),
-    );
+    ).holds();
     const declare = (name: string, ref: typeof one) =>
       reacting.register({
         [name]: reaction(({ file }: Vars) =>
@@ -286,7 +326,9 @@ describe("views: IR and round trip", () => {
   test("exportReactions carries referenced views, dependencies first", () => {
     const { reacting, Seating, Recorder } = setup();
     const hasRoom = hasRoomView(Seating);
-    const admits = view("(venue) admits", ({ venue }) => where(hasRoom({ venue })));
+    const admits = view("(venue) admits", ({ venue }, _outputs, _bindings) =>
+      where(hasRoom({ venue })),
+    ).holds();
     reacting.register({
       SeatOnReserve: reaction(({ person }: Vars) =>
         when(Seating.reserve, { person })
@@ -300,7 +342,7 @@ describe("views: IR and round trip", () => {
     const [hasRoomIR] = app.views;
     expect(hasRoomIR.alternatives.length).toBe(1);
     expect(hasRoomIR.alternatives[0].map((op) => op.op)).toEqual(["count", "find", "holds"]);
-    // The reaction's keep carries the view by sentence, slots filled.
+    // The reaction's keep carries the view with its input mapping filled.
     const [reactionIR] = app.reactions;
     expect(reactionIR.where).toEqual([
       {
@@ -376,9 +418,9 @@ describe("views: IR and round trip", () => {
 
   test("a custom op inside a view stays visible in the opaque count", () => {
     const { reacting, Filing, Recorder } = setup();
-    const shady = view("(file) passes a custom check", ({ file }) =>
+    const shady = view("(file) passes a custom check", ({ file }, _outputs, _bindings) =>
       where(custom((id) => typeof id === "string", [file], [])),
-    );
+    ).holds();
     reacting.register({
       Checked: reaction(({ id }: Vars) =>
         when(Filing.add, { id })
@@ -404,13 +446,14 @@ describe("views: rendering", () => {
     const app = reacting.exportReactions();
     expect(renderView(app.views[0])).toBe(
       [
-        "(requester) may read (file)",
+        "(requester) may read (file) — inputs (requester, file); outputs (); bindings ()",
         "  where Filing._get (id: file) has (owner: requester)",
         "  where Filing._sharedWith (id: file) has (person: requester)",
       ].join("\n"),
     );
-    // The reaction's condition reads as the sentence, slots filled.
-    expect(renderReaction(app.reactions[0])).toContain("  requester may read file");
+    expect(renderReaction(app.reactions[0])).toContain(
+      "  (requester) may read (file) (requester, file)",
+    );
   });
 
   test("count renders as the count sentence; renderApp carries a Views section", () => {

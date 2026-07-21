@@ -149,30 +149,26 @@ export function readBackReaction(reaction: ReactionIR, env: ReadBackEnv): string
 export function readBackView(view: ViewIR, env: ReadBackEnv): string {
   const lines: string[] = [];
   const proof = env.viewProof(view.name);
-  // A sentence-form name already carries its `(slot)` groups; a plain name
-  // (IR registered without a sentence) states its ins beside it.
-  const head =
-    view.ins === undefined || view.name.includes("(")
-      ? view.name
-      : `${view.name} (${view.ins.join(", ")})`;
-  if (
-    view.ins === undefined ||
-    view.outs === undefined ||
-    view.outs.length === 0 ||
-    view.promise === undefined
-  ) {
+  const partitions = [
+    view.ins.length > 0 ? `inputs (${view.ins.join(", ")})` : "inputs ()",
+    view.outs.length > 0 ? `outputs (${view.outs.join(", ")})` : "outputs ()",
+    view.bindings.length > 0 ? `bindings (${view.bindings.join(", ")})` : "bindings ()",
+  ].join("; ");
+  const head = `${view.name} — ${partitions}`;
+  if (view.holds === true) {
     lines.push(`${head} — a predicate: holds or not`);
   } else {
-    const declared = `promises ${PROMISE_WORDS[view.promise]} (${view.outs.join(", ")})`;
+    const promise = view.promise as QueryPromise;
+    const declared = `promises ${PROMISE_WORDS[promise]} (${view.outs.join(", ")})`;
     const provenNote =
-      proof === undefined || proof.proven === view.promise
+      proof === undefined || proof.proven === promise
         ? "the body proves it"
         : `the body proves ${PROMISE_WORDS[proof.proven]} — the declaration is enforced at run`;
     lines.push(`${head} — ${declared}; ${provenNote}`);
   }
-  const ins = view.ins ?? [];
+  const ins = view.ins;
   for (const block of view.alternatives) {
-    const initial = new Set(view.ins === undefined ? slotNamesOf(view.name) : ins);
+    const initial = new Set(ins);
     const scheduled = scheduleBlock(block, initial, `View "${view.name}"`);
     for (const op of scheduled.ordered) {
       const opens = scheduled.opens.get(op) ?? [];
@@ -189,17 +185,11 @@ export function readBackFormer(former: FormerIR, env: ReadBackEnv): string {
     proven === former.promise
       ? "the body proves it"
       : `the body proves ${PROMISE_WORDS[proven]} — the declaration is enforced at run`;
-  return `${former.name} — promises ${PROMISE_WORDS[former.promise]}; ${note}`;
-}
-
-const SLOT = /\(([^()]*)\)/g;
-
-function slotNamesOf(sentence: string): string[] {
-  const slots: string[] = [];
-  for (const match of sentence.matchAll(SLOT)) {
-    if (match[1].trim() !== "") slots.push(match[1].trim());
-  }
-  return slots;
+  const partitions = [
+    former.ins.length > 0 ? `inputs (${former.ins.join(", ")})` : "inputs ()",
+    former.bindings.length > 0 ? `bindings (${former.bindings.join(", ")})` : "bindings ()",
+  ].join("; ");
+  return `${former.name} — ${partitions}; promises ${PROMISE_WORDS[former.promise]}; ${note}`;
 }
 
 /** The whole application's read-back: every view, then every reaction. */

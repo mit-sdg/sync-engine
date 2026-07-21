@@ -230,6 +230,9 @@ const register = {
   language: [
     "Condition",
     "ActionCall",
+    "FreeBindings",
+    "InputBindings",
+    "OutputBindings",
     "QueryPromise",
     "ReadLine",
     "RefusedActionLine",

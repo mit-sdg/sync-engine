@@ -7,7 +7,7 @@ import { concepts } from "../concept-set.ts";
 const { Alerting, Discussing, Gathering, Selecting } = concepts;
 
 /** Which responders belong to this room? */
-export const responderRoster = former("the responder roster of (room)", ({ room, responder }) =>
+export const responderRoster = former("the responder roster of (room)", ({ room }, { responder }) =>
   form({
     responders: each(Gathering._members({ gathering: room }).is({ member: responder })).form({
       responder,
@@ -16,30 +16,30 @@ export const responderRoster = former("the responder roster of (room)", ({ room,
 );
 
 /** Who is responding in this room? */
-export const roomSummary = former("the room summary (room)", ({ room, name, host }) =>
+export const roomSummary = former("the room summary (room)", ({ room }, { name, host }) =>
   where(Gathering._get({ gathering: room }).is({ name, host }))
     .form({ room, name, host })
-    .splicing(responderRoster(room)),
+    .splicing(responderRoster({ room })),
 );
 
 /** Which mitigation must this room currently have? */
 export const requiredCurrentMitigation = former(
   "the required current mitigation (room)",
-  ({ room, mitigation }) =>
+  ({ room }, { mitigation }) =>
     where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
 );
 
 /** Which mitigation does this room currently have, if any? */
 export const currentMitigation = former(
-  "the current mitigation (room), if any",
-  ({ room, mitigation }) =>
+  "the current mitigation (room)",
+  ({ room }, { mitigation }) =>
     where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
-);
+).optional();
 
 /** How many responses does this discussion have, which came first, and who responded? */
 export const responseStats = former(
   "the response stats of (discussion)",
-  ({ discussion, response, responder }) =>
+  ({ discussion }, { response, responder }) =>
     form({
       responseCount: each(
         Discussing._responses({ discussion }).is({ response, author: responder }),
@@ -56,21 +56,23 @@ export const responseStats = former(
 /** What should responders see when opening an operations room? */
 export const roomDashboard = former(
   "the operations room (room)",
-  ({
-    room,
-    name,
-    host,
-    responder,
-    selection,
-    mitigation,
-    discussion,
-    response,
-    author,
-    text,
-    alert,
-    subject,
-    alertedMitigation,
-  }) =>
+  (
+    { room },
+    {
+      name,
+      host,
+      responder,
+      selection,
+      mitigation,
+      discussion,
+      response,
+      author,
+      text,
+      alert,
+      subject,
+      alertedMitigation,
+    },
+  ) =>
     where(Gathering._get({ gathering: room }).is({ name, host })).form({
       room,
       name,
@@ -120,5 +122,5 @@ export const ChooseMitigation = endpoint(
 );
 
 export const GetRoom = endpoint("/rooms/get", ({ room }) =>
-  receive({ room }).then(respond({ dashboard: roomDashboard(room) })),
+  receive({ room }).then(respond({ dashboard: roomDashboard({ room }) })),
 );

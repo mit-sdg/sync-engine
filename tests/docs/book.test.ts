@@ -34,18 +34,22 @@ const ClearedReadingClosesDiscussion = reaction(({ selection, discussion }) =>
 );
 
 const theStandingOf = view(
-  "the standing of (member) in (circle) with one (joined)",
-  ({ member, circle, joined }) =>
+  "the standing of (member) in (circle)",
+  ({ member, circle }, { joined }, _bindings) =>
     where(Gathering._membership({ gathering: circle, member }).is({ joined })),
-);
+).one();
 
-const memberMayRespond = view("(member) may respond in (circle)", ({ member, circle }) =>
-  where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
-);
+const memberMayRespond = view(
+  "(member) may respond in (circle)",
+  ({ member, circle }, _outputs, _bindings) =>
+    where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
+).holds();
 
-const nonmemberMayNotRespond = view("(member) may not respond in (circle)", ({ member, circle }) =>
-  where(Gathering._membership({ gathering: circle, member }).is({ joined: false })),
-);
+const nonmemberMayNotRespond = view(
+  "(member) may not respond in (circle)",
+  ({ member, circle }, _outputs, _bindings) =>
+    where(Gathering._membership({ gathering: circle, member }).is({ joined: false })),
+).holds();
 
 const HostLeavingDissolvesCircle = reaction(({ circle, host, member }) =>
   when(Gathering.leave({ gathering: circle, member: host }).responds({}))
@@ -63,30 +67,28 @@ const OpenDiscussionOnce = reaction(({ selection }) =>
 );
 
 const theOpenDiscussionOf = view(
-  "the open discussion of (circle) with optional (discussion)",
-  ({ circle, selection, discussion }) =>
+  "the open discussion of (circle)",
+  ({ circle }, { discussion }, { selection }) =>
     where(
       Selecting._current({ scope: circle }).is({ selection }),
       Discussing._openFor({ subject: selection }).is({ discussion }),
     ),
-);
+).optional();
 
-const theCircleCard = former("the circle card (circle)", ({ circle, name, host, reading }) =>
+const theCircleCard = former("the circle card (circle)", ({ circle }, { name, host, reading }) =>
   where(
     Gathering._get({ gathering: circle }).is({ name, host }),
     whether(Selecting._current({ scope: circle }).is({ item: reading })),
   ).form({ name, host, reading }),
 );
 
-const theCurrentReadingOf = former(
-  "the current reading of (circle), if any",
-  ({ circle, reading }) =>
-    where(Selecting._current({ scope: circle }).is({ item: reading })).form({ reading }),
-);
+const theCurrentReadingOf = former("the current reading of (circle)", ({ circle }, { reading }) =>
+  where(Selecting._current({ scope: circle }).is({ item: reading })).form({ reading }),
+).optional();
 
 const theResponseCountOf = former(
   "the response count of (discussion)",
-  ({ discussion, response }) =>
+  ({ discussion }, { response }) =>
     each(Discussing._responses({ discussion }).is({ response })).count(),
 );
 
@@ -149,7 +151,7 @@ const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
 
 const theCircleActivityOf = former(
   "the circle activity of (circle)",
-  ({ circle, selection, reading, discussion }) =>
+  ({ circle }, { selection, reading, discussion }) =>
     where(
       whether(Selecting._current({ scope: circle }).is({ selection, item: reading })),
       whether(Discussing._openFor({ subject: selection }).is({ discussion })),
@@ -157,14 +159,14 @@ const theCircleActivityOf = former(
 );
 
 const theRespondedCircleActivityOf = former(
-  "the responded circle activity of (circle), if any",
-  ({ circle, selection, reading, discussion }) =>
+  "the responded circle activity of (circle)",
+  ({ circle }, { selection, reading, discussion }) =>
     where(
       whether(Selecting._current({ scope: circle }).is({ selection, item: reading })),
       whether(Discussing._openFor({ subject: selection }).is({ discussion })),
       Discussing._responses({ discussion }),
     ).form({ reading, discussion }),
-);
+).optional();
 
 // ── The caught mistakes — each rejected at registration ─────────────────────
 
@@ -191,11 +193,11 @@ const GetCircleNameFirstDraft = endpoint("/circles/name", ({ circle, name }) =>
   ),
 );
 
-const theFirstReadingOf = former("the first reading of (circle)", ({ circle, reading }) =>
+const theFirstReadingOf = former("the first reading of (circle)", ({ circle }, { reading }) =>
   each(Selecting._current({ scope: circle }).is({ item: reading })).first(reading),
 );
 
-const theMemberCard = former("the member card (circle)", ({ circle, member }) =>
+const theMemberCard = former("the member card (circle)", ({ circle }, { member }) =>
   where(Gathering._members({ gathering: circle }).is({ member })).form({ member }),
 );
 
@@ -209,11 +211,11 @@ const readBackPins = [
     "  then request Discussing.close (discussion)",
   ],
   [
-    "the standing of (member) in (circle) — promises exactly one (joined); the body proves it",
+    "the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); the body proves it",
     "  Gathering._membership (gathering: circle, member) has (joined) — always fills; opens (joined)",
   ],
   [
-    "(member) may respond in (circle) — a predicate: holds or not",
+    "(member) may respond in (circle) — inputs (member, circle); outputs (); bindings () — a predicate: holds or not",
     "  Gathering._membership (gathering: circle, member) has (joined: true) — existence — fires once or drops the case",
   ],
   [
@@ -230,19 +232,23 @@ const readBackPins = [
     "  then request Discussing.open (subject: selection)",
   ],
   [
-    "the open discussion of (circle) — promises at most one (discussion); the body proves it",
+    "the open discussion of (circle) — inputs (circle); outputs (discussion); bindings (selection) — promises at most one (discussion); the body proves it",
     "  Selecting._current (scope: circle) has (selection) — fills or drops the case; opens (selection)",
     "  Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)",
   ],
   [
-    "the circle card (circle) — promises exactly one; the body proves at most one — the declaration is enforced at run",
+    "the circle card (circle) — inputs (circle); bindings (name, host, reading); promises exactly one; the body proves at most one — the declaration is enforced at run",
   ],
-  ["the current reading of (circle) — promises at most one; the body proves it"],
-  ["the response count of (discussion) — promises exactly one; the body proves it"],
+  [
+    "the current reading of (circle) — inputs (circle); bindings (reading); promises at most one; the body proves it",
+  ],
+  [
+    "the response count of (discussion) — inputs (discussion); bindings (response); promises exactly one; the body proves it",
+  ],
   [
     "book.AddResponse",
     "  when RequestBoundary.request — opens (circle, reading, member, text, requestId)",
-    "  member may respond in circle — existence — fires once or drops the case",
+    "  (member) may respond in (circle) (member, circle) — existence — fires once or drops the case",
     "  Selecting._current (scope: circle) has (selection, item: reading) — fills or drops the case; opens (selection); tests (item) — may drop the case",
     "  Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)",
     "  then request Discussing.respond (discussion, author: member, text)",
@@ -256,7 +262,7 @@ const readBackPins = [
   [
     "book.RejectNonmemberResponse",
     "  when RequestBoundary.request — opens (circle, reading, member, text, requestId)",
-    "  member may not respond in circle — existence — fires once or drops the case",
+    "  (member) may not respond in (circle) (member, circle) — existence — fires once or drops the case",
     '  then request RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)',
   ],
   [
@@ -303,8 +309,12 @@ const readBackPins = [
     "  no Gathering._get (gathering: circle) — holds only when no such row exists — drops the case otherwise",
     '  then request RequestBoundary.respond (error: "NO_SUCH_CIRCLE", requestId)',
   ],
-  ["the circle activity of (circle) — promises exactly one; the body proves it"],
-  ["the responded circle activity of (circle) — promises at most one; the body proves it"],
+  [
+    "the circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises exactly one; the body proves it",
+  ],
+  [
+    "the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; the body proves it",
+  ],
 ].map((section) => section.join("\n"));
 
 const errorPins = {
@@ -370,10 +380,10 @@ describe("the example book", () => {
     expect(rejects({ GetCircleNameFirstDraft })).not.toThrow();
 
     const app = buildBook();
-    await expect(app.engine.form(theFirstReadingOf("after-dinner"))).rejects.toThrow(
+    await expect(app.engine.form(theFirstReadingOf({ circle: "after-dinner" }))).rejects.toThrow(
       errorPins.foldAtMostOne,
     );
-    await expect(app.engine.form(theMemberCard("after-dinner"))).rejects.toThrow(
+    await expect(app.engine.form(theMemberCard({ circle: "after-dinner" }))).rejects.toThrow(
       errorPins.recordFanOut,
     );
 
@@ -383,11 +393,13 @@ describe("the example book", () => {
   test("a former returns no result when a plain read receives a blank value from whether", async () => {
     const app = buildBook();
 
-    expect(await app.engine.form(theCircleActivityOf("after-dinner"))).toEqual({
+    expect(await app.engine.form(theCircleActivityOf({ circle: "after-dinner" }))).toEqual({
       reading: null,
       discussion: null,
     });
-    expect(await app.engine.form(theRespondedCircleActivityOf("after-dinner"))).toBeNull();
+    expect(
+      await app.engine.form(theRespondedCircleActivityOf({ circle: "after-dinner" })),
+    ).toBeNull();
 
     const { selection } = await app.concepts.Selecting.choose({
       scope: "after-dinner",
@@ -395,16 +407,20 @@ describe("the example book", () => {
     });
     const [{ discussion }] = await app.concepts.Discussing._openFor({ subject: selection });
 
-    expect(await app.engine.form(theCircleActivityOf("after-dinner"))).toEqual({
+    expect(await app.engine.form(theCircleActivityOf({ circle: "after-dinner" }))).toEqual({
       reading: "The Dispossessed",
       discussion,
     });
-    expect(await app.engine.form(theRespondedCircleActivityOf("after-dinner"))).toBeNull();
+    expect(
+      await app.engine.form(theRespondedCircleActivityOf({ circle: "after-dinner" })),
+    ).toBeNull();
 
     await app.concepts.Discussing.respond({ discussion, author: "Lin", text: "A response." });
-    expect(await app.engine.form(theRespondedCircleActivityOf("after-dinner"))).toEqual({
-      reading: "The Dispossessed",
-      discussion,
-    });
+    expect(await app.engine.form(theRespondedCircleActivityOf({ circle: "after-dinner" }))).toEqual(
+      {
+        reading: "The Dispossessed",
+        discussion,
+      },
+    );
   });
 });
