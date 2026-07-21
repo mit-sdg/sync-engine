@@ -95,11 +95,10 @@ describe("outcome-conditioned chains", () => {
     const { reacting, Button, Failing, Recorder } = setup();
     reacting.register({
       Try: reaction((_: Vars) =>
-        when(Button.clicked, { kind: "go" }).then(
-          request(Recorder.record, { tag: "before" }),
-          request(Failing.fail, {}),
-          request(Recorder.record, { tag: "unreachable" }),
-        ),
+        when(Button.clicked, { kind: "go" })
+          .then(request(Recorder.record, { tag: "before" }))
+          .then(request(Failing.fail, {}))
+          .then(request(Recorder.record, { tag: "unreachable" })),
       ),
     });
 

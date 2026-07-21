@@ -154,6 +154,10 @@ export function matchArguments(
 ): Frame | undefined {
   if (record.concept !== pattern.concept || record.action !== pattern.action) return undefined;
   if (pattern.by !== undefined && record.by !== pattern.by) return undefined;
+  if (pattern.posture === "requested") {
+    const next = unifyPattern(record.input, pattern.input, frame);
+    return next === undefined ? undefined : { ...next, [recordBinding]: record.id };
+  }
   if (pattern.posture !== undefined) {
     if (pattern.posture === "faulted") {
       if (record.fault === undefined) return undefined;
@@ -172,7 +176,19 @@ export function matchArguments(
   }
   if (record.outcome === undefined) return undefined;
   if (Object.keys(pattern.output).length === 0 && record.outcome.kind === "error") return undefined;
-  next = unifyOutputPattern(record.outcome, pattern.output, next);
+  next =
+    pattern.posture === "refused" && record.outcome.kind === "error"
+      ? unifyPattern(
+          {
+            ...record.outcome.error,
+            ...(record.outcome.error.error !== undefined
+              ? { message: record.outcome.error.error }
+              : {}),
+          },
+          pattern.output,
+          next,
+        )
+      : unifyOutputPattern(record.outcome, pattern.output, next);
   return next === undefined ? undefined : { ...next, [recordBinding]: record.id };
 }
 

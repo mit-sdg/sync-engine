@@ -143,7 +143,7 @@ _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/ope
 
 ```ts
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { each, form, former, request, whether, where } from "@mit-sdg/sync-engine/language";
+import { each, form, former, whether, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 
 const { Alerting, Discussing, Gathering, Selecting } = concepts;
@@ -155,10 +155,9 @@ _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/ope
 export const ChooseMitigation = endpoint(
   "/rooms/choose-mitigation",
   ({ room, mitigation, selection }) =>
-    receive({ room, mitigation }).then(
-      request(Selecting.choose, { scope: room, item: mitigation }, { selection }),
-      respond({ mitigation }),
-    ),
+    receive({ room, mitigation })
+      .then(Selecting.choose({ scope: room, item: mitigation }).responds({ selection }))
+      .then(respond({ mitigation })),
 );
 ```
 

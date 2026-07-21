@@ -1,5 +1,5 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { request, type RelationView } from "@mit-sdg/sync-engine/language";
+import { type RelationView } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../concept-set.ts";
 
 const { Discussing, Selecting } = concepts;
@@ -22,10 +22,8 @@ export function contributionEndpoints({
           Selecting._current({ scope: room }).is({ selection }),
           Discussing._openFor({ subject: selection }).is({ discussion }),
         )
-        .then(
-          request(Discussing.respond, { discussion, author: responder, text }, { response }),
-          respond({ response }),
-        ),
+        .then(Discussing.respond({ discussion, author: responder, text }).responds({ response }))
+        .then(respond({ response })),
   );
 
   const RejectContribution = endpoint("/rooms/contribute", ({ room, responder, text }) =>

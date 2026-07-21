@@ -62,8 +62,11 @@ describe("vocabulary refs", () => {
     expect((Noting._getNote as { queryName?: string }).queryName).toBe("_getNote");
   });
 
-  test("calling a ref directly throws, loudly and by name", () => {
-    expect(() => (Noting.add as unknown as () => void)()).toThrow(/Noting\.add is a static ref/);
+  test("calling an action ref authors a requested action line", () => {
+    const line = Noting.add({ id: "n", text: "note" });
+    expect(line.action.action).toBe(Noting.add);
+    expect(line.action.input).toEqual({ id: "n", text: "note" });
+    expect(line.linePosture).toBe("requested");
   });
 
   test("a member the class does not declare is an error at access", () => {

@@ -144,7 +144,7 @@ function returnedTrigger(step: StepNode, by: string): ActionPattern {
   return {
     ...step.action,
     output: step.action.output ?? {},
-    posture: "returned",
+    posture: step.linePosture === "refused" ? "refused" : "returned",
     by,
   };
 }
@@ -170,7 +170,7 @@ function lowerChainStep(
   const trigger = returnedTrigger(chain[i - 1], names[i - 1]);
   const available = varsOf(trigger.input, trigger.output);
   const needed = varsOf(step.action.input);
-  const ops: LoweredWhereOp[] = [];
+  const ops: LoweredWhereOp[] = [...(step.whereOps ?? [])];
 
   const stillMissing = (): Set<symbol> =>
     new Set([...needed].filter((variable) => !available.has(variable)));
@@ -197,7 +197,14 @@ function lowerChainStep(
   // pipeline rather than silently change meaning.
   if (stillMissing().size > 0) {
     if (decl.whereOps === undefined) {
-      return { reason: `step ${i + 1} needs a value bound by a closure where` };
+      if (decl.where !== undefined) {
+        return { reason: `step ${i + 1} needs a value bound by a closure where` };
+      }
+      const missing = [...stillMissing()]
+        .map((variable) => `"${String(variable.description ?? variable.toString())}"`)
+        .sort()
+        .join(", ");
+      return { reason: `stage ${i + 1} uses ${missing} before it is bound` };
     }
     for (const op of decl.whereOps) {
       const outs = opOutVars(op);
@@ -216,7 +223,11 @@ function lowerChainStep(
       for (const variable of outs) available.add(variable);
     }
     if (stillMissing().size > 0) {
-      return { reason: `step ${i + 1} uses a variable no record or computation carries` };
+      const missing = [...stillMissing()]
+        .map((variable) => `"${String(variable.description ?? variable.toString())}"`)
+        .sort()
+        .join(", ");
+      return { reason: `stage ${i + 1} uses ${missing} before it is bound` };
     }
   }
 
@@ -238,14 +249,19 @@ export function lowerReaction(name: string, decl: ReactionDeclaration): LowerOut
   const chain = decl.then as StepNode[];
 
   // The first step keeps the reaction's name; each later step becomes `Name#i`.
-  const names = chain.map((step, i) => step.stepName ?? (i === 0 ? name : `${name}#${i + 1}`));
+  const labels: string[] = [];
+  const names = chain.map((step, i) => {
+    labels.push(...(step.pathLabels ?? []));
+    const pathName = labels.length === 0 ? name : `${name}:${labels.join(":")}`;
+    return step.stepName ?? (i === 0 ? pathName : `${pathName}#${i + 1}`);
+  });
 
   const reactions: LoweredReaction[] = [
     {
       name: names[0],
       when: decl.when,
-      ...(decl.whereOps !== undefined
-        ? { whereOps: [...decl.whereOps] }
+      ...(decl.whereOps !== undefined || chain[0].whereOps !== undefined
+        ? { whereOps: [...(decl.whereOps ?? []), ...(chain[0].whereOps ?? [])] }
         : decl.where !== undefined
           ? { whereFn: decl.where }
           : {}),
@@ -324,7 +340,7 @@ function countOpSymbols(op: AnyWhereOp, counts: Map<symbol, number>): void {
  * chain's later steps count as readers; imported IR re-registers unlinted.
  */
 export function lintReactionOpens(name: string, decl: ReactionDeclaration): void {
-  const ops = decl.whereOps ?? [];
+  const ops = [...(decl.whereOps ?? []), ...decl.then.flatMap((node) => node.whereOps ?? [])];
   if (ops.length === 0) return;
   const counts = new Map<symbol, number>();
   for (const clause of decl.when) {
@@ -392,7 +408,7 @@ function assertDataValue(reactionName: string, action: string, key: string, valu
   );
 }
 
-function walkSteps(nodes: ThenNode[], visit: (step: StepNode) => void): void {
+function walkSteps(nodes: StepNode[], visit: (step: StepNode) => void): void {
   for (const node of nodes) visit(node);
 }
 
@@ -401,7 +417,7 @@ function walkSteps(nodes: ThenNode[], visit: (step: StepNode) => void): void {
  * formers, or registered per-firing computations. Values calculated while the
  * reaction is declared are rejected.
  */
-export function assertThenInputsAreData(reactionName: string, then: ThenNode[]): void {
+export function assertThenInputsAreData(reactionName: string, then: StepNode[]): void {
   walkSteps(then, (step) => {
     const action = `${conceptNameOf(step.action.concept)}.${actionNameOf(step.action.action)}`;
     for (const [key, value] of Object.entries(step.action.input)) {

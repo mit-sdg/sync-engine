@@ -122,8 +122,10 @@ describe("the callable proxy", () => {
     expect(isReadLine(denied)).toBe(true);
   });
 
-  test("an action ref refuses a direct call because only queries answer lines", () => {
-    expect(() => (Posting.create as unknown as () => void)()).toThrow(/static ref/);
+  test("an action ref answers a requested action line", () => {
+    const line = Posting.create({ post: "p", author: "sam" });
+    expect(line.action.action).toBe(Posting.create);
+    expect(line.action.input).toEqual({ post: "p", author: "sam" });
   });
 });
 

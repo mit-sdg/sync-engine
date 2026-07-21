@@ -258,10 +258,9 @@ describe("engine: literal pattern values compare structurally", () => {
     });
 
     const OnAdd = ({ value }: Vars) =>
-      when(List.add, {}, { value }).then(
-        request(Notification.notify, { message: "first", tags: ["a", "b"] } as never),
-        request(Notification.notify, { message: "second" }),
-      );
+      when(List.add, {}, { value })
+        .then(request(Notification.notify, { message: "first", tags: ["a", "b"] } as never))
+        .then(request(Notification.notify, { message: "second" }));
     reacting.register({ OnAdd });
 
     await List.add({ value: 1 });

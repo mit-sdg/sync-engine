@@ -1,6 +1,6 @@
 import type { ComputationRef } from "../reads/computations.ts";
 import type { InstrumentedAction, InstrumentedQuery, Mapping } from "./types.ts";
-import type { ActionPattern, ChannelPosture } from "./types.ts";
+import type { ActionPattern, ActionPosture } from "./types.ts";
 import { flow } from "./matching.ts";
 
 function diagnosticSite(site: string): string {
@@ -30,7 +30,7 @@ export class NameResolver {
     input: Mapping,
     output: Mapping | undefined,
     site: string,
-    posture?: ChannelPosture,
+    posture?: ActionPosture,
     by?: string,
   ): ActionPattern {
     const concept = this.concept(conceptName, site);

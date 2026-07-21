@@ -10,7 +10,7 @@ Import the reaction vocabulary from the canonical `language` entrypoint:
 _Source: [`examples/operations-room/src/composition/packs.ts`](../../examples/operations-room/src/composition/packs.ts)_
 
 ```ts
-import { reaction, request, when } from "@mit-sdg/sync-engine/language";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 ```
 
 ## Ask for one consequence
@@ -22,23 +22,21 @@ _Source: [`examples/operations-room/src/composition/packs.ts`](../../examples/op
 
 ```ts
 export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
-  when(Selecting.choose, {}, { selection }).then(request(Discussing.open, { subject: selection })),
+  when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
 ```
 
 Read it in order: when `Selecting.choose` returns a `selection`, request
 `Discussing.open` with that selection as its subject.
 
-A bare `when(Selecting.choose, …)` watches **returned occurrences** of that
-action: the action succeeded and its state change took effect. The first pattern
-object matches action inputs. This reaction uses `{}` because it needs none. The
-second matches output roles on the returned occurrence and binds `selection`.
+A line ending in `.responds(...)` watches a **returned occurrence**: the action
+succeeded and its state change took effect. The call pattern matches inputs;
+the response pattern binds `selection`.
 The consequence then asks Discussing to open the discussion; Discussing still
 decides whether its own action returns or refuses.
 
-The fixed frame is `when A.action … then request B.action`. The TypeScript
-source keeps the same order:
-`when(A.action, inputs, outputs).then(request(B.action, inputs))`.
+The fixed frame is `when A.action responds … then B.action`. The TypeScript
+source keeps the same order.
 
 ## Add one required read
 
@@ -49,9 +47,9 @@ _Source: [`examples/operations-room/src/composition/packs.ts`](../../examples/op
 
 ```ts
 export const SelectedMitigationAlertsResponders = reaction(({ room, selection, responder }) =>
-  when(Selecting.choose, { scope: room }, { selection })
+  when(Selecting.choose({ scope: room }).responds({ selection }))
     .where(Gathering._members({ gathering: room }).is({ member: responder }))
-    .then(request(Alerting.raise, { recipient: responder, subject: selection })),
+    .then(Alerting.raise({ recipient: responder, subject: selection })),
 );
 ```
 
@@ -68,21 +66,15 @@ none. The author writes no quantity at the use-site. Here `room` is already
 bound by `when`, so the query reads that room; the fresh `responder` name in
 `.is` opens once for each matching row.
 
-## Group a proven partition
+## Group sibling branches
 
 Separate reactions are independent: if both match one occurrence, both fire.
-When two cases express one reaction and their conditions show that they
-cannot both hold, group them as
-`when(...).either(where(...).then(...), where(...).then(...))`. The case
-builder `where` comes from the same `language` entrypoint as `when` and
-`request`.
+When several branches express one reaction, place them together in `then`.
+Every sibling ends in a stable `.named(...)` label. Matching siblings run
+independently; the group makes no disjointness or coverage claim.
 
-The [example book](../book.md#11--either-on-an-ordinary-reaction) shows a
-shared prefix and an equality split. [Execution
-semantics](../semantics.md#proven-partitions-and-either) owns the accepted proof
-shapes, coverage account, and lowering guarantees. If registration cannot
-prove the split, keep the cases as separate reactions or rewrite the conditions
-so they state the partition.
+The [example book](../book.md#11--siblings-on-an-ordinary-reaction) shows a
+shared prefix and an equality split.
 
 ## Condition on an action's outcome
 
@@ -92,10 +84,10 @@ value is the literal `"approved"`. `{ by: "Route" }` also requires the
 occurrence to have been asked for by the `Route` reaction. A direct call to the
 same action does not continue this chain.
 
-```ts
+```text
       Approved: reaction((_: Vars) =>
-        when(Decision.decide, {}, { route: "approved" }, { by: "Route", posture: "returned" }).then(
-          request(Recorder.record, { tag: "approved" }),
+        when(Decision.decide({}).responds({ route: "approved" })).then(
+          Recorder.record({ tag: "approved" }),
         ),
       ),
 ```
@@ -104,10 +96,10 @@ Declared refusals travel on a posture channel. The pattern can bind the whole
 `refusal` payload or its `message`; this example binds `message` and pins the
 channel to the ask made by `Try`.
 
-```ts
+```text
       Recover: reaction(({ message }: Vars) =>
         when(refused({ action: "fail", message }, { by: "Try" })).then(
-          request(Recorder.record, { tag: message }),
+          Recorder.record({ tag: message }),
         ),
       ),
 ```

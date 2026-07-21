@@ -32,7 +32,6 @@ import {
   $vars,
   declarationsOf,
   isRelationView,
-  request,
   isReaction,
   Logging,
   Reacting,
@@ -65,17 +64,17 @@ const Boundary = makeVocabulary({
 const requestIdVar = Symbol("requestId");
 
 export function receive(input: Mapping = {}): WhenBuilder {
-  return when(Boundary.request, { ...input, requestId: requestIdVar });
+  return when(Boundary.request({ ...input, requestId: requestIdVar }).responds());
 }
 
 /** Answer the request this reaction was triggered by. */
 export function respond(body: Mapping = {}) {
-  return request(Boundary.respond, { ...body, requestId: requestIdVar });
+  return Boundary.respond({ ...body, requestId: requestIdVar });
 }
 
 /** Answer the request with an application-defined error value. */
 export function fail(error: unknown = {}) {
-  return request(Boundary.respond, { error, requestId: requestIdVar });
+  return Boundary.respond({ error, requestId: requestIdVar });
 }
 
 // ── endpoint — one path, one reaction, and an optional input contract ──────
@@ -285,14 +284,10 @@ export function assemble<T extends Record<string, ConceptClass>>(
     if (isEndpointDef(value)) {
       const declared = value.reaction($vars);
       const declarations = declarationsOf(declared);
-      declarations.forEach((entry, index) => {
-        const reactionName = index === 0 ? name : `${name}:${index + 1}`;
-        if (reactions[reactionName] !== undefined) {
-          throw new Error(`assemble: two reactions named "${reactionName}".`);
-        }
-        const pinned = pinToPath(entry, value.path);
-        reactions[reactionName] = () => pinned;
-      });
+      declarations.forEach((entry) => pinToPath(entry, value.path));
+      if (reactions[name] !== undefined)
+        throw new Error(`assemble: two reactions named "${name}".`);
+      reactions[name] = () => declared;
       if (value.input !== undefined) {
         if (contracts[value.path] !== undefined) {
           throw new Error(

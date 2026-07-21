@@ -406,10 +406,9 @@ describe("log store: firings are introspectable after a live run", () => {
     reacting.addObserver({ onAction: (event) => events.push(event) });
     reacting.register({
       ChainOutput: reaction(({ sessionToken, token, password, setupKey }) =>
-        when(Start.run, {}).then(
-          request(Issuer.issue, {}, { sessionToken, token, password, setupKey }),
-          request(Chain.receive, { sessionToken, token, password, setupKey }),
-        ),
+        when(Start.run, {})
+          .then(request(Issuer.issue, {}, { sessionToken, token, password, setupKey }))
+          .then(request(Chain.receive, { sessionToken, token, password, setupKey })),
       ),
       ReadEarlierOutput: reaction(({ sessionToken, token, password, setupKey }) =>
         when(Chain.receive, {}, {})

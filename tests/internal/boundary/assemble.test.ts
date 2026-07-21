@@ -47,7 +47,9 @@ const vocab = vocabulary({
 const { Counting, Echoing } = vocab.concepts;
 
 const Increment = endpoint("/counter/increment", ({ count }) =>
-  receive({}).then(request(Counting.increment, {}, { count }), respond({ count })),
+  receive({})
+    .then(request(Counting.increment, {}, { count }))
+    .then(respond({ count })),
 );
 
 describe("assemble", () => {
@@ -159,23 +161,35 @@ describe("assemble", () => {
     expect(result).toEqual({ ok: false, error: { kind: "domain", value: "FORBIDDEN" } });
   });
 
-  test("either lowers literal, existence, and value witnesses to named reactions", () => {
+  test("sibling branches lower literal, existence, and value witnesses to stable names", () => {
     const Literal = endpoint("/literal", () =>
-      receive({}).either(
-        where(Counting._current({}).is({ count: 0 })).then(respond({ branch: "zero" })),
-        where(Counting._current({}).is({ count: 1 })).then(respond({ branch: "one" })),
+      receive({}).then(
+        where(Counting._current({}).is({ count: 0 }))
+          .then(respond({ branch: "zero" }))
+          .named("zero"),
+        where(Counting._current({}).is({ count: 1 }))
+          .then(respond({ branch: "one" }))
+          .named("one"),
       ),
     );
     const Existence = endpoint("/existence", () =>
-      receive({}).either(
-        where(Counting._named({ name: "counter" })).then(respond({ branch: "present" })),
-        where(no(Counting._named({ name: "counter" }))).then(respond({ branch: "absent" })),
+      receive({}).then(
+        where(Counting._named({ name: "counter" }))
+          .then(respond({ branch: "present" }))
+          .named("present"),
+        where(no(Counting._named({ name: "counter" })))
+          .then(respond({ branch: "absent" }))
+          .named("absent"),
       ),
     );
     const Value = endpoint("/value", () =>
-      receive({}).either(
-        where(Counting._current({}).is({ count: 0 })).then(respond({ branch: "zero" })),
-        where(Counting._current({}).is.not({ count: 0 })).then(respond({ branch: "nonzero" })),
+      receive({}).then(
+        where(Counting._current({}).is({ count: 0 }))
+          .then(respond({ branch: "zero" }))
+          .named("zero"),
+        where(Counting._current({}).is.not({ count: 0 }))
+          .then(respond({ branch: "nonzero" }))
+          .named("nonzero"),
       ),
     );
     const app = assemble({ vocabulary: vocab, composition: { Literal, Existence, Value } });
@@ -184,52 +198,73 @@ describe("assemble", () => {
         .exportReactions()
         .reactions.map((reaction) => reaction.name)
         .filter((name) => !name.startsWith("Deliver")),
-    ).toEqual(["Existence", "Existence:2", "Literal", "Literal:2", "Value", "Value:2"]);
+    ).toEqual([
+      "Existence:present",
+      "Existence:absent",
+      "Literal:zero",
+      "Literal:one",
+      "Value:zero",
+      "Value:nonzero",
+    ]);
   });
 
-  test("either rejects cases without a disjointness witness", () => {
+  test("overlapping siblings do not require a disjointness witness", () => {
     const Ambiguous = endpoint("/ambiguous", ({ count }) =>
-      receive({}).either(
-        where(Counting._current({}).is({ count })).then(respond({ branch: "first" })),
-        where(Counting._current({}).is({ count })).then(respond({ branch: "second" })),
+      receive({}).then(
+        where(Counting._current({}).is({ count }))
+          .then(respond({ branch: "first", count }))
+          .named("first"),
+        where(Counting._current({}).is({ count }))
+          .then(respond({ branch: "second", count }))
+          .named("second"),
       ),
     );
-    expect(() => assemble({ vocabulary: vocab, composition: { Ambiguous } })).toThrow(
-      "can both match",
-    );
+    expect(() => assemble({ vocabulary: vocab, composition: { Ambiguous } })).not.toThrow();
   });
 
-  test("either does not treat values from a many relation as disjoint", () => {
+  test("values from a many relation may independently enable siblings", () => {
     const Ambiguous = endpoint("/ambiguous-many", () =>
-      receive({}).either(
-        where(Counting._seen({}).is({ count: 0 })).then(respond({ branch: "zero" })),
-        where(Counting._seen({}).is({ count: 1 })).then(respond({ branch: "one" })),
+      receive({}).then(
+        where(Counting._seen({}).is({ count: 0 }))
+          .then(respond({ branch: "zero" }))
+          .named("zero"),
+        where(Counting._seen({}).is({ count: 1 }))
+          .then(respond({ branch: "one" }))
+          .named("one"),
       ),
     );
-    expect(() => assemble({ vocabulary: vocab, composition: { Ambiguous } })).toThrow(
-      "can both match",
-    );
+    expect(() => assemble({ vocabulary: vocab, composition: { Ambiguous } })).not.toThrow();
   });
 
-  test("either nests without changing the endpoint's path", () => {
+  test("nested qualifications flatten into stable sibling paths", () => {
     const Nested = endpoint("/nested", () =>
-      receive({}).either(
-        where(Counting._current({}).is({ count: 0 })).then(respond({ branch: "zero" })),
-        where(Counting._current({}).is.not({ count: 0 })).either(
-          where(Counting._named({ name: "counter" }).is({ count: 1 })).then(
-            respond({ branch: "one" }),
-          ),
-          where(Counting._named({ name: "counter" }).is.not({ count: 1 })).then(
-            respond({ branch: "many" }),
-          ),
-        ),
+      receive({}).then(
+        where(Counting._current({}).is({ count: 0 }))
+          .then(respond({ branch: "zero" }))
+          .named("zero"),
+        where(
+          Counting._current({}).is.not({ count: 0 }),
+          Counting._named({ name: "counter" }).is({ count: 1 }),
+        )
+          .then(respond({ branch: "one" }))
+          .named("one"),
+        where(
+          Counting._current({}).is.not({ count: 0 }),
+          Counting._named({ name: "counter" }).is.not({ count: 1 }),
+        )
+          .then(respond({ branch: "many" }))
+          .named("many"),
       ),
     );
     const app = assemble({ vocabulary: vocab, composition: { Nested } });
     const nested = app.engine
       .exportReactions()
       .reactions.filter((reaction) => reaction.name.startsWith("Nested"));
-    expect(nested.map((reaction) => reaction.name)).toEqual(["Nested", "Nested:2", "Nested:3"]);
+    expect(nested.map((reaction) => reaction.name)).toEqual([
+      "Nested:zero",
+      "Nested:one",
+      "Nested:many",
+    ]);
     expect(
       nested.every(
         (reaction) => "input" in reaction.when[0] && reaction.when[0].input.path === "/nested",
@@ -237,15 +272,17 @@ describe("assemble", () => {
     ).toBe(true);
   });
 
-  test("either lints a shared prefix across the whole partition", () => {
+  test("sibling branches lint a shared prefix across the whole group", () => {
     const Shared = endpoint("/shared", ({ count }) =>
       receive({})
         .where(Counting._current({}).is({ count }))
-        .either(
-          where(Counting._named({ name: "counter" }).is({ count: 0 })).then(respond({ count })),
-          where(Counting._named({ name: "counter" }).is({ count: 1 })).then(
-            respond({ branch: "one" }),
-          ),
+        .then(
+          where(Counting._named({ name: "counter" }).is({ count: 0 }))
+            .then(respond({ count }))
+            .named("zero"),
+          where(Counting._named({ name: "counter" }).is({ count: 1 }))
+            .then(respond({ branch: "one", count }))
+            .named("one"),
         ),
     );
     const app = assemble({ vocabulary: vocab, composition: { Shared } });
@@ -254,20 +291,24 @@ describe("assemble", () => {
         .exportReactions()
         .reactions.filter((reaction) => reaction.name.startsWith("Shared"))
         .map((reaction) => reaction.name),
-    ).toEqual(["Shared", "Shared:2"]);
+    ).toEqual(["Shared:zero", "Shared:one"]);
   });
 
-  test("either rejects an unused binding inside one case", () => {
+  test("a sibling rejects an unused binding inside its own path", () => {
     const Unused = endpoint("/unused", ({ value }) =>
-      receive({}).either(
+      receive({}).then(
         where(
           Counting._current({}).is({ count: 0 }),
           Counting._named({ name: "first" }).is({ count: value }),
-        ).then(respond({ branch: "first" })),
+        )
+          .then(respond({ branch: "first" }))
+          .named("first"),
         where(
           Counting._current({}).is({ count: 1 }),
           Counting._named({ name: "second" }).is({ count: value }),
-        ).then(respond({ value })),
+        )
+          .then(respond({ value }))
+          .named("second"),
       ),
     );
     expect(() => assemble({ vocabulary: vocab, composition: { Unused } })).toThrow(
@@ -275,15 +316,15 @@ describe("assemble", () => {
     );
   });
 
-  test("either states uncovered optional reads as coverage assumptions", () => {
+  test("sibling groups carry no coverage proof obligations", () => {
     const Named = endpoint("/named", () =>
-      receive({}).either(
-        where(Counting._named({ name: "counter" }).is({ count: 0 })).then(
-          respond({ branch: "zero" }),
-        ),
-        where(Counting._named({ name: "counter" }).is({ count: 1 })).then(
-          respond({ branch: "one" }),
-        ),
+      receive({}).then(
+        where(Counting._named({ name: "counter" }).is({ count: 0 }))
+          .then(respond({ branch: "zero" }))
+          .named("zero"),
+        where(Counting._named({ name: "counter" }).is({ count: 1 }))
+          .then(respond({ branch: "one" }))
+          .named("one"),
       ),
     );
     const app = assemble({ vocabulary: vocab, composition: { Named } });
@@ -292,7 +333,7 @@ describe("assemble", () => {
         .exportReactions()
         .reactions.filter((reaction) => reaction.name.startsWith("Named"))
         .map((reaction) => reaction.coverage),
-    ).toEqual([["Counting._named"], ["Counting._named"]]);
-    expect(app.engine.readBack()).toContain("assumes Counting._named fills");
+    ).toEqual([undefined, undefined]);
+    expect(app.engine.readBack()).not.toContain("assumes Counting._named fills");
   });
 });

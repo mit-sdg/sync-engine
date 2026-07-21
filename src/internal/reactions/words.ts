@@ -1,8 +1,8 @@
 import { applyWhereOps, brandWhereOp, conditionOp, isCondition } from "../reads/where-ops.ts";
 import type { AnyWhereOp, EarlierOp, WhereOp } from "../reads/where-ops.ts";
 import { isCountOp } from "../reads/views.ts";
-import { assertReactionNodes, brandReactionNode } from "./nodes.ts";
-import { partition } from "./partitions.ts";
+import { actionLine, assertReactionNodes } from "./nodes.ts";
+import { partition, siblingTree } from "./partitions.ts";
 import { isChannelPattern } from "./channels.ts";
 import { isActionRef } from "./refs.ts";
 import { flow } from "./matching.ts";
@@ -12,10 +12,13 @@ import type {
   ChannelPattern,
   ChannelPosture,
   InstrumentedAction,
+  LegacyWhenBuilder,
+  LegacyWhenBuilderWithFunctionWhere,
+  LegacyWhenBuilderWithWhere,
   Mapping,
-  ReactionCase,
   RequestChain,
   StepNode,
+  ThenNode,
   TriggerPattern,
   WhenBuilder,
   WhenBuilderWithWhere,
@@ -51,30 +54,49 @@ export interface WhenOptions {
   posture?: ChannelPosture;
 }
 
-export function when(clauses: Array<WhenClause | ChannelPattern>): WhenBuilder;
-export function when(channel: ChannelPattern): WhenBuilder;
+export function when(clauses: Array<WhenClause | ChannelPattern>): LegacyWhenBuilder;
+export function when(channel: ChannelPattern): LegacyWhenBuilder;
+export function when(line: StepNode): WhenBuilder;
 export function when(
   action: InstrumentedAction,
   input: Mapping,
   output?: Mapping,
   options?: WhenOptions,
-): WhenBuilder;
+): LegacyWhenBuilder;
 export function when(
-  actionOrClauses: InstrumentedAction | ChannelPattern | Array<WhenClause | ChannelPattern>,
+  actionOrClauses:
+    | InstrumentedAction
+    | StepNode
+    | ChannelPattern
+    | Array<WhenClause | ChannelPattern>,
   input?: Mapping,
   output?: Mapping,
   options?: WhenOptions,
-): WhenBuilder {
+): WhenBuilder | LegacyWhenBuilder {
   if (Array.isArray(actionOrClauses)) {
     if (actionOrClauses.length === 0) throw new Error("when([...]) requires at least one clause.");
-    return createWhenBuilder(...actionOrClauses);
+    return createLegacyWhenBuilder(...actionOrClauses);
   }
-  if (isChannelPattern(actionOrClauses)) return createWhenBuilder(actionOrClauses);
+  if (
+    typeof actionOrClauses === "object" &&
+    actionOrClauses !== null &&
+    "kind" in actionOrClauses &&
+    actionOrClauses.kind === "step"
+  ) {
+    const pattern = { ...actionOrClauses.action };
+    pattern.posture = actionOrClauses.linePosture ?? "requested";
+    pattern.output ??= {};
+    return createWhenBuilderFromPatterns([pattern]);
+  }
+  if (isChannelPattern(actionOrClauses)) return createLegacyWhenBuilder(actionOrClauses);
+  if (typeof actionOrClauses !== "function") {
+    throw new Error("when(...) takes a callable action line or posture channel.");
+  }
   if (input === undefined) throw new Error("when(action, input) requires an input pattern.");
   const pattern = actions([actionOrClauses, input, output ?? {}])[0];
   if (options?.by !== undefined) pattern.by = options.by;
   if (options?.posture !== undefined) pattern.posture = options.posture;
-  return createWhenBuilderFromPatterns([pattern]);
+  return createLegacyWhenBuilderFromPatterns([pattern]);
 }
 
 function normalizeWhere(
@@ -97,13 +119,47 @@ function normalizeWhere(
   return { ops: args.map((arg) => conditionOp(arg as Parameters<typeof conditionOp>[0], site)) };
 }
 
-function createWhenBuilder(...clauses: Array<WhenClause | ChannelPattern>): WhenBuilder {
+function createLegacyWhenBuilder(
+  ...clauses: Array<WhenClause | ChannelPattern>
+): LegacyWhenBuilder {
   const patterns: TriggerPattern[] = clauses.map((clause) => {
     if (isChannelPattern(clause)) return clause;
     const [action, input, output] = clause;
     return actions([action, input, output ?? {}])[0];
   });
-  return createWhenBuilderFromPatterns(patterns);
+  return createLegacyWhenBuilderFromPatterns(patterns);
+}
+
+function createLegacyWhenBuilderFromPatterns(patterns: TriggerPattern[]): LegacyWhenBuilder {
+  return {
+    where(...args: unknown[]) {
+      const normalized = normalizeWhere(args, "when(...).where");
+      if (normalized.fn !== undefined) {
+        const functional: LegacyWhenBuilderWithFunctionWhere = {
+          then(...nodes) {
+            assertReactionNodes(nodes);
+            return siblingTree(patterns, { where: normalized.fn }, nodes);
+          },
+        };
+        return functional;
+      }
+      const whereOps = normalized.ops ?? [];
+      const declarative: LegacyWhenBuilderWithWhere = {
+        then(...nodes) {
+          assertReactionNodes(nodes);
+          return siblingTree(patterns, { whereOps }, nodes);
+        },
+        either: (...cases) => partition(patterns, whereOps, cases),
+      };
+      return declarative;
+    },
+    then(...nodes) {
+      const authored = nodes as ThenNode[];
+      assertReactionNodes(authored);
+      return siblingTree(patterns, {}, authored);
+    },
+    either: (...cases) => partition(patterns, [], cases),
+  } as LegacyWhenBuilder;
 }
 
 function createWhenBuilderFromPatterns(patterns: TriggerPattern[]): WhenBuilder {
@@ -114,7 +170,7 @@ function createWhenBuilderFromPatterns(patterns: TriggerPattern[]): WhenBuilder 
         const functional: WhenBuilderWithFunctionWhere = {
           then(...nodes) {
             assertReactionNodes(nodes);
-            return { when: patterns, where: normalized.fn, then: nodes };
+            return siblingTree(patterns, { where: normalized.fn }, nodes);
           },
         };
         return functional;
@@ -122,10 +178,10 @@ function createWhenBuilderFromPatterns(patterns: TriggerPattern[]): WhenBuilder 
       return declarativeWhenBuilder(patterns, normalized.ops ?? []);
     },
     then(...nodes) {
-      assertReactionNodes(nodes);
-      return { when: patterns, then: nodes };
+      const authored = nodes as ThenNode[];
+      assertReactionNodes(authored);
+      return siblingTree(patterns, {}, authored);
     },
-    either: (...cases: ReactionCase[]) => partition(patterns, [], cases),
   } as WhenBuilder;
   return builder;
 }
@@ -136,11 +192,11 @@ function declarativeWhenBuilder(
 ): WhenBuilderWithWhere {
   return {
     then(...nodes) {
-      assertReactionNodes(nodes);
-      return { when: patterns, whereOps, then: nodes };
+      const authored = nodes as ThenNode[];
+      assertReactionNodes(authored);
+      return siblingTree(patterns, { whereOps }, authored);
     },
-    either: (...cases) => partition(patterns, whereOps, cases),
-  };
+  } as WhenBuilderWithWhere;
 }
 
 /** Construct one action request in a reaction consequence chain. */
@@ -149,8 +205,10 @@ export function request(
   input: Mapping,
   output?: Mapping,
 ): RequestChain {
-  const node: StepNode = { kind: "step", action: actions([action, input, output])[0] };
-  const chain = brandReactionNode(node) as unknown as RequestChain;
+  const chain = (
+    output === undefined ? actionLine(action, input) : actionLine(action, input).responds(output)
+  ) as RequestChain;
+  const node = chain as StepNode;
   chain.where = (...args: unknown[]) => {
     const normalized = normalizeWhere(args, "request(...).where");
     if (normalized.ops !== undefined) {

@@ -14,7 +14,6 @@ import {
   former,
   no,
   reaction,
-  request,
   view,
   when,
   where,
@@ -29,9 +28,9 @@ const { Discussing, Gathering, Selecting } = concepts;
 // ── The entries, in the book's order ────────────────────────────────────────
 
 const ClearedReadingClosesDiscussion = reaction(({ selection, discussion }) =>
-  when(Selecting.clear, {}, { selection })
+  when(Selecting.clear({}).responds({ selection }))
     .where(Discussing._openFor({ subject: selection }).is({ discussion }))
-    .then(request(Discussing.close, { discussion })),
+    .then(Discussing.close({ discussion })),
 );
 
 const theStandingOf = view(
@@ -49,18 +48,18 @@ const nonmemberMayNotRespond = view("(member) may not respond in (circle)", ({ m
 );
 
 const HostLeavingDissolvesCircle = reaction(({ circle, host, member }) =>
-  when(Gathering.leave, { gathering: circle, member: host }, {})
+  when(Gathering.leave({ gathering: circle, member: host }).responds({}))
     .where(
       Gathering._get({ gathering: circle }).is({ host }),
       Gathering._members({ gathering: circle }).is({ member }),
     )
-    .then(request(Gathering.leave, { gathering: circle, member })),
+    .then(Gathering.leave({ gathering: circle, member })),
 );
 
 const OpenDiscussionOnce = reaction(({ selection }) =>
-  when(Selecting.choose, {}, { selection })
+  when(Selecting.choose({}).responds({ selection }))
     .where(no(Discussing._openFor({ subject: selection })))
-    .then(request(Discussing.open, { subject: selection })),
+    .then(Discussing.open({ subject: selection })),
 );
 
 const theOpenDiscussionOf = view(
@@ -100,10 +99,8 @@ const AddResponse = endpoint(
         Selecting._current({ scope: circle }).is({ selection, item: reading }),
         Discussing._openFor({ subject: selection }).is({ discussion }),
       )
-      .then(
-        request(Discussing.respond, { discussion, author: member, text }, { response }),
-        respond({ response }),
-      ),
+      .then(Discussing.respond({ discussion, author: member, text }).responds({ response }))
+      .then(respond({ response })),
 );
 
 const RejectNonmemberResponse = endpoint("/circles/respond", ({ circle, reading, member, text }) =>
@@ -113,36 +110,40 @@ const RejectNonmemberResponse = endpoint("/circles/respond", ({ circle, reading,
 );
 
 const LeavingRoutesByHost = reaction(({ circle, member }) =>
-  when(Gathering.leave, { gathering: circle, member }, {})
+  when(Gathering.leave({ gathering: circle, member }).responds({}))
     .where(Selecting._current({ scope: circle }))
-    .either(
-      where(Gathering._get({ gathering: circle }).is.not({ host: member })).then(
-        request(Selecting.clear, { scope: circle }),
-      ),
-      where(Gathering._get({ gathering: circle }).is({ host: member })).then(
-        request(Discussing.open, { subject: circle }),
-      ),
+    .then(
+      where(Gathering._get({ gathering: circle }).is.not({ host: member }))
+        .then(Selecting.clear({ scope: circle }))
+        .named("member"),
+      where(Gathering._get({ gathering: circle }).is({ host: member }))
+        .then(Discussing.open({ subject: circle }))
+        .named("host"),
     ),
 );
 
 const ChooseReadingHostOnly = endpoint(
   "/circles/choose",
   ({ circle, member, reading, selection }) =>
-    receive({ circle, member, reading }).either(
-      where(Gathering._get({ gathering: circle }).is.not({ host: member })).then(
-        respond({ error: "HOST_ONLY" }),
-      ),
-      where(Gathering._get({ gathering: circle }).is({ host: member })).then(
-        request(Selecting.choose, { scope: circle, item: reading }, { selection }),
-        respond({ selection }),
-      ),
+    receive({ circle, member, reading }).then(
+      where(Gathering._get({ gathering: circle }).is.not({ host: member }))
+        .then(respond({ error: "HOST_ONLY" }))
+        .named("non-host"),
+      where(Gathering._get({ gathering: circle }).is({ host: member }))
+        .then(Selecting.choose({ scope: circle, item: reading }).responds({ selection }))
+        .then(respond({ selection }))
+        .named("host"),
     ),
 );
 
 const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
-  receive({ circle }).either(
-    where(Gathering._get({ gathering: circle }).is({ name })).then(respond({ name })),
-    where(no(Gathering._get({ gathering: circle }))).then(respond({ error: "NO_SUCH_CIRCLE" })),
+  receive({ circle }).then(
+    where(Gathering._get({ gathering: circle }).is({ name }))
+      .then(respond({ name }))
+      .named("found"),
+    where(no(Gathering._get({ gathering: circle })))
+      .then(respond({ error: "NO_SUCH_CIRCLE" }))
+      .named("missing"),
   ),
 );
 
@@ -168,21 +169,25 @@ const theRespondedCircleActivityOf = former(
 // ── The caught mistakes — each rejected at registration ─────────────────────
 
 const CloseTheAbsentDiscussion = reaction(({ selection, discussion }) =>
-  when(Selecting.clear, {}, { selection })
+  when(Selecting.clear({}).responds({ selection }))
     .where(no(Discussing._openFor({ subject: selection }).is({ discussion })))
-    .then(request(Discussing.close, { discussion })),
+    .then(Discussing.close({ discussion })),
 );
 
 const ReopenOnJoin = reaction(({ circle, selection, reading }) =>
-  when(Gathering.join, { gathering: circle }, {})
+  when(Gathering.join({ gathering: circle }).responds({}))
     .where(Selecting._current({ scope: circle }).is({ selection, item: reading }))
-    .then(request(Discussing.open, { subject: selection })),
+    .then(Discussing.open({ subject: selection })),
 );
 
 const GetCircleNameFirstDraft = endpoint("/circles/name", ({ circle, name }) =>
-  receive({ circle }).either(
-    where(Gathering._get({ gathering: circle }).is({ name })).then(respond({ name })),
-    where(Gathering._get({ gathering: circle })).then(respond({ error: "NO_SUCH_CIRCLE" })),
+  receive({ circle }).then(
+    where(Gathering._get({ gathering: circle }).is({ name }))
+      .then(respond({ name }))
+      .named("found"),
+    where(Gathering._get({ gathering: circle }))
+      .then(respond({ error: "NO_SUCH_CIRCLE" }))
+      .named("missing"),
   ),
 );
 
@@ -255,52 +260,45 @@ const readBackPins = [
     '  then request RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)',
   ],
   [
-    "book.LeavingRoutesByHost",
+    "book.LeavingRoutesByHost:member",
     "  when Gathering.leave — opens (circle, member)",
     "  Selecting._current (scope: circle) — existence — fires once or drops the case",
     "  Gathering._get (gathering: circle) and not (host: member) — existence — fires once or drops the case",
     "  then request Selecting.clear (scope: circle)",
-    "  assumes Selecting._current fills",
-    "  assumes Gathering._get fills",
   ],
   [
-    "book.LeavingRoutesByHost:2",
+    "book.LeavingRoutesByHost:host",
     "  when Gathering.leave — opens (circle, member)",
     "  Selecting._current (scope: circle) — existence — fires once or drops the case",
     "  Gathering._get (gathering: circle) has (host: member) — existence — fires once or drops the case",
     "  then request Discussing.open (subject: circle)",
-    "  assumes Selecting._current fills",
-    "  assumes Gathering._get fills",
   ],
   [
-    "book.ChooseReadingHostOnly",
+    "book.ChooseReadingHostOnly:non-host",
     "  when RequestBoundary.request — opens (circle, member, reading, requestId)",
     "  Gathering._get (gathering: circle) and not (host: member) — existence — fires once or drops the case",
     '  then request RequestBoundary.respond (error: "HOST_ONLY", requestId)',
-    "  assumes Gathering._get fills",
   ],
   [
-    "book.ChooseReadingHostOnly:2",
+    "book.ChooseReadingHostOnly:host",
     "  when RequestBoundary.request — opens (circle, member, reading, requestId)",
     "  Gathering._get (gathering: circle) has (host: member) — existence — fires once or drops the case",
     "  then request Selecting.choose (scope: circle, item: reading)",
-    "  assumes Gathering._get fills",
   ],
   [
-    "book.ChooseReadingHostOnly:2#2",
+    "book.ChooseReadingHostOnly:host#2",
     "  when Selecting.choose — opens (circle, reading, selection)",
     '  earlier, RequestBoundary.request (circle, member, reading, requestId, path: "/circles/choose") — reads the flow\'s record, once per matching occurrence',
     "  then request RequestBoundary.respond (selection, requestId)",
-    "  assumes Gathering._get fills",
   ],
   [
-    "book.GetCircleName",
+    "book.GetCircleName:found",
     "  when RequestBoundary.request — opens (circle, requestId)",
     "  Gathering._get (gathering: circle) has (name) — fills or drops the case; opens (name)",
     "  then request RequestBoundary.respond (name, requestId)",
   ],
   [
-    "book.GetCircleName:2",
+    "book.GetCircleName:missing",
     "  when RequestBoundary.request — opens (circle, requestId)",
     "  no Gathering._get (gathering: circle) — holds only when no such row exists — drops the case otherwise",
     '  then request RequestBoundary.respond (error: "NO_SUCH_CIRCLE", requestId)',
@@ -369,7 +367,7 @@ describe("the example book", () => {
 
     expect(rejects({ CloseTheAbsentDiscussion })).toThrow(errorPins.freshUnderNo);
     expect(rejects({ ReopenOnJoin })).toThrow(errorPins.unusedName);
-    expect(rejects({ GetCircleNameFirstDraft })).toThrow(errorPins.noWitness);
+    expect(rejects({ GetCircleNameFirstDraft })).not.toThrow();
 
     const app = buildBook();
     await expect(app.engine.form(theFirstReadingOf("after-dinner"))).rejects.toThrow(

@@ -202,6 +202,16 @@ export function instrumentConcept<T extends object>(
         state.actions._beginMatchingInput({ id, flow: flowToken, input });
         try {
           state.actions.invoke(record);
+          try {
+            await state.react({ ...record });
+          } catch (error) {
+            logger.error("Reaction body failed after the action request was recorded", {
+              actionId: id,
+              concept: concept.constructor.name,
+              action: action.name,
+              error: serializeError(error),
+            });
+          }
           const started = performance.now();
 
           const prior = state.actionLines.get(concept);

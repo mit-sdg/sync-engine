@@ -28,12 +28,20 @@
  */
 
 import { computationRef } from "../reads/computations.ts";
+import { actionLine } from "./nodes.ts";
 import { lineOf } from "../reads/lines.ts";
 import type { QueryReadLine, SlotPattern } from "../reads/lines.ts";
 import { parseSpecProse } from "./concept-spec.ts";
 import type { ComputationFn, ComputationRef } from "../reads/computations.ts";
 import type { ConceptMetadata } from "./concept-metadata.ts";
-import type { Mapping, Reaction } from "./types.ts";
+import type {
+  ActionCall,
+  InstrumentedAction,
+  Mapping,
+  Reaction,
+  StepNode,
+  TriggerActionLine,
+} from "./types.ts";
 import {
   validateQueryContractMap,
   type QueryPromises,
@@ -52,7 +60,7 @@ export type ConceptClass = new (...args: never[]) => object;
 
 /** A static reference to one concept action: `{ concept, action }` as data. */
 export interface ActionRef {
-  (...args: never[]): unknown;
+  (input: Mapping): StepNode;
   readonly refConcept: string;
   readonly refAction: string;
 }
@@ -79,15 +87,8 @@ export function isQueryRef(value: unknown): value is QueryRef {
   return typeof value === "function" && (value as never)[QueryRefBrand] === true;
 }
 
-function refThrows(concept: string, member: string): never {
-  throw new Error(
-    `${concept}.${member} is a static ref — it runs only through an assembled engine ` +
-      "(inside a registered reaction, view, or former), never called directly.",
-  );
-}
-
 function makeActionRef(concept: string, action: string): ActionRef {
-  const ref = (() => refThrows(concept, action)) as unknown as ActionRef;
+  const ref = ((input: Mapping) => actionLine(ref, input)) as unknown as ActionRef;
   Object.defineProperty(ref, "name", { value: `${concept}.${action}` });
   Object.defineProperty(ref, "refConcept", { value: concept, enumerable: true });
   Object.defineProperty(ref, "refAction", { value: action, enumerable: true });
@@ -132,15 +133,28 @@ export type QueryLineFn<F> = F extends (input: infer I) => infer A
     }
   : F;
 
+/** An action member called as authored data instead of executed directly. */
+type RequiredInputKeys<I> = {
+  [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
+}[keyof I];
+
+export type ActionLineFn<F> = F extends (input: infer I) => unknown
+  ? <P extends SlotPattern<I>>(
+      pattern: P,
+    ) => RequiredInputKeys<I> extends keyof P
+      ? ActionCall<F & InstrumentedAction, P>
+      : TriggerActionLine<F & InstrumentedAction, P>
+  : F;
+
 /**
  * The members of a concept instance as its vocabulary ref exposes them:
- * actions keep the class's own signatures (for `when`/`request` patterns);
+ * actions become callable data lines for `when` and `then`;
  * queries become typed line builders — the callable vocabulary proxy.
  */
 export type ConceptRef<I> = {
   readonly [K in keyof I as I[K] extends (...args: never[]) => unknown
     ? K
-    : never]: K extends `_${string}` ? QueryLineFn<I[K]> : I[K];
+    : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
 };
 
 /** The vocabulary's refs: one `ConceptRef` per declared name. */

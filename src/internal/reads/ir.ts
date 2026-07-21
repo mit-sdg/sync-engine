@@ -13,7 +13,7 @@
  * preceding occurrences in the same flow.
  */
 
-import type { ChannelPosture } from "../reactions/types.ts";
+import type { ActionPosture, ChannelPosture } from "../reactions/types.ts";
 import { foldFormerNode, foldReaction, foldView } from "./schema.ts";
 
 /** A JSON-safe pattern value: literals, variables, matchers, nested shapes. */
@@ -95,7 +95,7 @@ export interface ActionTriggerIR {
   concept: string;
   action: string;
   /** Absent: as authored (an empty output pattern admits successes only). */
-  posture?: ChannelPosture;
+  posture?: ActionPosture;
   /** Pin to occurrences asked for by one reaction — the ask's provenance. */
   by?: string;
   input: PatternIR;

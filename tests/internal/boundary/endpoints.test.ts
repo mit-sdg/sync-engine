@@ -7,7 +7,7 @@ import {
   receive,
   respond,
 } from "@sync-engine/internal/boundary";
-import { vocabulary } from "@sync-engine/internal/reactions";
+import { declarationsOf, vocabulary } from "@sync-engine/internal/reactions";
 import type { ActionPattern, Vars } from "@sync-engine/internal/reactions";
 
 const emptyVocabulary = vocabulary({ concepts: {}, computations: {} });
@@ -31,7 +31,7 @@ describe("endpoint", () => {
       receive({ message }).then(respond({ echoed: message })),
     );
 
-    const declaration = Echo.reaction({} as Vars);
+    const declaration = declarationsOf(Echo.reaction({} as Vars))[0];
     expect(declaration.when).toHaveLength(1);
     expect(declaration.then).toHaveLength(1);
     expect((declaration.when[0] as ActionPattern).input).toHaveProperty("message");
@@ -57,10 +57,14 @@ describe("endpoint", () => {
     const Failure = endpoint("/failure", () => receive().then(fail({ code: "NOPE" })));
 
     const successInput = (
-      Success.reaction({} as Vars).then[0] as unknown as { action: { input: unknown } }
+      declarationsOf(Success.reaction({} as Vars))[0].then[0] as unknown as {
+        action: { input: unknown };
+      }
     ).action.input;
     const failureInput = (
-      Failure.reaction({} as Vars).then[0] as unknown as { action: { input: unknown } }
+      declarationsOf(Failure.reaction({} as Vars))[0].then[0] as unknown as {
+        action: { input: unknown };
+      }
     ).action.input;
     expect(successInput).toMatchObject({ ok: true, id: "abc" });
     expect(failureInput).toMatchObject({ error: { code: "NOPE" } });
@@ -80,28 +84,30 @@ describe("endpoint", () => {
 
   test("receive accepts an empty input", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
-    expect(Ping.reaction({} as Vars).when).toHaveLength(1);
+    expect(declarationsOf(Ping.reaction({} as Vars))[0].when).toHaveLength(1);
   });
 
   test("receive keeps every authored input field", () => {
     const Filter = endpoint("/filter", ({ type, status }: Vars) =>
       receive({ type, status }).then(respond({ ok: true })),
     );
-    const pattern = Filter.reaction({} as Vars).when[0] as ActionPattern;
+    const pattern = declarationsOf(Filter.reaction({} as Vars))[0].when[0] as ActionPattern;
     expect(pattern.input).toHaveProperty("type");
     expect(pattern.input).toHaveProperty("status");
   });
 
   test("receive has an empty output pattern", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
-    const pattern = Ping.reaction({} as Vars).when[0] as ActionPattern;
+    const pattern = declarationsOf(Ping.reaction({} as Vars))[0].when[0] as ActionPattern;
     expect(pattern.output).toEqual({});
   });
 
   test("fail carries a string without changing it", () => {
     const Failure = endpoint("/failure", () => receive().then(fail("NOPE")));
     const input = (
-      Failure.reaction({} as Vars).then[0] as unknown as { action: { input: unknown } }
+      declarationsOf(Failure.reaction({} as Vars))[0].then[0] as unknown as {
+        action: { input: unknown };
+      }
     ).action.input;
     expect(input).toMatchObject({ error: "NOPE" });
   });
@@ -110,7 +116,9 @@ describe("endpoint", () => {
     const date = new Date("2024-01-01");
     const Failure = endpoint("/failure", () => receive().then(fail(date)));
     const input = (
-      Failure.reaction({} as Vars).then[0] as unknown as { action: { input: unknown } }
+      declarationsOf(Failure.reaction({} as Vars))[0].then[0] as unknown as {
+        action: { input: unknown };
+      }
     ).action.input as { error: unknown };
     expect(input.error).toBe(date);
   });
@@ -173,7 +181,7 @@ describe("endpoint", () => {
 
   test("receive and respond share one correlation binding", () => {
     const Echo = endpoint("/echo", () => receive().then(respond({ ok: true })));
-    const declaration = Echo.reaction({} as Vars);
+    const declaration = declarationsOf(Echo.reaction({} as Vars))[0];
     const requestId = (declaration.when[0] as ActionPattern).input.requestId;
     const responseInput = (
       declaration.then[0] as unknown as { action: { input: Record<string, unknown> } }
@@ -181,11 +189,14 @@ describe("endpoint", () => {
     expect(responseInput.requestId).toBe(requestId);
   });
 
-  test("an endpoint reaction may compose several consequences", () => {
+  test("an endpoint reaction may state sibling answer paths", () => {
     const Echo = endpoint("/echo", () =>
-      receive().then(respond({ first: true }), respond({ second: true })),
+      receive().then(
+        respond({ first: true }).named("first"),
+        respond({ second: true }).named("second"),
+      ),
     );
-    expect(Echo.reaction({} as Vars).then).toHaveLength(2);
+    expect(declarationsOf(Echo.reaction({} as Vars))).toHaveLength(2);
   });
 
   test("rejects a value that is not an absolute path", () => {

@@ -57,10 +57,9 @@ describe("lowering: chains become reactions", () => {
     const { reacting, Button, Deciding, Recorder } = setup();
     reacting.register({
       Chain: reaction(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind }).then(
-          request(Deciding.decide, { kind }, { route }),
-          request(Recorder.record, { tag: route }),
-        ),
+        when(Button.clicked, { kind })
+          .then(request(Deciding.decide, { kind }, { route }))
+          .then(request(Recorder.record, { tag: route })),
       ),
     });
 
@@ -96,10 +95,9 @@ describe("lowering: chains become reactions", () => {
     const { reacting, Button, Deciding, Recorder } = setup();
     reacting.register({
       NeedsRoot: reaction(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind }).then(
-          request(Deciding.decide, {}, { route }),
-          request(Recorder.record, { tag: kind }),
-        ),
+        when(Button.clicked, { kind })
+          .then(request(Deciding.decide, {}, { route }))
+          .then(request(Recorder.record, { tag: kind })),
       ),
     });
 
@@ -122,10 +120,9 @@ describe("lowering: chains become reactions", () => {
     const { reacting, Button, Deciding, Recorder } = setup();
     reacting.register({
       Named: reaction(({ route }: Vars) =>
-        when(Button.clicked, { kind: "n" }).then(
-          request(Deciding.decide, { kind: "n" }, { route }),
-          request(Recorder.record, { tag: route }).named("RecordRoute"),
-        ),
+        when(Button.clicked, { kind: "n" })
+          .then(request(Deciding.decide, { kind: "n" }, { route }))
+          .then(request(Recorder.record, { tag: route }).named("RecordRoute")),
       ),
     });
     expect(reacting.exportReactions().reactions.map((reaction) => reaction.name)).toEqual([
@@ -138,12 +135,13 @@ describe("lowering: chains become reactions", () => {
     const { reacting, Button, Deciding, Recorder } = setup();
     reacting.register({
       Transformed: reaction(({ tag }: Vars) =>
-        when(Button.clicked, { kind: "c" }).then(
-          request(Deciding.decide, { kind: "c" }).where((frames: Frames) =>
-            frames.map((frame) => ({ ...frame })),
-          ),
-          request(Recorder.record, { tag }),
-        ),
+        when(Button.clicked, { kind: "c" })
+          .then(
+            request(Deciding.decide, { kind: "c" }).where((frames: Frames) =>
+              frames.map((frame) => ({ ...frame })),
+            ),
+          )
+          .then(request(Recorder.record, { tag })),
       ),
     });
     const app = reacting.exportReactions();
@@ -160,10 +158,8 @@ describe("lowering: chains become reactions", () => {
       RowCrossing: reaction(({ value }: Vars) =>
         when(Button.clicked, { kind: "rows" })
           .where(lineOf({ query: List._items }, {}).is({ value }))
-          .then(
-            request(Recorder.record, { tag: "first" }),
-            request(Recorder.record, { tag: value }),
-          ),
+          .then(request(Recorder.record, { tag: "first" }))
+          .then(request(Recorder.record, { tag: value })),
       ),
     });
     const app = reacting.exportReactions();
@@ -224,10 +220,8 @@ describe("round trip: export → JSON → registerReactions", () => {
         Chain: reaction(({ route, mark }: Vars) =>
           when(engine.Button.clicked, { kind: "go" })
             .where(compute(stamp, { kind: "go" }, mark))
-            .then(
-              request(engine.Deciding.decide, { kind: "go" }, { route }),
-              request(engine.Recorder.record, { tag: route }),
-            ),
+            .then(request(engine.Deciding.decide, { kind: "go" }, { route }))
+            .then(request(engine.Recorder.record, { tag: route })),
         ),
       });
     };

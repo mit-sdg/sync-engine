@@ -163,10 +163,9 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     reacting.register({
       ChainWithThrow: ({ kind }: Vars) =>
-        when(Button.clicked, { kind }, {}).then(
-          request(Throwing.explode, {}),
-          request(Recorder.record, { tag: "after-throw" }),
-        ),
+        when(Button.clicked, { kind }, {})
+          .then(request(Throwing.explode, {}))
+          .then(request(Recorder.record, { tag: "after-throw" })),
     });
 
     await Button.clicked({ kind: "test" });
@@ -184,10 +183,9 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     reacting.register({
       StartWorkflow: ({ kind }: Vars) =>
-        when(Button.clicked, { kind }, {}).then(
-          request(Throwing.safe, {}),
-          request(Throwing.explode, {}),
-        ),
+        when(Button.clicked, { kind }, {})
+          .then(request(Throwing.safe, {}))
+          .then(request(Throwing.explode, {})),
       Response: ({ ok }: Vars) =>
         when([
           [Button.clicked, { kind: "test" }],

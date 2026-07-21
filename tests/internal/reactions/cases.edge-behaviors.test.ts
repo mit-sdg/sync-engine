@@ -38,10 +38,9 @@ describe("one evaluation per trigger record", () => {
           .then(request(Recorder.record, { tag: 2 })),
       ),
       AddTwice: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "twice" }).then(
-          request(List.add, { value: 1 }),
-          request(List.add, { value: 2 }),
-        ),
+        when(Button.clicked, { kind: "twice" })
+          .then(request(List.add, { value: 1 }))
+          .then(request(List.add, { value: 2 })),
       ),
     });
 

@@ -12,9 +12,9 @@
  *               resolved from the frame's bindings.
  *
  * Concepts are *instrumented* so that every (non-query) action invocation:
- *   1. appends a record to the log under a **flow** token,
- *   2. runs the underlying action and records its output, then
- *   3. drives {@link Reacting.react}, which fires any matching reactions.
+ *   1. appends a requested record under a **flow** token and reacts to it,
+ *   2. runs the underlying action and records its return, refusal, or fault,
+ *   3. reacts again to that completed posture.
  *
  * A **flow** groups actions in one causal chain: actions produced by a reaction's
  * `then` inherit the triggering action's flow, and matching is restricted to a
@@ -89,7 +89,6 @@ import type {
   ReactionDeclaration,
   ReactionMap,
   ExecutableReaction,
-  ThenNode,
   WhereFn,
 } from "./types.ts";
 import { uuid } from "../utils/runtime.ts";
@@ -197,8 +196,13 @@ export class Reacting {
         this.registry.resolveDeclaration(name, decl);
         assertThenInputsAreData(name, decl.then);
         lintReactionOpens(name, decl);
+        const outcome = lowerReaction(decl.path === undefined ? name : base, decl);
+        if (outcome.reason?.includes("before it is bound") === true) {
+          const path = decl.path?.join(" → ") ?? "main";
+          throw new Error(`Reaction "${base}", path "${path}": ${outcome.reason}.`);
+        }
         this.registry.indexDeclarationReads(decl);
-        return { name, decl, outcome: lowerReaction(name, decl) };
+        return { name, decl, outcome };
       });
       return { base, leaves };
     });
@@ -209,7 +213,7 @@ export class Reacting {
         const names = leaf.outcome.reactions?.map((reaction) => reaction.name) ?? [leaf.name];
         for (const name of names) {
           const claimedBy = claims.get(name);
-          if (claimedBy !== undefined) {
+          if (claimedBy !== undefined && claimedBy !== family.base) {
             throw new Error(
               `register: reactions "${claimedBy}" and "${family.base}" both produce "${name}".`,
             );
@@ -230,6 +234,7 @@ export class Reacting {
     for (const family of prepared) {
       const stored: ReactionIR[] = [];
       const executableNames: string[] = [];
+      const storedByName = new Map<string, string>();
       for (const leaf of family.leaves) {
         if (leaf.outcome.reactions !== undefined) {
           // The definition boundary: lowered reactions serialize to the IR here,
@@ -238,19 +243,29 @@ export class Reacting {
           // closure indexes frames by the symbols it closed over, so that
           // reaction executes from its authored form while still exporting as IR.
           const reactions = leaf.outcome.reactions.map((reaction) => serializeReaction(reaction));
-          stored.push(...reactions);
-          executableNames.push(...reactions.map((reaction) => reaction.name));
           leaf.outcome.reactions.forEach((live, index) => {
+            const reaction = reactions[index];
+            const serialized = JSON.stringify(reaction);
+            const previous = storedByName.get(reaction.name);
+            if (previous !== undefined) {
+              if (previous !== serialized) {
+                throw new Error(
+                  `register: reaction "${family.base}" produces different entries named "${reaction.name}".`,
+                );
+              }
+              return;
+            }
+            storedByName.set(reaction.name, serialized);
+            stored.push(reaction);
+            executableNames.push(reaction.name);
             this.indexReaction(
               this.compileReaction(
-                live.whereFn !== undefined ? live : this.registry.bindReaction(reactions[index]),
+                live.whereFn !== undefined ? live : this.registry.bindReaction(reaction),
               ),
             );
-          });
-          if (this.logging !== Logging.OFF) {
-            for (const reaction of reactions)
+            if (this.logging !== Logging.OFF)
               logger.info(readBackReaction(reaction, this.registry.readBackEnv()));
-          }
+          });
           continue;
         }
 
@@ -730,7 +745,7 @@ export class Reacting {
 
   private async runPipelineForFrame(
     frame: Frame,
-    nodes: ThenNode[],
+    nodes: StepNode[],
     reaction: ExecutableReaction,
     branch: FiringBranch,
   ): Promise<Frames> {

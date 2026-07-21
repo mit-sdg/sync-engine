@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { earlier, request, when } from "@sync-engine/internal/reactions/words.ts";
+import { declarationsOf } from "@sync-engine/internal/reactions/partitions.ts";
 import type { InstrumentedAction } from "@sync-engine/internal/reactions/types.ts";
 
 function action(name: string): InstrumentedAction {
@@ -12,7 +13,9 @@ describe("reaction words", () => {
   test("when and request build one declarative sentence", () => {
     const opened = action("opened");
     const notify = action("notify");
-    const declaration = when(opened, { id: "a" }).then(request(notify, { id: "a" }));
+    const declaration = declarationsOf(
+      when(opened, { id: "a" }).then(request(notify, { id: "a" })),
+    )[0];
     expect(declaration.when).toHaveLength(1);
     expect(declaration.then[0].action.action).toBe(notify);
   });

@@ -100,9 +100,14 @@ import type { ContractShape } from "./client.ts";
 import type { ApplicationInterface } from "./application-interface.ts";
 export declare function receive(input?: Mapping): WhenBuilder;
 /** Answer the request this reaction was triggered by. */
-export declare function respond(body?: Mapping): import("../reactions/types.ts").RequestChain;
+export declare function respond(body?: Mapping): import("../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../reactions/types.ts").InstrumentedAction, {
+    requestId: symbol;
+}>;
 /** Answer the request with an application-defined error value. */
-export declare function fail(error?: unknown): import("../reactions/types.ts").RequestChain;
+export declare function fail(error?: unknown): import("../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../reactions/types.ts").InstrumentedAction, {
+    error: unknown;
+    requestId: symbol;
+}>;
 export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
     readonly path: string;
     readonly reaction: (vars: Vars) => TResult;
@@ -637,7 +642,7 @@ export declare const gatewayVocabulary: import("../reactions/refs.ts").DeclaredV
  * The outer transport calls this one stable endpoint with the requested
  * application path carried as data.
  */
-export declare const ReceiveApplicationRequest: import("./assemble.ts").EndpointDef<import("../reactions/types.ts").ReactionDeclaration>;
+export declare const ReceiveApplicationRequest: import("./assemble.ts").EndpointDef<import("../reactions/types.ts").ReactionPartition>;
 export interface Gateway<C extends ContractShape> extends Invoker<C> {
     /** The gateway's own engine and log, separate from the application. */
     readonly engine: Reacting;
@@ -1753,8 +1758,13 @@ export declare function matchArguments(record: ActionRecord, pattern: ActionPatt
 export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: WeakMap<object, object>): Frame | undefined;
 
 === dist/internal/reactions/nodes.d.ts ===
-import type { ThenNode } from "./types.ts";
+import type { BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode } from "./types.ts";
+import type { WhereOp } from "../reads/where-ops.ts";
 export declare function brandReactionNode<T extends object>(node: T): T;
+/** Build the callable data line represented by one vocabulary action ref. */
+export declare function actionLine(action: InstrumentedAction, input: Mapping): StepNode;
+/** Qualify and privately chain one sibling branch. */
+export declare function branchChain(whereOps: readonly WhereOp[], first: StepNode): BranchChain;
 export declare function assertReactionNodes(nodes: readonly ThenNode[]): void;
 
 === dist/internal/reactions/observer.d.ts ===
@@ -1819,11 +1829,18 @@ export declare function contractOf(concept: object, action: string): ActionContr
 
 === dist/internal/reactions/partitions.d.ts ===
 import type { AnyWhereOp } from "../reads/where-ops.ts";
-import type { ReactionCase, ReactionDeclaration, ReactionPartition, ReactionResult, TriggerPattern } from "./types.ts";
+import type { ReactionCase, ReactionDeclaration, ReactionPartition, ReactionResult, ThenNode, TriggerPattern } from "./types.ts";
 export declare function isReactionCase(value: unknown): value is ReactionCase;
 export declare function isReactionPartition(value: unknown): value is ReactionPartition;
 export declare function declarationsOf(result: ReactionResult): readonly ReactionDeclaration[];
 export declare function partition(patterns: readonly TriggerPattern[], prefix: readonly AnyWhereOp[], cases: readonly ReactionCase[]): ReactionPartition;
+/** Build and extend the authored sibling tree as independent flat paths. */
+export declare function siblingTree(patterns: readonly TriggerPattern[], root: Pick<ReactionDeclaration, "where" | "whereOps">, nodes: readonly ThenNode[]): ReactionPartition;
+
+=== dist/internal/reactions/public-words.d.ts ===
+import type { ActionCall, RefusedActionLine, RefusedTriggerActionLine, ReturnedActionLine, ReturnedTriggerActionLine, TriggerActionLine, WhenBuilder } from "./types.ts";
+/** Watch the posture stated by one callable vocabulary action line. */
+export declare const when: (line: ActionCall | TriggerActionLine | ReturnedActionLine | ReturnedTriggerActionLine | RefusedActionLine | RefusedTriggerActionLine) => WhenBuilder;
 
 === dist/internal/reactions/reacting.d.ts ===
 /**
@@ -1840,9 +1857,9 @@ export declare function partition(patterns: readonly TriggerPattern[], prefix: r
  *               resolved from the frame's bindings.
  *
  * Concepts are *instrumented* so that every (non-query) action invocation:
- *   1. appends a record to the log under a **flow** token,
- *   2. runs the underlying action and records its output, then
- *   3. drives {@link Reacting.react}, which fires any matching reactions.
+ *   1. appends a requested record under a **flow** token and reacts to it,
+ *   2. runs the underlying action and records its return, refusal, or fault,
+ *   3. reacts again to that completed posture.
  *
  * A **flow** groups actions in one causal chain: actions produced by a reaction's
  * `then` inherit the triggering action's flow, and matching is restricted to a
@@ -2096,7 +2113,7 @@ export {};
 import type { QueryReadLine, SlotPattern } from "../reads/lines.ts";
 import type { ComputationFn, ComputationRef } from "../reads/computations.ts";
 import type { ConceptMetadata } from "./concept-metadata.ts";
-import type { Mapping, Reaction } from "./types.ts";
+import type { ActionCall, InstrumentedAction, Mapping, Reaction, StepNode, TriggerActionLine } from "./types.ts";
 import { type QueryPromise } from "../reads/query-contracts.ts";
 declare const VocabularyClasses: unique symbol;
 declare const VocabularyComputations: unique symbol;
@@ -2105,7 +2122,7 @@ declare const VocabularyMetadata: unique symbol;
 export type ConceptClass = new (...args: never[]) => object;
 /** A static reference to one concept action: `{ concept, action }` as data. */
 export interface ActionRef {
-    (...args: never[]): unknown;
+    (input: Mapping): StepNode;
     readonly refConcept: string;
     readonly refAction: string;
 }
@@ -2138,13 +2155,18 @@ export type QueryLineFn<F> = F extends (input: infer I) => infer A ? {
     (pattern: SlotPattern<I>): QueryReadLine<QueryRow<A>>;
     (input: I): A;
 } : F;
+/** An action member called as authored data instead of executed directly. */
+type RequiredInputKeys<I> = {
+    [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
+}[keyof I];
+export type ActionLineFn<F> = F extends (input: infer I) => unknown ? <P extends SlotPattern<I>>(pattern: P) => RequiredInputKeys<I> extends keyof P ? ActionCall<F & InstrumentedAction, P> : TriggerActionLine<F & InstrumentedAction, P> : F;
 /**
  * The members of a concept instance as its vocabulary ref exposes them:
- * actions keep the class's own signatures (for `when`/`request` patterns);
+ * actions become callable data lines for `when` and `then`;
  * queries become typed line builders — the callable vocabulary proxy.
  */
 export type ConceptRef<I> = {
-    readonly [K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never]: K extends `_${string}` ? QueryLineFn<I[K]> : I[K];
+    readonly [K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
 };
 /** The vocabulary's refs: one `ConceptRef` per declared name. */
 export type VocabularyRefs<T extends Record<string, ConceptClass>> = {
@@ -2245,14 +2267,14 @@ export declare function refusalMapping(refusal: Refuse): Record<string, unknown>
 === dist/internal/reactions/resolving.d.ts ===
 import type { ComputationRef } from "../reads/computations.ts";
 import type { InstrumentedQuery, Mapping } from "./types.ts";
-import type { ActionPattern, ChannelPosture } from "./types.ts";
+import type { ActionPattern, ActionPosture } from "./types.ts";
 /** Resolves vocabulary names against one assembly's installed referents. */
 export declare class NameResolver {
     private readonly concepts;
     private readonly computations;
     constructor(concepts: Map<string, object>, computations: Map<string, ComputationRef>);
     concept(name: string, site: string): object;
-    action(conceptName: string, actionName: string, input: Mapping, output: Mapping | undefined, site: string, posture?: ChannelPosture, by?: string): ActionPattern;
+    action(conceptName: string, actionName: string, input: Mapping, output: Mapping | undefined, site: string, posture?: ActionPosture, by?: string): ActionPattern;
     query(conceptName: string, queryName: string, site: string): InstrumentedQuery;
     computation(name: string, site: string, vocabularyOnly?: boolean): ComputationRef;
 }
@@ -2289,7 +2311,7 @@ export interface ActionPattern {
      * pattern admits successes only; a keyed one matches whichever posture's
      * payload unifies). Lowered reaction chains pin "returned".
      */
-    posture?: ChannelPosture;
+    posture?: ActionPosture;
     /**
      * Pin the trigger to occurrences asked for by one reaction — the ask's
      * provenance. Lowered reaction chains pin the previous step, so a
@@ -2299,6 +2321,7 @@ export interface ActionPattern {
 }
 /** The posture a channel trigger watches for. */
 export type ChannelPosture = "returned" | "refused" | "faulted";
+export type ActionPosture = "requested" | ChannelPosture;
 /**
  * A normalized channel clause: matches occurrences of *any* action by
  * posture rather than by identity. The pattern is unified against a
@@ -2336,6 +2359,8 @@ export type OutcomeKind = "any" | "result" | "error";
 /** A pure transform over frames — the `where` clause. */
 export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
 declare const MatcherBrand: unique symbol;
+declare const NamedLineBrand: unique symbol;
+declare const CompleteInputBrand: unique symbol;
 /** A branded value matcher used inside a pattern mapping. */
 export interface Matcher {
     readonly [MatcherBrand]: true;
@@ -2347,31 +2372,137 @@ export interface Matcher {
 export interface StepNode {
     kind: "step";
     action: ActionPattern;
+    linePosture?: "requested" | "returned" | "refused";
+    /** Conditions read immediately before this step at its incoming frontier. */
+    whereOps?: readonly WhereOp[];
     transform?: WhereFn;
     /** The declarative form of the step's transform, when authored as ops. */
     transformOps?: readonly WhereOp[];
     /** Author-chosen name for the reaction this step lowers to (see `.named()`). */
     stepName?: string;
+    branchLabel?: string;
+    /** Stable sibling labels introduced at this temporal stage. */
+    pathLabels?: readonly string[];
+    responds(output?: Mapping): StepNode;
+    refuses(output?: Mapping): StepNode;
+    named(name: string): StepNode;
 }
-/** Public executable node accepted by `then`: a step in the firing's pipeline. */
-export type ThenNode = StepNode;
-export type ThenClause = ThenNode[];
+/** A requested callable action line. */
+export interface ActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping> extends StepNode {
+    readonly [CompleteInputBrand]: true;
+    action: ActionPattern & {
+        action: TAction;
+        input: TInput;
+    };
+    linePosture: "requested";
+    responds<TOutput extends Mapping = Empty>(output?: TOutput): ReturnedActionLine<TAction, TInput, TOutput>;
+    refuses<TRefusal extends Mapping = Empty>(output?: TRefusal): RefusedActionLine<TAction, TInput, TRefusal>;
+    named(name: string): NamedActionCall<TAction, TInput>;
+}
+/** A requested callable action line whose required input slots remain open. */
+export interface TriggerActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping> {
+    kind: "step";
+    action: ActionPattern & {
+        action: TAction;
+        input: TInput;
+    };
+    linePosture: "requested";
+    responds<TOutput extends Mapping = Empty>(output?: TOutput): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
+    refuses<TRefusal extends Mapping = Empty>(output?: TRefusal): RefusedTriggerActionLine<TAction, TInput, TRefusal>;
+    named(name: string): TriggerActionLine<TAction, TInput>;
+}
+export interface NamedActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping> extends ActionCall<TAction, TInput> {
+    readonly [NamedLineBrand]: true;
+    named(name: string): NamedActionCall<TAction, TInput>;
+}
+/** A callable action line pinned to a successful return. */
+export interface ReturnedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TOutput extends Mapping = Mapping> extends StepNode {
+    readonly [CompleteInputBrand]: true;
+    action: ActionPattern & {
+        action: TAction;
+        input: TInput;
+        output: TOutput;
+    };
+    linePosture: "returned";
+    named(name: string): NamedReturnedActionLine<TAction, TInput, TOutput>;
+}
+/** A returned trigger line whose required input slots remain open. */
+export interface ReturnedTriggerActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TOutput extends Mapping = Mapping> {
+    kind: "step";
+    action: ActionPattern & {
+        action: TAction;
+        input: TInput;
+        output: TOutput;
+    };
+    linePosture: "returned";
+    named(name: string): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
+}
+export interface NamedReturnedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TOutput extends Mapping = Mapping> extends ReturnedActionLine<TAction, TInput, TOutput> {
+    readonly [NamedLineBrand]: true;
+    named(name: string): NamedReturnedActionLine<TAction, TInput, TOutput>;
+}
+/** A callable action line pinned to a declared refusal. */
+export interface RefusedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TRefusal extends Mapping = Mapping> extends StepNode {
+    readonly [CompleteInputBrand]: true;
+    action: ActionPattern & {
+        action: TAction;
+        input: TInput;
+        output: TRefusal;
+    };
+    linePosture: "refused";
+    named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
+}
+/** A refused trigger line whose required input slots remain open. */
+export interface RefusedTriggerActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TRefusal extends Mapping = Mapping> {
+    kind: "step";
+    action: ActionPattern & {
+        action: TAction;
+        input: TInput;
+        output: TRefusal;
+    };
+    linePosture: "refused";
+    named(name: string): RefusedTriggerActionLine<TAction, TInput, TRefusal>;
+}
+export interface NamedRefusedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TRefusal extends Mapping = Mapping> extends RefusedActionLine<TAction, TInput, TRefusal> {
+    readonly [NamedLineBrand]: true;
+    named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
+}
+/** A qualified branch with temporal stages private to that branch. */
+export interface BranchChain {
+    readonly kind: "branch";
+    readonly whereOps: readonly WhereOp[];
+    readonly steps: readonly StepNode[];
+    readonly branchLabel?: string;
+    then(...nodes: StepNode[]): BranchChain;
+    named(name: string): NamedBranchChain;
+}
+export interface NamedBranchChain extends BranchChain {
+    readonly [NamedLineBrand]: true;
+    named(name: string): NamedBranchChain;
+}
+/** Public executable node accepted by `then`. */
+export type ThenNode = StepNode | BranchChain;
+export type ConsequenceNode = ActionCall | ReturnedActionLine | RefusedActionLine | BranchChain | RequestChain;
+export type NamedThenNode = NamedActionCall | NamedReturnedActionLine | NamedRefusedActionLine | NamedBranchChain;
+export type ThenClause = StepNode[];
 /** The raw object a reaction function returns before it is registered by name. */
 export interface ReactionDeclaration {
     when: TriggerPattern[];
     where?: WhereFn;
     /** The declarative form of `where`, when authored as ops — the data the IR keeps. */
     whereOps?: readonly AnyWhereOp[];
-    then: ThenClause;
+    then: StepNode[];
+    path?: string[];
     coverage?: string[];
 }
-export interface ReactionCase {
+export interface NestedReactionCase {
     readonly where: readonly unknown[];
-    readonly then?: readonly ThenNode[];
     readonly cases?: readonly ReactionCase[];
 }
+export type ReactionCase = BranchChain | NestedReactionCase;
 export interface ReactionPartition {
     readonly declarations: readonly ReactionDeclaration[];
+    then(...nodes: ConsequenceNode[]): ReactionPartition;
 }
 export type ReactionResult = ReactionDeclaration | ReactionPartition;
 /** A registered reaction plus its name. */
@@ -2414,16 +2545,30 @@ export interface RequestChain extends StepNode {
 export interface WhenBuilder {
     where(...conditions: Condition[]): WhenBuilderWithWhere;
     where(fn: WhereFn): WhenBuilderWithFunctionWhere;
-    then(...nodes: ThenNode[]): ReactionDeclaration;
-    either(...cases: ReactionCase[]): ReactionPartition;
+    then(node: ConsequenceNode): ReactionPartition;
+    then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
 /** A `when` builder after `.where(...)`. */
 export interface WhenBuilderWithWhere {
-    then(...nodes: ThenNode[]): ReactionDeclaration;
-    either(...cases: ReactionCase[]): ReactionPartition;
+    then(node: ConsequenceNode): ReactionPartition;
+    then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
 export interface WhenBuilderWithFunctionWhere {
-    then(...nodes: ThenNode[]): ReactionDeclaration;
+    then(...nodes: ConsequenceNode[]): ReactionPartition;
+}
+/** Internal compatibility builder for low-level tests and framework channels. */
+export interface LegacyWhenBuilder {
+    where(...conditions: Condition[]): LegacyWhenBuilderWithWhere;
+    where(fn: WhereFn): LegacyWhenBuilderWithFunctionWhere;
+    then(...nodes: StepNode[]): ReactionPartition;
+    either(...cases: ReactionCase[]): ReactionPartition;
+}
+export interface LegacyWhenBuilderWithWhere {
+    then(...nodes: StepNode[]): ReactionPartition;
+    either(...cases: ReactionCase[]): ReactionPartition;
+}
+export interface LegacyWhenBuilderWithFunctionWhere {
+    then(...nodes: StepNode[]): ReactionPartition;
 }
 export {};
 
@@ -2446,7 +2591,7 @@ export declare const $vars: Vars;
 
 === dist/internal/reactions/words.d.ts ===
 import type { EarlierOp } from "../reads/where-ops.ts";
-import type { ActionList, ActionPattern, ChannelPattern, ChannelPosture, InstrumentedAction, Mapping, RequestChain, WhenBuilder, WhenClause } from "./types.ts";
+import type { ActionList, ActionPattern, ChannelPattern, ChannelPosture, InstrumentedAction, LegacyWhenBuilder, Mapping, RequestChain, StepNode, WhenBuilder, WhenClause } from "./types.ts";
 /** Normalize clauses shared by when, request, and earlier into action patterns. */
 export declare function actions(...clauses: ActionList[]): ActionPattern[];
 /** Read matching occurrences strictly before a trigger in its causal flow. */
@@ -2455,9 +2600,10 @@ export interface WhenOptions {
     by?: string;
     posture?: ChannelPosture;
 }
-export declare function when(clauses: Array<WhenClause | ChannelPattern>): WhenBuilder;
-export declare function when(channel: ChannelPattern): WhenBuilder;
-export declare function when(action: InstrumentedAction, input: Mapping, output?: Mapping, options?: WhenOptions): WhenBuilder;
+export declare function when(clauses: Array<WhenClause | ChannelPattern>): LegacyWhenBuilder;
+export declare function when(channel: ChannelPattern): LegacyWhenBuilder;
+export declare function when(line: StepNode): WhenBuilder;
+export declare function when(action: InstrumentedAction, input: Mapping, output?: Mapping, options?: WhenOptions): LegacyWhenBuilder;
 /** Construct one action request in a reaction consequence chain. */
 export declare function request(action: InstrumentedAction, input: Mapping, output?: Mapping): RequestChain;
 
@@ -2853,7 +2999,7 @@ export declare class Frames<TFrame extends Frame = Frame> extends Array<TFrame> 
  * matching occurrences; `earlier` performs a separate non-consuming read of
  * preceding occurrences in the same flow.
  */
-import type { ChannelPosture } from "../reactions/types.ts";
+import type { ActionPosture, ChannelPosture } from "../reactions/types.ts";
 /** A JSON-safe pattern value: literals, variables, matchers, nested shapes. */
 export type ValueIR = null | boolean | number | string | ValueIR[] | {
     $var: string;
@@ -2916,7 +3062,7 @@ export interface ActionTriggerIR {
     concept: string;
     action: string;
     /** Absent: as authored (an empty output pattern admits successes only). */
-    posture?: ChannelPosture;
+    posture?: ActionPosture;
     /** Pin to occurrences asked for by one reaction — the ask's provenance. */
     by?: string;
     input: PatternIR;
@@ -3238,7 +3384,7 @@ export {};
  * state-read rows remain executable pipelines and appear in
  * `exportReactions().unlowered` with a reason.
  */
-import type { Mapping, StepNode, ReactionDeclaration, ThenNode, TriggerPattern, WhereFn } from "../reactions/types.ts";
+import type { Mapping, StepNode, ReactionDeclaration, TriggerPattern, WhereFn } from "../reactions/types.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
 import type { ViewOp } from "./views.ts";
 import type { RelationView } from "./lines.ts";
@@ -3278,7 +3424,7 @@ export declare function lintReactionOpens(name: string, decl: ReactionDeclaratio
  * formers, or registered per-firing computations. Values calculated while the
  * reaction is declared are rejected.
  */
-export declare function assertThenInputsAreData(reactionName: string, then: ThenNode[]): void;
+export declare function assertThenInputsAreData(reactionName: string, then: StepNode[]): void;
 /**
  * Serialize one lowered reaction to JSON-safe IR. A closure-based `where`
  * serializes as an opaque marker and is attached through its {@link LIVE}
@@ -3887,8 +4033,7 @@ export declare function walkValueTree(value: unknown, visit: (node: unknown) => 
  * the number of matching rows at the moment of asking, never stored.
  *
  */
-import type { InstrumentedQuery, Mapping, ReactionCase, Vars } from "../reactions/types.ts";
-import type { ThenNode } from "../reactions/types.ts";
+import type { BranchChain, InstrumentedQuery, Mapping, StepNode, Vars } from "../reactions/types.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import type { ViewOpIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
@@ -3913,8 +4058,7 @@ declare const ViewBlockType: unique symbol;
 export type ViewBlock = ViewOp[] & {
     readonly [ViewBlockType]: true;
     form(entries: Record<string, FormerEntry>): FormNode;
-    then(...nodes: ThenNode[]): ReactionCase;
-    either(...cases: ReactionCase[]): ReactionCase;
+    then(...nodes: StepNode[]): BranchChain;
 };
 /** State one view alternative as a variadic conjunction. */
 export declare function where(...conditions: Array<Condition | CountOp>): ViewBlock;
@@ -4188,7 +4332,8 @@ export declare function uuid(): string;
 === dist/language/index.d.ts ===
 /** Words used to declare concepts, reactions, views, and formers. */
 export { reaction, vocabulary } from "../internal/reactions/refs.ts";
-export { request, earlier, when } from "../internal/reactions/words.ts";
+export { earlier } from "../internal/reactions/words.ts";
+export { when } from "../internal/reactions/public-words.ts";
 export { refused, returned } from "../internal/reactions/channels.ts";
 export { no, whether } from "../internal/reads/where-ops.ts";
 export { is } from "../internal/reads/computations.ts";
@@ -4196,7 +4341,7 @@ export { count, view, where } from "../internal/reads/views.ts";
 export { each, form, former } from "../internal/reads/former-builders.ts";
 export type { ReadLine, RelationView, SlotPattern } from "../internal/reads/lines.ts";
 export type { Condition } from "../internal/reads/where-ops.ts";
-export type { Vars } from "../internal/reactions/types.ts";
+export type { ActionCall, RefusedActionLine, ReturnedActionLine, Vars, } from "../internal/reactions/types.ts";
 export type { QueryPromise } from "../internal/reads/query-contracts.ts";
 
 === dist/tooling/index.d.ts ===

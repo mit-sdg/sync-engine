@@ -1,5 +1,4 @@
 import {
-  request,
   Logging,
   Refuse,
   type OutcomeContracts,
@@ -130,12 +129,15 @@ const { GatewayRouting, GatewayAdmitting, GatewayForwarding } = gatewayVocabular
 export const ReceiveApplicationRequest = endpoint(
   GATEWAY_RECEIVE_PATH,
   ({ targetPath, input, admitted, reply, correlationId }: Vars) =>
-    receive({ targetPath, input, correlationId }).then(
-      request(GatewayRouting.resolve, { path: targetPath }),
-      request(GatewayAdmitting.admit, { path: targetPath, input }, { admitted }),
-      request(GatewayForwarding.forward, { path: targetPath, admitted, correlationId }, { reply }),
-      respond({ reply }),
-    ),
+    receive({ targetPath, input, correlationId })
+      .then(GatewayRouting.resolve({ path: targetPath }))
+      .then(GatewayAdmitting.admit({ path: targetPath, input }).responds({ admitted }))
+      .then(
+        GatewayForwarding.forward({ path: targetPath, admitted, correlationId }).responds({
+          reply,
+        }),
+      )
+      .then(respond({ reply })),
 );
 
 export interface Gateway<C extends ContractShape> extends Invoker<C> {

@@ -12,7 +12,7 @@ import {
   respond,
 } from "@sync-engine/boundary";
 import { compute } from "@sync-engine/advanced";
-import { reaction, request, vocabulary, when } from "@sync-engine/language";
+import { reaction, vocabulary, when } from "@sync-engine/language";
 import { inspectAssembly, renderInputContracts } from "@sync-engine/tooling";
 
 class DuplicateTitle extends Error {}
@@ -92,7 +92,8 @@ describe("canonical public API", () => {
     const Add = endpoint("/catalog/add", ({ raw, title }) =>
       receive({ raw })
         .where(compute(normalizeTitle, { title: raw }, title))
-        .then(request(Catalog.add, { title }, { title }), respond({ title })),
+        .then(Catalog.add({ title }).responds({ title }))
+        .then(respond({ title })),
     );
     const system = assemble({ vocabulary: words, composition: { Add } });
     expect(await system.invoker.invoke("/catalog/add", { raw: "  Example " })).toEqual({
@@ -136,10 +137,9 @@ describe("canonical public API", () => {
     const words = vocabulary({ concepts: { Sessioning }, computations: {} });
     const { Sessioning: Session } = words.concepts;
     const Start = endpoint("/sessions/start", ({ token }) =>
-      receive().then(
-        request(Session.start, {}, { sessionToken: token }),
-        respond({ sessionToken: token }),
-      ),
+      receive()
+        .then(Session.start({}).responds({ sessionToken: token }))
+        .then(respond({ sessionToken: token })),
     );
     const system = assemble({ vocabulary: words, composition: { Start } });
 
@@ -170,9 +170,9 @@ describe("canonical public API", () => {
     });
     const { Cataloging: Catalog } = owned.concepts;
     const ForeignReaction = reaction(({ raw, title }) =>
-      when(Catalog.add, { title: raw })
+      when(Catalog.add({ title: raw }).responds())
         .where(compute(borrowed.computations.normalize, { value: raw }, title))
-        .then(request(Catalog.add, { title })),
+        .then(Catalog.add({ title })),
     );
 
     expect(() => assemble({ vocabulary: owned, composition: { ForeignReaction } })).toThrow(
@@ -229,9 +229,12 @@ describe("canonical public API", () => {
 const register = {
   language: [
     "Condition",
+    "ActionCall",
     "QueryPromise",
     "ReadLine",
+    "RefusedActionLine",
     "RelationView",
+    "ReturnedActionLine",
     "SlotPattern",
     "Vars",
     "count",
@@ -243,7 +246,6 @@ const register = {
     "no",
     "reaction",
     "refused",
-    "request",
     "returned",
     "view",
     "vocabulary",

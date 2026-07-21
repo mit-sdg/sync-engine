@@ -115,10 +115,9 @@ describe("faults during action instrumentation", () => {
     const { reacting, Button, Broken, Recorder } = setup();
     reacting.register({
       FaultyPipeline: (_: Vars) =>
-        when(Button.clicked, { kind: "go" }).then(
-          request(Broken.run, {}),
-          request(Recorder.record, { tag: "after-fault" }),
-        ),
+        when(Button.clicked, { kind: "go" })
+          .then(request(Broken.run, {}))
+          .then(request(Recorder.record, { tag: "after-fault" })),
     });
 
     await Button.clicked({ kind: "go" });

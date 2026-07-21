@@ -317,14 +317,14 @@ into the same authored design:
 
 ```ts
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { former, reaction, request, when, where } from "@mit-sdg/sync-engine/language";
+import { former, reaction, when, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "./concept-set.ts";
 
 const { Mitigating, Rooming } = concepts;
 
 export const RoomStartsWithInvestigation = reaction(({ room }) =>
-  when(Rooming.open, {}, { room }).then(
-    request(Mitigating.choose, { room, mitigation: "investigate" }),
+  when(Rooming.open({}).responds({ room })).then(
+    Mitigating.choose({ room, mitigation: "investigate" }),
   ),
 );
 
@@ -335,7 +335,7 @@ export const roomDashboard = former("the operations room (room)", ({ room, name,
 );
 
 export const OpenRoom = endpoint("/rooms/open", ({ name, room }) =>
-  receive({ name }).then(request(Rooming.open, { name }, { room }), respond({ room })),
+  receive({ name }).then(Rooming.open({ name }).responds({ room })).then(respond({ room })),
 );
 
 export const GetRoom = endpoint("/rooms/get", ({ room }) =>

@@ -23,7 +23,7 @@ update.
 
 <!-- register:language:start -->
 
-`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `SlotPattern`, `Vars`, `count`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `request`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
+`Condition`, `ActionCall`, `QueryPromise`, `ReadLine`, `RefusedActionLine`, `RelationView`, `ReturnedActionLine`, `SlotPattern`, `Vars`, `count`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -65,33 +65,23 @@ export const words = vocabulary({
 ### Reactions and consequences
 
 `reaction(callback)` declares one named reaction in a composition. The
-callback returns one reaction declaration or one proven partition. The
-ordinary single-case frame is:
+callback returns one reaction tree. The ordinary single-path frame is:
 
 ```ts
 reaction(({ source, result }) =>
-  when(Source.finish, { source }, { result }).then(request(Target.record, { source, result })),
+  when(Source.finish({ source }).responds({ result })).then(Target.record({ source, result })),
 );
 ```
 
-`when(action, input, output)` watches returned occurrences. The input and
-output patterns are partial. A fresh variable binds the matching role; a value
-or an already-bound variable tests it. A listed role must be present on the
-occurrence; omit the role to match whether or not it was supplied. This makes
-the output pattern the place to condition a consequence on what an action
-returned.
+Callable action lines state posture. A bare call watches or asks at the
+requested posture; `.responds(pattern?)` states a returned occurrence;
+`.refuses(pattern?)` states a refusal. Trigger input patterns may be partial,
+while consequence calls must supply every required input.
 
-`request(action, input, output?)` asks for one consequence. Its optional output
-pattern binds values for later requests in the same chain. Fluent `.where(...)`
-conditions that step, while `.named(name)` gives it an explicit chain name.
-Top-level `.where(...)` belongs between `when` and `.then(...)`.
-
-`when(...).either(case, ...)` groups mutually exclusive cases under the same
-reaction name. A shared declarative prefix may come first as
-`when(...).where(...).either(...)`. Each case is a `where(...).then(...)` pair
-and may contain another `either(...)`. The
-[semantic guarantee](semantics.md#proven-partitions-and-either) defines the
-required proof and the names produced when the partition lowers.
+Several arguments in one `then(...)` group are independent siblings. Every
+sibling carries a distinct trailing `.named(label)`. A later `then(...)`
+extends every current path independently. `where(...).then(action).named(label)`
+qualifies one sibling without asserting that siblings are disjoint or complete.
 
 `returned(pattern, options?)` and `refused(pattern, options?)` watch posture
 channels rather than one named action. A returned channel pattern can bind
@@ -109,7 +99,7 @@ by `TryPublish`:
 ```ts
 reaction(({ refusal }) =>
   when(refused({ action: "publish", refusal }, { by: "TryPublish" })).then(
-    request(Reporting.record, { refusal }),
+    Reporting.record({ refusal }),
   ),
 );
 ```
@@ -278,10 +268,10 @@ For the exact persistence, eviction, and restart limits, see
 <!-- register:boundary:end -->
 
 `endpoint(path, callback)` declares one outside request. The callback begins
-with `receive(input)`, may add `.where(...)`, and ends with `.then(...)` or the
-same `.either(...)` partition described for `when`. `receive` adds the request
-trigger; the endpoint adds its path and optional input contract.
-`request(...)` asks concept actions and `respond(body)` answers the caller.
+with `receive(input)`, may add `.where(...)`, and continues through the same
+single-path or labeled-sibling `then(...)` tree as `when`. `receive` adds the
+request trigger; the endpoint adds its path and optional input contract.
+Callable action lines ask concept actions, and `respond(body)` answers the caller.
 `EndpointDef` and `InputContractDecl` are the corresponding declaration types.
 
 `createGateway(options)` places standard routing, input admission, forwarding,

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { conceptFloor, conceptSet, PublicError, registerConcept } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { request } from "@sync-engine/language";
 import { assemble } from "@sync-engine/internal/boundary";
 
 class MissingItem extends Error {}
@@ -51,10 +50,14 @@ describe("external concept registration", () => {
     const set = conceptSet({ Cataloging: cataloging });
     const { Cataloging: Catalog } = set.concepts;
     const Find = endpoint("/find", () =>
-      receive({}).then(request(Catalog.find, {}), respond({ ok: true })),
+      receive({})
+        .then(Catalog.find({}))
+        .then(respond({ ok: true })),
     );
     const Misplaced = endpoint("/misplaced", () =>
-      receive({}).then(request(Catalog.misplaced, {}), respond({ ok: true })),
+      receive({})
+        .then(Catalog.misplaced({}))
+        .then(respond({ ok: true })),
     );
     const application = assemble({
       vocabulary: set.vocabulary,

@@ -8,7 +8,6 @@ import {
   receive,
   respond,
 } from "@sync-engine/boundary";
-import { request } from "@sync-engine/language";
 import { httpFloorReadBack } from "@sync-engine/tooling";
 import { projectAssemblyHttpWire } from "@sync-engine/internal/boundary/http-floor";
 import { assemblyBehind } from "@sync-engine/internal/boundary/assembly-registry";
@@ -51,21 +50,24 @@ function setup() {
   });
   const { Sessioning: Sessions } = set.concepts;
   const Login = endpoint("/login", ({ session, expiresAt, user }) =>
-    receive({}).then(
-      request(Sessions.start, {}, { session, expiresAt, user }),
-      respond({ session, expiresAt, user }),
-    ),
+    receive({})
+      .then(Sessions.start({}).responds({ session, expiresAt, user }))
+      .then(respond({ session, expiresAt, user })),
   );
   const Me = endpoint(
     "/me",
     ({ session, user }) =>
-      receive({ session }).then(request(Sessions.verify, { session }, { user }), respond({ user })),
+      receive({ session })
+        .then(Sessions.verify({ session }).responds({ user }))
+        .then(respond({ user })),
     { input: { required: ["session"] } },
   );
   const Logout = endpoint(
     "/logout",
     ({ session }) =>
-      receive({ session }).then(request(Sessions.end, { session }), respond({ ok: true })),
+      receive({ session })
+        .then(Sessions.end({ session }))
+        .then(respond({ ok: true })),
     { input: { required: ["session"] } },
   );
   const application = assemble({

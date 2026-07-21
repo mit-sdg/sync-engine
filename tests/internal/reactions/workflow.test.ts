@@ -57,10 +57,9 @@ describe("pipeline then", () => {
     const { reacting, Button, Decision, Recorder } = setup();
     reacting.register({
       Pipeline: reaction(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind }).then(
-          request(Decision.decide, { kind }, { route }),
-          request(Recorder.record, { tag: route }),
-        ),
+        when(Button.clicked, { kind })
+          .then(request(Decision.decide, { kind }, { route }))
+          .then(request(Recorder.record, { tag: route })),
       ),
     });
 
@@ -74,11 +73,10 @@ describe("pipeline then", () => {
       // explode refuses (an error outcome), so the chain never reaches the
       // "after" step — the ask's pipeline stops at the refusal.
       Stop: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "stop" }).then(
-          request(Recorder.record, { tag: "before" }),
-          request(Throwing.explode, {}),
-          request(Recorder.record, { tag: "after" }),
-        ),
+        when(Button.clicked, { kind: "stop" })
+          .then(request(Recorder.record, { tag: "before" }))
+          .then(request(Throwing.explode, {}))
+          .then(request(Recorder.record, { tag: "after" })),
       ),
     });
 
@@ -91,10 +89,9 @@ describe("pipeline then", () => {
     const { reacting, Button, Decision, Recorder } = setup();
     reacting.register({
       Mismatch: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "mismatch" }).then(
-          request(Decision.decide, { kind: "approve" }, { route: "rejected" }),
-          request(Recorder.record, { tag: "unreachable" }),
-        ),
+        when(Button.clicked, { kind: "mismatch" })
+          .then(request(Decision.decide, { kind: "approve" }, { route: "rejected" }))
+          .then(request(Recorder.record, { tag: "unreachable" })),
       ),
     });
 
@@ -106,16 +103,14 @@ describe("pipeline then", () => {
     const { reacting, Button, Completion, Recorder } = setup();
     reacting.register({
       Complete: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "complete" }).then(
-          request(Completion.finish, {}, {}),
-          request(Recorder.record, { tag: "ok" }),
-        ),
+        when(Button.clicked, { kind: "complete" })
+          .then(request(Completion.finish, {}, {}))
+          .then(request(Recorder.record, { tag: "ok" })),
       ),
       CompleteMismatch: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "complete" }).then(
-          request(Completion.finish, {}, { absent: "value" }),
-          request(Recorder.record, { tag: "bad" }),
-        ),
+        when(Button.clicked, { kind: "complete" })
+          .then(request(Completion.finish, {}, { absent: "value" }))
+          .then(request(Recorder.record, { tag: "bad" })),
       ),
     });
 
@@ -152,14 +147,15 @@ describe("step where fan-out", () => {
     await List.add({ value: 2 });
     reacting.register({
       Fanout: reaction(({ value, tag }: Vars) =>
-        when(Button.clicked, { kind: "fanout" }).then(
-          request(Completion.finish, {}).where(
-            lineOf({ query: List._items }, {}).is({ value }),
-            custom((item) => `v:${String(item)}`, [value], [tag]),
-          ),
-          request(Recorder.record, { tag }),
-          request(Recorder.record, { tag }),
-        ),
+        when(Button.clicked, { kind: "fanout" })
+          .then(
+            request(Completion.finish, {}).where(
+              lineOf({ query: List._items }, {}).is({ value }),
+              custom((item) => `v:${String(item)}`, [value], [tag]),
+            ),
+          )
+          .then(request(Recorder.record, { tag }))
+          .then(request(Recorder.record, { tag })),
       ),
     });
 
@@ -174,10 +170,9 @@ describe("sibling reactions on a shared trigger", () => {
     reacting.register({
       // step1's output binding threads into step2; order matters within the chain.
       ParallelPipeline: reaction(({ data }: Vars) =>
-        when(Button.clicked, { kind: "parallel" }).then(
-          request(SR.step1, {}, { data }),
-          request(SR.step2, { data }),
-        ),
+        when(Button.clicked, { kind: "parallel" })
+          .then(request(SR.step1, {}, { data }))
+          .then(request(SR.step2, { data })),
       ),
       // A separate reaction on the same trigger — an independent sibling.
       Sibling: reaction((_vars: Vars) =>
@@ -196,7 +191,7 @@ describe("sibling reactions on a shared trigger", () => {
 describe("construction guards", () => {
   test("rejects an empty pipeline", () => {
     const { Button } = setup();
-    expect(() => when(Button.clicked, {}).then()).toThrow("at least one request");
+    expect(() => when(Button.clicked, {}).then()).toThrow("at least one callable action line");
   });
 
   test("when builders and action chains are not thenable", async () => {

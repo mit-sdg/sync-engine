@@ -103,19 +103,19 @@ describe("ordinary reaction partitions", () => {
         when(Button.clicked, {})
           .where(Routing._route({}).is({ route }))
           .either(
-            where(Routing._route({}).is({ route: "left" })).then(
-              request(Recorder.record, { tag: route }),
-              request(Recorder.record, { tag: "left-again" }),
-            ),
-            where(Routing._route({}).is.not({ route: "left" })).either(
-              where(Routing._named({ name: "present" }).is({ route: "right" })).then(
-                request(Recorder.record, { tag: "right" }),
-                request(Recorder.record, { tag: "right-again" }),
-              ),
-              where(Routing._named({ name: "present" }).is.not({ route: "right" })).then(
-                request(Recorder.record, { tag: "other" }),
-              ),
-            ),
+            where(Routing._route({}).is({ route: "left" }))
+              .then(request(Recorder.record, { tag: route }))
+              .then(request(Recorder.record, { tag: "left-again" })),
+            where(
+              Routing._route({}).is.not({ route: "left" }),
+              Routing._named({ name: "present" }).is({ route: "right" }),
+            )
+              .then(request(Recorder.record, { tag: "right" }))
+              .then(request(Recorder.record, { tag: "right-again" })),
+            where(
+              Routing._route({}).is.not({ route: "left" }),
+              Routing._named({ name: "present" }).is.not({ route: "right" }),
+            ).then(request(Recorder.record, { tag: "other" })),
           ),
       ),
     });
@@ -228,14 +228,14 @@ describe("ordinary reaction partitions", () => {
           where(Routing._route({}).is({ route: "left" })).then(
             request(Recorder.record, { tag: "left" }),
           ),
-          where(Routing._route({}).is.not({ route: "left" })).either(
-            where(Routing._named({ name: "present" }).is({ route: "right" })).then(
-              request(Recorder.record, { tag: "right" }),
-            ),
-            where(Routing._named({ name: "present" }).is.not({ route: "right" })).then(
-              request(Recorder.record, { tag: "other" }),
-            ),
-          ),
+          where(
+            Routing._route({}).is.not({ route: "left" }),
+            Routing._named({ name: "present" }).is({ route: "right" }),
+          ).then(request(Recorder.record, { tag: "right" })),
+          where(
+            Routing._route({}).is.not({ route: "left" }),
+            Routing._named({ name: "present" }).is.not({ route: "right" }),
+          ).then(request(Recorder.record, { tag: "other" })),
         ),
       ),
     });

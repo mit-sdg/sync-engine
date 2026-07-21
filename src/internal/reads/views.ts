@@ -37,11 +37,17 @@
  *
  */
 
-import type { InstrumentedQuery, Mapping, ReactionCase, Vars } from "../reactions/types.ts";
-import type { ThenNode } from "../reactions/types.ts";
+import type {
+  BranchChain,
+  InstrumentedQuery,
+  Mapping,
+  StepNode,
+  Vars,
+} from "../reactions/types.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import { conditionOp } from "./where-ops.ts";
-import { brand, CountOpBrand, ReactionCaseBrand, hasBrand, ViewBlockBrand } from "./brands.ts";
+import { brand, CountOpBrand, hasBrand, ViewBlockBrand } from "./brands.ts";
+import { branchChain } from "../reactions/nodes.ts";
 import type { ViewOpIR } from "./ir.ts";
 import { lowerRelationBlocks } from "./lower.ts";
 import { assertConceptQuery } from "./queries.ts";
@@ -73,8 +79,7 @@ declare const ViewBlockType: unique symbol;
 export type ViewBlock = ViewOp[] & {
   readonly [ViewBlockType]: true;
   form(entries: Record<string, FormerEntry>): FormNode;
-  then(...nodes: ThenNode[]): ReactionCase;
-  either(...cases: ReactionCase[]): ReactionCase;
+  then(...nodes: StepNode[]): BranchChain;
 };
 
 /** State one view alternative as a variadic conjunction. */
@@ -87,10 +92,10 @@ export function where(...conditions: Array<Condition | CountOp>): ViewBlock {
     value: (entries: Record<string, FormerEntry>) => formFrom(block, entries),
   });
   Object.defineProperty(block, "then", {
-    value: (...nodes: ThenNode[]) => brand({ where: block, then: nodes }, ReactionCaseBrand),
-  });
-  Object.defineProperty(block, "either", {
-    value: (...cases: ReactionCase[]) => brand({ where: block, cases }, ReactionCaseBrand),
+    value: (first: StepNode, ...rest: StepNode[]) => {
+      const branch = branchChain(block as WhereOp[], first);
+      return rest.length === 0 ? branch : branch.then(...rest);
+    },
   });
   return block;
 }

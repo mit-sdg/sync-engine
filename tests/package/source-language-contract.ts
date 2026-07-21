@@ -1,4 +1,4 @@
-import { reaction, request, vocabulary, when, where } from "@sync-engine/language";
+import { reaction, vocabulary, when, where } from "@sync-engine/language";
 
 class OneAnswer {
   start(_: Record<string, never>) {
@@ -55,17 +55,45 @@ const words = vocabulary({
 const { OneAnswer: Answering } = words.concepts;
 
 reaction(({ value }) =>
-  when(Answering.start, {}).either(
-    where(Answering._answer({}).is({ value: 1 })).then(request(Answering.record, { value: 1 })),
-    where(Answering._answer({}).is.not({ value: 1 })).then(request(Answering.record, { value })),
+  when(Answering.start({}).responds()).then(
+    where(Answering._answer({}).is({ value: 1 }))
+      .then(Answering.record({ value: 1 }))
+      .named("one"),
+    where(Answering._answer({}).is.not({ value: 1 }))
+      .then(Answering.record({ value }))
+      .named("other"),
   ),
 );
 
 reaction(() =>
-  when(Answering.start, {})
-    .where((frames) => frames)
-    // @ts-expect-error A closure condition cannot supply a checked partition.
-    .either(),
+  when(Answering.start({}).responds())
+    // @ts-expect-error Siblings require stable trailing labels.
+    .then(Answering.record({ value: 1 }), Answering.record({ value: 2 })),
+);
+
+reaction(({ value }) => when(Answering.record({}).responds({ value })).then(Answering.start({})));
+
+reaction(() =>
+  when(Answering.start({}).responds()).then(
+    // @ts-expect-error A consequence supplies every required action input.
+    Answering.record({}),
+  ),
+);
+
+reaction(() =>
+  when(Answering.start({}).responds())
+    .then(Answering.record({ value: 1 }))
+    // @ts-expect-error The same completeness rule holds after an earlier consequence.
+    .then(Answering.record({})),
+);
+
+reaction(() =>
+  when(Answering.start({}).responds()).then(
+    where(Answering._answer({}).is({ value: 1 }))
+      // @ts-expect-error A qualified consequence also supplies every required action input.
+      .then(Answering.record({}))
+      .named("incomplete"),
+  ),
 );
 
 // @ts-expect-error A query returns one record or an array of records.

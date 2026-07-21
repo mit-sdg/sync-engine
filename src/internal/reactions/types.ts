@@ -35,7 +35,7 @@ export interface ActionPattern {
    * pattern admits successes only; a keyed one matches whichever posture's
    * payload unifies). Lowered reaction chains pin "returned".
    */
-  posture?: ChannelPosture;
+  posture?: ActionPosture;
   /**
    * Pin the trigger to occurrences asked for by one reaction — the ask's
    * provenance. Lowered reaction chains pin the previous step, so a
@@ -46,6 +46,7 @@ export interface ActionPattern {
 
 /** The posture a channel trigger watches for. */
 export type ChannelPosture = "returned" | "refused" | "faulted";
+export type ActionPosture = "requested" | ChannelPosture;
 
 /**
  * A normalized channel clause: matches occurrences of *any* action by
@@ -83,6 +84,8 @@ export type OutcomeKind = "any" | "result" | "error";
 export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
 
 declare const MatcherBrand: unique symbol;
+declare const NamedLineBrand: unique symbol;
+declare const CompleteInputBrand: unique symbol;
 
 /** A branded value matcher used inside a pattern mapping. */
 export interface Matcher {
@@ -96,17 +99,160 @@ export interface Matcher {
 export interface StepNode {
   kind: "step";
   action: ActionPattern;
+  linePosture?: "requested" | "returned" | "refused";
+  /** Conditions read immediately before this step at its incoming frontier. */
+  whereOps?: readonly WhereOp[];
   transform?: WhereFn;
   /** The declarative form of the step's transform, when authored as ops. */
   transformOps?: readonly WhereOp[];
   /** Author-chosen name for the reaction this step lowers to (see `.named()`). */
   stepName?: string;
+  branchLabel?: string;
+  /** Stable sibling labels introduced at this temporal stage. */
+  pathLabels?: readonly string[];
+  responds(output?: Mapping): StepNode;
+  refuses(output?: Mapping): StepNode;
+  named(name: string): StepNode;
 }
 
-/** Public executable node accepted by `then`: a step in the firing's pipeline. */
-export type ThenNode = StepNode;
+/** A requested callable action line. */
+export interface ActionCall<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+> extends StepNode {
+  readonly [CompleteInputBrand]: true;
+  action: ActionPattern & { action: TAction; input: TInput };
+  linePosture: "requested";
+  responds<TOutput extends Mapping = Empty>(
+    output?: TOutput,
+  ): ReturnedActionLine<TAction, TInput, TOutput>;
+  refuses<TRefusal extends Mapping = Empty>(
+    output?: TRefusal,
+  ): RefusedActionLine<TAction, TInput, TRefusal>;
+  named(name: string): NamedActionCall<TAction, TInput>;
+}
 
-export type ThenClause = ThenNode[];
+/** A requested callable action line whose required input slots remain open. */
+export interface TriggerActionLine<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+> {
+  kind: "step";
+  action: ActionPattern & { action: TAction; input: TInput };
+  linePosture: "requested";
+  responds<TOutput extends Mapping = Empty>(
+    output?: TOutput,
+  ): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
+  refuses<TRefusal extends Mapping = Empty>(
+    output?: TRefusal,
+  ): RefusedTriggerActionLine<TAction, TInput, TRefusal>;
+  named(name: string): TriggerActionLine<TAction, TInput>;
+}
+
+export interface NamedActionCall<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+> extends ActionCall<TAction, TInput> {
+  readonly [NamedLineBrand]: true;
+  named(name: string): NamedActionCall<TAction, TInput>;
+}
+
+/** A callable action line pinned to a successful return. */
+export interface ReturnedActionLine<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+  TOutput extends Mapping = Mapping,
+> extends StepNode {
+  readonly [CompleteInputBrand]: true;
+  action: ActionPattern & { action: TAction; input: TInput; output: TOutput };
+  linePosture: "returned";
+  named(name: string): NamedReturnedActionLine<TAction, TInput, TOutput>;
+}
+
+/** A returned trigger line whose required input slots remain open. */
+export interface ReturnedTriggerActionLine<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+  TOutput extends Mapping = Mapping,
+> {
+  kind: "step";
+  action: ActionPattern & { action: TAction; input: TInput; output: TOutput };
+  linePosture: "returned";
+  named(name: string): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
+}
+
+export interface NamedReturnedActionLine<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+  TOutput extends Mapping = Mapping,
+> extends ReturnedActionLine<TAction, TInput, TOutput> {
+  readonly [NamedLineBrand]: true;
+  named(name: string): NamedReturnedActionLine<TAction, TInput, TOutput>;
+}
+
+/** A callable action line pinned to a declared refusal. */
+export interface RefusedActionLine<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+  TRefusal extends Mapping = Mapping,
+> extends StepNode {
+  readonly [CompleteInputBrand]: true;
+  action: ActionPattern & { action: TAction; input: TInput; output: TRefusal };
+  linePosture: "refused";
+  named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
+}
+
+/** A refused trigger line whose required input slots remain open. */
+export interface RefusedTriggerActionLine<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+  TRefusal extends Mapping = Mapping,
+> {
+  kind: "step";
+  action: ActionPattern & { action: TAction; input: TInput; output: TRefusal };
+  linePosture: "refused";
+  named(name: string): RefusedTriggerActionLine<TAction, TInput, TRefusal>;
+}
+
+export interface NamedRefusedActionLine<
+  TAction extends InstrumentedAction = InstrumentedAction,
+  TInput extends Mapping = Mapping,
+  TRefusal extends Mapping = Mapping,
+> extends RefusedActionLine<TAction, TInput, TRefusal> {
+  readonly [NamedLineBrand]: true;
+  named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
+}
+
+/** A qualified branch with temporal stages private to that branch. */
+export interface BranchChain {
+  readonly kind: "branch";
+  readonly whereOps: readonly WhereOp[];
+  readonly steps: readonly StepNode[];
+  readonly branchLabel?: string;
+  then(...nodes: StepNode[]): BranchChain;
+  named(name: string): NamedBranchChain;
+}
+
+export interface NamedBranchChain extends BranchChain {
+  readonly [NamedLineBrand]: true;
+  named(name: string): NamedBranchChain;
+}
+
+/** Public executable node accepted by `then`. */
+export type ThenNode = StepNode | BranchChain;
+export type ConsequenceNode =
+  | ActionCall
+  | ReturnedActionLine
+  | RefusedActionLine
+  | BranchChain
+  | RequestChain;
+export type NamedThenNode =
+  | NamedActionCall
+  | NamedReturnedActionLine
+  | NamedRefusedActionLine
+  | NamedBranchChain;
+
+export type ThenClause = StepNode[];
 
 /** The raw object a reaction function returns before it is registered by name. */
 export interface ReactionDeclaration {
@@ -114,18 +260,20 @@ export interface ReactionDeclaration {
   where?: WhereFn;
   /** The declarative form of `where`, when authored as ops — the data the IR keeps. */
   whereOps?: readonly AnyWhereOp[];
-  then: ThenClause;
+  then: StepNode[];
+  path?: string[];
   coverage?: string[];
 }
 
-export interface ReactionCase {
+export interface NestedReactionCase {
   readonly where: readonly unknown[];
-  readonly then?: readonly ThenNode[];
   readonly cases?: readonly ReactionCase[];
 }
+export type ReactionCase = BranchChain | NestedReactionCase;
 
 export interface ReactionPartition {
   readonly declarations: readonly ReactionDeclaration[];
+  then(...nodes: ConsequenceNode[]): ReactionPartition;
 }
 
 export type ReactionResult = ReactionDeclaration | ReactionPartition;
@@ -176,16 +324,33 @@ export interface RequestChain extends StepNode {
 export interface WhenBuilder {
   where(...conditions: Condition[]): WhenBuilderWithWhere;
   where(fn: WhereFn): WhenBuilderWithFunctionWhere;
-  then(...nodes: ThenNode[]): ReactionDeclaration;
-  either(...cases: ReactionCase[]): ReactionPartition;
+  then(node: ConsequenceNode): ReactionPartition;
+  then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
 
 /** A `when` builder after `.where(...)`. */
 export interface WhenBuilderWithWhere {
-  then(...nodes: ThenNode[]): ReactionDeclaration;
-  either(...cases: ReactionCase[]): ReactionPartition;
+  then(node: ConsequenceNode): ReactionPartition;
+  then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
 
 export interface WhenBuilderWithFunctionWhere {
-  then(...nodes: ThenNode[]): ReactionDeclaration;
+  then(...nodes: ConsequenceNode[]): ReactionPartition;
+}
+
+/** Internal compatibility builder for low-level tests and framework channels. */
+export interface LegacyWhenBuilder {
+  where(...conditions: Condition[]): LegacyWhenBuilderWithWhere;
+  where(fn: WhereFn): LegacyWhenBuilderWithFunctionWhere;
+  then(...nodes: StepNode[]): ReactionPartition;
+  either(...cases: ReactionCase[]): ReactionPartition;
+}
+
+export interface LegacyWhenBuilderWithWhere {
+  then(...nodes: StepNode[]): ReactionPartition;
+  either(...cases: ReactionCase[]): ReactionPartition;
+}
+
+export interface LegacyWhenBuilderWithFunctionWhere {
+  then(...nodes: StepNode[]): ReactionPartition;
 }

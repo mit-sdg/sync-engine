@@ -49,25 +49,27 @@ const appVocabulary = vocabulary({
 const { Answering } = appVocabulary.concepts;
 
 const Echo = endpoint("/echo", ({ message }) =>
-  receive({ message }).then(
-    request(Answering.echo, { message }, { message }),
-    respond({ message }),
-  ),
+  receive({ message })
+    .then(request(Answering.echo, { message }, { message }))
+    .then(respond({ message })),
 );
 
 const Reject = endpoint("/reject", () =>
-  receive({}).then(request(Answering.reject, {}), respond({ ok: true })),
+  receive({})
+    .then(request(Answering.reject, {}))
+    .then(respond({ ok: true })),
 );
 
 const Slow = endpoint("/slow", ({ message }) =>
-  receive({ message }).then(
-    request(Answering.slow, { message }, { message }),
-    respond({ message }),
-  ),
+  receive({ message })
+    .then(request(Answering.slow, { message }, { message }))
+    .then(respond({ message })),
 );
 
 const Explode = endpoint("/explode", () =>
-  receive({}).then(request(Answering.explode, {}), respond({ ok: true })),
+  receive({})
+    .then(request(Answering.explode, {}))
+    .then(respond({ ok: true })),
 );
 
 type TestApi = {

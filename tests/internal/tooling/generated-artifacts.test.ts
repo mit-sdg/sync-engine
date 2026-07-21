@@ -26,20 +26,18 @@ const { Sessioning } = vocabularyDeclaration.concepts;
 const Login = endpoint(
   "/login",
   ({ user, session, expiresAt }) =>
-    receive({ user }).then(
-      request(Sessioning.start, { user }, { session, expiresAt }),
-      respond({ session, expiresAt }),
-    ),
+    receive({ user })
+      .then(request(Sessioning.start, { user }, { session, expiresAt }))
+      .then(respond({ session, expiresAt })),
   { input: { required: ["user"] } },
 );
 
 const Current = endpoint(
   "/current",
   ({ session, user }) =>
-    receive({ session }).then(
-      request(Sessioning.current, { session }, { user }),
-      respond({ user }),
-    ),
+    receive({ session })
+      .then(request(Sessioning.current, { session }, { user }))
+      .then(respond({ user })),
   { input: { required: ["session"] } },
 );
 

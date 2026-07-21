@@ -72,10 +72,9 @@ function setup() {
     LedgerAdd: endpoint(
       "/ledger/add",
       ({ session, item, amount, entry }: Vars) =>
-        receive({ session, item, amount }).then(
-          request(Ledger.add, { item, amount }, { entry }),
-          respond({ entry }),
-        ),
+        receive({ session, item, amount })
+          .then(request(Ledger.add, { item, amount }, { entry }))
+          .then(respond({ entry })),
       { input: { required: ["session", "item", "amount"], defaults: { note: null } } },
     ),
     LedgerAddForbidden: endpoint("/ledger/add", ({ session, item, amount }: Vars) =>
@@ -86,9 +85,11 @@ function setup() {
       receive({}).then(respond({ latest: theLatest() })),
     ),
     LedgerLabel: endpoint("/ledger/label", ({ item, label }: Vars) =>
-      receive({ item }).either(
-        where(labelOf({ item }).is({ label })).then(respond({ label })),
-        where(no(labelOf({ item }))).then(respond({ label: null })),
+      receive({ item }).then(
+        where(labelOf({ item }).is({ label })).then(respond({ label })).named("found"),
+        where(no(labelOf({ item })))
+          .then(respond({ label: null }))
+          .named("missing"),
       ),
     ),
     LedgerKnownLabel: endpoint("/ledger/known-label", ({ item, label }: Vars) =>
@@ -97,9 +98,13 @@ function setup() {
         .then(respond({ label })),
     ),
     LedgerPair: endpoint("/ledger/pair", () =>
-      receive({}).either(
-        where(labelOf({ item: "x" }).is({ label: "a" })).then(respond({ left: null, right: "b" })),
-        where(labelOf({ item: "x" }).is({ label: "b" })).then(respond({ left: "a", right: null })),
+      receive({}).then(
+        where(labelOf({ item: "x" }).is({ label: "a" }))
+          .then(respond({ left: null, right: "b" }))
+          .named("a"),
+        where(labelOf({ item: "x" }).is({ label: "b" }))
+          .then(respond({ left: "a", right: null }))
+          .named("b"),
       ),
     ),
     FeedCreated: endpoint("/ledger/feed", () =>

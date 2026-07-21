@@ -61,7 +61,7 @@ function setup() {
   // deliver concept refusals and runtime faults.
   const composition = {
     Claim: endpoint("/seats/claim", ({ seat }: Vars) =>
-      receive({ seat }).then(request(Seating.claim, { seat }), respond({ seat })),
+      receive({ seat }).then(request(Seating.claim, { seat })).then(respond({ seat })),
     ),
     DoubleFirst: endpoint("/seats/double", ({ seat }: Vars) =>
       receive({ seat }).then(request(Seating.claim, { seat })),
@@ -70,7 +70,9 @@ function setup() {
       receive({ seat }).then(request(Seating.claim, { seat })),
     ),
     Audit: endpoint("/seats/audit", () =>
-      receive().then(request(Seating.audit, {}), respond({ ok: true })),
+      receive()
+        .then(request(Seating.audit, {}))
+        .then(respond({ ok: true })),
     ),
   };
   const app = assemble({ vocabulary: words, composition });
@@ -247,10 +249,9 @@ describe("faults while forming response input", () => {
     const instrumented = reaction.instrumentConcept(boundary, "RequestBoundary");
     const { Seating } = reaction.instrument({ Seating: new SeatingConcept() });
     const Audit = ({ requestId }: Vars) =>
-      when(instrumented.request, { path: "/seats/audit", requestId }).then(
-        request(Seating.audit, {}),
-        request(instrumented.respond, { ok: true, requestId }),
-      );
+      when(instrumented.request, { path: "/seats/audit", requestId })
+        .then(request(Seating.audit, {}))
+        .then(request(instrumented.respond, { ok: true, requestId }));
     reaction.register({
       Audit,
       ...refusalFunnel(instrumented),

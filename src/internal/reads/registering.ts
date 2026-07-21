@@ -14,7 +14,6 @@ import type {
   InstrumentedQuery,
   ReactionDeclaration,
   StepNode,
-  ThenNode,
   TriggerPattern,
   WhereFn,
 } from "../reactions/types.ts";
@@ -685,7 +684,7 @@ export class Registry {
   }
 
   /** Resolve refs through a then pipeline: step actions and transforms. */
-  private resolveThenNodes(nodes: readonly ThenNode[], site: string): void {
+  private resolveThenNodes(nodes: readonly StepNode[], site: string): void {
     for (const node of nodes) {
       this.resolveActionPatternRefs(node.action, site);
       const authored = node.transformOps;
@@ -896,7 +895,7 @@ export class Registry {
           undefined,
           reaction.name,
         ),
-      },
+      } as StepNode,
     };
     const whereFn = liveOf(reaction) as WhereFn | undefined;
     if (whereFn !== undefined) {
