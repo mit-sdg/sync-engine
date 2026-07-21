@@ -10,8 +10,8 @@ declaration determines whether the line always supplies a row, may drop the
 current match, or continues once per row. An undeclared query may answer one
 record or an array and is treated as potentially many. `no`, `whether`, and
 `.is.not` add explicit absence or inequality behavior. `form`, the selection
-folds, and the producer's declaration control the result shape. `either`
-groups reaction cases whose exclusivity registration can prove.
+folds, and the producer's declaration control the result shape. A `then(...)`
+group states independent siblings; later groups state temporal dependence.
 
 ## Actions, refusals, and faults
 
@@ -62,12 +62,21 @@ produced. Once an evaluation records a firing, consumption prevents that
 reaction from evaluating the trigger again; other reactions consume it
 independently.
 
-Every `request` consequence receives a fresh action id, inherits the trigger's
-flow, and records the asking reaction as `by`. A multi-step endpoint is
-lowered to separate reactions. Later steps watch the preceding returned ask,
-use `by` to select their own chain, and use `earlier` when they need the
-original outside input. The reading-circle assembled read-back shows this for
-`ChooseReading` and `ChooseReading#2`.
+Every callable consequence receives a fresh action id, inherits the trigger's
+flow, and records the asking reaction as `by`. Several members of one
+`then(...)` group are independent siblings: every matching sibling asks its
+action, and the group carries no priority, exclusivity, or coverage claim. A
+multi-member group requires one stable trailing `.named(...)` label per
+sibling. Labels determine lowered path names and remain stable when source
+order changes.
+
+A later `.then(...)` group extends each current path independently after that
+path's preceding action returns. It does not wait for every sibling and is not
+a join. The engine lowers stages to separate reactions, pins each later
+trigger to the exact preceding `by` provenance, and uses `earlier` when a
+stage needs the original outside input. A refusal or fault stops that path
+while other siblings continue. A qualified sibling may carry its own chain
+before its trailing branch label.
 
 The advanced `when([...])` form joins matching occurrences within one flow and
 consumes the joint match. Ordinary application reactions use one trigger,
@@ -116,7 +125,7 @@ built-in relations read as closed lines over bound values.
 Registration rejects a fresh name under a denial, an opened name that no later
 line or consequence reads ("omit the key instead"), and a cycle between
 views. It also generates a read-back for every reaction. The read-back identifies
-opened and tested names, fan-out, dropped cases, and coverage assumptions.
+paths, stages, opened and tested names, fan-out, and dropped cases.
 `inspectAssembly(assemble(...)).readBack` returns the application's complete
 read-back as one string.
 [The example book](./book.md) quotes these read-backs entry by entry.
@@ -147,19 +156,18 @@ bindings do not escape. Stacked `where` blocks are alternatives; any matching
 block can supply a result.
 
 The engine checks a concept query's declared promise whenever it reads the
-query. For a view, registration infers a cardinality bound from the body and
-checks it against the declaration. Chains of at-most-one links remain at most
-one, an uncollapsed `many` line makes the body many, and stacked alternatives
-are treated as many. When inference cannot establish the declared bound, the
-engine checks it at runtime and notes that check in the read-back.
+query and checks a view's declared promise whenever it reads the view. The
+read-back states the declaration and the runtime integrity check. Inferred
+cardinality is advisory analysis over exported IR, not a registration
+requirement.
 
 A **former** names a formed answer. Its builder receives separate input and
 free binding bags. Its body matches in `where` and produces in `form`, and
 production is terminal: nothing in a `where` chooses output. A record former
 promises one answer unless it ends in `.optional()`. A selection-root former
 is many-valued and rejects `.optional()`. The human name carries neither its
-inputs nor its cardinality. Registration proves the body's bound against the
-promise the same way it does for views. A record's `where` cannot open a name
+inputs nor its cardinality. The engine checks the promise when the former is
+evaluated. A record's `where` cannot open a name
 from a `many` source. Use `each` when the result should contain rows.
 
 Production handles absence and plurality in three ways:
@@ -195,55 +203,41 @@ coordination, and rollback limits live under
 [Ordering and state-read timing](./consistency-and-operations.md#ordering-and-state-read-timing).
 
 Applications must not use reaction registration order as priority or conflict
-resolution. Reactions that can answer the same outside request must partition
-their conditions — by stating disjoint alternatives, or by claiming the
-partition with `either` below. See
+resolution. Independent reactions and sibling branches may all match. If
+several branches answer one outside request, the boundary accepts one response
+ask and refuses later ones with `NOT_PENDING`; the caller may receive any one
+of the matching answers. See
 [Consistency and operations](./consistency-and-operations.md) for the
 ordering and state-read boundary.
 
-## Proven partitions and `either`
+## Sibling paths and endpoint settlement
 
-Separate reactions are independent alternatives: every one whose conditions
-match may fire. `either(case, …)` makes a narrower claim under one reaction
-name. Each case is a `where … then …` pair, cases may nest, and a nested case
-inherits its parent's conjunction without restating it. Authors can place the
-partition directly after `when(...)` or after a declarative `.where(...)`
-prefix. A function-valued `where` is opaque to registration and cannot lead to
-`either`.
+One `then(...)` group may carry several alternatives:
 
-Registration accepts the claim only with a disjointness witness for every
-sibling pair, and it recognizes three shapes:
+```ts
+.then(
+  where(leftCase).then(Left.handle({ item })).named("left"),
+  where(rightCase).then(Right.handle({ item })).named("right"),
+)
+```
 
-1. **literal split** — one line tested against two distinct literals;
-2. **existence split** — a line against `no(…)` over unifiable patterns;
-3. **value split** — `.is({ x })` against `.is.not({ x })` on the same output field.
-
-Literal and value witnesses require an at-most-one relation, because two
-different rows of a `many` relation could satisfy both cases. Without a
-witness, registration identifies the offending pair. The author can rewrite
-the split or keep separate reactions.
-
-Registration verifies that cases are disjoint. It does not infer that the
-cases cover every input. When a plain line could drop without a sibling
-answering, the read-back prints `assumes … fills`, and the exported reaction
-keeps that assumption.
-
-Each leaf lowers to one single-case reaction. The first leaf keeps the
-composition export's name, later leaves add `:2`, `:3`, and so on, and a
-consequence chain keeps its `#2`, `#3` step suffix beneath that leaf. The
-leaves remain one registration family: replacing a directly registered
-partition removes every previous leaf in that family. Registration rejects a
-derived leaf or chain name that collides with another authored reaction.
+The engine lowers these to paths named `Reaction:left` and `Reaction:right`.
+If both conditions hold, both fire. If neither holds, neither fires. Labels
+record provenance and establish no preference. A later single consequence
+creates `Reaction:left#2` and `Reaction:right#2`, each triggered by the return
+from its own first stage. Repeated sibling groups expand the set of paths; they
+do not create a runtime join.
 
 At the application boundary, `receive(...)` supplies the outside-request
-trigger to the same partition builder. Path pinning, input contracts, request
+trigger to the same sibling tree. Path pinning, input contracts, request
 correlation, response shaping, and wire derivation remain endpoint concerns.
-An endpoint records at most one answer. An uncovered input, an uncovered
-partition, a dropped plain line, or a failed `where` can leave the request
-unanswered. Parallel endpoint declarations on one path remain ordinary
-alternatives, so any matching declaration may answer; `NOT_PENDING` refuses a
-second answer. [Cancellation](./consistency-and-operations.md#cancellation)
-owns what timeout and abort do with a pending call.
+An endpoint records at most one answer. An uncovered input, a dropped plain
+line, or a failed `where` can leave the request unanswered. Parallel endpoint
+declarations and sibling answers remain ordinary alternatives, so any matching
+path may answer; `NOT_PENDING` refuses another answer after settlement.
+[Cancellation](./consistency-and-operations.md#cancellation) owns what timeout
+and abort do with a pending call. Disjointness and coverage belong to advisory
+analysis over exported IR.
 
 ## Boundary, gateway, and client
 

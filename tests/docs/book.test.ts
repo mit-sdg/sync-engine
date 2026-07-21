@@ -208,10 +208,10 @@ const readBackPins = [
     "book.ClearedReadingClosesDiscussion",
     "  when Selecting.clear — opens (selection)",
     "  Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)",
-    "  then request Discussing.close (discussion)",
+    "  then Discussing.close (discussion)",
   ],
   [
-    "the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); the body proves it",
+    "the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); checked when read",
     "  Gathering._membership (gathering: circle, member) has (joined) — always fills; opens (joined)",
   ],
   [
@@ -223,97 +223,97 @@ const readBackPins = [
     "  when Gathering.leave — opens (circle, host)",
     "  Gathering._get (gathering: circle) has (host) — existence — fires once or drops the case",
     "  Gathering._members (gathering: circle) has (member) — fans out once per distinct fill; opens (member)",
-    "  then request Gathering.leave (gathering: circle, member)",
+    "  then Gathering.leave (gathering: circle, member)",
   ],
   [
     "book.OpenDiscussionOnce",
     "  when Selecting.choose — opens (selection)",
     "  no Discussing._openFor (subject: selection) — holds only when no such row exists — drops the case otherwise",
-    "  then request Discussing.open (subject: selection)",
+    "  then Discussing.open (subject: selection)",
   ],
   [
-    "the open discussion of (circle) — inputs (circle); outputs (discussion); bindings (selection) — promises at most one (discussion); the body proves it",
+    "the open discussion of (circle) — inputs (circle); outputs (discussion); bindings (selection) — promises at most one (discussion); checked when read",
     "  Selecting._current (scope: circle) has (selection) — fills or drops the case; opens (selection)",
     "  Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)",
   ],
   [
-    "the circle card (circle) — inputs (circle); bindings (name, host, reading); promises exactly one; the body proves at most one — the declaration is enforced at run",
+    "the circle card (circle) — inputs (circle); bindings (name, host, reading); promises exactly one; checked when formed",
   ],
   [
-    "the current reading of (circle) — inputs (circle); bindings (reading); promises at most one; the body proves it",
+    "the current reading of (circle) — inputs (circle); bindings (reading); promises at most one; checked when formed",
   ],
   [
-    "the response count of (discussion) — inputs (discussion); bindings (response); promises exactly one; the body proves it",
+    "the response count of (discussion) — inputs (discussion); bindings (response); promises exactly one; checked when formed",
   ],
   [
     "book.AddResponse",
     "  when RequestBoundary.request — opens (circle, reading, member, text, requestId)",
-    "  (member) may respond in (circle) (member, circle) — existence — fires once or drops the case",
+    '  view "(member) may respond in (circle)" with (member, circle) — existence — fires once or drops the case',
     "  Selecting._current (scope: circle) has (selection, item: reading) — fills or drops the case; opens (selection); tests (item) — may drop the case",
     "  Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)",
-    "  then request Discussing.respond (discussion, author: member, text)",
+    "  then Discussing.respond (discussion, author: member, text)",
   ],
   [
     "book.AddResponse#2",
     "  when Discussing.respond — opens (discussion, member, text, response)",
     '  earlier, RequestBoundary.request (circle, reading, member, text, requestId, path: "/circles/respond") — reads the flow\'s record, once per matching occurrence',
-    "  then request RequestBoundary.respond (response, requestId)",
+    "  then RequestBoundary.respond (response, requestId)",
   ],
   [
     "book.RejectNonmemberResponse",
     "  when RequestBoundary.request — opens (circle, reading, member, text, requestId)",
-    "  (member) may not respond in (circle) (member, circle) — existence — fires once or drops the case",
-    '  then request RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)',
+    '  view "(member) may not respond in (circle)" with (member, circle) — existence — fires once or drops the case',
+    '  then RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)',
   ],
   [
     "book.LeavingRoutesByHost:member",
     "  when Gathering.leave — opens (circle, member)",
     "  Selecting._current (scope: circle) — existence — fires once or drops the case",
     "  Gathering._get (gathering: circle) and not (host: member) — existence — fires once or drops the case",
-    "  then request Selecting.clear (scope: circle)",
+    "  then Selecting.clear (scope: circle)",
   ],
   [
     "book.LeavingRoutesByHost:host",
     "  when Gathering.leave — opens (circle, member)",
     "  Selecting._current (scope: circle) — existence — fires once or drops the case",
     "  Gathering._get (gathering: circle) has (host: member) — existence — fires once or drops the case",
-    "  then request Discussing.open (subject: circle)",
+    "  then Discussing.open (subject: circle)",
   ],
   [
     "book.ChooseReadingHostOnly:non-host",
     "  when RequestBoundary.request — opens (circle, member, reading, requestId)",
     "  Gathering._get (gathering: circle) and not (host: member) — existence — fires once or drops the case",
-    '  then request RequestBoundary.respond (error: "HOST_ONLY", requestId)',
+    '  then RequestBoundary.respond (error: "HOST_ONLY", requestId)',
   ],
   [
     "book.ChooseReadingHostOnly:host",
     "  when RequestBoundary.request — opens (circle, member, reading, requestId)",
     "  Gathering._get (gathering: circle) has (host: member) — existence — fires once or drops the case",
-    "  then request Selecting.choose (scope: circle, item: reading)",
+    "  then Selecting.choose (scope: circle, item: reading)",
   ],
   [
     "book.ChooseReadingHostOnly:host#2",
     "  when Selecting.choose — opens (circle, reading, selection)",
     '  earlier, RequestBoundary.request (circle, member, reading, requestId, path: "/circles/choose") — reads the flow\'s record, once per matching occurrence',
-    "  then request RequestBoundary.respond (selection, requestId)",
+    "  then RequestBoundary.respond (selection, requestId)",
   ],
   [
     "book.GetCircleName:found",
     "  when RequestBoundary.request — opens (circle, requestId)",
     "  Gathering._get (gathering: circle) has (name) — fills or drops the case; opens (name)",
-    "  then request RequestBoundary.respond (name, requestId)",
+    "  then RequestBoundary.respond (name, requestId)",
   ],
   [
     "book.GetCircleName:missing",
     "  when RequestBoundary.request — opens (circle, requestId)",
     "  no Gathering._get (gathering: circle) — holds only when no such row exists — drops the case otherwise",
-    '  then request RequestBoundary.respond (error: "NO_SUCH_CIRCLE", requestId)',
+    '  then RequestBoundary.respond (error: "NO_SUCH_CIRCLE", requestId)',
   ],
   [
-    "the circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises exactly one; the body proves it",
+    "the circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises exactly one; checked when formed",
   ],
   [
-    "the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; the body proves it",
+    "the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; checked when formed",
   ],
 ].map((section) => section.join("\n"));
 
@@ -322,9 +322,6 @@ const errorPins = {
     'Reaction "bad.CloseTheAbsentDiscussion": "discussion" is new inside no Discussing._openFor; no(...) can only test names bound by an earlier plain line.',
   unusedName:
     'Reaction "bad.ReopenOnJoin": "reading" is opened and never used — omit the key instead.',
-  noWitness:
-    "either(...): cases 1 and 2 can both match. " +
-    "Distinguish them with a literal, existence, or value split.",
   foldAtMostOne:
     'Former "the first reading of (circle)": the source already promises at most one row; use a plain line or whether(...), not a fold.',
   recordFanOut:

@@ -16,7 +16,6 @@
  */
 
 import {
-  request,
   earlier,
   faulted,
   reaction,
@@ -25,6 +24,7 @@ import {
   type Vars,
   when,
 } from "../reactions/index.ts";
+import { actionLine } from "../reactions/nodes.ts";
 import type { RequestBoundaryActions } from "./endpoints.ts";
 import { FRAMEWORK_ERROR_KIND_FIELD } from "./errors.ts";
 
@@ -40,18 +40,18 @@ export function refusalFunnel(boundary: RequestBoundaryActions): Record<string, 
   const DeliverRefusalToAsker = reaction(({ requestId, message }: Vars) =>
     when(refused({ message }, { except }))
       .where(earlier(boundary.request, { requestId }))
-      .then(request(boundary.respond, { requestId, error: message })),
+      .then(actionLine(boundary.respond, { requestId, error: message }) as never),
   );
 
   const DeliverFaultToAsker = reaction(({ requestId }: Vars) =>
     when(faulted({}, { exceptBy: [FAULT_REACTION] }))
       .where(earlier(boundary.request, { requestId }))
       .then(
-        request(boundary.respond, {
+        actionLine(boundary.respond, {
           requestId,
           error: FAULT_REPLY,
           [FRAMEWORK_ERROR_KIND_FIELD]: "framework",
-        }),
+        }) as never,
       ),
   );
 

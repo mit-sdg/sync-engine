@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { earlier, request, when } from "@sync-engine/internal/reactions/words.ts";
+import { earlier } from "@sync-engine/internal/reactions/words.ts";
+import { request, when } from "./historical-authoring.ts";
 import { declarationsOf } from "@sync-engine/internal/reactions/partitions.ts";
 import type { InstrumentedAction } from "@sync-engine/internal/reactions/types.ts";
 

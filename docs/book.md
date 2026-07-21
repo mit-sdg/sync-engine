@@ -62,7 +62,7 @@ The engine states this back at registration:
 book.ClearedReadingClosesDiscussion
   when Selecting.clear — opens (selection)
   Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)
-  then request Discussing.close (discussion)
+  then Discussing.close (discussion)
 ```
 
 **☒ Caught mistake — the row grabbed out of habit.** A later reaction pulled
@@ -98,13 +98,13 @@ const theStandingOf = view(
 
 - **English**: whether this member has joined this circle.
 - **Runs**: both inputs are bound; the engine reads the one promised row.
-- **None / many**: neither can happen — the promise is `one`, and the view's
-  own `one()` terminal carries that promise outward, proven at
-  registration.
+- **None / many**: neither can happen without an integrity fault. The view's
+  own `one()` terminal carries that promise outward, and the engine checks it
+  when the view is read.
 - **Opens**: `joined`.
 
 ```
-the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); the body proves it
+the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); checked when read
   Gathering._membership (gathering: circle, member) has (joined) — always fills; opens (joined)
 ```
 
@@ -142,8 +142,8 @@ const nonmemberMayNotRespond = view(
   Gathering._membership (gathering: circle, member) has (joined: true) — existence — fires once or drops the case
 ```
 
-The second view is a deliberate twin, not a leftover: the pair partitions the
-answer so that each boundary arm in entry 10 can ask its own question.
+The second view is a deliberate twin, not a leftover: it gives the boundary's
+denial branch its own named question.
 
 ## 4 · A bound name tests, and a many-relation fans out
 
@@ -175,7 +175,7 @@ book.HostLeavingDissolvesCircle
   when Gathering.leave — opens (circle, host)
   Gathering._get (gathering: circle) has (host) — existence — fires once or drops the case
   Gathering._members (gathering: circle) has (member) — fans out once per distinct fill; opens (member)
-  then request Gathering.leave (gathering: circle, member)
+  then Gathering.leave (gathering: circle, member)
 ```
 
 ## 5 · `no` — denial
@@ -201,7 +201,7 @@ const OpenDiscussionOnce = reaction(({ selection }) =>
 book.OpenDiscussionOnce
   when Selecting.choose — opens (selection)
   no Discussing._openFor (subject: selection) — holds only when no such row exists — drops the case otherwise
-  then request Discussing.open (subject: selection)
+  then Discussing.open (subject: selection)
 ```
 
 **☒ Caught mistake — asking the denial to hand something back.** An author
@@ -247,13 +247,11 @@ const theCircleCard = former("the circle card (circle)", ({ circle }, { name, ho
   case while it is blank, so a chain meant to survive absence stays under
   `whether`.
 
-The former's read-back also shows a promise being enforced rather than proven:
-`_get` promises at most one, so the body proves at most one card — but an
-unmarked former sentence promises exactly one. The author declares that the
-circle exists, and the engine checks that declaration at runtime:
+The former's read-back states its record-root promise. The author declares
+that the circle exists, and the engine checks that declaration when forming:
 
 ```
-the circle card (circle) — inputs (circle); bindings (name, host, reading); promises exactly one; the body proves at most one — the declaration is enforced at run
+the circle card (circle) — inputs (circle); bindings (name, host, reading); promises exactly one; checked when formed
 ```
 
 ## 7 · A view with outputs
@@ -274,15 +272,15 @@ const theOpenDiscussionOf = view(
 - **English**: the discussion open for the circle's current selection.
 - **Runs**: two at-most-one reads chained through `selection`, which stays
   local to the view; callers see only the declared output.
-- **None / many**: a chain of at-most-one links proves at most one result, and
-  registration checks that proof against the declared `optional()` terminal. A
+- **None / many**: `optional()` declares at most one result, and the engine
+  checks that promise whenever the view is read. A
   caller reading this view plainly drops its case when there is none; a caller
   wrapping it in `whether` gets a blank.
 - **Opens**: at a use-site, whatever fresh names the caller puts in `.is` —
   the view is read exactly like a concept query.
 
 ```
-the open discussion of (circle) — inputs (circle); outputs (discussion); bindings (selection) — promises at most one (discussion); the body proves it
+the open discussion of (circle) — inputs (circle); outputs (discussion); bindings (selection) — promises at most one (discussion); checked when read
   Selecting._current (scope: circle) has (selection) — fills or drops the case; opens (selection)
   Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)
 ```
@@ -298,10 +296,10 @@ const theCurrentReadingOf = former("the current reading of (circle)", ({ circle 
 ```
 
 A record former promises exactly one answer unless it ends in `optional()`.
-Here the body proves the narrower promise outright:
+The read-back states that promise directly:
 
 ```
-the current reading of (circle) — inputs (circle); bindings (reading); promises at most one; the body proves it
+the current reading of (circle) — inputs (circle); bindings (reading); promises at most one; checked when formed
 ```
 
 A host that reads this former plainly drops its row when there is no reading;
@@ -345,7 +343,7 @@ const theResponseCountOf = former(
 - **Opens**: nothing outward; `response` ranges inside the capture.
 
 ```
-the response count of (discussion) — inputs (discussion); bindings (response); promises exactly one; the body proves it
+the response count of (discussion) — inputs (discussion); bindings (response); promises exactly one; checked when formed
 ```
 
 **☒ Caught mistake — a record over a crowd.** Without `each`, a formed record
@@ -399,35 +397,35 @@ nonmember answer:
 ```
 book.AddResponse
   when RequestBoundary.request — opens (circle, reading, member, text, requestId)
-  (member) may respond in (circle) (member, circle) — existence — fires once or drops the case
+  view "(member) may respond in (circle)" with (member, circle) — existence — fires once or drops the case
   Selecting._current (scope: circle) has (selection, item: reading) — fills or drops the case; opens (selection); tests (item) — may drop the case
   Discussing._openFor (subject: selection) has (discussion) — fills or drops the case; opens (discussion)
-  then request Discussing.respond (discussion, author: member, text)
+  then Discussing.respond (discussion, author: member, text)
 ```
 
 ```
 book.AddResponse#2
   when Discussing.respond — opens (discussion, member, text, response)
   earlier, RequestBoundary.request (circle, reading, member, text, requestId, path: "/circles/respond") — reads the flow's record, once per matching occurrence
-  then request RequestBoundary.respond (response, requestId)
+  then RequestBoundary.respond (response, requestId)
 ```
 
 ```
 book.RejectNonmemberResponse
   when RequestBoundary.request — opens (circle, reading, member, text, requestId)
-  (member) may not respond in (circle) (member, circle) — existence — fires once or drops the case
-  then request RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)
+  view "(member) may not respond in (circle)" with (member, circle) — existence — fires once or drops the case
+  then RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)
 ```
 
-Two arms on one path are independent alternatives, and either may fire. The
-twin views from entry 3 make these arms disjoint, but the endpoint declarations
-do not claim that fact. Entries 11 and 12 show how to declare and check a
-partition for an ordinary reaction and at the boundary.
+Two declarations on one path are independent alternatives, and both may fire.
+The twin views from entry 3 happen to answer opposite values, but the endpoint
+declarations make no exclusivity or coverage claim. Entries 11 and 12 show the
+same all-match rule inside one labeled sibling group.
 
 ## 11 · Siblings on an ordinary reaction
 
-_When someone leaves a circle with a current selection, handle a member and
-the host as two exclusive cases._
+_When someone leaves a circle with a current selection, handle the member and
+host paths._
 
 ```ts
 const LeavingRoutesByHost = reaction(({ circle, member }) =>
@@ -444,18 +442,17 @@ const LeavingRoutesByHost = reaction(({ circle, member }) =>
 );
 ```
 
-The `_current` line is a shared prefix: both cases require a selection, and a
-nested `either` would inherit its parent's conditions in the same way. The two
-cases then compare the same at-most-one `host` field with `member`, one for
-difference and one for equality. That value split is the witness registration
-uses to prove that the cases cannot both hold.
+The `_current` line is a shared prefix: both branches require a selection.
+Each branch then compares the same `host` field with `member`, one for
+difference and one for equality. The language does not prove or depend on that
+relationship. It evaluates both branches and runs every one that matches.
 
 ```
 book.LeavingRoutesByHost:member
   when Gathering.leave — opens (circle, member)
   Selecting._current (scope: circle) — existence — fires once or drops the case
   Gathering._get (gathering: circle) and not (host: member) — existence — fires once or drops the case
-  then request Selecting.clear (scope: circle)
+  then Selecting.clear (scope: circle)
 ```
 
 ```
@@ -463,18 +460,16 @@ book.LeavingRoutesByHost:host
   when Gathering.leave — opens (circle, member)
   Selecting._current (scope: circle) — existence — fires once or drops the case
   Gathering._get (gathering: circle) has (host: member) — existence — fires once or drops the case
-  then request Discussing.open (subject: circle)
+  then Discussing.open (subject: circle)
 ```
 
-An authored partition still runs as single-case reactions. The first leaf is
-`book.LeavingRoutesByHost:member`; the second is
-`book.LeavingRoutesByHost:host`. Independent alternatives that may both hold stay
-as separate declarations like entry 10. An `either` with no witness is refused
-rather than treated as an unchecked `or`. The assumptions say what the proof
-does not: neither the shared selection read nor the circle read is proven to
-fill, so both cases may still decline together.
+Each sibling lowers to one single-case reaction. The stable labels produce
+`book.LeavingRoutesByHost:member` and
+`book.LeavingRoutesByHost:host`; reversing the source arguments leaves those
+names unchanged. If both conditions held, both paths would run. If the shared
+selection or both branch reads drop, neither path runs.
 
-## 12 · An endpoint uses the same partition
+## 12 · An endpoint uses the same sibling shape
 
 _Only the host may choose the circle's reading._
 
@@ -496,18 +491,15 @@ const ChooseReadingHostOnly = endpoint(
 
 - **English**: if the requester is not the host, answer with `HOST_ONLY`; if
   the requester is the host, choose.
-- **Runs**: registration proves the two cases disjoint before accepting the
-  declaration — here from `.is({ host: member })` against
-  `.is.not({ host: member })` on the same output field. Reusing the bound name
-  tests equality, `.is.not` tests difference, and `no` tests that no row
-  exists.
+- **Runs**: both sibling conditions are evaluated. Reusing the bound name
+  tests equality, while `.is.not` tests difference. Every matching branch
+  starts; labels establish path names, not priority.
 - **None / many**: `_get` promises at most one row, so when the circle does
-  not exist _both_ cases drop and nobody answers. The engine does not hide
-  that hole — it prints the assumption with each case.
+  not exist _both_ cases drop and nobody answers.
 - **Opens**: `selection`, in the acting case only.
 
 `receive(...)` supplies an outside-request trigger to the same builder that
-entry 11 used after `when(...)`. The partition proof and lowering are the same.
+entry 11 used after `when(...)`. The sibling lowering is the same.
 The endpoint layer adds the path, input contract, request correlation,
 response, and generated wire.
 
@@ -515,26 +507,26 @@ response, and generated wire.
 book.ChooseReadingHostOnly:non-host
   when RequestBoundary.request — opens (circle, member, reading, requestId)
   Gathering._get (gathering: circle) and not (host: member) — existence — fires once or drops the case
-  then request RequestBoundary.respond (error: "HOST_ONLY", requestId)
+  then RequestBoundary.respond (error: "HOST_ONLY", requestId)
 ```
 
 ```
 book.ChooseReadingHostOnly:host
   when RequestBoundary.request — opens (circle, member, reading, requestId)
   Gathering._get (gathering: circle) has (host: member) — existence — fires once or drops the case
-  then request Selecting.choose (scope: circle, item: reading)
+  then Selecting.choose (scope: circle, item: reading)
 ```
 
 ```
 book.ChooseReadingHostOnly:host#2
   when Selecting.choose — opens (circle, reading, selection)
   earlier, RequestBoundary.request (circle, member, reading, requestId, path: "/circles/choose") — reads the flow's record, once per matching occurrence
-  then request RequestBoundary.respond (selection, requestId)
+  then RequestBoundary.respond (selection, requestId)
 ```
 
-**☒ Caught mistake — a partition split by intent, not by form.** The author
-meant the second case as "not found" but wrote it as a plain read — which
-fires exactly when the circle _is_ found, overlapping the first case:
+**A live overlap — a split by intent, not by condition.** The author meant the
+second branch as "not found" but wrote it as a plain read. When the circle is
+found, both branches match and both ask the boundary to answer:
 
 ```ts
 const GetCircleNameFirstDraft = endpoint("/circles/name", ({ circle, name }) =>
@@ -549,12 +541,9 @@ const GetCircleNameFirstDraft = endpoint("/circles/name", ({ circle, name }) =>
 );
 ```
 
-```
-either(...): cases 1 and 2 can both match. Distinguish them with a literal, existence, or value split.
-```
-
-The accepted spelling says the absence it means, and existence against denial
-is a witness the proof accepts:
+The boundary accepts one answer and refuses the other with `NOT_PENDING`.
+Source order and labels choose no winner. The intended spelling says the
+absence directly:
 
 ```ts
 const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
@@ -569,21 +558,22 @@ const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
 );
 ```
 
-This version also closes the printed hole above: one case now answers whenever
-the other drops.
+This version covers found and missing circles because those are the conditions
+the author wrote. Coverage is still not a registration claim; advisory
+analysis over exported IR may report it.
 
 ```
 book.GetCircleName:found
   when RequestBoundary.request — opens (circle, requestId)
   Gathering._get (gathering: circle) has (name) — fills or drops the case; opens (name)
-  then request RequestBoundary.respond (name, requestId)
+  then RequestBoundary.respond (name, requestId)
 ```
 
 ```
 book.GetCircleName:missing
   when RequestBoundary.request — opens (circle, requestId)
   no Gathering._get (gathering: circle) — holds only when no such row exists — drops the case otherwise
-  then request RequestBoundary.respond (error: "NO_SUCH_CIRCLE", requestId)
+  then RequestBoundary.respond (error: "NO_SUCH_CIRCLE", requestId)
 ```
 
 ## 13 · A body of only `whether` lines
@@ -611,17 +601,17 @@ const theCircleActivityOf = former(
   row. A present `selection` is passed to `_openFor` as its `subject`. If
   either query returns no row, the former still returns one record, with the
   missing fields set to `null`.
-- **None / many**: an unmarked former sentence promises exactly one, and this
-  body proves it outright: a `whether` line never drops a case, so there is
-  always exactly one answer — possibly with every leaf blank. Entry 6 made
-  the same promise and needed a runtime cardinality check; this one does not.
+- **None / many**: the record-root former promises exactly one. A `whether`
+  line never drops a case, so this construction answers with one record,
+  possibly with every leaf blank. The engine checks the declared promise when
+  it forms the answer.
 - **Opens**: `reading` and `discussion`, both possibly blank.
 
 ```
-the circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises exactly one; the body proves it
+the circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises exactly one; checked when formed
 ```
 
-The proof cuts both ways. Nothing in this body tests that the circle exists,
+Nothing in this body tests that the circle exists,
 so asking about a circle nobody created still answers — a record of blanks,
 not absence. When blanks are not what you mean, the earlier entries are the
 choices: anchor the body with one plain line (entry 6), or state `optional()`
@@ -648,16 +638,17 @@ return `null`. When both queries return a row, `_responses` receives the
 `discussion` value and the former returns its record once a response exists.
 
 ```
-the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; the body proves it
+the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; checked when formed
 ```
 
 ## Summary
 
 Authors write plain lines and explicit result shapes. Relation declarations
 supply cardinality, and the generated read-back reports opens, tests, fan-out,
-dropped cases, and coverage assumptions. Registration rejects constructions
-whose bindings, promises, or partitions cannot be checked. The examples above
-show the accepted form beside each rejection.
+dropped cases, sibling paths, and temporal stages. Registration rejects
+unbound names, malformed branch labels, and incompatible declarations. The
+examples above show accepted forms beside representative rejections and one
+intentional overlap.
 
 Continue with [Execution semantics](./semantics.md) for the complete rules
 behind these examples, or use the [guided walkthrough](./guide/getting-started.md)

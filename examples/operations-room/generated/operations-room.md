@@ -125,7 +125,7 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
-Form the operations room (room) — inputs (room); bindings (name, host, responder, selection, mitigation, discussion, response, author, text, alert, subject, alertedMitigation) as follows:
+Former "the operations room (room)" — inputs (room); bindings (name, host, responder, selection, mitigation, discussion, response, author, text, alert, subject, alertedMitigation); promises exactly one record — forms:
   a record of
     where Gathering._get (gathering: room) has (name, host)
     room
@@ -153,7 +153,7 @@ Form the operations room (room) — inputs (room); bindings (name, host, respond
 ```
 
 ```former
-Form the responder roster of (room) — inputs (room); bindings (responder) as follows:
+Former "the responder roster of (room)" — inputs (room); bindings (responder); promises exactly one record — forms:
   a record of
     responders: each Gathering._members (gathering: room) has (member: responder)
       form a record of
@@ -161,17 +161,17 @@ Form the responder roster of (room) — inputs (room); bindings (responder) as f
 ```
 
 ```former
-Form the room summary (room) — inputs (room); bindings (name, host) as follows:
+Former "the room summary (room)" — inputs (room); bindings (name, host); promises exactly one record — forms:
   a record of
     where Gathering._get (gathering: room) has (name, host)
     room
     name
     host
-    … the responder roster of (room) (room)
+    … former "the responder roster of (room)" with (room)
 ```
 
 ```former
-Form the required current mitigation (room) — inputs (room); bindings (mitigation) as follows:
+Former "the required current mitigation (room)" — inputs (room); bindings (mitigation); promises exactly one record — forms:
   a record of
     where Selecting._current (scope: room) has (item: mitigation)
     room
@@ -179,7 +179,7 @@ Form the required current mitigation (room) — inputs (room); bindings (mitigat
 ```
 
 ```former
-If available, form the current mitigation (room) — inputs (room); bindings (mitigation) as follows:
+Former "the current mitigation (room)" — inputs (room); bindings (mitigation); promises at most one record — forms:
   a record of
     where Selecting._current (scope: room) has (item: mitigation)
     room
@@ -187,7 +187,7 @@ If available, form the current mitigation (room) — inputs (room); bindings (mi
 ```
 
 ```former
-Form the response stats of (discussion) — inputs (discussion); bindings (response, responder) as follows:
+Former "the response stats of (discussion)" — inputs (discussion); bindings (response, responder); promises exactly one record — forms:
   a record of
     responseCount: the count of Discussing._responses (discussion) has (response, author: responder)
     firstResponse: the response of the first Discussing._responses (discussion) has (response, author: responder)
@@ -203,7 +203,7 @@ when Selecting.choose (scope: room, selection)
 where
   Gathering._members (gathering: room) has (member: responder)
 then
-  request Alerting.raise (recipient: responder, subject: selection)
+  Alerting.raise (recipient: responder, subject: selection)
 ```
 
 ### contributions.AddContribution
@@ -211,11 +211,11 @@ then
 ```reaction
 when RequestBoundary.request (room, responder, text, requestId, path: "/rooms/contribute")
 where
-  (responder) may contribute in (room) (responder, room)
+  view "(responder) may contribute in (room)" with (responder, room)
   Selecting._current (scope: room) has (selection)
   Discussing._openFor (subject: selection) has (discussion)
 then
-  request Discussing.respond (discussion, author: responder, text)
+  Discussing.respond (discussion, author: responder, text)
 ```
 
 ### contributions.AddContribution#2
@@ -225,7 +225,7 @@ when Discussing.respond (discussion, author: responder, text, response), asked b
 where
   earlier, RequestBoundary.request (room, responder, text, requestId, path: "/rooms/contribute")
 then
-  request RequestBoundary.respond (response, requestId)
+  RequestBoundary.respond (response, requestId)
 ```
 
 ### contributions.RejectContribution
@@ -233,9 +233,9 @@ then
 ```reaction
 when RequestBoundary.request (room, responder, text, requestId, path: "/rooms/contribute")
 where
-  (responder) may not contribute in (room) (responder, room)
+  view "(responder) may not contribute in (room)" with (responder, room)
 then
-  request RequestBoundary.respond (error: "RESPONDERS_ONLY", requestId)
+  RequestBoundary.respond (error: "RESPONDERS_ONLY", requestId)
 ```
 
 ### discussion.SelectedMitigationOpensDiscussion
@@ -243,7 +243,7 @@ then
 ```reaction
 when Selecting.choose (selection)
 then
-  request Discussing.open (subject: selection)
+  Discussing.open (subject: selection)
 ```
 
 ### room.ChooseMitigation
@@ -251,7 +251,7 @@ then
 ```reaction
 when RequestBoundary.request (room, mitigation, requestId, path: "/rooms/choose-mitigation")
 then
-  request Selecting.choose (scope: room, item: mitigation)
+  Selecting.choose (scope: room, item: mitigation)
 ```
 
 ### room.ChooseMitigation#2
@@ -261,7 +261,7 @@ when Selecting.choose (scope: room, item: mitigation, selection), asked by room.
 where
   earlier, RequestBoundary.request (room, mitigation, requestId, path: "/rooms/choose-mitigation")
 then
-  request RequestBoundary.respond (mitigation, requestId)
+  RequestBoundary.respond (mitigation, requestId)
 ```
 
 ### room.CreateRoom
@@ -269,7 +269,7 @@ then
 ```reaction
 when RequestBoundary.request (name, host, requestId, path: "/rooms/create")
 then
-  request Gathering.create (name, host)
+  Gathering.create (name, host)
 ```
 
 ### room.CreateRoom#2
@@ -279,7 +279,7 @@ when Gathering.create (name, host, gathering: room), asked by room.CreateRoom
 where
   earlier, RequestBoundary.request (name, host, requestId, path: "/rooms/create")
 then
-  request RequestBoundary.respond (room, requestId)
+  RequestBoundary.respond (room, requestId)
 ```
 
 ### room.GetRoom
@@ -287,7 +287,7 @@ then
 ```reaction
 when RequestBoundary.request (room, requestId, path: "/rooms/get")
 then
-  request RequestBoundary.respond (dashboard: the operations room (room) (room), requestId)
+  RequestBoundary.respond (dashboard: former "the operations room (room)" with (room), requestId)
 ```
 
 ### room.JoinRoom
@@ -295,7 +295,7 @@ then
 ```reaction
 when RequestBoundary.request (room, responder, requestId, path: "/rooms/join")
 then
-  request Gathering.join (gathering: room, member: responder)
+  Gathering.join (gathering: room, member: responder)
 ```
 
 ### room.JoinRoom#2
@@ -305,7 +305,7 @@ when Gathering.join (gathering: room, member: responder, membership), asked by r
 where
   earlier, RequestBoundary.request (room, responder, requestId, path: "/rooms/join")
 then
-  request RequestBoundary.respond (responder, requestId)
+  RequestBoundary.respond (responder, requestId)
 ```
 
 ### DeliverRefusalToAsker
@@ -315,7 +315,7 @@ when any action is refused (message), except RequestBoundary
 where
   earlier, RequestBoundary.request (requestId)
 then
-  request RequestBoundary.respond (requestId, error: message)
+  RequestBoundary.respond (requestId, error: message)
 ```
 
 ### DeliverFaultToAsker
@@ -325,7 +325,7 @@ when any action is faulted, not asked by DeliverFaultToAsker
 where
   earlier, RequestBoundary.request (requestId)
 then
-  request RequestBoundary.respond (requestId, error: "INTERNAL_ERROR", errorKind: "framework")
+  RequestBoundary.respond (requestId, error: "INTERNAL_ERROR", errorKind: "framework")
 ```
 
 ## Endpoint input contracts

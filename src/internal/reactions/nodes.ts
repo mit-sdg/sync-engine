@@ -1,5 +1,13 @@
-import { actions } from "./words.ts";
-import type { BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode } from "./types.ts";
+import { actionPattern } from "./words.ts";
+import type {
+  BranchChain,
+  InstrumentedAction,
+  Mapping,
+  NamedBranchChain,
+  StepNode,
+  ThenNode,
+  UnnamedStepNode,
+} from "./types.ts";
 import type { WhereOp } from "../reads/where-ops.ts";
 
 const NodeBrand: unique symbol = Symbol("NodeBrand");
@@ -25,7 +33,7 @@ function stepWith(
 ): StepNode {
   const node = {
     kind: "step" as const,
-    action: actions([action, input, output])[0],
+    action: actionPattern(action, input, output),
     linePosture,
   } as unknown as StepNode;
   node.responds = (pattern: Mapping = {}) => stepWith(action, input, "returned", pattern);
@@ -43,25 +51,44 @@ export function actionLine(action: InstrumentedAction, input: Mapping): StepNode
 }
 
 /** Qualify and privately chain one sibling branch. */
-export function branchChain(whereOps: readonly WhereOp[], first: StepNode): BranchChain {
+export function branchChain(whereOps: readonly WhereOp[], first: UnnamedStepNode): BranchChain {
+  if (first.branchLabel !== undefined) {
+    throw new Error(
+      "name the qualified branch after its local action chain, not an action inside it.",
+    );
+  }
   const steps: StepNode[] = [first];
   const branch = {
     kind: "branch" as const,
     whereOps,
     steps,
     then(...nodes: StepNode[]) {
-      if (
-        nodes.length === 0 ||
-        nodes.some((node) => !isReactionNode(node) || node.kind !== "step")
-      ) {
-        throw new Error("a branch-local then(...) takes callable action lines.");
+      if (nodes.length !== 1) {
+        throw new Error("a branch-local then(...) takes one callable action line.");
       }
-      steps.push(...nodes);
+      const [node] = nodes;
+      if (!isReactionNode(node) || node.kind !== "step") {
+        throw new Error("a branch-local then(...) takes one callable action line.");
+      }
+      if (node.branchLabel !== undefined) {
+        throw new Error(
+          "name the qualified branch after its local action chain, not an action inside it.",
+        );
+      }
+      steps.push(node);
       return branch;
     },
     named(name: string) {
-      Object.defineProperty(branch, "branchLabel", { value: name, configurable: true });
-      return branch;
+      const terminal = {
+        kind: "branch" as const,
+        whereOps,
+        steps,
+        branchLabel: name,
+        named(next: string) {
+          return branch.named(next);
+        },
+      } as unknown as NamedBranchChain;
+      return brandReactionNode(terminal);
     },
   } as unknown as BranchChain;
   return brandReactionNode(branch);

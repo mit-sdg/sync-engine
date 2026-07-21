@@ -193,7 +193,7 @@ describe("views: definition", () => {
       when(Filing.add, { id: file })
         .where(count(Filing._sharedWith, { id: file }, n) as unknown as WhereOp)
         .then(request(Recorder.record, { tag: file })),
-    ).toThrow("count(...) cannot be used in a reaction condition");
+    ).toThrow("count(...) cannot be used here");
   });
 });
 
@@ -452,7 +452,7 @@ describe("views: rendering", () => {
       ].join("\n"),
     );
     expect(renderReaction(app.reactions[0])).toContain(
-      "  (requester) may read (file) (requester, file)",
+      '  view "(requester) may read (file)" with (requester, file)',
     );
   });
 

@@ -67,7 +67,6 @@ export interface LoweredReaction {
   whereFn?: WhereFn;
   /** The one consequence this reaction asks for. */
   step: StepNode;
-  coverage?: string[];
 }
 
 export interface LowerOutcome {
@@ -237,7 +236,6 @@ function lowerChainStep(
       when: [trigger],
       ...(ops.length > 0 ? { whereOps: ops } : {}),
       step,
-      ...(decl.coverage !== undefined ? { coverage: [...decl.coverage] } : {}),
     },
   };
 }
@@ -266,7 +264,6 @@ export function lowerReaction(name: string, decl: ReactionDeclaration): LowerOut
           ? { whereFn: decl.where }
           : {}),
       step: chain[0],
-      ...(decl.coverage !== undefined ? { coverage: [...decl.coverage] } : {}),
     },
   ];
 
@@ -617,7 +614,6 @@ export function serializeReaction(reaction: LoweredReaction): ReactionIR {
     when,
     where,
     then: [encodeConsequence(reaction.step, vars)],
-    ...(reaction.coverage !== undefined ? { coverage: [...reaction.coverage] } : {}),
   };
   if (reaction.whereFn !== undefined) withLive(ir, reaction.whereFn);
   return ir;

@@ -90,6 +90,34 @@ reaction(() =>
 reaction(() =>
   when(Answering.start({}).responds()).then(
     where(Answering._answer({}).is({ value: 1 }))
+      // @ts-expect-error A branch-local stage has exactly one consequence.
+      .then(Answering.record({ value: 1 }), Answering.record({ value: 2 }))
+      .named("many"),
+  ),
+);
+
+reaction(() =>
+  when(Answering.start({}).responds()).then(
+    where(Answering._answer({}).is({ value: 1 }))
+      // @ts-expect-error A branch-local action is labeled only at the path endpoint.
+      .then(Answering.record({ value: 1 }).named("inner"))
+      .named("outer"),
+  ),
+);
+
+reaction(() =>
+  when(Answering.start({}).responds()).then(
+    where(Answering._answer({}).is({ value: 1 }))
+      .then(Answering.record({ value: 1 }))
+      .named("done")
+      // @ts-expect-error A named branch is terminal and cannot grow another stage.
+      .then(Answering.record({ value: 2 })),
+  ),
+);
+
+reaction(() =>
+  when(Answering.start({}).responds()).then(
+    where(Answering._answer({}).is({ value: 1 }))
       // @ts-expect-error A qualified consequence also supplies every required action input.
       .then(Answering.record({}))
       .named("incomplete"),

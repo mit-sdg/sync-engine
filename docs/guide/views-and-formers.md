@@ -40,11 +40,11 @@ The contribution boundary accepts the two views as its policy. The affirmative
 view admits the success case; the negative view supplies the explicit denial.
 The success case then follows the current selection to its open discussion.
 Changing the policy does not copy or edit that request chain. The [application
-boundary chapter](application-boundary.md#receive-request-respond) teaches the
+boundary chapter](application-boundary.md#receive-ask-respond) teaches the
 endpoint frame that consumes these views.
 
 The negative view matters because both boundary cases share one path. For an
-existing room, the two views partition the permission question: one case keeps
+existing room, the two views answer opposite permission states: one case keeps
 a permitted responder, and the other returns an explicit denial. The success
 case still requires a current selection and an open discussion.
 
@@ -97,7 +97,7 @@ The input bag makes `room` the callable former's one named input.
 member row in the query's declared order. An empty room still has one roster,
 with an empty `responders` array.
 
-The next former asks for one current mitigation. Its unmarked sentence promises
+The next former asks for one current mitigation. Its record-root form promises
 one formed value.
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
@@ -126,6 +126,11 @@ export const currentMitigation = former(
 After a selection, both versions return the chosen mitigation. The difference
 appears only when the query finds no row, so the former makes absence a local,
 visible choice.
+
+The human name is inert prose. The input and free-binding bags declare the
+call shape, the formed tree declares the output shape, and `optional()` alone
+weakens the record-root promise. Words such as `if any` in a name carry no
+runtime meaning.
 
 The source declaration governs matching. A plain line continues once per
 distinct match or drops the candidate when none remain;

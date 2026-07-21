@@ -6,7 +6,6 @@ export const ViewBlockBrand: unique symbol = Symbol("ViewBlockBrand");
 export const LineBrand: unique symbol = Symbol("LineBrand");
 export const RelationViewBrand: unique symbol = Symbol("RelationViewBrand");
 export const FormerUseBrand: unique symbol = Symbol("FormerUseBrand");
-export const ReactionCaseBrand: unique symbol = Symbol("ReactionCaseBrand");
 export const ReactionPartitionBrand: unique symbol = Symbol("ReactionPartitionBrand");
 
 export function brand<T extends object>(value: T, marker: symbol): T {

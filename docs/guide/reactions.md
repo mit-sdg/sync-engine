@@ -15,8 +15,8 @@ import { reaction, when } from "@mit-sdg/sync-engine/language";
 
 ## Ask for one consequence
 
-The first reaction has one returned occurrence under `when` and one request
-under `then`:
+The first reaction has one returned occurrence under `when` and one callable
+action line under `then`:
 
 _Source: [`examples/operations-room/src/composition/packs.ts`](../../examples/operations-room/src/composition/packs.ts)_
 
@@ -26,7 +26,7 @@ export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
 );
 ```
 
-Read it in order: when `Selecting.choose` returns a `selection`, request
+Read it in order: when `Selecting.choose` returns a `selection`, ask
 `Discussing.open` with that selection as its subject.
 
 A line ending in `.responds(...)` watches a **returned occurrence**: the action
@@ -35,13 +35,13 @@ the response pattern binds `selection`.
 The consequence then asks Discussing to open the discussion; Discussing still
 decides whether its own action returns or refuses.
 
-The fixed frame is `when A.action responds … then B.action`. The TypeScript
-source keeps the same order.
+The fixed frame is `when A.action responds … then B.action`. The consequence
+line is the ask; no wrapper changes its posture.
 
 ## Add one required read
 
 Choosing a mitigation should also alert every responder in the room. Keep the
-same `when` and `request` frame, and add one standing read under `where`:
+same `when` and action-line frame, and add one standing read under `where`:
 
 _Source: [`examples/operations-room/src/composition/packs.ts`](../../examples/operations-room/src/composition/packs.ts)_
 
@@ -56,10 +56,10 @@ export const SelectedMitigationAlertsResponders = reaction(({ room, selection, r
 The returned `choose` occurrence supplies `room` from its `scope` input and
 `selection` from its output. The plain `Gathering._members` line reads the
 room's members and binds each one as `responder`. The reaction fires once for each
-row, so Mara and Lin receive separate alert requests. If the query finds no
+row, so Mara and Lin receive separate alert asks. If the query finds no
 members, there is no binding and this reaction does not fire.
 
-The construction retains `when A.action … then request B.action` and adds a
+The construction retains `when A.action … then B.action` and adds a
 plain query line under `where`. `_members` promises many rows, so the line
 continues once per distinct member and stops this reaction when there are
 none. The author writes no quantity at the use-site. Here `room` is already
@@ -75,6 +75,44 @@ independently; the group makes no disjointness or coverage claim.
 
 The [example book](../book.md#11--siblings-on-an-ordinary-reaction) shows a
 shared prefix and an equality split.
+
+## Chain only after a return
+
+A later `.then(...)` starts after the preceding action on its own path returns:
+
+_Source: [reading-circle.ts](../../examples/reading-circle/src/composition/reading-circle.ts)_
+
+```ts
+export const AddResponse = endpoint(
+  "/circles/respond",
+  ({ circle, reading, member, text, selection, discussion, response }) =>
+    receive({ circle, reading, member, text })
+      .where(
+        memberMayRespond({ member, circle }),
+        Selecting._current({ scope: circle }).is({ selection, item: reading }),
+        Discussing._openFor({ subject: selection }).is({ discussion }),
+      )
+      .then(Discussing.respond({ discussion, author: member, text }).responds({ response }))
+      .then(respond({ response })),
+);
+```
+
+The second stage can use `response` because the first action returned it. A
+refusal or fault stops this chain. When a sibling group precedes a later
+stage, each sibling continues independently; the later stage does not wait for
+the other siblings.
+
+A qualified sibling can carry its own chain before its trailing label:
+
+```ts
+where(Gathering._get({ gathering: circle }).is({ host: member }))
+  .then(Selecting.choose({ scope: circle, item: reading }).responds({ selection }))
+  .then(respond({ selection }))
+  .named("host"),
+```
+
+The label names the whole branch. Local stages cannot carry labels, and a
+named branch cannot be extended.
 
 ## Condition on an action's outcome
 

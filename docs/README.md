@@ -21,7 +21,7 @@ Then follow the topical chapters in order:
 1. [Define one behavior](./guide/concepts.md) — specify, implement, register,
    and test a concept by itself.
 2. [Connect independent behaviors](./guide/reactions.md) — add reactions,
-   standing reads, and a proven partition in the application composition.
+   standing reads, sibling alternatives, and explicit temporal chains.
 3. [Application boundary](./guide/application-boundary.md) — specialize the
    reaction frame for outside requests, assemble the application, and carry its
    contract to a client.

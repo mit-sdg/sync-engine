@@ -16,7 +16,7 @@
     "paths": {
       "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
       "@sync-engine/*": ["./src/*/index.ts"],
-      "@sync-engine/internal/reactions": ["./src/internal/reactions/index.ts"],
+      "@sync-engine/internal/reactions": ["./tests/internal/reactions/test-register.ts"],
       "@sync-engine/internal/reactions/*": ["./src/internal/reactions/*"],
       "@sync-engine/internal/reads/*": ["./src/internal/reads/*"],
       "@sync-engine/internal/boundary": ["./src/internal/boundary/index.ts"],

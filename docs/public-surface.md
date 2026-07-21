@@ -84,6 +84,10 @@ Several arguments in one `then(...)` group are independent siblings. Every
 sibling carries a distinct trailing `.named(label)`. A later `then(...)`
 extends every current path independently. `where(...).then(action).named(label)`
 qualifies one sibling without asserting that siblings are disjoint or complete.
+A qualified sibling may chain one action per local `.then(actionLine)` before
+its trailing label. Names opened by a local returned or refused line remain on
+that branch and are available to its local and parent descendants, never to a
+sibling. Once the branch is named it is terminal as a sibling member.
 
 `returned(pattern, options?)` and `refused(pattern, options?)` watch posture
 channels rather than one named action. A returned channel pattern can bind

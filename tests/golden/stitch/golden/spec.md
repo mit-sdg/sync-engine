@@ -70,7 +70,7 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
-Form the open queue () — inputs (); bindings (id, title, priority, status) as follows:
+Former "the open queue ()" — inputs (); bindings (id, title, priority, status); promises exactly one record — forms:
   each Work._list () has (id, title, priority, status) and not (status: "done")
     form a record of
       id
@@ -80,7 +80,7 @@ Form the open queue () — inputs (); bindings (id, title, priority, status) as 
 ```
 
 ```former
-Form the whole queue () — inputs (); bindings (id, title, priority, status) as follows:
+Former "the whole queue ()" — inputs (); bindings (id, title, priority, status); promises exactly one record — forms:
   each Work._list () has (id, title, priority, status)
     form a record of
       id
@@ -90,7 +90,7 @@ Form the whole queue () — inputs (); bindings (id, title, priority, status) as
 ```
 
 ```former
-If available, form the focus () — inputs (); bindings (item, title, priority, status) as follows:
+Former "the focus ()" — inputs (); bindings (item, title, priority, status); promises at most one record — forms:
   a record of
     where Focus._current () has (item)
     where Work._get (id: item) has (title, priority, status)
@@ -101,7 +101,7 @@ If available, form the focus () — inputs (); bindings (item, title, priority, 
 ```
 
 ```former
-Form the history () — inputs (); bindings (sequence, verb, item, title) as follows:
+Former "the history ()" — inputs (); bindings (sequence, verb, item, title); promises exactly one record — forms:
   each History._list () has (sequence, verb, item, title)
     arranged by sequence
     form a record of
@@ -118,7 +118,7 @@ Form the history () — inputs (); bindings (sequence, verb, item, title) as fol
 ```reaction
 when Work.add (item, title)
 then
-  request History.record (verb: "added", item, title)
+  History.record (verb: "added", item, title)
 ```
 
 ### BeginFocus
@@ -126,7 +126,7 @@ then
 ```reaction
 when Work.activate (item)
 then
-  request Focus.begin (item)
+  Focus.begin (item)
 ```
 
 ### RecordStarted
@@ -134,7 +134,7 @@ then
 ```reaction
 when Work.activate (item, title)
 then
-  request History.record (verb: "started", item, title)
+  History.record (verb: "started", item, title)
 ```
 
 ### PauseDisplacedWork
@@ -144,7 +144,7 @@ when Focus.begin (previous)
 where
   Work._get (id: previous)
 then
-  request Work.pause (id: previous)
+  Work.pause (id: previous)
 ```
 
 ### RecordPaused
@@ -152,7 +152,7 @@ then
 ```reaction
 when Work.pause (id: item, item, title, changed: true)
 then
-  request History.record (verb: "paused", item, title)
+  History.record (verb: "paused", item, title)
 ```
 
 ### FinishFocusedWork
@@ -160,9 +160,9 @@ then
 ```reaction
 when Work.complete (item)
 where
-  (item) has focus (item)
+  view "(item) has focus" with (item)
 then
-  request Focus.finish (item)
+  Focus.finish (item)
 ```
 
 ### RecordCompleted
@@ -170,5 +170,5 @@ then
 ```reaction
 when Work.complete (item, title)
 then
-  request History.record (verb: "completed", item, title)
+  History.record (verb: "completed", item, title)
 ```

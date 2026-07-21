@@ -430,7 +430,7 @@ export class Reacting {
    * The read-back: the engine states the quantities the author no longer
    * writes: per reaction, which names open, which values are tested, where multiple
    * cases may result,
-   * or drop; per view, the declared promise beside what the body proves.
+   * or drop; per view, the declared promise checked when the relation is read.
    */
   readBack(): string {
     const app = this.exportReactions();

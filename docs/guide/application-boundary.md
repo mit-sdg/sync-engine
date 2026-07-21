@@ -129,7 +129,7 @@ packs, or with a different contribution policy.
 Each call creates a new application. Changing an option and running again does
 not replace reactions inside an application that is already running.
 
-## Receive, request, respond
+## Receive, ask, respond
 
 An **endpoint** specializes the reaction frame at the application boundary. It
 adds an outside trigger, path, input contract, correlation, and response. The
@@ -161,7 +161,7 @@ export const ChooseMitigation = endpoint(
 );
 ```
 
-`receive` states the JSON keys the caller supplies. The consequence requests
+`receive` states the JSON keys the caller supplies. The consequence asks
 `Selecting.choose` and binds the selection on its returned occurrence.
 `respond` supplies the success JSON after that request returns. When a requested
 action has a refusal, as `Gathering.join` does, the standard refusal path
@@ -172,12 +172,13 @@ The application boundary is independent of HTTP. A local client and an HTTP
 adapter can call the same endpoint declarations.
 
 An endpoint can also answer differently by case. `receive(...)` supplies the
-outside-request trigger to the same proven `either` construction ordinary
-reactions use. Stacked declarations on one path remain independent
-alternatives. [The example book](../book.md)'s partition entries show the
-ordinary reaction first and its application-boundary specialization beside it.
-[Execution semantics](../semantics.md#proven-partitions-and-either) defines the
-proof and lowering.
+outside-request trigger to the same labeled sibling tree ordinary reactions
+use. Every matching branch runs, and labels establish provenance rather than
+priority or exclusivity. If several branches answer, the boundary accepts one
+response and refuses another with `NOT_PENDING`. [The example
+book](../book.md#12--an-endpoint-uses-the-same-sibling-shape) shows this boundary
+specialization, and [Execution semantics](../semantics.md#sibling-paths-and-endpoint-settlement)
+defines its lowering and settlement.
 
 ## Put the standard gateway in front
 

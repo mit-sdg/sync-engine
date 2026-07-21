@@ -7,9 +7,9 @@
  * `unwritten`. Opaque computations and unlowered reactions remain explicit.
  *
  * Some rendered forms describe engine-only behavior: `asked by` records
- * request provenance, `earlier` reads an earlier occurrence in the same flow,
+ * ask provenance, `earlier` reads an earlier occurrence in the same flow,
  * channel triggers watch all actions in one posture, and a multi-clause
- * `when` joins occurrences. The renderer emits only `request` consequences;
+ * `when` joins occurrences. The renderer emits only ask consequences;
  * attestations and world effects are not implemented.
  */
 
@@ -58,7 +58,7 @@ export function renderValue(value: ValueIR): string {
       case "$former": {
         // The consequence carries the former's tree, read at the moment of asking.
         const former = marker.payload as { name: string; in: PatternIR };
-        return `${former.name} (${renderRoles(former.in)})`;
+        return renderNamedRead("former", former.name, former.in);
       }
       case "$lit":
         return renderValue(marker.payload as ValueIR);
@@ -80,6 +80,11 @@ export function renderRoles(pattern: PatternIR): string {
   return Object.entries(pattern)
     .map(([key, value]) => renderRole(key, value))
     .join(", ");
+}
+
+function renderNamedRead(kind: "view" | "former", name: string, input: PatternIR): string {
+  const filled = renderRoles(input);
+  return `${kind} ${JSON.stringify(name)}${filled === "" ? "" : ` with (${filled})`}`;
 }
 
 /**
@@ -143,7 +148,7 @@ const HOLDS_SENTENCES: Record<string, (input: PatternIR) => string> = {
 
 /** Render a view's human name beside its explicit input mapping. */
 function renderViewSentence(name: string, input: PatternIR): string {
-  return Object.keys(input).length === 0 ? name : `${name} (${renderRoles(input)})`;
+  return renderNamedRead("view", name, input);
 }
 
 /** Render one plain, `no`, or `whether` read with its input and output patterns. */
@@ -259,13 +264,13 @@ function renderFormerNode(node: FormerNodeIR, indent: number): string[] {
       }
       for (const spliceIR of node.splices ?? []) {
         const posture = spliceIR.whether ? ", with blank leaves if absent" : "";
-        const filled = `${spliceIR.fragment} (${renderRoles(spliceIR.in)})`;
+        const filled = renderNamedRead("former", spliceIR.fragment, spliceIR.in);
         lines.push(`${pad}  … ${filled}${posture}`);
       }
       return lines;
     }
     case "former": {
-      const filled = `${node.former} (${renderRoles(node.in)})`;
+      const filled = renderNamedRead("former", node.former, node.in);
       return [`${pad}${node.whether ? "whether " : ""}${filled}`];
     }
     case "each": {
@@ -303,17 +308,16 @@ function renderFormerNode(node: FormerNodeIR, indent: number): string[] {
  */
 export function renderFormer(formerIR: FormerIR): string {
   const declaration = `inputs (${formerIR.ins.join(", ")}); bindings (${formerIR.bindings.join(", ")})`;
-  const heading =
-    formerIR.promise === "optional"
-      ? `If available, form ${formerIR.name} — ${declaration} as follows:`
-      : `Form ${formerIR.name} — ${declaration} as follows:`;
+  const heading = `Former ${JSON.stringify(formerIR.name)} — ${declaration}; promises ${
+    formerIR.promise === "optional" ? "at most one record" : "exactly one record"
+  } — forms:`;
   return [heading, ...renderFormerNode(formerIR.body, 1)].join("\n");
 }
 
 // ── Reactions ──────────────────────────────────────────────────────────────────
 
 function renderConsequence(consequence: ConsequenceIR): string {
-  return `request ${consequence.concept}.${consequence.action} (${renderRoles(consequence.input)})`;
+  return `${consequence.concept}.${consequence.action} (${renderRoles(consequence.input)})`;
 }
 
 /**

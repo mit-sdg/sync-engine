@@ -60,7 +60,7 @@ export type {
 } from "../reads/lines.ts";
 export { count, isCountOp, view, where } from "../reads/views.ts";
 export type { CountOp, ViewOp } from "../reads/views.ts";
-export { declarationsOf, isReactionCase, isReactionPartition } from "./partitions.ts";
+export { declarationsOf, isReactionPartition } from "./partitions.ts";
 export { each, form, former } from "../reads/former-builders.ts";
 export type { FreeBindings, InputBindings, OutputBindings } from "../reads/sentence.ts";
 export {
@@ -163,12 +163,9 @@ export type { LoweredReaction, LoweredWhereOp } from "../reads/lower.ts";
 export { isMatcher, oneOf } from "../reads/matchers.ts";
 export { Logging } from "./logging.ts";
 export { Reacting } from "./reacting.ts";
-export { request, earlier, when } from "./words.ts";
-export type { WhenOptions } from "./words.ts";
+export { earlier, when } from "./words.ts";
 
 export type {
-  RequestChain,
-  ActionList,
   ActionOutcome,
   ActionPattern,
   ChannelPattern,
@@ -182,18 +179,15 @@ export type {
   OutcomeKind,
   StepNode,
   ReactionDeclaration,
-  ReactionCase,
   ReactionPartition,
   ReactionResult,
   Reaction,
-  ThenClause,
   ThenNode,
   TriggerPattern,
   Vars,
   WhenBuilder,
   WhenBuilderWithWhere,
   WhenBuilderWithFunctionWhere,
-  WhenClause,
   WhereFn,
 } from "./types.ts";
 export { $vars } from "./vars.ts";

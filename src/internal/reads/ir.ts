@@ -267,7 +267,6 @@ export interface ReactionIR {
   where: WhereOpIR[];
   then: ConsequenceIR[];
   /** Plain reads an authored partition assumes will fill. */
-  coverage?: string[];
 }
 
 /** A reaction that could not be lowered to `ReactionIR` — visible, never silent. */

@@ -19,10 +19,6 @@ export type ActionFunction<TInput = Mapping, TOutput = Mapping> = (input: TInput
 /** A concept method reference stored as identity, not called through this type. */
 export type AnyAction = (...args: never[]) => unknown;
 
-/** An action plus its input pattern and optional output pattern. */
-export type ActionList = [InstrumentedAction, Mapping, Mapping?];
-export type WhenClause = ActionList;
-
 /** A normalized action declaration. */
 export interface ActionPattern {
   action: InstrumentedAction;
@@ -223,36 +219,41 @@ export interface NamedRefusedActionLine<
   named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
 }
 
+/** A callable consequence before it receives a sibling-path label. */
+export type UnnamedStepNode = StepNode & { readonly [NamedLineBrand]?: never };
+
 /** A qualified branch with temporal stages private to that branch. */
 export interface BranchChain {
   readonly kind: "branch";
   readonly whereOps: readonly WhereOp[];
   readonly steps: readonly StepNode[];
   readonly branchLabel?: string;
-  then(...nodes: StepNode[]): BranchChain;
+  then(node: UnnamedStepNode): BranchChain;
   named(name: string): NamedBranchChain;
 }
 
-export interface NamedBranchChain extends BranchChain {
+export interface NamedBranchChain {
+  readonly kind: "branch";
+  readonly whereOps: readonly WhereOp[];
+  readonly steps: readonly StepNode[];
+  readonly branchLabel: string;
   readonly [NamedLineBrand]: true;
   named(name: string): NamedBranchChain;
 }
 
 /** Public executable node accepted by `then`. */
-export type ThenNode = StepNode | BranchChain;
+export type ThenNode = StepNode | BranchChain | NamedBranchChain;
 export type ConsequenceNode =
   | ActionCall
   | ReturnedActionLine
   | RefusedActionLine
   | BranchChain
-  | RequestChain;
+  | NamedBranchChain;
 export type NamedThenNode =
   | NamedActionCall
   | NamedReturnedActionLine
   | NamedRefusedActionLine
   | NamedBranchChain;
-
-export type ThenClause = StepNode[];
 
 /** The raw object a reaction function returns before it is registered by name. */
 export interface ReactionDeclaration {
@@ -262,18 +263,12 @@ export interface ReactionDeclaration {
   whereOps?: readonly AnyWhereOp[];
   then: StepNode[];
   path?: string[];
-  coverage?: string[];
 }
-
-export interface NestedReactionCase {
-  readonly where: readonly unknown[];
-  readonly cases?: readonly ReactionCase[];
-}
-export type ReactionCase = BranchChain | NestedReactionCase;
 
 export interface ReactionPartition {
   readonly declarations: readonly ReactionDeclaration[];
-  then(...nodes: ConsequenceNode[]): ReactionPartition;
+  then(node: ConsequenceNode): ReactionPartition;
+  then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
 
 export type ReactionResult = ReactionDeclaration | ReactionPartition;
@@ -312,14 +307,6 @@ export type ReactionMap = Record<string, Reaction>;
 /** The canonical no-fields mapping. */
 export type Empty = Record<PropertyKey, never>;
 
-/** A chainable dispatch step returned by `request(action, input, output?)`. */
-export interface RequestChain extends StepNode {
-  where(...conditions: Condition[]): RequestChain;
-  where(fn: WhereFn): RequestChain;
-  /** Name the reaction this step lowers to, instead of the derived `Name#n`. */
-  named(name: string): RequestChain;
-}
-
 /** The builder returned by `when(...)`. */
 export interface WhenBuilder {
   where(...conditions: Condition[]): WhenBuilderWithWhere;
@@ -335,22 +322,6 @@ export interface WhenBuilderWithWhere {
 }
 
 export interface WhenBuilderWithFunctionWhere {
-  then(...nodes: ConsequenceNode[]): ReactionPartition;
-}
-
-/** Internal compatibility builder for low-level tests and framework channels. */
-export interface LegacyWhenBuilder {
-  where(...conditions: Condition[]): LegacyWhenBuilderWithWhere;
-  where(fn: WhereFn): LegacyWhenBuilderWithFunctionWhere;
-  then(...nodes: StepNode[]): ReactionPartition;
-  either(...cases: ReactionCase[]): ReactionPartition;
-}
-
-export interface LegacyWhenBuilderWithWhere {
-  then(...nodes: StepNode[]): ReactionPartition;
-  either(...cases: ReactionCase[]): ReactionPartition;
-}
-
-export interface LegacyWhenBuilderWithFunctionWhere {
-  then(...nodes: StepNode[]): ReactionPartition;
+  then(node: ConsequenceNode): ReactionPartition;
+  then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }

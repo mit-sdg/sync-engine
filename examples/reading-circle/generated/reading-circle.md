@@ -105,7 +105,7 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
-Form the circle page (circle) — inputs (circle); bindings (name, host, member, selection, reading, discussion, response, author, text) as follows:
+Former "the circle page (circle)" — inputs (circle); bindings (name, host, member, selection, reading, discussion, response, author, text); promises exactly one record — forms:
   a record of
     where Gathering._get (gathering: circle) has (name, host)
     circle
@@ -132,11 +132,11 @@ Form the circle page (circle) — inputs (circle); bindings (name, host, member,
 ```reaction
 when RequestBoundary.request (circle, reading, member, text, requestId, path: "/circles/respond")
 where
-  (member) may respond in (circle) (member, circle)
+  view "(member) may respond in (circle)" with (member, circle)
   Selecting._current (scope: circle) has (selection, item: reading)
   Discussing._openFor (subject: selection) has (discussion)
 then
-  request Discussing.respond (discussion, author: member, text)
+  Discussing.respond (discussion, author: member, text)
 ```
 
 ### readingCircle.AddResponse#2
@@ -146,7 +146,7 @@ when Discussing.respond (discussion, author: member, text, response), asked by r
 where
   earlier, RequestBoundary.request (circle, reading, member, text, requestId, path: "/circles/respond")
 then
-  request RequestBoundary.respond (response, requestId)
+  RequestBoundary.respond (response, requestId)
 ```
 
 ### readingCircle.ChooseReading
@@ -154,7 +154,7 @@ then
 ```reaction
 when RequestBoundary.request (circle, reading, requestId, path: "/circles/choose")
 then
-  request Selecting.choose (scope: circle, item: reading)
+  Selecting.choose (scope: circle, item: reading)
 ```
 
 ### readingCircle.ChooseReading#2
@@ -164,7 +164,7 @@ when Selecting.choose (scope: circle, item: reading, selection), asked by readin
 where
   earlier, RequestBoundary.request (circle, reading, requestId, path: "/circles/choose")
 then
-  request RequestBoundary.respond (reading, requestId)
+  RequestBoundary.respond (reading, requestId)
 ```
 
 ### readingCircle.CreateCircle
@@ -172,7 +172,7 @@ then
 ```reaction
 when RequestBoundary.request (name, host, requestId, path: "/circles/create")
 then
-  request Gathering.create (name, host)
+  Gathering.create (name, host)
 ```
 
 ### readingCircle.CreateCircle#2
@@ -182,7 +182,7 @@ when Gathering.create (name, host, gathering: circle), asked by readingCircle.Cr
 where
   earlier, RequestBoundary.request (name, host, requestId, path: "/circles/create")
 then
-  request RequestBoundary.respond (circle, requestId)
+  RequestBoundary.respond (circle, requestId)
 ```
 
 ### readingCircle.GetCirclePage
@@ -190,7 +190,7 @@ then
 ```reaction
 when RequestBoundary.request (circle, requestId, path: "/circles/page")
 then
-  request RequestBoundary.respond (page: the circle page (circle) (circle), requestId)
+  RequestBoundary.respond (page: former "the circle page (circle)" with (circle), requestId)
 ```
 
 ### readingCircle.JoinCircle
@@ -198,7 +198,7 @@ then
 ```reaction
 when RequestBoundary.request (circle, member, requestId, path: "/circles/join")
 then
-  request Gathering.join (gathering: circle, member)
+  Gathering.join (gathering: circle, member)
 ```
 
 ### readingCircle.JoinCircle#2
@@ -208,7 +208,7 @@ when Gathering.join (gathering: circle, member, membership), asked by readingCir
 where
   earlier, RequestBoundary.request (circle, member, requestId, path: "/circles/join")
 then
-  request RequestBoundary.respond (member, requestId)
+  RequestBoundary.respond (member, requestId)
 ```
 
 ### readingCircle.RejectNonmemberResponse
@@ -216,9 +216,9 @@ then
 ```reaction
 when RequestBoundary.request (circle, reading, member, text, requestId, path: "/circles/respond")
 where
-  (member) may not respond in (circle) (member, circle)
+  view "(member) may not respond in (circle)" with (member, circle)
 then
-  request RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)
+  RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)
 ```
 
 ### readingCircle.SelectedReadingOpensDiscussion
@@ -226,7 +226,7 @@ then
 ```reaction
 when Selecting.choose (selection)
 then
-  request Discussing.open (subject: selection)
+  Discussing.open (subject: selection)
 ```
 
 ### DeliverRefusalToAsker
@@ -236,7 +236,7 @@ when any action is refused (message), except RequestBoundary
 where
   earlier, RequestBoundary.request (requestId)
 then
-  request RequestBoundary.respond (requestId, error: message)
+  RequestBoundary.respond (requestId, error: message)
 ```
 
 ### DeliverFaultToAsker
@@ -246,7 +246,7 @@ when any action is faulted, not asked by DeliverFaultToAsker
 where
   earlier, RequestBoundary.request (requestId)
 then
-  request RequestBoundary.respond (requestId, error: "INTERNAL_ERROR", errorKind: "framework")
+  RequestBoundary.respond (requestId, error: "INTERNAL_ERROR", errorKind: "framework")
 ```
 
 ## Endpoint input contracts

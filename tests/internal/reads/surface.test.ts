@@ -551,7 +551,7 @@ describe("former result shapes", () => {
     expect(await engine.form(presentFace({ post: "p9" }))).toBeNull();
     engine.declareFormers(face);
     expect(engine.readBack()).toContain(
-      "the face of (post) — inputs (post); bindings (author); promises exactly one; the body proves at most one — the declaration is enforced at run",
+      "the face of (post) — inputs (post); bindings (author); promises exactly one; checked when formed",
     );
   });
 
@@ -650,16 +650,16 @@ describe("the read-back", () => {
         "  whether Grading._gradeOf (submission: post) has (score) — binds or leaves blank (score possibly blank)",
         '  no Posting._byAuthor (author: "banned") — holds only when no such row exists — drops the case otherwise',
         "  50 is less than at — tests — drops the case when it does not hold",
-        "  then request Recording.note (tag: author, grade: score)",
+        "  then Recording.note (tag: author, grade: score)",
       ].join("\n"),
     );
   });
 
-  test("a view prints its promise beside what the body proves", () => {
+  test("a view prints the promise enforced when it is read", () => {
     const { engine } = build();
     engine.declareViews(authorOf);
     expect(engine.readBack()).toContain(
-      "the author of (post) — inputs (post); outputs (author); bindings () — promises at most one (author); the body proves it",
+      "the author of (post) — inputs (post); outputs (author); bindings () — promises at most one (author); checked when read",
     );
   });
 });

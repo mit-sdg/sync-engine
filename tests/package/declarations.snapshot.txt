@@ -1462,7 +1462,7 @@ export { isReadLine, isRelationView } from "../reads/lines.ts";
 export type { QueryReadLine, ReadLine, RelationView, SlotPattern, ViewReadLine, } from "../reads/lines.ts";
 export { count, isCountOp, view, where } from "../reads/views.ts";
 export type { CountOp, ViewOp } from "../reads/views.ts";
-export { declarationsOf, isReactionCase, isReactionPartition } from "./partitions.ts";
+export { declarationsOf, isReactionPartition } from "./partitions.ts";
 export { each, form, former } from "../reads/former-builders.ts";
 export type { FreeBindings, InputBindings, OutputBindings } from "../reads/sentence.ts";
 export { FormerFault, fuseFormer, isFormerNode, isFusedFormer, isFormerUse, } from "../reads/former-nodes.ts";
@@ -1484,9 +1484,8 @@ export type { LoweredReaction, LoweredWhereOp } from "../reads/lower.ts";
 export { isMatcher, oneOf } from "../reads/matchers.ts";
 export { Logging } from "./logging.ts";
 export { Reacting } from "./reacting.ts";
-export { request, earlier, when } from "./words.ts";
-export type { WhenOptions } from "./words.ts";
-export type { RequestChain, ActionList, ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, Empty, Frame, InstrumentedAction, InstrumentedQuery, Matcher, Mapping, OutcomeKind, StepNode, ReactionDeclaration, ReactionCase, ReactionPartition, ReactionResult, Reaction, ThenClause, ThenNode, TriggerPattern, Vars, WhenBuilder, WhenBuilderWithWhere, WhenBuilderWithFunctionWhere, WhenClause, WhereFn, } from "./types.ts";
+export { earlier, when } from "./words.ts";
+export type { ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, Empty, Frame, InstrumentedAction, InstrumentedQuery, Matcher, Mapping, OutcomeKind, StepNode, ReactionDeclaration, ReactionPartition, ReactionResult, Reaction, ThenNode, TriggerPattern, Vars, WhenBuilder, WhenBuilderWithWhere, WhenBuilderWithFunctionWhere, WhereFn, } from "./types.ts";
 export { $vars } from "./vars.ts";
 
 === dist/internal/reactions/instrumenting.d.ts ===
@@ -1759,13 +1758,13 @@ export declare function matchArguments(record: ActionRecord, pattern: ActionPatt
 export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: WeakMap<object, object>): Frame | undefined;
 
 === dist/internal/reactions/nodes.d.ts ===
-import type { BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode } from "./types.ts";
+import type { BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode, UnnamedStepNode } from "./types.ts";
 import type { WhereOp } from "../reads/where-ops.ts";
 export declare function brandReactionNode<T extends object>(node: T): T;
 /** Build the callable data line represented by one vocabulary action ref. */
 export declare function actionLine(action: InstrumentedAction, input: Mapping): StepNode;
 /** Qualify and privately chain one sibling branch. */
-export declare function branchChain(whereOps: readonly WhereOp[], first: StepNode): BranchChain;
+export declare function branchChain(whereOps: readonly WhereOp[], first: UnnamedStepNode): BranchChain;
 export declare function assertReactionNodes(nodes: readonly ThenNode[]): void;
 
 === dist/internal/reactions/observer.d.ts ===
@@ -1829,12 +1828,9 @@ export type OutcomeContracts = Record<string, ActionContract>;
 export declare function contractOf(concept: object, action: string): ActionContract | undefined;
 
 === dist/internal/reactions/partitions.d.ts ===
-import type { AnyWhereOp } from "../reads/where-ops.ts";
-import type { ReactionCase, ReactionDeclaration, ReactionPartition, ReactionResult, ThenNode, TriggerPattern } from "./types.ts";
-export declare function isReactionCase(value: unknown): value is ReactionCase;
+import type { ReactionDeclaration, ReactionPartition, ReactionResult, ThenNode, TriggerPattern } from "./types.ts";
 export declare function isReactionPartition(value: unknown): value is ReactionPartition;
 export declare function declarationsOf(result: ReactionResult): readonly ReactionDeclaration[];
-export declare function partition(patterns: readonly TriggerPattern[], prefix: readonly AnyWhereOp[], cases: readonly ReactionCase[]): ReactionPartition;
 /** Build and extend the authored sibling tree as independent flat paths. */
 export declare function siblingTree(patterns: readonly TriggerPattern[], root: Pick<ReactionDeclaration, "where" | "whereOps">, nodes: readonly ThenNode[]): ReactionPartition;
 
@@ -1956,7 +1952,7 @@ export declare class Reacting {
      * The read-back: the engine states the quantities the author no longer
      * writes: per reaction, which names open, which values are tested, where multiple
      * cases may result,
-     * or drop; per view, the declared promise beside what the body proves.
+     * or drop; per view, the declared promise checked when the relation is read.
      */
     readBack(): string;
     /** Everything this engine knows about its registered reactions, as data. */
@@ -2297,9 +2293,6 @@ export type Frame = Record<string | symbol, unknown>;
 export type ActionFunction<TInput = Mapping, TOutput = Mapping> = (input: TInput) => TOutput;
 /** A concept method reference stored as identity, not called through this type. */
 export type AnyAction = (...args: never[]) => unknown;
-/** An action plus its input pattern and optional output pattern. */
-export type ActionList = [InstrumentedAction, Mapping, Mapping?];
-export type WhenClause = ActionList;
 /** A normalized action declaration. */
 export interface ActionPattern {
     action: InstrumentedAction;
@@ -2468,24 +2461,31 @@ export interface NamedRefusedActionLine<TAction extends InstrumentedAction = Ins
     readonly [NamedLineBrand]: true;
     named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
 }
+/** A callable consequence before it receives a sibling-path label. */
+export type UnnamedStepNode = StepNode & {
+    readonly [NamedLineBrand]?: never;
+};
 /** A qualified branch with temporal stages private to that branch. */
 export interface BranchChain {
     readonly kind: "branch";
     readonly whereOps: readonly WhereOp[];
     readonly steps: readonly StepNode[];
     readonly branchLabel?: string;
-    then(...nodes: StepNode[]): BranchChain;
+    then(node: UnnamedStepNode): BranchChain;
     named(name: string): NamedBranchChain;
 }
-export interface NamedBranchChain extends BranchChain {
+export interface NamedBranchChain {
+    readonly kind: "branch";
+    readonly whereOps: readonly WhereOp[];
+    readonly steps: readonly StepNode[];
+    readonly branchLabel: string;
     readonly [NamedLineBrand]: true;
     named(name: string): NamedBranchChain;
 }
 /** Public executable node accepted by `then`. */
-export type ThenNode = StepNode | BranchChain;
-export type ConsequenceNode = ActionCall | ReturnedActionLine | RefusedActionLine | BranchChain | RequestChain;
+export type ThenNode = StepNode | BranchChain | NamedBranchChain;
+export type ConsequenceNode = ActionCall | ReturnedActionLine | RefusedActionLine | BranchChain | NamedBranchChain;
 export type NamedThenNode = NamedActionCall | NamedReturnedActionLine | NamedRefusedActionLine | NamedBranchChain;
-export type ThenClause = StepNode[];
 /** The raw object a reaction function returns before it is registered by name. */
 export interface ReactionDeclaration {
     when: TriggerPattern[];
@@ -2494,16 +2494,11 @@ export interface ReactionDeclaration {
     whereOps?: readonly AnyWhereOp[];
     then: StepNode[];
     path?: string[];
-    coverage?: string[];
 }
-export interface NestedReactionCase {
-    readonly where: readonly unknown[];
-    readonly cases?: readonly ReactionCase[];
-}
-export type ReactionCase = BranchChain | NestedReactionCase;
 export interface ReactionPartition {
     readonly declarations: readonly ReactionDeclaration[];
-    then(...nodes: ConsequenceNode[]): ReactionPartition;
+    then(node: ConsequenceNode): ReactionPartition;
+    then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
 export type ReactionResult = ReactionDeclaration | ReactionPartition;
 /** A registered reaction plus its name. */
@@ -2535,13 +2530,6 @@ export type Reaction = (vars: Vars) => ReactionResult;
 export type ReactionMap = Record<string, Reaction>;
 /** The canonical no-fields mapping. */
 export type Empty = Record<PropertyKey, never>;
-/** A chainable dispatch step returned by `request(action, input, output?)`. */
-export interface RequestChain extends StepNode {
-    where(...conditions: Condition[]): RequestChain;
-    where(fn: WhereFn): RequestChain;
-    /** Name the reaction this step lowers to, instead of the derived `Name#n`. */
-    named(name: string): RequestChain;
-}
 /** The builder returned by `when(...)`. */
 export interface WhenBuilder {
     where(...conditions: Condition[]): WhenBuilderWithWhere;
@@ -2555,21 +2543,8 @@ export interface WhenBuilderWithWhere {
     then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
 export interface WhenBuilderWithFunctionWhere {
-    then(...nodes: ConsequenceNode[]): ReactionPartition;
-}
-/** Internal compatibility builder for low-level tests and framework channels. */
-export interface LegacyWhenBuilder {
-    where(...conditions: Condition[]): LegacyWhenBuilderWithWhere;
-    where(fn: WhereFn): LegacyWhenBuilderWithFunctionWhere;
-    then(...nodes: StepNode[]): ReactionPartition;
-    either(...cases: ReactionCase[]): ReactionPartition;
-}
-export interface LegacyWhenBuilderWithWhere {
-    then(...nodes: StepNode[]): ReactionPartition;
-    either(...cases: ReactionCase[]): ReactionPartition;
-}
-export interface LegacyWhenBuilderWithFunctionWhere {
-    then(...nodes: StepNode[]): ReactionPartition;
+    then(node: ConsequenceNode): ReactionPartition;
+    then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
 export {};
 
@@ -2592,21 +2567,13 @@ export declare const $vars: Vars;
 
 === dist/internal/reactions/words.d.ts ===
 import type { EarlierOp } from "../reads/where-ops.ts";
-import type { ActionList, ActionPattern, ChannelPattern, ChannelPosture, InstrumentedAction, LegacyWhenBuilder, Mapping, RequestChain, StepNode, WhenBuilder, WhenClause } from "./types.ts";
-/** Normalize clauses shared by when, request, and earlier into action patterns. */
-export declare function actions(...clauses: ActionList[]): ActionPattern[];
+import type { ActionPattern, ChannelPattern, InstrumentedAction, Mapping, StepNode, WhenBuilder } from "./types.ts";
+/** Normalize one action and its patterns into the occurrence data the engine matches. */
+export declare function actionPattern(action: InstrumentedAction, input: Mapping, output?: Mapping): ActionPattern;
 /** Read matching occurrences strictly before a trigger in its causal flow. */
 export declare function earlier(action: InstrumentedAction, input: Mapping, output?: Mapping): EarlierOp;
-export interface WhenOptions {
-    by?: string;
-    posture?: ChannelPosture;
-}
-export declare function when(clauses: Array<WhenClause | ChannelPattern>): LegacyWhenBuilder;
-export declare function when(channel: ChannelPattern): LegacyWhenBuilder;
+export declare function when(channel: ChannelPattern): WhenBuilder;
 export declare function when(line: StepNode): WhenBuilder;
-export declare function when(action: InstrumentedAction, input: Mapping, output?: Mapping, options?: WhenOptions): LegacyWhenBuilder;
-/** Construct one action request in a reaction consequence chain. */
-export declare function request(action: InstrumentedAction, input: Mapping, output?: Mapping): RequestChain;
 
 === dist/internal/reads/brands.d.ts ===
 /** Import-leaf brands keep read-side predicates from creating value cycles. */
@@ -2617,7 +2584,6 @@ export declare const ViewBlockBrand: unique symbol;
 export declare const LineBrand: unique symbol;
 export declare const RelationViewBrand: unique symbol;
 export declare const FormerUseBrand: unique symbol;
-export declare const ReactionCaseBrand: unique symbol;
 export declare const ReactionPartitionBrand: unique symbol;
 export declare function brand<T extends object>(value: T, marker: symbol): T;
 export declare function hasBrand(value: unknown, marker: symbol): value is object;
@@ -3255,8 +3221,6 @@ export interface ReactionIR {
     when: TriggerIR[];
     where: WhereOpIR[];
     then: ConsequenceIR[];
-    /** Plain reads an authored partition assumes will fill. */
-    coverage?: string[];
 }
 /** A reaction that could not be lowered to `ReactionIR` — visible, never silent. */
 export interface UnloweredIR {
@@ -3417,7 +3381,6 @@ export interface LoweredReaction {
     whereFn?: WhereFn;
     /** The one consequence this reaction asks for. */
     step: StepNode;
-    coverage?: string[];
 }
 export interface LowerOutcome {
     reactions?: LoweredReaction[];
@@ -3567,7 +3530,7 @@ export declare function validateQueryContracts(concept: object, conceptName: str
 /**
  * Generate a registration read-back for views, formers, and reactions.
  * The output reports opened and tested names, cardinality behavior, declared
- * promises, inferred bounds, and coverage assumptions. `Reacting.readBack()`
+ * promises and path structure. `Reacting.readBack()`
  * returns the complete string, and registration also sends it to the logger.
  */
 import type { QueryPromise } from "./query-contracts.ts";
@@ -3576,14 +3539,6 @@ import type { QueryRefIR, ReactionIR, FormerIR, ViewIR } from "./ir.ts";
 export interface ReadBackEnv {
     queryPromise(ref: QueryRefIR): QueryPromise | undefined;
     viewPromise(name: string): QueryPromise | undefined;
-    viewProof(name: string): {
-        declared?: QueryPromise;
-        proven: QueryPromise;
-    } | undefined;
-    formerProof(name: string): {
-        declared: QueryPromise;
-        proven: QueryPromise;
-    } | undefined;
 }
 /** Generate one reaction's line-by-line read-back. */
 export declare function readBackReaction(reaction: ReactionIR, env: ReadBackEnv): string;
@@ -3609,7 +3564,6 @@ import type { ReadEnv } from "./env.ts";
 import type { ReadBackEnv } from "./read-back.ts";
 import type { RelationView } from "./lines.ts";
 import type { EarlierOp } from "./where-ops.ts";
-import type { QueryPromise } from "./query-contracts.ts";
 /** A where op as a bound reaction executes it: the IR, plus bound `earlier` reads. */
 export type BoundWhereOp = Exclude<WhereOpIR, {
     op: "earlier";
@@ -3639,17 +3593,11 @@ export declare class Registry {
      */
     private readonly views;
     /**
-     * Per registered view, the inferred body bound and declared promise. When
-     * static inference is looser, runtime evaluation checks the declaration.
-     */
-    private readonly viewProofs;
-    /**
      * Formers by name, indexed as reactions referencing them register (or as
      * the app declares them for edge/CLI reads). Engine-scoped for the same
      * reason views are: a former reads state through this engine's concepts.
      */
     private readonly formers;
-    private readonly formerProofs;
     /** Formers this engine has validated against its vocabulary — names bind, escapes carried. */
     private readonly formable;
     /** Views this engine has validated against its vocabulary. */
@@ -3673,11 +3621,6 @@ export declare class Registry {
     viewNamed(name: string): RelationView | undefined;
     /** Every view this registry holds, in registration order. */
     viewRefs(): Iterable<RelationView>;
-    /** What registration proved about a view's promise — the read-back's source. */
-    viewProof(name: string): {
-        declared?: QueryPromise;
-        proven: QueryPromise;
-    } | undefined;
     /** The promise lookups the read-back printer states quantities from. */
     readBackEnv(): ReadBackEnv;
     /** The environment used to resolve registered names during evaluation. */
@@ -3692,30 +3635,18 @@ export declare class Registry {
     assertFormable(ref: FormerRef): void;
     /** Validate a former's sequential scopes from its registered IR. */
     private assertFormerBindings;
-    private proveFormerBound;
     /**
      * Validate one view against this engine's vocabulary, once — the same
      * contract {@link assertFormable} keeps for formers: names bind, opaque
      * escapes carry their definition-site live values, and the views it rests
      * on are themselves usable (carried at definition, or already registered).
-     * Each block is scheduled (conjunction is orderless), a relation's outs
-     * must be bound by every alternative, and the body's cardinality bound is
-     * proved against the declared promise.
+     * Each block is scheduled (conjunction is orderless), and a relation's outs
+     * must be bound by every alternative. Declared cardinality is checked when
+     * the view is read.
      */
     assertViewUsable(ref: RelationView): void;
-    /**
-     * The compositional cardinality bound a view's body proves: chains of
-     * always-fill lines prove `one`, anything that can drop caps at
-     * `optional`, an opening line over a many-relation — or stacked
-     * alternatives — makes the body `many`. Where the author declares tighter
-     * than static inference establishes, runtime evaluation enforces the
-     * declaration and the read-back says so.
-     */
-    private proveViewBound;
     /** The declared promise of a query or view line. */
     private lineRefPromise;
-    /** Whether a line can drop its case: any tested out slot, or any `.is.not` slot. */
-    private lineTests;
     /**
      * The unused-opened-name lint: a name a line opens and nothing reads —
      * no later line, no consequence, no declared output — is an error; omit
@@ -3815,9 +3746,9 @@ export declare class Registry {
  * `unwritten`. Opaque computations and unlowered reactions remain explicit.
  *
  * Some rendered forms describe engine-only behavior: `asked by` records
- * request provenance, `earlier` reads an earlier occurrence in the same flow,
+ * ask provenance, `earlier` reads an earlier occurrence in the same flow,
  * channel triggers watch all actions in one posture, and a multi-clause
- * `when` joins occurrences. The renderer emits only `request` consequences;
+ * `when` joins occurrences. The renderer emits only ask consequences;
  * attestations and world effects are not implemented.
  */
 import type { AppIR, ConceptInventoryIR, FormerIR, PatternIR, ReactionIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR } from "./ir.ts";
@@ -4033,16 +3964,14 @@ export declare function walkValueTree(value: unknown, visit: (node: unknown) => 
  * alternatives: the view holds (or answers rows) if any block does.
  * Multiple blocks are alternatives, so callers can reuse one named policy.
  *
- * Registration infers a cardinality bound from the body and checks it against
- * the view's declared promise. Runtime evaluation enforces a promise that is
- * tighter than static inference can establish. Views may read other views;
+ * Runtime evaluation enforces the view's declared promise. Views may read other views;
  * registration rejects cycles.
  *
  * Views are where a reaction reaches an aggregate: `count(query, in, out)` binds
  * the number of matching rows at the moment of asking, never stored.
  *
  */
-import type { BranchChain, InstrumentedQuery, Mapping, StepNode } from "../reactions/types.ts";
+import type { BranchChain, InstrumentedQuery, Mapping, UnnamedStepNode } from "../reactions/types.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import type { ViewOpIR } from "./ir.ts";
 import { type FreeBindings, type InputBindings, type OutputBindings } from "./sentence.ts";
@@ -4068,7 +3997,7 @@ declare const ViewBlockType: unique symbol;
 export type ViewBlock = ViewOp[] & {
     readonly [ViewBlockType]: true;
     form(entries: Record<string, FormerEntry>): FormNode;
-    then(...nodes: StepNode[]): BranchChain;
+    then(node: UnnamedStepNode): BranchChain;
 };
 /** State one view alternative as a variadic conjunction. */
 export declare function where(...conditions: Array<Condition | CountOp>): ViewBlock;

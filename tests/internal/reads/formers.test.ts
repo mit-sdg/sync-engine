@@ -795,7 +795,7 @@ describe("formers: rendering", () => {
     const rendered = renderFormer(reacting.exportReactions().formers[0]);
     expect(rendered).toBe(
       [
-        "Form summary (conversation) — inputs (conversation); bindings (node, parent, author, createdAt, profile, bio) as follows:",
+        'Former "summary (conversation)" — inputs (conversation); bindings (node, parent, author, createdAt, profile, bio); promises exactly one record — forms:',
         "  a record of",
         "    where whether Profiling._ofOwner (owner: conversation) has (profile, bio)",
         "    conversation",
@@ -827,9 +827,11 @@ describe("formers: rendering", () => {
     const spec = reacting.renderApp("Formers demo");
     expect(spec).toContain("## Formers");
     expect(spec).toContain(
-      "```former\nForm summary (conversation) — inputs (conversation); bindings (node) as follows:",
+      '```former\nFormer "summary (conversation)" — inputs (conversation); bindings (node); promises exactly one record — forms:',
     );
-    expect(spec).toContain("request Recorder.record (tag: summary (conversation) (conversation))");
+    expect(spec).toContain(
+      'Recorder.record (tag: former "summary (conversation)" with (conversation))',
+    );
   });
 });
 
@@ -997,6 +999,6 @@ describe("formers: fragments (splice)", () => {
       .exportReactions()
       .formers.find((f) => f.name === "the posts of (conversation)");
     const rendered = renderFormer(hostIR as never);
-    expect(rendered).toContain("… the profile summary of (person) (person: author)");
+    expect(rendered).toContain('… former "the profile summary of (person)" with (person: author)');
   });
 });

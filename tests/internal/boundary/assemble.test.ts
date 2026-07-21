@@ -332,8 +332,8 @@ describe("assemble", () => {
       app.engine
         .exportReactions()
         .reactions.filter((reaction) => reaction.name.startsWith("Named"))
-        .map((reaction) => reaction.coverage),
-    ).toEqual([undefined, undefined]);
+        .map((reaction) => reaction.name),
+    ).toEqual(["Named:zero", "Named:one"]);
     expect(app.engine.readBack()).not.toContain("assumes Counting._named fills");
   });
 });

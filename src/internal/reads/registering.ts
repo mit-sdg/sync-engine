@@ -85,19 +85,11 @@ export class Registry {
    */
   private readonly views: Map<string, RelationView> = new Map();
   /**
-   * Per registered view, the inferred body bound and declared promise. When
-   * static inference is looser, runtime evaluation checks the declaration.
-   */
-  private readonly viewProofs: Map<string, { declared?: QueryPromise; proven: QueryPromise }> =
-    new Map();
-  /**
    * Formers by name, indexed as reactions referencing them register (or as
    * the app declares them for edge/CLI reads). Engine-scoped for the same
    * reason views are: a former reads state through this engine's concepts.
    */
   private readonly formers: Map<string, FormerRef> = new Map();
-  private readonly formerProofs: Map<string, { declared: QueryPromise; proven: QueryPromise }> =
-    new Map();
   /** Formers this engine has validated against its vocabulary — names bind, escapes carried. */
   private readonly formable = new WeakSet<FormerRef>();
   /** Views this engine has validated against its vocabulary. */
@@ -176,11 +168,6 @@ export class Registry {
     return this.views.values();
   }
 
-  /** What registration proved about a view's promise — the read-back's source. */
-  viewProof(name: string): { declared?: QueryPromise; proven: QueryPromise } | undefined {
-    return this.viewProofs.get(name);
-  }
-
   /** The promise lookups the read-back printer states quantities from. */
   readBackEnv(): ReadBackEnv {
     return {
@@ -195,8 +182,6 @@ export class Registry {
         const view = this.views.get(name);
         return view?.promise;
       },
-      viewProof: (name) => this.viewProofs.get(name),
-      formerProof: (name) => this.formerProofs.get(name),
     };
   }
 
@@ -269,7 +254,6 @@ export class Registry {
         }
       },
     });
-    this.formerProofs.set(site, { declared: ref.promise, proven: this.proveFormerBound(ref) });
     this.formable.add(ref);
   }
 
@@ -358,38 +342,14 @@ export class Registry {
     }
   }
 
-  private proveFormerBound(ref: FormerRef): QueryPromise {
-    if (ref.body.node !== "record") return "one";
-    const scheduled = scheduleBlock(
-      ref.body.where ?? [],
-      new Set(ref.ins),
-      `Former "${ref.formerName}"`,
-    );
-    let bound: QueryPromise = "one";
-    for (const op of scheduled.ordered) {
-      if (op.op === "find") {
-        const opens = scheduled.opens.get(op) ?? [];
-        if (
-          this.lineRefPromise(op, `Former "${ref.formerName}"`) !== "one" ||
-          this.lineTests(op, opens)
-        ) {
-          bound = "optional";
-        }
-      } else if (op.op === "no" || op.op === "holds" || op.op === "custom") {
-        bound = "optional";
-      }
-    }
-    return bound;
-  }
-
   /**
    * Validate one view against this engine's vocabulary, once — the same
    * contract {@link assertFormable} keeps for formers: names bind, opaque
    * escapes carry their definition-site live values, and the views it rests
    * on are themselves usable (carried at definition, or already registered).
-   * Each block is scheduled (conjunction is orderless), a relation's outs
-   * must be bound by every alternative, and the body's cardinality bound is
-   * proved against the declared promise.
+   * Each block is scheduled (conjunction is orderless), and a relation's outs
+   * must be bound by every alternative. Declared cardinality is checked when
+   * the view is read.
    */
   assertViewUsable(ref: RelationView): void {
     if (this.usableViews.has(ref)) return;
@@ -431,58 +391,7 @@ export class Registry {
         `View "${site}": an output view must carry its one, optional, or many promise.`,
       );
     }
-    this.viewProofs.set(site, {
-      ...(ref.promise !== undefined ? { declared: ref.promise } : {}),
-      proven: this.proveViewBound(ref),
-    });
     this.usableViews.add(ref);
-  }
-
-  /**
-   * The compositional cardinality bound a view's body proves: chains of
-   * always-fill lines prove `one`, anything that can drop caps at
-   * `optional`, an opening line over a many-relation — or stacked
-   * alternatives — makes the body `many`. Where the author declares tighter
-   * than static inference establishes, runtime evaluation enforces the
-   * declaration and the read-back says so.
-   */
-  private proveViewBound(ref: RelationView): QueryPromise {
-    const ins = ref.ins;
-    const blocks = ref.alternatives as readonly (readonly ViewOpIR[])[];
-    if (blocks.length > 1) return "many";
-    const bounds = blocks.map((block) => {
-      let bound: QueryPromise = "one";
-      const cap = (next: QueryPromise): void => {
-        if (next === "many" || bound === "many") bound = "many";
-        else if (next === "optional" || bound === "optional") bound = "optional";
-      };
-      const scheduled = scheduleBlock(block, new Set(ins), `View "${ref.viewName}"`);
-      for (const op of scheduled.ordered) {
-        const opens = scheduled.opens.get(op) ?? [];
-        switch (op.op) {
-          case "find":
-          case "whether": {
-            const promise = this.lineRefPromise(op, `View "${ref.viewName}"`);
-            if (promise === "many" && opens.length > 0) cap("many");
-            else if (op.op === "find" && (promise !== "one" || this.lineTests(op, opens))) {
-              cap("optional");
-            }
-            break;
-          }
-          case "no":
-          case "holds":
-            cap("optional");
-            break;
-          case "custom":
-            cap("optional");
-            break;
-          default:
-            break;
-        }
-      }
-      return bound;
-    });
-    return bounds[0] ?? "one";
   }
 
   /** The declared promise of a query or view line. */
@@ -498,19 +407,6 @@ export class Registry {
     if (op.query === undefined) return "many";
     const query = this.resolver.query(op.query.concept, op.query.query, diagnosticSite);
     return query.queryPromise ?? "many";
-  }
-
-  /** Whether a line can drop its case: any tested out slot, or any `.is.not` slot. */
-  private lineTests(
-    op: Extract<ViewOpIR, { op: "find" | "whether" }>,
-    opens: readonly string[],
-  ): boolean {
-    if ("not" in op && op.not !== undefined && Object.keys(op.not).length > 0) return true;
-    const tested = Object.entries(op.out).some(([, value]) => {
-      const names = varNamesInPattern({ value } as PatternIR);
-      return names.length === 0 || names.some((name) => !opens.includes(name));
-    });
-    return tested;
   }
 
   /**

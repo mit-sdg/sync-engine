@@ -25,9 +25,7 @@
  * alternatives: the view holds (or answers rows) if any block does.
  * Multiple blocks are alternatives, so callers can reuse one named policy.
  *
- * Registration infers a cardinality bound from the body and checks it against
- * the view's declared promise. Runtime evaluation enforces a promise that is
- * tighter than static inference can establish. Views may read other views;
+ * Runtime evaluation enforces the view's declared promise. Views may read other views;
  * registration rejects cycles.
  *
  * Views are where a reaction reaches an aggregate: `count(query, in, out)` binds
@@ -35,7 +33,13 @@
  *
  */
 
-import type { BranchChain, InstrumentedQuery, Mapping, StepNode } from "../reactions/types.ts";
+import type {
+  BranchChain,
+  InstrumentedQuery,
+  Mapping,
+  StepNode,
+  UnnamedStepNode,
+} from "../reactions/types.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import { conditionOp } from "./where-ops.ts";
 import { brand, CountOpBrand, hasBrand, ViewBlockBrand } from "./brands.ts";
@@ -80,7 +84,7 @@ declare const ViewBlockType: unique symbol;
 export type ViewBlock = ViewOp[] & {
   readonly [ViewBlockType]: true;
   form(entries: Record<string, FormerEntry>): FormNode;
-  then(...nodes: StepNode[]): BranchChain;
+  then(node: UnnamedStepNode): BranchChain;
 };
 
 /** State one view alternative as a variadic conjunction. */
@@ -93,9 +97,11 @@ export function where(...conditions: Array<Condition | CountOp>): ViewBlock {
     value: (entries: Record<string, FormerEntry>) => formFrom(block, entries),
   });
   Object.defineProperty(block, "then", {
-    value: (first: StepNode, ...rest: StepNode[]) => {
-      const branch = branchChain(block as WhereOp[], first);
-      return rest.length === 0 ? branch : branch.then(...rest);
+    value: (...nodes: StepNode[]) => {
+      if (nodes.length !== 1) {
+        throw new Error("a branch-local then(...) takes one callable action line.");
+      }
+      return branchChain(block as WhereOp[], nodes[0] as UnnamedStepNode);
     },
   });
   return block;

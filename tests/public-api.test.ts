@@ -124,7 +124,7 @@ describe("canonical public API", () => {
     expect(renderInputContracts(inspected.inputContracts)).toContain("/catalog/add");
     expect(inspected.occurrences.some((entry) => entry.concept === "Cataloging")).toBe(true);
     expect(inspected.readBack).toContain("Add");
-    expect(inspected.readBack).toContain("then request Cataloging.add");
+    expect(inspected.readBack).toContain("then Cataloging.add");
   });
 
   test("inspection redacts credential-shaped action outputs", async () => {

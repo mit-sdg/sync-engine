@@ -50,7 +50,7 @@ describe("renderReaction", () => {
       ],
     };
     expect(renderReaction(reaction)).toBe(
-      ["when Todo.complete (id)", "then", "  request Audit.record (message: id)"].join("\n"),
+      ["when Todo.complete (id)", "then", "  Audit.record (message: id)"].join("\n"),
     );
   });
 
@@ -75,7 +75,7 @@ describe("renderReaction", () => {
       [
         "when refused Payment.charge (id: item, amount: 100, receipt), asked by OnCheckout",
         "then",
-        "  request Inventory.release ()",
+        "  Inventory.release ()",
       ].join("\n"),
     );
   });
@@ -136,7 +136,7 @@ describe("renderReaction", () => {
         "where",
         "  earlier, RequestBoundary.request (requestId)",
         "then",
-        "  request RequestBoundary.respond (requestId, error: refusal)",
+        "  RequestBoundary.respond (requestId, error: refusal)",
       ].join("\n"),
     );
   });
@@ -166,7 +166,7 @@ describe("renderReaction", () => {
       then: [{ kind: "request", concept: "C", action: "go", input: {} }],
     };
     expect(renderReaction(reaction)).toBe(
-      ["when A.done ()", "and jointly when B.done ()", "then", "  request C.go ()"].join("\n"),
+      ["when A.done ()", "and jointly when B.done ()", "then", "  C.go ()"].join("\n"),
     );
   });
 

@@ -9,9 +9,10 @@ failure delivery, cancellation, persistence, restart, or boundary operation.
 
 An assembly sorts the authored composition's reactions by name before
 registering them, then registers the standard fault and refusal reactions.
-It evaluates reactions for one trigger record sequentially. A consequence
-chain completes before evaluation moves to the next reaction. Applications
-must not use this implementation order as a priority mechanism.
+It evaluates reactions for one trigger record sequentially. Sibling paths
+carry no priority and do not form a join; each path advances when its own
+preceding ask returns. Applications must not use evaluation order as a
+priority mechanism.
 
 Action bodies run one at a time per concept instance, in arrival order,
 including asynchronous bodies. This is an in-process guarantee. A concept's
@@ -27,8 +28,9 @@ as-of-trigger state snapshot.
 
 If two reactions answer the same outside request, the application boundary
 accepts the first answer and refuses the next with `NOT_PENDING`. The
-[ordinary reaction discipline](./semantics.md#decisions-that-must-not-race) is to partition
-answering conditions and keep race-sensitive decisions in concept actions.
+[ordinary reaction discipline](./semantics.md#decisions-that-must-not-race) is
+to keep race-sensitive decisions in concept actions and treat all matching
+answer paths as live alternatives.
 
 ## Failures between action asks
 

@@ -8,7 +8,7 @@ statement, a **reaction**, opens a discussion whenever a mitigation is selected:
 
 ```ts
 const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
-  when(Selecting.choose, {}, { selection }).then(request(Discussing.open, { subject: selection })),
+  when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
 ```
 

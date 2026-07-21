@@ -42,7 +42,10 @@ const repositoryOnlySources = new Map<string, URL[]>([
   ],
   [
     new URL("reactions.md", guideDirectory).pathname,
-    [new URL("../internal/reactions/chains.test.ts", import.meta.url)],
+    [
+      new URL("../internal/reactions/chains.test.ts", import.meta.url),
+      new URL("../docs/book.test.ts", import.meta.url),
+    ],
   ],
   [
     new URL("views-and-formers.md", guideDirectory).pathname,

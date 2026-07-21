@@ -218,6 +218,21 @@ describe("sibling paths", () => {
 });
 
 describe("branch-local chains", () => {
+  test("runtime rejects variadic local stages and labels inside the path", () => {
+    expect(() =>
+      (where(Routing._enabled({ item: "ready" }).is({ enabled: true })).then as Function)(
+        Preparing.prepare({ item: "ready" }),
+        Finishing.finish({ prepared: "ready" }),
+      ),
+    ).toThrow("a branch-local then(...) takes one callable action line.");
+
+    expect(() =>
+      where(Routing._enabled({ item: "ready" }).is({ enabled: true })).then(
+        Preparing.prepare({ item: "ready" }).named("inside") as never,
+      ),
+    ).toThrow("name the qualified branch after its local action chain");
+  });
+
   test("a branch carries a returned binding into its private next stage", async () => {
     const { engine, concepts, raw } = setup();
     engine.register({

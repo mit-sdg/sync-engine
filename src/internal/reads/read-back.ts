@@ -1,7 +1,7 @@
 /**
  * Generate a registration read-back for views, formers, and reactions.
  * The output reports opened and tested names, cardinality behavior, declared
- * promises, inferred bounds, and coverage assumptions. `Reacting.readBack()`
+ * promises and path structure. `Reacting.readBack()`
  * returns the complete string, and registration also sends it to the logger.
  */
 
@@ -24,8 +24,6 @@ import { renderRoles, renderWhereOp } from "./render.ts";
 export interface ReadBackEnv {
   queryPromise(ref: QueryRefIR): QueryPromise | undefined;
   viewPromise(name: string): QueryPromise | undefined;
-  viewProof(name: string): { declared?: QueryPromise; proven: QueryPromise } | undefined;
-  formerProof(name: string): { declared: QueryPromise; proven: QueryPromise } | undefined;
 }
 
 const PROMISE_WORDS: Record<QueryPromise, string> = {
@@ -136,11 +134,8 @@ export function readBackReaction(reaction: ReactionIR, env: ReadBackEnv): string
   }
   for (const consequence of reaction.then) {
     lines.push(
-      `  then request ${consequence.concept}.${consequence.action} (${renderRoles(consequence.input)})`,
+      `  then ${consequence.concept}.${consequence.action} (${renderRoles(consequence.input)})`,
     );
-  }
-  for (const assumption of reaction.coverage ?? []) {
-    lines.push(`  assumes ${assumption} fills`);
   }
   return lines.join("\n");
 }
@@ -148,7 +143,6 @@ export function readBackReaction(reaction: ReactionIR, env: ReadBackEnv): string
 /** Generate one view's declared promise and inferred body bound. */
 export function readBackView(view: ViewIR, env: ReadBackEnv): string {
   const lines: string[] = [];
-  const proof = env.viewProof(view.name);
   const partitions = [
     view.ins.length > 0 ? `inputs (${view.ins.join(", ")})` : "inputs ()",
     view.outs.length > 0 ? `outputs (${view.outs.join(", ")})` : "outputs ()",
@@ -160,11 +154,7 @@ export function readBackView(view: ViewIR, env: ReadBackEnv): string {
   } else {
     const promise = view.promise as QueryPromise;
     const declared = `promises ${PROMISE_WORDS[promise]} (${view.outs.join(", ")})`;
-    const provenNote =
-      proof === undefined || proof.proven === promise
-        ? "the body proves it"
-        : `the body proves ${PROMISE_WORDS[proof.proven]} — the declaration is enforced at run`;
-    lines.push(`${head} — ${declared}; ${provenNote}`);
+    lines.push(`${head} — ${declared}; checked when read`);
   }
   const ins = view.ins;
   for (const block of view.alternatives) {
@@ -179,17 +169,12 @@ export function readBackView(view: ViewIR, env: ReadBackEnv): string {
 }
 
 export function readBackFormer(former: FormerIR, env: ReadBackEnv): string {
-  const proof = env.formerProof(former.name);
-  const proven = proof?.proven ?? former.promise;
-  const note =
-    proven === former.promise
-      ? "the body proves it"
-      : `the body proves ${PROMISE_WORDS[proven]} — the declaration is enforced at run`;
+  void env;
   const partitions = [
     former.ins.length > 0 ? `inputs (${former.ins.join(", ")})` : "inputs ()",
     former.bindings.length > 0 ? `bindings (${former.bindings.join(", ")})` : "bindings ()",
   ].join("; ");
-  return `${former.name} — ${partitions}; promises ${PROMISE_WORDS[former.promise]}; ${note}`;
+  return `${former.name} — ${partitions}; promises ${PROMISE_WORDS[former.promise]}; checked when formed`;
 }
 
 /** The whole application's read-back: every view, then every reaction. */
