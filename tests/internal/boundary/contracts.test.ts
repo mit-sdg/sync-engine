@@ -69,6 +69,23 @@ describe("declared endpoint input contracts", () => {
     });
   });
 
+  test("a required field inherited from a prototype is not admitted", async () => {
+    const { invoker } = setup();
+    const inherited = Object.create({ session: "not-owned" }) as Record<string, unknown>;
+    inherited.item = "i1";
+
+    const result = await invoker.invoke("/items/save" as never, inherited as never);
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: "framework",
+        code: FrameworkErrorCode.INVALID_INPUT,
+        detail: '/items/save requires "session"',
+      },
+    });
+  });
+
   test("a valid body reaches the endpoint", async () => {
     const { invoker } = setup();
 

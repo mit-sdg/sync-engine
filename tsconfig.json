@@ -17,12 +17,12 @@
       "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
       "@sync-engine/*": ["./src/*/index.ts"],
       "@sync-engine/internal/reactions": ["./tests/internal/reactions/test-register.ts"],
-      "@sync-engine/internal/reactions/*": ["./src/internal/reactions/*"],
-      "@sync-engine/internal/reads/*": ["./src/internal/reads/*"],
-      "@sync-engine/internal/boundary": ["./src/internal/boundary/index.ts"],
-      "@sync-engine/internal/boundary/*": ["./src/internal/boundary/*"],
-      "@sync-engine/internal/hosting": ["./src/internal/hosting/index.ts"],
-      "@sync-engine/internal/hosting/*": ["./src/internal/hosting/*"]
+      "@sync-engine/internal/reactions/*": ["./src/engine/reactions/*"],
+      "@sync-engine/internal/reads/*": ["./src/engine/reads/*"],
+      "@sync-engine/internal/boundary": ["./src/engine/boundary/index.ts"],
+      "@sync-engine/internal/boundary/*": ["./src/engine/boundary/*"],
+      "@sync-engine/internal/hosting": ["./src/engine/hosting/index.ts"],
+      "@sync-engine/internal/hosting/*": ["./src/engine/hosting/*"]
     }
   },
   "include": ["examples", "scripts", "src", "tests"],

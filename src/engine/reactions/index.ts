@@ -1,5 +1,5 @@
 /**
- * Internal reactions entrypoint, imported by engine modules and focused
+ * Runtime reactions entrypoint, imported by engine modules and focused
  * tests as `@sync-engine/internal/reactions`. It gathers the reaction runtime,
  * its authored vocabulary, and the read-side contracts that runtime uses.
  */
@@ -176,7 +176,6 @@ export type {
   InstrumentedQuery,
   Matcher,
   Mapping,
-  OutcomeKind,
   StepNode,
   ReactionDeclaration,
   ReactionPartition,

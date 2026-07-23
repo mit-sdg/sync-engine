@@ -7,7 +7,7 @@ import {
   pinGenerated,
   renderGenerated,
   type GeneratedApplication,
-} from "../internal/tooling/generated-artifacts.ts";
+} from "../engine/tooling/generated-artifacts.ts";
 
 const usage = `Usage: sync-engine artifacts <command> [--config path]
 

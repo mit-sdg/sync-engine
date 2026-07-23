@@ -170,6 +170,7 @@ function lowerChainStep(
   const available = varsOf(trigger.input, trigger.output);
   const needed = varsOf(step.action.input);
   const ops: LoweredWhereOp[] = [...(step.whereOps ?? [])];
+  const initialWhereOps = [...(decl.whereOps ?? []), ...(chain[0].whereOps ?? [])];
 
   const stillMissing = (): Set<symbol> =>
     new Set([...needed].filter((variable) => !available.has(variable)));
@@ -195,7 +196,7 @@ function lowerChainStep(
   // by a pure computation over values in hand. Anything else must stay a
   // pipeline rather than silently change meaning.
   if (stillMissing().size > 0) {
-    if (decl.whereOps === undefined) {
+    if (initialWhereOps.length === 0) {
       if (decl.where !== undefined) {
         return { reason: `step ${i + 1} needs a value bound by a closure where` };
       }
@@ -205,7 +206,7 @@ function lowerChainStep(
         .join(", ");
       return { reason: `stage ${i + 1} uses ${missing} before it is bound` };
     }
-    for (const op of decl.whereOps) {
+    for (const op of initialWhereOps) {
       const outs = opOutVars(op);
       if (!intersects(stillMissing(), outs)) continue;
       if (op.op === "find" || op.op === "whether" || op.op === "earlier") {

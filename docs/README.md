@@ -43,6 +43,8 @@ correlation, and response; it is not another core design piece.
 - **Plan for failure and operation.** Read [Consistency and
   operations](./consistency-and-operations.md) for ordering, partial failure,
   cancellation, logs, restart, and the guarantees the runtime does not make.
+- **Navigate the implementation.** Read [Engine architecture](./architecture.md)
+  for the contributor-facing execution path and internal module map.
 - **Find an import, export, type, or signature.** Use the [Public API
   reference](./public-surface.md), the complete register of package subpaths
   and callable names.

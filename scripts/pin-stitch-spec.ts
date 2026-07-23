@@ -1,5 +1,5 @@
 import { writeFile } from "node:fs/promises";
-import { Logging, Reacting } from "../src/internal/reactions/index.ts";
+import { Logging, Reacting } from "../src/engine/reactions/index.ts";
 import { FocusConcept, HistoryConcept, WorkConcept } from "../tests/golden/stitch/concepts.ts";
 import { makeStitchFormers, makeStitchReactions } from "../tests/golden/stitch/reactions.ts";
 

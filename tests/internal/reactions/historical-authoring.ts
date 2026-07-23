@@ -3,13 +3,13 @@
  * tests. Public package declarations and examples use callable action lines.
  */
 
-import { applyWhereOps, conditionOp, isCondition } from "../../../src/internal/reads/where-ops.ts";
-import type { AnyWhereOp, WhereOp } from "../../../src/internal/reads/where-ops.ts";
-import { isCountOp } from "../../../src/internal/reads/views.ts";
-import { actionLine, assertReactionNodes } from "../../../src/internal/reactions/nodes.ts";
-import { siblingTree } from "../../../src/internal/reactions/partitions.ts";
-import { isChannelPattern } from "../../../src/internal/reactions/channels.ts";
-import { actionPattern } from "../../../src/internal/reactions/words.ts";
+import { applyWhereOps, conditionOp, isCondition } from "../../../src/engine/reads/where-ops.ts";
+import type { AnyWhereOp, WhereOp } from "../../../src/engine/reads/where-ops.ts";
+import { isCountOp } from "../../../src/engine/reads/views.ts";
+import { actionLine, assertReactionNodes } from "../../../src/engine/reactions/nodes.ts";
+import { siblingTree } from "../../../src/engine/reactions/partitions.ts";
+import { isChannelPattern } from "../../../src/engine/reactions/channels.ts";
+import { actionPattern } from "../../../src/engine/reactions/words.ts";
 import type {
   ChannelPattern,
   InstrumentedAction,
@@ -17,7 +17,7 @@ import type {
   StepNode,
   TriggerPattern,
   WhereFn,
-} from "../../../src/internal/reactions/types.ts";
+} from "../../../src/engine/reactions/types.ts";
 
 function normalizedWhere(args: unknown[], site: string): { fn?: WhereFn; ops?: AnyWhereOp[] } {
   if (args.length === 1 && typeof args[0] === "function" && !isCondition(args[0])) {

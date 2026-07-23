@@ -101,6 +101,13 @@ export function where(...conditions: Array<Condition | CountOp>): ViewBlock {
       if (nodes.length !== 1) {
         throw new Error("a branch-local then(...) takes one callable action line.");
       }
+      if (block.some(isCountOp)) {
+        throw new Error(
+          "count(...) cannot be used in a reaction condition. " +
+            "To return a row count, use each(line).count() in a former. " +
+            "To test a count as policy, define a view and read that view.",
+        );
+      }
       return branchChain(block as WhereOp[], nodes[0] as UnnamedStepNode);
     },
   });

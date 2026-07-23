@@ -84,11 +84,17 @@ function isEndpointCommand(
   );
 }
 
+// `any` preserves contextual inference for each command's independently inferred input.
+// The values are narrowed before execution at the single adapter boundary below.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Commands = Record<string, CliCommand<any>>;
+type Commands = Record<string, CliCommand<any> | EndpointCliCommand<any, any, any>>;
 
 export type CommandInput<TCommands extends Commands, K extends keyof TCommands> =
-  TCommands[K] extends CliCommand<infer I> ? I : never;
+  TCommands[K] extends CliCommand<infer I>
+    ? I
+    : TCommands[K] extends EndpointCliCommand<infer I, unknown, unknown>
+      ? I
+      : never;
 
 export interface CliApp<TCommands extends Commands> {
   run(args: string[]): Promise<CliResult>;
@@ -99,10 +105,10 @@ export interface CliApp<TCommands extends Commands> {
   help(): string;
 }
 
-export interface CliAppOptions {
+export interface CliAppOptions<C extends ContractShape = ContractShape> {
   name?: string;
   version?: string;
-  invoker?: Invoker<ContractShape>;
+  invoker?: Invoker<C>;
 }
 
 type CliExecutor = (
@@ -112,9 +118,9 @@ type CliExecutor = (
 
 const DEFAULT_DESCRIPTION = "No description provided.";
 
-export function createCliApp<TCommands extends Commands>(
+export function createCliApp<TCommands extends Commands, C extends ContractShape = ContractShape>(
   commands: TCommands,
-  options: CliAppOptions = {},
+  options: CliAppOptions<C> = {},
 ): CliApp<TCommands> {
   const { name = "", version = "" } = options;
 
@@ -136,14 +142,23 @@ export function createCliApp<TCommands extends Commands>(
   }
 
   function deriveExecutor(command: AnyCliCommand): CliExecutor {
-    if (isEndpointCommand(command) && options.invoker !== undefined) {
+    if (isEndpointCommand(command)) {
       const endpoint = command;
       const invoker = options.invoker;
       return async (positionals, opts) => {
-        const parsed = endpoint.parse(positionals, opts);
-        if (!parsed.ok) return fail(parsed.message);
-        const result = await invoker.invoke(endpoint.path, parsed.value as never);
-        return endpoint.format(result);
+        try {
+          const parsed = endpoint.parse(positionals, opts);
+          if (!parsed.ok) return fail(parsed.message);
+          if (invoker === undefined)
+            return fail(`Endpoint command "${endpoint.path}" needs an invoker.`);
+          const result = await invoker.invoke(
+            endpoint.path as keyof C & string,
+            parsed.value as never,
+          );
+          return endpoint.format(result);
+        } catch (err) {
+          return fail(err instanceof Error ? err.message : String(err));
+        }
       };
     }
 
@@ -204,9 +219,20 @@ export function createCliApp<TCommands extends Commands>(
     commandName: K,
     input: CommandInput<TCommands, K>,
   ): Promise<CliResult> {
-    const command = commands[commandName] as CliCommand<CommandInput<TCommands, K>>;
+    const command = commands[commandName] as TCommands[K];
     try {
-      return await command.run(input);
+      if (isEndpointCommand(command)) {
+        if (options.invoker === undefined) {
+          return fail(`Endpoint command "${command.path}" needs an invoker.`);
+        }
+        const result = await options.invoker.invoke(
+          command.path as keyof C & string,
+          input as never,
+        );
+        return command.format(result);
+      }
+      const plainCommand = command as CliCommand<CommandInput<TCommands, K>>;
+      return await plainCommand.run(input);
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err));
     }

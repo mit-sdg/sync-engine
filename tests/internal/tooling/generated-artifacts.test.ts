@@ -5,7 +5,7 @@ import { request, vocabulary } from "@sync-engine/internal/reactions";
 import { endpoint, receive, respond } from "@sync-engine/internal/boundary";
 import { assemble } from "@sync-engine/assembly";
 import { httpFloor } from "@sync-engine/boundary";
-import { renderGenerated } from "../../../src/internal/tooling/generated-artifacts.ts";
+import { renderGenerated } from "../../../src/engine/tooling/generated-artifacts.ts";
 
 class SessioningConcept {
   start({ user }: { user: string }) {

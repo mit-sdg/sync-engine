@@ -42,6 +42,13 @@ import type { Stoppable } from "./stoppable.ts";
  */
 export type RetentionPolicy = "keepAll" | "evictConsumed" | { window: number };
 
+function assertRetentionPolicy(policy: RetentionPolicy, site: string): void {
+  if (typeof policy === "string") return;
+  if (!Number.isFinite(policy.window) || !Number.isInteger(policy.window) || policy.window < 0) {
+    throw new Error(`${site}: window must be a non-negative finite integer.`);
+  }
+}
+
 // ── FileStore ───────────────────────────────────────────────────────────────
 
 /**
@@ -104,11 +111,14 @@ export class FileStore extends MemoryStore implements Stoppable {
     public readonly policy: RetentionPolicy = "keepAll",
   ) {
     super();
+    assertRetentionPolicy(policy, "FileStore");
   }
 
   override append(entry: LogEntry): void {
+    this.assertAppendable(entry);
+    const line = `${JSON.stringify(persistedEntryOf(entry))}\n`;
+    appendFileSync(this.path, line);
     super.append(entry);
-    appendFileSync(this.path, `${JSON.stringify(persistedEntryOf(entry))}\n`);
     if (entry.kind === "invocation") this.enforceWindow(entry.record.flow);
   }
 
@@ -125,6 +135,16 @@ export class FileStore extends MemoryStore implements Stoppable {
     while (this.flowOrder.length > this.policy.window) {
       const oldest = this.flowOrder.shift();
       if (oldest !== undefined) this.evictFlow(oldest);
+    }
+  }
+
+  /** Reject entries the in-memory fold would reject before they reach disk. */
+  private assertAppendable(entry: LogEntry): void {
+    if (entry.kind === "invocation" && entry.record.id === undefined) {
+      throw new Error("Invocation entry requires a record id.");
+    }
+    if ((entry.kind === "outcome" || entry.kind === "fault") && !this.actions.has(entry.id)) {
+      throw new Error(`Action with id ${entry.id} not found.`);
     }
   }
 }
@@ -161,6 +181,7 @@ export class PersistingConcept {
   bind({ subject, store, policy }: { subject: string; store: LogStore; policy: RetentionPolicy }): {
     subject: string;
   } {
+    assertRetentionPolicy(policy, "PersistingConcept.bind");
     if (this.bindings.has(subject)) {
       throw new Refuse(`Subject "${subject}" is already bound.`);
     }

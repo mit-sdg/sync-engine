@@ -172,6 +172,7 @@ export class MemoryStore implements LogStore {
   evictFlow(flow: string): void {
     const records = this.flowIndex.get(flow);
     if (records) {
+      this.dropFiringsFor(records);
       this.dropRecords(records);
       this.flowIndex.delete(flow);
     }
@@ -187,6 +188,7 @@ export class MemoryStore implements LogStore {
       }
       if (keepFrom < records.length) {
         const toRemove = records.splice(keepFrom);
+        this.dropFiringsFor(toRemove);
         this.dropRecords(toRemove);
         evicted += toRemove.length;
         if (keepFrom === 0) {
@@ -225,6 +227,31 @@ export class MemoryStore implements LogStore {
     for (const record of records) {
       this.actions.delete(record.id ?? "");
       this.consumedIndex.delete(record.id ?? "");
+    }
+  }
+
+  /** Remove firings that refer to evicted occurrences and rebuild consumption from what remains. */
+  private dropFiringsFor(records: Iterable<ActionRecord>): void {
+    const ids = new Set(
+      [...records].flatMap((record) => (record.id === undefined ? [] : [record.id])),
+    );
+    if (ids.size === 0) return;
+
+    for (const [reaction, firings] of this.firings) {
+      const retained = firings.filter((firing) => !firing.consumed.some((id) => ids.has(id)));
+      if (retained.length === 0) this.firings.delete(reaction);
+      else if (retained.length !== firings.length) this.firings.set(reaction, retained);
+    }
+
+    this.consumedIndex.clear();
+    for (const [reaction, firings] of this.firings) {
+      for (const firing of firings) {
+        for (const id of firing.consumed) {
+          const consumers = this.consumedIndex.get(id) ?? new Set<string>();
+          consumers.add(reaction);
+          this.consumedIndex.set(id, consumers);
+        }
+      }
     }
   }
 }

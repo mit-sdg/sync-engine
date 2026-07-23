@@ -1,4 +1,4 @@
-import { reaction, vocabulary, when, where } from "@sync-engine/language";
+import { reaction, returned, vocabulary, when, where } from "@sync-engine/language";
 
 class OneAnswer {
   start(_: Record<string, never>) {
@@ -72,6 +72,8 @@ reaction(() =>
 );
 
 reaction(({ value }) => when(Answering.record({}).responds({ value })).then(Answering.start({})));
+
+reaction(() => when(returned({ action: "start" })).then(Answering.start({})));
 
 reaction(() =>
   when(Answering.start({}).responds()).then(

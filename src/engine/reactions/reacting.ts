@@ -271,9 +271,9 @@ export class Reacting {
 
         this.unloweredReactions.set(leaf.name, leaf.outcome.reason ?? "not lowerable");
         executableNames.push(leaf.name);
-        const ops = leaf.decl.whereOps;
+        const ops = [...(leaf.decl.whereOps ?? []), ...(leaf.decl.then[0]?.whereOps ?? [])];
         const where =
-          ops !== undefined
+          ops.length > 0
             ? (frames: Frames) => this.applyLoweredWhere(frames, ops)
             : leaf.decl.where;
         this.indexReaction({
@@ -484,7 +484,7 @@ export class Reacting {
   registerReactions(reactions: ReactionIR[]): void {
     for (const reaction of reactions) {
       const bound = this.registry.bindReaction(reaction);
-      this.unregisterBase(reaction.name);
+      this.unregisterBase(this.ownerOf(reaction.name) ?? reaction.name);
       this.loweredReactions.set(reaction.name, [reaction]);
       this.namesByBase.set(reaction.name, [reaction.name]);
       this.indexReaction(this.compileReaction(bound));

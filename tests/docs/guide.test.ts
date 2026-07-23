@@ -169,6 +169,7 @@ describe("guided curriculum", () => {
       new URL("../../docs/README.md", import.meta.url),
       new URL("../../docs/book.md", import.meta.url),
       new URL("../../docs/public-surface.md", import.meta.url),
+      new URL("../../docs/architecture.md", import.meta.url),
       new URL("../../docs/semantics.md", import.meta.url),
       new URL("../../docs/consistency-and-operations.md", import.meta.url),
       new URL("../../examples/README.md", import.meta.url),
@@ -182,7 +183,10 @@ describe("guided curriculum", () => {
     for (const docUrl of docs) {
       const markdown = await readFile(docUrl, "utf8");
       expect(markdown).not.toMatch(/from\s+["']@mit-sdg\/sync-engine["']/);
-      if (!docUrl.pathname.endsWith("/public-surface.md")) {
+      if (
+        !docUrl.pathname.endsWith("/public-surface.md") &&
+        !docUrl.pathname.endsWith("/architecture.md")
+      ) {
         expect(markdown).not.toMatch(/\bReacting\b|\bClock\b|\bRandom\b/);
       }
 

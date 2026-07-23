@@ -1,6 +1,7 @@
 import { when as authoredWhen } from "./words.ts";
 import type {
   ActionCall,
+  ChannelPattern,
   RefusedActionLine,
   RefusedTriggerActionLine,
   ReturnedActionLine,
@@ -12,6 +13,7 @@ import type {
 /** Watch the posture stated by one callable vocabulary action line. */
 export const when = authoredWhen as (
   line:
+    | ChannelPattern
     | ActionCall
     | TriggerActionLine
     | ReturnedActionLine

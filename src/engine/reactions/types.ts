@@ -13,9 +13,6 @@ export type Mapping = Record<string, unknown>;
  */
 export type Frame = Record<string | symbol, unknown>;
 
-/** A concept action: a function from an input mapping to an output mapping. */
-export type ActionFunction<TInput = Mapping, TOutput = Mapping> = (input: TInput) => TOutput;
-
 /** A concept method reference stored as identity, not called through this type. */
 export type AnyAction = (...args: never[]) => unknown;
 
@@ -73,8 +70,6 @@ export type TriggerPattern = ActionPattern | ChannelPattern;
  * it leaves the ask without an outcome (see `ActionRecord.fault`).
  */
 export type ActionOutcome = { kind: "result"; value: Mapping } | { kind: "error"; error: Mapping };
-
-export type OutcomeKind = "any" | "result" | "error";
 
 /** A pure transform over frames — the `where` clause. */
 export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;

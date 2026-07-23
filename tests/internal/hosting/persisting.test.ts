@@ -141,6 +141,15 @@ describe("FileStore: the log survives as JSONL", () => {
     // Nothing already written was touched: all four invocations are on disk.
     const invocations = readEntries(path).filter((e) => e.kind === "invocation");
     expect(invocations.length).toBe(4);
+    expect(store.firingsByReaction("Forward")).toHaveLength(1);
+  });
+
+  test("rejects invalid retention windows before creating a store", () => {
+    for (const window of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => new FileStore(join(dir, "log.jsonl"), { window })).toThrow(
+        "window must be a non-negative finite integer",
+      );
+    }
   });
 
   test("credential inputs do not enter the retained fold or JSONL", () => {

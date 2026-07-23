@@ -1,9 +1,11 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import {
   cliFail as fail,
   cliOk as ok,
+  command,
   createCliApp,
   parseArgs,
+  parseOk,
 } from "@sync-engine/internal/boundary";
 import type { ParsedArgs } from "@sync-engine/internal/boundary";
 
@@ -74,6 +76,53 @@ describe("ok / fail", () => {
 });
 
 describe("createCliApp", () => {
+  test("runs and dispatches endpoint commands through the supplied invoker", async () => {
+    const invoke = vi.fn(async (_path: string, input: { message: string }) => ({
+      ok: true as const,
+      value: { echoed: input.message },
+    }));
+    const app = createCliApp(
+      {
+        echo: command(
+          { path: "/echo" },
+          {
+            parse: (positionals) => parseOk({ message: positionals.join(" ") }),
+            format: (result) => (result.ok ? ok(result.value.echoed) : fail("unexpected")),
+          },
+        ),
+      },
+      { invoker: { invoke } as never },
+    );
+
+    expect(await app.run(["echo", "hello", "world"])).toEqual({
+      stdout: "hello world\n",
+      stderr: "",
+      exitCode: 0,
+    });
+    expect(await app.dispatch("echo", { message: "direct" })).toEqual({
+      stdout: "direct\n",
+      stderr: "",
+      exitCode: 0,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(1, "/echo", { message: "hello world" });
+    expect(invoke).toHaveBeenNthCalledWith(2, "/echo", { message: "direct" });
+  });
+
+  test("endpoint commands fail clearly when no invoker is configured", async () => {
+    const app = createCliApp({
+      echo: command(
+        { path: "/echo" },
+        { parse: () => parseOk({}), format: () => ok("unreachable") },
+      ),
+    });
+
+    await expect(app.run(["echo"])).resolves.toEqual({
+      stdout: "",
+      stderr: 'Endpoint command "/echo" needs an invoker.\n',
+      exitCode: 1,
+    });
+  });
+
   test("run dispatches the command named by the first argument", async () => {
     const app = createCliApp({
       ping: {

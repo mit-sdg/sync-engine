@@ -1,9 +1,9 @@
 /** Manual engine construction and explicit escape hatches. */
-export { createEngine } from "../internal/reactions/engine.ts";
-export type { Engine } from "../internal/reactions/engine.ts";
-export { faulted } from "../internal/reactions/channels.ts";
-export { compute, custom } from "../internal/reads/where-ops.ts";
-export { Refuse } from "../internal/reactions/refuse.ts";
-export { Requesting } from "../internal/boundary/invoke.ts";
-export { refusalFunnel } from "../internal/boundary/funnel.ts";
-export type { EngineObserver, LogEvent } from "../internal/reactions/observer.ts";
+export { createEngine } from "../engine/reactions/engine.ts";
+export type { Engine } from "../engine/reactions/engine.ts";
+export { faulted } from "../engine/reactions/channels.ts";
+export { compute, custom } from "../engine/reads/where-ops.ts";
+export { Refuse } from "../engine/reactions/refuse.ts";
+export { Requesting } from "../engine/boundary/invoke.ts";
+export { refusalFunnel } from "../engine/boundary/funnel.ts";
+export type { EngineObserver, LogEvent } from "../engine/reactions/observer.ts";

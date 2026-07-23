@@ -1,4 +1,4 @@
-import { reaction, vocabulary, when, where } from "@sync-engine/language";
+import { count, reaction, vocabulary, when, where } from "@sync-engine/language";
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse, Reacting, type AppIR } from "@sync-engine/internal/reactions";
 
@@ -231,6 +231,12 @@ describe("branch-local chains", () => {
         Preparing.prepare({ item: "ready" }).named("inside") as never,
       ),
     ).toThrow("name the qualified branch after its local action chain");
+
+    expect(() =>
+      where(count(Routing._enabled as never, { item: "ready" }, Symbol("total"))).then(
+        Preparing.prepare({ item: "ready" }),
+      ),
+    ).toThrow("count(...) cannot be used in a reaction condition");
   });
 
   test("a branch carries a returned binding into its private next stage", async () => {

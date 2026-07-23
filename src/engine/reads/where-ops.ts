@@ -21,6 +21,7 @@ import type { ViewOp } from "./views.ts";
 import type { ActionPattern, Frame, InstrumentedQuery, Mapping } from "../reactions/types.ts";
 import { brand, hasBrand, WhereOpBrand } from "./brands.ts";
 import { liveOf } from "./ir.ts";
+import { walkValueTree } from "./value-tree.ts";
 import type { QueryRefIR, ViewOpIR } from "./ir.ts";
 import type { ReadEnv } from "./env.ts";
 import { isQueryRef } from "../reactions/refs.ts";
@@ -358,11 +359,22 @@ function passesNot(not: Mapping | undefined, frame: Frame, row: unknown): boolea
   return true;
 }
 
+/** A line cannot answer a definite fact while one of its inputs is still absent. */
+function hasUnboundInput(frame: Frame, input: Mapping): boolean {
+  let unbound = false;
+  walkValueTree(input, (value) => {
+    if (typeof value !== "symbol") return;
+    if (!readPatternValue(value, frame).bound) unbound = true;
+  });
+  return unbound;
+}
+
 async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined): Promise<Frames> {
   const result = new Frames();
   for (const frame of frames) {
     switch (op.op) {
       case "find": {
+        if (hasUnboundInput(frame, op.in)) break;
         const rows = (await lineRows(op, frame, env, "find")).filter((row) =>
           passesNot("not" in op ? op.not : undefined, frame, row),
         );
@@ -377,6 +389,10 @@ async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined
         break;
       }
       case "whether": {
+        if (hasUnboundInput(frame, op.in)) {
+          result.push({ ...frame });
+          break;
+        }
         const rows = await lineRows(op, frame, env, "whether");
         const matches = new Frames();
         expandOutputRows(matches, frame, rows, op.out);
@@ -385,6 +401,7 @@ async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined
         break;
       }
       case "no": {
+        if (hasUnboundInput(frame, op.in)) break;
         const rows = await lineRows(op, frame, env, "no");
         const matches = new Frames();
         expandOutputRows(matches, frame, rows, op.out);

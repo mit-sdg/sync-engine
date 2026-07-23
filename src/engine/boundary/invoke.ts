@@ -14,6 +14,13 @@ interface PendingRequest {
   signalListener?: () => void;
 }
 
+function disposePending(pending: PendingRequest): void {
+  clearTimeout(pending.timer);
+  if (pending.signalListener !== undefined && pending.signal !== undefined) {
+    pending.signal.removeEventListener("abort", pending.signalListener);
+  }
+}
+
 export class Requesting {
   static readonly purpose =
     "Let the outside world ask for things and receive answers, so each answer belongs to one pending call and unanswered calls remain unanswered.";
@@ -49,11 +56,8 @@ export class Requesting {
         detail: `request ${requestId} is not pending — already answered, timed out, or unknown`,
       });
     }
-    clearTimeout(pending.timer);
-    if (pending.signalListener !== undefined && pending.signal !== undefined) {
-      pending.signal.removeEventListener("abort", pending.signalListener);
-    }
     this.pending.delete(requestId);
+    disposePending(pending);
     pending.resolve(output);
     return args;
   }
@@ -65,7 +69,11 @@ export class Requesting {
   ): Promise<Record<string, unknown>> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pending.delete(requestId);
+        const pending = this.pending.get(requestId);
+        if (pending !== undefined) {
+          this.pending.delete(requestId);
+          disposePending(pending);
+        }
         reject(new DOMException("Timed out", "TimeoutError"));
       }, timeoutMs);
 
@@ -77,8 +85,11 @@ export class Requesting {
           return;
         }
         signalListener = () => {
-          clearTimeout(timer);
-          this.pending.delete(requestId);
+          const pending = this.pending.get(requestId);
+          if (pending !== undefined) {
+            this.pending.delete(requestId);
+            disposePending(pending);
+          }
           reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
         };
         signal.addEventListener("abort", signalListener, { once: true });
@@ -91,11 +102,8 @@ export class Requesting {
   cancel(requestId: string): void {
     const pending = this.pending.get(requestId);
     if (pending === undefined) return;
-    clearTimeout(pending.timer);
-    if (pending.signalListener !== undefined && pending.signal !== undefined) {
-      pending.signal.removeEventListener("abort", pending.signalListener);
-    }
     this.pending.delete(requestId);
+    disposePending(pending);
   }
 }
 

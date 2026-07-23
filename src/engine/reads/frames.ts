@@ -12,6 +12,7 @@
  * again, keeping the fluent API closed over the type.
  */
 import type { Frame, Mapping } from "../reactions/types.ts";
+import { structurallyEqual } from "./value-equality.ts";
 import { hasMarkerKey, isVarIR } from "./ir.ts";
 
 /**
@@ -152,51 +153,7 @@ export function expandOutputRows(
   }
 }
 
-/**
- * Like {@link expandOutputRows}, but preserves the source frame when no row
- * survives — left-join semantics. Absence includes unification failure: a
- * row whose value conflicts with an already-bound variable is no match.
- */
-export function expandOptionalOutputRows(
-  into: Frames,
-  frame: Frame,
-  rows: unknown[],
-  output: Mapping,
-): void {
-  const before = into.length;
-  expandOutputRows(into, frame, rows, output);
-  if (into.length === before) into.push({ ...frame } as Frame);
-}
-
-/** Structural equality for pattern unification and distinct logical fills. */
-export function structurallyEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-  if (left instanceof Date && right instanceof Date) return left.getTime() === right.getTime();
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((value, index) => structurallyEqual(value, right[index]))
-    );
-  }
-  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
-    return false;
-  }
-  const leftRecord = left as Record<PropertyKey, unknown>;
-  const rightRecord = right as Record<PropertyKey, unknown>;
-  const order = (key: PropertyKey): string =>
-    typeof key === "symbol" ? `symbol:${key.description ?? key.toString()}` : `string:${key}`;
-  const leftKeys = Reflect.ownKeys(leftRecord).sort((a, b) => order(a).localeCompare(order(b)));
-  const rightKeys = Reflect.ownKeys(rightRecord).sort((a, b) => order(a).localeCompare(order(b)));
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] && structurallyEqual(leftRecord[key], rightRecord[key]),
-    )
-  );
-}
+export { structurallyEqual } from "./value-equality.ts";
 
 /** Keep the first occurrence of each structurally equal frame. */
 export function distinctFrames(frames: Frames): Frames {

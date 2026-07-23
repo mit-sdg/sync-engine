@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
-import { matchArguments, unifyPattern } from "@sync-engine/internal/reactions/matching.ts";
+import {
+  literalEquals,
+  matchArguments,
+  unifyPattern,
+} from "@sync-engine/internal/reactions/matching.ts";
 import type { ActionRecord } from "@sync-engine/internal/reactions/actions.ts";
 import type { ActionPattern, InstrumentedAction } from "@sync-engine/internal/reactions/types.ts";
 
@@ -31,5 +35,11 @@ describe("reaction matching", () => {
       flow: Symbol("flow"),
     };
     expect(matchArguments(record, pattern, {}, Symbol("record"))).toBeDefined();
+  });
+
+  test("shares read equality for dates and does not guess at collection equality", () => {
+    expect(literalEquals(new Date("2024-01-01"), new Date("2024-01-01"))).toBe(true);
+    expect(literalEquals(new Map(), new Map())).toBe(false);
+    expect(literalEquals(new Set(), new Set())).toBe(false);
   });
 });

@@ -12,58 +12,25 @@ import { isRefuse, refusalMapping } from "./refuse.ts";
 import { actionId, byReaction, flow } from "./matching.ts";
 import type { ActionOutcome, AnyAction, InstrumentedAction } from "./types.ts";
 import { queryPromiseOf, validateQueryContracts } from "../reads/query-contracts.ts";
+import { memoizeQuery } from "./query-cache.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
-type AnyFn = (...args: never[]) => unknown;
-
-interface Memoized<T extends AnyFn> {
-  (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
-  /** Drop every cached result. */
-  invalidate: () => void;
-}
-
-/** A stable serialization of a value, so equal arguments produce equal keys. */
-function stableKey(value: unknown): string {
-  if (value === null) return "null";
-  if (value === undefined) return "undefined";
-  if (Array.isArray(value)) return `[${value.map(stableKey).join(",")}]`;
-  if (value instanceof Date) return `date:${value.getTime()}`;
-  if (typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const keys = Object.keys(record).sort();
-    return `{${keys.map((key) => `${key}:${stableKey(record[key])}`).join(",")}}`;
-  }
-  if (typeof value === "string") return `s:${value}`;
-  return `${typeof value}:${String(value)}`;
-}
-
 /**
- * Memoize a query by a stable serialization of its arguments. Queries read
- * standing state, so identical arguments return identical rows until the
- * state changes — `invalidate()` clears everything, and the engine calls it
- * on every action. No TTL or size bound: the working set is the reads issued
- * between two mutations. A rejected async query is never cached as a failure.
+ * The runtime surface of an instrumented concept.
+ *
+ * Concept classes stay ordinary: an action may return synchronously and may
+ * throw its declared refusal. Once instrumented, every action is asynchronous
+ * because the engine records and reacts to its occurrence before settling the
+ * caller. Queries retain their declared return shape.
  */
-function memoize<T extends AnyFn>(fn: T): Memoized<T> {
-  let cache = new Map<string, unknown>();
-  const wrapper = function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
-    const key = args.map(stableKey).join("|");
-    if (cache.has(key)) return cache.get(key) as ReturnType<T>;
-    const result = fn.call(this, ...args);
-    cache.set(key, result);
-    if (result instanceof Promise) {
-      result.catch(() => {
-        if (cache.get(key) === result) cache.delete(key);
-      });
-    }
-    return result as ReturnType<T>;
-  };
-  wrapper.invalidate = () => {
-    cache = new Map();
-  };
-  return wrapper as Memoized<T>;
-}
+export type InstrumentedConcept<T extends object> = {
+  [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result
+    ? Key extends `_${string}`
+      ? T[Key]
+      : (...args: Args) => Promise<Awaited<Result>>
+    : T[Key];
+};
 
 export interface InstrumentationState {
   actions: ActionConcept;
@@ -147,7 +114,7 @@ export function instrumentConcept<T extends object>(
       if (String(property).startsWith("_")) {
         const memoized = boundActions.get(actionKey);
         if (memoized !== undefined) return memoized;
-        const withCache = memoize(value.bind(concept));
+        const withCache = memoizeQuery(value.bind(concept));
         const query = withCache as typeof withCache & {
           concept?: object;
           queryName?: string;

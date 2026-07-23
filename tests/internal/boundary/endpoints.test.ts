@@ -96,6 +96,12 @@ describe("endpoint", () => {
     expect(pattern.input).toHaveProperty("status");
   });
 
+  test("reserves the response correlation field for the boundary", () => {
+    expect(() => respond({ requestId: "author value" })).toThrow(
+      'respond(...) cannot author the boundary-owned "requestId" field.',
+    );
+  });
+
   test("receive has an empty output pattern", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
     const pattern = declarationsOf(Ping.reaction({} as Vars))[0].when[0] as ActionPattern;

@@ -1,21 +1,21 @@
 /** Supported inspection, rendering, and generated-contract tools. */
-export { inspectAssembly } from "../internal/tooling/inspection.ts";
-export type { ObservedOccurrence } from "../internal/tooling/inspection.ts";
-export { renderApp, renderReaction } from "../internal/reads/render.ts";
-export { renderWireTypes, wireContracts } from "../internal/boundary/wire.ts";
-export { renderInputContracts } from "../internal/boundary/endpoints.ts";
-export { floorReadBack, httpFloorReadBack } from "../internal/boundary/http-floor.ts";
+export { inspectAssembly } from "../engine/tooling/inspection.ts";
+export type { ObservedOccurrence } from "../engine/tooling/inspection.ts";
+export { renderApp, renderReaction } from "../engine/reads/render.ts";
+export { renderWireTypes, wireContracts } from "../engine/boundary/wire.ts";
+export { renderInputContracts } from "../engine/boundary/endpoints.ts";
+export { floorReadBack, httpFloorReadBack } from "../engine/boundary/http-floor.ts";
 export type {
   AppIR,
   ConceptInventoryIR,
   FormerIR,
   ReactionIR,
   ViewIR,
-} from "../internal/reads/ir.ts";
+} from "../engine/reads/ir.ts";
 export type {
   WireContractsIR,
   WireEndpoint,
   WireOptions,
   WireRenderOptions,
   WireType,
-} from "../internal/boundary/wire.ts";
+} from "../engine/boundary/wire.ts";

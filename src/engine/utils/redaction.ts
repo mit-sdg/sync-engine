@@ -77,25 +77,75 @@ function isSensitive(key: string): boolean {
 }
 
 export function redact(obj: unknown, depth = 0): unknown {
+  if (obj === undefined) return undefined;
+  return redactValue(obj, depth, new WeakSet());
+}
+
+/** Project arbitrary diagnostic data to a redacted value that JSON can always encode. */
+function redactValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
   if (depth > 5) return "[max depth]";
-  if (obj === null || obj === undefined) return obj;
-  if (obj instanceof Error) return serializeError(obj);
-  if (typeof obj === "bigint") return obj.toString();
-  if (typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) {
-    return obj.map((v) => redact(v, depth + 1));
+  if (value === null) return null;
+
+  switch (typeof value) {
+    case "undefined":
+      return "[undefined]";
+    case "boolean":
+    case "string":
+      return value;
+    case "number":
+      return Number.isFinite(value) ? value : `[${String(value)}]`;
+    case "bigint":
+      return value.toString();
+    case "symbol":
+      return `[symbol ${value.description ?? ""}]`;
+    case "function":
+      return "[function]";
+    case "object":
+      break;
   }
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-    if (isSensitive(key)) {
-      result[key] = "[redacted]";
-    } else if (value instanceof Error) {
-      result[key] = serializeError(value);
-    } else if (typeof value === "object" && value !== null) {
-      result[key] = redact(value, depth + 1);
-    } else {
-      result[key] = value;
+
+  try {
+    if (value instanceof Error) return serializeError(value);
+    if (seen.has(value)) return "[circular]";
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      const result: unknown[] = [];
+      for (let index = 0; index < value.length; index += 1) {
+        try {
+          result.push(redactValue(value[index], depth + 1, seen));
+        } catch {
+          result.push("[unreadable]");
+        }
+      }
+      return result;
     }
+
+    if (value instanceof Date) {
+      const time = value.getTime();
+      return Number.isFinite(time) ? value.toISOString() : "[invalid date]";
+    }
+
+    const result: Record<string, unknown> = {};
+    let keys: string[];
+    try {
+      keys = Object.keys(value);
+    } catch {
+      return "[unreadable]";
+    }
+    for (const key of keys) {
+      if (isSensitive(key)) {
+        result[key] = "[redacted]";
+        continue;
+      }
+      try {
+        result[key] = redactValue((value as Record<string, unknown>)[key], depth + 1, seen);
+      } catch {
+        result[key] = "[unreadable]";
+      }
+    }
+    return result;
+  } catch {
+    return "[unreadable]";
   }
-  return result;
 }

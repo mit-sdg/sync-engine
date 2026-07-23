@@ -151,6 +151,36 @@ describe("where ops: evaluation", () => {
     expect(id in out[0]).toBe(false);
   });
 
+  test("an unbound optional input preserves only another optional read", async () => {
+    const calls: unknown[] = [];
+    const source = ((_: {
+      key: string;
+    }) => []) as unknown as import("@sync-engine/internal/reactions").InstrumentedQuery;
+    source.concept = {};
+    source.queryName = "_source";
+    const next = ((input: { key: string }) => {
+      calls.push(input);
+      return [];
+    }) as unknown as import("@sync-engine/internal/reactions").InstrumentedQuery;
+    next.concept = {};
+    next.queryName = "_next";
+    const { key, value } = $vars;
+
+    const optional = await applyWhereOps(new Frames({}), [
+      whether(lineOf({ query: source }, { key }).is({ value })),
+      whether(lineOf({ query: next }, { key })),
+    ]);
+    expect(optional).toHaveLength(1);
+    expect(calls).toEqual([]);
+
+    const plain = await applyWhereOps(new Frames({}), [
+      whether(lineOf({ query: source }, { key }).is({ value })),
+      lineOf({ query: next }, { key }),
+    ]);
+    expect(plain).toHaveLength(0);
+    expect(calls).toEqual([]);
+  });
+
   test("closed relations admit exactly the rows they hold for", async () => {
     const { n } = $vars;
     const frames = new Frames({ [n]: 1 }, { [n]: 2 }, { [n]: 3 });

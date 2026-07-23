@@ -43,6 +43,7 @@ import {
 } from "../reactions/index.ts";
 import { attachConceptMetadata } from "../reactions/concept-metadata.ts";
 import type { PublicErrorCategory } from "../reactions/concept-metadata.ts";
+import type { InstrumentedConcept } from "../reactions/instrumenting.ts";
 import { logger } from "../utils/logger.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";
 import { refusalFunnel } from "./funnel.ts";
@@ -69,6 +70,9 @@ export function receive(input: Mapping = {}): WhenBuilder {
 
 /** Answer the request this reaction was triggered by. */
 export function respond(body: Mapping = {}) {
+  if (Object.hasOwn(body, "requestId")) {
+    throw new Error('respond(...) cannot author the boundary-owned "requestId" field.');
+  }
   return Boundary.respond({ ...body, requestId: requestIdVar });
 }
 
@@ -164,7 +168,7 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   /** The boundary's instrumented actions for framework reactions and adapters. */
   boundaryActions: RequestBoundaryActions;
   /** The instrumented concepts, by vocabulary name — the canonical class types them. */
-  concepts: { [K in keyof T]: InstanceType<T[K]> };
+  concepts: { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> };
   contracts: Record<string, InputContractDecl>;
   /** The public route and admission facts a separate gateway may consume. */
   publicInterface: ApplicationInterface;
@@ -352,7 +356,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     invoker,
     boundary,
     boundaryActions: instrumentedBoundary as unknown as RequestBoundaryActions,
-    concepts: concepts as { [K in keyof T]: InstanceType<T[K]> },
+    concepts: concepts as { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> },
     contracts,
     publicInterface,
     publicErrors,

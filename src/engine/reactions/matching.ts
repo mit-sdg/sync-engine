@@ -1,5 +1,6 @@
 import { isMatcher } from "../reads/matchers.ts";
 import { varKeyOf } from "../reads/frames.ts";
+import { structurallyEqual } from "../reads/value-equality.ts";
 import { asMarker, liveOf } from "../reads/ir.ts";
 import { actionNameOf, conceptNameOf } from "./introspect.ts";
 import type { ActionRecord } from "./actions.ts";
@@ -24,39 +25,8 @@ export function postureOfOutcome(outcome: ActionOutcome): ChannelPosture {
   return outcome.kind === "result" ? "returned" : "refused";
 }
 
-/** Compare literal arrays and records recursively, including their exact key sets. */
-export function literalEquals(recordValue: unknown, literal: unknown): boolean {
-  if (recordValue === literal) return true;
-  if (Array.isArray(literal)) {
-    return (
-      Array.isArray(recordValue) &&
-      literal.length === recordValue.length &&
-      literal.every((item, index) => literalEquals(recordValue[index], item))
-    );
-  }
-  if (
-    literal !== null &&
-    typeof literal === "object" &&
-    recordValue !== null &&
-    typeof recordValue === "object" &&
-    !Array.isArray(recordValue)
-  ) {
-    const literalKeys = Object.keys(literal);
-    const recordKeys = Object.keys(recordValue);
-    return (
-      literalKeys.length === recordKeys.length &&
-      literalKeys.every(
-        (key) =>
-          key in recordValue &&
-          literalEquals(
-            (recordValue as Record<string, unknown>)[key],
-            (literal as Record<string, unknown>)[key],
-          ),
-      )
-    );
-  }
-  return false;
-}
+/** Compare literal values with the same equality used by reads and formers. */
+export const literalEquals = structurallyEqual;
 
 /** Cached regular expressions for serialized `$regexp` markers. */
 const regexpOf = new WeakMap<object, RegExp>();

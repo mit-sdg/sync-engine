@@ -24,7 +24,6 @@ const dependencies = new Map([
 ]);
 const unsupportedTopLevelDirectories = new Set([
   "cli",
-  "engine",
   "gateway",
   "hosting",
   "http",
@@ -53,9 +52,9 @@ function top(path: string): string {
   return relative(sourceRoot, path).split(sep)[0] ?? "";
 }
 
-function internalConcern(path: string): string | undefined {
+function engineConcern(path: string): string | undefined {
   const parts = relative(sourceRoot, path).split(sep);
-  return parts[0] === "internal" && concerns.has(parts[1]) ? parts[1] : undefined;
+  return parts[0] === "engine" && concerns.has(parts[1]) ? parts[1] : undefined;
 }
 
 function targetOf(source: string, specifier: string): string | undefined {
@@ -120,7 +119,7 @@ const shippedFiles = [
   ...(
     await Promise.all([...publicSubpaths].map((subpath) => tsFilesBelow(join(sourceRoot, subpath))))
   ).flat(),
-  ...(await tsFilesBelow(join(sourceRoot, "internal"))),
+  ...(await tsFilesBelow(join(sourceRoot, "engine"))),
 ];
 const tsconfig = JSON.parse(readFileSync(join(root, "tsconfig.json"), "utf8")) as {
   compilerOptions: { paths: Record<string, string[]> };
@@ -194,7 +193,7 @@ for (const subpath of publicSubpaths) {
   }
 }
 
-for (const sourcePath of await tsFilesBelow(join(sourceRoot, "internal"))) {
+for (const sourcePath of await tsFilesBelow(join(sourceRoot, "engine"))) {
   const source = ts.createSourceFile(
     sourcePath,
     readFileSync(sourcePath, "utf8"),
@@ -202,7 +201,7 @@ for (const sourcePath of await tsFilesBelow(join(sourceRoot, "internal"))) {
     true,
     ts.ScriptKind.TS,
   );
-  const owner = internalConcern(sourcePath);
+  const owner = engineConcern(sourcePath);
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) continue;
     const specifier = statement.moduleSpecifier;
@@ -212,11 +211,11 @@ for (const sourcePath of await tsFilesBelow(join(sourceRoot, "internal"))) {
     const targetTop = top(target);
     if (publicSubpaths.has(targetTop)) {
       failures.push(
-        `${relative(root, sourcePath)}: internal modules may not import public entrypoint ${targetTop}`,
+        `${relative(root, sourcePath)}: engine modules may not import public entrypoint ${targetTop}`,
       );
       continue;
     }
-    const targetConcern = internalConcern(target);
+    const targetConcern = engineConcern(target);
     if (
       owner !== undefined &&
       targetConcern !== undefined &&
@@ -265,7 +264,7 @@ for (const path of repository) {
     (head === "src" &&
       ((parts[1] === "command" && parts.length === 3 && parts[2] === "artifacts.ts") ||
         (publicSubpaths.has(parts[1] ?? "") && parts.length === 3 && parts[2] === "index.ts") ||
-        (parts[1] === "internal" && path.endsWith(".ts")))) ||
+        (parts[1] === "engine" && path.endsWith(".ts")))) ||
     (head === "docs" && path.endsWith(".md")) ||
     (head === "examples" && (path.endsWith(".md") || path.endsWith(".ts"))) ||
     (head === "scripts" && parts.length === 2 && path.endsWith(".ts")) ||
@@ -291,7 +290,7 @@ const shippedSources = new Set(shippedFiles.map((path) => normalize(path)));
 const entrypoints = [
   ...[...publicSubpaths].map((subpath) => join(sourceRoot, subpath, "index.ts")),
   ...[...concerns]
-    .map((concern) => join(sourceRoot, "internal", concern, "index.ts"))
+    .map((concern) => join(sourceRoot, "engine", concern, "index.ts"))
     .filter(existsSync),
   join(sourceRoot, "command", "artifacts.ts"),
 ].map(normalize);

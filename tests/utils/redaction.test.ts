@@ -77,10 +77,29 @@ describe("redact", () => {
     expect(redact(42n)).toBe("42");
   });
 
-  test("BigInt as property value passes through as primitive", () => {
+  test("BigInt as property value becomes JSON-safe", () => {
     const result = redact({ val: 42n }) as Record<string, unknown>;
-    expect(typeof result.val).toBe("bigint");
-    expect(result.val).toBe(42n);
+    expect(result.val).toBe("42");
+    expect(() => JSON.stringify(result)).not.toThrow();
+  });
+
+  test("nested values remain redacted and JSON-safe through cycles and unreadable fields", () => {
+    const circular: Record<string, unknown> = { token: "secret" };
+    circular.self = circular;
+    const unreadable = Object.defineProperty({}, "value", {
+      enumerable: true,
+      get() {
+        throw new Error("unreadable");
+      },
+    });
+
+    const result = redact({ nested: { circular, total: 42n }, unreadable });
+
+    expect(result).toMatchObject({
+      nested: { circular: { token: "[redacted]", self: "[circular]" }, total: "42" },
+      unreadable: { value: "[unreadable]" },
+    });
+    expect(() => JSON.stringify(result)).not.toThrow();
   });
 
   test("configureRedaction with non-iterable fields does not throw", () => {

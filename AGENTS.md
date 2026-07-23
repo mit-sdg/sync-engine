@@ -57,29 +57,29 @@ the book.
 
 ## Project Structure
 
-| Directory                      | Purpose                                                                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `src/language/` … `src/utils/` | Public package subpaths; each directory contains one export-only `index.ts` file                              |
-| `src/command/`                 | Source for the installed `sync-engine` executable                                                             |
-| `src/internal/reactions/`      | Interpreter, matching, firing, instrumentation, and log                                                       |
-| `src/internal/reads/`          | Where operations, views, formers, lowering, and rendering                                                     |
-| `src/internal/boundary/`       | Endpoints, invocation, gateway, transports, clients, and wire                                                 |
-| `src/internal/hosting/`        | Application host, lifecycle, and persistence                                                                  |
-| `src/internal/tooling/`        | Assembly inspection and generated-artifact implementation                                                     |
-| `src/internal/utils/`          | Shared dependency-neutral utilities and framework primitives; public utility implementations where applicable |
-| `docs/`                        | Public guide, API reference, and execution semantics                                                          |
-| `examples/`                    | Runnable applications, shared example concepts, and pinned generated artifacts                                |
-| `scripts/`                     | Build, package, architecture, declaration, and golden maintenance commands                                    |
-| `.github/`                     | Continuous integration using the same named package commands contributors run                                 |
-| `tests/internal/`              | Focused units mirroring reactions, reads, boundary, and hosting                                               |
-| `tests/package/`               | Source and packed type contracts, the isolated consumer fixture, and generated declarations                   |
-| `tests/golden/`                | Pinned integration fixtures                                                                                   |
-| `tests/examples/`              | End-to-end example application coverage                                                                       |
-| `tests/docs/`                  | Guide source-link and excerpt verification                                                                    |
-| `tests/utils/`                 | Public utility contract coverage                                                                              |
-| `tests/public-api.test.ts`     | Exact export register, public-package-subpath check, and unsupported-entrypoint check                         |
+| Directory                      | Purpose                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| `src/language/` … `src/utils/` | Public package subpaths; each directory contains one export-only `index.ts` file            |
+| `src/command/`                 | Source for the installed `sync-engine` executable                                           |
+| `src/engine/reactions/`        | Interpreter, matching, firing, instrumentation, occurrence log, and vocabulary refs         |
+| `src/engine/reads/`            | Where operations, views, formers, lowering, evaluation, IR, and rendering                   |
+| `src/engine/boundary/`         | Endpoints, invocation, gateway, transports, clients, and wire                               |
+| `src/engine/hosting/`          | Log retention and persistence                                                               |
+| `src/engine/tooling/`          | Assembly inspection and generated-artifact implementation                                   |
+| `src/engine/utils/`            | Shared dependency-neutral utilities and framework primitives                                |
+| `docs/`                        | Public guide, API reference, and execution semantics                                        |
+| `examples/`                    | Runnable applications, shared example concepts, and pinned generated artifacts              |
+| `scripts/`                     | Build, package, architecture, declaration, and golden maintenance commands                  |
+| `.github/`                     | Continuous integration using the same named package commands contributors run               |
+| `tests/internal/`              | Focused units mirroring reactions, reads, boundary, and hosting                             |
+| `tests/package/`               | Source and packed type contracts, the isolated consumer fixture, and generated declarations |
+| `tests/golden/`                | Pinned integration fixtures                                                                 |
+| `tests/examples/`              | End-to-end example application coverage                                                     |
+| `tests/docs/`                  | Guide source-link and excerpt verification                                                  |
+| `tests/utils/`                 | Public utility contract coverage                                                            |
+| `tests/public-api.test.ts`     | Exact export register, public-package-subpath check, and unsupported-entrypoint check       |
 
-Public entrypoints contain exports only. Code under `src/internal/` imports other
-internal modules rather than a public entrypoint. The architecture check enforces
+Public entrypoints contain exports only. Code under `src/engine/` imports other
+engine modules rather than a public entrypoint. The architecture check enforces
 these dependency directions, rejects unsupported top-level and test directories,
 and the public API test pins the exact export map and nested constants.

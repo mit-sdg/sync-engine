@@ -2,55 +2,55 @@
 
 === dist/advanced/index.d.ts ===
 /** Manual engine construction and explicit escape hatches. */
-export { createEngine } from "../internal/reactions/engine.ts";
-export type { Engine } from "../internal/reactions/engine.ts";
-export { faulted } from "../internal/reactions/channels.ts";
-export { compute, custom } from "../internal/reads/where-ops.ts";
-export { Refuse } from "../internal/reactions/refuse.ts";
-export { Requesting } from "../internal/boundary/invoke.ts";
-export { refusalFunnel } from "../internal/boundary/funnel.ts";
-export type { EngineObserver, LogEvent } from "../internal/reactions/observer.ts";
+export { createEngine } from "../engine/reactions/engine.ts";
+export type { Engine } from "../engine/reactions/engine.ts";
+export { faulted } from "../engine/reactions/channels.ts";
+export { compute, custom } from "../engine/reads/where-ops.ts";
+export { Refuse } from "../engine/reactions/refuse.ts";
+export { Requesting } from "../engine/boundary/invoke.ts";
+export { refusalFunnel } from "../engine/boundary/funnel.ts";
+export type { EngineObserver, LogEvent } from "../engine/reactions/observer.ts";
 
 === dist/assembly/index.d.ts ===
 /** Install a vocabulary and its composition into one coherent running system. */
-export { assemble } from "../internal/boundary/assembly-facade.ts";
-export type { Assembly, AssemblyOptions } from "../internal/boundary/assembly-facade.ts";
-export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../internal/boundary/concept-set.ts";
-export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, QueryRegistration, RefusalRegistration, RegisteredConcept, RegisteredConceptSet, } from "../internal/boundary/concept-set.ts";
-export { FileStore, PersistingConcept } from "../internal/hosting/index.ts";
-export { MemoryStore } from "../internal/reactions/log-store.ts";
-export type { FiringRecord, LogEntry, LogStore } from "../internal/reactions/log-store.ts";
+export { assemble } from "../engine/boundary/assembly-facade.ts";
+export type { Assembly, AssemblyOptions } from "../engine/boundary/assembly-facade.ts";
+export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engine/boundary/concept-set.ts";
+export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, QueryRegistration, RefusalRegistration, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/concept-set.ts";
+export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
+export { MemoryStore } from "../engine/reactions/log-store.ts";
+export type { FiringRecord, LogEntry, LogStore } from "../engine/reactions/log-store.ts";
 
 === dist/boundary/index.d.ts ===
 /** Declare the public requests a composition can receive and answer. */
-export { endpoint, receive, respond } from "../internal/boundary/assemble.ts";
-export type { EndpointDef } from "../internal/boundary/assemble.ts";
-export type { InputContractDecl } from "../internal/boundary/endpoints.ts";
-export { FrameworkErrorCode } from "../internal/boundary/errors.ts";
-export type { EmittedFrameworkErrorCode, InvocationResult } from "../internal/boundary/errors.ts";
-export type { Invoker, InvokeOptions } from "../internal/boundary/invoke.ts";
-export { createGateway } from "../internal/boundary/public-gateway.ts";
-export type { Gateway, GatewayClientError, GatewayOptions, GatewayTarget, } from "../internal/boundary/public-gateway.ts";
-export type { ApplicationInterface } from "../internal/boundary/application-interface.ts";
-export { createHttpHandler } from "../internal/boundary/http.ts";
-export { httpFloor } from "../internal/boundary/http-floor.ts";
-export type { HttpCredentialBinding, HttpFloor } from "../internal/boundary/http-floor.ts";
-export { command, createCliApp, fail, ok, parseArgs, parseFail, parseOk, } from "../internal/boundary/cli-app.ts";
-export type { CliApp, CliAppOptions, CliCommand, CliResult, CommandInput, EndpointCliCommand, ParsedArgs, ParseResult, } from "../internal/boundary/cli-app.ts";
+export { endpoint, receive, respond } from "../engine/boundary/assemble.ts";
+export type { EndpointDef } from "../engine/boundary/assemble.ts";
+export type { InputContractDecl } from "../engine/boundary/endpoints.ts";
+export { FrameworkErrorCode } from "../engine/boundary/errors.ts";
+export type { EmittedFrameworkErrorCode, InvocationResult } from "../engine/boundary/errors.ts";
+export type { Invoker, InvokeOptions } from "../engine/boundary/invoke.ts";
+export { createGateway } from "../engine/boundary/public-gateway.ts";
+export type { Gateway, GatewayClientError, GatewayOptions, GatewayTarget, } from "../engine/boundary/public-gateway.ts";
+export type { ApplicationInterface } from "../engine/boundary/application-interface.ts";
+export { createHttpHandler } from "../engine/boundary/http.ts";
+export { httpFloor } from "../engine/boundary/http-floor.ts";
+export type { HttpCredentialBinding, HttpFloor } from "../engine/boundary/http-floor.ts";
+export { command, createCliApp, fail, ok, parseArgs, parseFail, parseOk, } from "../engine/boundary/cli-app.ts";
+export type { CliApp, CliAppOptions, CliCommand, CliResult, CommandInput, EndpointCliCommand, ParsedArgs, ParseResult, } from "../engine/boundary/cli-app.ts";
 
 === dist/client/index.d.ts ===
 /** Consume a generated wire contract, locally or over HTTP. */
-export { createClient } from "../internal/boundary/client.ts";
-export { createHttpClient, createHttpTransport } from "../internal/boundary/http-client.ts";
-export { createLocalClient } from "../internal/boundary/local-client.ts";
-export type { Client, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "../internal/boundary/client.ts";
-export type { HeadersOption, HttpClientOptions } from "../internal/boundary/http-client.ts";
+export { createClient } from "../engine/boundary/client.ts";
+export { createHttpClient, createHttpTransport } from "../engine/boundary/http-client.ts";
+export { createLocalClient } from "../engine/boundary/local-client.ts";
+export type { Client, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client.ts";
+export type { HeadersOption, HttpClientOptions } from "../engine/boundary/http-client.ts";
 
 === dist/command/artifacts.d.ts ===
 #!/usr/bin/env bun
 export {};
 
-=== dist/internal/boundary/admit.d.ts ===
+=== dist/engine/boundary/admit.d.ts ===
 /**
  * Validate declared endpoint input for both direct invocation and the gateway.
  * The input must be an object containing each required key; explicit `null`
@@ -68,7 +68,7 @@ export type AdmitResult = {
 /** Check `input` against `contract` and name `path` in every failure. */
 export declare function admitInput(contract: InputContractDecl, path: string, input: unknown): AdmitResult;
 
-=== dist/internal/boundary/application-interface.d.ts ===
+=== dist/engine/boundary/application-interface.d.ts ===
 import type { InputContractDecl } from "./endpoints.ts";
 /**
  * The application facts a gateway may rely on. It deliberately contains no
@@ -78,7 +78,7 @@ export interface ApplicationInterface {
     readonly routes: Readonly<Record<string, InputContractDecl>>;
 }
 
-=== dist/internal/boundary/assemble.d.ts ===
+=== dist/engine/boundary/assemble.d.ts ===
 /**
  * Assemble a vocabulary and composition into one application.
  *
@@ -93,6 +93,7 @@ export interface ApplicationInterface {
 import type { ConceptClass, ConceptEntry, ConceptClassesOf, ComputationFn, DeclaredVocabulary, FusedFormer, Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../reactions/index.ts";
 import { Logging, Reacting } from "../reactions/index.ts";
 import type { PublicErrorCategory } from "../reactions/concept-metadata.ts";
+import type { InstrumentedConcept } from "../reactions/instrumenting.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";
 import type { Invoker } from "./invoke.ts";
 import { Requesting } from "./invoke.ts";
@@ -153,7 +154,7 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     boundaryActions: RequestBoundaryActions;
     /** The instrumented concepts, by vocabulary name — the canonical class types them. */
     concepts: {
-        [K in keyof T]: InstanceType<T[K]>;
+        [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>>;
     };
     contracts: Record<string, InputContractDecl>;
     /** The public route and admission facts a separate gateway may consume. */
@@ -174,7 +175,7 @@ export declare function assemble<TEntries extends Record<string, ConceptEntry>, 
     vocabulary: DeclaredVocabulary<TEntries, TComputations>;
 }): AssembledApp<ConceptClassesOf<TEntries>>;
 
-=== dist/internal/boundary/assembly-facade.d.ts ===
+=== dist/engine/boundary/assembly-facade.d.ts ===
 import type { ComputationFn } from "../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../reactions/refs.ts";
 import type { AssembledApp, AssembleOptions } from "./assemble.ts";
@@ -185,12 +186,12 @@ export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComp
 };
 export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: AssemblyOptions<TEntries, TComputations>): Assembly<ConceptClassesOf<TEntries>>;
 
-=== dist/internal/boundary/assembly-registry.d.ts ===
+=== dist/engine/boundary/assembly-registry.d.ts ===
 import type { AssembledApp } from "./assemble.ts";
 export declare function rememberAssembly(facade: object, assembled: AssembledApp<Record<string, new (...args: never[]) => object>>): void;
 export declare function assemblyBehind(facade: object): AssembledApp<Record<string, new (...args: never[]) => object>>;
 
-=== dist/internal/boundary/cli-app.d.ts ===
+=== dist/engine/boundary/cli-app.d.ts ===
 import type { InvocationResult } from "./errors.ts";
 import type { Invoker } from "./invoke.ts";
 import type { ContractShape } from "./client.ts";
@@ -226,19 +227,19 @@ export interface EndpointCliCommand<TInput, TOutput, TDomainError> {
     parse(positionals: string[], options: Record<string, string | boolean>): ParseResult<TInput>;
     format(result: InvocationResult<TOutput, TDomainError>): CliResult;
 }
-type Commands = Record<string, CliCommand<any>>;
-export type CommandInput<TCommands extends Commands, K extends keyof TCommands> = TCommands[K] extends CliCommand<infer I> ? I : never;
+type Commands = Record<string, CliCommand<any> | EndpointCliCommand<any, any, any>>;
+export type CommandInput<TCommands extends Commands, K extends keyof TCommands> = TCommands[K] extends CliCommand<infer I> ? I : TCommands[K] extends EndpointCliCommand<infer I, unknown, unknown> ? I : never;
 export interface CliApp<TCommands extends Commands> {
     run(args: string[]): Promise<CliResult>;
     dispatch<K extends keyof TCommands>(command: K, input: CommandInput<TCommands, K>): Promise<CliResult>;
     help(): string;
 }
-export interface CliAppOptions {
+export interface CliAppOptions<C extends ContractShape = ContractShape> {
     name?: string;
     version?: string;
-    invoker?: Invoker<ContractShape>;
+    invoker?: Invoker<C>;
 }
-export declare function createCliApp<TCommands extends Commands>(commands: TCommands, options?: CliAppOptions): CliApp<TCommands>;
+export declare function createCliApp<TCommands extends Commands, C extends ContractShape = ContractShape>(commands: TCommands, options?: CliAppOptions<C>): CliApp<TCommands>;
 export declare function command<TInput, TOutput, TDomainError>(endpointRef: {
     path: string;
 }, opts: {
@@ -248,7 +249,7 @@ export declare function command<TInput, TOutput, TDomainError>(endpointRef: {
 }): EndpointCliCommand<TInput, TOutput, TDomainError>;
 export {};
 
-=== dist/internal/boundary/client.d.ts ===
+=== dist/engine/boundary/client.d.ts ===
 /**
  * Create a typed client from a generated contract and a transport.
  *
@@ -368,7 +369,7 @@ export type Client<C extends ContractShape, TError = ClientError> = IndexedClien
 export declare function createClient<C extends ContractShape, TError = ClientError>(options: ClientOptions<TError>): Client<C, TError>;
 export {};
 
-=== dist/internal/boundary/concept-set.d.ts ===
+=== dist/engine/boundary/concept-set.d.ts ===
 import { type ConceptClass, type ConceptClassesOf, type ConceptEntry, type DeclaredVocabulary } from "../reactions/refs.ts";
 import type { ErrorConstructor, PublicErrorCategory as MetadataPublicErrorCategory, RefusalContracts } from "../reactions/concept-metadata.ts";
 import type { ComputationFn } from "../reads/computations.ts";
@@ -454,7 +455,7 @@ export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>>
 export declare function conceptSet<const S extends Record<string, AnyRegistration>>(registrations: S): RegisteredConceptSet<S>;
 export {};
 
-=== dist/internal/boundary/endpoints.d.ts ===
+=== dist/engine/boundary/endpoints.d.ts ===
 /**
  * Declare typed application endpoints over request and response actions.
  * {@link RequestBoundaryActions} describes the required action pair, and the
@@ -480,7 +481,7 @@ export interface RequestBoundaryActions {
  */
 export declare function renderInputContracts(contracts: Record<string, InputContractDecl>): string;
 
-=== dist/internal/boundary/envelope.d.ts ===
+=== dist/engine/boundary/envelope.d.ts ===
 /**
  * One home for the flat wire envelope: the JSON body a transport carries in
  * place of an {@link InvocationResult}, and the reading that recovers a result
@@ -512,7 +513,7 @@ export declare function toJsonEnvelope(result: InvocationResult): unknown;
  */
 export declare function fromEnvelope(output: Record<string, unknown>): InvocationResult;
 
-=== dist/internal/boundary/errors.d.ts ===
+=== dist/engine/boundary/errors.d.ts ===
 import type { EmittedFrameworkErrorCode, FrameworkErrorCode as FrameworkErrorCodeValue } from "../utils/framework-error-codes.ts";
 export type InvocationResult<TOutput = unknown, TDomainError = unknown> = {
     ok: true;
@@ -549,7 +550,7 @@ export declare function success<T>(value: T): InvocationResult<T, never>;
 export declare function domainError<E>(value: E): InvocationResult<never, E>;
 export declare function frameworkError(code: EmittedFrameworkErrorCode, detail?: string): InvocationResult<never, never>;
 
-=== dist/internal/boundary/funnel.d.ts ===
+=== dist/engine/boundary/funnel.d.ts ===
 /**
  * Standard refusal and fault delivery for an application boundary.
  *
@@ -574,7 +575,7 @@ export declare const FAULT_REPLY = "INTERNAL_ERROR";
 export declare const FAULT_REACTION = "DeliverFaultToAsker";
 export declare function refusalFunnel(boundary: RequestBoundaryActions): Record<string, Reaction>;
 
-=== dist/internal/boundary/gateway.d.ts ===
+=== dist/engine/boundary/gateway.d.ts ===
 import { Logging, type OutcomeContracts, type Reacting } from "../reactions/index.ts";
 import type { ApplicationInterface } from "./application-interface.ts";
 import type { ClientError, ContractShape } from "./client.ts";
@@ -663,7 +664,7 @@ export declare function createGateway<C extends ContractShape = ContractShape>(o
 export type GatewayClientError = ClientError;
 export {};
 
-=== dist/internal/boundary/http-client.d.ts ===
+=== dist/engine/boundary/http-client.d.ts ===
 /**
  * # HTTP transport adapter
  *
@@ -717,7 +718,7 @@ export declare function createHttpTransport(options?: HttpClientOptions): Client
  */
 export declare function createHttpClient<C extends ContractShape>(options?: HttpClientOptions): Client<C>;
 
-=== dist/internal/boundary/http-floor.d.ts ===
+=== dist/engine/boundary/http-floor.d.ts ===
 import type { Assembly } from "./assembly-facade.ts";
 import type { InputContractDecl } from "./endpoints.ts";
 import type { PublicErrorCategory } from "../reactions/concept-metadata.ts";
@@ -751,7 +752,7 @@ export declare function floorReadBack(options: {
     httpFloor: HttpFloor;
 }): string;
 
-=== dist/internal/boundary/http.d.ts ===
+=== dist/engine/boundary/http.d.ts ===
 import type { ContractShape } from "./client.ts";
 import type { Invoker } from "./invoke.ts";
 import type { Assembly } from "./assembly-facade.ts";
@@ -768,7 +769,7 @@ export declare function createHttpHandler(options: {
     floor: HttpFloor;
 }): (request: Request) => Promise<Response>;
 
-=== dist/internal/boundary/index.d.ts ===
+=== dist/engine/boundary/index.d.ts ===
 export { createClient } from "./client.ts";
 export type { Client, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "./client.ts";
 export { createHttpTransport, createHttpClient } from "./http-client.ts";
@@ -791,7 +792,7 @@ export type { WireContractsIR, WireEndpoint, WireOptions, WireRenderOptions, Wir
 export { command, createCliApp, fail as cliFail, ok as cliOk, parseArgs, parseFail, parseOk, } from "./cli-app.ts";
 export type { CliApp, CliAppOptions, CliCommand, CliResult, CommandInput, EndpointCliCommand, ParsedArgs, ParseResult, } from "./cli-app.ts";
 
-=== dist/internal/boundary/invoke.d.ts ===
+=== dist/engine/boundary/invoke.d.ts ===
 import { type OutcomeContracts } from "../reactions/index.ts";
 import type { ContractShape, DomainErrorValue } from "./client.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";
@@ -830,7 +831,7 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
 }): Invoker<C>;
 export { createLocalClient } from "./local-client.ts";
 
-=== dist/internal/boundary/local-client.d.ts ===
+=== dist/engine/boundary/local-client.d.ts ===
 import type { Client, ContractShape } from "./client.ts";
 import type { Invoker } from "./invoke.ts";
 /** Consume an assembled boundary in process through the ordinary client contract. */
@@ -838,7 +839,7 @@ export declare function createLocalClient<C extends ContractShape>(options: {
     invoker: Invoker<C>;
 }): Client<C>;
 
-=== dist/internal/boundary/public-gateway.d.ts ===
+=== dist/engine/boundary/public-gateway.d.ts ===
 /** The standard gateway. */
 import type { Logging } from "../reactions/logging.ts";
 import type { ApplicationInterface } from "./application-interface.ts";
@@ -859,7 +860,7 @@ export interface Gateway<C extends ContractShape> extends Invoker<C> {
 }
 export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
 
-=== dist/internal/boundary/wire-provenance.d.ts ===
+=== dist/engine/boundary/wire-provenance.d.ts ===
 /** Endpoint-local type origins derived from registered reaction and read IR. */
 import type { PatternIR, QueryRefIR, ReactionIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR } from "../reads/ir.ts";
 export type WireOrigin = {
@@ -914,7 +915,7 @@ export declare function referenceOfValue(value: ValueIR, env: ProvenanceEnv): {
 } | undefined;
 export {};
 
-=== dist/internal/boundary/wire.d.ts ===
+=== dist/engine/boundary/wire.d.ts ===
 /**
  * Derive a TypeScript wire contract from registered endpoint IR.
  *
@@ -1015,12 +1016,12 @@ export interface WireRenderOptions {
 export declare function renderWireTypes(wire: WireContractsIR, moduleName?: string): string;
 export declare function renderWireTypes(wire: WireContractsIR, options?: WireRenderOptions): string;
 
-=== dist/internal/hosting/index.d.ts ===
+=== dist/engine/hosting/index.d.ts ===
 export { AuditFeed, FileStore, PersistingConcept } from "./persisting.ts";
 export type { AuditEntry, PersistBinding, PersistedEntry, RetentionPolicy } from "./persisting.ts";
 export type { Stoppable } from "./stoppable.ts";
 
-=== dist/internal/hosting/persisting.d.ts ===
+=== dist/engine/hosting/persisting.d.ts ===
 /**
  * Log storage, retention, and retained-log queries.
  *
@@ -1093,6 +1094,8 @@ export declare class FileStore extends MemoryStore implements Stoppable {
     /** File writes are synchronous; this hook lets a host manage the store as a resource. */
     stop(): void;
     private enforceWindow;
+    /** Reject entries the in-memory fold would reject before they reach disk. */
+    private assertAppendable;
 }
 /** One registry entry: a subject, its application-supplied store, and recorded policy. */
 export interface PersistBinding {
@@ -1173,13 +1176,13 @@ export declare class AuditFeed {
     private entryOf;
 }
 
-=== dist/internal/hosting/stoppable.d.ts ===
+=== dist/engine/hosting/stoppable.d.ts ===
 /** A long-lived resource that a host can stop during shutdown. */
 export interface Stoppable {
     stop(): void | Promise<void>;
 }
 
-=== dist/internal/reactions/actions.d.ts ===
+=== dist/engine/reactions/actions.d.ts ===
 /**
  * The **action log** — itself a tiny concept.
  *
@@ -1276,7 +1279,7 @@ export declare class ActionConcept {
     evictConsumedFlows(): number;
 }
 
-=== dist/internal/reactions/channels.d.ts ===
+=== dist/engine/reactions/channels.d.ts ===
 /**
  * **Channel triggers** — `when` clauses that watch a *posture*, not a
  * particular action.
@@ -1316,7 +1319,7 @@ export declare function faulted(pattern?: Mapping, options?: ChannelOptions): Ch
 /** Whether a value is a channel clause built by this module. */
 export declare function isChannelPattern(value: unknown): value is ChannelPattern;
 
-=== dist/internal/reactions/concept-metadata.d.ts ===
+=== dist/engine/reactions/concept-metadata.d.ts ===
 import type { OutcomeContracts } from "./outcomes.ts";
 import type { QueryPromise } from "../reads/query-contracts.ts";
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
@@ -1341,7 +1344,7 @@ export interface RegisteredRefusal {
 /** Match a thrown error to an action's vocabulary-declared refusal branch. */
 export declare function registeredRefusalOf(concept: object, action: string, thrown: unknown): RegisteredRefusal | undefined;
 
-=== dist/internal/reactions/concept-spec.d.ts ===
+=== dist/engine/reactions/concept-spec.d.ts ===
 /** Read purpose and principle from their single authored specification. */
 /** The prose a concept's specification document authors. */
 export interface ConceptSpecProse {
@@ -1355,7 +1358,7 @@ export interface ConceptSpecProse {
  */
 export declare function parseSpecProse(markdown: string): ConceptSpecProse;
 
-=== dist/internal/reactions/engine.d.ts ===
+=== dist/engine/reactions/engine.d.ts ===
 /**
  * The engine as a host constructs it directly — the deliberate escape
  * hatches behind `assemble`: instrument concepts by hand, register authored
@@ -1409,7 +1412,7 @@ export interface Engine {
 /** Construct an engine with an optional log store. */
 export declare function createEngine(store?: LogStore): Engine;
 
-=== dist/internal/reactions/firing.d.ts ===
+=== dist/engine/reactions/firing.d.ts ===
 import type { FiringRecord, LogStore } from "./log-store.ts";
 export interface FiringFill {
     reaction: string;
@@ -1436,9 +1439,9 @@ export declare class FiringBook {
     firings(reaction: string): FiringRecord[];
 }
 
-=== dist/internal/reactions/index.d.ts ===
+=== dist/engine/reactions/index.d.ts ===
 /**
- * Internal reactions entrypoint, imported by engine modules and focused
+ * Runtime reactions entrypoint, imported by engine modules and focused
  * tests as `@sync-engine/internal/reactions`. It gathers the reaction runtime,
  * its authored vocabulary, and the read-side contracts that runtime uses.
  */
@@ -1485,13 +1488,24 @@ export { isMatcher, oneOf } from "../reads/matchers.ts";
 export { Logging } from "./logging.ts";
 export { Reacting } from "./reacting.ts";
 export { earlier, when } from "./words.ts";
-export type { ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, Empty, Frame, InstrumentedAction, InstrumentedQuery, Matcher, Mapping, OutcomeKind, StepNode, ReactionDeclaration, ReactionPartition, ReactionResult, Reaction, ThenNode, TriggerPattern, Vars, WhenBuilder, WhenBuilderWithWhere, WhenBuilderWithFunctionWhere, WhereFn, } from "./types.ts";
+export type { ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, Empty, Frame, InstrumentedAction, InstrumentedQuery, Matcher, Mapping, StepNode, ReactionDeclaration, ReactionPartition, ReactionResult, Reaction, ThenNode, TriggerPattern, Vars, WhenBuilder, WhenBuilderWithWhere, WhenBuilderWithFunctionWhere, WhereFn, } from "./types.ts";
 export { $vars } from "./vars.ts";
 
-=== dist/internal/reactions/instrumenting.d.ts ===
+=== dist/engine/reactions/instrumenting.d.ts ===
 import { ActionConcept } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
 import type { AnyAction, InstrumentedAction } from "./types.ts";
+/**
+ * The runtime surface of an instrumented concept.
+ *
+ * Concept classes stay ordinary: an action may return synchronously and may
+ * throw its declared refusal. Once instrumented, every action is asynchronous
+ * because the engine records and reacts to its occurrence before settling the
+ * caller. Queries retain their declared return shape.
+ */
+export type InstrumentedConcept<T extends object> = {
+    [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result ? Key extends `_${string}` ? T[Key] : (...args: Args) => Promise<Awaited<Result>> : T[Key];
+};
 export interface InstrumentationState {
     actions: ActionConcept;
     boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
@@ -1512,7 +1526,7 @@ export declare function instrumentConcept<T extends object>(state: Instrumentati
 export declare function instrument<T extends Record<string, object>>(state: InstrumentationState, concepts: T): T;
 export declare function instrument<T extends object>(state: InstrumentationState, concept: T): T;
 
-=== dist/internal/reactions/introspect.d.ts ===
+=== dist/engine/reactions/introspect.d.ts ===
 /**
  * Concept/action name-derivation helpers for the engine and tooling.
  *
@@ -1566,7 +1580,7 @@ export declare function rolesOf(fn: (...args: never[]) => unknown): string[] | u
  */
 export declare function inventoryOf(concept: object): ConceptInventoryIR;
 
-=== dist/internal/reactions/log-store.d.ts ===
+=== dist/engine/reactions/log-store.d.ts ===
 /**
  * Store action and reaction log entries:
  *
@@ -1702,9 +1716,11 @@ export declare class MemoryStore implements LogStore {
     private replaceRecord;
     /** Drop each record from both the id map and the derived consumed index. */
     private dropRecords;
+    /** Remove firings that refer to evicted occurrences and rebuild consumption from what remains. */
+    private dropFiringsFor;
 }
 
-=== dist/internal/reactions/logging.d.ts ===
+=== dist/engine/reactions/logging.d.ts ===
 import type { ActionRecord } from "./actions.ts";
 import type { ActionConcept } from "./actions.ts";
 import type { EngineObserver, LogEvent } from "./observer.ts";
@@ -1731,7 +1747,8 @@ export declare class ReactionLogger {
     action(record: ActionRecord, durationMs?: number): void;
 }
 
-=== dist/internal/reactions/matching.d.ts ===
+=== dist/engine/reactions/matching.d.ts ===
+import { structurallyEqual } from "../reads/value-equality.ts";
 import type { ActionRecord } from "./actions.ts";
 import type { ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, Frame, Mapping } from "./types.ts";
 /** Reserved bindings carried beside application variables in an interpreter frame. */
@@ -1741,8 +1758,8 @@ export declare const byReaction: unique symbol;
 export declare const landing: unique symbol;
 /** The posture in which an action outcome landed. */
 export declare function postureOfOutcome(outcome: ActionOutcome): ChannelPosture;
-/** Compare literal arrays and records recursively, including their exact key sets. */
-export declare function literalEquals(recordValue: unknown, literal: unknown): boolean;
+/** Compare literal values with the same equality used by reads and formers. */
+export declare const literalEquals: typeof structurallyEqual;
 /**
  * Match each stated field against a record and extend the supplied frame.
  * Accepted field patterns are authored variables, `{ $var }`, `RegExp`,
@@ -1757,7 +1774,7 @@ export declare function matchArguments(record: ActionRecord, pattern: ActionPatt
 /** Match one record against a posture channel, exclusions, provenance, and payload pattern. */
 export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: WeakMap<object, object>): Frame | undefined;
 
-=== dist/internal/reactions/nodes.d.ts ===
+=== dist/engine/reactions/nodes.d.ts ===
 import type { BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode, UnnamedStepNode } from "./types.ts";
 import type { WhereOp } from "../reads/where-ops.ts";
 export declare function brandReactionNode<T extends object>(node: T): T;
@@ -1767,7 +1784,7 @@ export declare function actionLine(action: InstrumentedAction, input: Mapping): 
 export declare function branchChain(whereOps: readonly WhereOp[], first: UnnamedStepNode): BranchChain;
 export declare function assertReactionNodes(nodes: readonly ThenNode[]): void;
 
-=== dist/internal/reactions/observer.d.ts ===
+=== dist/engine/reactions/observer.d.ts ===
 /**
  * The engine sends observers one {@link LogEvent} after each instrumented
  * non-query action. The event contains the concept and action names,
@@ -1794,7 +1811,7 @@ export interface EngineObserver {
     onAction(ev: LogEvent): void;
 }
 
-=== dist/internal/reactions/outcomes.d.ts ===
+=== dist/engine/reactions/outcomes.d.ts ===
 /**
  * **Declared outcomes** — a static, per-action contract carried on the
  * concept class.
@@ -1827,19 +1844,42 @@ export type OutcomeContracts = Record<string, ActionContract>;
 /** Look up the declared contract for one action of a concept instance. */
 export declare function contractOf(concept: object, action: string): ActionContract | undefined;
 
-=== dist/internal/reactions/partitions.d.ts ===
+=== dist/engine/reactions/partitions.d.ts ===
 import type { ReactionDeclaration, ReactionPartition, ReactionResult, ThenNode, TriggerPattern } from "./types.ts";
 export declare function isReactionPartition(value: unknown): value is ReactionPartition;
 export declare function declarationsOf(result: ReactionResult): readonly ReactionDeclaration[];
 /** Build and extend the authored sibling tree as independent flat paths. */
 export declare function siblingTree(patterns: readonly TriggerPattern[], root: Pick<ReactionDeclaration, "where" | "whereOps">, nodes: readonly ThenNode[]): ReactionPartition;
 
-=== dist/internal/reactions/public-words.d.ts ===
-import type { ActionCall, RefusedActionLine, RefusedTriggerActionLine, ReturnedActionLine, ReturnedTriggerActionLine, TriggerActionLine, WhenBuilder } from "./types.ts";
+=== dist/engine/reactions/public-words.d.ts ===
+import type { ActionCall, ChannelPattern, RefusedActionLine, RefusedTriggerActionLine, ReturnedActionLine, ReturnedTriggerActionLine, TriggerActionLine, WhenBuilder } from "./types.ts";
 /** Watch the posture stated by one callable vocabulary action line. */
-export declare const when: (line: ActionCall | TriggerActionLine | ReturnedActionLine | ReturnedTriggerActionLine | RefusedActionLine | RefusedTriggerActionLine) => WhenBuilder;
+export declare const when: (line: ChannelPattern | ActionCall | TriggerActionLine | ReturnedActionLine | ReturnedTriggerActionLine | RefusedActionLine | RefusedTriggerActionLine) => WhenBuilder;
 
-=== dist/internal/reactions/reacting.d.ts ===
+=== dist/engine/reactions/query-cache.d.ts ===
+/**
+ * Query memoization between mutations.
+ *
+ * Instrumentation invalidates every query cache before and after an action
+ * body. This module owns only cache identity and rejected-promise eviction.
+ */
+type AnyFn = (...args: never[]) => unknown;
+export interface MemoizedQuery<T extends AnyFn> {
+    (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
+    invalidate(): void;
+}
+interface IdentityTable {
+    symbols: Map<symbol, number>;
+    functions: WeakMap<Function, number>;
+    next: number;
+}
+/** Build a deterministic key without conflating cyclic, collection, or identity values. */
+export declare function queryCacheKey(args: readonly unknown[], identities?: IdentityTable): string;
+/** Memoize a query until invalidated; a rejected promise is never retained. */
+export declare function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T>;
+export {};
+
+=== dist/engine/reactions/reacting.d.ts ===
 /**
  * The reaction interpreter.
  *
@@ -2078,7 +2118,7 @@ export declare class Reacting {
 }
 export {};
 
-=== dist/internal/reactions/refs.d.ts ===
+=== dist/engine/reactions/refs.d.ts ===
 /**
  * **Static concept refs** — authoring against names, not instances.
  *
@@ -2232,7 +2272,7 @@ export declare function reaction(reaction: Reaction): Reaction;
 export declare function isReaction(value: unknown): value is Reaction;
 export {};
 
-=== dist/internal/reactions/refuse.d.ts ===
+=== dist/engine/reactions/refuse.d.ts ===
 /**
  * The **`Refuse` marker** — the implementation-language spelling of a
  * concept's declared refuse branch, the way `return` spells the success
@@ -2261,7 +2301,7 @@ export declare function isRefuse(value: unknown): value is Refuse;
  */
 export declare function refusalMapping(refusal: Refuse): Record<string, unknown>;
 
-=== dist/internal/reactions/resolving.d.ts ===
+=== dist/engine/reactions/resolving.d.ts ===
 import type { ComputationRef } from "../reads/computations.ts";
 import type { InstrumentedQuery, Mapping } from "./types.ts";
 import type { ActionPattern, ActionPosture } from "./types.ts";
@@ -2276,7 +2316,7 @@ export declare class NameResolver {
     computation(name: string, site: string, vocabularyOnly?: boolean): ComputationRef;
 }
 
-=== dist/internal/reactions/types.d.ts ===
+=== dist/engine/reactions/types.d.ts ===
 /** Core type vocabulary for declarative reactions. */
 import type { Frames } from "../reads/frames.ts";
 import type { AnyWhereOp, Condition, WhereOp } from "../reads/where-ops.ts";
@@ -2289,8 +2329,6 @@ export type Mapping = Record<string, unknown>;
  * collide with the reserved symbol keys.
  */
 export type Frame = Record<string | symbol, unknown>;
-/** A concept action: a function from an input mapping to an output mapping. */
-export type ActionFunction<TInput = Mapping, TOutput = Mapping> = (input: TInput) => TOutput;
 /** A concept method reference stored as identity, not called through this type. */
 export type AnyAction = (...args: never[]) => unknown;
 /** A normalized action declaration. */
@@ -2349,7 +2387,6 @@ export type ActionOutcome = {
     kind: "error";
     error: Mapping;
 };
-export type OutcomeKind = "any" | "result" | "error";
 /** A pure transform over frames — the `where` clause. */
 export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
 declare const MatcherBrand: unique symbol;
@@ -2548,7 +2585,7 @@ export interface WhenBuilderWithFunctionWhere {
 }
 export {};
 
-=== dist/internal/reactions/vars.d.ts ===
+=== dist/engine/reactions/vars.d.ts ===
 /**
  * The {@link $vars} proxy: the source of logic variables for reaction functions.
  *
@@ -2565,7 +2602,7 @@ export {};
 import type { Vars } from "./types.ts";
 export declare const $vars: Vars;
 
-=== dist/internal/reactions/words.d.ts ===
+=== dist/engine/reactions/words.d.ts ===
 import type { EarlierOp } from "../reads/where-ops.ts";
 import type { ActionPattern, ChannelPattern, InstrumentedAction, Mapping, StepNode, WhenBuilder } from "./types.ts";
 /** Normalize one action and its patterns into the occurrence data the engine matches. */
@@ -2575,7 +2612,7 @@ export declare function earlier(action: InstrumentedAction, input: Mapping, outp
 export declare function when(channel: ChannelPattern): WhenBuilder;
 export declare function when(line: StepNode): WhenBuilder;
 
-=== dist/internal/reads/brands.d.ts ===
+=== dist/engine/reads/brands.d.ts ===
 /** Import-leaf brands keep read-side predicates from creating value cycles. */
 export declare const WhereOpBrand: unique symbol;
 export declare const CountOpBrand: unique symbol;
@@ -2588,7 +2625,7 @@ export declare const ReactionPartitionBrand: unique symbol;
 export declare function brand<T extends object>(value: T, marker: symbol): T;
 export declare function hasBrand(value: unknown, marker: symbol): value is object;
 
-=== dist/internal/reads/computations.d.ts ===
+=== dist/engine/reads/computations.d.ts ===
 /**
  * Named, pure calculations over values already in hand.
  *
@@ -2633,7 +2670,7 @@ export declare const is: {
 /** Engine-provided computation refs installed into every engine instance. */
 export declare const standardComputations: readonly ComputationRef[];
 
-=== dist/internal/reads/env.d.ts ===
+=== dist/engine/reads/env.d.ts ===
 /**
  * The read environment: how IR-shaped nodes reach live state at evaluation.
  *
@@ -2658,7 +2695,7 @@ export interface ReadEnv {
     formerByName(name: string, site: string): FormerRef;
 }
 
-=== dist/internal/reads/former-analysis.d.ts ===
+=== dist/engine/reads/former-analysis.d.ts ===
 /** Definition-time static checks a former runs over its nodes before it registers. */
 import type { PatternIR } from "./ir.ts";
 import type { FormerNode } from "./former-nodes.ts";
@@ -2674,7 +2711,7 @@ export declare function varNamesInPattern(pattern: PatternIR): string[];
 export declare function assertBound(name: string, node: FormerNode, bound: ReadonlySet<symbol>, free?: ReadonlySet<symbol>): void;
 export declare function symbolsUsed(node: FormerNode, into: Set<symbol>): void;
 
-=== dist/internal/reads/former-builders.d.ts ===
+=== dist/engine/reads/former-builders.d.ts ===
 /** Formers name and shape read answers at the edge. */
 import type { Condition, FindOp, WhereOp } from "./where-ops.ts";
 import type { ReadLine } from "./lines.ts";
@@ -2757,7 +2794,7 @@ export declare function each(line: ReadLine): SelectionBuilder;
 export declare function former(name: string, build: (inputs: InputBindings, bindings: FreeBindings) => FormerNode): FormerRef;
 export {};
 
-=== dist/internal/reads/former-evaluation.d.ts ===
+=== dist/engine/reads/former-evaluation.d.ts ===
 /** Evaluate a fused former into its shaped tree, at the moment of asking. */
 import type { FusedFormer } from "./former-nodes.ts";
 import type { ReadEnv } from "./env.ts";
@@ -2770,7 +2807,7 @@ import type { ReadEnv } from "./env.ts";
  */
 export declare function formTree(fused: FusedFormer, env: ReadEnv): Promise<unknown>;
 
-=== dist/internal/reads/former-nodes.d.ts ===
+=== dist/engine/reads/former-nodes.d.ts ===
 /**
  * The former algebra's node shapes. The builder-time nodes here carry live
  * references and symbols; a finished {@link FormerRef} carries the IR —
@@ -2871,7 +2908,7 @@ export declare class FormerFault extends Error {
  */
 export declare function formerRefWith(name: string, ins: readonly string[], inputVars: readonly symbol[], bindings: readonly string[], promise: Exclude<QueryPromise, "many">, body: FormerNodeIR): FormerRef;
 
-=== dist/internal/reads/frames.d.ts ===
+=== dist/engine/reads/frames.d.ts ===
 /**
  * {@link Frames} — the working set of a reaction.
  *
@@ -2940,21 +2977,14 @@ export declare function bindInputMapping(frame: Frame, input: Mapping): Mapping;
  * semantics.
  */
 export declare function expandOutputRows(into: Frames, frame: Frame, rows: unknown[], output: Mapping): void;
-/**
- * Like {@link expandOutputRows}, but preserves the source frame when no row
- * survives — left-join semantics. Absence includes unification failure: a
- * row whose value conflicts with an already-bound variable is no match.
- */
-export declare function expandOptionalOutputRows(into: Frames, frame: Frame, rows: unknown[], output: Mapping): void;
-/** Structural equality for pattern unification and distinct logical fills. */
-export declare function structurallyEqual(left: unknown, right: unknown): boolean;
+export { structurallyEqual } from "./value-equality.ts";
 /** Keep the first occurrence of each structurally equal frame. */
 export declare function distinctFrames(frames: Frames): Frames;
 export declare class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     constructor(...frames: TFrame[]);
 }
 
-=== dist/internal/reads/ir.d.ts ===
+=== dist/engine/reads/ir.d.ts ===
 /**
  * Serializable intermediate representation for registered reactions, views,
  * and formers.
@@ -3266,7 +3296,7 @@ export interface ConceptInventoryIR {
 /** Count unlowered reactions and custom read operations in an exported app. */
 export declare function opaqueCount(app: AppIR): number;
 
-=== dist/internal/reads/lines.d.ts ===
+=== dist/engine/reads/lines.d.ts ===
 /**
  * Build typed reads from concept queries and views.
  *
@@ -3350,7 +3380,7 @@ export declare function lineOf(source: {
 }, input: Mapping): ViewReadLine;
 export {};
 
-=== dist/internal/reads/lower.d.ts ===
+=== dist/engine/reads/lower.d.ts ===
 /**
  * Lower fluent reaction declarations into one-consequence `ReactionIR` entries.
  *
@@ -3461,7 +3491,7 @@ export declare function fusedFormersOf(mapping: Mapping): FusedFormer[];
 /** Assemble the exported app IR from the engine's registration bookkeeping. */
 export declare function serializeApp(registered: Iterable<ReactionIR[]>, unlowered: Iterable<[string, string]>, formers?: Iterable<FormerRef>, viewOf?: (name: string) => RelationView | undefined): AppIR;
 
-=== dist/internal/reads/matchers.d.ts ===
+=== dist/engine/reads/matchers.d.ts ===
 /**
  * Value matchers usable inside `when` patterns: `oneOf(...)` is a closed
  * equality disjunction, serializable as data.
@@ -3474,7 +3504,7 @@ export declare function isMatcher(value: unknown): value is Matcher;
 /** Convenience guard for pattern walkers: a plain string-keyed mapping. */
 export declare function isPlainMapping(value: unknown): value is Mapping;
 
-=== dist/internal/reads/queries.d.ts ===
+=== dist/engine/reads/queries.d.ts ===
 /**
  * A query's return shape states its cardinality. One record is one answer; an
  * array of records is any number of answers. Anything else is a query fault.
@@ -3516,7 +3546,7 @@ export declare function rowsOfAnswer(value: unknown, query: NamedQuery): unknown
  */
 export declare function queryRows(query: InstrumentedQuery, input: Mapping, frame: Frame): Promise<unknown[]>;
 
-=== dist/internal/reads/query-contracts.d.ts ===
+=== dist/engine/reads/query-contracts.d.ts ===
 /** The promised number of rows a concept query may answer. */
 export type QueryPromise = "one" | "optional" | "many";
 export type QueryPromises = Readonly<Record<string, QueryPromise>>;
@@ -3526,7 +3556,7 @@ export declare function validateQueryContractMap(contracts: unknown, prototype: 
 /** Validate a concept's declared query promises while its vocabulary is assembled. */
 export declare function validateQueryContracts(concept: object, conceptName: string): void;
 
-=== dist/internal/reads/read-back.d.ts ===
+=== dist/engine/reads/read-back.d.ts ===
 /**
  * Generate a registration read-back for views, formers, and reactions.
  * The output reports opened and tested names, cardinality behavior, declared
@@ -3548,7 +3578,7 @@ export declare function readBackFormer(former: FormerIR, env: ReadBackEnv): stri
 /** The whole application's read-back: every view, then every reaction. */
 export declare function readBackApp(views: readonly ViewIR[], formers: readonly FormerIR[], reactions: readonly ReactionIR[], env: ReadBackEnv): string;
 
-=== dist/internal/reads/registering.d.ts ===
+=== dist/engine/reads/registering.d.ts ===
 /**
  * Bind reaction, view, and former IR to one engine's concepts and computations.
  * Registration validates names, bindings, promises, and attached opaque
@@ -3736,7 +3766,7 @@ export declare class Registry {
     private assertBindingPartitions;
 }
 
-=== dist/internal/reads/render.d.ts ===
+=== dist/engine/reads/render.d.ts ===
 /**
  * Render registered application IR as design notation.
  *
@@ -3792,7 +3822,7 @@ export interface AppSpecIR {
  */
 export declare function renderApp(spec: AppSpecIR): string;
 
-=== dist/internal/reads/schedule.d.ts ===
+=== dist/engine/reads/schedule.d.ts ===
 /**
  * Derive an evaluation order for an orderless `where` conjunction.
  * Registration places a line after the lines that bind its required names.
@@ -3824,7 +3854,7 @@ export interface ScheduledBlock<Op extends AnyOpIR> {
 export declare function scheduleBlock<Op extends AnyOpIR>(ops: readonly Op[], initial: ReadonlySet<string>, site: string): ScheduledBlock<Op>;
 export {};
 
-=== dist/internal/reads/schema.d.ts ===
+=== dist/engine/reads/schema.d.ts ===
 /**
  * Declare the reference-carrying fields of each IR variant once.
  * Shared folds use these tables to visit queries, views, formers, patterns,
@@ -3868,7 +3898,7 @@ export declare function foldReaction(reaction: ReactionIR, fold: IRFold): void;
 export declare function foldView(view: ViewIR, fold: IRFold): void;
 export {};
 
-=== dist/internal/reads/sentence.d.ts ===
+=== dist/engine/reads/sentence.d.ts ===
 /** Binding bags and callable references shared by views and formers. */
 import type { Mapping, Vars } from "../reactions/types.ts";
 /** One independently declared binding bag. */
@@ -3910,7 +3940,17 @@ export interface ObjectRefSpec<Ref, Fused> {
 export declare function objectRef<Ref extends (input: Mapping) => Fused, Fused>(spec: ObjectRefSpec<Ref, Fused>): Ref;
 export {};
 
-=== dist/internal/reads/value-tree.d.ts ===
+=== dist/engine/reads/value-equality.d.ts ===
+/**
+ * Equality for values that cross the engine boundary.
+ *
+ * Records and arrays compare structurally. Dates compare by timestamp. Other
+ * object kinds compare only by identity, which avoids guessing at the meaning
+ * of maps, sets, class instances, and custom prototypes.
+ */
+export declare function structurallyEqual(left: unknown, right: unknown): boolean;
+
+=== dist/engine/reads/value-tree.d.ts ===
 /**
  * The one definition of the value tree every pass walks: arrays and plain
  * string-keyed mappings branch; everything else — primitives, symbols,
@@ -3936,7 +3976,7 @@ export declare function mapValueTreeAsync(value: unknown, mapLeaf: (node: unknow
  */
 export declare function walkValueTree(value: unknown, visit: (node: unknown) => boolean | undefined | void): void;
 
-=== dist/internal/reads/views.d.ts ===
+=== dist/engine/reads/views.d.ts ===
 /**
  * Define views as named relations over concept queries and other views.
  *
@@ -4021,7 +4061,7 @@ export declare function relationViewWith(name: string, ins: readonly string[], o
 export declare function view(name: string, build: (inputs: InputBindings, outputs: OutputBindings, bindings: FreeBindings) => ViewBlock | ViewBlock[]): RelationView;
 export {};
 
-=== dist/internal/reads/where-ops.d.ts ===
+=== dist/engine/reads/where-ops.d.ts ===
 /**
  * Conditions accepted by `where(...)`.
  *
@@ -4139,7 +4179,7 @@ export declare function queryLine(query: InstrumentedQuery, input: Mapping): Rea
 /** Construct the line a called relation view answers with. @internal */
 export declare function viewLine(view: RelationView, input: Mapping): ReadLine;
 
-=== dist/internal/tooling/generated-artifacts.d.ts ===
+=== dist/engine/tooling/generated-artifacts.d.ts ===
 import type { Assembly } from "../boundary/assembly-facade.ts";
 import type { HttpFloor } from "../boundary/http-floor.ts";
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
@@ -4174,7 +4214,7 @@ export declare function pinGenerated(application: GeneratedApplication, artifact
 export declare function checkGenerated(application: GeneratedApplication): Promise<void>;
 export {};
 
-=== dist/internal/tooling/inspection.d.ts ===
+=== dist/engine/tooling/inspection.d.ts ===
 import type { Assembly } from "../boundary/assembly-facade.ts";
 import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
 import type { ActionOutcome } from "../reactions/types.ts";
@@ -4195,7 +4235,7 @@ export declare function inspectAssembly(assembly: Assembly<Record<string, new (.
     readBack: string;
 };
 
-=== dist/internal/utils/framework-error-codes.d.ts ===
+=== dist/engine/utils/framework-error-codes.d.ts ===
 export declare const FrameworkErrorCode: {
     readonly UNKNOWN_ERROR: "UNKNOWN_ERROR";
     readonly INVALID_INPUT: "INVALID_INPUT";
@@ -4213,7 +4253,7 @@ export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof Framew
 /** Framework codes the shipped boundaries can emit. */
 export type EmittedFrameworkErrorCode = FrameworkErrorCode;
 
-=== dist/internal/utils/logger.d.ts ===
+=== dist/engine/utils/logger.d.ts ===
 import { serializeError } from "./redaction.ts";
 export { serializeError };
 export type LogLevel = "debug" | "info" | "warn" | "error" | "none";
@@ -4225,7 +4265,7 @@ export interface Logger {
 }
 export declare const logger: Logger;
 
-=== dist/internal/utils/redaction.d.ts ===
+=== dist/engine/utils/redaction.d.ts ===
 /**
  * Return the stable class of a thrown value for an ordinary log.
  *
@@ -4257,7 +4297,7 @@ export interface RedactionPolicy {
 export declare function configureRedaction(policy: RedactionPolicy): void;
 export declare function redact(obj: unknown, depth?: number): unknown;
 
-=== dist/internal/utils/runtime.d.ts ===
+=== dist/engine/utils/runtime.d.ts ===
 /** Node's custom-inspection hook, kept internal to engine instrumentation. */
 export declare const inspectCustom: unique symbol;
 export declare function inspect(value: unknown): string;
@@ -4265,34 +4305,34 @@ export declare function uuid(): string;
 
 === dist/language/index.d.ts ===
 /** Words used to declare concepts, reactions, views, and formers. */
-export { reaction, vocabulary } from "../internal/reactions/refs.ts";
-export { earlier } from "../internal/reactions/words.ts";
-export { when } from "../internal/reactions/public-words.ts";
-export { refused, returned } from "../internal/reactions/channels.ts";
-export { no, whether } from "../internal/reads/where-ops.ts";
-export { is } from "../internal/reads/computations.ts";
-export { count, view, where } from "../internal/reads/views.ts";
-export { each, form, former } from "../internal/reads/former-builders.ts";
-export type { ReadLine, RelationView, SlotPattern } from "../internal/reads/lines.ts";
-export type { Condition } from "../internal/reads/where-ops.ts";
-export type { ActionCall, RefusedActionLine, ReturnedActionLine, Vars, } from "../internal/reactions/types.ts";
-export type { QueryPromise } from "../internal/reads/query-contracts.ts";
-export type { FreeBindings, InputBindings, OutputBindings } from "../internal/reads/sentence.ts";
+export { reaction, vocabulary } from "../engine/reactions/refs.ts";
+export { earlier } from "../engine/reactions/words.ts";
+export { when } from "../engine/reactions/public-words.ts";
+export { refused, returned } from "../engine/reactions/channels.ts";
+export { no, whether } from "../engine/reads/where-ops.ts";
+export { is } from "../engine/reads/computations.ts";
+export { count, view, where } from "../engine/reads/views.ts";
+export { each, form, former } from "../engine/reads/former-builders.ts";
+export type { ReadLine, RelationView, SlotPattern } from "../engine/reads/lines.ts";
+export type { Condition } from "../engine/reads/where-ops.ts";
+export type { ActionCall, RefusedActionLine, ReturnedActionLine, Vars, } from "../engine/reactions/types.ts";
+export type { QueryPromise } from "../engine/reads/query-contracts.ts";
+export type { FreeBindings, InputBindings, OutputBindings } from "../engine/reads/sentence.ts";
 
 === dist/tooling/index.d.ts ===
 /** Supported inspection, rendering, and generated-contract tools. */
-export { inspectAssembly } from "../internal/tooling/inspection.ts";
-export type { ObservedOccurrence } from "../internal/tooling/inspection.ts";
-export { renderApp, renderReaction } from "../internal/reads/render.ts";
-export { renderWireTypes, wireContracts } from "../internal/boundary/wire.ts";
-export { renderInputContracts } from "../internal/boundary/endpoints.ts";
-export { floorReadBack, httpFloorReadBack } from "../internal/boundary/http-floor.ts";
-export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR, } from "../internal/reads/ir.ts";
-export type { WireContractsIR, WireEndpoint, WireOptions, WireRenderOptions, WireType, } from "../internal/boundary/wire.ts";
+export { inspectAssembly } from "../engine/tooling/inspection.ts";
+export type { ObservedOccurrence } from "../engine/tooling/inspection.ts";
+export { renderApp, renderReaction } from "../engine/reads/render.ts";
+export { renderWireTypes, wireContracts } from "../engine/boundary/wire.ts";
+export { renderInputContracts } from "../engine/boundary/endpoints.ts";
+export { floorReadBack, httpFloorReadBack } from "../engine/boundary/http-floor.ts";
+export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR, } from "../engine/reads/ir.ts";
+export type { WireContractsIR, WireEndpoint, WireOptions, WireRenderOptions, WireType, } from "../engine/boundary/wire.ts";
 
 === dist/utils/index.d.ts ===
-export { logger } from "../internal/utils/logger.ts";
-export type { Logger, LogLevel } from "../internal/utils/logger.ts";
-export { serializeError } from "../internal/utils/logger.ts";
-export { configureRedaction, redact, UNIVERSAL_SENSITIVE_PATTERNS, } from "../internal/utils/redaction.ts";
-export type { RedactionPolicy } from "../internal/utils/redaction.ts";
+export { logger } from "../engine/utils/logger.ts";
+export type { Logger, LogLevel } from "../engine/utils/logger.ts";
+export { serializeError } from "../engine/utils/logger.ts";
+export { configureRedaction, redact, UNIVERSAL_SENSITIVE_PATTERNS, } from "../engine/utils/redaction.ts";
+export type { RedactionPolicy } from "../engine/utils/redaction.ts";

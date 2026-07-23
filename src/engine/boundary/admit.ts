@@ -18,7 +18,7 @@ export function admitInput(contract: InputContractDecl, path: string, input: unk
   }
   const body = input as Record<string, unknown>;
   for (const key of contract.required ?? []) {
-    if (!(key in body)) {
+    if (!Object.hasOwn(body, key)) {
       return { ok: false, detail: `${path} requires "${key}"` };
     }
   }
