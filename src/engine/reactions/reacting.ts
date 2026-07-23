@@ -32,15 +32,17 @@ import type { RelationView } from "../reads/lines.ts";
 import type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "../reads/ir.ts";
 import { renderApp as renderAppSpec } from "../reads/render.ts";
 import {
-  assertThenInputsAreData,
-  copyReactionLintExtraUses,
-  lintReactionOpens,
   type LoweredReaction,
   lowerReaction,
   serializeApp,
   serializeReaction,
   serializeView,
 } from "../reads/lower.ts";
+import {
+  assertThenInputsAreData,
+  copyReactionLintExtraUses,
+  lintReactionOpens,
+} from "../reads/reaction-validation.ts";
 import {
   type FormerRef,
   fuseFormer,

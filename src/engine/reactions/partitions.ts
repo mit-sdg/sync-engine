@@ -1,4 +1,4 @@
-import { setReactionLintExtraUses } from "../reads/lower.ts";
+import { setReactionLintExtraUses } from "../reads/reaction-validation.ts";
 import type { WhereOp } from "../reads/where-ops.ts";
 import type {
   ReactionDeclaration,
