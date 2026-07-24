@@ -6,6 +6,12 @@ import { concepts } from "../concept-set.ts";
 
 const { Discussing, Gathering, Selecting } = concepts;
 
+// ── Policy views ─────────────────────────────────────────────────────────
+// Views return the rows matching their name. A success view drives the `where()`
+// clause of an accepting endpoint; an inverted view drives a rejecting endpoint
+// on the same path — the engine tries both in declaration order, short-
+// circuiting on the first match.
+
 export const memberMayRespond = view(
   "(member) may respond in (circle)",
   ({ member, circle }, _outputs, _bindings) =>
@@ -19,6 +25,7 @@ export const nonmemberMayNotRespond = view(
 ).holds();
 
 export const SelectedReadingOpensDiscussion = reaction(({ selection }) =>
+  // An empty input pattern ({}) matches any choose regardless of scope or item.
   when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
 
@@ -62,6 +69,11 @@ export const ChooseReading = endpoint("/circles/choose", ({ circle, reading, sel
     .then(Selecting.choose({ scope: circle, item: reading }).responds({ selection }))
     .then(respond({ reading })),
 );
+
+// ── Endpoints ────────────────────────────────────────────────────────────
+// The two /circles/respond endpoints share one path. The engine tries them in
+// declaration order: AddResponse checks membership and processes the response;
+// if its where() rejects, RejectNonmemberResponse answers with an error.
 
 export const AddResponse = endpoint(
   "/circles/respond",

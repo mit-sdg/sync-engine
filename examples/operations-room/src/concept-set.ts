@@ -1,3 +1,15 @@
+/**
+ * Registers the domain concepts (Alerting, Discussing, Gathering, Selecting)
+ * for the operations room application.
+ *
+ * `conceptSet(registrations)` returns:
+ *  - `vocabulary` — concept signatures for assembly introspection and codegen
+ *  - `concepts`   — typed shortcuts for composition files
+ *  - `implementations(floor, ctx)` — factory for named sets of concrete instances
+ *
+ * A "floor" is a preconfigured set of concept instances. The `"deterministic"`
+ * floor uses fixed IDs so scenario output is stable enough to snapshot.
+ */
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { alerting } from "../../concepts/alerting/registry.ts";
 import { discussing } from "../../concepts/discussing/registry.ts";

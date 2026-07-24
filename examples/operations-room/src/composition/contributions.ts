@@ -4,6 +4,12 @@ import { concepts } from "../concept-set.ts";
 
 const { Discussing, Selecting } = concepts;
 
+/**
+ * Contribution endpoints accept policy views from outside — the caller
+ * selects which responder-is-a-member rule applies. The two endpoints share
+ * one path; the engine tries AddContribution first and falls through to
+ * RejectContribution when the policy where() clause rejects.
+ */
 export function contributionEndpoints({
   denied,
   mayContribute,

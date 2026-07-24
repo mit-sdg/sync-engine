@@ -67,8 +67,8 @@ import {
 import { Logging, ReactionLogger } from "./logging.ts";
 import {
   errorOutputFromThrown,
-  instrument as instrumentAll,
-  instrumentConcept as instrumentOne,
+  instrument as instrumentMany,
+  instrumentConcept as instrumentSingle,
   type InstrumentationState,
 } from "./instrumenting.ts";
 import type {
@@ -123,6 +123,12 @@ export class Reacting {
   /** Every executable reaction name each base registration produced. */
   private namesByBase: Map<string, string[]> = new Map();
 
+  constructor(actionConcept: ActionConcept = new ActionConcept()) {
+    this.Action = actionConcept;
+    this.reactionLogger = new ReactionLogger(actionConcept);
+    this.firingBook = new FiringBook(actionConcept.store);
+  }
+
   /** Register an engine observer. Returns a function to unregister it. */
   addObserver(o: EngineObserver): () => void {
     return this.reactionLogger.addObserver(o);
@@ -139,12 +145,6 @@ export class Reacting {
 
   set logging(level: Logging) {
     this.reactionLogger.level = level;
-  }
-
-  constructor(actionConcept: ActionConcept = new ActionConcept()) {
-    this.Action = actionConcept;
-    this.reactionLogger = new ReactionLogger(actionConcept);
-    this.firingBook = new FiringBook(actionConcept.store);
   }
 
   /** Install one assembly's vocabulary-owned calculations. */
@@ -1015,7 +1015,7 @@ export class Reacting {
    * may use different names.
    */
   instrumentConcept<T extends object>(concept: T, name?: string): T {
-    return instrumentOne(this.instrumentationState(), concept, name);
+    return instrumentSingle(this.instrumentationState(), concept, name);
   }
 
   /**
@@ -1027,7 +1027,7 @@ export class Reacting {
   /** Instrument a single concept instance. */
   instrument<T extends object>(concept: T): T;
   instrument(concepts: Record<string, object> | object): Record<string, object> | object {
-    return instrumentAll(this.instrumentationState(), concepts);
+    return instrumentMany(this.instrumentationState(), concepts);
   }
 
   private instrumentationState(): InstrumentationState {

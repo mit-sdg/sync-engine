@@ -1,3 +1,12 @@
+/**
+ * Full end-to-end story through a local gateway.
+ *
+ * The application is built in:
+ *   src/concept-set.ts         — vocabulary and implementations
+ *   src/composition/reading-circle.ts — reactions, views, formers, endpoints
+ *   src/assembly.ts            — the assemble() call
+ *   src/edge.ts                — gateway and HTTP wiring
+ */
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
 import { identities } from "../../support/identities.ts";
 import { deterministicImplementations } from "./concept-set.ts";

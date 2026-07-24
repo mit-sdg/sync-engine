@@ -16,10 +16,12 @@ export const responderRoster = former("the responder roster of (room)", ({ room 
 );
 
 /** Who is responding in this room? */
-export const roomSummary = former("the room summary (room)", ({ room }, { name, host }) =>
-  where(Gathering._get({ gathering: room }).is({ name, host }))
-    .form({ room, name, host })
-    .splicing(responderRoster({ room })),
+export const roomSummary = former(
+  "the room summary (room)",
+  ({ room }, { name, host }) =>
+    where(Gathering._get({ gathering: room }).is({ name, host }))
+      .form({ room, name, host })
+      .splicing(responderRoster({ room })), // .splicing() pulls in another former's output
 );
 
 /** Which mitigation must this room currently have? */
@@ -34,7 +36,7 @@ export const currentMitigation = former(
   "the current mitigation (room)",
   ({ room }, { mitigation }) =>
     where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
-).optional();
+).optional(); // .optional() produces null when no row matches, rather than raising an error
 
 /** How many responses does this discussion have, which came first, and who responded? */
 export const responseStats = former(
@@ -43,13 +45,13 @@ export const responseStats = former(
     form({
       responseCount: each(
         Discussing._responses({ discussion }).is({ response, author: responder }),
-      ).count(),
+      ).count(), // .count() returns the row count
       firstResponse: each(
         Discussing._responses({ discussion }).is({ response, author: responder }),
-      ).first(response),
+      ).first(response), // .first() returns the earliest row by that value
       responders: each(
         Discussing._responses({ discussion }).is({ response, author: responder }),
-      ).distinct(responder),
+      ).distinct(responder), // .distinct() returns the unique values of that column
     }),
 );
 
@@ -84,7 +86,7 @@ export const roomDashboard = former(
           .form({ alert, mitigation: alertedMitigation }),
       }),
       current: where(
-        whether(Selecting._current({ scope: room }).is({ selection, item: mitigation })),
+        whether(Selecting._current({ scope: room }).is({ selection, item: mitigation })), // whether() allows optional matching — the row still exists if no selection is found
         whether(Discussing._openFor({ subject: selection }).is({ discussion })),
       ).form({
         mitigation,
