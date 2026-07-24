@@ -2,7 +2,14 @@ import { NoCurrentSelection } from "./errors.ts";
 
 type Selection = { selection: string; scope: string; item: string };
 
-/** Keep one current item selected within each scope. */
+/**
+ * Keep one current item selected within each scope.
+ *
+ * **Queries** (methods prefixed `_`) are standing questions the current state
+ * answers — the engine caches them without placing records in the action log.
+ * Every other public method is an **action**: the engine records the call,
+ * runs the implementation, and fires matching reactions.
+ */
 export class SelectingConcept {
   private readonly selections = new Map<string, Selection>();
   private readonly current = new Map<string, string>();

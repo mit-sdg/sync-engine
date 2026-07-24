@@ -1,11 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
+import { identities as ids } from "../../support/identities.ts";
 import { AlreadyJoined, GatheringNotFound, NotJoined } from "./errors.ts";
 import { GatheringConcept } from "./gathering.ts";
-
-const ids = (...values: string[]) => {
-  const remaining = [...values];
-  return () => remaining.shift() ?? "unexpected";
-};
 
 describe("Gathering", () => {
   test("its principle: create, join once, leave once", () => {

@@ -118,7 +118,13 @@ _Source: [`examples/support/identities.ts`](../../examples/support/identities.ts
 ```ts
 export function identities(...values: string[]): () => string {
   const remaining = [...values];
-  return () => remaining.shift() ?? "unexpected";
+  return () => {
+    const next = remaining.shift();
+    if (next === undefined) {
+      throw new Error("identities exhausted: supply enough values for every expected id.");
+    }
+    return next;
+  };
 }
 ```
 

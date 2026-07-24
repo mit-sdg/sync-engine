@@ -11,11 +11,15 @@ export type { FiringRecord, LogEntry, LogStore } from "./log-store.ts";
 export { isRefuse, Refuse, refusalMapping } from "./refuse.ts";
 export { contractOf } from "./outcomes.ts";
 export type { ActionContract, OutcomeContracts } from "./outcomes.ts";
+
+// Read-side contracts — imported through the reads barrel for explicit dependency tracking.
 export { QueryAnswerFault, rowsOfAnswer } from "../reads/queries.ts";
+
 export { parseSpecProse } from "./concept-spec.ts";
 export type { ConceptSpecProse } from "./concept-spec.ts";
 export { faulted, isChannelPattern, refused, returned } from "./channels.ts";
 export type { ChannelOptions } from "./channels.ts";
+
 export {
   computationRef,
   is,
@@ -28,6 +32,7 @@ export type {
   ComputationSource,
   FusedComputation,
 } from "../reads/computations.ts";
+
 export {
   applyWhereOps,
   compute,
@@ -50,6 +55,7 @@ export type {
   WhereOp,
   WhetherOp,
 } from "../reads/where-ops.ts";
+
 export { isReadLine, isRelationView } from "../reads/lines.ts";
 export type {
   QueryReadLine,
@@ -58,11 +64,14 @@ export type {
   SlotPattern,
   ViewReadLine,
 } from "../reads/lines.ts";
+
 export { count, isCountOp, view, where } from "../reads/views.ts";
 export type { CountOp, ViewOp } from "../reads/views.ts";
+
 export { declarationsOf, isReactionPartition } from "./partitions.ts";
 export { each, form, former } from "../reads/former-builders.ts";
 export type { FreeBindings, InputBindings, OutputBindings } from "../reads/sentence.ts";
+
 export {
   FormerFault,
   fuseFormer,
@@ -91,8 +100,10 @@ export type {
   SelectionBuilder,
   SelectionConsumers,
 } from "../reads/former-builders.ts";
+
 export { Frames } from "../reads/frames.ts";
 export type { QueryPromise } from "../reads/query-contracts.ts";
+
 export {
   isActionRef,
   isQueryRef,
@@ -116,6 +127,7 @@ export type {
   VocabularyDeclaration,
   VocabularyRefs,
 } from "./refs.ts";
+
 export type { ConceptMetadata, ErrorConstructor, RefusalContracts } from "./concept-metadata.ts";
 export {
   actionNameOf,
@@ -126,6 +138,7 @@ export {
   rolesOf,
 } from "./introspect.ts";
 export type { EngineObserver, LogEvent } from "./observer.ts";
+
 export { opaqueCount } from "../reads/ir.ts";
 export type {
   ActionInventoryIR,
@@ -149,6 +162,7 @@ export type {
   ViewOpIR,
   WhereOpIR,
 } from "../reads/ir.ts";
+
 export {
   renderApp,
   renderFormer,
@@ -159,8 +173,10 @@ export {
   renderWhereOp,
 } from "../reads/render.ts";
 export type { AppSpecIR } from "../reads/render.ts";
+
 export type { LoweredReaction, LoweredWhereOp } from "../reads/lower.ts";
 export { isMatcher, oneOf } from "../reads/matchers.ts";
+
 export { Logging } from "./logging.ts";
 export { Reacting } from "./reacting.ts";
 export { earlier, when } from "./words.ts";

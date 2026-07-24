@@ -1,11 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
+import { identities as ids } from "../../support/identities.ts";
 import { NoCurrentSelection } from "./errors.ts";
 import { SelectingConcept } from "./selecting.ts";
-
-const ids = (...values: string[]) => {
-  const remaining = [...values];
-  return () => remaining.shift() ?? "unexpected";
-};
 
 describe("Selecting", () => {
   test("its principle: a new choice replaces only its scope's current selection", () => {

@@ -266,7 +266,8 @@ for (const path of repository) {
         (publicSubpaths.has(parts[1] ?? "") && parts.length === 3 && parts[2] === "index.ts") ||
         (parts[1] === "engine" && path.endsWith(".ts")))) ||
     (head === "docs" && path.endsWith(".md")) ||
-    (head === "examples" && (path.endsWith(".md") || path.endsWith(".ts"))) ||
+    (head === "examples" &&
+      (path.endsWith(".md") || path.endsWith(".ts") || path.endsWith(".json"))) ||
     (head === "scripts" && parts.length === 2 && path.endsWith(".ts")) ||
     (head === "tests" &&
       ((parts.length === 2 && parts[1] === "public-api.test.ts") ||

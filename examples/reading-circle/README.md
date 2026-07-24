@@ -1,48 +1,50 @@
-# Reading circle
+# Reading Circle
 
-Mara opens a reading circle, Lin joins, and the circle chooses _The
-Dispossessed_. Choosing the book opens its discussion without Selecting knowing
-about Discussing. Lin can respond because membership policy admits her; the
-same policy gives Niko a clear refusal.
+A book club app where members join reading circles, choose books, and
+discuss them. Policy views admit members to discussions and block non-members
+with a clear refusal.
 
-From a project where `@mit-sdg/sync-engine` is installed:
+**Run it:**
 
 ```sh
-bun node_modules/@mit-sdg/sync-engine/examples/reading-circle/src/scenario.ts
+bun start
 ```
 
-The command prints the whole circle page, the `ALREADY_JOINED` refusal, and the
-`NOT_A_MEMBER` policy answer.
+The scenario creates a circle, adds members, chooses a book, records
+responses, and prints both the full circle page and the refusals.
 
-Read the design from its authored sources into its derived evidence:
+**What it demonstrates:**
 
-1. [`../concepts/`](../concepts/) — each shared generic behavior has its own Purpose,
-   Principle, State, Actions, errors, implementation, and principle test. The
-   [authoring guide](../concepts/README.md) states the discipline.
-2. [`src/concept-set.ts`](src/concept-set.ts) — public references and complete
-   implementation floors derived from the concepts' own registries.
-3. [`src/composition/reading-circle.ts`](src/composition/reading-circle.ts) —
-   the application's reaction, policy views, whole-page former, and boundary
-   declarations.
-4. [`src/assembly.ts`](src/assembly.ts) — the single assembly call and optional
-   ready-made concept instances.
-5. [`src/edge.ts`](src/edge.ts) — the fixed gateway and Fetch transport.
-6. [`src/client.ts`](src/client.ts) — the HTTP client typed by the generated
-   contract, with success-or-error handling.
-7. [`generated/reading-circle.md`](generated/reading-circle.md) — the assembled
-   read-back derived from the registered concepts and composition.
-8. [`generated/wire.ts`](generated/wire.ts) — the generated TypeScript contract
-   for the application's boundary.
+- Concept registration from shared domain concepts (Gathering, Selecting,
+  Discussing)
+- Reaction-based composition — choosing a book opens its discussion
+  automatically
+- Policy views (`memberMayRespond`, `nonmemberMayNotRespond`) — access
+  control as declarative conditions
+- Boundary declarations (`endpoint`, `receive`, `respond`) — typed
+  request/response contracts
+- A gateway that admits calls through a generated wire contract
+- A typed client created from the wire contract
+- A whole-page former that stitches the circle state, reading, and
+  discussion into one view
 
-[`src/scenario.ts`](src/scenario.ts) connects the gateway to the generated
-contract without a server.
+## Files
 
-The scenario selects the concept set's complete deterministic floor. The
-concept state and both occurrence logs use memory, so all of them disappear
-with the process.
+| File                                                         | Role                                                       |
+| ------------------------------------------------------------ | ---------------------------------------------------------- |
+| `src/scenario.ts`                                            | Entry point — runs the full story through a local gateway  |
+| `src/concept-set.ts`                                         | Exposes the vocabulary, refs, and implementations          |
+| `src/composition/reading-circle.ts`                          | Reactions, policy views, formers, and boundary definitions |
+| `src/assembly.ts`                                            | The single `assemble()` call with optional overrides       |
+| `src/edge.ts`                                                | Gateway wiring and HTTP handler                            |
+| `src/client.ts`                                              | Typed client factories                                     |
+| `generated.config.ts`                                        | Instructions for the `sync-engine` CLI artifact commands   |
+| [`generated/reading-circle.md`](generated/reading-circle.md) | Assembled read-back (concepts, views, reactions)           |
+| [`generated/wire.ts`](generated/wire.ts)                     | Generated TypeScript wire contract                         |
+| [`generated/README.md`](generated/README.md)                 | Provenance and regeneration notes                          |
 
-The [generated-artifact README](generated/README.md) states the provenance and
-regenerate-and-check discipline. What the contract checks, what the gateway
-admits at runtime, and why `createGateway` is fixed are the
-[application boundary guide](../../docs/guide/application-boundary.md)'s
-territory.
+## Regenerate artifacts
+
+```sh
+cd ../.. && bun run build && bun scripts/examples.ts check readingCircle
+```

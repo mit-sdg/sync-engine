@@ -2,7 +2,14 @@ import { AlertNotFound } from "./errors.ts";
 
 type Alert = { alert: string; recipient: string; subject: string };
 
-/** Keep open alerts for each recipient until they acknowledge them. */
+/**
+ * Keep open alerts for each recipient until they acknowledge them.
+ *
+ * **Queries** (methods prefixed `_`) are standing questions the current state
+ * answers — the engine caches them without placing records in the action log.
+ * Every other public method is an **action**: the engine records the call,
+ * runs the implementation, and fires matching reactions.
+ */
 export class AlertingConcept {
   private readonly alerts = new Map<string, Alert>();
 

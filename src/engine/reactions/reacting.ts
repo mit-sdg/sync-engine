@@ -29,15 +29,8 @@ import { applyWhereOps } from "../reads/where-ops.ts";
 import type { AnyWhereOp } from "../reads/where-ops.ts";
 import type { ComputationRef } from "../reads/computations.ts";
 import type { RelationView } from "../reads/lines.ts";
-import type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "../reads/ir.ts";
-import { renderApp as renderAppSpec } from "../reads/render.ts";
-import {
-  type LoweredReaction,
-  lowerReaction,
-  serializeApp,
-  serializeReaction,
-  serializeView,
-} from "../reads/lower.ts";
+import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../reads/ir.ts";
+import { type LoweredReaction, lowerReaction, serializeReaction } from "../reads/lower.ts";
 import {
   assertThenInputsAreData,
   copyReactionLintExtraUses,
@@ -49,8 +42,8 @@ import {
   type FusedFormer,
   isFusedFormer,
 } from "../reads/former-nodes.ts";
+import { readBackReaction } from "../reads/read-back.ts";
 import { formTree } from "../reads/former-evaluation.ts";
-import { readBackApp, readBackReaction } from "../reads/read-back.ts";
 import type { ReadEnv } from "../reads/env.ts";
 import { Registry } from "../reads/registering.ts";
 import type { BoundReaction, BoundWhereOp } from "../reads/registering.ts";
@@ -58,7 +51,7 @@ import { varKeyOf } from "../reads/frames.ts";
 import { hasMarkerKey, liveOf } from "../reads/ir.ts";
 import type { FiringRecord } from "./log-store.ts";
 import { Frames } from "../reads/frames.ts";
-import { actionNameOf, inventoryOf } from "./introspect.ts";
+import { actionNameOf } from "./introspect.ts";
 import type { EngineObserver } from "./observer.ts";
 import { FiringBook, type FiringBranch, type FiringFill } from "./firing.ts";
 import {
@@ -96,6 +89,7 @@ import type {
 import { uuid } from "../utils/runtime.ts";
 import { $vars } from "./vars.ts";
 import { declarationsOf } from "./partitions.ts";
+import { exportConcepts, exportReactions, form, readBack, renderApp } from "./reacting-export.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
@@ -418,63 +412,44 @@ export class Reacting {
    * the moment of asking.
    */
   async form(fused: FusedFormer): Promise<unknown> {
-    if (!isFusedFormer(fused)) {
-      throw new Error(
-        "form(...) takes a named former with its input mapping filled, " +
-          "for example form(roomDashboard(room)).",
-      );
-    }
-    this.registry.assertFormable(fused.former);
-    return formTree(fused, this.registry.readEnv());
+    return form({ registry: this.registry }, fused);
   }
 
-  /**
-   * The read-back: the engine states the quantities the author no longer
-   * writes: per reaction, which names open, which values are tested, where multiple
-   * cases may result,
-   * or drop; per view, the declared promise checked when the relation is read.
-   */
+  /** The engine states the quantities the author no longer writes: per reaction, */
   readBack(): string {
-    const app = this.exportReactions();
-    const views = [...this.registry.viewRefs()].map((ref) => serializeView(ref));
-    return readBackApp(views, app.formers, app.reactions, this.registry.readBackEnv());
+    return readBack({
+      registry: this.registry,
+      exportReactions: () => this.exportReactions(),
+    });
   }
 
   /** Everything this engine knows about its registered reactions, as data. */
   exportReactions(): AppIR {
-    return serializeApp(
-      this.loweredReactions.values(),
-      this.unloweredReactions.entries(),
-      this.registry.formerRefs(),
-      (name) => this.registry.viewNamed(name),
-    );
-  }
-
-  /**
-   * Inventories of every instrumented concept, in instrumentation order:
-   * actions with observed input roles and declared refusal codes, queries,
-   * and authored purpose/principle prose where the class carries it.
-   */
-  exportConcepts(): ConceptInventoryIR[] {
-    const inventories: ConceptInventoryIR[] = [];
-    for (const instrumented of this.registry.concepts.values()) {
-      const raw = this.rawConceptsByInstrumented.get(instrumented) ?? instrumented;
-      inventories.push(inventoryOf(raw));
-    }
-    return inventories;
-  }
-
-  /**
-   * Render the registered concepts, views, formers, and reactions as a
-   * assembled read-back. Missing concept prose and reactions that remain
-   * executable pipelines are labeled in the output.
-   */
-  renderApp(title = "Application"): string {
-    return renderAppSpec({
-      title,
-      concepts: this.exportConcepts(),
-      app: this.exportReactions(),
+    return exportReactions({
+      loweredReactions: this.loweredReactions,
+      unloweredReactions: this.unloweredReactions,
+      registry: this.registry,
     });
+  }
+
+  /** Inventories of every instrumented concept, in instrumentation order. */
+  exportConcepts() {
+    return exportConcepts({
+      registry: this.registry,
+      rawConceptsByInstrumented: this.rawConceptsByInstrumented,
+    });
+  }
+
+  /** Render the registered concepts, views, formers, and reactions. */
+  renderApp(title = "Application"): string {
+    return renderApp(
+      {
+        registry: this.registry,
+        rawConceptsByInstrumented: this.rawConceptsByInstrumented,
+        exportReactions: () => this.exportReactions(),
+      },
+      title,
+    );
   }
 
   /**

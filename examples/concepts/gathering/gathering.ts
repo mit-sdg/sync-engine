@@ -3,7 +3,14 @@ import { AlreadyJoined, GatheringNotFound, NotJoined } from "./errors.ts";
 type Gathering = { gathering: string; name: string; host: string };
 type Membership = { membership: string; gathering: string; member: string };
 
-/** Create named gatherings and let people join or leave them. */
+/**
+ * Create named gatherings and let people join or leave them.
+ *
+ * **Queries** (methods prefixed `_`) are standing questions the current state
+ * answers — the engine caches them without placing records in the action log.
+ * Every other public method is an **action**: the engine records the call,
+ * runs the implementation, and fires matching reactions.
+ */
 export class GatheringConcept {
   private readonly gatherings = new Map<string, Gathering>();
   private readonly memberships = new Map<string, Membership>();

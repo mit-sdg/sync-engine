@@ -1,11 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
+import { identities as ids } from "../../support/identities.ts";
 import { AlertingConcept } from "./alerting.ts";
 import { AlertNotFound } from "./errors.ts";
-
-const ids = (...values: string[]) => {
-  const remaining = [...values];
-  return () => remaining.shift() ?? "unexpected";
-};
 
 describe("Alerting", () => {
   test("its principle: keep each recipient's alerts in order until acknowledged", () => {

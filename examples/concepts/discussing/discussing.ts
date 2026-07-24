@@ -3,7 +3,14 @@ import { DiscussionAlreadyOpen, DiscussionNotOpen } from "./errors.ts";
 type Discussion = { discussion: string; subject: string; open: boolean };
 type Response = { response: string; discussion: string; author: string; text: string };
 
-/** Open discussions about subjects and collect responses while they remain open. */
+/**
+ * Open discussions about subjects and collect responses while they remain open.
+ *
+ * **Queries** (methods prefixed `_`) are standing questions the current state
+ * answers — the engine caches them without placing records in the action log.
+ * Every other public method is an **action**: the engine records the call,
+ * runs the implementation, and fires matching reactions.
+ */
 export class DiscussingConcept {
   private readonly discussions = new Map<string, Discussion>();
   private readonly responses: Response[] = [];

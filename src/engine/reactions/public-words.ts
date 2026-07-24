@@ -1,3 +1,9 @@
+/**
+ * Public-facing `when` — narrows the internal overloads in `words.ts` to the
+ * author-facing union (concrete action lines and channel patterns only,
+ * excluding internal `StepNode`). The internal `words.ts` accepts a wider
+ * signature for lowered reaction reconstruction.
+ */
 import { when as authoredWhen } from "./words.ts";
 import type {
   ActionCall,
@@ -10,7 +16,6 @@ import type {
   WhenBuilder,
 } from "./types.ts";
 
-/** Watch the posture stated by one callable vocabulary action line. */
 export const when = authoredWhen as (
   line:
     | ChannelPattern

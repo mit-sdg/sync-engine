@@ -1,0 +1,11 @@
+{
+  "name": "reading-circle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/scenario.ts"
+  },
+  "dependencies": {
+    "@mit-sdg/sync-engine": "workspace:*"
+  }
+}

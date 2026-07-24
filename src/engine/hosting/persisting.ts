@@ -26,7 +26,10 @@ import {
 } from "../reactions/index.ts";
 import { redact } from "../utils/redaction.ts";
 
-import type { Stoppable } from "./stoppable.ts";
+/** A long-lived resource that a host can stop during shutdown. */
+export interface Stoppable {
+  stop(): void | Promise<void>;
+}
 
 // ── Retention policies ──────────────────────────────────────────────────────
 

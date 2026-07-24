@@ -1,40 +1,52 @@
-# Operations room
+# Operations Room
 
-This executable application accompanies the [Concept Design
-guide](../../docs/guide/getting-started.md). Start with the guide to build a
-small whole application; use this directory to see the same structure extended
-with responders, selectable reaction packs, swappable policy, alerts,
-discussion, and a complete dashboard.
+An incident-response app with selectable reaction packs, swappable policy,
+and a full dashboard. Choose between host-only or responder-contribution
+models.
+
+**Run it:**
 
 ```sh
-bun node_modules/@mit-sdg/sync-engine/examples/operations-room/src/scenario.ts
+bun start
 ```
 
-Read the application from its authored sources into its derived evidence:
+The scenario reports an incident, opens a discussion, lets responders
+contribute mitigations, and prints the dashboard.
 
-1. [`../concepts/`](../concepts/) — the manifest of shared generic behaviors.
-   Each directory owns one full specification, implementation, refusal map,
-   registry, and principle test; the [concept map](../concepts/README.md) links
-   the specifications.
-2. [`src/concept-set.ts`](src/concept-set.ts) — the public references and
-   complete implementation floors derived from those registries.
-3. [`src/composition/`](src/composition/) — the reactions, policy views,
-   formers, and application-boundary declarations, split into small modules.
-4. [`src/assembly.ts`](src/assembly.ts) — the explicit composition manifest and
-   its selectable packs.
-5. [`src/edge.ts`](src/edge.ts) — the fixed gateway and Fetch transport.
-6. [`src/client.ts`](src/client.ts) — the HTTP client typed by the generated
-   contract, with success-or-error handling.
-7. [`generated/operations-room.md`](generated/operations-room.md) — the
-   assembled read-back derived from the registered concepts and composition.
-8. [`generated/wire.ts`](generated/wire.ts) — the generated TypeScript contract
-   for the application's boundary.
+**What it demonstrates:**
 
-[`src/scenario.ts`](src/scenario.ts) runs a complete path through the gateway
-with deterministic identities. The [generated-artifact
-README](generated/README.md) states the provenance and regeneration discipline.
+- **Reaction packs** — optional behaviors (alerts, discussion) toggled via
+  assembly options
+- **Swappable policy** — two implementations of the same contribution-policy
+  view (`host-may-contribute` and `responders-may-contribute`)
+- **Parameterized endpoints** — factory functions that accept policy views as
+  arguments
+- **Staged formers** — `currentMitigation` (optional), `requiredCurrentMitigation`
+  (required), `responseStats` (aggregation with `each`, `count`, `distinct`)
+- **Fragment splicing** — the dashboard former splices other formers so
+  each stays independently typed and testable
 
-The layout follows the [application file
-grammar](../../docs/guide/application-boundary.md#application-files-and-floors).
-Its two local depth choices are the shared concept directory and the split
-`src/composition/` directory; they do not change the grammar.
+## Files
+
+| File                                                           | Role                                             |
+| -------------------------------------------------------------- | ------------------------------------------------ |
+| `src/scenario.ts`                                              | Entry point — runs through a local gateway       |
+| `src/concept-set.ts`                                           | Vocabulary, refs, and implementations            |
+| `src/composition/room.ts`                                      | Formers (dashboard, mitigation status)           |
+| `src/composition/packs.ts`                                     | Optional reaction packs (alerts, discussion)     |
+| `src/composition/contributions.ts`                             | Parameterized contribution endpoints             |
+| `src/composition/host-may-contribute.ts`                       | Policy: only the incident host may contribute    |
+| `src/composition/responders-may-contribute.ts`                 | Policy: any responder may contribute             |
+| `src/assembly.ts`                                              | `assemble()` with `OperationsRoomOptions`        |
+| `src/edge.ts`                                                  | Gateway and HTTP wiring                          |
+| `src/client.ts`                                                | Typed client factories                           |
+| `generated.config.ts`                                          | CLI artifact commands                            |
+| [`generated/operations-room.md`](generated/operations-room.md) | Assembled read-back (concepts, views, reactions) |
+| [`generated/wire.ts`](generated/wire.ts)                       | Generated TypeScript wire contract               |
+| [`generated/README.md`](generated/README.md)                   | Provenance and regeneration notes                |
+
+## Regenerate artifacts
+
+```sh
+cd ../.. && bun run build && bun scripts/examples.ts check operationsRoom
+```
