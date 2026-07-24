@@ -231,10 +231,12 @@ export interface AuditEntry {
   firings: string[];
 }
 
+const MAX_CONTAINS_DEPTH = 10;
+
 /** Does `value` appear anywhere inside `haystack` (strict equality, deep)? */
 function containsValue(haystack: unknown, value: unknown, depth = 0): boolean {
   if (haystack === value) return true;
-  if (depth > 10 || haystack === null || typeof haystack !== "object") return false;
+  if (depth > MAX_CONTAINS_DEPTH || haystack === null || typeof haystack !== "object") return false;
   const children = Array.isArray(haystack) ? haystack : Object.values(haystack);
   return children.some((child) => containsValue(child, value, depth + 1));
 }

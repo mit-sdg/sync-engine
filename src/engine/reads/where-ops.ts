@@ -474,6 +474,10 @@ async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined
         if (unifies) result.push(next);
         break;
       }
+      default: {
+        const _exhausted: never = op;
+        throw new Error(`Unknown where op kind: ${(_exhausted as { op?: unknown }).op}`);
+      }
     }
   }
   return result;

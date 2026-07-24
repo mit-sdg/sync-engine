@@ -73,7 +73,7 @@ export function configureRedaction(policy: RedactionPolicy): void {
 
 function isSensitive(key: string): boolean {
   if (policyFields.has(key.toLowerCase())) return true;
-  return policyPatterns.some((pattern) => new RegExp(pattern).test(key));
+  return policyPatterns.some((pattern) => pattern.test(key));
 }
 
 export function redact(obj: unknown, depth = 0): unknown {
@@ -81,9 +81,11 @@ export function redact(obj: unknown, depth = 0): unknown {
   return redactValue(obj, depth, new WeakSet());
 }
 
+const MAX_REDACTION_DEPTH = 5;
+
 /** Project arbitrary diagnostic data to a redacted value that JSON can always encode. */
 function redactValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
-  if (depth > 5) return "[max depth]";
+  if (depth > MAX_REDACTION_DEPTH) return "[max depth]";
   if (value === null) return null;
 
   switch (typeof value) {

@@ -152,7 +152,8 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
 
       const requestId = crypto.randomUUID();
       const correlationId = invokeOpts.correlationId ?? requestId;
-      const timeoutMs = invokeOpts.timeoutMs ?? 30_000;
+      const DEFAULT_TIMEOUT_MS = 30_000;
+      const timeoutMs = invokeOpts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
       let responsePromise: Promise<Record<string, unknown>>;
       try {

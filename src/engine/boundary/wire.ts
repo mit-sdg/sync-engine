@@ -112,13 +112,14 @@ function hasOneNullDifference(
   if (left.fields.length !== right.fields.length) return false;
   let differences = 0;
   for (let index = 0; index < left.fields.length; index += 1) {
-    const a = left.fields[index];
-    const b = right.fields[index];
-    if (a.key !== b.key || a.optional !== b.optional) return false;
-    if (JSON.stringify(a.type) === JSON.stringify(b.type)) continue;
-    const aIsNull = a.type.kind === "literal" && a.type.value === null;
-    const bIsNull = b.type.kind === "literal" && b.type.value === null;
-    if (!aIsNull && !bIsNull) return false;
+    const leftField = left.fields[index];
+    const rightField = right.fields[index];
+    if (leftField.key !== rightField.key || leftField.optional !== rightField.optional)
+      return false;
+    if (JSON.stringify(leftField.type) === JSON.stringify(rightField.type)) continue;
+    const leftIsNull = leftField.type.kind === "literal" && leftField.type.value === null;
+    const rightIsNull = rightField.type.kind === "literal" && rightField.type.value === null;
+    if (!leftIsNull && !rightIsNull) return false;
     differences += 1;
   }
   return differences === 1;
