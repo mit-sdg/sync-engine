@@ -1,8 +1,8 @@
-import { FrameworkErrorCode as Codes } from "../utils/framework-error-codes.ts";
+import { FrameworkErrorCode as Codes } from "@engine/utils/framework-error-codes";
 import type {
   EmittedFrameworkErrorCode,
   FrameworkErrorCode as FrameworkErrorCodeValue,
-} from "../utils/framework-error-codes.ts";
+} from "@engine/utils/framework-error-codes";
 
 export type InvocationResult<TOutput = unknown, TDomainError = unknown> =
   | { ok: true; value: TOutput }

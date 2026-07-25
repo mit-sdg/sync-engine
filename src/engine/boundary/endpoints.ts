@@ -4,7 +4,7 @@
  * generated `ContractShape` supplies endpoint types to the client.
  */
 
-import type { InstrumentedAction } from "../reactions/types.ts";
+import type { InstrumentedAction } from "@engine/reactions/types";
 
 // An endpoint may declare required keys and defaults for its input object.
 // Admission runs before the request is recorded. Required keys test presence,

@@ -1,6 +1,6 @@
-import { brandWhereOp, conditionOp, isCondition } from "../reads/where-ops.ts";
-import type { AnyWhereOp, EarlierOp } from "../reads/where-ops.ts";
-import { isCountOp } from "../reads/views.ts";
+import { brandWhereOp, conditionOp, isCondition } from "@engine/reads/where-ops";
+import type { AnyWhereOp, EarlierOp } from "@engine/reads/where-ops";
+import { isCountOp } from "@engine/reads/views";
 import { assertReactionNodes } from "./nodes.ts";
 import { siblingTree } from "./partitions.ts";
 import { isChannelPattern } from "./channels.ts";

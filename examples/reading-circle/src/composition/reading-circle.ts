@@ -8,9 +8,8 @@ const { Discussing, Gathering, Selecting } = concepts;
 
 // ── Policy views ─────────────────────────────────────────────────────────
 // Views return the rows matching their name. A success view drives the `where()`
-// clause of an accepting endpoint; an inverted view drives a rejecting endpoint
-// on the same path — the engine tries both in declaration order, short-
-// circuiting on the first match.
+// clause of an accepting endpoint; a deliberately disjoint view drives a
+// rejecting endpoint on the same path. Every matching endpoint may run.
 
 export const memberMayRespond = view(
   "(member) may respond in (circle)",
@@ -71,9 +70,9 @@ export const ChooseReading = endpoint("/circles/choose", ({ circle, reading, sel
 );
 
 // ── Endpoints ────────────────────────────────────────────────────────────
-// The two /circles/respond endpoints share one path. The engine tries them in
-// declaration order: AddResponse checks membership and processes the response;
-// if its where() rejects, RejectNonmemberResponse answers with an error.
+// The two /circles/respond endpoints share one path. Their policy views are
+// deliberately disjoint: members match AddResponse and nonmembers match
+// RejectNonmemberResponse. Do not rely on declaration order for exclusivity.
 
 export const AddResponse = endpoint(
   "/circles/respond",

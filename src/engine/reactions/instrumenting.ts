@@ -1,7 +1,7 @@
-import { FrameworkErrorCode } from "../utils/framework-error-codes.ts";
-import { inspect, inspectCustom, uuid } from "../utils/runtime.ts";
-import { logger } from "../utils/logger.ts";
-import { serializeError } from "../utils/redaction.ts";
+import { FrameworkErrorCode } from "@engine/utils/framework-error-codes";
+import { inspect, inspectCustom, uuid } from "@engine/utils/runtime";
+import { logger } from "@engine/utils/logger";
+import { serializeError } from "@engine/utils/redaction";
 import { ActionConcept } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
 import { registeredRefusalOf } from "./concept-metadata.ts";
@@ -11,7 +11,7 @@ import type { ActionContract } from "./outcomes.ts";
 import { isRefuse, refusalMapping } from "./refuse.ts";
 import { actionId, byReaction, flow } from "./matching.ts";
 import type { ActionOutcome, AnyAction, InstrumentedAction } from "./types.ts";
-import { queryPromiseOf, validateQueryContracts } from "../reads/query-contracts.ts";
+import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
 import { memoizeQuery } from "./query-cache.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
@@ -119,7 +119,7 @@ export function instrumentConcept<T extends object>(
           concept?: object;
           queryName?: string;
           queryLabel?: string;
-          queryPromise?: import("../reads/query-contracts.ts").QueryPromise;
+          queryPromise?: import("@engine/reads/query-contracts").QueryPromise;
         };
         query.concept = concept;
         query.queryName = String(property);

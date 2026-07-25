@@ -8,7 +8,7 @@ import type {
   ThenNode,
   UnnamedStepNode,
 } from "./types.ts";
-import type { WhereOp } from "../reads/where-ops.ts";
+import type { WhereOp } from "@engine/reads/where-ops";
 
 const NodeBrand: unique symbol = Symbol("NodeBrand");
 

@@ -23,8 +23,8 @@ import {
   type LogEntry,
   type LogStore,
   type OutcomeContracts,
-} from "../reactions/index.ts";
-import { redact } from "../utils/redaction.ts";
+} from "@engine/reactions/index";
+import { redact } from "@engine/utils/redaction";
 
 /** A long-lived resource that a host can stop during shutdown. */
 export interface Stoppable {

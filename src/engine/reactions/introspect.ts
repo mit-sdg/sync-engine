@@ -8,10 +8,10 @@
  * These helpers import no application concepts or boundaries.
  */
 import type { ActionPattern, InstrumentedAction } from "./types.ts";
-import type { ConceptInventoryIR } from "../reads/ir.ts";
+import type { ConceptInventoryIR } from "@engine/reads/ir";
 import { contractOf } from "./outcomes.ts";
 import { conceptMetadataOf } from "./concept-metadata.ts";
-import { queryPromiseOf } from "../reads/query-contracts.ts";
+import { queryPromiseOf } from "@engine/reads/query-contracts";
 
 /**
  * An explicit concept name, stamped on an instance when it was instrumented

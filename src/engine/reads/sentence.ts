@@ -1,6 +1,6 @@
 /** Binding bags and callable references shared by views and formers. */
 
-import type { Mapping, Vars } from "../reactions/types.ts";
+import type { Mapping, Vars } from "@engine/reactions/types";
 import { isPlainMapping } from "./matchers.ts";
 
 /** One independently declared binding bag. */

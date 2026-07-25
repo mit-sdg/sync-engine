@@ -17,8 +17,8 @@
  */
 
 import type { ActionOutcome } from "./types.ts";
-import { uuid } from "../utils/runtime.ts";
-import { redact } from "../utils/redaction.ts";
+import { uuid } from "@engine/utils/runtime";
+import { redact } from "@engine/utils/redaction";
 import { MemoryStore, type ActionRecord, type LogStore } from "./log-store.ts";
 
 export type { ActionRecord } from "./log-store.ts";

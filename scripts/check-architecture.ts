@@ -59,6 +59,10 @@ function engineConcern(path: string): string | undefined {
 
 function targetOf(source: string, specifier: string): string | undefined {
   if (specifier.startsWith(".")) return normalize(resolve(dirname(source), specifier));
+  if (specifier.startsWith("@engine/")) {
+    const target = join(sourceRoot, "engine", specifier.slice("@engine/".length));
+    return existsSync(target) ? target : `${target}.ts`;
+  }
   const match = /^@sync-engine\/(.+?)(?:\/|$)/.exec(specifier);
   return match === null ? undefined : join(sourceRoot, match[1]);
 }

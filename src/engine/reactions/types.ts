@@ -1,7 +1,7 @@
 /** Core type vocabulary for declarative reactions. */
-import type { Frames } from "../reads/frames.ts";
-import type { AnyWhereOp, Condition, WhereOp } from "../reads/where-ops.ts";
-import type { QueryPromise } from "../reads/query-contracts.ts";
+import type { Frames } from "@engine/reads/frames";
+import type { AnyWhereOp, Condition, WhereOp } from "@engine/reads/where-ops";
+import type { QueryPromise } from "@engine/reads/query-contracts";
 
 /** A plain, string-keyed record — the shape an action's input/output takes. */
 export type Mapping = Record<string, unknown>;

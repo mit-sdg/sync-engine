@@ -1,10 +1,10 @@
-import type { Assembly } from "../boundary/assembly-facade.ts";
-import { assemblyBehind } from "../boundary/assembly-registry.ts";
-import { actionNameOf, conceptNameOf } from "../reactions/introspect.ts";
-import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
-import type { ActionOutcome } from "../reactions/types.ts";
-import type { InputContractDecl } from "../boundary/endpoints.ts";
-import { redact } from "../utils/redaction.ts";
+import type { Assembly } from "@engine/boundary/assembly-facade";
+import { assemblyBehind } from "@engine/boundary/assembly-registry";
+import { actionNameOf, conceptNameOf } from "@engine/reactions/introspect";
+import type { AppIR, ConceptInventoryIR } from "@engine/reads/ir";
+import type { ActionOutcome } from "@engine/reactions/types";
+import type { InputContractDecl } from "@engine/boundary/endpoints";
+import { redact } from "@engine/utils/redaction";
 
 export interface ObservedOccurrence {
   concept: string;

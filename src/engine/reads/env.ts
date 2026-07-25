@@ -7,7 +7,7 @@
  * so evaluation expects every lookup to succeed.
  */
 
-import type { InstrumentedQuery } from "../reactions/types.ts";
+import type { InstrumentedQuery } from "@engine/reactions/types";
 import type { ComputationRef } from "./computations.ts";
 import type { FormerRef } from "./former-nodes.ts";
 import type { QueryRefIR } from "./ir.ts";

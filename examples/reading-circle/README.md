@@ -43,8 +43,11 @@ responses, and prints both the full circle page and the refusals.
 | [`generated/wire.ts`](generated/wire.ts)                     | Generated TypeScript wire contract                         |
 | [`generated/README.md`](generated/README.md)                 | Provenance and regeneration notes                          |
 
-## Regenerate artifacts
+## Check Artifacts
 
 ```sh
 cd ../.. && bun run build && bun scripts/examples.ts check readingCircle
 ```
+
+Use `bun scripts/examples.ts pin readingCircle` instead of `check` to
+regenerate the pinned files intentionally.

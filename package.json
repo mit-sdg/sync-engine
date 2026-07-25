@@ -28,6 +28,7 @@
     "NOTICE"
   ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
     "./advanced": {
       "types": "./dist/advanced/index.d.ts",

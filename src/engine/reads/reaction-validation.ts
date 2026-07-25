@@ -1,5 +1,5 @@
-import { actionNameOf, conceptNameOf } from "../reactions/introspect.ts";
-import type { ReactionDeclaration, StepNode } from "../reactions/types.ts";
+import { actionNameOf, conceptNameOf } from "@engine/reactions/introspect";
+import type { ReactionDeclaration, StepNode } from "@engine/reactions/types";
 import { isFusedFormer } from "./former-nodes.ts";
 import { isMatcher, isPlainMapping } from "./matchers.ts";
 import { walkValueTree } from "./value-tree.ts";

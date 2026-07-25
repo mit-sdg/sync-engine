@@ -1,5 +1,5 @@
 /** The standard gateway. */
-import type { Logging } from "../reactions/logging.ts";
+import type { Logging } from "@engine/reactions/logging";
 import type { ApplicationInterface } from "./application-interface.ts";
 import type { ContractShape } from "./client.ts";
 import { createGateway as createGatewayEngine } from "./gateway.ts";

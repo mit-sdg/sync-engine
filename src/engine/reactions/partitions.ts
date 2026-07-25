@@ -1,5 +1,5 @@
-import { setReactionLintExtraUses } from "../reads/reaction-validation.ts";
-import type { WhereOp } from "../reads/where-ops.ts";
+import { setReactionLintExtraUses } from "@engine/reads/reaction-validation";
+import type { WhereOp } from "@engine/reads/where-ops";
 import type {
   ReactionDeclaration,
   ReactionPartition,
@@ -8,7 +8,7 @@ import type {
   ThenNode,
   TriggerPattern,
 } from "./types.ts";
-import { ReactionPartitionBrand, hasBrand } from "../reads/brands.ts";
+import { ReactionPartitionBrand, hasBrand } from "@engine/reads/brands";
 import { assertReactionNodes } from "./nodes.ts";
 
 export function isReactionPartition(value: unknown): value is ReactionPartition {

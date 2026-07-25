@@ -1,7 +1,9 @@
 # Examples
 
 Two complete applications that demonstrate the engine surface end to end.
-Each is a standalone TypeScript project — `cd` in and `bun start`.
+Each is independently runnable within this repository or the installed package:
+`cd` into its directory and run `bun start`. They share the concepts and support
+modules in this parent directory.
 
 - [Reading Circle](reading-circle/README.md) — a book club app. Members join
   circles, choose books, and discuss them. Policy views gate membership.

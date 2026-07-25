@@ -1,7 +1,7 @@
 import type { Assembly } from "./assembly-facade.ts";
 import { assemblyBehind } from "./assembly-registry.ts";
 import type { InputContractDecl } from "./endpoints.ts";
-import type { PublicErrorCategory } from "../reactions/concept-metadata.ts";
+import type { PublicErrorCategory } from "@engine/reactions/concept-metadata";
 import { wireContracts } from "./wire.ts";
 import type { WireContractsIR, WireType } from "./wire.ts";
 

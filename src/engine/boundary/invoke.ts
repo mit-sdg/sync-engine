@@ -1,4 +1,4 @@
-import { type OutcomeContracts, Refuse } from "../reactions/index.ts";
+import { type OutcomeContracts, Refuse } from "@engine/reactions/index";
 import { admitInput } from "./admit.ts";
 import type { ContractShape, DomainErrorValue } from "./client.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";

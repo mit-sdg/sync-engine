@@ -1,6 +1,6 @@
 /** Endpoint-local type origins derived from registered reaction and read IR. */
 
-import { asMarker } from "../reads/ir.ts";
+import { asMarker } from "@engine/reads/ir";
 import type {
   ActionTriggerIR,
   PatternIR,
@@ -10,7 +10,7 @@ import type {
   ViewIR,
   ViewOpIR,
   WhereOpIR,
-} from "../reads/ir.ts";
+} from "@engine/reads/ir";
 
 export type WireOrigin =
   | {

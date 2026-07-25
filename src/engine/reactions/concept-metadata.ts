@@ -1,5 +1,5 @@
 import type { OutcomeContracts } from "./outcomes.ts";
-import type { QueryPromise } from "../reads/query-contracts.ts";
+import type { QueryPromise } from "@engine/reads/query-contracts";
 
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 

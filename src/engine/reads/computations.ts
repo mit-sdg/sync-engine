@@ -8,7 +8,7 @@
  * actually assembled the ref.
  */
 
-import type { Mapping } from "../reactions/types.ts";
+import type { Mapping } from "@engine/reactions/types";
 import { brand, hasBrand } from "./brands.ts";
 
 /** The runtime shape of a computation: one input mapping in, one value out. */

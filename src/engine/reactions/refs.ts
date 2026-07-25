@@ -27,12 +27,12 @@
  * the vocabulary's class stays the canonical, type-defining one.
  */
 
-import { computationRef } from "../reads/computations.ts";
+import { computationRef } from "@engine/reads/computations";
 import { actionLine } from "./nodes.ts";
-import { lineOf } from "../reads/lines.ts";
-import type { QueryReadLine, SlotPattern } from "../reads/lines.ts";
+import { lineOf } from "@engine/reads/lines";
+import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
 import { parseSpecProse } from "./concept-spec.ts";
-import type { ComputationFn, ComputationRef } from "../reads/computations.ts";
+import type { ComputationFn, ComputationRef } from "@engine/reads/computations";
 import type { ConceptMetadata } from "./concept-metadata.ts";
 import type {
   ActionCall,
@@ -46,7 +46,7 @@ import {
   validateQueryContractMap,
   type QueryPromises,
   type QueryPromise,
-} from "../reads/query-contracts.ts";
+} from "@engine/reads/query-contracts";
 
 const ActionRefBrand: unique symbol = Symbol("ActionRefBrand");
 const QueryRefBrand: unique symbol = Symbol("QueryRefBrand");

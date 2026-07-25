@@ -21,36 +21,36 @@
  * single flow so independent invocations never cross-match.
  */
 
-import { logger } from "../utils/logger.ts";
-import { serializeError } from "../utils/redaction.ts";
+import { logger } from "@engine/utils/logger";
+import { serializeError } from "@engine/utils/redaction";
 import { ActionConcept, type ActionRecord, normalizeOutcome } from "./actions.ts";
-import { DESCEND, mapValueTree, mapValueTreeAsync, walkValueTree } from "../reads/value-tree.ts";
-import { applyWhereOps } from "../reads/where-ops.ts";
-import type { AnyWhereOp } from "../reads/where-ops.ts";
-import type { ComputationRef } from "../reads/computations.ts";
-import type { RelationView } from "../reads/lines.ts";
-import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../reads/ir.ts";
-import { type LoweredReaction, lowerReaction, serializeReaction } from "../reads/lower.ts";
+import { DESCEND, mapValueTree, mapValueTreeAsync, walkValueTree } from "@engine/reads/value-tree";
+import { applyWhereOps } from "@engine/reads/where-ops";
+import type { AnyWhereOp } from "@engine/reads/where-ops";
+import type { ComputationRef } from "@engine/reads/computations";
+import type { RelationView } from "@engine/reads/lines";
+import type { AppIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
+import { type LoweredReaction, lowerReaction, serializeReaction } from "@engine/reads/lower";
 import {
   assertThenInputsAreData,
   copyReactionLintExtraUses,
   lintReactionOpens,
-} from "../reads/reaction-validation.ts";
+} from "@engine/reads/reaction-validation";
 import {
   type FormerRef,
   fuseFormer,
   type FusedFormer,
   isFusedFormer,
-} from "../reads/former-nodes.ts";
-import { readBackReaction } from "../reads/read-back.ts";
-import { formTree } from "../reads/former-evaluation.ts";
-import type { ReadEnv } from "../reads/env.ts";
-import { Registry } from "../reads/registering.ts";
-import type { BoundReaction, BoundWhereOp } from "../reads/registering.ts";
-import { varKeyOf } from "../reads/frames.ts";
-import { hasMarkerKey, liveOf } from "../reads/ir.ts";
+} from "@engine/reads/former-nodes";
+import { readBackReaction } from "@engine/reads/read-back";
+import { formTree } from "@engine/reads/former-evaluation";
+import type { ReadEnv } from "@engine/reads/env";
+import { Registry } from "@engine/reads/registering";
+import type { BoundReaction, BoundWhereOp } from "@engine/reads/registering";
+import { varKeyOf } from "@engine/reads/frames";
+import { hasMarkerKey, liveOf } from "@engine/reads/ir";
 import type { FiringRecord } from "./log-store.ts";
-import { Frames } from "../reads/frames.ts";
+import { Frames } from "@engine/reads/frames";
 import { actionNameOf } from "./introspect.ts";
 import type { EngineObserver } from "./observer.ts";
 import { FiringBook, type FiringBranch, type FiringFill } from "./firing.ts";
@@ -86,7 +86,7 @@ import type {
   ExecutableReaction,
   WhereFn,
 } from "./types.ts";
-import { uuid } from "../utils/runtime.ts";
+import { uuid } from "@engine/utils/runtime";
 import { $vars } from "./vars.ts";
 import { declarationsOf } from "./partitions.ts";
 import { exportConcepts, exportReactions, form, readBack, renderApp } from "./reacting-export.ts";

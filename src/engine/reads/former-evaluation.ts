@@ -8,7 +8,7 @@ import type { FormerRef, FusedFormer } from "./former-nodes.ts";
 import { liveOf } from "./ir.ts";
 import type { ArrangedIR, FormerNodeIR, PatternIR, SpliceIR } from "./ir.ts";
 import type { ReadEnv } from "./env.ts";
-import type { Frame, Mapping } from "../reactions/types.ts";
+import type { Frame, Mapping } from "@engine/reactions/types";
 
 /** One selection's shared shape: source line and refinements. */
 type SelectionIR = Extract<FormerNodeIR, { from: object }>;

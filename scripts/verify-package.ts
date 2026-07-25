@@ -99,6 +99,15 @@ try {
 
   const installed = resolve(temporary, "node_modules/@mit-sdg/sync-engine");
   await verifyPackedDocLinks(entries, installed);
+  for (const path of await filesBelow(
+    resolve(installed, "dist"),
+    (name) => name.endsWith(".js") || name.endsWith(".d.ts"),
+  )) {
+    const source = await readFile(path, "utf8");
+    if (/["']@(?:engine|sync-engine)\//.test(source)) {
+      throw new Error(`${relative(installed, path)} contains a repository-only import alias`);
+    }
+  }
 
   for (const example of examples) {
     run(
@@ -153,7 +162,7 @@ try {
       ),
     )}.map((entrypoint) => import(entrypoint)));\n`,
   );
-  run("bun", [resolve(temporary, "runtime-import.mjs")], temporary);
+  run("node", [resolve(temporary, "runtime-import.mjs")], temporary);
 
   await mkdir(consumer);
   await writeFile(
@@ -182,7 +191,7 @@ try {
         moduleResolution: "NodeNext",
         noEmit: true,
         strict: true,
-        skipLibCheck: true,
+        skipLibCheck: false,
       },
       files: ["all-entrypoints.ts", "contract.ts"],
     })}\n`,

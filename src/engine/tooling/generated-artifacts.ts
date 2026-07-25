@@ -1,10 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import type { Assembly } from "../boundary/assembly-facade.ts";
-import { renderInputContracts } from "../boundary/endpoints.ts";
-import { renderWireTypes, wireContracts } from "../boundary/wire.ts";
-import type { HttpFloor } from "../boundary/http-floor.ts";
-import { projectAssemblyHttpWire } from "../boundary/http-floor.ts";
-import { renderApp } from "../reads/render.ts";
+import type { Assembly } from "@engine/boundary/assembly-facade";
+import { renderInputContracts } from "@engine/boundary/endpoints";
+import { renderWireTypes, wireContracts } from "@engine/boundary/wire";
+import type { HttpFloor } from "@engine/boundary/http-floor";
+import { projectAssemblyHttpWire } from "@engine/boundary/http-floor";
+import { renderApp } from "@engine/reads/render";
 import { inspectAssembly } from "./inspection.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;

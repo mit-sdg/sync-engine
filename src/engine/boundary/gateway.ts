@@ -5,7 +5,7 @@ import {
   type Reacting,
   type Vars,
   vocabulary,
-} from "../reactions/index.ts";
+} from "@engine/reactions/index";
 import { admitInput } from "./admit.ts";
 import type { ApplicationInterface } from "./application-interface.ts";
 import { assemble, endpoint, receive, respond } from "./assemble.ts";

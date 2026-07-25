@@ -1,5 +1,5 @@
-import type { ComputationFn } from "../reads/computations.ts";
-import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../reactions/refs.ts";
+import type { ComputationFn } from "@engine/reads/computations";
+import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "@engine/reactions/refs";
 import { rememberAssembly } from "./assembly-registry.ts";
 import { assemble as assembleEngine } from "./assemble.ts";
 import type { AssembledApp, AssembleOptions } from "./assemble.ts";

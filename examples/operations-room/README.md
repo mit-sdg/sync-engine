@@ -23,8 +23,8 @@ contribute mitigations, and prints the dashboard.
   arguments
 - **Staged formers** — `currentMitigation` (optional), `requiredCurrentMitigation`
   (required), `responseStats` (aggregation with `each`, `count`, `distinct`)
-- **Fragment splicing** — the dashboard former splices other formers so
-  each stays independently typed and testable
+- **Fragment splicing** — `roomSummary` splices `responderRoster` so each
+  fragment stays independently typed and testable
 
 ## Files
 
@@ -32,7 +32,7 @@ contribute mitigations, and prints the dashboard.
 | -------------------------------------------------------------- | ------------------------------------------------ |
 | `src/scenario.ts`                                              | Entry point — runs through a local gateway       |
 | `src/concept-set.ts`                                           | Vocabulary, refs, and implementations            |
-| `src/composition/room.ts`                                      | Formers (dashboard, mitigation status)           |
+| `src/composition/room.ts`                                      | Formers and room endpoints                       |
 | `src/composition/packs.ts`                                     | Optional reaction packs (alerts, discussion)     |
 | `src/composition/contributions.ts`                             | Parameterized contribution endpoints             |
 | `src/composition/host-may-contribute.ts`                       | Policy: only the incident host may contribute    |
@@ -45,8 +45,11 @@ contribute mitigations, and prints the dashboard.
 | [`generated/wire.ts`](generated/wire.ts)                       | Generated TypeScript wire contract               |
 | [`generated/README.md`](generated/README.md)                   | Provenance and regeneration notes                |
 
-## Regenerate artifacts
+## Check Artifacts
 
 ```sh
 cd ../.. && bun run build && bun scripts/examples.ts check operationsRoom
 ```
+
+Use `bun scripts/examples.ts pin operationsRoom` instead of `check` to
+regenerate the pinned files intentionally.

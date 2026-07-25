@@ -27,7 +27,7 @@ import type {
   RelationView,
   Vars,
   WhenBuilder,
-} from "../reactions/index.ts";
+} from "@engine/reactions/index";
 import {
   $vars,
   declarationsOf,
@@ -40,11 +40,11 @@ import {
   vocabularyComputations,
   vocabularyMetadata,
   when,
-} from "../reactions/index.ts";
-import { attachConceptMetadata } from "../reactions/concept-metadata.ts";
-import type { PublicErrorCategory } from "../reactions/concept-metadata.ts";
-import type { InstrumentedConcept } from "../reactions/instrumenting.ts";
-import { logger } from "../utils/logger.ts";
+} from "@engine/reactions/index";
+import { attachConceptMetadata } from "@engine/reactions/concept-metadata";
+import type { PublicErrorCategory } from "@engine/reactions/concept-metadata";
+import type { InstrumentedConcept } from "@engine/reactions/instrumenting";
+import { logger } from "@engine/utils/logger";
 import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";
 import { refusalFunnel } from "./funnel.ts";
 import type { Invoker } from "./invoke.ts";

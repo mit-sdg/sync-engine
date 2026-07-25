@@ -1,12 +1,12 @@
-import { logger } from "../utils/logger.ts";
-import { redact, serializeError } from "../utils/redaction.ts";
-import { inspect } from "../utils/runtime.ts";
+import { logger } from "@engine/utils/logger";
+import { redact, serializeError } from "@engine/utils/redaction";
+import { inspect } from "@engine/utils/runtime";
 import type { ActionRecord } from "./actions.ts";
 import type { ActionConcept } from "./actions.ts";
 import { actionNameOf, conceptNameOf } from "./introspect.ts";
 import type { EngineObserver, LogEvent } from "./observer.ts";
 import type { ActionOutcome, Frame } from "./types.ts";
-import type { Frames } from "../reads/frames.ts";
+import type { Frames } from "@engine/reads/frames";
 
 export enum Logging {
   OFF,

@@ -13,7 +13,7 @@ export { contractOf } from "./outcomes.ts";
 export type { ActionContract, OutcomeContracts } from "./outcomes.ts";
 
 // Read-side contracts — imported through the reads barrel for explicit dependency tracking.
-export { QueryAnswerFault, rowsOfAnswer } from "../reads/queries.ts";
+export { QueryAnswerFault, rowsOfAnswer } from "@engine/reads/queries";
 
 export { parseSpecProse } from "./concept-spec.ts";
 export type { ConceptSpecProse } from "./concept-spec.ts";
@@ -25,13 +25,13 @@ export {
   is,
   isFusedComputation,
   standardComputations,
-} from "../reads/computations.ts";
+} from "@engine/reads/computations";
 export type {
   ComputationFn,
   ComputationRef,
   ComputationSource,
   FusedComputation,
-} from "../reads/computations.ts";
+} from "@engine/reads/computations";
 
 export {
   applyWhereOps,
@@ -42,7 +42,7 @@ export {
   isWhereOp,
   no,
   whether,
-} from "../reads/where-ops.ts";
+} from "@engine/reads/where-ops";
 export type {
   AnyWhereOp,
   ComputeOp,
@@ -54,23 +54,23 @@ export type {
   NoOp,
   WhereOp,
   WhetherOp,
-} from "../reads/where-ops.ts";
+} from "@engine/reads/where-ops";
 
-export { isReadLine, isRelationView } from "../reads/lines.ts";
+export { isReadLine, isRelationView } from "@engine/reads/lines";
 export type {
   QueryReadLine,
   ReadLine,
   RelationView,
   SlotPattern,
   ViewReadLine,
-} from "../reads/lines.ts";
+} from "@engine/reads/lines";
 
-export { count, isCountOp, view, where } from "../reads/views.ts";
-export type { CountOp, ViewOp } from "../reads/views.ts";
+export { count, isCountOp, view, where } from "@engine/reads/views";
+export type { CountOp, ViewOp } from "@engine/reads/views";
 
 export { declarationsOf, isReactionPartition } from "./partitions.ts";
-export { each, form, former } from "../reads/former-builders.ts";
-export type { FreeBindings, InputBindings, OutputBindings } from "../reads/sentence.ts";
+export { each, form, former } from "@engine/reads/former-builders";
+export type { FreeBindings, InputBindings, OutputBindings } from "@engine/reads/sentence";
 
 export {
   FormerFault,
@@ -78,8 +78,8 @@ export {
   isFormerNode,
   isFusedFormer,
   isFormerUse,
-} from "../reads/former-nodes.ts";
-export { formTree } from "../reads/former-evaluation.ts";
+} from "@engine/reads/former-nodes";
+export { formTree } from "@engine/reads/former-evaluation";
 export type {
   Arranged,
   CountNode,
@@ -93,16 +93,16 @@ export type {
   LeafNode,
   RecordNode,
   FormerUse,
-} from "../reads/former-nodes.ts";
+} from "@engine/reads/former-nodes";
 export type {
   FormNode,
   EachFormNode,
   SelectionBuilder,
   SelectionConsumers,
-} from "../reads/former-builders.ts";
+} from "@engine/reads/former-builders";
 
-export { Frames } from "../reads/frames.ts";
-export type { QueryPromise } from "../reads/query-contracts.ts";
+export { Frames } from "@engine/reads/frames";
+export type { QueryPromise } from "@engine/reads/query-contracts";
 
 export {
   isActionRef,
@@ -139,7 +139,7 @@ export {
 } from "./introspect.ts";
 export type { EngineObserver, LogEvent } from "./observer.ts";
 
-export { opaqueCount } from "../reads/ir.ts";
+export { opaqueCount } from "@engine/reads/ir";
 export type {
   ActionInventoryIR,
   ActionTriggerIR,
@@ -161,7 +161,7 @@ export type {
   ViewIR,
   ViewOpIR,
   WhereOpIR,
-} from "../reads/ir.ts";
+} from "@engine/reads/ir";
 
 export {
   renderApp,
@@ -171,11 +171,11 @@ export {
   renderValue,
   renderView,
   renderWhereOp,
-} from "../reads/render.ts";
-export type { AppSpecIR } from "../reads/render.ts";
+} from "@engine/reads/render";
+export type { AppSpecIR } from "@engine/reads/render";
 
-export type { LoweredReaction, LoweredWhereOp } from "../reads/lower.ts";
-export { isMatcher, oneOf } from "../reads/matchers.ts";
+export type { LoweredReaction, LoweredWhereOp } from "@engine/reads/lower";
+export { isMatcher, oneOf } from "@engine/reads/matchers";
 
 export { Logging } from "./logging.ts";
 export { Reacting } from "./reacting.ts";

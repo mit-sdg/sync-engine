@@ -1,11 +1,11 @@
-import type { Registry } from "../reads/registering.ts";
-import type { AppIR, ConceptInventoryIR, ReactionIR } from "../reads/ir.ts";
-import { renderApp as renderAppSpec } from "../reads/render.ts";
-import { serializeApp, serializeView } from "../reads/lower.ts";
-import { readBackApp } from "../reads/read-back.ts";
-import type { FusedFormer } from "../reads/former-nodes.ts";
-import { isFusedFormer } from "../reads/former-nodes.ts";
-import { formTree } from "../reads/former-evaluation.ts";
+import type { Registry } from "@engine/reads/registering";
+import type { AppIR, ConceptInventoryIR, ReactionIR } from "@engine/reads/ir";
+import { renderApp as renderAppSpec } from "@engine/reads/render";
+import { serializeApp, serializeView } from "@engine/reads/lower";
+import { readBackApp } from "@engine/reads/read-back";
+import type { FusedFormer } from "@engine/reads/former-nodes";
+import { isFusedFormer } from "@engine/reads/former-nodes";
+import { formTree } from "@engine/reads/former-evaluation";
 import { inventoryOf } from "./introspect.ts";
 
 export function exportReactions(state: {

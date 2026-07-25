@@ -39,11 +39,11 @@ import type {
   Mapping,
   StepNode,
   UnnamedStepNode,
-} from "../reactions/types.ts";
+} from "@engine/reactions/types";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import { conditionOp } from "./where-ops.ts";
 import { brand, CountOpBrand, hasBrand, ViewBlockBrand } from "./brands.ts";
-import { branchChain } from "../reactions/nodes.ts";
+import { branchChain } from "@engine/reactions/nodes";
 import type { ViewOpIR } from "./ir.ts";
 import { lowerRelationBlocks } from "./lower.ts";
 import { assertConceptQuery } from "./queries.ts";

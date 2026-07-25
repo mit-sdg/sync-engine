@@ -13,7 +13,7 @@
  * preceding occurrences in the same flow.
  */
 
-import type { ActionPosture, ChannelPosture } from "../reactions/types.ts";
+import type { ActionPosture, ChannelPosture } from "@engine/reactions/types";
 import { foldFormerNode, foldReaction, foldView } from "./schema.ts";
 
 /** A JSON-safe pattern value: literals, variables, matchers, nested shapes. */

@@ -21,8 +21,8 @@ import type {
   PatternIR,
   ReactionIR,
   ValueIR,
-} from "../reactions/index.ts";
-import { asMarker } from "../reads/ir.ts";
+} from "@engine/reactions/index";
+import { asMarker } from "@engine/reads/ir";
 import type { InputContractDecl } from "./endpoints.ts";
 import {
   analyzeReactionProvenance,

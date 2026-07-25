@@ -1,7 +1,7 @@
-import { isMatcher } from "../reads/matchers.ts";
-import { varKeyOf } from "../reads/frames.ts";
-import { structurallyEqual } from "../reads/value-equality.ts";
-import { asMarker, liveOf } from "../reads/ir.ts";
+import { isMatcher } from "@engine/reads/matchers";
+import { varKeyOf } from "@engine/reads/frames";
+import { structurallyEqual } from "@engine/reads/value-equality";
+import { asMarker, liveOf } from "@engine/reads/ir";
 import { actionNameOf, conceptNameOf } from "./introspect.ts";
 import type { ActionRecord } from "./actions.ts";
 import type {

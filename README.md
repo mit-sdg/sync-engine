@@ -1,68 +1,171 @@
 # sync-engine
 
-A TypeScript library for composing independent application behaviors in a
-modular, declarative way. Each behavior — selecting, discussing, grading — is
-written as a self-contained concept with its own state and actions. Applications
-grow by assembling these concepts with a small set of statements. One such
-statement, a **reaction**, opens a discussion whenever a mitigation is selected:
+Build TypeScript applications from independent behaviors, then describe how
+those behaviors work together without coupling their implementations.
 
-```ts
-const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
-  when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
-);
-```
+sync-engine calls each independent behavior a **concept**. A concept owns its
+state, actions, queries, and errors. An application combines concepts with:
 
-`Selecting` remains independent of `Discussing`. Its specification states what
-choosing an item does — a readable contract that holds in any application that
-uses it:
+- **reactions**, which connect one action to another;
+- **views**, which name shared questions and policy decisions;
+- **formers**, which assemble query results into typed values;
+- **endpoints**, which expose selected behavior to clients.
 
-```actions
-choose (scope: Scope, item: Item) : return (selection: Selection)
-  then
-    remove any selection with scope from current
-    add a new selection with scope and item
-    add selection to current
-    return selection
-```
-
-This approach is called Concept Design. In this release, an ordinary
-TypeScript class implements each concept's actions, state, and queries. The
-engine interprets the reactions that connect actions, the views that name
-shared questions, and the formers that shape complete answers. An application
-is the incremental composition of these pieces, and every occurrence lands in
-its append-only log.
+The engine validates this composition, executes it, and can generate a readable
+description and TypeScript wire contract from the assembled application.
 
 ## Install
 
-```bash
+```sh
 bun add @mit-sdg/sync-engine
 # or: npm install @mit-sdg/sync-engine
 ```
 
-Library imports support the Node.js versions declared in `package.json`. The
-installed `sync-engine` command for generated artifacts runs with Bun.
+The library is ESM-only and supports Node.js 20 or newer. The generated-artifact
+command and shipped TypeScript scenarios run with Bun 1.3 or newer.
 
-## Run the shipped examples
+## Three Tiers
 
-After installing the package in a project, run the operations room — the
-application the [guide](docs/guide/getting-started.md) builds:
+The examples below build the same operations-room application one layer at a
+time. They use package subpaths so each import states which part of the library
+it needs.
 
-```sh
-bun node_modules/@mit-sdg/sync-engine/examples/operations-room/src/scenario.ts
+### Tier 1: One Independent Behavior
+
+Start with a normal TypeScript class. `SelectingConcept` knows how to keep one
+current mitigation for each room, but knows nothing about discussions, alerts,
+HTTP, or the rest of the application.
+
+```ts
+type Selection = { selection: string; scope: string; item: string };
+
+class SelectingConcept {
+  private readonly selections = new Map<string, Selection>();
+  private readonly current = new Map<string, string>();
+
+  choose({ scope, item }: { scope: string; item: string }) {
+    const selection = crypto.randomUUID();
+    this.selections.set(selection, { selection, scope, item });
+    this.current.set(scope, selection);
+    return { selection };
+  }
+
+  _current({ scope }: { scope: string }) {
+    const selection = this.current.get(scope);
+    const found = selection === undefined ? undefined : this.selections.get(selection);
+    return found === undefined ? [] : [found];
+  }
+}
 ```
 
-The reading circle is the complete reference fixture:
+Public methods are recorded **actions**. Methods prefixed with `_` are
+**queries**: standing questions over current concept state. A registration pairs
+the class with its specification and makes both available to assembly. See the
+[concept authoring guide](examples/concepts/README.md) for the complete class,
+specification, errors, registry, and principle test.
 
-```sh
-bun node_modules/@mit-sdg/sync-engine/examples/reading-circle/src/scenario.ts
+### Tier 2: Compose Independent Behaviors
+
+The Selecting concept should not import a discussion concept merely because
+this application opens a discussion after choosing a mitigation. That decision
+belongs in the composition:
+
+```ts
+import { reaction, when } from "@mit-sdg/sync-engine/language";
+import { concepts } from "./concept-set.ts";
+
+const { Discussing, Selecting } = concepts;
+
+export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
+  when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
+);
 ```
 
-## Documentation
+The trigger binds the returned `selection`; the consequence passes it to
+`Discussing.open`. Neither concept names the other, so either remains reusable
+and the application-level decision remains visible. The generated read-back is:
 
-Start with the [guided walkthrough](docs/guide/getting-started.md) to assemble a
-small whole application. The [documentation router](docs/README.md) then points
-to deeper guides, worked constructions, execution guarantees, operations, and
-the public API according to what you need next.
+```reaction
+when Selecting.choose (selection)
+then
+  Discussing.open (subject: selection)
+```
+
+Reactions can also query state, branch, sequence actions, and match refusals.
+The [reaction guide](docs/guide/reactions.md) introduces those forms in order;
+the [example book](docs/book.md) places close variations beside their exact
+read-backs and registration errors.
+
+### Tier 3: Expose a Complete Application
+
+An endpoint is a reaction at the application boundary. This one receives a
+request, asks Selecting to choose the mitigation, and returns a typed result:
+
+```ts
+import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
+import { concepts } from "./concept-set.ts";
+
+const { Selecting } = concepts;
+
+export const ChooseMitigation = endpoint(
+  "/rooms/choose-mitigation",
+  ({ room, mitigation, selection }) =>
+    receive({ room, mitigation })
+      .then(Selecting.choose({ scope: room, item: mitigation }).responds({ selection }))
+      .then(respond({ mitigation })),
+);
+```
+
+Assembly selects concept implementations and composition modules. From that
+single value, sync-engine can provide a local gateway, an HTTP handler, a
+generated wire contract, and a client whose paths and payloads are inferred:
+
+```ts
+const chooseMitigation = operations.rooms["choose-mitigation"];
+const result = await chooseMitigation({
+  room: "checkout-latency",
+  mitigation: "rollback-build-842",
+});
+```
+
+The [getting-started walkthrough](docs/guide/getting-started.md) builds a small
+application from an empty directory. The full [Operations Room
+example](examples/operations-room/README.md) extends it with formers, generated
+artifacts, selectable reaction packs, and swappable policy.
+
+## What The Engine Guarantees
+
+- Concepts remain independently implemented and registered.
+- Composition is validated before execution and can be read back as text.
+- Calls are typed from concept action signatures through generated clients.
+- Every action occurrence is recorded in an append-only occurrence log.
+
+The occurrence log is execution evidence and observability infrastructure. It
+does not automatically persist concept state, replay an application, or provide
+restart recovery. See [execution semantics](docs/semantics.md) and [consistency
+and operations](docs/consistency-and-operations.md) for the precise guarantees.
+
+## Examples And Documentation
+
+From a source checkout, run both independently runnable examples with:
+
+```sh
+bun install
+bun run scenario
+```
+
+Choose a path based on what you need next:
+
+- [Getting started](docs/guide/getting-started.md): build a complete package
+  consumer from an empty directory.
+- [Documentation map](docs/README.md): follow the curriculum or find the right
+  reference page.
+- [Examples map](examples/README.md): compare the compact Reading Circle with
+  the modular Operations Room.
+- [Public API](docs/public-surface.md): find package subpaths, exports, and
+  signatures.
+- [Engine architecture](docs/architecture.md): navigate the implementation as
+  a contributor.
 
 ## License
 

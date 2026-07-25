@@ -1,4 +1,4 @@
-import type { ComputationRef } from "../reads/computations.ts";
+import type { ComputationRef } from "@engine/reads/computations";
 import type { InstrumentedAction, InstrumentedQuery, Mapping } from "./types.ts";
 import type { ActionPattern, ActionPosture } from "./types.ts";
 import { flow } from "./matching.ts";

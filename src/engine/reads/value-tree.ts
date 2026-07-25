@@ -9,7 +9,7 @@
  */
 
 import { isPlainMapping } from "./matchers.ts";
-import type { Mapping } from "../reactions/types.ts";
+import type { Mapping } from "@engine/reactions/types";
 
 /** Returned by a caller's handler to decline a node and let the walk descend. */
 export const DESCEND: unique symbol = Symbol("descend");

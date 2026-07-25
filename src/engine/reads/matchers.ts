@@ -3,7 +3,7 @@
  * equality disjunction, serializable as data.
  */
 
-import type { Matcher, Mapping } from "../reactions/types.ts";
+import type { Matcher, Mapping } from "@engine/reactions/types";
 import { brand, hasBrand } from "./brands.ts";
 
 const MatcherBrand: unique symbol = Symbol("MatcherBrand");

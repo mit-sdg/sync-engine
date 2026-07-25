@@ -23,8 +23,8 @@ import {
   type Reaction,
   type Vars,
   when,
-} from "../reactions/index.ts";
-import { actionLine } from "../reactions/nodes.ts";
+} from "@engine/reactions/index";
+import { actionLine } from "@engine/reactions/nodes";
 import type { RequestBoundaryActions } from "./endpoints.ts";
 import { FRAMEWORK_ERROR_KIND_FIELD } from "./errors.ts";
 

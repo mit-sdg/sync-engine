@@ -4,18 +4,18 @@ import {
   type ConceptClassesOf,
   type ConceptEntry,
   type DeclaredVocabulary,
-} from "../reactions/refs.ts";
+} from "@engine/reactions/refs";
 import type {
   ErrorConstructor,
   PublicErrorCategory as MetadataPublicErrorCategory,
   RefusalContracts,
-} from "../reactions/concept-metadata.ts";
-import type { ComputationFn } from "../reads/computations.ts";
+} from "@engine/reactions/concept-metadata";
+import type { ComputationFn } from "@engine/reads/computations";
 import {
   validateQueryContractMap,
   type QueryPromises,
   type QueryPromise,
-} from "../reads/query-contracts.ts";
+} from "@engine/reads/query-contracts";
 
 export type PublicErrorCategory = MetadataPublicErrorCategory;
 

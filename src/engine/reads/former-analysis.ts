@@ -4,7 +4,7 @@ import { walkValueTree } from "./value-tree.ts";
 import { isVarIR } from "./ir.ts";
 import type { PatternIR } from "./ir.ts";
 import type { FormerNode } from "./former-nodes.ts";
-import type { Mapping } from "../reactions/types.ts";
+import type { Mapping } from "@engine/reactions/types";
 import type { WhereOp } from "./where-ops.ts";
 
 export function symbolsInMapping(mapping: Mapping): symbol[] {

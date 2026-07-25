@@ -14,6 +14,7 @@
     "resolveJsonModule": true,
     "types": ["node"],
     "paths": {
+      "@engine/*": ["./src/engine/*"],
       "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
       "@sync-engine/*": ["./src/*/index.ts"],
       "@sync-engine/internal/reactions": ["./tests/internal/reactions/test-register.ts"],

@@ -156,5 +156,5 @@ decision as a reaction. In this example, adding alerts changes the composition
 while Selecting, Gathering, Discussing, and Alerting keep the same
 specifications and implementations.
 
-Continue to [Application boundary](application-boundary.md) to assemble the
-composition and carry its actions and formed answers to callers.
+Continue to [Views and formers](views-and-formers.md) to name shared questions
+and shape complete answers before exposing them to callers.

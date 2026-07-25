@@ -1,7 +1,7 @@
 /** The promised number of rows a concept query may answer. */
 export type QueryPromise = "one" | "optional" | "many";
 
-import { conceptMetadataOf } from "../reactions/concept-metadata.ts";
+import { conceptMetadataOf } from "@engine/reactions/concept-metadata";
 
 export type QueryPromises = Readonly<Record<string, QueryPromise>>;
 

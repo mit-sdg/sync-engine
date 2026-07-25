@@ -22,13 +22,13 @@ Then follow the topical chapters in order:
    and test a concept by itself.
 2. [Connect independent behaviors](./guide/reactions.md) — add reactions,
    standing reads, sibling alternatives, and explicit temporal chains.
-3. [Application boundary](./guide/application-boundary.md) — specialize the
+3. [Views and formers](./guide/views-and-formers.md) — name policy questions
+   and form complete read results.
+4. [Application boundary](./guide/application-boundary.md) — specialize the
    reaction frame for outside requests, assemble the application, and carry its
    contract to a client.
-4. [Views and formers](./guide/views-and-formers.md) — name policy questions
-   and form complete read results.
 
-An endpoint belongs to the third chapter because it is a reaction specialized
+An endpoint belongs to the fourth chapter because it is a reaction specialized
 at the application boundary. It adds an outside trigger, path, input contract,
 correlation, and response; it is not another core design piece.
 

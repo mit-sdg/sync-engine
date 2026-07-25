@@ -10,10 +10,10 @@ import type { LogStore } from "./log-store.ts";
 import type { Logging } from "./logging.ts";
 import type { EngineObserver } from "./observer.ts";
 import type { ReactionMap } from "./types.ts";
-import type { ComputationRef } from "../reads/computations.ts";
-import type { FormerRef, FusedFormer } from "../reads/former-nodes.ts";
-import type { RelationView } from "../reads/lines.ts";
-import type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "../reads/ir.ts";
+import type { ComputationRef } from "@engine/reads/computations";
+import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
+import type { RelationView } from "@engine/reads/lines";
+import type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
 import { Reacting } from "./reacting.ts";
 
 export interface Engine {

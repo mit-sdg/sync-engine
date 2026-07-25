@@ -11,8 +11,8 @@
  * `exportReactions().unlowered` with a reason.
  */
 
-import { actionNameOf, conceptNameOf } from "../reactions/introspect.ts";
-import { isQueryRef } from "../reactions/refs.ts";
+import { actionNameOf, conceptNameOf } from "@engine/reactions/introspect";
+import { isQueryRef } from "@engine/reactions/refs";
 import { isMatcher, isPlainMapping } from "./matchers.ts";
 import { liveOf, withLive } from "./ir.ts";
 import { foldFormerNode } from "./schema.ts";
@@ -26,13 +26,13 @@ import type {
   ThenNode,
   TriggerPattern,
   WhereFn,
-} from "../reactions/types.ts";
+} from "@engine/reactions/types";
 import type { AnyWhereOp, WhereOp } from "./where-ops.ts";
 import type { ViewOp } from "./views.ts";
 import type { RelationView } from "./lines.ts";
 import type { Arranged, FormerNode, FormerRef, FusedFormer } from "./former-nodes.ts";
 import { isFusedFormer } from "./former-nodes.ts";
-import type { InstrumentedQuery } from "../reactions/types.ts";
+import type { InstrumentedQuery } from "@engine/reactions/types";
 import type { QueryRefIR } from "./ir.ts";
 import type {
   ActionTriggerIR,

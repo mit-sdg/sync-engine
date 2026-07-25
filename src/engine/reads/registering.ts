@@ -6,8 +6,8 @@
  * are rejected because JSON does not carry their implementation.
  */
 
-import { isActionRef, isQueryRef } from "../reactions/refs.ts";
-import { NameResolver } from "../reactions/resolving.ts";
+import { isActionRef, isQueryRef } from "@engine/reactions/refs";
+import { NameResolver } from "@engine/reactions/resolving";
 import type {
   ActionPattern,
   InstrumentedAction,
@@ -16,7 +16,7 @@ import type {
   StepNode,
   TriggerPattern,
   WhereFn,
-} from "../reactions/types.ts";
+} from "@engine/reactions/types";
 import { standardComputations } from "./computations.ts";
 import type { ComputationRef } from "./computations.ts";
 import { formerRefWith } from "./former-nodes.ts";

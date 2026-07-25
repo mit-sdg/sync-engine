@@ -1,6 +1,6 @@
 import type { FiringRecord, LogStore } from "./log-store.ts";
-import { uuid } from "../utils/runtime.ts";
-import { redact } from "../utils/redaction.ts";
+import { uuid } from "@engine/utils/runtime";
+import { redact } from "@engine/utils/redaction";
 
 export interface FiringFill {
   reaction: string;

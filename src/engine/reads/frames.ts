@@ -11,7 +11,7 @@
  * `concat`, `reverse`, `sort`, `splice`, …) transparently returns a `Frames`
  * again, keeping the fluent API closed over the type.
  */
-import type { Frame, Mapping } from "../reactions/types.ts";
+import type { Frame, Mapping } from "@engine/reactions/types";
 import { structurallyEqual } from "./value-equality.ts";
 import { hasMarkerKey, isVarIR } from "./ir.ts";
 

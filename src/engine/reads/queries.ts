@@ -3,7 +3,7 @@
  * array of records is any number of answers. Anything else is a query fault.
  */
 
-import type { Frame, InstrumentedQuery, Mapping } from "../reactions/types.ts";
+import type { Frame, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import { bindInputMapping } from "./frames.ts";
 import type { QueryPromise } from "./query-contracts.ts";
 

@@ -81,7 +81,11 @@ route, serialize, or cancel a request, but they do not inspect concept state.
 ## Dependency rules
 
 Public subpaths under `src/` are export-only. Engine code lives under
-`src/engine/` and imports engine modules, never public barrels.
+`src/engine/` and imports engine modules, never public barrels. Use
+`@engine/<concern>/<module>` when crossing an engine concern or exporting an
+engine module through a public subpath; keep `./module.ts` for neighbors within
+one concern. The build rewrites `@engine` to relative package paths and rejects
+unresolved aliases before packing.
 `scripts/check-architecture.ts` checks those
 directions, verifies package exports, and rejects unreachable shipped source.
 Run `bun run check` after moving code; it is the source of truth for the
