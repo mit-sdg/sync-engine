@@ -1,5 +1,4 @@
-import { RoomAlreadyOpen, RoomNotOpen } from "./errors.ts";
-import { RoomingConcept } from "./rooming.ts";
+import { RoomingConcept, RoomAlreadyOpen, RoomNotOpen } from "./rooming.ts";
 
 const rooming = new RoomingConcept(() => "checkout-latency");
 const opened = rooming.open({ name: "Checkout latency" });

@@ -1,7 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { DiscussionAlreadyOpen, DiscussionNotOpen } from "./errors.ts";
+import { DiscussingConcept, DiscussionAlreadyOpen, DiscussionNotOpen } from "./discussing.ts";
 import spec from "./spec.md" with { type: "text" };
-import { DiscussingConcept } from "./discussing.ts";
 
 export const discussing = registerConcept({
   class: DiscussingConcept,

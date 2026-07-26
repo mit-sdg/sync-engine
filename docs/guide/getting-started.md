@@ -123,17 +123,13 @@ close (room: Room) : return (), refuse (message: String)
 ````
 
 The specification is the readable contract. For this release, ordinary
-TypeScript implements that contract. Create `src/concepts/rooming/errors.ts`:
+TypeScript implements that contract. Create `src/concepts/rooming/rooming.ts`.
+The class exposes the concept API; the error subclasses at the top define its
+refusals:
 
 ```ts
 export class RoomAlreadyOpen extends Error {}
 export class RoomNotOpen extends Error {}
-```
-
-Create `src/concepts/rooming/rooming.ts`:
-
-```ts
-import { RoomAlreadyOpen, RoomNotOpen } from "./errors.ts";
 
 type Room = { room: string; name: string };
 
@@ -169,8 +165,7 @@ name, specification, query promise, and refusal code:
 
 ```ts
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { RoomAlreadyOpen, RoomNotOpen } from "./errors.ts";
-import { RoomingConcept } from "./rooming.ts";
+import { RoomingConcept, RoomAlreadyOpen, RoomNotOpen } from "./rooming.ts";
 import spec from "./spec.md" with { type: "text" };
 
 export const rooming = registerConcept({
@@ -188,8 +183,7 @@ Create `src/concepts/rooming/rooming.test.ts`. It drives the Principle directly
 against the concept, without an assembly:
 
 ```ts
-import { RoomAlreadyOpen, RoomNotOpen } from "./errors.ts";
-import { RoomingConcept } from "./rooming.ts";
+import { RoomingConcept, RoomAlreadyOpen, RoomNotOpen } from "./rooming.ts";
 
 const rooming = new RoomingConcept(() => "checkout-latency");
 const opened = rooming.open({ name: "Checkout latency" });

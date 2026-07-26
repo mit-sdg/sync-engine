@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { identities as ids } from "../../identities.ts";
-import { DiscussionAlreadyOpen, DiscussionNotOpen } from "./errors.ts";
-import { DiscussingConcept } from "./discussing.ts";
+import { DiscussingConcept, DiscussionAlreadyOpen, DiscussionNotOpen } from "./discussing.ts";
 
 describe("Discussing", () => {
   test("its principle: open, respond in order, close, refuse", () => {

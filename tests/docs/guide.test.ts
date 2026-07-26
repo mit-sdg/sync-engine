@@ -22,7 +22,6 @@ const repositoryOnlySources = new Map<string, URL[]>([
     new URL("getting-started.md", guideDirectory).pathname,
     [
       new URL("../package/application/text.d.ts", import.meta.url),
-      new URL("../package/application/src/concepts/rooming/errors.ts", import.meta.url),
       new URL("../package/application/src/concepts/rooming/rooming.ts", import.meta.url),
       new URL("../package/application/src/concepts/rooming/registry.ts", import.meta.url),
       new URL("../package/application/src/concepts/rooming/rooming.test.ts", import.meta.url),
@@ -100,7 +99,6 @@ describe("guided curriculum", () => {
       "tsconfig.project.json",
       "text.d.ts",
       "src/concepts/rooming/spec.md",
-      "src/concepts/rooming/errors.ts",
       "src/concepts/rooming/rooming.ts",
       "src/concepts/rooming/registry.ts",
       "src/concepts/rooming/rooming.test.ts",

@@ -1,4 +1,5 @@
-import { DiscussionAlreadyOpen, DiscussionNotOpen } from "./errors.ts";
+export class DiscussionAlreadyOpen extends Error {}
+export class DiscussionNotOpen extends Error {}
 
 type Discussion = { discussion: string; subject: string; open: boolean };
 type Response = { response: string; discussion: string; author: string; text: string };

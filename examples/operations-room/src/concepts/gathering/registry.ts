@@ -1,7 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { AlreadyJoined, GatheringNotFound, NotJoined } from "./errors.ts";
+import { GatheringConcept, AlreadyJoined, GatheringNotFound, NotJoined } from "./gathering.ts";
 import spec from "./spec.md" with { type: "text" };
-import { GatheringConcept } from "./gathering.ts";
 
 export const gathering = registerConcept({
   class: GatheringConcept,

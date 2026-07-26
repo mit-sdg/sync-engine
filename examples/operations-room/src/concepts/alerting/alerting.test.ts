@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { identities as ids } from "../../identities.ts";
-import { AlertingConcept } from "./alerting.ts";
-import { AlertNotFound } from "./errors.ts";
+import { AlertingConcept, AlertNotFound } from "./alerting.ts";
 
 describe("Alerting", () => {
   test("its principle: keep each recipient's alerts in order until acknowledged", () => {

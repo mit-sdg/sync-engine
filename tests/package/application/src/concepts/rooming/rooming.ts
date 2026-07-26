@@ -1,4 +1,5 @@
-import { RoomAlreadyOpen, RoomNotOpen } from "./errors.ts";
+export class RoomAlreadyOpen extends Error {}
+export class RoomNotOpen extends Error {}
 
 type Room = { room: string; name: string };
 

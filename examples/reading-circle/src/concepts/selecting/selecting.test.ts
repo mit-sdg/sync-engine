@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { identities as ids } from "../../identities.ts";
-import { NoCurrentSelection } from "./errors.ts";
-import { SelectingConcept } from "./selecting.ts";
+import { SelectingConcept, NoCurrentSelection } from "./selecting.ts";
 
 describe("Selecting", () => {
   test("its principle: a new choice replaces only its scope's current selection", () => {

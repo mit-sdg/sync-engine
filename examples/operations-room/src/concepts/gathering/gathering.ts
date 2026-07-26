@@ -1,4 +1,6 @@
-import { AlreadyJoined, GatheringNotFound, NotJoined } from "./errors.ts";
+export class GatheringNotFound extends Error {}
+export class AlreadyJoined extends Error {}
+export class NotJoined extends Error {}
 
 type Gathering = { gathering: string; name: string; host: string };
 type Membership = { membership: string; gathering: string; member: string };

@@ -1,4 +1,4 @@
-import { NoCurrentSelection } from "./errors.ts";
+export class NoCurrentSelection extends Error {}
 
 type Selection = { selection: string; scope: string; item: string };
 

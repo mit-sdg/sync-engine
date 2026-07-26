@@ -1,4 +1,4 @@
-import { AlertNotFound } from "./errors.ts";
+export class AlertNotFound extends Error {}
 
 type Alert = { alert: string; recipient: string; subject: string };
 
