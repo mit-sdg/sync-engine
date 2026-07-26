@@ -2,6 +2,7 @@ import type { Assembly } from "./assembly-facade.ts";
 import { assemblyBehind } from "./assembly-registry.ts";
 import type { InputContractDecl } from "./endpoints.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concept-metadata";
+import { publicCategoryOf } from "./public-errors.ts";
 import { wireContracts } from "./wire.ts";
 import type { WireContractsIR, WireType } from "./wire.ts";
 
@@ -118,31 +119,6 @@ function omitTopLevel(type: WireType, omitted: ReadonlySet<string>): WireType {
   return type;
 }
 
-function publicCategory(
-  code: string,
-  categories: Readonly<Record<string, PublicErrorCategory>>,
-): PublicErrorCategory | "INTERNAL_ERROR" {
-  if (
-    code === "INVALID_REQUEST" ||
-    code === "UNAUTHORIZED" ||
-    code === "FORBIDDEN" ||
-    code === "NOT_FOUND" ||
-    code === "CONFLICT"
-  ) {
-    return code;
-  }
-  switch (code) {
-    case "INVALID_INPUT":
-    case "BAD_JSON":
-    case "BAD_STATUS":
-      return "INVALID_REQUEST";
-    case "INTERNAL_ERROR":
-      return "INTERNAL_ERROR";
-    default:
-      return categories[code] ?? "INTERNAL_ERROR";
-  }
-}
-
 export function projectHttpWire(
   wire: WireContractsIR,
   contracts: Readonly<Record<string, InputContractDecl>>,
@@ -155,7 +131,7 @@ export function projectHttpWire(
       const protectedRoute =
         contracts[endpoint.path]?.required?.includes(credential.input) ?? false;
       const errors = [
-        ...new Set(endpoint.errors.map((code) => publicCategory(code, categories))),
+        ...new Set(endpoint.errors.map((code) => publicCategoryOf(code, categories))),
       ].sort();
       return {
         ...endpoint,
@@ -173,7 +149,7 @@ export function projectHttpWire(
         openError: false,
       };
     }),
-    appWide: [...new Set(wire.appWide.map((code) => publicCategory(code, categories)))].sort(),
+    appWide: [...new Set(wire.appWide.map((code) => publicCategoryOf(code, categories)))].sort(),
   };
 }
 

@@ -242,6 +242,7 @@ const repository = repositoryFiles();
 const allowedRootFiles = new Set([
   ".gitignore",
   "AGENTS.md",
+  "CHANGELOG.md",
   "LICENSE",
   "NOTICE",
   "README.md",

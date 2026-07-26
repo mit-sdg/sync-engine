@@ -93,8 +93,8 @@ export interface Frames<TFrame extends Frame = Frame> {
 /**
  * Resolve a query's `input` mapping against a single frame.
  *
- * Symbol values are looked up in the frame (and must be bound — an unbound
- * symbol is a programming error); literal values pass through unchanged.
+ * Variable values are looked up in the frame; unbound variables are omitted
+ * so callers can distinguish absent optional inputs. Literals pass through.
  * Shared by where ops and formers.
  */
 export function bindInputMapping(frame: Frame, input: Mapping): Mapping {

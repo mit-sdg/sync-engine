@@ -6,6 +6,8 @@
  *    written is ever modified;
  *  - a **firing** entry, recording which reaction fired, with which
  *    bindings, consuming which records and producing which.
+ *  - a **reaction failure** entry, recording a pre-firing evaluation failure
+ *    without consuming its matched occurrences.
  *
  * A store folds these entries into indexes by id, flow, and reaction. Matching
  * reads those indexes. Each store defines what `prune()` removes.
@@ -56,6 +58,16 @@ export interface FiringRecord {
   at: number;
 }
 
+/** A non-consuming failure while evaluating a matched reaction. */
+export interface ReactionFailureRecord {
+  reaction: string;
+  flow: string;
+  triggerIds: string[];
+  stage: "where" | "trigger";
+  errorClass: string;
+  at: number;
+}
+
 /** An entry appended to the log. Engine-created mappings are field-name redacted. */
 export type LogEntry =
   | { kind: "invocation"; at: number; record: ActionRecord }
@@ -67,6 +79,7 @@ export type LogEntry =
       outcome: ActionOutcome;
     }
   | { kind: "firing"; at: number; firing: FiringRecord }
+  | { kind: "reaction-failure"; at: number; failure: ReactionFailureRecord }
   /**
    * A fault entry names the interrupted ask and records its validated
    * framework classification. The ask remains without an outcome.
@@ -110,6 +123,8 @@ export class MemoryStore implements LogStore {
   readonly flowIndex: Map<string, ActionRecord[]> = new Map();
   /** Recorded firings, grouped by reaction name, in firing order. */
   readonly firings: Map<string, FiringRecord[]> = new Map();
+  /** Non-consuming evaluation failures, in occurrence order. */
+  readonly reactionFailures: ReactionFailureRecord[] = [];
   /** Derived index folded from firing entries: record id → reactions that consumed it. */
   private consumedIndex: Map<string, Set<string>> = new Map();
 
@@ -146,6 +161,9 @@ export class MemoryStore implements LogStore {
         }
         return;
       }
+      case "reaction-failure":
+        this.reactionFailures.push(entry.failure);
+        return;
     }
   }
 

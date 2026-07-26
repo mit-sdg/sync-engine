@@ -21,4 +21,9 @@ export type {
 } from "@engine/boundary/concept-set";
 export { FileStore, PersistingConcept } from "@engine/hosting/index";
 export { MemoryStore } from "@engine/reactions/log-store";
-export type { FiringRecord, LogEntry, LogStore } from "@engine/reactions/log-store";
+export type {
+  FiringRecord,
+  LogEntry,
+  LogStore,
+  ReactionFailureRecord,
+} from "@engine/reactions/log-store";

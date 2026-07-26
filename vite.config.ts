@@ -60,6 +60,14 @@ export default defineConfig({
   test: {
     include: ["examples/**/*.test.ts", "tests/**/*.test.ts"],
     exclude: ["tests/package/application/**"],
+    coverage: {
+      thresholds: {
+        statements: 88,
+        branches: 79,
+        functions: 93,
+        lines: 90,
+      },
+    },
   },
   staged: {
     "*.{ts,json,md}": "vp check --fix",

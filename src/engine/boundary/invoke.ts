@@ -158,7 +158,6 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       let responsePromise: Promise<Record<string, unknown>>;
       try {
         responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal);
-        void responsePromise.catch(() => undefined);
       } catch (err) {
         return frameworkError(
           FrameworkErrorCode.TIMED_OUT,
@@ -166,22 +165,44 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         );
       }
 
-      try {
-        const reqFn = instrumented.request as unknown as (
-          args: Record<string, unknown>,
-        ) => Promise<Record<string, unknown>>;
-        const resolvedInput = (input as Record<string, unknown> | undefined) ?? {};
-        await reqFn({ ...resolvedInput, requestId, correlationId, path });
-      } catch (err) {
+      const reqFn = instrumented.request as unknown as (
+        args: Record<string, unknown>,
+      ) => Promise<Record<string, unknown>>;
+      const resolvedInput = (input as Record<string, unknown> | undefined) ?? {};
+      const dispatch = reqFn({ ...resolvedInput, requestId, correlationId, path }).then(
+        () => ({ kind: "dispatched" }) as const,
+        (error: unknown) => ({ kind: "dispatch-error", error }) as const,
+      );
+      const response = responsePromise.then(
+        (value) => ({ kind: "response", value }) as const,
+        (error: unknown) => ({ kind: "response-error", error }) as const,
+      );
+      const first = await Promise.race([dispatch, response]);
+
+      if (first.kind === "dispatch-error") {
         boundary.cancel(requestId);
         return frameworkError(
           FrameworkErrorCode.TRANSPORT_ERROR,
-          err instanceof Error ? err.message : String(err),
+          first.error instanceof Error ? first.error.message : String(first.error),
         );
       }
 
+      if (first.kind === "response") {
+        // A response may land from inside the dispatch cascade. Preserve the
+        // guarantee that its firing and outcome records are complete on return.
+        const completion = await dispatch;
+        if (completion.kind === "dispatch-error") {
+          return frameworkError(
+            FrameworkErrorCode.TRANSPORT_ERROR,
+            completion.error instanceof Error ? completion.error.message : String(completion.error),
+          );
+        }
+        return fromEnvelope(first.value);
+      }
+      const settled = first.kind === "dispatched" ? await response : first;
+      if (settled.kind === "response") return fromEnvelope(settled.value);
       try {
-        return fromEnvelope(await responsePromise);
+        throw settled.error;
       } catch (err) {
         if (err instanceof DOMException) {
           if (err.name === "TimeoutError") return frameworkError(FrameworkErrorCode.TIMED_OUT);

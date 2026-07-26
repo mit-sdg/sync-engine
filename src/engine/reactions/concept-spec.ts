@@ -13,7 +13,7 @@ function sectionOf(lines: readonly string[], heading: string): string {
   }
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if (lines[i].startsWith("## ")) {
+    if (lines[i].trim().startsWith("## ")) {
       end = i;
       break;
     }

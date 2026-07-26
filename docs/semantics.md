@@ -353,11 +353,14 @@ already has an answer, the boundary refuses the second answer with
 `NOT_PENDING`; the client keeps the first answer.
 
 A query, view, computation, or other `where` operation can instead fail while
-the engine decides whether a reaction matches. The runtime logs the reaction
-context and exception class, then drops that evaluation. It creates no fault
-occurrence and invokes no standard boundary reaction. If no alternative
-answers, a waiting invoker may time out. Concepts should represent expected
-rejection with registered refusals and explicit policy alternatives.
+the engine decides whether a reaction matches. The runtime appends a
+non-consuming `reaction-failure` entry with the reaction, flow, trigger ids,
+stage, and exception class, then drops that evaluation. It creates no fault
+occurrence and invokes no standard boundary reaction. Because the entry does
+not consume triggers, later records in a multi-trigger flow may make the
+reaction eligible again. If no alternative answers, a waiting invoker may time
+out. Concepts should represent expected rejection with registered refusals and
+explicit policy alternatives.
 
 ### Cancellation
 

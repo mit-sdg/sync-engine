@@ -215,7 +215,7 @@ fault.
 
 <!-- register:assembly:start -->
 
-`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `QueryRegistration`, `RefusalRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `QueryRegistration`, `ReactionFailureRecord`, `RefusalRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -255,8 +255,9 @@ The registry's query promises apply to every implementation selected for that
 concept name.
 
 `MemoryStore` and `FileStore` implement `LogStore` for occurrence records.
-`LogEntry` names the store's entry union, while `FiringRecord` describes one
-reaction firing. Supply a log store through the advanced `createEngine(store?)`
+`LogEntry` names the store's entry union. `FiringRecord` describes one reaction
+firing; `ReactionFailureRecord` describes a non-consuming failure while
+evaluating a matched reaction. Supply a log store through advanced `createEngine(store?)`
 constructor; ordinary `assemble(...)` uses its own in-memory occurrence log.
 `FileStore` appends a JSONL occurrence record.
 

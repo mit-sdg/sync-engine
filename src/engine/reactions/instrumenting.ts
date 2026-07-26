@@ -9,7 +9,8 @@ import { CONCEPT_NAME, conceptNameOf } from "./introspect.ts";
 import { contractOf } from "./outcomes.ts";
 import type { ActionContract } from "./outcomes.ts";
 import { isRefuse, refusalMapping } from "./refuse.ts";
-import { actionId, byReaction, flow } from "./matching.ts";
+import { actionId, actionSettlement, byReaction, flow } from "./matching.ts";
+import type { ActionSettlement } from "./matching.ts";
 import type { ActionOutcome, AnyAction, InstrumentedAction } from "./types.ts";
 import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
 import { memoizeQuery } from "./query-cache.ts";
@@ -144,7 +145,17 @@ export function instrumentConcept<T extends object>(
           state.queryCaches.get(concept)?.forEach((cache) => cache.invalidate());
         };
         invalidate();
-        let { [flow]: flowToken, [actionId]: id, [byReaction]: askedBy, ...input } = args;
+        let {
+          [flow]: flowToken,
+          [actionId]: id,
+          [byReaction]: askedBy,
+          [actionSettlement]: reportSettlement,
+          ...input
+        } = args;
+        const report =
+          typeof reportSettlement === "function"
+            ? (reportSettlement as (settlement: ActionSettlement) => void)
+            : undefined;
         if (flowToken === undefined) flowToken = uuid();
         if (typeof flowToken !== "string") {
           throw new Error(
@@ -169,10 +180,11 @@ export function instrumentConcept<T extends object>(
         state.actions._beginMatchingInput({ id, flow: flowToken, input });
         try {
           state.actions.invoke(record);
+          report?.("ask-recorded");
           try {
             await state.react({ ...record });
           } catch (error) {
-            logger.error("Reaction body failed after the action request was recorded", {
+            logger.error("Reaction body failed after the action ask was recorded", {
               actionId: id,
               concept: concept.constructor.name,
               action: action.name,
@@ -253,6 +265,7 @@ export function instrumentConcept<T extends object>(
               } else {
                 const durationMs = performance.now() - started;
                 state.actions.faulted({ id, fault: errorOutputFromThrown(error) });
+                report?.("fault-recorded");
                 try {
                   await state.react({ ...record }, durationMs);
                 } catch (immediateError) {

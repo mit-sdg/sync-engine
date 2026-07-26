@@ -43,6 +43,13 @@ describe("spec prose", () => {
     );
   });
 
+  test("an indented heading terminates the preceding section consistently", () => {
+    expect(parseSpecProse("# X\n\n  ## Purpose\n\nWhy.\n\n  ## Principle\n\nStory.\n")).toEqual({
+      purpose: "Why.",
+      principle: "Story.",
+    });
+  });
+
   test("takes markdown text, not a path or nothing", () => {
     expect(() => parseSpecProse("")).toThrow("markdown text");
   });

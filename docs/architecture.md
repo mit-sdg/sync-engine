@@ -52,6 +52,15 @@ The runtime can still execute explicitly local constructs such as closure-based
 conditions, but tooling labels those paths as unlowered instead of presenting
 them as portable IR.
 
+`partitions.ts` validates sibling labels, flattens authored branch trees, and
+forms the cross-product when later sibling groups extend earlier paths.
+`lowerReaction` then gives variables stable names and serializes each path's
+triggers, reads, and consequence asks. Definition-site closures remain live and
+executable in the local engine, but appear in the export's `unlowered` list
+rather than masquerading as portable data. See
+[Sibling paths and endpoint settlement](./semantics.md#sibling-paths-and-endpoint-settlement)
+for the resulting behavior.
+
 ## Reads and values
 
 `reads/where-ops.ts` evaluates query and view lines against `Frames`.

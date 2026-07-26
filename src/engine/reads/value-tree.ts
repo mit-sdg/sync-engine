@@ -25,7 +25,14 @@ export function mapValueTree(value: unknown, mapLeaf: (node: unknown) => unknown
   if (Array.isArray(value)) return value.map((item) => mapValueTree(item, mapLeaf));
   if (isPlainMapping(value)) {
     const out: Mapping = {};
-    for (const [key, item] of Object.entries(value)) out[key] = mapValueTree(item, mapLeaf);
+    for (const [key, item] of Object.entries(value)) {
+      Object.defineProperty(out, key, {
+        value: mapValueTree(item, mapLeaf),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
     return out;
   }
   return value;
@@ -39,12 +46,19 @@ export async function mapValueTreeAsync(
   const mapped = await mapLeaf(value);
   if (mapped !== DESCEND) return mapped;
   if (Array.isArray(value)) {
-    return Promise.all(value.map((item) => mapValueTreeAsync(item, mapLeaf)));
+    const out: unknown[] = [];
+    for (const item of value) out.push(await mapValueTreeAsync(item, mapLeaf));
+    return out;
   }
   if (isPlainMapping(value)) {
     const out: Mapping = {};
     for (const [key, item] of Object.entries(value)) {
-      out[key] = await mapValueTreeAsync(item, mapLeaf);
+      Object.defineProperty(out, key, {
+        value: await mapValueTreeAsync(item, mapLeaf),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
     return out;
   }

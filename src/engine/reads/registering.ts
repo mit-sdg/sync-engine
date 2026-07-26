@@ -21,7 +21,7 @@ import { standardComputations } from "./computations.ts";
 import type { ComputationRef } from "./computations.ts";
 import { formerRefWith } from "./former-nodes.ts";
 import type { FormerRef } from "./former-nodes.ts";
-import { hasMarkerKey, liveOf } from "./ir.ts";
+import { asMarker, hasMarkerKey, liveOf } from "./ir.ts";
 import type {
   ActionTriggerIR,
   FormerIR,
@@ -497,17 +497,51 @@ export class Registry {
     kind: "Former" | "View" | "Reaction",
   ): void {
     walkValueTree(pattern, (node) => {
-      if (
-        typeof node === "object" &&
-        node !== null &&
-        hasMarkerKey(node, "$is") &&
-        liveOf(node) === undefined
-      ) {
-        throw new Error(
-          `${kind} "${site}": an "$is" matcher (${String((node as { $is: unknown }).$is)}) is ` +
-            "opaque code and cannot be re-registered from data.",
-        );
+      if (typeof node !== "object" || node === null || Array.isArray(node)) return;
+      const marker = asMarker(node);
+      if (marker === null) return;
+      const invalid = (() => {
+        switch (marker.tag) {
+          case "$var":
+            return typeof marker.payload === "string" ? undefined : "a string name";
+          case "$oneOf":
+            return Array.isArray(marker.payload) ? undefined : "an array";
+          case "$regexp": {
+            if (
+              typeof marker.payload !== "object" ||
+              marker.payload === null ||
+              typeof (marker.payload as { source?: unknown }).source !== "string" ||
+              typeof (marker.payload as { flags?: unknown }).flags !== "string"
+            ) {
+              return "string source and flags";
+            }
+            try {
+              new RegExp(
+                (marker.payload as { source: string }).source,
+                (marker.payload as { flags: string }).flags,
+              );
+              return undefined;
+            } catch {
+              return "valid regular-expression source and flags";
+            }
+          }
+          case "$is":
+            if (typeof marker.payload !== "string") return "a string description";
+            return liveOf(node) === undefined ? "its definition-site matcher" : undefined;
+          case "$former":
+            return typeof marker.payload === "object" && marker.payload !== null
+              ? undefined
+              : "a former description";
+          case "$lit":
+            return typeof marker.payload === "object" && marker.payload !== null
+              ? undefined
+              : "an object literal";
+        }
+      })();
+      if (invalid !== undefined) {
+        throw new Error(`${kind} "${site}": marker "${marker.tag}" requires ${invalid}.`);
       }
+      return false;
     });
   }
 

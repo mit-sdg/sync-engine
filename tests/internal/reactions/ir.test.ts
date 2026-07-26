@@ -265,6 +265,32 @@ describe("round trip: export → JSON → registerReactions", () => {
       'Reaction "Ghost": no instrumented concept is named "Nowhere" — instrument it before registering reactions.',
     );
   });
+
+  test.each([
+    ["$oneOf", { $oneOf: "not-an-array" }],
+    ["$regexp", { $regexp: { source: "[", flags: "" } }],
+    ["$var", { $var: 7 }],
+  ])("rejects a malformed serialized %s marker", (_tag, marker) => {
+    const { reacting } = setup();
+    expect(() =>
+      reacting.registerReactions([
+        {
+          name: "MalformedMarker",
+          when: [
+            {
+              kind: "action",
+              concept: "Button",
+              action: "clicked",
+              input: { kind: marker as never },
+              output: {},
+            },
+          ],
+          where: [],
+          then: [{ kind: "request", concept: "Recorder", action: "record", input: { tag: "x" } }],
+        },
+      ]),
+    ).toThrow(/marker .* requires/);
+  });
 });
 
 describe("integration fixtures export supported reactions", () => {

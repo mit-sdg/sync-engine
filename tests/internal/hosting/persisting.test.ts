@@ -115,6 +115,34 @@ describe("FileStore: the log survives as JSONL", () => {
     expect(firing.bindings).toEqual({ tag: "hello" });
   });
 
+  test("a where failure is durable without consuming its trigger", async () => {
+    const path = join(dir, "log.jsonl");
+    const { reacting, Source } = engineOn(new FileStore(path));
+    reacting.register({
+      BadWhere: reaction(({ tag }: Vars) =>
+        when(Source.emit, { tag }, {})
+          .where(() => {
+            throw new TypeError("private diagnostic");
+          })
+          .then(request(Source.emit, { tag })),
+      ),
+    });
+
+    await Source.emit({ tag: "failed" });
+
+    const failures = readEntries(path).filter((entry) => entry.kind === "reaction-failure");
+    expect(failures).toMatchObject([
+      {
+        failure: {
+          reaction: "BadWhere",
+          stage: "where",
+          errorClass: "TypeError",
+        },
+      },
+    ]);
+    expect(JSON.stringify(failures)).not.toContain("private diagnostic");
+  });
+
   test("keepAll never prunes; the fold retains everything", async () => {
     const store = new FileStore(join(dir, "log.jsonl"), "keepAll");
     const { Source } = engineOn(store);

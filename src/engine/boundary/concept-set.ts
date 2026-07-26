@@ -16,16 +16,11 @@ import {
   type QueryPromises,
   type QueryPromise,
 } from "@engine/reads/query-contracts";
+import { PUBLIC_ERROR_CATEGORIES } from "./public-errors.ts";
 
 export type PublicErrorCategory = MetadataPublicErrorCategory;
 
-export const PublicError = {
-  INVALID_REQUEST: "INVALID_REQUEST",
-  UNAUTHORIZED: "UNAUTHORIZED",
-  FORBIDDEN: "FORBIDDEN",
-  NOT_FOUND: "NOT_FOUND",
-  CONFLICT: "CONFLICT",
-} as const satisfies Record<PublicErrorCategory, PublicErrorCategory>;
+export const PublicError = PUBLIC_ERROR_CATEGORIES;
 
 type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result
   ? (...args: Args) => Result | Promise<Awaited<Result>>
@@ -225,18 +220,25 @@ type CompleteFloorNames<S extends Record<string, AnyRegistration>> = CompleteFlo
   S,
   DeclaredFloorNames<S>
 >;
+type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends (
+  value: infer Intersection,
+) => void
+  ? Intersection
+  : never;
 type FloorContext<
   S extends Record<string, AnyRegistration>,
   Floor extends CompleteFloorNames<S>,
-> = {
-  [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F>
-    ? Floor extends keyof F
-      ? F[Floor] extends (context: infer Context) => object
-        ? Context
+> = UnionToIntersection<
+  {
+    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F>
+      ? Floor extends keyof F
+        ? F[Floor] extends (context: infer Context) => object
+          ? Context
+          : never
         : never
-      : never
-    : never;
-}[keyof S];
+      : never;
+  }[keyof S]
+>;
 
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>> {
   vocabulary: VocabularyOf<S>;
@@ -304,7 +306,11 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
       if (floor === undefined) {
         result[name] = new (registration.class as new () => object)();
       } else {
-        result[name] = registration.floors![floor]!(context as never);
+        const factory = registration.floors?.[floor];
+        if (factory === undefined) {
+          throw new Error(`conceptSet: floor "${floor}" disappeared during construction.`);
+        }
+        result[name] = factory(context as never);
       }
     }
     return result;

@@ -7,6 +7,8 @@ import type { Assembly } from "./assembly-facade.ts";
 import { assemblyBehind } from "./assembly-registry.ts";
 import type { HttpFloor } from "./http-floor.ts";
 import { validateHttpFloor } from "./http-floor.ts";
+import type { PublicErrorCategory } from "@engine/reactions/concept-metadata";
+import { publicCategoryOf, publicErrorStatus } from "./public-errors.ts";
 
 // The body is the flat wire envelope; http adds only the status decoration —
 // 200 for success, 400 for a domain error, and the code's own status for a
@@ -108,42 +110,16 @@ type FloorHandlerOptions = {
 
 function publicFailure(
   result: Exclude<InvocationResult, { ok: true }>,
-  categories: Readonly<Record<string, string>>,
+  categories: Readonly<Record<string, PublicErrorCategory>>,
 ): { error: string; status: number } {
-  if (result.error.kind === "framework") {
-    switch (result.error.code) {
-      case FrameworkErrorCode.NOT_FOUND:
-        return { error: "NOT_FOUND", status: 404 };
-      case FrameworkErrorCode.INVALID_INPUT:
-      case FrameworkErrorCode.BAD_JSON:
-      case FrameworkErrorCode.BAD_STATUS:
-        return { error: "INVALID_REQUEST", status: 400 };
-      default:
-        return { error: "INTERNAL_ERROR", status: 500 };
-    }
-  }
-  const code = typeof result.error.value === "string" ? result.error.value : "";
-  const category =
-    code === "INVALID_REQUEST" ||
-    code === "UNAUTHORIZED" ||
-    code === "FORBIDDEN" ||
-    code === "NOT_FOUND" ||
-    code === "CONFLICT"
-      ? code
-      : (categories[code] ?? "INTERNAL_ERROR");
-  const status =
-    category === "INVALID_REQUEST"
-      ? 400
-      : category === "UNAUTHORIZED"
-        ? 401
-        : category === "FORBIDDEN"
-          ? 403
-          : category === "NOT_FOUND"
-            ? 404
-            : category === "CONFLICT"
-              ? 409
-              : 500;
-  return { error: category, status };
+  const code =
+    result.error.kind === "framework"
+      ? result.error.code
+      : typeof result.error.value === "string"
+        ? result.error.value
+        : "";
+  const category = publicCategoryOf(code, categories);
+  return { error: category, status: publicErrorStatus(category) };
 }
 
 function cookieValue(header: string | null, name: string): string | undefined {

@@ -73,6 +73,7 @@ export type PersistedEntry =
     }
   | { kind: "outcome"; at: number; id: string; outcome: unknown }
   | { kind: "firing"; at: number; firing: unknown }
+  | { kind: "reaction-failure"; at: number; failure: unknown }
   | { kind: "fault"; at: number; id: string; fault: unknown };
 
 function persistedEntryOf(entry: LogEntry): PersistedEntry {
@@ -95,6 +96,8 @@ function persistedEntryOf(entry: LogEntry): PersistedEntry {
         at: entry.at,
         firing: { ...entry.firing, bindings: redact(entry.firing.bindings) },
       };
+    case "reaction-failure":
+      return { kind: "reaction-failure", at: entry.at, failure: entry.failure };
     case "fault":
       return { kind: "fault", at: entry.at, id: entry.id, fault: redact(entry.fault) };
   }

@@ -184,6 +184,8 @@ describe("gateway application", () => {
       ok: false,
       error: { kind: "framework", code: FrameworkErrorCode.ABORTED },
     });
+    expect(application.concepts.Answering.completed).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 25));
     expect(application.concepts.Answering.completed).toEqual(["committed"]);
   });
 

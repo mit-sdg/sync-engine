@@ -1,11 +1,3 @@
-export { brand, hasBrand, LineBrand, RelationViewBrand, WhereOpBrand } from "./brands.ts";
-export type {
-  CountOpBrand,
-  ClaimBrand,
-  ViewBlockBrand,
-  FormerUseBrand,
-  ReactionPartitionBrand,
-} from "./brands.ts";
 export {
   among,
   computationRef,

@@ -26,6 +26,26 @@ const complete = conceptSet({
 complete.implementations();
 complete.implementations("mongo", context);
 
+const combinedContext = conceptSet({
+  First: registerConcept({
+    class: FirstConcept,
+    spec,
+    floors: { shared: (_: { store: string }) => new FirstConcept() },
+  }),
+  Second: registerConcept({
+    class: SecondConcept,
+    spec,
+    floors: { shared: (_: { url: URL }) => new SecondConcept() },
+  }),
+});
+combinedContext.implementations("shared", {
+  store: "primary",
+  url: new URL("https://example.test"),
+});
+
+// @ts-expect-error One context must satisfy every factory on the selected floor.
+combinedContext.implementations("shared", { store: "primary" });
+
 // @ts-expect-error A floor declared by only one registration is not a complete named floor.
 complete.implementations("file", context);
 

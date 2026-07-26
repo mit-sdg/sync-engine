@@ -273,6 +273,7 @@ const register = {
     "PublicError",
     "PublicErrorCategory",
     "QueryRegistration",
+    "ReactionFailureRecord",
     "RefusalRegistration",
     "RegisteredConcept",
     "RegisteredConceptSet",

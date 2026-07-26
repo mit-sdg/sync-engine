@@ -4,11 +4,14 @@ import {
   actionNodeId,
   type Frames,
   Logging,
+  MemoryStore,
+  type LogEntry,
   Reacting,
   type Vars,
   when,
 } from "@sync-engine/internal/reactions";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
+import { ActionConcept } from "@sync-engine/internal/reactions/actions";
 import {
   ButtonConcept,
   CounterConcept,
@@ -330,6 +333,80 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     await Button.clicked({ kind: "trigger" });
     expect(Recorder.order).not.toContain("bad");
     expect(Recorder.order).toContain("good");
+    expect((reacting.Action.store as MemoryStore).reactionFailures).toMatchObject([
+      {
+        reaction: "BadWhere",
+        stage: "where",
+        errorClass: "Error",
+      },
+    ]);
+  });
+
+  test("retention cannot invalidate trigger ids captured before an async where", async () => {
+    const store = new MemoryStore();
+    const reacting = new Reacting(new ActionConcept(store));
+    reacting.logging = Logging.OFF;
+    const { Button, Recorder } = reacting.instrument({
+      Button: new ButtonConcept(),
+      Recorder: new RecorderConcept(),
+    });
+    let releaseWhere = () => {};
+    const waitForRelease = new Promise<void>((resolve) => {
+      releaseWhere = resolve;
+    });
+    let enteredWhere = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enteredWhere = resolve;
+    });
+    reacting.register({
+      Retained: (_vars: Vars) =>
+        when(Button.clicked, { kind: "retained" }, {})
+          .where(async (frames: Frames) => {
+            enteredWhere();
+            await waitForRelease;
+            return frames;
+          })
+          .then(request(Recorder.record, { tag: "kept" })),
+    });
+
+    const pending = Button.clicked({ kind: "retained" });
+    await entered;
+    const activeFlow = [...store.flowIndex.keys()][0];
+    expect(activeFlow).toBeDefined();
+    if (activeFlow === undefined) throw new Error("expected an active flow");
+    store.evictFlow(activeFlow);
+    releaseWhere();
+    await pending;
+
+    expect(Recorder.order).toEqual(["kept"]);
+    expect(store.firings.get("Retained")?.[0]?.consumed).toHaveLength(1);
+  });
+
+  test("a consequence ask remains produced when recording its fault fails", async () => {
+    class FaultRejectingStore extends MemoryStore {
+      override append(entry: LogEntry): void {
+        if (entry.kind === "fault") throw new Error("fault store unavailable");
+        super.append(entry);
+      }
+    }
+    const store = new FaultRejectingStore();
+    const reacting = new Reacting(new ActionConcept(store));
+    reacting.logging = Logging.OFF;
+    const { Button, Crashing } = reacting.instrument({
+      Button: new ButtonConcept(),
+      Crashing: new CrashingConcept(),
+    });
+    reacting.register({
+      PartialFault: (_vars: Vars) =>
+        when(Button.clicked, { kind: "crash" }, {}).then(request(Crashing.crash, {})),
+    });
+
+    await Button.clicked({ kind: "crash" });
+
+    const firing = store.firings.get("PartialFault")?.[0];
+    expect(firing?.produced).toHaveLength(1);
+    if (firing === undefined) throw new Error("expected a firing");
+    expect(store.byId(firing.produced[0] ?? "")).toBeDefined();
   });
 
   test("reaction re-registration removes the prior definition from the action index", async () => {

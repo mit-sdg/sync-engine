@@ -19,7 +19,7 @@ export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engi
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, QueryRegistration, RefusalRegistration, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/concept-set.ts";
 export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
 export { MemoryStore } from "../engine/reactions/log-store.ts";
-export type { FiringRecord, LogEntry, LogStore } from "../engine/reactions/log-store.ts";
+export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord, } from "../engine/reactions/log-store.ts";
 
 === dist/boundary/index.d.ts ===
 /** Declare the public requests a composition can receive and answer. */
@@ -442,9 +442,10 @@ type MissingRegistrations<S extends Record<string, AnyRegistration>, Floor exten
 }[keyof S];
 type CompleteFloorName<S extends Record<string, AnyRegistration>, Floor extends string> = Floor extends unknown ? [MissingRegistrations<S, Floor>] extends [never] ? Floor : never : never;
 type CompleteFloorNames<S extends Record<string, AnyRegistration>> = CompleteFloorName<S, DeclaredFloorNames<S>>;
-type FloorContext<S extends Record<string, AnyRegistration>, Floor extends CompleteFloorNames<S>> = {
+type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Intersection) => void ? Intersection : never;
+type FloorContext<S extends Record<string, AnyRegistration>, Floor extends CompleteFloorNames<S>> = UnionToIntersection<{
     [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? Floor extends keyof F ? F[Floor] extends (context: infer Context) => object ? Context : never : never : never;
-}[keyof S];
+}[keyof S]>;
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>> {
     vocabulary: VocabularyOf<S>;
     concepts: VocabularyOf<S>["concepts"];
@@ -839,6 +840,19 @@ export declare function createLocalClient<C extends ContractShape>(options: {
     invoker: Invoker<C>;
 }): Client<C>;
 
+=== dist/engine/boundary/public-errors.d.ts ===
+import type { PublicErrorCategory } from "../reactions/concept-metadata.ts";
+export declare const PUBLIC_ERROR_CATEGORIES: {
+    readonly INVALID_REQUEST: "INVALID_REQUEST";
+    readonly UNAUTHORIZED: "UNAUTHORIZED";
+    readonly FORBIDDEN: "FORBIDDEN";
+    readonly NOT_FOUND: "NOT_FOUND";
+    readonly CONFLICT: "CONFLICT";
+};
+/** Project a domain or framework error code onto the HTTP floor's public vocabulary. */
+export declare function publicCategoryOf(code: string, categories: Readonly<Record<string, PublicErrorCategory>>): PublicErrorCategory | "INTERNAL_ERROR";
+export declare function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number;
+
 === dist/engine/boundary/public-gateway.d.ts ===
 /** The standard gateway. */
 import type { Logging } from "../reactions/logging.ts";
@@ -1074,6 +1088,10 @@ export type PersistedEntry = {
     kind: "firing";
     at: number;
     firing: unknown;
+} | {
+    kind: "reaction-failure";
+    at: number;
+    failure: unknown;
 } | {
     kind: "fault";
     at: number;
@@ -1444,7 +1462,7 @@ export declare class FiringBook {
 export { normalizeOutcome } from "./actions.ts";
 export type { ActionRecord } from "./actions.ts";
 export { MemoryStore } from "./log-store.ts";
-export type { FiringRecord, LogEntry, LogStore } from "./log-store.ts";
+export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord } from "./log-store.ts";
 export { isRefuse, Refuse, refusalMapping } from "./refuse.ts";
 export { contractOf } from "./outcomes.ts";
 export type { ActionContract, OutcomeContracts } from "./outcomes.ts";
@@ -1585,6 +1603,8 @@ export declare function inventoryOf(concept: object): ConceptInventoryIR;
  *    written is ever modified;
  *  - a **firing** entry, recording which reaction fired, with which
  *    bindings, consuming which records and producing which.
+ *  - a **reaction failure** entry, recording a pre-firing evaluation failure
+ *    without consuming its matched occurrences.
  *
  * A store folds these entries into indexes by id, flow, and reaction. Matching
  * reads those indexes. Each store defines what `prune()` removes.
@@ -1631,6 +1651,15 @@ export interface FiringRecord {
     produced: string[];
     at: number;
 }
+/** A non-consuming failure while evaluating a matched reaction. */
+export interface ReactionFailureRecord {
+    reaction: string;
+    flow: string;
+    triggerIds: string[];
+    stage: "where" | "trigger";
+    errorClass: string;
+    at: number;
+}
 /** An entry appended to the log. Engine-created mappings are field-name redacted. */
 export type LogEntry = {
     kind: "invocation";
@@ -1646,6 +1675,10 @@ export type LogEntry = {
     kind: "firing";
     at: number;
     firing: FiringRecord;
+} | {
+    kind: "reaction-failure";
+    at: number;
+    failure: ReactionFailureRecord;
 }
 /**
  * A fault entry names the interrupted ask and records its validated
@@ -1693,6 +1726,8 @@ export declare class MemoryStore implements LogStore {
     readonly flowIndex: Map<string, ActionRecord[]>;
     /** Recorded firings, grouped by reaction name, in firing order. */
     readonly firings: Map<string, FiringRecord[]>;
+    /** Non-consuming evaluation failures, in occurrence order. */
+    readonly reactionFailures: ReactionFailureRecord[];
     /** Derived index folded from firing entries: record id → reactions that consumed it. */
     private consumedIndex;
     append(entry: LogEntry): void;
@@ -1751,6 +1786,9 @@ import type { ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, Fram
 export declare const flow: unique symbol;
 export declare const actionId: unique symbol;
 export declare const byReaction: unique symbol;
+/** Internal callback through which instrumentation reports how far a consequence ask landed. */
+export declare const actionSettlement: unique symbol;
+export type ActionSettlement = "ask-recorded" | "fault-recorded";
 export declare const landing: unique symbol;
 /** The posture in which an action outcome landed. */
 export declare function postureOfOutcome(outcome: ActionOutcome): ChannelPosture;
@@ -2083,8 +2121,11 @@ export declare class Reacting {
     private runPipelineForFrame;
     private runStepNode;
     private framesWithStepOutput;
-    /** Recover the `when` records a frame matched, ready to be consumed by a fill. */
-    private resolveWhenActions;
+    /** Recover the immutable ids captured when this frame matched. */
+    private resolveWhenIds;
+    /** Persist pre-firing failures without changing trigger consumption. */
+    private recordReactionFailure;
+    private appendReactionFailure;
     /**
      * Resolve a `then` clause into an action argument object: replace symbol
      * inputs with their frame bindings (a missing binding is an error), then
@@ -2967,8 +3008,8 @@ export interface Frames<TFrame extends Frame = Frame> {
 /**
  * Resolve a query's `input` mapping against a single frame.
  *
- * Symbol values are looked up in the frame (and must be bound — an unbound
- * symbol is a programming error); literal values pass through unchanged.
+ * Variable values are looked up in the frame; unbound variables are omitted
+ * so callers can distinguish absent optional inputs. Literals pass through.
  * Shared by where ops and formers.
  */
 export declare function bindInputMapping(frame: Frame, input: Mapping): Mapping;
@@ -2993,8 +3034,6 @@ export declare class Frames<TFrame extends Frame = Frame> extends Array<TFrame> 
 }
 
 === dist/engine/reads/index.d.ts ===
-export { brand, hasBrand, LineBrand, RelationViewBrand, WhereOpBrand } from "./brands.ts";
-export type { CountOpBrand, ClaimBrand, ViewBlockBrand, FormerUseBrand, ReactionPartitionBrand, } from "./brands.ts";
 export { among, computationRef, ge, gt, is, isFusedComputation, le, lt, standardComputations, } from "./computations.ts";
 export type { ComputationFn, ComputationRef, ComputationSource, FusedComputation, } from "./computations.ts";
 export type { ReadEnv } from "./env.ts";
