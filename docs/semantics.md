@@ -1,7 +1,7 @@
 # Execution semantics
 
 This page owns the execution guarantees for actions, reactions, reads, formed
-results, and application boundaries. The [documentation router](./README.md)
+results, and application boundaries. The [root documentation map](../README.md#examples-and-documentation)
 points to the authoring guides, the [example book](./book.md) demonstrates each
 construction, and the [public API](./public-surface.md) lists the exports.
 
@@ -31,7 +31,7 @@ A different throw is a **fault**, not a third action outcome. The engine records
 the fault against the ask, leaves that ask without an outcome, and lets the
 throw reach a direct caller. Failure delivery during reaction matching and at
 the application boundary is covered in
-[Consistency and operations](./consistency-and-operations.md#failures-between-action-asks).
+[Failures between action asks](#failures-between-action-asks).
 
 The operations room shows three client-visible cases:
 
@@ -143,7 +143,7 @@ former reads it. `null`, a scalar, a malformed row, or a violation of a
 declared cardinality raises a query fault.
 
 How such a fault is delivered depends on where the read occurs. See
-[Failures between action asks](./consistency-and-operations.md#failures-between-action-asks).
+[Failures between action asks](#failures-between-action-asks).
 
 ## Views and formers
 
@@ -193,21 +193,21 @@ If a former faults while forming a reaction consequence, that consequence ask
 is recorded with the fault and remains unanswered. Calling a former directly
 has no action ask to mark, so the evaluation rejects instead. The operational
 delivery boundary is described under
-[Failures between action asks](./consistency-and-operations.md#failures-between-action-asks).
+[Failures between action asks](#failures-between-action-asks).
 
 ## Decisions that must not race
 
 A uniqueness, capacity, first-come, or answer-once decision belongs in the
 action that owns the state, not in a reaction's `where`. The exact execution,
 coordination, and rollback limits live under
-[Ordering and state-read timing](./consistency-and-operations.md#ordering-and-state-read-timing).
+[Ordering and state-read timing](#ordering-and-state-read-timing).
 
 Applications must not use reaction registration order as priority or conflict
 resolution. Independent reactions and sibling branches may all match. If
 several branches answer one outside request, the boundary accepts one response
 ask and refuses later ones with `NOT_PENDING`; the caller may receive any one
 of the matching answers. See
-[Consistency and operations](./consistency-and-operations.md) for the
+[Operational limits](#operational-limits) for the
 ordering and state-read boundary.
 
 ## Sibling paths and endpoint settlement
@@ -235,7 +235,7 @@ An endpoint records at most one answer. An uncovered input, a dropped plain
 line, or a failed `where` can leave the request unanswered. Parallel endpoint
 declarations and sibling answers remain ordinary alternatives, so any matching
 path may answer; `NOT_PENDING` refuses another answer after settlement.
-[Cancellation](./consistency-and-operations.md#cancellation) owns what timeout
+[Cancellation](#cancellation) owns what timeout
 and abort do with a pending call. Disjointness and coverage belong to advisory
 analysis over exported IR.
 
@@ -255,7 +255,7 @@ The local and HTTP clients resolve to the same simple shape: the endpoint's
 success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
 boundary answer keeps domain errors and framework errors distinct. The HTTP
 adapter also owns method, JSON parsing, and status mapping. See the exact
-[cancellation boundary](./consistency-and-operations.md#cancellation).
+[cancellation boundary](#cancellation).
 
 An HTTP floor may bind one logical credential input to a cookie. The application
 declares the credential name and input, the endpoint that issues it and the
@@ -284,7 +284,7 @@ checks callers during typecheck but adds no runtime value validator.
 Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
 `Domain`. An HTTPS origin uses a `Secure` cookie whose name has the `__Host-`
 prefix; production rejects a non-HTTPS origin. Deployment responsibilities are
-listed under [Boundary operations](./consistency-and-operations.md#boundary-operations).
+listed under [Boundary operations](#boundary-operations).
 
 Both clients apply the same JSON projection to inputs and results. The local
 client serializes and parses values before returning them, just as the HTTP
@@ -314,13 +314,88 @@ private refusal codes. Both contracts share the generated type helpers and
 vocabulary anchor.
 
 These are TypeScript guarantees. The runtime validation limit is stated under
-[Boundary operations](./consistency-and-operations.md#boundary-operations).
+[Boundary operations](#boundary-operations).
 
-## Advanced consistency
+## Operational limits
 
-Most applications can stop here. The separate
-[Consistency and operations](./consistency-and-operations.md) note
-defines the limits around ordering, faults between action asks,
-cancellation, logs, restart, state-read timing, and boundary operation. It
-also states explicitly which replay and as-of guarantees the shipped runtime
-does not provide.
+The following limits matter when an application depends on ordering, failure
+delivery, cancellation, persistence, restart, or boundary operation.
+
+### Ordering and state-read timing
+
+An assembly sorts the authored composition's reactions by name before
+registering them, then registers the standard fault and refusal reactions. It
+evaluates reactions for one trigger record sequentially. Sibling paths carry no
+priority and do not form a join; each path advances when its own preceding ask
+returns. Applications must not use evaluation order as a priority mechanism.
+
+Action bodies run one at a time per concept instance, in arrival order,
+including asynchronous bodies. This is an in-process guarantee. A concept's
+implementation and storage must supply any atomicity or coordination required
+across processes. A reaction consequence chain is not a database transaction:
+earlier actions are not rolled back when a later action refuses or faults.
+
+`earlier` reads matching action records whose invocation position precedes the
+trigger in the same flow. Ordinary query reads instead read concept state when
+the reaction runs. A later reaction may therefore observe state changed by an
+earlier cascade; the runtime provides no as-of-trigger snapshot.
+
+If two reactions answer the same outside request, the boundary accepts the
+first answer and refuses the next with `NOT_PENDING`. Keep race-sensitive
+decisions in concept actions and treat all matching answer paths as live.
+
+### Failures between action asks
+
+Action faults and faults while forming a consequence have an action ask to
+mark. The engine records the fault, and the standard boundary reaction can try
+to answer an unanswered root request with `INTERNAL_ERROR`. If the request
+already has an answer, the boundary refuses the second answer with
+`NOT_PENDING`; the client keeps the first answer.
+
+A query, view, computation, or other `where` operation can instead fail while
+the engine decides whether a reaction matches. The runtime logs the reaction
+context and exception class, then drops that evaluation. It creates no fault
+occurrence and invokes no standard boundary reaction. If no alternative
+answers, a waiting invoker may time out. Concepts should represent expected
+rejection with registered refusals and explicit policy alternatives.
+
+### Cancellation
+
+An invocation already aborted when it begins does not reach the gateway. While
+a request is pending, aborting marks it to resolve with `ABORTED`; the signal is
+not forwarded to the application and does not cancel, prevent, or roll back
+forwarded work. Timeout and abort end the pending wait but record no
+`RequestBoundary.respond` occurrence, so recorded application work may remain
+unanswered.
+
+### Logs, concept implementations, and restart
+
+Concept state is separate from the assembly's occurrence log. The engine sends
+append-only invocation, outcome, fault, and firing entries to its `LogStore`,
+which folds them into indexes for matching and inspection. Retention may evict
+indexed entries, so no assembly promises to retain every occurrence forever.
+
+The configured field-name redaction policy applies before entries reach a
+store, observer, or inspection summary. During an active causal flow, the
+interpreter privately retains original values for execution and matching, then
+clears them when the outermost action settles. Ordinary process logs omit
+exception messages, stacks, causes, and attached fields.
+
+Ordinary `assemble(...)` uses a process-local `MemoryStore`. Advanced callers
+may pass a `FileStore` or custom `LogStore` to `createEngine(store?)`.
+`FileStore` appends JSONL; retention trims its in-memory fold without rewriting
+that file. `PersistingConcept` manages an application-supplied store registry;
+it does not bind concept state or install an assembly log store.
+
+An application may persist concept state while leaving occurrence logs in
+memory, or vice versa. The engine does not load prior occurrence files, rebuild
+concept state, resume interrupted reactions, restore pending requests, or
+replay firings. JSONL occurrences are evidence, not restart recovery.
+
+### Boundary operations
+
+In production, the HTTP floor rejects a public origin that is not HTTPS. It
+does not provide TLS termination, HSTS, or trusted-proxy handling; deployment
+must supply them. Generated wire contracts typecheck callers, but the gateway
+does not validate returned values against generated output types or derive a
+runtime validator from concept specifications.

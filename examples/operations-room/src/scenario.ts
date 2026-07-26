@@ -12,7 +12,7 @@
  *   src/edge.ts                       — gateway and HTTP wiring
  */
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
-import { identities } from "../../support/identities.ts";
+import { identities } from "./support/identities.ts";
 import { deterministicImplementations } from "./concept-set.ts";
 import { buildOperationsRoom } from "./edge.ts";
 import type { OperationsRoomWire } from "../generated/wire.ts";

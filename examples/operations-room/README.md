@@ -1,55 +1,36 @@
 # Operations Room
 
-An incident-response app with selectable reaction packs, swappable policy,
-and a full dashboard. Choose between host-only or responder-contribution
-models.
+An independently installable incident-response example with selectable alert
+and discussion packs, swappable contribution policy, and a composed dashboard.
 
-**Run it:**
+## Commands
+
+Run every command from this directory:
 
 ```sh
+bun install
 bun start
+bun test
+bun run typecheck
+bun run artifacts:check
+bun run check
 ```
 
-The scenario reports an incident, opens a discussion, lets responders
-contribute mitigations, and prints the dashboard.
+Use `bun run artifacts:pin` only when intentionally regenerating the pinned
+read-back and wire contract.
 
-**What it demonstrates:**
+## Source Map
 
-- **Reaction packs** — optional behaviors (alerts, discussion) toggled via
-  assembly options
-- **Swappable policy** — two implementations of the same contribution-policy
-  view (`host-may-contribute` and `responders-may-contribute`)
-- **Parameterized endpoints** — factory functions that accept policy views as
-  arguments
-- **Staged formers** — `currentMitigation` (optional), `requiredCurrentMitigation`
-  (required), `responseStats` (aggregation with `each`, `count`, `distinct`)
-- **Fragment splicing** — `roomSummary` splices `responderRoster` so each
-  fragment stays independently typed and testable
-
-## Files
-
-| File                                                           | Role                                             |
-| -------------------------------------------------------------- | ------------------------------------------------ |
-| `src/scenario.ts`                                              | Entry point — runs through a local gateway       |
-| `src/concept-set.ts`                                           | Vocabulary, refs, and implementations            |
-| `src/composition/room.ts`                                      | Formers and room endpoints                       |
-| `src/composition/packs.ts`                                     | Optional reaction packs (alerts, discussion)     |
-| `src/composition/contributions.ts`                             | Parameterized contribution endpoints             |
-| `src/composition/host-may-contribute.ts`                       | Policy: only the incident host may contribute    |
-| `src/composition/responders-may-contribute.ts`                 | Policy: any responder may contribute             |
-| `src/assembly.ts`                                              | `assemble()` with `OperationsRoomOptions`        |
-| `src/edge.ts`                                                  | Gateway and HTTP wiring                          |
-| `src/client.ts`                                                | Typed client factories                           |
-| `generated.config.ts`                                          | CLI artifact commands                            |
-| [`generated/operations-room.md`](generated/operations-room.md) | Assembled read-back (concepts, views, reactions) |
-| [`generated/wire.ts`](generated/wire.ts)                       | Generated TypeScript wire contract               |
-| [`generated/README.md`](generated/README.md)                   | Provenance and regeneration notes                |
-
-## Check Artifacts
-
-```sh
-cd ../.. && bun run build && bun scripts/examples.ts check operationsRoom
-```
-
-Use `bun scripts/examples.ts pin operationsRoom` instead of `check` to
-regenerate the pinned files intentionally.
+| Path                                                           | Role                                                                                                  |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `src/concepts/`                                                | Vendored Alerting, Discussing, Gathering, and Selecting concepts, specifications, and principle tests |
+| `src/support/`                                                 | Deterministic identities and floor context                                                            |
+| `src/composition/`                                             | Room formers, endpoints, optional reaction packs, and contribution policies                           |
+| `src/assembly.ts`                                              | Application assembly and selectable options                                                           |
+| `src/edge.ts`                                                  | Gateway and HTTP wiring                                                                               |
+| `src/client.ts`                                                | Typed client factories                                                                                |
+| `src/scenario.ts`                                              | Runnable end-to-end scenario                                                                          |
+| `tests/application.test.ts`                                    | Full application and HTTP coverage                                                                    |
+| `generated.config.ts`                                          | Artifact command configuration                                                                        |
+| [`generated/operations-room.md`](generated/operations-room.md) | Pinned assembled read-back                                                                            |
+| [`generated/wire.ts`](generated/wire.ts)                       | Pinned TypeScript wire contract                                                                       |

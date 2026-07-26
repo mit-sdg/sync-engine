@@ -7,7 +7,7 @@ application gives it a public name or connects it to anything else.
 The operations room needs alerts that remain open until someone acknowledges
 them. Start with the Purpose and Principle from Alerting's specification:
 
-_Source: [`examples/concepts/alerting/spec.md`](../../examples/concepts/alerting/spec.md)_
+_Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../examples/operations-room/src/concepts/alerting/spec.md)_
 
 ```text
 ## Purpose
@@ -34,7 +34,7 @@ Alerting owns alerts and two facts about each one. `Person` and `Subject` are
 opaque identities supplied by an application; Alerting neither creates nor
 interprets them.
 
-_Source: [`examples/concepts/alerting/spec.md`](../../examples/concepts/alerting/spec.md)_
+_Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../examples/operations-room/src/concepts/alerting/spec.md)_
 
 ````text
 ```state
@@ -46,7 +46,7 @@ a set of Alerts with
 
 Its actions state every successful change and the case the concept refuses:
 
-_Source: [`examples/concepts/alerting/spec.md`](../../examples/concepts/alerting/spec.md)_
+_Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../examples/operations-room/src/concepts/alerting/spec.md)_
 
 ````text
 ```actions
@@ -76,7 +76,7 @@ The class has no engine base class and imports no application code. Its public
 methods implement the actions, while the underscore-prefixed method only reads
 current state.
 
-_Source: [`examples/concepts/alerting/alerting.ts`](../../examples/concepts/alerting/alerting.ts)_
+_Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../examples/operations-room/src/concepts/alerting/alerting.ts)_
 
 ```ts
   raise({ recipient, subject }: { recipient: string; subject: string }) {
@@ -103,7 +103,7 @@ at most one row or any number of rows. Without a declaration, a query may
 return one record or an array and is treated as potentially many. `_openFor`
 promises `many` because one recipient may have any number of open alerts:
 
-_Source: [`examples/concepts/alerting/registry.ts`](../../examples/concepts/alerting/registry.ts)_
+_Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../examples/operations-room/src/concepts/alerting/registry.ts)_
 
 ```ts
 queries: { _openFor: "many" },
@@ -111,7 +111,7 @@ queries: { _openFor: "many" },
 
 Gathering shows both query shapes next to each other:
 
-_Source: [`examples/concepts/gathering/gathering.ts`](../../examples/concepts/gathering/gathering.ts)_
+_Source: [`examples/operations-room/src/concepts/gathering/gathering.ts`](../../examples/operations-room/src/concepts/gathering/gathering.ts)_
 
 ```ts
   _members({ gathering }: { gathering: string }): { member: string }[] {
@@ -136,7 +136,7 @@ The concept test uses the class without assembling an application. It gives the
 class deterministic identities, follows the Principle, and checks both the
 state it exposes and its refusal.
 
-_Source: [`examples/concepts/alerting/alerting.test.ts`](../../examples/concepts/alerting/alerting.test.ts)_
+_Source: [`examples/operations-room/src/concepts/alerting/alerting.test.ts`](../../examples/operations-room/src/concepts/alerting/alerting.test.ts)_
 
 ```ts
 test("its principle: keep each recipient's alerts in order until acknowledged", () => {
@@ -172,7 +172,7 @@ boundary must omit the competing detail.
 
 Use the canonical `assembly` entrypoint:
 
-_Source: [`examples/concepts/alerting/registry.ts`](../../examples/concepts/alerting/registry.ts)_
+_Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../examples/operations-room/src/concepts/alerting/registry.ts)_
 
 ```ts
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
@@ -181,7 +181,7 @@ import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 Alerting's registry keeps the prose in `spec.md`, registers the one deliberate
 refusal, and declares its participation in the deterministic example floor:
 
-_Source: [`examples/concepts/alerting/registry.ts`](../../examples/concepts/alerting/registry.ts)_
+_Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../examples/operations-room/src/concepts/alerting/registry.ts)_
 
 ```ts
 export const alerting = registerConcept({

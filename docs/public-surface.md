@@ -265,7 +265,7 @@ constructor; ordinary `assemble(...)` uses its own in-memory occurrence log.
 `prune` delegates to the bound store.
 
 For the exact persistence, eviction, and restart limits, see
-[Logs, concept implementations, and restart](./consistency-and-operations.md#logs-concept-implementations-and-restart).
+[Logs, concept implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).
 
 ## `boundary`
 
@@ -317,7 +317,7 @@ const handler = createHttpHandler({ gateway, application, floor });
 The fixed adapter derives protected routes from their declared credential
 input. [Execution semantics](./semantics.md#boundary-gateway-and-client) owns
 its request, credential, projection, and failure guarantees;
-[Consistency and operations](./consistency-and-operations.md#cancellation)
+[Cancellation](./semantics.md#cancellation)
 owns cancellation.
 
 The CLI construction uses `command(...)` and `createCliApp(...)`.
@@ -427,7 +427,7 @@ other runtime code. Its payload key is `fault`; the shared channel keys are
 `{ by: "ReactionName" }` pins provenance exactly as it does for `returned` and
 `refused`. A fault is not a concept refusal: the interrupted ask remains
 unanswered. The delivery limits are documented under
-[Failures between action asks](./consistency-and-operations.md#failures-between-action-asks).
+[Failures between action asks](./semantics.md#failures-between-action-asks).
 
 ## `utils`
 
@@ -444,4 +444,4 @@ unanswered. The delivery limits are documented under
 `configureRedaction(policy)` sets the process redaction policy. `redact(value)`
 returns a copy that replaces values whose field names match `RedactionPolicy`
 or `UNIVERSAL_SENSITIVE_PATTERNS`. The exact storage and redaction guarantees
-live under [Logs, concept implementations, and restart](./consistency-and-operations.md#logs-concept-implementations-and-restart).
+live under [Logs, concept implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).

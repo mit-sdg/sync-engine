@@ -156,28 +156,23 @@ describe("guided curriculum", () => {
     }
   });
 
-  test("the documentation router points to the public API without copying subpaths", async () => {
-    const index = await readFile(new URL("../../docs/README.md", import.meta.url), "utf8");
+  test("the root documentation map points to the public API without copying subpaths", async () => {
+    const index = await readFile(new URL("../../README.md", import.meta.url), "utf8");
 
-    expect(index).toContain("[Public API\n  reference](./public-surface.md)");
+    expect(index).toContain("[Public API](docs/public-surface.md)");
     expect(index).not.toContain("@mit-sdg/sync-engine/utils");
   });
 
   test("local links and anchors resolve and guides avoid unsupported entrypoints", async () => {
     const docs = [
       new URL("../../README.md", import.meta.url),
-      new URL("../../docs/README.md", import.meta.url),
       new URL("../../docs/book.md", import.meta.url),
       new URL("../../docs/public-surface.md", import.meta.url),
       new URL("../../docs/architecture.md", import.meta.url),
       new URL("../../docs/semantics.md", import.meta.url),
-      new URL("../../docs/consistency-and-operations.md", import.meta.url),
       new URL("../../examples/README.md", import.meta.url),
-      new URL("../../examples/concepts/README.md", import.meta.url),
       new URL("../../examples/operations-room/README.md", import.meta.url),
-      new URL("../../examples/operations-room/generated/README.md", import.meta.url),
       new URL("../../examples/reading-circle/README.md", import.meta.url),
-      new URL("../../examples/reading-circle/generated/README.md", import.meta.url),
       ...guideFiles.map((file) => new URL(file, guideDirectory)),
     ];
     for (const docUrl of docs) {

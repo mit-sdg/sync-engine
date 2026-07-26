@@ -1,7 +1,7 @@
 # The example book
 
 Use this book to look up a reading construction and see it in a small working
-example. The [documentation router](./README.md) points to the right guide or
+example. The [root documentation map](../README.md#examples-and-documentation) points to the right guide or
 reference for each task, and the [guided walkthrough](./guide/getting-started.md)
 builds a complete application.
 

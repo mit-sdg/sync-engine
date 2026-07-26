@@ -1,9 +1,16 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig } from "vite-plus";
 import { applicationExamples } from "./examples/register.ts";
 
 export default defineConfig({
   resolve: {
+    alias: [
+      {
+        find: /^@mit-sdg\/sync-engine\/([^/]+)$/,
+        replacement: resolve(import.meta.dirname, "src/$1/index.ts"),
+      },
+    ],
     tsconfigPaths: true,
   },
   plugins: [
@@ -51,7 +58,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
-    include: ["examples/concepts/**/*.test.ts", "tests/**/*.test.ts"],
+    include: ["examples/**/*.test.ts", "tests/**/*.test.ts"],
     exclude: ["tests/package/application/**"],
   },
   staged: {

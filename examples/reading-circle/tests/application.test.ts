@@ -1,17 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { describe, expect, test } from "vite-plus/test";
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
-import {
-  createReadingCircleClient,
-  loadCirclePage,
-} from "../../examples/reading-circle/src/client.ts";
-import { GatheringConcept } from "../../examples/concepts/gathering/gathering.ts";
-import {
-  buildReadingCircle,
-  buildReadingCircleHttp,
-} from "../../examples/reading-circle/src/edge.ts";
-import { runScenario } from "../../examples/reading-circle/src/scenario.ts";
-import type { ReadingCircleWire } from "../../examples/reading-circle/generated/wire.ts";
+import { describe, expect, test } from "vite-plus/test";
+import type { ReadingCircleWire } from "../generated/wire.ts";
+import { createReadingCircleClient, loadCirclePage } from "../src/client.ts";
+import { GatheringConcept } from "../src/concepts/gathering/gathering.ts";
+import { buildReadingCircle, buildReadingCircleHttp } from "../src/edge.ts";
+import { runScenario } from "../src/scenario.ts";
 
 describe("canonical reading-circle example", () => {
   test("the typed client runs the complete scenario through the standard gateway", async () => {
@@ -112,10 +106,7 @@ describe("canonical reading-circle example", () => {
   });
 
   test("the rendered design has no unwritten concept prose", async () => {
-    const spec = await readFile(
-      new URL("../../examples/reading-circle/generated/reading-circle.md", import.meta.url),
-      "utf8",
-    );
+    const spec = await readFile(new URL("../generated/reading-circle.md", import.meta.url), "utf8");
     expect(spec).not.toContain("[unwritten");
   });
 });

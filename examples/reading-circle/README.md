@@ -4,9 +4,10 @@ A book club app where members join reading circles, choose books, and
 discuss them. Policy views admit members to discussions and block non-members
 with a clear refusal.
 
-**Run it:**
+Install and run from this directory:
 
 ```sh
+bun install
 bun start
 ```
 
@@ -15,8 +16,7 @@ responses, and prints both the full circle page and the refusals.
 
 **What it demonstrates:**
 
-- Concept registration from shared domain concepts (Gathering, Selecting,
-  Discussing)
+- Local concept registration for Gathering, Selecting, and Discussing
 - Reaction-based composition — choosing a book opens its discussion
   automatically
 - Policy views (`memberMayRespond`, `nonmemberMayNotRespond`) — access
@@ -30,24 +30,24 @@ responses, and prints both the full circle page and the refusals.
 
 ## Files
 
-| File                                                         | Role                                                       |
-| ------------------------------------------------------------ | ---------------------------------------------------------- |
-| `src/scenario.ts`                                            | Entry point — runs the full story through a local gateway  |
-| `src/concept-set.ts`                                         | Exposes the vocabulary, refs, and implementations          |
-| `src/composition/reading-circle.ts`                          | Reactions, policy views, formers, and boundary definitions |
-| `src/assembly.ts`                                            | The single `assemble()` call with optional overrides       |
-| `src/edge.ts`                                                | Gateway wiring and HTTP handler                            |
-| `src/client.ts`                                              | Typed client factories                                     |
-| `generated.config.ts`                                        | Instructions for the `sync-engine` CLI artifact commands   |
-| [`generated/reading-circle.md`](generated/reading-circle.md) | Assembled read-back (concepts, views, reactions)           |
-| [`generated/wire.ts`](generated/wire.ts)                     | Generated TypeScript wire contract                         |
-| [`generated/README.md`](generated/README.md)                 | Provenance and regeneration notes                          |
+- `src/concepts/*/`: concept implementations, principle tests, and specs
+- `src/support/`: deterministic identity support
+- `src/composition/reading-circle.ts`: reactions, views, formers, and boundaries
+- `src/assembly.ts`, `src/edge.ts`, `src/client.ts`: assembly and boundary wiring
+- `src/scenario.ts`: complete local-gateway story
+- `tests/application.test.ts`: full application and boundary tests
+- `generated.config.ts`: artifact command configuration
+- [`generated/reading-circle.md`](generated/reading-circle.md): pinned assembled read-back
+- [`generated/wire.ts`](generated/wire.ts): pinned TypeScript wire contract
 
-## Check Artifacts
+## Commands
 
 ```sh
-cd ../.. && bun run build && bun scripts/examples.ts check readingCircle
+bun start
+bun test
+bun run typecheck
+bun run artifacts:check
+bun run check
 ```
 
-Use `bun scripts/examples.ts pin readingCircle` instead of `check` to
-regenerate the pinned files intentionally.
+Use `bun run artifacts:pin` to intentionally regenerate the pinned files.

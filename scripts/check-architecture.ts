@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
 import ts from "typescript";
+import { applicationExamples } from "../examples/register.ts";
 import { filesBelow } from "./walk.ts";
 
 const root = resolve(import.meta.dirname, "..");
@@ -44,6 +45,9 @@ const eliminatedIdentifiers = new Set([
   "specificationProse",
 ]);
 const failures: string[] = [];
+const exampleDirectories = new Set(
+  Object.values(applicationExamples).map(({ directory }) => `examples/${directory}/`),
+);
 
 const tsFilesBelow = (directory: string): Promise<string[]> =>
   filesBelow(directory, (name) => name.endsWith(".ts"));
@@ -76,6 +80,10 @@ function repositoryFiles(): string[] {
     .filter(Boolean)
     .filter((path) => existsSync(resolve(root, path)))
     .sort();
+}
+
+function exampleDirectoryOf(path: string): string | undefined {
+  return [...exampleDirectories].find((directory) => path.startsWith(directory));
 }
 
 function sourceDependencies(path: string): string[] {
@@ -259,8 +267,14 @@ for (const path of repository) {
   if (content.length === 0) failures.push(`${path}: repository files may not be empty`);
   const hash = createHash("sha256").update(content).digest("hex");
   const duplicate = hashes.get(hash);
-  if (duplicate !== undefined) failures.push(`${path}: exact duplicate of ${duplicate}`);
-  else hashes.set(hash, path);
+  if (
+    duplicate !== undefined &&
+    (exampleDirectoryOf(path) === undefined ||
+      exampleDirectoryOf(duplicate) === undefined ||
+      exampleDirectoryOf(path) === exampleDirectoryOf(duplicate))
+  ) {
+    failures.push(`${path}: exact duplicate of ${duplicate}`);
+  } else hashes.set(hash, path);
 
   const known =
     (parts.length === 1 && allowedRootFiles.has(path)) ||

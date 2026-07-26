@@ -50,9 +50,8 @@ A new concept changes the explicit concept set; a new composition file changes
 the explicit composition manifest. Floor and process files change only when
 the runtime substrate or deployment boundary changes.
 
-The repository's `examples/concepts/` directory holds generic concepts used by
-either example; a standalone application normally owns them under
-`src/concepts/`. A small application may keep its composition in one file; the
+Each example owns its concepts under `src/concepts/`, so its directory remains
+independently installable and testable. A small application may keep its composition in one file; the
 reading circle uses a vocabulary and one composition module. The operations
 room separates policy, reaction packs, reads, and endpoints within
 `src/composition/`. A larger application may divide the same directory by
@@ -111,9 +110,9 @@ export function assembleOperationsRoom({
 The scenarios select the concept set's complete deterministic floor so their
 generated identities stay fixed. Tests may still overlay one ready-made
 implementation after the ordinary floor is selected. Identity generation
-lives in one shared example helper:
+lives in an example-local helper:
 
-_Source: [`examples/support/identities.ts`](../../examples/support/identities.ts)_
+_Source: [`examples/operations-room/src/support/identities.ts`](../../examples/operations-room/src/support/identities.ts)_
 
 ```ts
 export function identities(...values: string[]): () => string {

@@ -38,7 +38,7 @@ for (const [, example] of selected) {
   } else if (operation === "test") {
     run(resolve(root, "node_modules/.bin/vp"), [
       "test",
-      `tests/examples/${example.directory}.test.ts`,
+      `examples/${example.directory}/tests/application.test.ts`,
     ]);
   } else {
     throw new Error(`Unknown example operation: ${operation}.`);

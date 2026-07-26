@@ -39,7 +39,7 @@ describe("documented inventories", () => {
     }
   });
 
-  test("every application example has the package, repository, and README seats", async () => {
+  test("every application example is a documented, self-contained package", async () => {
     const registered = Object.values(applicationExamples);
     const examplesReadme = await text("examples/README.md");
 
@@ -47,15 +47,21 @@ describe("documented inventories", () => {
       expect(examplesReadme).toContain(`(${directory}/README.md)`);
       const applicationReadme = await text(`examples/${directory}/README.md`);
       for (const artifact of generated) expect(applicationReadme).toContain(`(${artifact})`);
-      expect(applicationReadme).toContain("(generated/README.md)");
-      await expect(
-        stat(new URL(`tests/examples/${directory}.test.ts`, root)),
-      ).resolves.toBeDefined();
+      for (const path of [
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "text.d.ts",
+        "tests/application.test.ts",
+        "generated.config.ts",
+      ]) {
+        await expect(stat(new URL(`examples/${directory}/${path}`, root))).resolves.toBeDefined();
+      }
     }
   });
 
-  test("the router leaves inventories in their reference homes", async () => {
-    const docsIndex = await text("docs/README.md");
+  test("the root map leaves inventories in their reference homes", async () => {
+    const docsIndex = await text("README.md");
     const guide = await text("docs/guide/views-and-formers.md");
     const publicSurface = await text("docs/public-surface.md");
 

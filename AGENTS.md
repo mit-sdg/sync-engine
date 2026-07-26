@@ -4,7 +4,7 @@ This file is the working guide for coding agents in this repository: the
 toolchain to use and where the source lives. If you are a person exploring
 `sync-engine`, you are welcome here too — start with the
 [project README](README.md) for the pitch and install, and the
-[documentation router](docs/README.md) for the path that fits your work; the sections below are
+[documentation section](README.md#examples-and-documentation) for the path that fits your work; the sections below are
 the day-to-day mechanics.
 
 ## Toolchain
@@ -37,10 +37,9 @@ worked examples of reads with the engine's read-back beside
 each, including the mistakes registration catches — and the complete register
 (`docs/public-surface.md`). The rest:
 
-- Documentation router and guided curriculum: `docs/README.md`
+- Documentation routes and guided curriculum: `README.md` and `docs/guide/`
 - Execution guarantees: `docs/semantics.md`
-- Ordering, failure, cancellation, persistence, and restart limits:
-  `docs/consistency-and-operations.md`
+- Ordering, failure, cancellation, persistence, and restart limits: `docs/semantics.md`
 - Vite+ docs: `node_modules/vite-plus/docs/` or https://viteplus.dev/guide/
 
 ### Contributing to the example book
@@ -74,7 +73,7 @@ the book.
 | `tests/internal/`              | Focused units mirroring reactions, reads, boundary, and hosting                             |
 | `tests/package/`               | Source and packed type contracts, the isolated consumer fixture, and generated declarations |
 | `tests/golden/`                | Pinned integration fixtures                                                                 |
-| `tests/examples/`              | End-to-end example application coverage                                                     |
+| `examples/*/tests/`            | End-to-end coverage colocated with each self-contained example                              |
 | `tests/docs/`                  | Guide source-link and excerpt verification                                                  |
 | `tests/utils/`                 | Public utility contract coverage                                                            |
 | `tests/public-api.test.ts`     | Exact export register, public-package-subpath check, and unsupported-entrypoint check       |

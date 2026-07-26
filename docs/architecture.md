@@ -1,7 +1,7 @@
 # Engine architecture
 
 This note maps the implementation for contributors. It does not define public
-authoring syntax; use the [guide router](./README.md), [execution
+authoring syntax; use the [root documentation map](../README.md#examples-and-documentation), [execution
 semantics](./semantics.md), and [public API](./public-surface.md) for that.
 
 ## One occurrence through the engine

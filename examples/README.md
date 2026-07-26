@@ -1,39 +1,18 @@
 # Examples
 
-Two complete applications that demonstrate the engine surface end to end.
-Each is independently runnable within this repository or the installed package:
-`cd` into its directory and run `bun start`. They share the concepts and support
-modules in this parent directory.
+Each application is a complete, independently installable TypeScript project.
+Its directory contains its concepts, specifications, support code, tests,
+configuration, generated contracts, and package scripts. Copy either directory
+without the rest of this repository and it remains runnable.
 
-- [Reading Circle](reading-circle/README.md) — a book club app. Members join
-  circles, choose books, and discuss them. Policy views gate membership.
-  Everything lives in one composition file — reactions, views, formers, and
-  boundary declarations side by side. Start here for the shortest path
-  through the full design.
-- [Operations Room](operations-room/README.md) — an incident-response app
-  with selectable reaction packs, swappable contribution policy, and a
-  dashboard built from staged formers. Each concern (policy, packs,
-  endpoints, formers) has its own module. Start here to see modular
-  composition at scale.
+- [Reading Circle](reading-circle/README.md) keeps reactions, policy views,
+  formers, and endpoints together for the shortest complete example.
+- [Operations Room](operations-room/README.md) separates composition into
+  selectable reaction packs, swappable policy, endpoints, and staged formers.
 
-## Shared concepts
-
-Both applications use the same four domain concepts under
-[`concepts/`](concepts/). Each concept is a standalone behavior with its own
-specification, implementation, error classes, test, and registry. The
-[concept authoring guide](concepts/README.md) explains the discipline.
-
-## Shared support
-
-[`support/identities.ts`](support/identities.ts) provides deterministic IDs
-for stable scenario output. [`support/deterministic-floor.ts`](support/deterministic-floor.ts)
-types the identity factory each concept receives.
-[`text.d.ts`](text.d.ts) lets TypeScript import `.md` files as strings so
-concept registries can carry their specifications into generated read-backs.
-
-## Monorepo scripts
-
-From the repo root, these commands build the engine and run each example:
+From an example directory, `bun install && bun run check` verifies formatting,
+types, tests, and pinned artifacts; `bun start` runs its scenario. From the
+repository root:
 
 ```sh
 bun run example               # reading circle

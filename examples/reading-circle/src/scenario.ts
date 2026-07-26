@@ -8,16 +8,15 @@
  *   src/edge.ts                — gateway and HTTP wiring
  */
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
-import { identities } from "../../support/identities.ts";
 import { deterministicImplementations } from "./concept-set.ts";
 import { buildReadingCircle } from "./edge.ts";
+import { identities } from "./support/identities.ts";
 import type { ReadingCircleWire } from "../generated/wire.ts";
 
 export async function runScenario() {
   const { gateway } = buildReadingCircle({
     ...deterministicImplementations({
       identities: {
-        Alerting: identities(),
         Discussing: identities("discussion-1", "response-1"),
         Gathering: identities("after-dinner", "mara-membership", "lin-membership"),
         Selecting: identities("selection-1"),

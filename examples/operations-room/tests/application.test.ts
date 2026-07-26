@@ -1,23 +1,20 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
-import {
-  createOperationsRoomClient,
-  loadRoomDashboard,
-} from "../../examples/operations-room/src/client.ts";
-import { AlertingConcept } from "../../examples/concepts/alerting/alerting.ts";
-import { DiscussingConcept } from "../../examples/concepts/discussing/discussing.ts";
-import { GatheringConcept } from "../../examples/concepts/gathering/gathering.ts";
-import { SelectingConcept } from "../../examples/concepts/selecting/selecting.ts";
-import { assembleOperationsRoom } from "../../examples/operations-room/src/assembly.ts";
+import { createOperationsRoomClient, loadRoomDashboard } from "../src/client.ts";
+import { AlertingConcept } from "../src/concepts/alerting/alerting.ts";
+import { DiscussingConcept } from "../src/concepts/discussing/discussing.ts";
+import { GatheringConcept } from "../src/concepts/gathering/gathering.ts";
+import { SelectingConcept } from "../src/concepts/selecting/selecting.ts";
+import { assembleOperationsRoom } from "../src/assembly.ts";
 import {
   currentMitigation,
   responseStats,
   requiredCurrentMitigation,
   roomSummary,
-} from "../../examples/operations-room/src/composition/room.ts";
-import { buildOperationsRoomHttp } from "../../examples/operations-room/src/edge.ts";
-import { runScenario } from "../../examples/operations-room/src/scenario.ts";
-import { identities } from "../../examples/support/identities.ts";
+} from "../src/composition/room.ts";
+import { buildOperationsRoomHttp } from "../src/edge.ts";
+import { runScenario } from "../src/scenario.ts";
+import { identities } from "../src/support/identities.ts";
 
 function buildRoom(options: {
   alerts: boolean;
@@ -232,7 +229,7 @@ describe("operations-room composition", () => {
 
   test("the rendered design has no unwritten concept prose", async () => {
     const spec = await readFile(
-      new URL("../../examples/operations-room/generated/operations-room.md", import.meta.url),
+      new URL("../generated/operations-room.md", import.meta.url),
       "utf8",
     );
     expect(spec).not.toContain("[unwritten");

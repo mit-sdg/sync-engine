@@ -61,7 +61,7 @@ class SelectingConcept {
 Public methods are recorded **actions**. Methods prefixed with `_` are
 **queries**: standing questions over current concept state. A registration pairs
 the class with its specification and makes both available to assembly. See the
-[concept authoring guide](examples/concepts/README.md) for the complete class,
+[concept authoring guide](docs/guide/concepts.md) for the complete class,
 specification, errors, registry, and principle test.
 
 ### Tier 2: Compose Independent Behaviors
@@ -142,8 +142,8 @@ artifacts, selectable reaction packs, and swappable policy.
 
 The occurrence log is execution evidence and observability infrastructure. It
 does not automatically persist concept state, replay an application, or provide
-restart recovery. See [execution semantics](docs/semantics.md) and [consistency
-and operations](docs/consistency-and-operations.md) for the precise guarantees.
+restart recovery. See [execution semantics](docs/semantics.md) for the precise
+guarantees and operational limits.
 
 ## Examples And Documentation
 
@@ -158,8 +158,8 @@ Choose a path based on what you need next:
 
 - [Getting started](docs/guide/getting-started.md): build a complete package
   consumer from an empty directory.
-- [Documentation map](docs/README.md): follow the curriculum or find the right
-  reference page.
+- [Authoring guides](docs/guide/getting-started.md): follow the curriculum from
+  one concept through a complete boundary.
 - [Examples map](examples/README.md): compare the compact Reading Circle with
   the modular Operations Room.
 - [Public API](docs/public-surface.md): find package subpaths, exports, and

@@ -110,32 +110,17 @@ try {
   }
 
   for (const example of examples) {
-    run(
-      "bun",
-      [`node_modules/@mit-sdg/sync-engine/examples/${example}/src/scenario.ts`],
-      temporary,
-    );
-    run(
-      "bunx",
-      [
-        "sync-engine",
-        "artifacts",
-        "pin",
-        "--config",
-        `node_modules/@mit-sdg/sync-engine/examples/${example}/generated.config.ts`,
-      ],
-      temporary,
-    );
-    run(
-      resolve(temporary, "node_modules/.bin/sync-engine"),
-      [
-        "artifacts",
-        "check",
-        "--config",
-        resolve(installed, `examples/${example}/generated.config.ts`),
-      ],
-      installed,
-    );
+    const isolated = resolve(temporary, example);
+    await cp(resolve(installed, "examples", example), isolated, { recursive: true });
+    const manifestPath = resolve(isolated, "package.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      dependencies: Record<string, string>;
+    };
+    manifest.dependencies["@mit-sdg/sync-engine"] = `file:${tarball}`;
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    run("bun", ["install", "--ignore-scripts"], isolated);
+    run("bun", ["run", "check"], isolated);
+    run("bun", ["run", "start"], isolated);
   }
 
   await cp(resolve(root, "tests/package/application"), standalone, { recursive: true });
