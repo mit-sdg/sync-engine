@@ -112,7 +112,7 @@ generated identities stay fixed. Tests may still overlay one ready-made
 implementation after the ordinary floor is selected. Identity generation
 lives in an example-local helper:
 
-_Source: [`examples/operations-room/src/support/identities.ts`](../../examples/operations-room/src/support/identities.ts)_
+_Source: [`examples/operations-room/src/identities.ts`](../../examples/operations-room/src/identities.ts)_
 
 ```ts
 export function identities(...values: string[]): () => string {

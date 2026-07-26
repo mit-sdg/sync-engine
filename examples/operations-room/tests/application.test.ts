@@ -14,7 +14,7 @@ import {
 } from "../src/composition/room.ts";
 import { buildOperationsRoomHttp } from "../src/edge.ts";
 import { runScenario } from "../src/scenario.ts";
-import { identities } from "../src/support/identities.ts";
+import { identities } from "../src/identities.ts";
 
 function buildRoom(options: {
   alerts: boolean;

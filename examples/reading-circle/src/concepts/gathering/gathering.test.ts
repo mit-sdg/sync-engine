@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { identities as ids } from "../../support/identities.ts";
+import { identities as ids } from "../../identities.ts";
 import { AlreadyJoined, GatheringNotFound, NotJoined } from "./errors.ts";
 import { GatheringConcept } from "./gathering.ts";
 

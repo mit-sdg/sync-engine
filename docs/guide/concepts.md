@@ -192,7 +192,7 @@ export const alerting = registerConcept({
     ALERT_NOT_FOUND: { error: AlertNotFound, on: ["acknowledge"] },
   },
   floors: {
-    deterministic: ({ identities }: DeterministicFloorContext) =>
+    deterministic: ({ identities }: { identities: { Alerting: () => string } }) =>
       new AlertingConcept(identities.Alerting),
   },
 });

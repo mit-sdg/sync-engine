@@ -10,7 +10,7 @@
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
 import { deterministicImplementations } from "./concept-set.ts";
 import { buildReadingCircle } from "./edge.ts";
-import { identities } from "./support/identities.ts";
+import { identities } from "./identities.ts";
 import type { ReadingCircleWire } from "../generated/wire.ts";
 
 export async function runScenario() {

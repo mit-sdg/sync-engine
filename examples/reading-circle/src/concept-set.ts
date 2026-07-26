@@ -14,7 +14,14 @@ import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { discussing } from "./concepts/discussing/registry.ts";
 import { gathering } from "./concepts/gathering/registry.ts";
 import { selecting } from "./concepts/selecting/registry.ts";
-import type { DeterministicFloorContext } from "./support/deterministic-floor.ts";
+
+interface DeterministicFloorContext {
+  identities: {
+    Gathering: () => string;
+    Selecting: () => string;
+    Discussing: () => string;
+  };
+}
 
 export const readingCircleConcepts = conceptSet({
   Gathering: gathering,

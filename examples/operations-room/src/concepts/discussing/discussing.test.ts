@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { identities as ids } from "../../support/identities.ts";
+import { identities as ids } from "../../identities.ts";
 import { DiscussionAlreadyOpen, DiscussionNotOpen } from "./errors.ts";
 import { DiscussingConcept } from "./discussing.ts";
 
