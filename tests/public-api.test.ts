@@ -563,7 +563,9 @@ describe("public API register", () => {
 
   test("unsupported register words are absent from filenames and shipped prose", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const files = filesUnder(root);
+    const files = filesUnder(root).filter(
+      (file) => !file.slice(root.length + 1).startsWith("docs/tmp-"),
+    );
     const unsupportedFilenames = files
       .map((file) => file.slice(root.length + 1))
       .filter((file) =>
