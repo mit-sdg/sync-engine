@@ -17,6 +17,11 @@ import { memoizeQuery } from "./query-cache.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
+export interface ActionLine {
+  done: boolean;
+  settled: Promise<void>;
+}
+
 /**
  * The runtime surface of an instrumented concept.
  *
@@ -37,7 +42,8 @@ export interface InstrumentationState {
   actions: ActionConcept;
   boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
   queryCaches: WeakMap<object, Array<{ invalidate: () => void }>>;
-  actionLines: WeakMap<object, Promise<unknown>>;
+  actionLines: WeakMap<object, ActionLine>;
+  waitingActionBodies: WeakMap<object, Set<{ flow: string; release: () => void }>>;
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
   conceptsByName: Map<string, object>;
@@ -181,6 +187,93 @@ export function instrumentConcept<T extends object>(
         try {
           state.actions.invoke(record);
           report?.("ask-recorded");
+
+          let waiting = state.waitingActionBodies.get(concept);
+          if (waiting === undefined) {
+            waiting = new Set();
+            state.waitingActionBodies.set(concept, waiting);
+          }
+          // A requested consequence on this concept cannot wait behind the
+          // body whose requested reaction is awaiting that consequence. Make
+          // every earlier slot runnable; the serial line still preserves their
+          // invocation order.
+          const earlierReservations = [...waiting];
+          if (earlierReservations.some((entry) => entry.flow === flowToken)) {
+            for (const entry of earlierReservations) entry.release();
+          }
+
+          let resolveRun = (_value: unknown): void => {};
+          let rejectRun = (_error: unknown): void => {};
+          const run = new Promise<unknown>((resolve, reject) => {
+            resolveRun = resolve;
+            rejectRun = reject;
+          });
+          let started: number | undefined;
+          const prior = state.actionLines.get(concept);
+          let predecessorDone = prior?.done ?? true;
+          let released = false;
+          let bodyStarted = false;
+          let line: ActionLine;
+          const startBody = () => {
+            if (!released || !predecessorDone || bodyStarted) return;
+            bodyStarted = true;
+            started ??= performance.now();
+            try {
+              const result = action(input);
+              if (result instanceof Promise) {
+                void result.then(
+                  (output) => {
+                    invalidate();
+                    line.done = true;
+                    resolveRun(output);
+                  },
+                  (error) => {
+                    invalidate();
+                    line.done = true;
+                    rejectRun(error);
+                  },
+                );
+              } else {
+                invalidate();
+                line.done = true;
+                resolveRun(result);
+              }
+            } catch (error) {
+              invalidate();
+              line.done = true;
+              rejectRun(error);
+            }
+          };
+          const reservation = {
+            flow: flowToken,
+            release: () => {
+              if (released) return;
+              released = true;
+              waiting.delete(reservation);
+              if (waiting.size === 0) state.waitingActionBodies.delete(concept);
+              if (prior?.done === true) predecessorDone = true;
+              startBody();
+            },
+          };
+          waiting.add(reservation);
+          state.waitingActionBodies.set(concept, waiting);
+
+          if (prior !== undefined && !prior.done) {
+            void prior.settled.then(() => {
+              predecessorDone = true;
+              startBody();
+            });
+          }
+          const tail = run.then(
+            () => undefined,
+            () => undefined,
+          );
+          line = { done: false, settled: tail };
+          state.actionLines.set(concept, line);
+          void tail.then(() => {
+            if (state.actionLines.get(concept) === line) state.actionLines.delete(concept);
+          });
+
           try {
             await state.react({ ...record });
           } catch (error) {
@@ -191,50 +284,8 @@ export function instrumentConcept<T extends object>(
               error: serializeError(error),
             });
           }
-          const started = performance.now();
-
-          const prior = state.actionLines.get(concept);
-          let run: Promise<unknown>;
-          let bodyInFlight = true;
-          if (prior === undefined) {
-            try {
-              const result = action(input);
-              if (result instanceof Promise) run = result.finally(invalidate);
-              else {
-                invalidate();
-                run = Promise.resolve(result);
-                bodyInFlight = false;
-              }
-            } catch (error) {
-              invalidate();
-              run = Promise.reject(error);
-              bodyInFlight = false;
-            }
-          } else {
-            run = prior
-              .then(
-                () => undefined,
-                () => undefined,
-              )
-              .then(async () => {
-                try {
-                  return await action(input);
-                } finally {
-                  invalidate();
-                }
-              });
-          }
-          if (bodyInFlight) {
-            const tail: Promise<void> = run
-              .then(
-                () => undefined,
-                () => undefined,
-              )
-              .then(() => {
-                if (state.actionLines.get(concept) === tail) state.actionLines.delete(concept);
-              });
-            state.actionLines.set(concept, tail);
-          }
+          started ??= performance.now();
+          reservation.release();
 
           let output: Record<string, unknown>;
           let outcome: ActionOutcome | undefined;

@@ -6,6 +6,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { request, Logging, Refuse, Reacting, when } from "@sync-engine/internal/reactions";
 import type { Vars } from "@sync-engine/internal/reactions";
+import type { Frames } from "@sync-engine/internal/reads/frames.ts";
 
 const tick = (ms = 1) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -101,5 +102,76 @@ describe("engine: async concept actions", () => {
     ]);
     const final = await Ledger._getBalance({ account: "a" });
     expect(final).toEqual([{ balance: 15 }]);
+  });
+
+  test("action bodies keep invocation order across differing requested-reaction delays", async () => {
+    class OrderedConcept {
+      order: string[] = [];
+
+      run({ label }: { label: string }) {
+        this.order.push(label);
+        return { label };
+      }
+    }
+    class DelayConcept {
+      wait(_: Record<string, never>) {
+        return {};
+      }
+    }
+
+    const reacting = new Reacting();
+    reacting.logging = Logging.OFF;
+    const raw = new OrderedConcept();
+    const { Ordered, Delay } = reacting.instrument({
+      Ordered: raw,
+      Delay: new DelayConcept(),
+    });
+    reacting.register({
+      DelaySlowRequest: () =>
+        when(request(Ordered.run, { label: "slow" }))
+          .where(async (frames: Frames) => {
+            await tick(20);
+            return frames;
+          })
+          .then(request(Delay.wait, {})),
+    });
+
+    await Promise.all([Ordered.run({ label: "slow" }), Ordered.run({ label: "fast" })]);
+
+    expect(raw.order).toEqual(["slow", "fast"]);
+  });
+
+  test("same-concept requested consequences make progress in body arrival order", async () => {
+    class ReentrantConcept {
+      order: string[] = [];
+
+      root(_: Record<string, never>) {
+        this.order.push("root");
+        return {};
+      }
+
+      middle(_: Record<string, never>) {
+        this.order.push("middle");
+        return {};
+      }
+
+      leaf(_: Record<string, never>) {
+        this.order.push("leaf");
+        return {};
+      }
+    }
+
+    const reacting = new Reacting();
+    reacting.logging = Logging.OFF;
+    const raw = new ReentrantConcept();
+    const Reentrant = reacting.instrument(raw);
+    reacting.register({
+      ContinueRoot: () => when(request(Reentrant.root, {})).then(request(Reentrant.middle, {})),
+      ContinueMiddle: () => when(request(Reentrant.middle, {})).then(request(Reentrant.leaf, {})),
+    });
+
+    await Reentrant.root({});
+
+    expect(raw.order).toEqual(["root", "middle", "leaf"]);
   });
 });

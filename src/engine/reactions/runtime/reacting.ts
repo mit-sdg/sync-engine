@@ -12,8 +12,11 @@
  *               resolved from the frame's bindings.
  *
  * Concepts are *instrumented* so that every (non-query) action invocation:
- *   1. appends a requested record under a **flow** token and reacts to it,
- *   2. runs the underlying action and records its return, refusal, or fault,
+ *   1. appends a requested record under a **flow** token, reserves the action
+ *      body's per-concept arrival position, and reacts to the request,
+ *   2. runs the underlying action and records its return, refusal, or fault
+ *      (a same-concept requested consequence can release the reserved body
+ *      early so the causal chain does not deadlock),
  *   3. reacts again to that completed posture.
  *
  * A **flow** groups actions in one causal chain: actions produced by a reaction's
@@ -74,6 +77,7 @@ import {
   errorOutputFromThrown,
   instrument as instrumentMany,
   instrumentConcept as instrumentSingle,
+  type ActionLine,
   type InstrumentationState,
 } from "./instrumenting.ts";
 import type {
@@ -116,7 +120,9 @@ export class Reacting {
   /** Tracks query cache invalidators per concept instance. */
   private queryCaches: WeakMap<object, Array<{ invalidate: () => void }>> = new WeakMap();
   /** Per-concept serial lines: the tail of each concept's action queue. */
-  private actionLines: WeakMap<object, Promise<unknown>> = new WeakMap();
+  private actionLines: WeakMap<object, ActionLine> = new WeakMap();
+  /** Reserved bodies still waiting for their requested reactions to finish. */
+  private waitingActionBodies = new WeakMap<object, Set<{ flow: string; release: () => void }>>();
   /** Resolves public instrumented proxies back to their cache-owning instances. */
   private rawConceptsByInstrumented = new WeakMap<object, object>();
   /** All raw concept instances known to this engine, via WeakRef so they can be GC'd. */
@@ -1140,6 +1146,7 @@ export class Reacting {
       boundActionsByConcept: this.boundActionsByConcept,
       queryCaches: this.queryCaches,
       actionLines: this.actionLines,
+      waitingActionBodies: this.waitingActionBodies,
       rawConceptsByInstrumented: this.rawConceptsByInstrumented,
       concepts: this.concepts,
       conceptsByName: this.registry.concepts,
