@@ -5,7 +5,8 @@ import { applicationExamples } from "../../examples/register.ts";
 const root = new URL("../../", import.meta.url);
 
 async function text(path: string): Promise<string> {
-  return readFile(new URL(path, root), "utf8");
+  const content = await readFile(new URL(path, root), "utf8");
+  return content.replace(/\r\n/g, "\n");
 }
 
 function table(document: string, header: string): string {

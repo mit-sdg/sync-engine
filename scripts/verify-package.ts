@@ -56,7 +56,12 @@ try {
   run("bun", ["pm", "pack", "--filename", tarball, "--ignore-scripts", "--quiet"]);
 
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
-  const entries = new Set(listing.trim().split("\n"));
+  const entries = new Set(
+    listing
+      .trim()
+      .split("\n")
+      .map((e) => e.replaceAll("\\", "/")),
+  );
   if ([...entries].some((entry) => entry.endsWith(".map"))) {
     throw new Error("packed package contains source maps whose implementation sources are omitted");
   }

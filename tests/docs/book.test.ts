@@ -356,7 +356,8 @@ function buildBook() {
 }
 
 async function bookText(): Promise<string> {
-  return await readFile(new URL("../../docs/book.md", import.meta.url), "utf8");
+  const text = await readFile(new URL("../../docs/book.md", import.meta.url), "utf8");
+  return text.replace(/\r\n/g, "\n");
 }
 
 describe("the example book", () => {

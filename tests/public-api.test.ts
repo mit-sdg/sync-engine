@@ -542,7 +542,10 @@ describe("public API register", () => {
 
   test("the public API reference pins one generated unit for every package subpath", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const reference = readFileSync(resolve(root, "docs/public-surface.md"), "utf8");
+    const reference = readFileSync(resolve(root, "docs/public-surface.md"), "utf8").replace(
+      /\r\n/g,
+      "\n",
+    );
     let previous = -1;
     for (const subpath of Object.keys(register) as Array<keyof typeof register>) {
       const block = referenceSubpathBlock(subpath);
