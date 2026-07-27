@@ -2,7 +2,7 @@
 
 A book club app where members join reading circles, choose books, and
 discuss them. Policy views admit members to discussions and block non-members
-with a clear refusal.
+with a clear `NOT_A_MEMBER` error response.
 
 Install and run from this directory:
 
@@ -12,7 +12,8 @@ bun start
 ```
 
 The scenario creates a circle, adds members, chooses a book, records
-responses, and prints both the full circle page and the refusals.
+responses, and prints the full circle page, a duplicate-membership refusal,
+and the policy error response.
 
 **What it demonstrates:**
 

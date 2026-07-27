@@ -36,7 +36,9 @@ async function main(): Promise<void> {
     const written = await scaffoldProject(rest[0]);
     console.log(`Wrote ${written.length} files into ${rest[0]}:`);
     for (const path of written) console.log(`  ${path}`);
-    console.log(`\nNext: cd ${rest[0]} && bun install && bun run generate && bun run start`);
+    console.log(
+      `\nNext: cd ${rest[0]} && bun install && bun run generate && bun run check && bun run start`,
+    );
     return;
   }
 

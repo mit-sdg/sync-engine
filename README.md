@@ -18,11 +18,31 @@ description and TypeScript wire contract from the assembled application.
 
 ```sh
 bun add @mit-sdg/sync-engine@alpha
-# or: npm install @mit-sdg/sync-engine@alpha
 ```
 
-The library is ESM-only and supports Node.js 20 or newer. The generated-artifact
-command and shipped TypeScript scenarios run with Bun 1.3 or newer.
+All CLI commands and shipped TypeScript projects require Bun 1.3 or newer. The
+ESM-only library supports Node.js 20 or newer.
+
+Start a project with the package-qualified CLI:
+
+```sh
+bunx --package @mit-sdg/sync-engine@alpha sync-engine new operations-room
+```
+
+## Alpha Status
+
+sync-engine v1 is alpha and is not recommended for production. Public APIs and
+generated files may change incompatibly. For serious evaluation, pin an exact
+version such as `@mit-sdg/sync-engine@1.0.0-alpha.0` instead of the moving
+`@alpha` tag. See the [operational limits](docs/semantics.md#operational-limits).
+
+### Upgrading Alpha Versions
+
+Alpha releases carry no migration guarantee. Before changing a pinned version,
+read the [changelog](https://github.com/mit-sdg/sync-engine/blob/main/CHANGELOG.md)
+and matching [GitHub
+release](https://github.com/mit-sdg/sync-engine/releases); release-specific
+migration guidance is published there when available.
 
 ## Three Tiers
 
@@ -137,9 +157,8 @@ const result = await chooseMitigation({
 });
 ```
 
-Start a new project with `sync-engine new <directory>`. The
-[getting-started walkthrough](docs/guide/getting-started.md) explains what was
-generated and how to grow it. The full [Operations Room
+The [getting-started walkthrough](docs/guide/getting-started.md) explains what
+the scaffold generated and how to grow it. The full [Operations Room
 example](examples/operations-room/README.md) extends the same shape with formers,
 generated artifacts, selectable reaction packs, and swappable policy.
 
@@ -168,12 +187,18 @@ Choose a path based on what you need next:
 
 - [Getting started](docs/guide/getting-started.md): scaffold a project, then
   walk through its concept, composition, and boundary.
-- [Authoring guides](docs/guide/concepts.md): follow the curriculum from
-  one concept through a complete boundary.
+- Authoring curriculum: [Concepts](docs/guide/concepts.md),
+  [Reactions](docs/guide/reactions.md), [Views and
+  formers](docs/guide/views-and-formers.md), [Application
+  boundary](docs/guide/application-boundary.md), then [Execution
+  semantics](docs/semantics.md).
 - [Examples map](examples/README.md): compare the compact Reading Circle with
   the modular Operations Room.
 - [Public API](docs/public-surface.md): find package subpaths, exports, and
   signatures.
+- [Release status](#alpha-status), [migration guidance](#upgrading-alpha-versions),
+  and [changelog](https://github.com/mit-sdg/sync-engine/blob/main/CHANGELOG.md):
+  evaluate or upgrade an alpha version.
 - [Engine architecture](docs/architecture.md): navigate the implementation as
   a contributor.
 

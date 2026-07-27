@@ -1,7 +1,9 @@
 # Getting started
 
+This walkthrough requires Bun 1.3 or newer.
+
 ```sh
-sync-engine new operations-room
+bunx --package @mit-sdg/sync-engine@alpha sync-engine new operations-room
 cd operations-room
 bun install
 ```
@@ -106,18 +108,20 @@ export function assembleOperationsRoom() {
 }
 ```
 
-## Generate, typecheck, and run
+## Generate, validate, and run
 
 ```sh
 bun run generate    # writes generated/operations-room.md and generated/wire.ts
-bun run typecheck
+bun run check       # checks the spec, generated artifacts, and types
 bun run principle   # the concept's story, with no application around it
 bun run start       # the scenario, through the gateway
 ```
 
 The generated read-back and wire contract live under `generated/`. Pin them
-with `sync-engine artifacts pin`. The wire contract typechecks every caller
-against the concept signatures the assembly exposes.
+with `bun run generate`; use `bun run typecheck`, `bunx sync-engine check`, or
+`bunx sync-engine artifacts check` when isolating a failed aggregate check. The
+wire contract typechecks every caller against the concept signatures the
+assembly exposes.
 
 ## Add a second concept
 
@@ -129,7 +133,10 @@ The complete slice works with one concept. To grow it:
 4. Add the registration to the list in `src/concept-set.ts`.
 5. Connect the new concept to existing ones in `src/composition.ts` with
    reactions, views, and formers.
-6. Run `bun run generate` to refresh the wire contract.
+6. Run `bun run generate`, then `bun run check`, to refresh and validate the
+   wire contract.
 
-Continue to [Concepts](concepts.md) for authoring a full specification and
-class, or to [Reactions](reactions.md) to connect independent behaviors.
+Continue through one curriculum: [Concepts](concepts.md),
+[Reactions](reactions.md), [Views and formers](views-and-formers.md),
+[Application boundary](application-boundary.md), then [Execution
+semantics](../semantics.md).
