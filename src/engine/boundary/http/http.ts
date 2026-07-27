@@ -184,9 +184,14 @@ export function createHttpHandler(
       );
     }
 
-    const result = await target.invoke(path, body as never, {
-      signal: request.signal,
-    });
+    let result: InvocationResult;
+    try {
+      result = await target.invoke(path, body as never, {
+        signal: request.signal,
+      });
+    } catch {
+      return internalErrorResponse();
+    }
 
     return mapResultToResponse(result);
   };
@@ -292,7 +297,12 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
         cookieValue(request.headers.get("Cookie"), cookieName) ?? null;
     }
 
-    const result = await options.gateway.invoke(path, body as never, { signal: request.signal });
+    let result: InvocationResult;
+    try {
+      result = await options.gateway.invoke(path, body as never, { signal: request.signal });
+    } catch {
+      return internalErrorResponse();
+    }
     if (!result.ok) {
       const failure = publicFailure(result, categories);
       const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";

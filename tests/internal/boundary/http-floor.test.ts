@@ -250,4 +250,28 @@ describe("HTTP floor", () => {
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
   });
+
+  test("maps an unexpected gateway rejection to opaque INTERNAL_ERROR", async () => {
+    const { application, floor } = setup();
+    const fetch = createHttpHandler({
+      application,
+      floor,
+      gateway: {
+        invoke: async () => {
+          throw new Error("private floor failure");
+        },
+      },
+    });
+
+    const response = await fetch(
+      new Request("http://learning.test/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
+  });
 });

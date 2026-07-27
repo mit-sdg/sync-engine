@@ -226,6 +226,23 @@ describe("createHttpHandler", () => {
     expect(await response.json()).toEqual({ error: FrameworkErrorCode.INTERNAL_ERROR });
   });
 
+  test("maps an unexpected invoker rejection to opaque INTERNAL_ERROR", async () => {
+    const handler = createHttpHandler({
+      invoker: {
+        invoke: async () => {
+          throw new Error("private invocation failure");
+        },
+      },
+    });
+
+    const response = await handler(
+      new Request("http://localhost/explode", { method: "POST", body: "{}" }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: FrameworkErrorCode.INTERNAL_ERROR });
+  });
+
   test("omits private framework details from server errors", async () => {
     const handler = createHttpHandler({
       invoker: {
