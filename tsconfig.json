@@ -27,5 +27,5 @@
     }
   },
   "include": ["examples", "scripts", "src", "tests"],
-  "exclude": ["tests/package/application"]
+  "exclude": ["src/command/scaffold", "tests/package/application"]
 }

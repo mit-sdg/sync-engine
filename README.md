@@ -77,7 +77,9 @@ import { concepts } from "./concept-set.ts";
 const { Discussing, Selecting } = concepts;
 
 export const SelectedMitigationOpensDiscussion = reaction(({ room, selection }) =>
-  when(Selecting.choose({ scope: room }).responds({ selection })).then(Discussing.open({ subject: selection })),
+  when(Selecting.choose({ scope: room }).responds({ selection })).then(
+    Discussing.open({ subject: selection }),
+  ),
 );
 ```
 

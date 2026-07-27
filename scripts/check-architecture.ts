@@ -52,6 +52,7 @@ const failures: string[] = [];
  */
 const projectDirectories = new Set([
   ...Object.values(applicationExamples).map(({ directory }) => `examples/${directory}/`),
+  "src/command/scaffold/",
   "tests/package/application/",
 ]);
 
@@ -133,7 +134,9 @@ for (const directory of unsupportedTestDirectories) {
 }
 
 const shippedFiles = [
-  ...(await tsFilesBelow(join(sourceRoot, "command"))),
+  ...(await tsFilesBelow(join(sourceRoot, "command"))).filter(
+    (f) => !f.startsWith(join(sourceRoot, "command/scaffold")),
+  ),
   ...(
     await Promise.all([...publicSubpaths].map((subpath) => tsFilesBelow(join(sourceRoot, subpath))))
   ).flat(),
@@ -287,7 +290,9 @@ for (const path of repository) {
     (parts.length === 1 && allowedRootFiles.has(path)) ||
     (head === ".github" && parts[1] === "workflows" && parts.length === 3) ||
     (head === "src" &&
-      ((parts[1] === "command" && parts.length === 3 && path.endsWith(".ts")) ||
+      ((parts[1] === "command" &&
+        ((parts.length === 3 && path.endsWith(".ts")) ||
+          (parts.length >= 3 && parts[2] === "scaffold"))) ||
         (publicSubpaths.has(parts[1] ?? "") && parts.length === 3 && parts[2] === "index.ts") ||
         (parts[1] === "engine" && path.endsWith(".ts")))) ||
     (head === "docs" && path.endsWith(".md")) ||

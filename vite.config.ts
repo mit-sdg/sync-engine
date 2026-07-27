@@ -24,12 +24,15 @@ export default defineConfig({
     },
   ],
   fmt: {
-    ignorePatterns: Object.values(applicationExamples).flatMap((example) =>
-      example.generated.map((path) => `examples/${example.directory}/${path}`),
-    ),
+    ignorePatterns: [
+      "src/command/scaffold/**",
+      ...Object.values(applicationExamples).flatMap((example) =>
+        example.generated.map((path) => `examples/${example.directory}/${path}`),
+      ),
+    ],
   },
   lint: {
-    ignorePatterns: ["tests/package/application/**"],
+    ignorePatterns: ["src/command/scaffold/**", "tests/package/application/**"],
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",

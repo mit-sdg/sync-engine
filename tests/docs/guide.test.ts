@@ -1,4 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
+import { camel, heading, pascal, slug } from "../../src/engine/utils/case.ts";
 import { describe, expect, test } from "vite-plus/test";
 
 const guideDirectory = new URL("../../docs/guide/", import.meta.url);
@@ -21,18 +22,9 @@ const repositoryOnlySources = new Map<string, URL[]>([
   [
     new URL("getting-started.md", guideDirectory).pathname,
     [
-      new URL("../package/application/text.d.ts", import.meta.url),
-      new URL("../package/application/src/concepts/rooming/rooming.ts", import.meta.url),
-      new URL("../package/application/src/concepts/rooming/registry.ts", import.meta.url),
-      new URL("../package/application/src/concepts/rooming/rooming.test.ts", import.meta.url),
-      new URL("../package/application/src/concepts/mitigating/mitigating.ts", import.meta.url),
-      new URL("../package/application/src/concepts/mitigating/registry.ts", import.meta.url),
-      new URL("../package/application/src/concept-set.ts", import.meta.url),
-      new URL("../package/application/src/composition.ts", import.meta.url),
-      new URL("../package/application/src/assembly.ts", import.meta.url),
-      new URL("../package/application/generated.config.ts", import.meta.url),
-      new URL("../package/application/src/edge.ts", import.meta.url),
-      new URL("../package/application/src/scenario.ts", import.meta.url),
+      new URL("../../src/command/scaffold/src/concept-set.ts", import.meta.url),
+      new URL("../../src/command/scaffold/src/composition.ts", import.meta.url),
+      new URL("../../src/command/scaffold/src/assembly.ts", import.meta.url),
     ],
   ],
   [
@@ -56,6 +48,18 @@ function atExcerptIndents(source: string): string[] {
   return Array.from({ length: 9 }, (_, level) =>
     source.replace(new RegExp(`^ {${level * 2}}`, "gm"), ""),
   );
+}
+
+function applyTemplate(source: string, name: string): string {
+  const h = heading(name);
+  const r: Record<string, string> = {
+    App: pascal(name),
+    app: camel(name),
+    heading: h,
+    slug: slug(h),
+    name,
+  };
+  return source.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => r[key] ?? _match);
 }
 
 function headingAnchors(markdown: string): Set<string> {
@@ -91,32 +95,24 @@ function headingAnchors(markdown: string): Set<string> {
 }
 
 describe("guided curriculum", () => {
-  test("the clean-project guide contains every standalone authored file", async () => {
+  test("the getting-started guide describes the scaffold output", async () => {
     const guide = await readFile(new URL("getting-started.md", guideDirectory), "utf8");
-    const application = new URL("../package/application/", import.meta.url);
-    const authored = [
-      "package.json",
-      "tsconfig.project.json",
-      "text.d.ts",
-      "src/concepts/rooming/spec.md",
-      "src/concepts/rooming/rooming.ts",
-      "src/concepts/rooming/registry.ts",
-      "src/concepts/rooming/rooming.test.ts",
-      "src/concepts/mitigating/spec.md",
-      "src/concepts/mitigating/mitigating.ts",
-      "src/concepts/mitigating/registry.ts",
-      "src/concept-set.ts",
-      "src/composition.ts",
-      "src/assembly.ts",
-      "generated.config.ts",
-      "src/edge.ts",
-      "src/scenario.ts",
-    ];
 
-    for (const path of authored) {
-      const source = (await readFile(new URL(path, application), "utf8")).trim();
-      expect(guide, path).toContain(source);
-    }
+    expect(guide).toContain("sync-engine new operations-room");
+    expect(guide).toContain("Noting");
+    expect(guide).toContain("src/concepts/noting/spec.md");
+    expect(guide).toContain("src/concepts/noting/noting.ts");
+    expect(guide).toContain("src/concepts/noting/registry.ts");
+    expect(guide).toContain("src/concepts/noting/noting.test.ts");
+    expect(guide).toContain("src/concept-set.ts");
+    expect(guide).toContain("src/composition.ts");
+    expect(guide).toContain("src/assembly.ts");
+    expect(guide).toContain("edge.ts");
+    expect(guide).toContain("scenario.ts");
+    expect(guide).toContain("bun run generate");
+    expect(guide).toContain("bun run typecheck");
+    expect(guide).toContain("bun run principle");
+    expect(guide).toContain("bun run start");
   });
 
   test("every TypeScript example remains byte-exact source", async () => {
@@ -128,7 +124,11 @@ describe("guided curriculum", () => {
         sources.push(await readFile(new URL(relativeSource, docUrl), "utf8"));
       }
       for (const sourceUrl of repositoryOnlySources.get(docUrl.pathname) ?? []) {
-        sources.push(await readFile(sourceUrl, "utf8"));
+        const text = await readFile(sourceUrl, "utf8");
+        sources.push(text);
+        if (text.includes("{{")) {
+          sources.push(applyTemplate(text, "operations-room"));
+        }
       }
 
       const candidates = sources.flatMap(atExcerptIndents);

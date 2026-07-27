@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmod, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { filesBelow } from "./walk.ts";
@@ -39,5 +39,9 @@ for (const path of await filesBelow(
   }
   if (rewritten !== source) await writeFile(path, rewritten);
 }
+
+await cp(resolve(root, "src/command/scaffold"), resolve(dist, "command/scaffold"), {
+  recursive: true,
+});
 
 await chmod(resolve(root, "dist/command/artifacts.js"), 0o755);

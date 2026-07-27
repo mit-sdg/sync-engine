@@ -8,6 +8,7 @@ import { renderWireTypes, wireContracts } from "@engine/boundary/wire";
 import type { HttpFloor } from "@engine/boundary/http-floor";
 import { projectAssemblyHttpWire } from "@engine/boundary/http-floor";
 import { renderApp } from "@engine/reads/render";
+import { pascal, slug } from "@engine/utils/case";
 import { inspectAssembly } from "./inspection.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
@@ -51,22 +52,6 @@ type ResolvedApplication = GeneratedApplication & {
   /** The specifier the generated wire imports its type anchor from. */
   vocabularyFrom: { from: string; export: string };
 };
-
-function slug(title: string): string {
-  return title
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function pascal(title: string): string {
-  return title
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join("");
-}
 
 /** The module specifier a file in `directory` uses to reach `target`. */
 function specifierFrom(directory: URL, target: URL): string {

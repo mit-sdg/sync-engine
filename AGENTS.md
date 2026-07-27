@@ -82,3 +82,13 @@ Public entrypoints contain exports only. Code under `src/engine/` imports other
 engine modules rather than a public entrypoint. The architecture check enforces
 these dependency directions, rejects unsupported top-level and test directories,
 and the public API test pins the exact export map and nested constants.
+
+### Import conventions
+
+- **Within one concern:** use `./module.ts` (relative).
+- **Crossing a concern or importing from `src/command/`:** use
+  `@engine/<concern>/<module>` — no `.ts` extension. The tsconfig path mapping
+  resolves it during typecheck; the build rewrites it to the emitted dist path
+  before packing.
+- **Public barrels** (`@mit-sdg/sync-engine/<subpath>`) are for external
+  consumers. Engine code and commands do not import them.

@@ -98,7 +98,11 @@ receives a `note` id and returns the formed page.
 
 ```ts
 export function assembleOperationsRoom() {
-  return assemble({ vocabulary, instances: operationsRoomConcepts.implementations(), composition });
+  return assemble({
+    vocabulary,
+    instances: operationsRoomConcepts.implementations(),
+    composition,
+  });
 }
 ```
 

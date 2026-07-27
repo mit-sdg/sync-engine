@@ -1,0 +1,17 @@
+{
+  "name": "{{name}}",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "sync-engine artifacts pin",
+    "typecheck": "tsc --noEmit",
+    "principle": "bun src/concepts/noting/noting.test.ts",
+    "start": "bun src/scenario.ts"
+  },
+  "dependencies": {
+    "@mit-sdg/sync-engine": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}
