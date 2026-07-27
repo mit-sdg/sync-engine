@@ -22,7 +22,7 @@ export class AlertingConcept {
   }
 
   acknowledge({ alert }: { alert: string }) {
-    if (!this.alerts.delete(alert)) throw new AlertNotFound("There is no such open alert.");
+    if (!this.alerts.delete(alert)) throw new AlertNotFound();
     return { alert };
   }
 

@@ -117,10 +117,9 @@ named branch cannot be extended.
 ## Condition on an action's outcome
 
 The output pattern in `when` can test a returned value as well as bind one.
-`Approved` accepts only a returned route whose
-value is the literal `"approved"`. `{ by: "Route" }` also requires the
-occurrence to have been asked for by the `Route` reaction. A direct call to the
-same action does not continue this chain.
+`Approved` accepts any returned `Decision.decide` occurrence whose route is the
+literal `"approved"`. This action-specific trigger has no provenance pin, so a
+direct call to the same action can also match it.
 
 ```text
       Approved: reaction((_: Vars) =>

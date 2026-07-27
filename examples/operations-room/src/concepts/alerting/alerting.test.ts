@@ -20,6 +20,5 @@ describe("Alerting", () => {
     expect(alerting._openFor({ recipient: "Jo" })).toHaveLength(1);
     const repeatedAcknowledgement = () => alerting.acknowledge({ alert: "first" });
     expect(repeatedAcknowledgement).toThrow(AlertNotFound);
-    expect(repeatedAcknowledgement).toThrow("There is no such open alert.");
   });
 });

@@ -605,7 +605,9 @@ const theCircleActivityOf = former(
   line never drops a case, so this construction answers with one record,
   possibly with every leaf blank. The engine checks the declared promise when
   it forms the answer.
-- **Opens**: `reading` and `discussion`, both possibly blank.
+- **Opens**: `selection`, `reading`, and `discussion`, all possibly blank.
+  `selection` is a local binding consumed by `_openFor`; only `reading` and
+  `discussion` appear in the formed output.
 
 ```
 the circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises exactly one; checked when formed

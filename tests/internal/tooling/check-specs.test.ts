@@ -95,7 +95,7 @@ describe("inputs the runtime cannot see", () => {
     expect(conceptFailures(where)).toEqual([]);
   });
 
-  test("a parameter type the source does not settle is left alone", async () => {
+  test("a parameter type the source does not settle fails closed", async () => {
     const where = join(directory, "sessioning");
     await concept(
       "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
@@ -106,7 +106,11 @@ describe("inputs the runtime cannot see", () => {
       'import type { Imported } from "./elsewhere.ts";\n\n' +
         "export class SessioningConcept {\n  end(_: Imported) {\n    return { ok: true };\n  }\n}\n",
     );
-    expect(conceptFailures(where)).toEqual([]);
+    expect(conceptFailures(where)).toEqual([
+      expect.stringContaining(
+        "the action `end` uses unsupported parameter syntax, so its inputs cannot be checked",
+      ),
+    ]);
   });
 });
 

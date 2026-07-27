@@ -70,10 +70,13 @@ An **action** may change the concept's state. `raise` adds an alert;
 `acknowledge` removes one or refuses when the alert is no longer open. Every
 input is present, and every branch says what it returns.
 
-A `refuse` branch names the stable code the boundary returns and the sentence
-that explains it. Both are contract: registration derives which actions may
-refuse which codes from these lines, and the sentence is what a caller
-receives — so the class never has to repeat it.
+A `refuse` branch names a stable code and its normative explanatory sentence.
+Registration derives which actions may refuse which codes from these lines;
+the registered `Error` class only signals the branch, so its own message is not
+part of the contract. A direct call through `Assembly.concepts` receives the
+code and the sentence as `detail`; the standard endpoint funnel sends the code
+without that detail. [Execution semantics](../semantics.md#actions-refusals-and-faults)
+defines these outcomes and keeps authored boundary error responses distinct.
 
 ## Implement the concept in ordinary TypeScript
 
@@ -91,7 +94,7 @@ _Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../ex
   }
 
   acknowledge({ alert }: { alert: string }) {
-    if (!this.alerts.delete(alert)) throw new AlertNotFound("There is no such open alert.");
+    if (!this.alerts.delete(alert)) throw new AlertNotFound();
     return { alert };
   }
 
@@ -165,7 +168,6 @@ test("its principle: keep each recipient's alerts in order until acknowledged", 
   expect(alerting._openFor({ recipient: "Jo" })).toHaveLength(1);
   const repeatedAcknowledgement = () => alerting.acknowledge({ alert: "first" });
   expect(repeatedAcknowledgement).toThrow(AlertNotFound);
-  expect(repeatedAcknowledgement).toThrow("There is no such open alert.");
 });
 ```
 
@@ -204,18 +206,25 @@ export const alerting = registerConcept({
 });
 ```
 
-Registration reads the specification and holds it to the class. A refusal the
-document declares with no `Error` class to signal it, an `Error` class for a
-branch the document never names, an action or query on one side but not the
-other, or a signature naming inputs the implementation does not destructure —
-each fails at registration, naming what disagreed.
+At runtime, `registerConcept` compares action and query names and checks that
+every specified refusal has one distinct registered `Error` class, with no
+extra refusal mappings. It compares input names only when reflection recovers
+a non-empty, top-level destructured parameter. Placeholder, plain, absent,
+empty, or nested parameters therefore skip that runtime input comparison.
 
-Inputs get a second, stricter pass before anything runs. TypeScript erases a
-parameter's type, so a method that names no inputs — `end(_: { session: string })`,
-or one taking a plain parameter, or none at all — reaches the engine with its
-signature gone. `scripts/check-specs.ts` reads the source instead, where the
-declared type survives, and compares every signature to its specification. It
-runs in `bun run check`.
+`sync-engine check`, run by `bun run check`, reads the TypeScript source to
+cover erased inputs. It supports no parameter; one untyped object-destructured
+parameter with identifier keys and no rest; or one parameter typed by an
+inline object type, `Record<..., never>`, or a direct same-file alias to either.
+All other forms fail closed as unsupported, including interfaces, imported or
+qualified types, alias chains, intersections, unions, mapped and other utility
+types, multiple parameters, plain untyped parameters, untyped object
+destructuring with rest or nested bindings, and non-property members.
+
+Neither comparison validates state declarations, field types, returned field
+names, uniqueness, or invariants. Query result shape and cardinality are
+runtime read guarantees described in [Execution semantics](../semantics.md#queries),
+not registration checks.
 
 The operations room includes that registry once in its explicit concept set.
 The set derives its vocabulary, public references, ordinary implementations,

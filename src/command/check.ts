@@ -31,10 +31,13 @@ function parseFile(path: string): ts.SourceFile {
 
 type Inputs = readonly string[] | undefined;
 
-function membersOfTypeLiteral(type: ts.TypeLiteralNode): string[] {
-  return type.members.flatMap((member) =>
-    ts.isPropertySignature(member) && ts.isIdentifier(member.name) ? [member.name.text] : [],
-  );
+function membersOfTypeLiteral(type: ts.TypeLiteralNode): Inputs {
+  const members: string[] = [];
+  for (const member of type.members) {
+    if (!ts.isPropertySignature(member) || !ts.isIdentifier(member.name)) return undefined;
+    members.push(member.name.text);
+  }
+  return members;
 }
 
 function aliasIn(source: ts.SourceFile, name: string): ts.TypeNode | undefined {
@@ -65,13 +68,20 @@ function inputsOfType(type: ts.TypeNode, source: ts.SourceFile, depth = 0): Inpu
 }
 
 function inputsOfMethod(method: ts.MethodDeclaration, source: ts.SourceFile): Inputs {
+  if (method.parameters.length > 1) return undefined;
   const [parameter] = method.parameters;
   if (parameter === undefined) return [];
   if (parameter.type !== undefined) return inputsOfType(parameter.type, source);
   if (ts.isObjectBindingPattern(parameter.name)) {
-    return parameter.name.elements.flatMap((element) =>
-      ts.isIdentifier(element.name) ? [element.name.text] : [],
-    );
+    const inputs: string[] = [];
+    for (const element of parameter.name.elements) {
+      if (element.dotDotDotToken !== undefined || !ts.isIdentifier(element.name)) return undefined;
+      if (element.propertyName !== undefined && !ts.isIdentifier(element.propertyName)) {
+        return undefined;
+      }
+      inputs.push(element.propertyName?.text ?? element.name.text);
+    }
+    return inputs;
   }
   return undefined;
 }
@@ -156,7 +166,13 @@ function compare(
   }
   for (const declaration of declarations) {
     const member = members.find(({ name }) => name === declaration.name);
-    if (member?.inputs === undefined) continue;
+    if (member === undefined) continue;
+    if (member.inputs === undefined) {
+      report(
+        `the ${kind} \`${declaration.name}\` uses unsupported parameter syntax, so its inputs cannot be checked`,
+      );
+      continue;
+    }
     if ([...declaration.inputs].sort().join() === [...member.inputs].sort().join()) continue;
     report(
       `the ${kind} \`${declaration.name}\` declares the inputs ${listed(declaration.inputs)} ` +
