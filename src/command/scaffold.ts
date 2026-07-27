@@ -23,7 +23,7 @@ async function* relativeFiles(dir: string, base = dir): AsyncGenerator<string> {
     if ((await stat(full)).isDirectory()) {
       yield* relativeFiles(full, base);
     } else {
-      yield full.slice(base.length + 1);
+      yield full.slice(base.length + 1).replaceAll("\\", "/");
     }
   }
 }

@@ -62,7 +62,7 @@ try {
   }
 
   for (const path of await filesBelow(resolve(root, "examples"))) {
-    requireEntry(entries, relative(root, path));
+    requireEntry(entries, relative(root, path).replaceAll("\\", "/"));
   }
 
   const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {

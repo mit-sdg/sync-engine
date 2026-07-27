@@ -177,7 +177,7 @@ describe("an artifact configuration's defaults", () => {
         },
         configUrl,
       ),
-    ).toThrow(/no vocabulary module at .*absent\/concept-set\.ts/);
+    ).toThrow(/no vocabulary module at .*absent[/\\]concept-set\.ts/);
   });
 
   test("a configuration without a title fails", () => {
