@@ -62,6 +62,9 @@ function packWithNpm(): NpmPackResult {
 }
 
 function requireExecutable(packed: NpmPackResult, path: string): void {
+  // Windows archives do not carry a meaningful POSIX executable bit. The
+  // Linux publication job and every POSIX package check enforce it.
+  if (process.platform === "win32") return;
   const mode = packed.files.find((file) => file.path === path)?.mode;
   if (mode === undefined || (mode & 0o100) === 0) {
     throw new Error(`packed package does not mark ${path} executable`);
