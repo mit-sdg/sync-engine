@@ -78,11 +78,12 @@
     "test": "LOG_LEVEL=error vp test",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "typescript": "^5.9.0"
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "4.1.10",
-    "typescript": "^5.9.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.6",
     "vite-plus": "0.2.6"
   },

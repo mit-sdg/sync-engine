@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { copyFile, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, posix, relative, resolve } from "node:path";
+import { dirname, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { filesBelow } from "./walk.ts";
 import { applicationExamples } from "../examples/register.ts";
@@ -23,6 +23,10 @@ function run(command: string, args: string[], cwd = root): void {
 
 function requireEntry(entries: Set<string>, path: string): void {
   if (!entries.has(`package/${path}`)) throw new Error(`packed package omits ${path}`);
+}
+
+function portablePath(path: string): string {
+  return path.split(sep).join(posix.sep);
 }
 
 function packedPathExists(entries: Set<string>, path: string): boolean {
@@ -56,18 +60,13 @@ try {
   run("bun", ["pm", "pack", "--filename", tarball, "--ignore-scripts", "--quiet"]);
 
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
-  const entries = new Set(
-    listing
-      .trim()
-      .split("\n")
-      .map((e) => e.replaceAll("\\", "/")),
-  );
+  const entries = new Set(listing.trim().split(/\r?\n/));
   if ([...entries].some((entry) => entry.endsWith(".map"))) {
     throw new Error("packed package contains source maps whose implementation sources are omitted");
   }
 
   for (const path of await filesBelow(resolve(root, "examples"))) {
-    requireEntry(entries, relative(root, path).replaceAll("\\", "/"));
+    requireEntry(entries, portablePath(relative(root, path)));
   }
 
   const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {

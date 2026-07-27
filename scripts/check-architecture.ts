@@ -249,6 +249,7 @@ for (const sourcePath of await tsFilesBelow(join(sourceRoot, "engine"))) {
 
 const repository = repositoryFiles();
 const allowedRootFiles = new Set([
+  ".gitattributes",
   ".gitignore",
   "AGENTS.md",
   "CHANGELOG.md",

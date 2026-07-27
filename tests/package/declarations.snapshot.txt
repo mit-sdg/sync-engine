@@ -47,6 +47,14 @@ export type { Client, ClientError, ClientOptions, ClientRequest, ClientTransport
 export type { HeadersOption, HttpClientOptions } from "../engine/boundary/http-client.ts";
 
 === dist/command/artifacts.d.ts ===
+export declare function artifactsCommand(args: readonly string[]): Promise<void>;
+
+=== dist/command/check.d.ts ===
+export declare function conceptFailures(directory: string, projectRoot?: string): string[];
+export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;
+export declare function checkCommand(args: readonly string[]): Promise<void>;
+
+=== dist/command/main.d.ts ===
 #!/usr/bin/env bun
 export {};
 

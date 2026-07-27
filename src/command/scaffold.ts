@@ -10,7 +10,7 @@
 
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { camel, heading, pascal, slug } from "@engine/utils/case";
 
@@ -23,7 +23,7 @@ async function* relativeFiles(dir: string, base = dir): AsyncGenerator<string> {
     if ((await stat(full)).isDirectory()) {
       yield* relativeFiles(full, base);
     } else {
-      yield full.slice(base.length + 1).replaceAll("\\", "/");
+      yield relative(base, full).split(sep).join(posix.sep);
     }
   }
 }
