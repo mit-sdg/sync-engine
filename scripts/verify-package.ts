@@ -84,8 +84,8 @@ try {
     throw new Error(`package author is ${packageJson.author}; expected ${expectedAuthor}`);
   }
   for (const path of ["LICENSE", "README.md", "package.json"]) requireEntry(entries, path);
-  if (packageJson.bin["sync-engine"] !== "./dist/command/artifacts.js") {
-    throw new Error("package must expose the generated-artifact command as sync-engine");
+  if (packageJson.bin["sync-engine"] !== "./dist/command/main.js") {
+    throw new Error("package must expose the sync-engine command as ./dist/command/main.js");
   }
   requireEntry(entries, packageJson.bin["sync-engine"].replace(/^\.\//, ""));
   for (const target of Object.values(packageJson.exports)) {

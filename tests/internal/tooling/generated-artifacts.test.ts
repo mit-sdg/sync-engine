@@ -52,7 +52,7 @@ const Current = endpoint(
 );
 
 describe("generated application artifacts", () => {
-  test("the installed command prints exact, stackless artifact help", () => {
+  test("the installed command prints exact, stackless help", () => {
     const root = fileURLToPath(new URL("../../../", import.meta.url));
     const expected = `Usage: sync-engine <topic> <command>
 
@@ -67,8 +67,10 @@ describe("generated application artifacts", () => {
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-The configuration path defaults to generated.config.ts.\n`;
-    const help = spawnSync("bun", ["src/command/artifacts.ts", "--help"], {
+  sync-engine check [--concepts <path...>]
+    Verify every concept specification against its class.
+    Defaults to src/concepts.\n`;
+    const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,
       encoding: "utf8",
     });
@@ -78,7 +80,7 @@ The configuration path defaults to generated.config.ts.\n`;
       stderr: "",
     });
 
-    const unknown = spawnSync("bun", ["src/command/artifacts.ts", "unknown"], {
+    const unknown = spawnSync("bun", ["src/command/main.ts", "unknown"], {
       cwd: root,
       encoding: "utf8",
     });

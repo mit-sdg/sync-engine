@@ -44,4 +44,4 @@ await cp(resolve(root, "src/command/scaffold"), resolve(dist, "command/scaffold"
   recursive: true,
 });
 
-await chmod(resolve(root, "dist/command/artifacts.js"), 0o755);
+await chmod(resolve(root, "dist/command/main.js"), 0o755);

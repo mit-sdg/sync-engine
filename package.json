@@ -19,12 +19,12 @@
     "url": "https://github.com/mit-sdg/sync-engine"
   },
   "bin": {
-    "sync-engine": "./dist/command/artifacts.js"
+    "sync-engine": "./dist/command/main.js"
   },
   "files": [
-    "dist/",
-    "docs/",
-    "examples/",
+    "dist",
+    "docs",
+    "examples",
     "NOTICE"
   ],
   "type": "module",

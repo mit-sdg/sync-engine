@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import { scaffoldProject } from "../../../src/command/scaffold.ts";
-import { conceptFailures } from "../../../scripts/check-specs.ts";
+import { conceptFailures } from "../../../src/command/check.ts";
 
 let directory = "";
 

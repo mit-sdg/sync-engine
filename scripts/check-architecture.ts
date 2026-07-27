@@ -323,7 +323,7 @@ const entrypoints = [
   ...[...concerns]
     .map((concern) => join(sourceRoot, "engine", concern, "index.ts"))
     .filter(existsSync),
-  join(sourceRoot, "command", "artifacts.ts"),
+  join(sourceRoot, "command", "main.ts"),
 ].map(normalize);
 const reachable = new Set<string>();
 const pending = entrypoints.filter((path) => shippedSources.has(path));

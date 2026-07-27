@@ -1,0 +1,251 @@
+import { readFileSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
+import ts from "typescript";
+import { parseSpec, type ConceptSpec } from "@engine/reactions/concept-spec";
+
+async function filesBelow(
+  directory: string,
+  filter?: (name: string) => boolean,
+): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) return filesBelow(path, filter);
+      return entry.isFile() && (filter === undefined || filter(entry.name)) ? [path] : [];
+    }),
+  );
+  return files.flat();
+}
+
+function parseFile(path: string): ts.SourceFile {
+  return ts.createSourceFile(
+    path,
+    readFileSync(path, "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+}
+
+type Inputs = readonly string[] | undefined;
+
+function membersOfTypeLiteral(type: ts.TypeLiteralNode): string[] {
+  return type.members.flatMap((member) =>
+    ts.isPropertySignature(member) && ts.isIdentifier(member.name) ? [member.name.text] : [],
+  );
+}
+
+function aliasIn(source: ts.SourceFile, name: string): ts.TypeNode | undefined {
+  for (const statement of source.statements) {
+    if (ts.isTypeAliasDeclaration(statement) && statement.name.text === name) return statement.type;
+  }
+  return undefined;
+}
+
+function isEmptyRecord(type: ts.TypeReferenceNode): boolean {
+  return (
+    ts.isIdentifier(type.typeName) &&
+    type.typeName.text === "Record" &&
+    type.typeArguments?.length === 2 &&
+    type.typeArguments[1].kind === ts.SyntaxKind.NeverKeyword
+  );
+}
+
+function inputsOfType(type: ts.TypeNode, source: ts.SourceFile, depth = 0): Inputs {
+  if (ts.isTypeLiteralNode(type)) return membersOfTypeLiteral(type);
+  if (ts.isTypeReferenceNode(type)) {
+    if (isEmptyRecord(type)) return [];
+    if (depth > 0 || !ts.isIdentifier(type.typeName)) return undefined;
+    const aliased = aliasIn(source, type.typeName.text);
+    return aliased === undefined ? undefined : inputsOfType(aliased, source, depth + 1);
+  }
+  return undefined;
+}
+
+function inputsOfMethod(method: ts.MethodDeclaration, source: ts.SourceFile): Inputs {
+  const [parameter] = method.parameters;
+  if (parameter === undefined) return [];
+  if (parameter.type !== undefined) return inputsOfType(parameter.type, source);
+  if (ts.isObjectBindingPattern(parameter.name)) {
+    return parameter.name.elements.flatMap((element) =>
+      ts.isIdentifier(element.name) ? [element.name.text] : [],
+    );
+  }
+  return undefined;
+}
+
+interface Member {
+  name: string;
+  inputs: Inputs;
+}
+
+function membersOfClass(declaration: ts.ClassDeclaration, source: ts.SourceFile): Member[] {
+  const members: Member[] = [];
+  for (const member of declaration.members) {
+    if (!ts.isMethodDeclaration(member) || !ts.isIdentifier(member.name)) continue;
+    const modifiers = ts.getModifiers(member) ?? [];
+    if (modifiers.some(({ kind }) => kind === ts.SyntaxKind.PrivateKeyword)) continue;
+    if (modifiers.some(({ kind }) => kind === ts.SyntaxKind.StaticKeyword)) continue;
+    members.push({ name: member.name.text, inputs: inputsOfMethod(member, source) });
+  }
+  return members;
+}
+
+function classIn(source: ts.SourceFile, name: string): ts.ClassDeclaration | undefined {
+  for (const statement of source.statements) {
+    if (ts.isClassDeclaration(statement) && statement.name?.text === name) return statement;
+  }
+  return undefined;
+}
+
+function registeredClass(registry: ts.SourceFile): { name: string; from: string } | undefined {
+  let name: string | undefined;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "registerConcept" &&
+      ts.isObjectLiteralExpression(node.arguments[0])
+    ) {
+      for (const property of node.arguments[0].properties) {
+        if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) continue;
+        if (property.name.text === "class" && ts.isIdentifier(property.initializer)) {
+          name = property.initializer.text;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(registry);
+  if (name === undefined) return undefined;
+
+  for (const statement of registry.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
+    if (bindings.elements.some((element) => element.name.text === name)) {
+      return { name, from: statement.moduleSpecifier.text };
+    }
+  }
+  return undefined;
+}
+
+const listed = (names: readonly string[]): string =>
+  names.length === 0 ? "none" : names.map((name) => `\`${name}\``).join(", ");
+
+function compare(
+  kind: "action" | "query",
+  declarations: readonly { name: string; inputs: readonly string[] }[],
+  members: readonly Member[],
+  report: (what: string) => void,
+): void {
+  const declared = declarations.map(({ name }) => name);
+  const implemented = members.map(({ name }) => name);
+
+  const missing = declared.filter((name) => !implemented.includes(name));
+  if (missing.length > 0) {
+    report(`the specification declares the ${kind} ${listed(missing)}, which the class lacks`);
+  }
+  const unspecified = implemented.filter((name) => !declared.includes(name));
+  if (unspecified.length > 0) {
+    report(`the class declares the ${kind} ${listed(unspecified)}, which the specification lacks`);
+  }
+  for (const declaration of declarations) {
+    const member = members.find(({ name }) => name === declaration.name);
+    if (member?.inputs === undefined) continue;
+    if ([...declaration.inputs].sort().join() === [...member.inputs].sort().join()) continue;
+    report(
+      `the ${kind} \`${declaration.name}\` declares the inputs ${listed(declaration.inputs)} ` +
+        `but the class takes ${listed(member.inputs)}`,
+    );
+  }
+}
+
+export function conceptFailures(directory: string, projectRoot = ""): string[] {
+  const within = projectRoot === "" ? directory : directory.slice(projectRoot.length + 1);
+  const label = within === "" || within.startsWith("..") ? directory : within;
+  const findings: string[] = [];
+  const report = (what: string): void => void findings.push(`${label}: ${what}.`);
+
+  const registryPath = join(directory, "registry.ts");
+  let spec: ConceptSpec;
+  try {
+    spec = parseSpec(readFileSync(join(directory, "spec.md"), "utf8"));
+  } catch (error) {
+    report(error instanceof Error ? error.message : String(error));
+    return findings;
+  }
+
+  const registered = registeredClass(parseFile(registryPath));
+  if (registered === undefined) {
+    report("registry.ts does not register a class imported by name");
+    return findings;
+  }
+  const classPath = resolve(dirname(registryPath), registered.from);
+  const source = parseFile(classPath);
+  const declaration = classIn(source, registered.name);
+  if (declaration === undefined) {
+    report(`${basename(classPath)} does not declare ${registered.name}`);
+    return findings;
+  }
+
+  const members = membersOfClass(declaration, source);
+  compare(
+    "action",
+    spec.actions,
+    members.filter(({ name }) => !name.startsWith("_")),
+    report,
+  );
+  compare(
+    "query",
+    spec.queries,
+    members.filter(({ name }) => name.startsWith("_")),
+    report,
+  );
+  return findings;
+}
+
+export async function conceptDirectories(
+  roots: readonly string[],
+  projectRoot = "",
+): Promise<string[]> {
+  const found = await Promise.all(
+    roots.map((directory) =>
+      filesBelow(resolve(projectRoot, directory), (name) => name === "spec.md"),
+    ),
+  );
+  return found
+    .flat()
+    .map((path) => dirname(path))
+    .sort();
+}
+
+const usage = `sync-engine check [--concepts <path...>]
+  Verify every concept specification against its class.
+  Defaults to src/concepts.`;
+
+export async function checkCommand(args: readonly string[]): Promise<void> {
+  const conceptsIndex = args.indexOf("--concepts");
+  let conceptRoots = ["src/concepts"];
+  if (conceptsIndex !== -1) {
+    conceptRoots = args.slice(conceptsIndex + 1);
+    if (conceptRoots.length === 0) throw new Error(usage);
+  }
+
+  const root = process.cwd();
+  const directories = await conceptDirectories(conceptRoots, root);
+  if (directories.length === 0) {
+    throw new Error(`No concept directories found under: ${conceptRoots.join(", ")}`);
+  }
+  const failures = directories.flatMap((directory) => conceptFailures(directory, root));
+  if (failures.length > 0) {
+    throw new Error(
+      `Concept specification check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
+    );
+  }
+  console.log(`Specification check passed for ${directories.length} concepts.`);
+}

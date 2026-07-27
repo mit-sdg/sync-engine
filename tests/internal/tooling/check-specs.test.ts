@@ -6,9 +6,9 @@
  */
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { conceptDirectories, conceptFailures } from "../../../scripts/check-specs.ts";
+import { conceptDirectories, conceptFailures } from "../../../src/command/check.ts";
 
 let directory = "";
 
@@ -166,8 +166,9 @@ describe("membership, checked without constructing anything", () => {
 
 describe("the repository's own concepts", () => {
   test("every shipped concept agrees with its specification", async () => {
-    const directories = await conceptDirectories(["examples", "tests/package/application"]);
+    const root = resolve(import.meta.dirname, "../../..");
+    const directories = await conceptDirectories(["examples", "tests/package/application"], root);
     expect(directories.length).toBeGreaterThan(0);
-    expect(directories.flatMap((where) => conceptFailures(where))).toEqual([]);
+    expect(directories.flatMap((where) => conceptFailures(where, root))).toEqual([]);
   });
 });

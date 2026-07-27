@@ -21,7 +21,7 @@ for (const [, example] of selected) {
     run("bun", [`${directory}/src/scenario.ts`]);
   } else if (operation === "check") {
     run("bun", [
-      "src/command/artifacts.ts",
+      "src/command/main.ts",
       "artifacts",
       "check",
       "--config",
@@ -29,7 +29,7 @@ for (const [, example] of selected) {
     ]);
   } else if (operation === "pin") {
     run("bun", [
-      "src/command/artifacts.ts",
+      "src/command/main.ts",
       "artifacts",
       "pin",
       "--config",
