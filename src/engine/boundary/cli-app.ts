@@ -168,11 +168,11 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
     if (plainCommand.parse !== undefined) {
       const parse = plainCommand.parse;
       return async (positionals, opts) => {
-        const parsed = parse(positionals, opts);
-        if ("exitCode" in (parsed as Partial<CliResult>)) {
-          return parsed as CliResult;
-        }
         try {
+          const parsed = parse(positionals, opts);
+          if (typeof parsed === "object" && parsed !== null && "exitCode" in parsed) {
+            return parsed as CliResult;
+          }
           return await plainCommand.run(
             parsed as ReturnType<NonNullable<typeof plainCommand.parse>>,
           );

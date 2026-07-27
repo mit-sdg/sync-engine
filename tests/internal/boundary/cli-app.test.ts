@@ -227,16 +227,54 @@ describe("createCliApp", () => {
     expect(result).toEqual({ stdout: "buy milk [high]\n", stderr: "", exitCode: 0 });
   });
 
-  test("run returns a parser failure without calling the command handler", async () => {
+  test("run accepts a primitive parsed input", async () => {
+    const run = vi.fn(async (input: number) => ok(String(input)));
+    const app = createCliApp({
+      count: {
+        parse: () => 42,
+        run,
+      },
+    });
+
+    await expect(app.run(["count"])).resolves.toEqual({
+      stdout: "42\n",
+      stderr: "",
+      exitCode: 0,
+    });
+    expect(run).toHaveBeenCalledWith(42);
+  });
+
+  test("run returns a thrown parser error on stderr without calling the command handler", async () => {
+    const run = vi.fn(async () => ok("unreachable"));
+    const app = createCliApp({
+      broken: {
+        parse: () => {
+          throw new Error("bad parse");
+        },
+        run,
+      },
+    });
+
+    await expect(app.run(["broken"])).resolves.toEqual({
+      stdout: "",
+      stderr: "bad parse\n",
+      exitCode: 1,
+    });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  test("run returns an explicit CliResult from the parser without calling the command handler", async () => {
+    const run = vi.fn(async () => ok("unreachable"));
     const app = createCliApp({
       add: {
         parse: (_args) => fail("title required"),
-        run: async () => ok("should not reach"),
+        run,
       },
     });
 
     const result = await app.run(["add"]);
     expect(result).toEqual({ stdout: "", stderr: "title required\n", exitCode: 1 });
+    expect(run).not.toHaveBeenCalled();
   });
 
   test("run returns a thrown command error on stderr", async () => {
@@ -365,7 +403,7 @@ describe("createCliApp", () => {
     expect(typedList.stdout).toBe("open items\n");
   });
 
-  test("run catches an error thrown in the command handler after parse succeeds", async () => {
+  test("run returns a command exception inside the CliResult boundary", async () => {
     const app = createCliApp({
       broken: {
         parse: (positionals) => ({ msg: positionals.join(" ") }),
@@ -374,9 +412,12 @@ describe("createCliApp", () => {
         },
       },
     });
-    const result = await app.run(["broken", "hello"]);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("parse-ok-but-run-boom");
+
+    await expect(app.run(["broken", "hello"])).resolves.toEqual({
+      stdout: "",
+      stderr: "parse-ok-but-run-boom\n",
+      exitCode: 1,
+    });
   });
 
   test("dispatch on an endpoint command without an invoker fails clearly", async () => {
