@@ -1,9 +1,15 @@
 import type { AssembledApp } from "./assemble.ts";
 
-const assemblies = new WeakMap<
+type AssemblyRegistry = WeakMap<
   object,
   AssembledApp<Record<string, new (...args: never[]) => object>>
->();
+>;
+
+const registryKey = Symbol.for("@mit-sdg/sync-engine/assembly-registry");
+const registered = Reflect.get(globalThis, registryKey) as unknown;
+const assemblies: AssemblyRegistry =
+  registered instanceof WeakMap ? (registered as AssemblyRegistry) : new WeakMap();
+if (registered === undefined) Reflect.set(globalThis, registryKey, assemblies);
 
 export function rememberAssembly(
   facade: object,
