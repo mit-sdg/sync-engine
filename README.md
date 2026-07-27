@@ -76,17 +76,24 @@ import { concepts } from "./concept-set.ts";
 
 const { Discussing, Selecting } = concepts;
 
-export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
-  when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
+export const SelectedMitigationOpensDiscussion = reaction(({ room, selection }) =>
+  when(Selecting.choose({ scope: room }).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
 ```
 
-The trigger binds the returned `selection`; the consequence passes it to
-`Discussing.open`. Neither concept names the other, so either remains reusable
-and the application-level decision remains visible. The generated read-back is:
+Calling a vocabulary ref produces data, not a runtime action. Here,
+`{ scope: room }` reads the `scope` argument from the triggering call and binds
+it as `room`. `.responds({ selection })` tells the engine to match after the
+action returns and bind `selection` from that return value. Under `then`, the
+bare `Discussing.open(...)` is the consequence ask.
+
+Neither concept names the other, so either remains reusable and the
+application-level decision remains visible. The engine can read the reaction
+back in plain text — a checkable description it generates from the composition,
+not syntax you author:
 
 ```reaction
-when Selecting.choose (selection)
+when Selecting.choose — opens (room, selection)
 then
   Discussing.open (subject: selection)
 ```
@@ -128,10 +135,11 @@ const result = await chooseMitigation({
 });
 ```
 
-The [getting-started walkthrough](docs/guide/getting-started.md) builds a small
-application from an empty directory. The full [Operations Room
-example](examples/operations-room/README.md) extends it with formers, generated
-artifacts, selectable reaction packs, and swappable policy.
+Start a new project with `sync-engine new <directory>`. The
+[getting-started walkthrough](docs/guide/getting-started.md) explains what was
+generated and how to grow it. The full [Operations Room
+example](examples/operations-room/README.md) extends the same shape with formers,
+generated artifacts, selectable reaction packs, and swappable policy.
 
 ## What The Engine Guarantees
 
@@ -156,8 +164,8 @@ bun run scenario
 
 Choose a path based on what you need next:
 
-- [Getting started](docs/guide/getting-started.md): build a complete package
-  consumer from an empty directory.
+- [Getting started](docs/guide/getting-started.md): scaffold a project, then
+  walk through its concept, composition, and boundary.
 - [Authoring guides](docs/guide/getting-started.md): follow the curriculum from
   one concept through a complete boundary.
 - [Examples map](examples/README.md): compare the compact Reading Circle with
