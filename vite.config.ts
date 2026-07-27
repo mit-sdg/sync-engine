@@ -65,10 +65,10 @@ export default defineConfig({
     exclude: ["tests/package/application/**"],
     coverage: {
       thresholds: {
-        statements: 88,
-        branches: 79,
-        functions: 93,
-        lines: 90,
+        statements: 90,
+        branches: 82,
+        functions: 94,
+        lines: 92,
       },
     },
   },

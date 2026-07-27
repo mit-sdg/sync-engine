@@ -187,6 +187,7 @@ describe("where ops: evaluation", () => {
     const values = async (ops: Parameters<typeof applyWhereOps>[1]) =>
       [...(await applyWhereOps(frames, ops))].map(($) => $[n]);
     expect(await values([is.gt(n, 2)])).toEqual([3]);
+    expect(await values([is.ge(n, 2)])).toEqual([2, 3]);
     expect(await values([is.among(n, [1, 3])])).toEqual([1, 3]);
   });
 

@@ -70,4 +70,21 @@ describe("query cache", () => {
     expect(calls).toBe(3);
     expect(second).not.toBe(first);
   });
+
+  test("encodes Date values", () => {
+    const d1 = new Date(0);
+    const d2 = new Date(1);
+    expect(queryCacheKey([d1])).not.toBe(queryCacheKey([d2]));
+  });
+
+  test("encodes function identities", () => {
+    expect(queryCacheKey([() => 1])).toMatch(/^function:\d+$/);
+  });
+
+  test("assigns distinct ids to distinct functions within one call", () => {
+    const fnA = () => 1;
+    const fnB = () => 2;
+    const [idA, idB] = queryCacheKey([fnA, fnB]).split("|");
+    expect(idA).not.toBe(idB);
+  });
 });

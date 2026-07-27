@@ -238,4 +238,62 @@ describe("Requesting", () => {
 
     boundary.cancel("test-id");
   });
+
+  test("register rejects immediately when signal is already aborted", async () => {
+    const boundary = new Requesting();
+    const controller = new AbortController();
+    controller.abort("early abort");
+
+    try {
+      await boundary.register("test-id", 5000, controller.signal);
+      expect("unreachable").toBe(false);
+    } catch (err) {
+      expect(err).toBe("early abort");
+    }
+  });
+
+  test("register rejects when a live signal aborts and disposes the pending entry", async () => {
+    const boundary = new Requesting();
+    const controller = new AbortController();
+
+    const promise = boundary.register("test-id", 5000, controller.signal);
+    controller.abort("cancelled");
+
+    try {
+      await promise;
+      expect("unreachable").toBe(false);
+    } catch (err) {
+      expect(err).toBe("cancelled");
+    }
+  });
+});
+
+describe("createInvoker non-DOMException without aborted signal", () => {
+  test("returns TRANSPORT_ERROR when response rejects with non-DOMException", async () => {
+    const boundary = {
+      register(_requestId: string, _timeoutMs: number, _signal?: AbortSignal) {
+        return Promise.reject(new Error("transport error"));
+      },
+      cancel() {},
+    };
+
+    const mockRequest = async () => {};
+    const mockRespond = () => {};
+
+    const invoker = createInvoker({
+      boundary: boundary as unknown as Requesting,
+      instrumented: {
+        request: mockRequest as never,
+        respond: mockRespond as never,
+      },
+      contracts: {},
+    });
+
+    const result = await invoker.invoke("/test", {} as never);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.kind === "framework") {
+      expect(result.error.code).toBe(FrameworkErrorCode.TRANSPORT_ERROR);
+    }
+  });
 });

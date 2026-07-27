@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { ActionConcept } from "@sync-engine/internal/reactions/actions.ts";
-import { ReactionLogger } from "@sync-engine/internal/reactions/logging.ts";
+import { ReactionLogger, Logging } from "@sync-engine/internal/reactions/logging.ts";
 import type { InstrumentedAction } from "@sync-engine/internal/reactions/types.ts";
 
 describe("reaction logging", () => {
@@ -19,5 +19,33 @@ describe("reaction logging", () => {
     logging.addObserver({ onAction: (event) => events.push(event) });
     logging.emit({ id: "ask", concept, action: save, input: { title: "A" }, flow: "flow" }, 2);
     expect(events).toMatchObject([{ concept: "Drafting", action: "save", durationMs: 2 }]);
+  });
+
+  test("verbose action log records details without throwing", () => {
+    class Drafting {}
+    const concept = new Drafting();
+    const rawSave = Object.defineProperty(async () => ({}), "name", { value: "save" });
+    const save = rawSave as InstrumentedAction;
+    save.concept = concept;
+    save.action = rawSave;
+    const logging = new ReactionLogger(new ActionConcept());
+    logging.level = Logging.VERBOSE;
+    expect(() =>
+      logging.action({ concept, action: save, input: { title: "A" }, flow: "flow" }),
+    ).not.toThrow();
+  });
+
+  test("trace action log records details without throwing", () => {
+    class Drafting {}
+    const concept = new Drafting();
+    const rawSave = Object.defineProperty(async () => ({}), "name", { value: "save" });
+    const save = rawSave as InstrumentedAction;
+    save.concept = concept;
+    save.action = rawSave;
+    const logging = new ReactionLogger(new ActionConcept());
+    logging.level = Logging.TRACE;
+    expect(() =>
+      logging.action({ concept, action: save, input: { title: "A" }, flow: "flow" }),
+    ).not.toThrow();
   });
 });

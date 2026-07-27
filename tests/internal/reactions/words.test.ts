@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { earlier, when as rawWhen } from "@sync-engine/internal/reactions/words.ts";
+import { actionPattern, earlier, when as rawWhen } from "@sync-engine/internal/reactions/words.ts";
 import { request, when } from "./historical-authoring.ts";
 import { declarationsOf } from "@sync-engine/internal/reactions/partitions.ts";
 import { actionLine } from "@sync-engine/internal/reactions/nodes.ts";
@@ -50,5 +50,27 @@ describe("reaction words", () => {
     const a = action("a");
     const step = actionLine(a, {});
     expect(() => rawWhen(step).where()).toThrow("states at least one condition line.");
+  });
+
+  test("actionPattern throws for an uninstrumented action", () => {
+    const fn = Object.defineProperty(() => {}, "name", { value: "myAction" }) as InstrumentedAction;
+    expect(() => actionPattern(fn, {})).toThrow("Action myAction is not instrumented.");
+  });
+
+  test("functional where accepts a plain function and embeds it in the declaration", () => {
+    const a = action("a");
+    const b = action("b");
+    const step = actionLine(a, {});
+    const thenStep = actionLine(b, {});
+    const fn = (frames: any) => frames;
+
+    const declaration = declarationsOf(
+      rawWhen(step)
+        .where(fn)
+        .then(thenStep as any),
+    )[0];
+
+    expect(declaration.where).toBe(fn);
+    expect(declaration.then[0].action.action).toBe(b);
   });
 });

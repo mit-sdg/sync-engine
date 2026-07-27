@@ -11,6 +11,8 @@ import type {
   ChannelPattern,
   InstrumentedAction,
 } from "@sync-engine/internal/reactions/types.ts";
+import { oneOf } from "@sync-engine/internal/reactions";
+import { withLive } from "@sync-engine/internal/reads/ir.ts";
 
 describe("reaction matching", () => {
   test("binds a fresh variable and tests an existing binding", () => {
@@ -148,5 +150,30 @@ describe("reaction matching", () => {
     expect(() => matchArguments(record, pattern, {}, Symbol("record"))).toThrow(
       "is missing output pattern",
     );
+  });
+
+  test("unifyPattern matches a value against oneOf candidates", () => {
+    const matcher = oneOf("a", "b");
+    expect(unifyPattern({ role: "a" }, { role: matcher }, {})).toBeDefined();
+    expect(unifyPattern({ role: "c" }, { role: matcher }, {})).toBeUndefined();
+  });
+
+  test("unifyPattern matches a record value against a $is marker's live value", () => {
+    const live = { id: 42 };
+    const marked = withLive({ $is: "theAnswer" }, live);
+
+    expect(unifyPattern({ role: { id: 42 } }, { role: marked }, {})).toBeDefined();
+    expect(unifyPattern({ role: { id: 99 } }, { role: marked }, {})).toBeUndefined();
+  });
+
+  test("unifyPattern matches a record value against a $lit payload", () => {
+    expect(unifyPattern({ role: "hello" }, { role: { $lit: "hello" } }, {})).toBeDefined();
+    expect(unifyPattern({ role: "hello" }, { role: { $lit: "goodbye" } }, {})).toBeUndefined();
+  });
+
+  test("unifyPattern falls back to literalEquals for an unknown marker tag", () => {
+    const value = { $former: { name: "test", in: {} } };
+    expect(unifyPattern({ role: value }, { role: value }, {})).toBeDefined();
+    expect(unifyPattern({ role: "other" }, { role: value }, {})).toBeUndefined();
   });
 });

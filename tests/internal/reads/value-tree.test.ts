@@ -41,6 +41,18 @@ describe("value-tree walkers", () => {
     expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
   });
 
+  test("maps plain objects asynchronously in entry order", async () => {
+    const source = { x: 1, y: 2 };
+    const orders: string[] = [];
+    const mapped = (await mapValueTreeAsync(source, async (node) => {
+      if (typeof node !== "number") return DESCEND;
+      orders.push(`visit:${node}`);
+      return node * 10;
+    })) as Record<string, number>;
+    expect(mapped).toEqual({ x: 10, y: 20 });
+    expect(orders).toEqual(["visit:1", "visit:2"]);
+  });
+
   test("walk skips descendants when the visitor returns false", () => {
     const seen: unknown[] = [];
     const skipped = { hidden: 1 };

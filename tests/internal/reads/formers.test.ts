@@ -1,4 +1,5 @@
 import { lineOf } from "@sync-engine/internal/reads/lines";
+import { contributedKeys, useFormer } from "@sync-engine/internal/reads/former-nodes";
 /**
  * Formed results evaluated when requested. These tests cover records, lists,
  * at-most-one reads, selection reductions, nested gradebook rows, consequence
@@ -1000,5 +1001,40 @@ describe("formers: fragments (splice)", () => {
       .formers.find((f) => f.name === "the posts of (conversation)");
     const rendered = renderFormer(hostIR as never);
     expect(rendered).toContain('… former "the profile summary of (person)" with (person: author)');
+  });
+});
+
+// ── Nodes and keys ─────────────────────────────────────────────────────────
+
+describe("formers: nodes and keys", () => {
+  test("contributedKeys returns entry keys for a plain record former", () => {
+    const rec = former("rec (a, b)", ({ a, b }, _bindings) => form({ a, b }));
+    expect(contributedKeys(rec).sort()).toEqual(["a", "b"]);
+  });
+
+  test("contributedKeys includes keys from spliced fragments", () => {
+    const { Profiling } = setup();
+    const frag = former("frag (person)", ({ person }, { profile, bio }) =>
+      where(
+        whether(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })),
+      ).form({ profile, bio }),
+    );
+    const host = former("host (node)", ({ node }, _bindings) =>
+      form({ node }).splicing(whether(frag({ person: "priya" }))),
+    );
+    expect(contributedKeys(host).sort()).toEqual(["bio", "node", "profile"]);
+  });
+
+  test("contributedKeys returns empty array for a non-record former", () => {
+    const list = former("list (conversation)", ({ conversation }, { node }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node }),
+    );
+    expect(contributedKeys(list)).toEqual([]);
+  });
+
+  test("useFormer throws when given a non-fused input", () => {
+    expect(() => useFormer({} as never)).toThrow(
+      "a former use takes a named former with its input mapping filled.",
+    );
   });
 });
