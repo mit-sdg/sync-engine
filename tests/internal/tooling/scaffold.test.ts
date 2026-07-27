@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import { scaffoldProject } from "../../../src/command/scaffold.ts";
+import { conceptFailures } from "../../../scripts/check-specs.ts";
 
 let directory = "";
 
@@ -45,6 +46,12 @@ describe("sync-engine new", () => {
     const spec = await readFile(join(project, "src/concepts/noting/spec.md"), "utf8");
     expect(spec).toContain('refuse NOTE_NOT_FOUND "There is no such note."');
     expect(spec).toContain("_get (note: Note) : optional (text: String)");
+  });
+
+  test("the written concept already agrees with its specification", async () => {
+    const project = join(directory, "note-keeper");
+    await scaffoldProject(project);
+    expect(conceptFailures(join(project, "src/concepts/noting"))).toEqual([]);
   });
 
   test("refuses to overwrite a file that is already there", async () => {

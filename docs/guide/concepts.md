@@ -207,8 +207,15 @@ export const alerting = registerConcept({
 Registration reads the specification and holds it to the class. A refusal the
 document declares with no `Error` class to signal it, an `Error` class for a
 branch the document never names, an action or query on one side but not the
-other, or a signature naming inputs the implementation does not take — each
-fails at registration, naming what disagreed.
+other, or a signature naming inputs the implementation does not destructure —
+each fails at registration, naming what disagreed.
+
+Inputs get a second, stricter pass before anything runs. TypeScript erases a
+parameter's type, so a method that names no inputs — `end(_: { session: string })`,
+or one taking a plain parameter, or none at all — reaches the engine with its
+signature gone. `scripts/check-specs.ts` reads the source instead, where the
+declared type survives, and compares every signature to its specification. It
+runs in `bun run check`.
 
 The operations room includes that registry once in its explicit concept set.
 The set derives its vocabulary, public references, ordinary implementations,

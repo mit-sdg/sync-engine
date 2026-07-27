@@ -160,8 +160,9 @@ function checkAgainstClass(cls: ConceptClass, spec: ConceptSpec): void {
     }
     for (const declaration of declarations) {
       // A member that takes a placeholder parameter, or destructures nothing
-      // from it, names no roles and so says nothing about its inputs. Compare
-      // only against an implementation that states them.
+      // from it, names no roles: its inputs were erased with its type, and
+      // nothing here can recover them. `scripts/check-specs.ts` compares those
+      // signatures against the source, where the declared type survives.
       const roles = rolesOf(prototype[declaration.name]);
       if (roles === undefined || roles.length === 0) continue;
       const inputs = [...declaration.inputs].sort();
