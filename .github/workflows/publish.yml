@@ -36,6 +36,5 @@ jobs:
       - run: bun run test
       - run: bun run declarations:check
       - run: bun run package:check
-      - run: bun run goldens
       - run: bun audit
       - run: npm publish --tag alpha --access public

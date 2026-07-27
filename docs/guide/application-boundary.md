@@ -236,7 +236,7 @@ vocabulary path is relative to the generated file. The generated module imports
 that value as a type, so it adds no server code to a frontend bundle. Use
 `bunx sync-engine artifacts check` in a repository gate, `spec` or `wire` to
 inspect one artifact on standard output, and `pin-spec` or `pin-wire` when only
-one golden should be rewritten.
+one artifact should be rewritten.
 
 An application with a cookie credential also supplies its `httpFloor` in this
 descriptor, so the generated module carries both the logical application

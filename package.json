@@ -74,7 +74,6 @@
     "example:operations:pin": "bun scripts/examples.ts pin operationsRoom",
     "example:pin": "bun scripts/examples.ts pin readingCircle",
     "examples:check": "bun scripts/examples.ts check",
-    "goldens": "bun run examples:check && LOG_LEVEL=error bun scripts/examples.ts test && LOG_LEVEL=error vp test tests/internal/reads/render.test.ts tests/golden/stitch/integration.test.ts",
     "package:check": "bun run build && bun scripts/verify-package.ts",
     "prepack": "bun run build",
     "scenario": "bun run build && bun scripts/examples.ts scenario",

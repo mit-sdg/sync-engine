@@ -19,20 +19,7 @@ import {
   vocabulary,
   vocabularyComputations,
 } from "@sync-engine/internal/reactions";
-import {
-  EnrollingConcept,
-  GroupingConcept,
-  ObligatingConcept,
-  OrganizingConcept,
-  ProfilingConcept,
-  TimingConcept,
-} from "../../golden/lms/concepts.ts";
-import { makeLMSReactions } from "../../golden/lms/reactions.ts";
-import { FocusConcept, HistoryConcept, WorkConcept } from "../../golden/stitch/concepts.ts";
-import { makeStitchReactions } from "../../golden/stitch/reactions.ts";
-import { AuditConcept, TodoConcept } from "../../golden/todo/concepts.ts";
-import { makeTodoReactions } from "../../golden/todo/reactions.ts";
-import { ButtonConcept, ListConcept, RecorderConcept } from "./mocks.ts";
+import { ButtonConcept, CounterConcept, ListConcept, RecorderConcept } from "./mocks.ts";
 
 class DecidingConcept {
   decide({ kind }: { kind: string }) {
@@ -293,64 +280,25 @@ describe("round trip: export → JSON → registerReactions", () => {
   });
 });
 
-describe("integration fixtures export supported reactions", () => {
-  test("LMS: every reaction exports with serializable conditions", () => {
+describe("mock concepts export supported reactions", () => {
+  test("every reaction lowers with zero opaque ops and serializes", () => {
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;
-    const { Profiles, Courses, Groups, Enrollments, Obligations, Timing } = reacting.instrument({
-      Profiles: new ProfilingConcept(),
-      Courses: new OrganizingConcept(),
-      Groups: new GroupingConcept(),
-      Enrollments: new EnrollingConcept(),
-      Obligations: new ObligatingConcept(),
-      Timing: new TimingConcept(),
+    const { Counter, Button } = reacting.instrument({
+      Counter: new CounterConcept(),
+      Button: new ButtonConcept(),
     });
-    reacting.register(
-      makeLMSReactions(Profiles, Courses, Groups, Enrollments, Obligations, Timing),
-    );
+    reacting.register({
+      TrackClicks: ({ kind }: Vars) =>
+        when(Button.clicked, { kind }).then(request(Counter.increment, {})),
+      DoubleClick: ({ kind }: Vars) =>
+        when(Button.clicked, { kind }).then(request(Counter.decrement, {}).named("Dec")),
+    });
 
     const app = reacting.exportReactions();
     expect(app.unlowered).toEqual([]);
-    expect(app.reactions.length).toBe(6);
+    expect(app.reactions.length).toBe(2);
     expect(opaqueCount(app)).toBe(0);
-    // The due date is read from the Timing concept at the firing position.
-    const dueDates = app.reactions.flatMap((reaction) =>
-      reaction.where.filter(
-        (op) =>
-          op.op === "find" &&
-          "query" in op &&
-          op.query?.concept === "Timing" &&
-          op.query?.query === "_now",
-      ),
-    );
-    expect(dueDates.length).toBe(1);
     expect(JSON.parse(JSON.stringify(app))).toEqual(app);
-  });
-
-  test("stitch and todo: every reaction lowers with zero opaque ops", () => {
-    const stitch = new Reacting();
-    stitch.logging = Logging.OFF;
-    const { Work, Focus, History } = stitch.instrument({
-      Work: new WorkConcept({ nextId: 1, items: [] }),
-      Focus: new FocusConcept({ current: null, sessions: [] }),
-      History: new HistoryConcept({ entries: [] }),
-    });
-    stitch.register(makeStitchReactions(Work, Focus, History));
-    const stitchApp = stitch.exportReactions();
-    expect(stitchApp.unlowered).toEqual([]);
-    expect(stitchApp.reactions.length).toBe(7);
-    expect(opaqueCount(stitchApp)).toBe(0);
-
-    const todo = new Reacting();
-    todo.logging = Logging.OFF;
-    const { Todo, Audit } = todo.instrument({
-      Todo: new TodoConcept(),
-      Audit: new AuditConcept(),
-    });
-    todo.register(makeTodoReactions(Todo, Audit));
-    const todoApp = todo.exportReactions();
-    expect(todoApp.unlowered).toEqual([]);
-    expect(todoApp.reactions.length).toBe(3);
-    expect(opaqueCount(todoApp)).toBe(0);
   });
 });

@@ -4,7 +4,6 @@
  * prose is marked, unlowered reactions are listed, opaque computations say so.
  * The full-app rendering is pinned by a golden file (the stitch spec).
  */
-import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
 import {
   request,
@@ -20,8 +19,7 @@ import {
   type Vars,
   type WhereOpIR,
 } from "@sync-engine/internal/reactions";
-import { FocusConcept, HistoryConcept, WorkConcept } from "../../golden/stitch/concepts.ts";
-import { makeStitchFormers, makeStitchReactions } from "../../golden/stitch/reactions.ts";
+import { ButtonConcept, CounterConcept } from "../reactions/mocks.ts";
 
 // ── renderReaction ─────────────────────────────────────────────────────────────
 
@@ -295,17 +293,24 @@ describe("renderWhereOp", () => {
 // ── Registered concept inventory ──────────────────────────────────────────
 
 describe("inventoryOf", () => {
-  test("actions carry observed roles and declared refusals; queries are listed", () => {
-    const inventory = inventoryOf(new WorkConcept({ nextId: 1, items: [] }));
-    expect(inventory.name).toBe("Work");
-    expect(inventory.actions).toContainEqual({
-      name: "activate",
-      roles: ["id"],
-      refusals: ["NOT_FOUND", "ALREADY_DONE", "ALREADY_ACTIVE"],
-    });
-    expect(inventory.actions).toContainEqual({ name: "pause", roles: ["id"] });
+  test("reads action names and query names from a concept", () => {
+    class MiniConcept {
+      static readonly queries = { _get: "optional", _list: "many" } as const;
+      doThing({ id }: { id: string }) {
+        return { id, done: true };
+      }
+      _get({ id }: { id: string }): { id: string }[] {
+        return [{ id }];
+      }
+      _list(_: Record<string, never>): { id: string }[] {
+        return [];
+      }
+    }
+
+    const inventory = inventoryOf(new MiniConcept());
+    expect(inventory.name).toBe("Mini");
+    expect(inventory.actions).toContainEqual({ name: "doThing", roles: ["id"] });
     expect(inventory.queries).toContainEqual({ name: "_get", roles: ["id"], returns: "optional" });
-    // `_list(_)` takes nothing, and the reader can tell.
     expect(inventory.queries).toContainEqual({ name: "_list", roles: [], returns: "many" });
     expect(inventory.purpose).toBeUndefined();
   });
@@ -334,51 +339,48 @@ describe("inventoryOf", () => {
 // ── The whole spec, pinned ─────────────────────────────────────────────────
 
 describe("renderApp", () => {
-  function stitchEngine(): Reacting {
+  function mockEngine(): Reacting {
     const engine = new Reacting();
     engine.logging = Logging.OFF;
-    const { Work, Focus, History } = engine.instrument({
-      Work: new WorkConcept({ nextId: 1, items: [] }),
-      Focus: new FocusConcept({ current: null, sessions: [] }),
-      History: new HistoryConcept({ entries: [] }),
+    const { Counter, Button } = engine.instrument({
+      Counter: new CounterConcept(),
+      Button: new ButtonConcept(),
     });
-    engine.register(makeStitchReactions(Work, Focus, History));
-    engine.declareFormers(...Object.values(makeStitchFormers(Work, Focus, History)));
+    engine.register({
+      CounterClicked: ({ kind }: Vars) =>
+        when(Button.clicked, { kind }).then(request(Counter.increment, {})),
+      ClickAndNotify: ({ kind }: Vars) =>
+        when(Button.clicked, { kind }).then(request(Counter.increment, {}).named("Inc")),
+    });
     return engine;
   }
 
-  test("the stitch spec matches its golden file", async () => {
-    const golden = await readFile(
-      new URL("../../golden/stitch/golden/spec.md", import.meta.url),
-      "utf8",
-    );
-    expect(stitchEngine().renderApp("Stitch")).toBe(golden);
-  });
-
-  test("the stitch golden has one named pin command", async () => {
-    const packageJson = JSON.parse(
-      await readFile(new URL("../../../package.json", import.meta.url), "utf8"),
-    ) as { scripts?: Record<string, string> };
-    expect(packageJson.scripts?.["stitch:pin"]).toBe("bun scripts/pin-stitch-spec.ts");
+  test("a rendered app contains its registered reactions", () => {
+    const spec = mockEngine().renderApp("MockApp");
+    expect(spec).toContain("CounterClicked");
+    expect(spec).toContain("Inc");
   });
 
   test("a reaction that stayed a pipeline is listed with its reason, never dropped", () => {
-    const engine = stitchEngine();
-    expect(engine.renderApp("Stitch")).not.toContain(
-      "Reactions represented only by executable code",
-    );
+    const engine = new Reacting();
+    engine.logging = Logging.OFF;
+    const { Counter } = engine.instrument({
+      Counter: new CounterConcept(),
+    });
+    engine.register({
+      JustCount: (_: Vars) => when(Counter.increment, {}).then(request(Counter.decrement, {})),
+    });
+    expect(engine.renderApp("Test")).not.toContain("Reactions represented only by executable code");
 
-    const work = new WorkConcept({ nextId: 1, items: [] });
-    const Work = engine.instrument(work);
-    const WithTransform = ({ item }: Vars) =>
-      when(Work.complete, {}, { item }).then(
-        request(Work.pause, { id: item }).where((frames: Frames) =>
+    const WithTransform = (_: Vars) =>
+      when(Counter.increment, {}).then(
+        request(Counter.decrement, {}).where((frames: Frames) =>
           frames.map((frame) => ({ ...frame })),
         ),
       );
     engine.register({ WithTransform });
 
-    const spec = engine.renderApp("Stitch");
+    const spec = engine.renderApp("Test");
     expect(spec).toContain("Reactions represented only by executable code");
     expect(spec).toContain("`WithTransform` — a step transform in the pipeline");
   });

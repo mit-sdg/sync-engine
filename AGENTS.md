@@ -23,7 +23,7 @@ the formatter, linter, typechecker, and test runner beneath those scripts.
 | Check declaration snapshot        | `bun run declarations:check` |
 | Check packed consumer             | `bun run package:check`      |
 | Run both example scenarios        | `bun run scenario`           |
-| Check pinned generated artifacts  | `bun run goldens`            |
+| Check pinned generated artifacts  | `bun run examples:check`     |
 | Typecheck only                    | `bun run typecheck`          |
 
 **Do not** use `bun test`, `npm`, or `npx`. Use the package scripts above.
@@ -68,11 +68,11 @@ the book.
 | `src/engine/utils/`            | Shared dependency-neutral utilities and framework primitives                                |
 | `docs/`                        | Public guide, API reference, and execution semantics                                        |
 | `examples/`                    | Runnable applications, shared example concepts, and pinned generated artifacts              |
-| `scripts/`                     | Build, package, architecture, declaration, and golden maintenance commands                  |
+| `scripts/`                     | Build, package, architecture, declaration, and maintenance commands                         |
 | `.github/`                     | Continuous integration using the same named package commands contributors run               |
 | `tests/internal/`              | Focused units mirroring reactions, reads, boundary, and hosting                             |
 | `tests/package/`               | Source and packed type contracts, the isolated consumer fixture, and generated declarations |
-| `tests/golden/`                | Pinned integration fixtures                                                                 |
+| `tests/fixtures/`              | Shared test concepts, reactions, and app builders                                           |
 | `examples/*/tests/`            | End-to-end coverage colocated with each self-contained example                              |
 | `tests/docs/`                  | Guide source-link and excerpt verification                                                  |
 | `tests/utils/`                 | Public utility contract coverage                                                            |

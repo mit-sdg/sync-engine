@@ -264,7 +264,7 @@ const allowedRootFiles = new Set([
 const allowedTestDirectories = new Set([
   "docs",
   "examples",
-  "golden",
+  "fixtures",
   "internal",
   "package",
   "utils",
