@@ -43,7 +43,9 @@ import {
 } from "@engine/reactions/index";
 import { attachConceptMetadata } from "@engine/reactions/concept-metadata";
 import type { PublicErrorCategory } from "@engine/reactions/concept-metadata";
+import { ActionConcept } from "@engine/reactions/actions";
 import type { InstrumentedConcept } from "@engine/reactions/instrumenting";
+import { MemoryStore, type RetentionPolicy } from "@engine/reactions/log-store";
 import { logger } from "@engine/utils/logger";
 import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";
 import { refusalFunnel } from "./funnel.ts";
@@ -159,6 +161,8 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
    */
   composition: Record<string, unknown>;
   logging?: Logging;
+  /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
+  retention?: RetentionPolicy;
 }
 
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
@@ -230,7 +234,9 @@ export function assemble<
 export function assemble<T extends Record<string, ConceptClass>>(
   options: AssembleOptions<T>,
 ): AssembledApp<T> {
-  const engine = new Reacting();
+  const engine = new Reacting(
+    new ActionConcept(new MemoryStore(options.retention ?? { window: 100 })),
+  );
   engine.logging = options.logging ?? Logging.OFF;
   engine.registerComputations(vocabularyComputations(options.vocabulary));
 

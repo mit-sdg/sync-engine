@@ -189,4 +189,65 @@ describe("HTTP floor", () => {
       ].join("\n"),
     );
   });
+
+  test("cancels an oversized streamed body without trusting Content-Length", async () => {
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(1_048_577));
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const request = new Request("http://learning.test/login", {
+      method: "POST",
+      headers: { "Content-Length": "1", "Content-Type": "application/json" },
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    const { fetch } = setup();
+    const response = await fetch(request);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "INVALID_REQUEST" });
+    expect(canceled).toBe(true);
+  });
+
+  test("keeps malformed JSON opaque", async () => {
+    const { fetch } = setup();
+    const response = await fetch(
+      new Request("http://learning.test/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not json",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "INVALID_REQUEST" });
+  });
+
+  test("maps an unserializable floor result to opaque INTERNAL_ERROR", async () => {
+    const { application, floor } = setup();
+    const value: Record<string, unknown> = {};
+    value.self = value;
+    const fetch = createHttpHandler({
+      application,
+      floor,
+      gateway: { invoke: async () => ({ ok: true as const, value }) } as never,
+    });
+
+    const response = await fetch(
+      new Request("http://learning.test/cyclic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
+  });
 });

@@ -6,8 +6,14 @@
 
 export { normalizeOutcome } from "./actions.ts";
 export type { ActionRecord } from "./actions.ts";
-export { MemoryStore } from "./log-store.ts";
-export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord } from "./log-store.ts";
+export { assertRetentionPolicy, MemoryStore } from "./log-store.ts";
+export type {
+  FiringRecord,
+  LogEntry,
+  LogStore,
+  ReactionFailureRecord,
+  RetentionPolicy,
+} from "./log-store.ts";
 export { isRefuse, Refuse, refusalMapping } from "./refuse.ts";
 export { contractOf } from "./outcomes.ts";
 export type { ActionContract, OutcomeContracts } from "./outcomes.ts";

@@ -57,10 +57,10 @@ export function unifyPattern(
   let next = frame;
   for (const [key, value] of Object.entries(pattern)) {
     const variable = varKeyOf(value);
-    if (!(key in recordValues)) return undefined;
+    if (!Object.hasOwn(recordValues, key)) return undefined;
     const recordValue = recordValues[key];
     if (variable !== undefined) {
-      if (!(variable in next)) next = { ...next, [variable]: recordValue };
+      if (!Object.hasOwn(next, variable)) next = { ...next, [variable]: recordValue };
       else if (next[variable] !== recordValue) return undefined;
       continue;
     }

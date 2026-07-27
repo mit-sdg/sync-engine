@@ -1,7 +1,7 @@
 import type { InvocationResult } from "./errors.ts";
 import { FrameworkErrorCode } from "./errors.ts";
 import type { ContractShape } from "./client.ts";
-import { serializeEnvelope } from "./envelope.ts";
+import { serializeEnvelope, serializeJsonValue } from "./envelope.ts";
 import type { Invoker } from "./invoke.ts";
 import type { Assembly } from "./assembly-facade.ts";
 import { assemblyBehind } from "./assembly-registry.ts";
@@ -14,14 +14,33 @@ import { publicCategoryOf, publicErrorStatus } from "./public-errors.ts";
 // 200 for success, 400 for a domain error, and the code's own status for a
 // framework fault.
 function mapResultToResponse(result: InvocationResult): Response {
-  const body = serializeEnvelope(result);
   const status = result.ok
     ? 200
     : result.error.kind === "domain"
       ? 400
       : statusFor(result.error.code, 500);
+  const exposed =
+    !result.ok && result.error.kind === "framework" && status >= 500
+      ? ({
+          ok: false,
+          error: { kind: "framework", code: result.error.code },
+        } satisfies InvocationResult)
+      : result;
+  let body: string;
+  try {
+    body = serializeEnvelope(exposed);
+  } catch {
+    return internalErrorResponse();
+  }
   return new Response(body, {
     status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function internalErrorResponse(): Response {
+  return new Response(`{"error":"${FrameworkErrorCode.INTERNAL_ERROR}"}`, {
+    status: 500,
     headers: { "Content-Type": "application/json" },
   });
 }
@@ -43,6 +62,54 @@ function statusFor(code: unknown, fallback = 400): number {
   }
 }
 
+const MAX_BODY_BYTES = 1_048_576;
+
+type RequestTextResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: "too_large" | "unreadable" };
+
+function cancelStream(stream: ReadableStream<Uint8Array> | null): void {
+  if (stream !== null) void stream.cancel().catch(() => undefined);
+}
+
+async function readRequestText(request: Request): Promise<RequestTextResult> {
+  const declared = request.headers.get("Content-Length");
+  if (declared !== null && Number(declared) > MAX_BODY_BYTES) {
+    cancelStream(request.body);
+    return { ok: false, reason: "too_large" };
+  }
+  if (request.body === null) return { ok: true, text: "" };
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  const parts: string[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_BODY_BYTES) {
+        void reader.cancel().catch(() => undefined);
+        return { ok: false, reason: "too_large" };
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+    parts.push(decoder.decode());
+    return { ok: true, text: parts.join("") };
+  } catch {
+    return { ok: false, reason: "unreadable" };
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function normalizeBasePath(basePath: string | undefined): string {
+  if (basePath === undefined || basePath === "" || basePath === "/") return "";
+  if (!basePath.startsWith("/")) throw new TypeError("basePath must start with '/'.");
+  return basePath.replace(/\/+$/, "");
+}
+
 export function createHttpHandler(
   options:
     | { gateway: Invoker<ContractShape>; basePath?: string }
@@ -54,7 +121,7 @@ export function createHttpHandler(
       },
 ): (request: Request) => Promise<Response> {
   if ("floor" in options) return createFloorHandler(options);
-  const base = options.basePath ?? "";
+  const base = normalizeBasePath(options.basePath);
   const target = "gateway" in options ? options.gateway : options.invoker;
 
   return async (request) => {
@@ -67,7 +134,16 @@ export function createHttpHandler(
 
     const url = new URL(request.url);
     let path = url.pathname;
-    if (base !== "" && path.startsWith(base)) {
+    if (base !== "" && path !== base && !path.startsWith(`${base}/`)) {
+      return new Response(
+        JSON.stringify({
+          error: FrameworkErrorCode.NOT_FOUND,
+          detail: `Unknown endpoint: ${path}`,
+        }),
+        { status: 404, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (base !== "") {
       path = path.slice(base.length);
     }
 
@@ -82,9 +158,24 @@ export function createHttpHandler(
     }
 
     let body: unknown;
+    const requestText = await readRequestText(request);
+    if (!requestText.ok) {
+      if (requestText.reason === "too_large") {
+        return new Response(
+          JSON.stringify({
+            error: FrameworkErrorCode.INVALID_INPUT,
+            detail: "Request body exceeds the 1 MiB limit",
+          }),
+          { status: 413, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
     try {
-      const text = await request.text();
-      body = text === "" ? {} : JSON.parse(text);
+      body = requestText.text === "" ? {} : JSON.parse(requestText.text);
     } catch {
       return new Response(
         JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
@@ -99,8 +190,6 @@ export function createHttpHandler(
     return mapResultToResponse(result);
   };
 }
-
-const MAX_BODY_BYTES = 1_048_576;
 
 type FloorHandlerOptions = {
   gateway: Invoker<ContractShape>;
@@ -141,10 +230,16 @@ function floorJson(
   status: number,
   options: { cookie?: string; noStore?: boolean } = {},
 ): Response {
+  let serialized: string;
+  try {
+    serialized = serializeJsonValue(body);
+  } catch {
+    return internalErrorResponse();
+  }
   const headers = new Headers({ "Content-Type": "application/json" });
   if (options.cookie !== undefined) headers.set("Set-Cookie", options.cookie);
   if (options.noStore === true) headers.set("Cache-Control", "no-store");
-  return new Response(JSON.stringify(body), { status, headers });
+  return new Response(serialized, { status, headers });
 }
 
 function createFloorHandler(options: FloorHandlerOptions): (request: Request) => Promise<Response> {
@@ -179,17 +274,14 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
     if (contentType !== null && !/^application\/json(?:\s*;|$)/i.test(contentType)) {
       return invalid();
     }
-    const declaredLength = Number(request.headers.get("Content-Length"));
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) return invalid();
-
     let path = new URL(request.url).pathname;
     if (!(path in routes) && path.startsWith("/api/")) path = path.slice("/api".length);
 
     let body: unknown;
+    const requestText = await readRequestText(request);
+    if (!requestText.ok) return invalid();
     try {
-      const text = await request.text();
-      if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) return invalid();
-      body = text === "" ? {} : JSON.parse(text);
+      body = requestText.text === "" ? {} : JSON.parse(requestText.text);
     } catch {
       return invalid();
     }

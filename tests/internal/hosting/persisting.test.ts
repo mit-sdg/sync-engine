@@ -172,6 +172,68 @@ describe("FileStore: the log survives as JSONL", () => {
     expect(store.firingsByReaction("Forward")).toHaveLength(1);
   });
 
+  test("a window keeps concurrent flows until their outcomes can be appended", async () => {
+    const path = join(dir, "concurrent.jsonl");
+    const store = new FileStore(path, { window: 1 });
+    const reacting = new Reacting(new ActionConcept(store));
+    class SettlingConcept {
+      async settle({ tag }: { tag: string }) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return { tag };
+      }
+    }
+    const Settling = reacting.instrumentConcept(new SettlingConcept());
+
+    await Promise.all([Settling.settle({ tag: "first" }), Settling.settle({ tag: "second" })]);
+
+    expect([...store.actions.values()].map((record) => record.input.tag)).toEqual(["second"]);
+    const entries = readEntries(path);
+    expect(entries.filter((entry) => entry.kind === "invocation")).toHaveLength(2);
+    expect(entries.filter((entry) => entry.kind === "outcome")).toHaveLength(2);
+  });
+
+  test("a window keeps concurrent flows until their faults can be appended", async () => {
+    const path = join(dir, "concurrent-fault.jsonl");
+    const store = new FileStore(path, { window: 1 });
+    const reacting = new Reacting(new ActionConcept(store));
+    class SettlingConcept {
+      async settle({ fail }: { fail: boolean }) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        if (fail) throw new Error("expected fault");
+        return {};
+      }
+    }
+    const Settling = reacting.instrumentConcept(new SettlingConcept());
+
+    const faulted = Settling.settle({ fail: true });
+    const completed = Settling.settle({ fail: false });
+    await expect(faulted).rejects.toThrow("expected fault");
+    await expect(completed).resolves.toEqual({});
+
+    const entries = readEntries(path);
+    expect(entries.filter((entry) => entry.kind === "fault")).toHaveLength(1);
+    expect(entries.filter((entry) => entry.kind === "outcome")).toHaveLength(1);
+  });
+
+  test("a zero window lets an action complete before evicting its flow", async () => {
+    const path = join(dir, "zero.jsonl");
+    const store = new FileStore(path, { window: 0 });
+    const { Source, Sink } = engineOn(store);
+
+    await expect(Source.emit({ tag: "complete" })).resolves.toEqual({ tag: "complete" });
+
+    expect(Sink.received).toEqual(["complete"]);
+    expect(store.actions.size).toBe(0);
+    expect(store.flowIndex.size).toBe(0);
+    expect(readEntries(path).map((entry) => entry.kind)).toEqual([
+      "invocation",
+      "outcome",
+      "invocation",
+      "outcome",
+      "firing",
+    ]);
+  });
+
   test("rejects invalid retention windows before creating a store", () => {
     for (const window of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => new FileStore(join(dir, "log.jsonl"), { window })).toThrow(

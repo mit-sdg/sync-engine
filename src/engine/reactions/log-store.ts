@@ -15,6 +15,16 @@
 
 import type { ActionOutcome, InstrumentedAction } from "./types.ts";
 
+/** How long a store's in-memory fold retains occurrence records. */
+export type RetentionPolicy = "keepAll" | "evictConsumed" | { window: number };
+
+export function assertRetentionPolicy(policy: RetentionPolicy, site: string): void {
+  if (typeof policy === "string") return;
+  if (!Number.isFinite(policy.window) || !Number.isInteger(policy.window) || policy.window < 0) {
+    throw new Error(`${site}: window must be a non-negative finite integer.`);
+  }
+}
+
 /**
  * One entry in the action log, as served by a store's folded view.
  *
@@ -105,6 +115,8 @@ export interface LogStore {
   consumedBy(recordId: string): string[];
   /** Apply the store's retention policy and return the number of removed action records. */
   prune(): number;
+  /** Observe that the outermost action in a causal flow has settled. */
+  flowSettled?(flow: string): void;
   /** Drop all records belonging to a flow from the folded views. */
   evictFlow(flow: string): void;
   /** Folded view: every retained action record, keyed by id. */
@@ -114,9 +126,7 @@ export interface LogStore {
 }
 
 /**
- * The default store folds entries into memory. For each flow, `prune()`
- * removes the contiguous records at the end that at least one recorded firing
- * has consumed. It stops at the first unconsumed record.
+ * Fold entries into memory and retain them according to the configured policy.
  */
 export class MemoryStore implements LogStore {
   readonly actions: Map<string, ActionRecord> = new Map();
@@ -127,6 +137,12 @@ export class MemoryStore implements LogStore {
   readonly reactionFailures: ReactionFailureRecord[] = [];
   /** Derived index folded from firing entries: record id → reactions that consumed it. */
   private consumedIndex: Map<string, Set<string>> = new Map();
+  private settledFlowOrder: string[] = [];
+  private activeFlows = new Set<string>();
+
+  constructor(public readonly policy: RetentionPolicy = "evictConsumed") {
+    assertRetentionPolicy(policy, "MemoryStore");
+  }
 
   append(entry: LogEntry): void {
     switch (entry.kind) {
@@ -139,6 +155,11 @@ export class MemoryStore implements LogStore {
         const partition = this.flowIndex.get(record.flow) ?? [];
         partition.push(record);
         this.flowIndex.set(record.flow, partition);
+        if (typeof this.policy === "object") {
+          const settledPosition = this.settledFlowOrder.indexOf(record.flow);
+          if (settledPosition >= 0) this.settledFlowOrder.splice(settledPosition, 1);
+          this.activeFlows.add(record.flow);
+        }
         return;
       }
       case "outcome": {
@@ -194,10 +215,28 @@ export class MemoryStore implements LogStore {
       this.dropRecords(records);
       this.flowIndex.delete(flow);
     }
+    for (let index = this.reactionFailures.length - 1; index >= 0; index--) {
+      if (this.reactionFailures[index]?.flow === flow) this.reactionFailures.splice(index, 1);
+    }
+    this.activeFlows.delete(flow);
+    const position = this.settledFlowOrder.indexOf(flow);
+    if (position >= 0) this.settledFlowOrder.splice(position, 1);
   }
 
-  /** Remove each flow's contiguous consumed suffix and return the record count. */
+  flowSettled(flow: string): void {
+    this.activeFlows.delete(flow);
+    if (!this.flowIndex.has(flow)) return;
+    const previousPosition = this.settledFlowOrder.indexOf(flow);
+    if (previousPosition >= 0) this.settledFlowOrder.splice(previousPosition, 1);
+    this.settledFlowOrder.push(flow);
+    this.enforceWindow();
+  }
+
+  /** Apply the configured retention policy and return the removed record count. */
   prune(): number {
+    if (this.policy === "keepAll") return 0;
+    if (typeof this.policy === "object") return this.enforceWindow();
+
     let evicted = 0;
     for (const [flow, records] of this.flowIndex) {
       let keepFrom = records.length;
@@ -213,6 +252,21 @@ export class MemoryStore implements LogStore {
           this.flowIndex.delete(flow);
         }
       }
+    }
+    return evicted;
+  }
+
+  private enforceWindow(): number {
+    if (typeof this.policy === "string") return 0;
+    let evicted = 0;
+    const candidates = this.settledFlowOrder.slice(
+      0,
+      Math.max(0, this.settledFlowOrder.length - this.policy.window),
+    );
+    for (const flow of candidates) {
+      if (this.activeFlows.has(flow)) continue;
+      evicted += this.flowIndex.get(flow)?.length ?? 0;
+      this.evictFlow(flow);
     }
     return evicted;
   }

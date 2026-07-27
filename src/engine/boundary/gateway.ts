@@ -3,6 +3,7 @@ import {
   Refuse,
   type OutcomeContracts,
   type Reacting,
+  type RetentionPolicy,
   type Vars,
   vocabulary,
 } from "@engine/reactions/index";
@@ -19,8 +20,13 @@ const GATEWAY_RECEIVE_PATH = "/gateway/receive";
 
 type GatewayBoundaryContract = {
   "/gateway/receive": {
-    input: { targetPath: string; input: unknown };
-    output: { reply: GatewayReply };
+    input: {
+      targetPath: string;
+      input: unknown;
+      signal?: AbortSignal;
+      timeoutMs?: number;
+    };
+    output: { reply: Promise<GatewayReply> };
     error: { error: string };
   };
 };
@@ -84,29 +90,39 @@ export class GatewayForwardingConcept {
 
   constructor(private readonly application: Invoker<ContractShape>) {}
 
-  async forward({
+  forward({
     path,
     admitted,
     correlationId,
+    signal,
+    timeoutMs,
   }: {
     path: string;
     admitted: Record<string, unknown>;
     correlationId: string;
-  }): Promise<{ reply: GatewayReply }> {
-    const result = await this.application.invoke(path, admitted, { correlationId });
-    if (result.ok) return { reply: { kind: "success", body: result.value } };
-
-    if (result.error.kind === "framework") {
-      return {
-        reply: {
-          kind: "framework",
-          code: result.error.code,
-          ...(result.error.detail === undefined ? {} : { detail: result.error.detail }),
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  }): { reply: Promise<GatewayReply> } {
+    const reply = Promise.resolve()
+      .then(() => this.application.invoke(path, admitted, { correlationId, signal, timeoutMs }))
+      .then(
+        (result): GatewayReply => {
+          if (result.ok) return { kind: "success", body: result.value };
+          if (result.error.kind === "framework") {
+            return {
+              kind: "framework",
+              code: result.error.code,
+              ...(result.error.detail === undefined ? {} : { detail: result.error.detail }),
+            };
+          }
+          return { kind: "domain", value: result.error.value };
         },
-      };
-    }
-
-    return { reply: { kind: "domain", value: result.error.value } };
+        (): GatewayReply => ({
+          kind: "framework",
+          code: FrameworkErrorCode.TRANSPORT_ERROR,
+        }),
+      );
+    return { reply };
   }
 }
 
@@ -128,14 +144,18 @@ const { GatewayRouting, GatewayAdmitting, GatewayForwarding } = gatewayVocabular
  */
 export const ReceiveApplicationRequest = endpoint(
   GATEWAY_RECEIVE_PATH,
-  ({ targetPath, input, admitted, reply, correlationId }: Vars) =>
-    receive({ targetPath, input, correlationId })
+  ({ targetPath, input, admitted, reply, correlationId, signal, timeoutMs }: Vars) =>
+    receive({ targetPath, input, correlationId, signal, timeoutMs })
       .then(GatewayRouting.resolve({ path: targetPath }))
       .then(GatewayAdmitting.admit({ path: targetPath, input }).responds({ admitted }))
       .then(
-        GatewayForwarding.forward({ path: targetPath, admitted, correlationId }).responds({
-          reply,
-        }),
+        GatewayForwarding.forward({
+          path: targetPath,
+          admitted,
+          correlationId,
+          signal,
+          timeoutMs,
+        }).responds({ reply }),
       )
       .then(respond({ reply })),
 );
@@ -154,6 +174,8 @@ export interface GatewayOptions {
   /** Additional gateway reactions, views, and formers. */
   composition?: Record<string, unknown>;
   logging?: Logging;
+  /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
+  retention?: RetentionPolicy;
 }
 
 /** Build a separate gateway application in front of an assembled application. */
@@ -172,6 +194,7 @@ export function createGateway<C extends ContractShape = ContractShape>(
       ...options.composition,
     },
     logging: options.logging,
+    retention: options.retention,
   });
 
   return {
@@ -180,12 +203,17 @@ export function createGateway<C extends ContractShape = ContractShape>(
     async invoke(path, input, invokeOptions) {
       const result = (await (app.invoker as Invoker<GatewayBoundaryContract>).invoke(
         GATEWAY_RECEIVE_PATH,
-        { targetPath: path, input },
+        {
+          targetPath: path,
+          input,
+          signal: invokeOptions?.signal,
+          timeoutMs: invokeOptions?.timeoutMs,
+        },
         invokeOptions,
-      )) as InvocationResult<{ reply: GatewayReply }, string>;
+      )) as InvocationResult<{ reply: Promise<GatewayReply> }, string>;
 
       if (result.ok) {
-        const reply = result.value.reply;
+        const reply = await result.value.reply;
         if (reply.kind === "success") return { ok: true, value: reply.body } as never;
         if (reply.kind === "domain") {
           return { ok: false, error: { kind: "domain", value: reply.value } } as never;

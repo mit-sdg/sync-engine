@@ -14,6 +14,18 @@ describe("reaction matching", () => {
     expect(unifyPattern({ item: "b" }, { item }, { [item]: "a" })).toBeUndefined();
   });
 
+  test("does not match inherited record fields or inherited frame bindings", () => {
+    for (const name of ["constructor", "toString", "__proto__"]) {
+      const variable = Symbol(name);
+      expect(unifyPattern({}, { [name]: variable }, {})).toBeUndefined();
+
+      const frame = unifyPattern({ value: name }, { value: { $var: name } }, {});
+      expect(frame).toBeDefined();
+      expect(Object.hasOwn(frame ?? {}, name)).toBe(true);
+      expect(frame?.[name]).toBe(name);
+    }
+  });
+
   test("matches equal literal arrays structurally", () => {
     const concept = {};
     const action = (async () => ({})) as InstrumentedAction;

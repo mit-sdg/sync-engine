@@ -360,14 +360,35 @@ export class Reacting {
     ops: readonly (BoundWhereOp | AnyWhereOp)[],
   ): Promise<Frames> {
     let current = frames;
+    const optionalBindings = new Set<string | symbol>();
     for (const op of ops) {
+      if (op.op === "whether") {
+        for (const pattern of Object.values(op.out)) {
+          const key = varKeyOf(pattern);
+          if (key !== undefined) optionalBindings.add(key);
+        }
+      }
       current =
         op.op === "earlier"
           ? this.applyEarlier(current, op.pattern)
           : await applyWhereOps(current, [op], this.registry.readEnv());
       if (current.length === 0) break;
     }
-    return current;
+    if (optionalBindings.size === 0) return current;
+    return current.map((frame) => {
+      const filled = { ...frame };
+      for (const key of optionalBindings) {
+        if (!Object.hasOwn(filled, key)) {
+          Object.defineProperty(filled, key, {
+            value: null,
+            enumerable: true,
+            configurable: true,
+            writable: true,
+          });
+        }
+      }
+      return filled;
+    });
   }
 
   /**
@@ -723,7 +744,14 @@ export class Reacting {
   private bindingsOf(frame: Frame, actionSymbols: symbol[]): Record<string, unknown> {
     const reserved = new Set<symbol>([flow, landing, ...actionSymbols]);
     const bindings: Record<string, unknown> = {};
-    for (const key of Object.keys(frame)) bindings[key] = frame[key];
+    for (const key of Object.keys(frame)) {
+      Object.defineProperty(bindings, key, {
+        value: frame[key],
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
     for (const key of Object.getOwnPropertySymbols(frame)) {
       if (reserved.has(key)) continue;
       bindings[key.description ?? String(key)] = frame[key];
@@ -947,7 +975,7 @@ export class Reacting {
       mapValueTree(value, (node) => {
         const key = varKeyOf(node);
         if (key !== undefined) {
-          if (!(key in frame)) {
+          if (!Object.hasOwn(frame, key)) {
             throw new Error(
               `Then clause references variable ${String(key)} which is not bound in the current frame.`,
             );
@@ -978,7 +1006,12 @@ export class Reacting {
 
     const input: ActionArguments = {};
     for (const [key, value] of Object.entries(then.input)) {
-      input[key] = resolve(value);
+      Object.defineProperty(input, key, {
+        value: resolve(value),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
     input[flow] = frame[flow];
     input[actionId] = uuid();

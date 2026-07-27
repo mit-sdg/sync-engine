@@ -27,4 +27,19 @@ describe("Reacting interpreter loop", () => {
     expect(sink.seen).toBe(1);
     expect(reacting._getFirings("Notify")).toHaveLength(1);
   });
+
+  test("does not resolve inherited frame properties as consequence bindings", () => {
+    class Sink {
+      note(_input: { value: unknown }) {
+        return {};
+      }
+    }
+    const reacting = new Reacting();
+    const SinkConcept = reacting.instrumentConcept(new Sink());
+
+    for (const name of ["constructor", "toString", "__proto__"]) {
+      const consequence = request(SinkConcept.note, { value: { $var: name } });
+      expect(() => reacting.matchThen(consequence.action, {})).toThrow("is not bound");
+    }
+  });
 });

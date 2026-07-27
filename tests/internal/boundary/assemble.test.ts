@@ -8,7 +8,15 @@
  * reaction's name — never a silent tiebreak.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { no, request, reaction, vocabulary, when, where } from "@sync-engine/internal/reactions";
+import {
+  MemoryStore,
+  no,
+  request,
+  reaction,
+  vocabulary,
+  when,
+  where,
+} from "@sync-engine/internal/reactions";
 import { assemble, endpoint, fail, receive, respond } from "@sync-engine/internal/boundary";
 
 class CountingConcept {
@@ -53,6 +61,18 @@ const Increment = endpoint("/counter/increment", ({ count }) =>
 );
 
 describe("assemble", () => {
+  test("retains the newest 100 settled flows by default and accepts an override", () => {
+    const app = assemble({ vocabulary: vocab, composition: { Increment } });
+    const keepAll = assemble({
+      vocabulary: vocab,
+      composition: { Increment },
+      retention: "keepAll",
+    });
+
+    expect((app.engine.Action.store as MemoryStore).policy).toEqual({ window: 100 });
+    expect((keepAll.engine.Action.store as MemoryStore).policy).toBe("keepAll");
+  });
+
   test("reactions register under their dotted composition path", async () => {
     const EchoIncrements = reaction(({ count }) =>
       when(Counting.increment, {}, { count }).then(request(Echoing.hear, { text: "bump" })),

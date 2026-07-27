@@ -24,6 +24,16 @@ describe("Frames primitives", () => {
     });
   });
 
+  test("treats only own frame properties as bindings", () => {
+    for (const name of ["constructor", "toString", "__proto__"]) {
+      expect(readPatternValue({ $var: name }, {})).toEqual({
+        isVariable: true,
+        bound: false,
+        value: undefined,
+      });
+    }
+  });
+
   test("expands only rows that contain and unify every output slot", () => {
     const value = Symbol("value");
     const result = new Frames();
@@ -34,6 +44,20 @@ describe("Frames primitives", () => {
       { value, kind: "ok" },
     );
     expect(result).toEqual(new Frames({ [value]: { nested: 1 } }));
+  });
+
+  test("requires own row fields and safely binds Object.prototype names", () => {
+    for (const name of ["constructor", "toString", "__proto__"]) {
+      const missing = new Frames();
+      expandOutputRows(missing, {}, [{}], { [name]: Symbol(name) });
+      expect(missing).toHaveLength(0);
+
+      const bound = new Frames();
+      expandOutputRows(bound, {}, [{ value: name }], { value: { $var: name } });
+      expect(bound).toHaveLength(1);
+      expect(Object.hasOwn(bound[0], name)).toBe(true);
+      expect(bound[0][name]).toBe(name);
+    }
   });
 
   test("array-returning operations remain Frames and distinct keeps first occurrence", () => {

@@ -62,6 +62,23 @@ describe("redact — injected redaction policy", () => {
     expect(result.token).toBe("[redacted]");
   });
 
+  test("tests global and sticky patterns independently without changing caller state", () => {
+    const global = /^private/g;
+    const sticky = /^internal/y;
+    global.lastIndex = 3;
+    sticky.lastIndex = 4;
+    configureRedaction({ patterns: [global, sticky] });
+
+    expect(redact({ privateOne: 1, privateTwo: 2, internalOne: 3, internalTwo: 4 })).toEqual({
+      privateOne: "[redacted]",
+      privateTwo: "[redacted]",
+      internalOne: "[redacted]",
+      internalTwo: "[redacted]",
+    });
+    expect(global.lastIndex).toBe(3);
+    expect(sticky.lastIndex).toBe(4);
+  });
+
   test("field matching is case-insensitive", () => {
     configureRedaction({ fields: ["searchname"] });
     const result = redact({ searchName: "Alisa" }) as Record<string, unknown>;

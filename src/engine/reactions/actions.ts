@@ -111,6 +111,7 @@ export class ActionConcept {
     if (active.depth > 0) return;
     for (const id of active.ids) this.matchingValues.delete(id);
     this.activeFlowValues.delete(flow);
+    this.store.flowSettled?.(flow);
   }
 
   /** Return a transient record with raw input, output, and outcome while its flow is active. */

@@ -24,4 +24,5 @@ export type {
   LogEntry,
   LogStore,
   ReactionFailureRecord,
+  RetentionPolicy,
 } from "@engine/reactions/log-store";

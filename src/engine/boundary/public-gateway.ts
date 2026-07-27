@@ -1,5 +1,6 @@
 /** The standard gateway. */
 import type { Logging } from "@engine/reactions/logging";
+import type { RetentionPolicy } from "@engine/reactions/log-store";
 import type { ApplicationInterface } from "./application-interface.ts";
 import type { ContractShape } from "./client.ts";
 import { createGateway as createGatewayEngine } from "./gateway.ts";
@@ -18,6 +19,8 @@ export interface GatewayOptions {
   /** Declarations added beside the standard gateway composition. */
   additionalComposition?: Record<string, unknown>;
   logging?: Logging;
+  /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
+  retention?: RetentionPolicy;
 }
 
 export interface Gateway<C extends ContractShape> extends Invoker<C> {}
@@ -31,6 +34,7 @@ export function createGateway<C extends ContractShape = ContractShape>(
       ? {}
       : { composition: { Additional: options.additionalComposition } }),
     ...(options.logging === undefined ? {} : { logging: options.logging }),
+    ...(options.retention === undefined ? {} : { retention: options.retention }),
   });
   return { invoke: gateway.invoke.bind(gateway) };
 }

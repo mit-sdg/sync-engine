@@ -7,6 +7,7 @@ import {
   createInvoker,
   endpoint,
   fail,
+  FrameworkErrorCode,
   receive,
   Requesting,
   respond,
@@ -98,6 +99,10 @@ describe("createHttpHandler", () => {
     const response = await handler(request);
 
     expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: FrameworkErrorCode.BAD_JSON,
+      detail: "Invalid request body",
+    });
   });
 
   test("strips basePath from URL", async () => {
@@ -130,5 +135,116 @@ describe("createHttpHandler", () => {
     const response = await handler(request);
 
     expect(response.status).toBe(404);
+  });
+
+  test("rejects paths outside basePath without crossing segment boundaries", async () => {
+    const { handler } = setup();
+
+    const outside = await handler(
+      new Request("http://localhost/echo", { method: "POST", body: '{"message":"outside"}' }),
+    );
+    const adjacent = await handler(
+      new Request("http://localhost/apiary/echo", {
+        method: "POST",
+        body: '{"message":"adjacent"}',
+      }),
+    );
+
+    expect(outside.status).toBe(404);
+    expect(await outside.json()).toEqual({
+      error: FrameworkErrorCode.NOT_FOUND,
+      detail: "Unknown endpoint: /echo",
+    });
+    expect(adjacent.status).toBe(404);
+    expect(await adjacent.json()).toEqual({
+      error: FrameworkErrorCode.NOT_FOUND,
+      detail: "Unknown endpoint: /apiary/echo",
+    });
+  });
+
+  test("cancels an oversized streamed body even when Content-Length is understated", async () => {
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(1_048_577));
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const request = new Request("http://localhost/api/echo", {
+      method: "POST",
+      headers: { "Content-Length": "1" },
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    const { handler } = setup();
+    const response = await handler(request);
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      error: FrameworkErrorCode.INVALID_INPUT,
+      detail: "Request body exceeds the 1 MiB limit",
+    });
+    expect(canceled).toBe(true);
+  });
+
+  test("cancels a body rejected early by Content-Length", async () => {
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() {
+        canceled = true;
+      },
+    });
+    const request = new Request("http://localhost/api/echo", {
+      method: "POST",
+      headers: { "Content-Length": "1048577" },
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    const { handler } = setup();
+    const response = await handler(request);
+
+    expect(response.status).toBe(413);
+    expect(canceled).toBe(true);
+  });
+
+  test("maps an unserializable invocation result to opaque INTERNAL_ERROR", async () => {
+    const value: Record<string, unknown> = {};
+    value.self = value;
+    const handler = createHttpHandler({
+      invoker: { invoke: async () => ({ ok: true as const, value }) } as never,
+    });
+
+    const response = await handler(
+      new Request("http://localhost/cyclic", { method: "POST", body: "{}" }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: FrameworkErrorCode.INTERNAL_ERROR });
+  });
+
+  test("omits private framework details from server errors", async () => {
+    const handler = createHttpHandler({
+      invoker: {
+        invoke: async () => ({
+          ok: false as const,
+          error: {
+            kind: "framework" as const,
+            code: FrameworkErrorCode.TRANSPORT_ERROR,
+            detail: "/private/service.ts: database unavailable at internal.example",
+          },
+        }),
+      } as never,
+    });
+
+    const response = await handler(
+      new Request("http://localhost/explode", { method: "POST", body: "{}" }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: FrameworkErrorCode.TRANSPORT_ERROR });
   });
 });

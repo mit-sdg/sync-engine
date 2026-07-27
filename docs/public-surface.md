@@ -220,14 +220,16 @@ fault.
 
 <!-- register:assembly:start -->
 
-`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
-`assemble({ vocabulary, composition, instances? })` installs one vocabulary
-and composition. It returns an `Assembly` with `concepts`, `invoker`,
-`publicInterface`, and `form(fusedFormer)`. `AssemblyOptions` names its input
-type.
+`assemble({ vocabulary, composition, instances?, retention? })` installs one
+vocabulary and composition. It returns an `Assembly` with `concepts`,
+`invoker`, `publicInterface`, and `form(fusedFormer)`. `AssemblyOptions` names
+its input type. The default in-memory occurrence log retains the 100 most
+recent settled causal flows; `retention` accepts `"keepAll"`,
+`"evictConsumed"`, or `{ window: number }`.
 
 A named former is callable with one object-shaped input mapping: the former
 `"the operations room"` is fused as `roomDashboard({ room })`. Pass that
@@ -268,11 +270,12 @@ implementation selected for that concept name.
 A floor factory receives the floor context and the name the concept is
 registered under, so a registry never spells its own application name.
 
-`MemoryStore` and `FileStore` implement `LogStore` for occurrence records.
+`MemoryStore` and `FileStore` implement `LogStore` for occurrence records;
+`RetentionPolicy` configures their in-memory folds.
 `LogEntry` names the store's entry union. `FiringRecord` describes one reaction
 firing; `ReactionFailureRecord` describes a non-consuming failure while
 evaluating a matched reaction. Supply a log store through advanced `createEngine(store?)`
-constructor; ordinary `assemble(...)` uses its own in-memory occurrence log.
+constructor; ordinary `assemble(...)` uses its bounded in-memory occurrence log.
 `FileStore` appends a JSONL occurrence record.
 
 `PersistingConcept` keeps a subject registry for application-supplied

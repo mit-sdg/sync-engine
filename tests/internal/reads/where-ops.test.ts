@@ -250,6 +250,25 @@ describe("where ops: construction guards", () => {
 });
 
 describe("where ops: inside a reaction", () => {
+  test("an absent whether output reaches a consequence as null", async () => {
+    const reacting = new Reacting();
+    reacting.logging = Logging.OFF;
+    const { Promised, Recorder } = reacting.instrument({
+      Promised: new PromisedConcept(),
+      Recorder: new RecorderConcept(),
+    });
+    reacting.register({
+      RecordsBlank: reaction(({ value }: Vars) =>
+        when(Promised.start, {})
+          .where(whether(lineOf({ query: Promised._maybe }, {}).is({ value })))
+          .then(request(Recorder.record, { tag: value })),
+      ),
+    });
+
+    await (Promised as unknown as { start: (input: object) => Promise<unknown> }).start({});
+    expect(Recorder.order).toEqual([null]);
+  });
+
   test("plain reads use each query's declared promise", async () => {
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;

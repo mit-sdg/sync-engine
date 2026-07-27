@@ -287,6 +287,7 @@ const register = {
     "ReactionFailureRecord",
     "RegisteredConcept",
     "RegisteredConceptSet",
+    "RetentionPolicy",
     "assemble",
     "conceptFloor",
     "conceptSet",

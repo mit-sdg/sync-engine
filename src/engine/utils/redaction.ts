@@ -73,7 +73,15 @@ export function configureRedaction(policy: RedactionPolicy): void {
 
 function isSensitive(key: string): boolean {
   if (policyFields.has(key.toLowerCase())) return true;
-  return policyPatterns.some((pattern) => pattern.test(key));
+  return policyPatterns.some((pattern) => {
+    const lastIndex = pattern.lastIndex;
+    try {
+      pattern.lastIndex = 0;
+      return pattern.test(key);
+    } finally {
+      pattern.lastIndex = lastIndex;
+    }
+  });
 }
 
 export function redact(obj: unknown, depth = 0): unknown {

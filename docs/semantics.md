@@ -254,8 +254,9 @@ replacement gateway vocabulary or assembly.
 The local and HTTP clients resolve to the same simple shape: the endpoint's
 success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
 boundary answer keeps domain errors and framework errors distinct. The HTTP
-adapter also owns method, JSON parsing, and status mapping. See the exact
-[cancellation boundary](#cancellation).
+adapter also owns method, JSON parsing, a one-mebibyte request-body limit, and
+status mapping; framework failures mapped to 5xx responses omit diagnostic
+detail. See the exact [cancellation boundary](#cancellation).
 
 An HTTP floor may bind one logical credential input to a cookie. The application
 declares the credential name and input, the endpoint that issues it and the
@@ -264,14 +265,15 @@ the public origin. Registration checks those names against the assembly. Any
 endpoint whose input contract requires that credential becomes protected
 without another floor edit.
 
-The fixed floor accepts JSON `POST` requests, limits the body to one mebibyte,
-enforces the declared origin when an `Origin` header is present, replaces a
-protected request's credential input with the cookie value, and never accepts
-that value from the body. It projects concept refusal codes through their
-registered public categories and keeps framework faults opaque. The issuing
-endpoint's token and expiry fields become the cookie and do not enter its HTTP
-response. Successful clearing endpoints and an unauthorized protected request
-clear the cookie. Credential responses use `Cache-Control: no-store`.
+The fixed floor accepts JSON `POST` requests, enforces the declared origin when
+an `Origin` header is present, replaces a protected request's credential input
+with the cookie value, and never accepts that value from the body. It projects
+concept refusal codes through their registered public categories and keeps
+framework faults opaque. The issuing endpoint's token and expiry fields become
+the cookie and do not enter its HTTP response. Successful clearing endpoints
+and an unauthorized protected request clear the cookie. Credential responses
+use `Cache-Control: no-store`. The floor is a same-origin boundary: it does not
+answer CORS preflights or emit CORS headers.
 
 Gateway admission validates the route and the request's outer shape. The input
 must be an object and contain every required key. Admission does not validate a
@@ -384,11 +386,15 @@ interpreter privately retains original values for execution and matching, then
 clears them when the outermost action settles. Ordinary process logs omit
 exception messages, stacks, causes, and attached fields.
 
-Ordinary `assemble(...)` uses a process-local `MemoryStore`. Advanced callers
-may pass a `FileStore` or custom `LogStore` to `createEngine(store?)`.
-`FileStore` appends JSONL; retention trims its in-memory fold without rewriting
-that file. `PersistingConcept` manages an application-supplied store registry;
-it does not bind concept state or install an assembly log store.
+Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
+most recent settled causal flows. Its `retention` option can select another
+window, `"keepAll"`, or `"evictConsumed"`; the standard gateway has the same
+independent option and default. Active flows may temporarily exceed a window
+and are never evicted before settling. Advanced callers may pass a `FileStore`
+or custom `LogStore` to `createEngine(store?)`. `FileStore` appends JSONL;
+retention trims its in-memory fold without rewriting that file.
+`PersistingConcept` manages an application-supplied store registry; it does not
+bind concept state or install an assembly log store.
 
 An application may persist concept state while leaving occurrence logs in
 memory, or vice versa. The engine does not load prior occurrence files, rebuild
@@ -397,8 +403,9 @@ replay firings. JSONL occurrences are evidence, not restart recovery.
 
 ### Boundary operations
 
-In production, the HTTP floor rejects a public origin that is not HTTPS. It
-does not provide TLS termination, HSTS, or trusted-proxy handling; deployment
-must supply them. Generated wire contracts typecheck callers, but the gateway
-does not validate returned values against generated output types or derive a
-runtime validator from concept specifications.
+When `NODE_ENV=production`, the HTTP floor rejects a public origin that is not
+HTTPS. A production host must set that environment value. The floor does not
+provide TLS termination, HSTS, or trusted-proxy handling; deployment must supply
+them. Generated wire contracts typecheck callers, but the gateway does not
+validate returned values against generated output types or derive a runtime
+validator from concept specifications.

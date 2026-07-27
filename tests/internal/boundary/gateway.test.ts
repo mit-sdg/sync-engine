@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { actionNameOf, request, Refuse, vocabulary } from "@sync-engine/internal/reactions";
+import { MemoryStore } from "@sync-engine/internal/reactions/log-store.ts";
 import {
   assemble,
   createGateway,
@@ -113,6 +114,11 @@ function setup() {
 }
 
 describe("gateway application", () => {
+  test("uses bounded occurrence retention by default", () => {
+    const { gateway } = setup();
+    expect((gateway.engine.Action.store as MemoryStore).policy).toEqual({ window: 100 });
+  });
+
   test("forwards an admitted request and keeps a separate log", async () => {
     const { application, gateway } = setup();
 
@@ -133,6 +139,65 @@ describe("gateway application", () => {
     );
     expect(gatewayRoot?.input.correlationId).toBe("trace-1");
     expect(applicationRoot?.input.correlationId).toBe("trace-1");
+  });
+
+  test("does not hold an unrelated request behind an in-flight forward", async () => {
+    let releaseSlow = () => {};
+    let markSlowStarted = () => {};
+    const slowGate = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const slowStarted = new Promise<void>((resolve) => {
+      markSlowStarted = resolve;
+    });
+    const invoker = {
+      async invoke(path: string, input: { message: string }) {
+        if (path === "/slow") {
+          markSlowStarted();
+          await slowGate;
+        }
+        return { ok: true as const, value: input };
+      },
+    };
+    const gateway = createGateway<TestApi>({
+      application: {
+        invoker: invoker as never,
+        publicInterface: { routes: { "/slow": {}, "/echo": {} } },
+      },
+    });
+
+    const slow = gateway.invoke("/slow", { message: "slow" });
+    await slowStarted;
+    const fast = gateway.invoke("/echo", { message: "fast" });
+    try {
+      expect(
+        await Promise.race([
+          fast,
+          new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 10)),
+        ]),
+      ).toEqual({ ok: true, value: { message: "fast" } });
+    } finally {
+      releaseSlow();
+    }
+    await expect(slow).resolves.toEqual({ ok: true, value: { message: "slow" } });
+  });
+
+  test("maps a rejected application invoker to an opaque transport error", async () => {
+    const gateway = createGateway<TestApi>({
+      application: {
+        invoker: {
+          invoke() {
+            throw new Error("private upstream failure");
+          },
+        },
+        publicInterface: { routes: { "/echo": {} } },
+      },
+    });
+
+    await expect(gateway.invoke("/echo", { message: "hello" })).resolves.toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.TRANSPORT_ERROR },
+    });
   });
 
   test("refuses an unknown path before the application sees it", async () => {

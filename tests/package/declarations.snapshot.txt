@@ -19,7 +19,7 @@ export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engi
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/concept-set.ts";
 export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
 export { MemoryStore } from "../engine/reactions/log-store.ts";
-export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord, } from "../engine/reactions/log-store.ts";
+export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/log-store.ts";
 
 === dist/boundary/index.d.ts ===
 /** Declare the public requests a composition can receive and answer. */
@@ -113,6 +113,7 @@ import type { ConceptClass, ConceptEntry, ConceptClassesOf, ComputationFn, Decla
 import { Logging, Reacting } from "../reactions/index.ts";
 import type { PublicErrorCategory } from "../reactions/concept-metadata.ts";
 import type { InstrumentedConcept } from "../reactions/instrumenting.ts";
+import { type RetentionPolicy } from "../reactions/log-store.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";
 import type { Invoker } from "./invoke.ts";
 import { Requesting } from "./invoke.ts";
@@ -164,6 +165,8 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
      */
     composition: Record<string, unknown>;
     logging?: Logging;
+    /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
+    retention?: RetentionPolicy;
 }
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
     engine: Reacting;
@@ -596,7 +599,7 @@ export declare const FAULT_REACTION = "DeliverFaultToAsker";
 export declare function refusalFunnel(boundary: RequestBoundaryActions): Record<string, Reaction>;
 
 === dist/engine/boundary/gateway.d.ts ===
-import { Logging, type OutcomeContracts, type Reacting } from "../reactions/index.ts";
+import { Logging, type OutcomeContracts, type Reacting, type RetentionPolicy } from "../reactions/index.ts";
 import type { ApplicationInterface } from "./application-interface.ts";
 import type { ClientError, ContractShape } from "./client.ts";
 import type { EmittedFrameworkErrorCode } from "./errors.ts";
@@ -645,13 +648,15 @@ export declare class GatewayForwardingConcept {
     static readonly purpose = "Forward an admitted request to the application and carry its answer back across the gateway boundary.";
     static readonly principle = "An admitted request is invoked once, and the gateway returns its public answer unchanged.";
     constructor(application: Invoker<ContractShape>);
-    forward({ path, admitted, correlationId, }: {
+    forward({ path, admitted, correlationId, signal, timeoutMs, }: {
         path: string;
         admitted: Record<string, unknown>;
         correlationId: string;
-    }): Promise<{
-        reply: GatewayReply;
-    }>;
+        signal?: AbortSignal;
+        timeoutMs?: number;
+    }): {
+        reply: Promise<GatewayReply>;
+    };
 }
 export declare const gatewayVocabulary: import("../reactions/index.ts").DeclaredVocabulary<{
     GatewayRouting: typeof GatewayRoutingConcept;
@@ -677,6 +682,8 @@ export interface GatewayOptions {
     /** Additional gateway reactions, views, and formers. */
     composition?: Record<string, unknown>;
     logging?: Logging;
+    /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
+    retention?: RetentionPolicy;
 }
 /** Build a separate gateway application in front of an assembled application. */
 export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
@@ -875,6 +882,7 @@ export declare function publicErrorStatus(category: PublicErrorCategory | "INTER
 === dist/engine/boundary/public-gateway.d.ts ===
 /** The standard gateway. */
 import type { Logging } from "../reactions/logging.ts";
+import type { RetentionPolicy } from "../reactions/log-store.ts";
 import type { ApplicationInterface } from "./application-interface.ts";
 import type { ContractShape } from "./client.ts";
 import type { Invoker } from "./invoke.ts";
@@ -888,6 +896,8 @@ export interface GatewayOptions {
     /** Declarations added beside the standard gateway composition. */
     additionalComposition?: Record<string, unknown>;
     logging?: Logging;
+    /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
+    retention?: RetentionPolicy;
 }
 export interface Gateway<C extends ContractShape> extends Invoker<C> {
 }
@@ -1051,7 +1061,8 @@ export declare function renderWireTypes(wire: WireContractsIR, options?: WireRen
 
 === dist/engine/hosting/index.d.ts ===
 export { AuditFeed, FileStore, PersistingConcept } from "./persisting.ts";
-export type { AuditEntry, PersistBinding, PersistedEntry, RetentionPolicy, Stoppable, } from "./persisting.ts";
+export type { AuditEntry, PersistBinding, PersistedEntry, Stoppable } from "./persisting.ts";
+export type { RetentionPolicy } from "../reactions/log-store.ts";
 
 === dist/engine/hosting/persisting.d.ts ===
 /**
@@ -1065,24 +1076,11 @@ export type { AuditEntry, PersistBinding, PersistedEntry, RetentionPolicy, Stopp
  * store. {@link AuditFeed} queries entries retained in a log store's in-memory
  * indexes. Core reaction execution does not depend on this module.
  */
-import { MemoryStore, type ActionOutcome, type FiringRecord, type LogEntry, type LogStore, type OutcomeContracts } from "../reactions/index.ts";
+import { MemoryStore, type ActionOutcome, type FiringRecord, type LogEntry, type LogStore, type OutcomeContracts, type RetentionPolicy } from "../reactions/index.ts";
 /** A long-lived resource that a host can stop during shutdown. */
 export interface Stoppable {
     stop(): void | Promise<void>;
 }
-/**
- * How long a store's in-memory fold retains records. These policies do not
- * rewrite or truncate a {@link FileStore} JSONL file.
- *
- *  - `"keepAll"`     — `prune()` removes no records.
- *  - `"evictConsumed"` — `prune()` removes each flow's contiguous consumed
- *                        suffix.
- *  - `{ window: n }` — retain only the `n` most recently started flows;
- *                      the earliest flows evict as new ones begin.
- */
-export type RetentionPolicy = "keepAll" | "evictConsumed" | {
-    window: number;
-};
 /**
  * The serialized projection of a {@link LogEntry}, one JSON line per entry.
  * Concept instances and instrumented functions are represented by name. Each
@@ -1124,15 +1122,10 @@ export type PersistedEntry = {
  */
 export declare class FileStore extends MemoryStore implements Stoppable {
     readonly path: string;
-    readonly policy: RetentionPolicy;
-    /** Flow tokens in first-seen order, for the `window` policy. */
-    private flowOrder;
     constructor(path: string, policy?: RetentionPolicy);
     append(entry: LogEntry): void;
-    prune(): number;
     /** File writes are synchronous; this hook lets a host manage the store as a resource. */
     stop(): void;
-    private enforceWindow;
     /** Reject entries the in-memory fold would reject before they reach disk. */
     private assertAppendable;
 }
@@ -1547,8 +1540,8 @@ export declare class FiringBook {
  */
 export { normalizeOutcome } from "./actions.ts";
 export type { ActionRecord } from "./actions.ts";
-export { MemoryStore } from "./log-store.ts";
-export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord } from "./log-store.ts";
+export { assertRetentionPolicy, MemoryStore } from "./log-store.ts";
+export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord, RetentionPolicy, } from "./log-store.ts";
 export { isRefuse, Refuse, refusalMapping } from "./refuse.ts";
 export { contractOf } from "./outcomes.ts";
 export type { ActionContract, OutcomeContracts } from "./outcomes.ts";
@@ -1696,6 +1689,11 @@ export declare function inventoryOf(concept: object): ConceptInventoryIR;
  * reads those indexes. Each store defines what `prune()` removes.
  */
 import type { ActionOutcome, InstrumentedAction } from "./types.ts";
+/** How long a store's in-memory fold retains occurrence records. */
+export type RetentionPolicy = "keepAll" | "evictConsumed" | {
+    window: number;
+};
+export declare function assertRetentionPolicy(policy: RetentionPolicy, site: string): void;
 /**
  * One entry in the action log, as served by a store's folded view.
  *
@@ -1795,6 +1793,8 @@ export interface LogStore {
     consumedBy(recordId: string): string[];
     /** Apply the store's retention policy and return the number of removed action records. */
     prune(): number;
+    /** Observe that the outermost action in a causal flow has settled. */
+    flowSettled?(flow: string): void;
     /** Drop all records belonging to a flow from the folded views. */
     evictFlow(flow: string): void;
     /** Folded view: every retained action record, keyed by id. */
@@ -1803,11 +1803,10 @@ export interface LogStore {
     readonly flowIndex: Map<string, ActionRecord[]>;
 }
 /**
- * The default store folds entries into memory. For each flow, `prune()`
- * removes the contiguous records at the end that at least one recorded firing
- * has consumed. It stops at the first unconsumed record.
+ * Fold entries into memory and retain them according to the configured policy.
  */
 export declare class MemoryStore implements LogStore {
+    readonly policy: RetentionPolicy;
     readonly actions: Map<string, ActionRecord>;
     readonly flowIndex: Map<string, ActionRecord[]>;
     /** Recorded firings, grouped by reaction name, in firing order. */
@@ -1816,6 +1815,9 @@ export declare class MemoryStore implements LogStore {
     readonly reactionFailures: ReactionFailureRecord[];
     /** Derived index folded from firing entries: record id → reactions that consumed it. */
     private consumedIndex;
+    private settledFlowOrder;
+    private activeFlows;
+    constructor(policy?: RetentionPolicy);
     append(entry: LogEntry): void;
     byId(id: string): ActionRecord | undefined;
     byFlow(flow: string): ActionRecord[] | undefined;
@@ -1823,8 +1825,10 @@ export declare class MemoryStore implements LogStore {
     hasConsumed(recordId: string, reaction: string): boolean;
     consumedBy(recordId: string): string[];
     evictFlow(flow: string): void;
-    /** Remove each flow's contiguous consumed suffix and return the record count. */
+    flowSettled(flow: string): void;
+    /** Apply the configured retention policy and return the removed record count. */
     prune(): number;
+    private enforceWindow;
     private isConsumed;
     /**
      * Replace one folded record in the id map and flow array. The previous

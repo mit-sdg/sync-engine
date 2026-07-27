@@ -37,7 +37,8 @@ export function readPatternValue(
 ): { isVariable: boolean; bound?: boolean; value: unknown } {
   const key = varKeyOf(value);
   if (key !== undefined) {
-    return { isVariable: true, bound: key in frame, value: frame[key] };
+    const bound = Object.hasOwn(frame, key);
+    return { isVariable: true, bound, value: bound ? frame[key] : undefined };
   }
   if (typeof value === "object" && value !== null && hasMarkerKey(value, "$lit")) {
     return { isVariable: false, value: (value as { $lit: unknown }).$lit };
@@ -101,10 +102,13 @@ export function bindInputMapping(frame: Frame, input: Mapping): Mapping {
   const bound: Mapping = {};
   for (const [key, binding] of Object.entries(input)) {
     const read = readPatternValue(binding, frame);
-    if (read.isVariable) {
-      if (read.bound) bound[key] = read.value;
-    } else {
-      bound[key] = read.value;
+    if (!read.isVariable || read.bound) {
+      Object.defineProperty(bound, key, {
+        value: read.value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
   return bound;
@@ -132,18 +136,23 @@ export function expandOutputRows(
     const newFrame: Frame = { ...frame };
     let unifies = true;
     for (const [outputKey, pattern] of Object.entries(output)) {
-      if (row === null || typeof row !== "object" || !(outputKey in row)) {
+      if (row === null || typeof row !== "object" || !Object.hasOwn(row, outputKey)) {
         unifies = false;
         break;
       }
       const rowValue = (row as Record<string, unknown>)[outputKey];
       const key = varKeyOf(pattern);
       if (key !== undefined) {
-        if (key in frame && !structurallyEqual(frame[key], rowValue)) {
+        if (Object.hasOwn(frame, key) && !structurallyEqual(frame[key], rowValue)) {
           unifies = false;
           break;
         }
-        newFrame[key] = rowValue;
+        Object.defineProperty(newFrame, key, {
+          value: rowValue,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       } else if (!structurallyEqual(readPatternValue(pattern, frame).value, rowValue)) {
         unifies = false;
         break;

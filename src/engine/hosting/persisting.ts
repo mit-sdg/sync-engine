@@ -16,6 +16,7 @@ import {
   MemoryStore,
   Refuse,
   actionNameOf,
+  assertRetentionPolicy,
   conceptNameOf,
   type ActionOutcome,
   type ActionRecord,
@@ -23,33 +24,13 @@ import {
   type LogEntry,
   type LogStore,
   type OutcomeContracts,
+  type RetentionPolicy,
 } from "@engine/reactions/index";
 import { redact } from "@engine/utils/redaction";
 
 /** A long-lived resource that a host can stop during shutdown. */
 export interface Stoppable {
   stop(): void | Promise<void>;
-}
-
-// ── Retention policies ──────────────────────────────────────────────────────
-
-/**
- * How long a store's in-memory fold retains records. These policies do not
- * rewrite or truncate a {@link FileStore} JSONL file.
- *
- *  - `"keepAll"`     — `prune()` removes no records.
- *  - `"evictConsumed"` — `prune()` removes each flow's contiguous consumed
- *                        suffix.
- *  - `{ window: n }` — retain only the `n` most recently started flows;
- *                      the earliest flows evict as new ones begin.
- */
-export type RetentionPolicy = "keepAll" | "evictConsumed" | { window: number };
-
-function assertRetentionPolicy(policy: RetentionPolicy, site: string): void {
-  if (typeof policy === "string") return;
-  if (!Number.isFinite(policy.window) || !Number.isInteger(policy.window) || policy.window < 0) {
-    throw new Error(`${site}: window must be a non-negative finite integer.`);
-  }
 }
 
 // ── FileStore ───────────────────────────────────────────────────────────────
@@ -109,15 +90,11 @@ function persistedEntryOf(entry: LogEntry): PersistedEntry {
  * and does not rewrite the file.
  */
 export class FileStore extends MemoryStore implements Stoppable {
-  /** Flow tokens in first-seen order, for the `window` policy. */
-  private flowOrder: string[] = [];
-
   constructor(
     public readonly path: string,
-    public readonly policy: RetentionPolicy = "keepAll",
+    policy: RetentionPolicy = "keepAll",
   ) {
-    super();
-    assertRetentionPolicy(policy, "FileStore");
+    super(policy);
   }
 
   override append(entry: LogEntry): void {
@@ -125,24 +102,10 @@ export class FileStore extends MemoryStore implements Stoppable {
     const line = `${JSON.stringify(persistedEntryOf(entry))}\n`;
     appendFileSync(this.path, line);
     super.append(entry);
-    if (entry.kind === "invocation") this.enforceWindow(entry.record.flow);
-  }
-
-  override prune(): number {
-    return this.policy === "evictConsumed" ? super.prune() : 0;
   }
 
   /** File writes are synchronous; this hook lets a host manage the store as a resource. */
   stop(): void {}
-
-  private enforceWindow(flow: string): void {
-    if (typeof this.policy === "string") return;
-    if (!this.flowOrder.includes(flow)) this.flowOrder.push(flow);
-    while (this.flowOrder.length > this.policy.window) {
-      const oldest = this.flowOrder.shift();
-      if (oldest !== undefined) this.evictFlow(oldest);
-    }
-  }
 
   /** Reject entries the in-memory fold would reject before they reach disk. */
   private assertAppendable(entry: LogEntry): void {

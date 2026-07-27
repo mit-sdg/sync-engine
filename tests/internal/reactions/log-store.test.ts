@@ -155,6 +155,63 @@ describe("log store: outcomes fold immutably", () => {
   });
 });
 
+describe("log store: window retention", () => {
+  test("retains only the newest settled flows", () => {
+    const store = new MemoryStore({ window: 1 });
+    const log = new ActionConcept(store);
+
+    for (const name of ["first", "second"]) {
+      const id = `${name}-id`;
+      const flow = `${name}-flow`;
+      log._beginMatchingInput({ id, flow, input: { name } });
+      log.invoke(record({ id, flow, input: { name } }));
+      store.append({
+        kind: "reaction-failure",
+        at: Date.now(),
+        failure: {
+          reaction: "TestFailure",
+          flow,
+          triggerIds: [id],
+          stage: "where",
+          errorClass: "Error",
+          at: Date.now(),
+        },
+      });
+      log.invoked({ id, output: { name } });
+      log._endMatchingInput(flow);
+    }
+
+    expect([...store.flowIndex.keys()]).toEqual(["second-flow"]);
+    expect([...store.actions.values()].map((entry) => entry.input.name)).toEqual(["second"]);
+    expect(store.reactionFailures.map((failure) => failure.flow)).toEqual(["second-flow"]);
+  });
+
+  test("rejects invalid windows", () => {
+    for (const window of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => new MemoryStore({ window })).toThrow(
+        "MemoryStore: window must be a non-negative finite integer.",
+      );
+    }
+  });
+
+  test("orders the window by settlement rather than start", () => {
+    const store = new MemoryStore({ window: 1 });
+    const log = new ActionConcept(store);
+
+    for (const name of ["first", "second"]) {
+      log._beginMatchingInput({ id: name, flow: name, input: { name } });
+      log.invoke(record({ id: name, flow: name, input: { name } }));
+      log.invoked({ id: name, output: { name } });
+    }
+
+    log._endMatchingInput("second");
+    expect([...store.flowIndex.keys()]).toEqual(["first", "second"]);
+
+    log._endMatchingInput("first");
+    expect([...store.flowIndex.keys()]).toEqual(["first"]);
+  });
+});
+
 describe("log store: firing records", () => {
   test("firing entries are served by reaction name in order", () => {
     const store = new MemoryStore();
