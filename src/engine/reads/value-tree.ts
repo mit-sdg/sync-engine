@@ -10,6 +10,7 @@
 
 import { isPlainMapping } from "./matchers.ts";
 import type { Mapping } from "@engine/reactions/types";
+import { setOwn } from "./brands.ts";
 
 /** Returned by a caller's handler to decline a node and let the walk descend. */
 export const DESCEND: unique symbol = Symbol("descend");
@@ -26,12 +27,7 @@ export function mapValueTree(value: unknown, mapLeaf: (node: unknown) => unknown
   if (isPlainMapping(value)) {
     const out: Mapping = {};
     for (const [key, item] of Object.entries(value)) {
-      Object.defineProperty(out, key, {
-        value: mapValueTree(item, mapLeaf),
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
+      setOwn(out, key, mapValueTree(item, mapLeaf));
     }
     return out;
   }
@@ -53,12 +49,7 @@ export async function mapValueTreeAsync(
   if (isPlainMapping(value)) {
     const out: Mapping = {};
     for (const [key, item] of Object.entries(value)) {
-      Object.defineProperty(out, key, {
-        value: await mapValueTreeAsync(item, mapLeaf),
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
+      setOwn(out, key, await mapValueTreeAsync(item, mapLeaf));
     }
     return out;
   }

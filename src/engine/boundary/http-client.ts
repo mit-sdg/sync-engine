@@ -8,6 +8,7 @@
  * setup.
  */
 
+import { describeError } from "../utils/redaction.ts";
 import { FrameworkErrorCode } from "./errors.ts";
 import type { Client, ClientTransport, ContractShape } from "./client.ts";
 import { createClient } from "./client.ts";
@@ -82,7 +83,7 @@ async function httpRequest(
   } catch (e) {
     return {
       error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED,
-      detail: describe(e),
+      detail: describeError(e),
     };
   }
 
@@ -97,7 +98,7 @@ async function httpRequest(
   } catch (e) {
     return {
       error: FrameworkErrorCode.NETWORK_ERROR,
-      detail: `Network request to ${path} failed: ${describe(e)}`,
+      detail: `Network request to ${path} failed: ${describeError(e)}`,
     };
   }
 
@@ -129,12 +130,9 @@ async function httpRequest(
   return data;
 }
 
-/** Renders an unknown thrown value as a short string for error envelopes. */
-function describe(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 /**
+
+
  * Creates an HTTP {@link ClientTransport} that uses `fetch` with the given
  * options. The returned transport can be passed directly to
  * {@link createClient}.

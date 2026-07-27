@@ -9,6 +9,7 @@ import type { HttpFloor } from "./http-floor.ts";
 import { validateHttpFloor } from "./http-floor.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concept-metadata";
 import { publicCategoryOf, publicErrorStatus } from "./public-errors.ts";
+import { isPlainObject } from "@engine/reads/matchers";
 
 // The body is the flat wire envelope; http adds only the status decoration —
 // 200 for success, 400 for a domain error, and the code's own status for a
@@ -286,7 +287,7 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
       return invalid();
     }
     if (protectedPaths.has(path)) {
-      if (typeof body !== "object" || body === null || Array.isArray(body)) return invalid();
+      if (!isPlainObject(body)) return invalid();
       (body as Record<string, unknown>)[credential.input] =
         cookieValue(request.headers.get("Cookie"), cookieName) ?? null;
     }
@@ -304,7 +305,7 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
 
     const value = result.value;
     if (path === credential.issue.path) {
-      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      if (!isPlainObject(value)) {
         return floorJson({ error: "INTERNAL_ERROR" }, 500);
       }
       const record = value as Record<string, unknown>;

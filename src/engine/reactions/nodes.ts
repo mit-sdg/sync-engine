@@ -9,20 +9,16 @@ import type {
   UnnamedStepNode,
 } from "./types.ts";
 import type { WhereOp } from "@engine/reads/where-ops";
+import { brand, hasBrand } from "@engine/reads/brands";
 
 const NodeBrand: unique symbol = Symbol("NodeBrand");
 
 export function brandReactionNode<T extends object>(node: T): T {
-  Object.defineProperty(node, NodeBrand, { value: true, enumerable: false });
-  return node;
+  return brand(node, NodeBrand);
 }
 
 function isReactionNode(value: unknown): value is ThenNode {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[NodeBrand] === true
-  );
+  return hasBrand(value, NodeBrand);
 }
 
 function stepWith(

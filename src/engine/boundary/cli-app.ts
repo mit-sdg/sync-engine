@@ -1,6 +1,7 @@
 import type { InvocationResult } from "./errors.ts";
 import type { Invoker } from "./invoke.ts";
 import type { ContractShape } from "./client.ts";
+import { describeError } from "../utils/redaction.ts";
 
 export interface CliResult {
   stdout: string;
@@ -157,7 +158,7 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
           );
           return endpoint.format(result);
         } catch (err) {
-          return fail(err instanceof Error ? err.message : String(err));
+          return fail(describeError(err));
         }
       };
     }
@@ -176,7 +177,7 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
             parsed as ReturnType<NonNullable<typeof plainCommand.parse>>,
           );
         } catch (err) {
-          return fail(err instanceof Error ? err.message : String(err));
+          return fail(describeError(err));
         }
       };
     }
@@ -187,7 +188,7 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
           typeof plainCommand.run
         >[0]);
       } catch (err) {
-        return fail(err instanceof Error ? err.message : String(err));
+        return fail(describeError(err));
       }
     };
   }
@@ -234,7 +235,7 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
       const plainCommand = command as CliCommand<CommandInput<TCommands, K>>;
       return await plainCommand.run(input);
     } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err));
+      return fail(describeError(err));
     }
   }
 

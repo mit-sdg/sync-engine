@@ -18,6 +18,10 @@ function stableErrorName(error: Error): string {
  * attacker-controlled input. A value thrown without `Error` supplies no safe
  * class and is identified only as `NonErrorThrown`.
  */
+export function describeError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function serializeError(err: unknown, depth = 0): Record<string, unknown> {
   void depth;
   try {

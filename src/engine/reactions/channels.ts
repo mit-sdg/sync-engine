@@ -21,6 +21,7 @@
  */
 
 import type { ChannelPattern, ChannelPosture, Mapping } from "./types.ts";
+import { brand, hasBrand } from "@engine/reads/brands";
 
 const ChannelBrand: unique symbol = Symbol("ChannelBrand");
 
@@ -45,7 +46,7 @@ function channel(
     ...(options.exceptBy !== undefined ? { exceptBy: options.exceptBy } : {}),
     ...(options.by !== undefined ? { by: options.by } : {}),
   };
-  Object.defineProperty(clause, ChannelBrand, { value: true, enumerable: false });
+  brand(clause, ChannelBrand);
   return clause;
 }
 
@@ -66,9 +67,5 @@ export function faulted(pattern: Mapping = {}, options: ChannelOptions = {}): Ch
 
 /** Whether a value is a channel clause built by this module. */
 export function isChannelPattern(value: unknown): value is ChannelPattern {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[ChannelBrand] === true
-  );
+  return hasBrand(value, ChannelBrand);
 }

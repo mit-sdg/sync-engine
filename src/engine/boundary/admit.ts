@@ -6,6 +6,7 @@
  */
 
 import type { InputContractDecl } from "./endpoints.ts";
+import { isPlainObject } from "@engine/reads/matchers";
 
 export type AdmitResult =
   | { ok: true; admitted: Record<string, unknown> }
@@ -13,7 +14,7 @@ export type AdmitResult =
 
 /** Check `input` against `contract` and name `path` in every failure. */
 export function admitInput(contract: InputContractDecl, path: string, input: unknown): AdmitResult {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  if (!isPlainObject(input)) {
     return { ok: false, detail: `${path} requires a JSON object` };
   }
   const body = input as Record<string, unknown>;

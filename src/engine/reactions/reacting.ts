@@ -25,6 +25,7 @@ import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
 import { ActionConcept, type ActionRecord, normalizeOutcome } from "./actions.ts";
 import { DESCEND, mapValueTree, mapValueTreeAsync, walkValueTree } from "@engine/reads/value-tree";
+import { setOwn } from "@engine/reads/brands";
 import { applyWhereOps } from "@engine/reads/where-ops";
 import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { ComputationRef } from "@engine/reads/computations";
@@ -379,12 +380,7 @@ export class Reacting {
       const filled = { ...frame };
       for (const key of optionalBindings) {
         if (!Object.hasOwn(filled, key)) {
-          Object.defineProperty(filled, key, {
-            value: null,
-            enumerable: true,
-            configurable: true,
-            writable: true,
-          });
+          setOwn(filled, key, null);
         }
       }
       return filled;
@@ -745,12 +741,7 @@ export class Reacting {
     const reserved = new Set<symbol>([flow, landing, ...actionSymbols]);
     const bindings: Record<string, unknown> = {};
     for (const key of Object.keys(frame)) {
-      Object.defineProperty(bindings, key, {
-        value: frame[key],
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
+      setOwn(bindings, key, frame[key]);
     }
     for (const key of Object.getOwnPropertySymbols(frame)) {
       if (reserved.has(key)) continue;
@@ -778,6 +769,25 @@ export class Reacting {
     return current;
   }
 
+  private stopped(): { frames: Frames; stop: true } {
+    return { frames: new Frames(), stop: true };
+  }
+
+  private failStep(
+    reaction: ExecutableReaction,
+    node: StepNode,
+    message: string,
+    err: unknown,
+    actionId?: string,
+  ): { frames: Frames; stop: true } {
+    logger.error(`Reaction "${reaction.name}": ${message}`, {
+      action: actionNameOf(node.action.action as InstrumentedAction),
+      ...(actionId !== undefined ? { actionId } : {}),
+      error: serializeError(err),
+    });
+    return this.stopped();
+  }
+
   private async runStepNode(
     frame: Frame,
     node: StepNode,
@@ -795,7 +805,7 @@ export class Reacting {
           error: serializeError(err),
         },
       );
-      return { frames: new Frames(), stop: true };
+      return this.stopped();
     }
 
     // Evaluate former inputs at the moment of asking. If a former violates its
@@ -837,7 +847,7 @@ export class Reacting {
             error: serializeError(err),
           },
         );
-        return { frames: new Frames(), stop: true };
+        return this.stopped();
       }
       // An infrastructure-level throw before the ask landed: roll back this
       // branch's consumption so the when-records stay re-matchable.
@@ -847,7 +857,7 @@ export class Reacting {
         error: serializeError(err),
       });
       this.firingBook.unmark(branch);
-      return { frames: new Frames(), stop: true };
+      return this.stopped();
     }
     branch.fill.produced.push(id);
 
@@ -870,7 +880,7 @@ export class Reacting {
         actionId: id,
         error: serializeError(err),
       });
-      return { frames: new Frames(), stop: true };
+      return this.stopped();
     }
     if (childFrames.length === 0) return { frames: childFrames, stop: true };
 
@@ -884,7 +894,7 @@ export class Reacting {
           actionId: id,
           error: serializeError(err),
         });
-        return { frames: new Frames(), stop: true };
+        return this.stopped();
       }
     }
 
@@ -1006,12 +1016,7 @@ export class Reacting {
 
     const input: ActionArguments = {};
     for (const [key, value] of Object.entries(then.input)) {
-      Object.defineProperty(input, key, {
-        value: resolve(value),
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
+      setOwn(input, key, resolve(value));
     }
     input[flow] = frame[flow];
     input[actionId] = uuid();
@@ -1040,7 +1045,7 @@ export class Reacting {
     const concept = (node.action.action as InstrumentedAction).concept;
     if (typeof id !== "string" || typeof flowToken !== "string" || concept === undefined) {
       // Without an action id, flow token, or concept, no faulted ask can be recorded.
-      return { frames: new Frames(), stop: true };
+      return this.stopped();
     }
     const describe = (value: unknown): unknown =>
       mapValueTree(value, (node) =>
@@ -1071,7 +1076,7 @@ export class Reacting {
     } finally {
       this.Action._endMatchingInput(flowToken);
     }
-    return { frames: new Frames(), stop: true };
+    return this.stopped();
   }
 
   /** Replace every fused former in a resolved input with its evaluated tree. */

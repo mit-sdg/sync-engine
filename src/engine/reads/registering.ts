@@ -47,6 +47,7 @@ import {
 import type { RelationView } from "./lines.ts";
 import { foldFormerNode } from "./schema.ts";
 import { varNamesInPattern } from "./former-analysis.ts";
+import { isPlainObject } from "./matchers.ts";
 import { opNamesIR, scheduleBlock } from "./schedule.ts";
 import { walkValueTree } from "./value-tree.ts";
 import { relationViewWith } from "./views.ts";
@@ -497,7 +498,7 @@ export class Registry {
     kind: "Former" | "View" | "Reaction",
   ): void {
     walkValueTree(pattern, (node) => {
-      if (typeof node !== "object" || node === null || Array.isArray(node)) return;
+      if (!isPlainObject(node)) return;
       const marker = asMarker(node);
       if (marker === null) return;
       const invalid = (() => {

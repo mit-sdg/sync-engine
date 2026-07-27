@@ -1,7 +1,7 @@
 export {
   configureRedaction,
   redact,
-  serializeError,
+  describeError,
   UNIVERSAL_SENSITIVE_PATTERNS,
 } from "./redaction.ts";
 export type { RedactionPolicy } from "./redaction.ts";

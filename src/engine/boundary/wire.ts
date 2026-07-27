@@ -418,9 +418,7 @@ function inputTypeOf(
   for (const pattern of patterns) {
     for (const [key, value] of Object.entries(pattern)) {
       if (RESERVED_BOUNDARY_KEYS.has(key)) continue;
-      if (value !== null && typeof value === "object" && "$var" in value) {
-        mentioned.add(key);
-      } else if (
+      if (
         value === null ||
         typeof value === "string" ||
         typeof value === "number" ||
@@ -430,7 +428,7 @@ function inputTypeOf(
         forKey.push({ kind: "literal", value });
         literals.set(key, forKey);
       } else {
-        mentioned.add(key); // structural pattern — beyond the input type's grain
+        mentioned.add(key);
       }
     }
   }

@@ -16,9 +16,10 @@
  * `where-ops.ts` defines `no`, `whether`, and evaluation of these reads.
  */
 
-import { brand, hasBrand, LineBrand, RelationViewBrand } from "./brands.ts";
+import { brand, hasBrand, hasFuncBrand, LineBrand, RelationViewBrand } from "./brands.ts";
 import type { InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import type { QueryPromise } from "./query-contracts.ts";
+import { isPlainObject } from "./matchers.ts";
 
 /** A view declared as a relation: named inputs, promised outputs, a body. */
 export interface RelationView {
@@ -43,10 +44,7 @@ export interface RelationView {
 }
 
 export function isRelationView(value: unknown): value is RelationView {
-  return (
-    typeof value === "function" &&
-    (value as unknown as Record<symbol, unknown>)[RelationViewBrand] === true
-  );
+  return hasFuncBrand(value, RelationViewBrand);
 }
 
 export function brandRelationView<T extends object>(ref: T): T {
@@ -131,7 +129,7 @@ function makeLine(source: LineSource, input: Mapping, out: Mapping, not: Mapping
 }
 
 function assertPattern(pattern: unknown, operation: string): void {
-  if (pattern === null || typeof pattern !== "object" || Array.isArray(pattern)) {
+  if (!isPlainObject(pattern)) {
     throw new Error(`${operation}(...) takes a pattern mapping of output fields.`);
   }
 }

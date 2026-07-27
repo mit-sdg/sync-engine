@@ -384,6 +384,7 @@ const register = {
     "RedactionPolicy",
     "UNIVERSAL_SENSITIVE_PATTERNS",
     "configureRedaction",
+    "describeError",
     "logger",
     "redact",
     "serializeError",

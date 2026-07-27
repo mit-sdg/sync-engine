@@ -8,7 +8,7 @@ import type {
   ThenNode,
   TriggerPattern,
 } from "./types.ts";
-import { ReactionPartitionBrand, hasBrand } from "@engine/reads/brands";
+import { ReactionPartitionBrand, brand, hasBrand } from "@engine/reads/brands";
 import { assertReactionNodes } from "./nodes.ts";
 
 export function isReactionPartition(value: unknown): value is ReactionPartition {
@@ -147,6 +147,5 @@ export function siblingTree(
       return result;
     },
   } as ReactionPartition;
-  Object.defineProperty(result, ReactionPartitionBrand, { value: true });
-  return result;
+  return brand(result, ReactionPartitionBrand);
 }

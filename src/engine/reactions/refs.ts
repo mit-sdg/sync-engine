@@ -28,6 +28,7 @@
  */
 
 import { computationRef } from "@engine/reads/computations";
+import { brand, hasFuncBrand } from "@engine/reads/brands";
 import { actionLine } from "./nodes.ts";
 import { lineOf } from "@engine/reads/lines";
 import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
@@ -80,11 +81,11 @@ export interface QueryRef {
 }
 
 export function isActionRef(value: unknown): value is ActionRef {
-  return typeof value === "function" && (value as never)[ActionRefBrand] === true;
+  return hasFuncBrand(value, ActionRefBrand);
 }
 
 export function isQueryRef(value: unknown): value is QueryRef {
-  return typeof value === "function" && (value as never)[QueryRefBrand] === true;
+  return hasFuncBrand(value, QueryRefBrand);
 }
 
 function makeActionRef(concept: string, action: string): ActionRef {
@@ -92,8 +93,7 @@ function makeActionRef(concept: string, action: string): ActionRef {
   Object.defineProperty(ref, "name", { value: `${concept}.${action}` });
   Object.defineProperty(ref, "refConcept", { value: concept, enumerable: true });
   Object.defineProperty(ref, "refAction", { value: action, enumerable: true });
-  Object.defineProperty(ref, ActionRefBrand, { value: true });
-  return ref;
+  return brand(ref, ActionRefBrand);
 }
 
 function makeQueryRef(concept: string, query: string, promise: QueryPromise | undefined): QueryRef {
@@ -108,8 +108,7 @@ function makeQueryRef(concept: string, query: string, promise: QueryPromise | un
   if (promise !== undefined) {
     Object.defineProperty(ref, "queryPromise", { value: promise, enumerable: true });
   }
-  Object.defineProperty(ref, QueryRefBrand, { value: true });
-  return ref;
+  return brand(ref, QueryRefBrand);
 }
 
 /** Property names a ref proxy answers with `undefined` instead of an error. */
@@ -438,10 +437,9 @@ export function reaction(reaction: Reaction): Reaction {
   if (typeof reaction !== "function") {
     throw new Error("reaction(...) takes a function that declares the reaction.");
   }
-  Object.defineProperty(reaction, ReactionBrand, { value: true });
-  return reaction;
+  return brand(reaction, ReactionBrand);
 }
 
 export function isReaction(value: unknown): value is Reaction {
-  return typeof value === "function" && (value as never)[ReactionBrand] === true;
+  return hasFuncBrand(value, ReactionBrand);
 }

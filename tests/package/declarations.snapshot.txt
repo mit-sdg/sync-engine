@@ -730,6 +730,8 @@ export interface HttpClientOptions {
     credentials?: "include" | "omit" | "same-origin";
 }
 /**
+
+
  * Creates an HTTP {@link ClientTransport} that uses `fetch` with the given
  * options. The returned transport can be passed directly to
  * {@link createClient}.
@@ -2209,6 +2211,8 @@ export declare class Reacting {
     /** Extract a frame's user-variable bindings, keyed by variable name. */
     private bindingsOf;
     private runPipelineForFrame;
+    private stopped;
+    private failStep;
     private runStepNode;
     private framesWithStepOutput;
     /** Recover the immutable ids captured when this frame matched. */
@@ -2763,6 +2767,8 @@ export declare const FormerUseBrand: unique symbol;
 export declare const ReactionPartitionBrand: unique symbol;
 export declare function brand<T extends object>(value: T, marker: symbol): T;
 export declare function hasBrand(value: unknown, marker: symbol): value is object;
+export declare function hasFuncBrand(value: unknown, marker: symbol): value is object;
+export declare function setOwn<T extends object>(obj: T, key: string | symbol, value: unknown): T;
 
 === dist/engine/reads/computations.d.ts ===
 /**
@@ -3135,7 +3141,7 @@ export { brandRelationView, isQueryReadLine, isReadLine, isRelationView, lineOf 
 export type { QueryReadLine, ReadLine, RelationView, SlotPattern, ViewReadLine } from "./lines.ts";
 export { collectViews, fragmentChannelsOfFormer, fusedFormersOf, lowerFormerBody, lowerReaction, lowerRelationBlocks, lowerViewAlternatives, serializeApp, serializeFormer, serializeReaction, serializeView, viewChannelsOfFormer, viewChannelsOfView, viewLineIR, } from "./lower.ts";
 export type { FormerChannel, LowerOutcome, LoweredReaction, LoweredWhereOp } from "./lower.ts";
-export { isMatcher, isPlainMapping, oneOf } from "./matchers.ts";
+export { isMatcher, isPlainMapping, isPlainObject, oneOf } from "./matchers.ts";
 export { assertConceptQuery, QueryAnswerFault, queryRows, rowsOfAnswer } from "./queries.ts";
 export type { NamedQuery } from "./queries.ts";
 export { queryPromiseOf, validateQueryContractMap, validateQueryContracts, } from "./query-contracts.ts";
@@ -3670,6 +3676,7 @@ export declare function oneOf(...candidates: unknown[]): Matcher;
 export declare function isMatcher(value: unknown): value is Matcher;
 /** Convenience guard for pattern walkers: a plain string-keyed mapping. */
 export declare function isPlainMapping(value: unknown): value is Mapping;
+export declare function isPlainObject(value: unknown): value is Record<string, unknown>;
 
 === dist/engine/reads/queries.d.ts ===
 /**
@@ -4477,7 +4484,7 @@ export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof Framew
 export type EmittedFrameworkErrorCode = FrameworkErrorCode;
 
 === dist/engine/utils/index.d.ts ===
-export { configureRedaction, redact, serializeError, UNIVERSAL_SENSITIVE_PATTERNS, } from "./redaction.ts";
+export { configureRedaction, redact, describeError, UNIVERSAL_SENSITIVE_PATTERNS, } from "./redaction.ts";
 export type { RedactionPolicy } from "./redaction.ts";
 export { logger } from "./logger.ts";
 export type { Logger, LogLevel } from "./logger.ts";
@@ -4505,6 +4512,7 @@ export declare const logger: Logger;
  * attacker-controlled input. A value thrown without `Error` supplies no safe
  * class and is identified only as `NonErrorThrown`.
  */
+export declare function describeError(err: unknown): string;
 export declare function serializeError(err: unknown, depth?: number): Record<string, unknown>;
 /**
  * Default patterns for sensitive field names. These patterns match object
@@ -4565,5 +4573,5 @@ export type { WireContractsIR, WireEndpoint, WireOptions, WireRenderOptions, Wir
 export { logger } from "../engine/utils/logger.ts";
 export type { Logger, LogLevel } from "../engine/utils/logger.ts";
 export { serializeError } from "../engine/utils/logger.ts";
-export { configureRedaction, redact, UNIVERSAL_SENSITIVE_PATTERNS } from "../engine/utils/redaction.ts";
+export { configureRedaction, describeError, redact, UNIVERSAL_SENSITIVE_PATTERNS, } from "../engine/utils/redaction.ts";
 export type { RedactionPolicy } from "../engine/utils/redaction.ts";

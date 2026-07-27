@@ -29,6 +29,7 @@
 import type { Prettify } from "./endpoints.ts";
 import { FrameworkErrorCode } from "./errors.ts";
 import type { EmittedFrameworkErrorCode } from "./errors.ts";
+import { describeError } from "../utils/redaction.ts";
 
 /** The normalized error envelope transports use for outside-world failures. */
 export type ClientError = { error: EmittedFrameworkErrorCode; detail?: string };
@@ -194,7 +195,7 @@ export function createClient<C extends ContractShape, TError = ClientError>(
     } catch (e) {
       return {
         error: FrameworkErrorCode.TRANSPORT_ERROR,
-        detail: e instanceof Error ? e.message : String(e),
+        detail: describeError(e),
       };
     }
   };

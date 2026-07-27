@@ -1,6 +1,7 @@
 /** Endpoint-local type origins derived from registered reaction and read IR. */
 
 import { asMarker } from "@engine/reads/ir";
+import { isPlainObject } from "@engine/reads/matchers";
 import type {
   ActionTriggerIR,
   PatternIR,
@@ -87,7 +88,7 @@ function at(origin: ConceptOrigin, key: string): ConceptOrigin {
 }
 
 function variableName(value: ValueIR): string | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  if (!isPlainObject(value)) return undefined;
   const marker = asMarker(value);
   return marker?.tag === "$var" ? (marker.payload as string) : undefined;
 }

@@ -66,7 +66,7 @@ export {
   viewLineIR,
 } from "./lower.ts";
 export type { FormerChannel, LowerOutcome, LoweredReaction, LoweredWhereOp } from "./lower.ts";
-export { isMatcher, isPlainMapping, oneOf } from "./matchers.ts";
+export { isMatcher, isPlainMapping, isPlainObject, oneOf } from "./matchers.ts";
 export { assertConceptQuery, QueryAnswerFault, queryRows, rowsOfAnswer } from "./queries.ts";
 export type { NamedQuery } from "./queries.ts";
 export {

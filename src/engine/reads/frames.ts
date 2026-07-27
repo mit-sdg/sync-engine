@@ -14,6 +14,7 @@
 import type { Frame, Mapping } from "@engine/reactions/types";
 import { structurallyEqual } from "./value-equality.ts";
 import { hasMarkerKey, isVarIR } from "./ir.ts";
+import { setOwn } from "./brands.ts";
 
 /**
  * The frame key a variable leaf binds under: a symbol for authored
@@ -103,12 +104,7 @@ export function bindInputMapping(frame: Frame, input: Mapping): Mapping {
   for (const [key, binding] of Object.entries(input)) {
     const read = readPatternValue(binding, frame);
     if (!read.isVariable || read.bound) {
-      Object.defineProperty(bound, key, {
-        value: read.value,
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
+      setOwn(bound, key, read.value);
     }
   }
   return bound;
@@ -147,12 +143,7 @@ export function expandOutputRows(
           unifies = false;
           break;
         }
-        Object.defineProperty(newFrame, key, {
-          value: rowValue,
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        });
+        setOwn(newFrame, key, rowValue);
       } else if (!structurallyEqual(readPatternValue(pattern, frame).value, rowValue)) {
         unifies = false;
         break;

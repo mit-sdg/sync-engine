@@ -10,6 +10,7 @@ import {
   type GeneratedApplication,
 } from "@engine/tooling/generated-artifacts";
 import { scaffoldProject } from "./scaffold.ts";
+import { describeError } from "@engine/utils/redaction";
 
 const usage = `Usage: sync-engine <topic> <command>
 
@@ -96,6 +97,6 @@ async function main(): Promise<void> {
 try {
   await main();
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(describeError(error));
   process.exitCode = 1;
 }

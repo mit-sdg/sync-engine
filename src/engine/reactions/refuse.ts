@@ -13,6 +13,8 @@
  * module instance) is recognized.
  */
 
+import { hasBrand } from "@engine/reads/brands";
+
 const RefuseMarker = Symbol.for("sync-engine.refuse");
 
 export class Refuse extends Error {
@@ -29,11 +31,7 @@ export class Refuse extends Error {
 
 /** Cross-realm-safe recognition: the marker property, not `instanceof`. */
 export function isRefuse(value: unknown): value is Refuse {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[RefuseMarker] === true
-  );
+  return hasBrand(value, RefuseMarker);
 }
 
 /**

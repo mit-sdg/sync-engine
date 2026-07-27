@@ -47,6 +47,7 @@ import { ActionConcept } from "@engine/reactions/actions";
 import type { InstrumentedConcept } from "@engine/reactions/instrumenting";
 import { MemoryStore, type RetentionPolicy } from "@engine/reactions/log-store";
 import { logger } from "@engine/utils/logger";
+import { brand, hasBrand } from "@engine/reads/brands";
 import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";
 import { refusalFunnel } from "./funnel.ts";
 import type { Invoker } from "./invoke.ts";
@@ -123,16 +124,12 @@ export function endpoint(
     reaction,
     ...(opts?.input !== undefined ? { input: opts.input } : {}),
   } as EndpointDef;
-  Object.defineProperty(def, EndpointBrand, { value: true });
+  brand(def, EndpointBrand);
   return def;
 }
 
 export function isEndpointDef(value: unknown): value is EndpointDef {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[EndpointBrand] === true
-  );
+  return hasBrand(value, EndpointBrand);
 }
 
 /** Pin every boundary-request trigger in a declaration to the endpoint's path. */

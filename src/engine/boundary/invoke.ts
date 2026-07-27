@@ -5,6 +5,7 @@ import type { InputContractDecl, RequestBoundaryActions } from "./endpoints.ts";
 import { fromEnvelope } from "./envelope.ts";
 import { FrameworkErrorCode, frameworkError } from "./errors.ts";
 import type { InvocationResult } from "./errors.ts";
+import { describeError } from "@engine/utils/redaction";
 
 interface PendingRequest {
   resolve: (value: Record<string, unknown>) => void;
@@ -159,10 +160,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       try {
         responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal);
       } catch (err) {
-        return frameworkError(
-          FrameworkErrorCode.TIMED_OUT,
-          err instanceof Error ? err.message : String(err),
-        );
+        return frameworkError(FrameworkErrorCode.TIMED_OUT, describeError(err));
       }
 
       const reqFn = instrumented.request as unknown as (
@@ -181,10 +179,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
 
       if (first.kind === "dispatch-error") {
         boundary.cancel(requestId);
-        return frameworkError(
-          FrameworkErrorCode.TRANSPORT_ERROR,
-          first.error instanceof Error ? first.error.message : String(first.error),
-        );
+        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR, describeError(first.error));
       }
 
       if (first.kind === "response") {
@@ -194,7 +189,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         if (completion.kind === "dispatch-error") {
           return frameworkError(
             FrameworkErrorCode.TRANSPORT_ERROR,
-            completion.error instanceof Error ? completion.error.message : String(completion.error),
+            describeError(completion.error),
           );
         }
         return fromEnvelope(first.value);
@@ -211,10 +206,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         if (isAborted(invokeOpts.signal)) {
           return frameworkError(FrameworkErrorCode.ABORTED);
         }
-        return frameworkError(
-          FrameworkErrorCode.TRANSPORT_ERROR,
-          err instanceof Error ? err.message : String(err),
-        );
+        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR, describeError(err));
       }
     },
   } as Invoker<C>;

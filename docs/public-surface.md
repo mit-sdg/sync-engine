@@ -451,13 +451,15 @@ unanswered. The delivery limits are documented under
 
 <!-- register:utils:start -->
 
-`LogLevel`, `Logger`, `RedactionPolicy`, `UNIVERSAL_SENSITIVE_PATTERNS`, `configureRedaction`, `logger`, `redact`, `serializeError`
+`LogLevel`, `Logger`, `RedactionPolicy`, `UNIVERSAL_SENSITIVE_PATTERNS`, `configureRedaction`, `describeError`, `logger`, `redact`, `serializeError`
 
 <!-- register:utils:end -->
 
 `logger` is the package logger. `Logger` and `LogLevel` describe its public API.
 `serializeError(...)` returns only an `Error` class name, or
-`NonErrorThrown` for another thrown value.
+`NonErrorThrown` for another thrown value. `describeError(...)` returns the
+message of an `Error` or the string representation of another thrown value
+for safe use in error envelopes.
 
 `configureRedaction(policy)` sets the process redaction policy. `redact(value)`
 returns a copy that replaces values whose field names match `RedactionPolicy`
