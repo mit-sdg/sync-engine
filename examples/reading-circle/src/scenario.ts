@@ -10,17 +10,14 @@
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
 import { deterministicImplementations } from "./concept-set.ts";
 import { buildReadingCircle } from "./edge.ts";
-import { identities } from "./identities.ts";
 import type { ReadingCircleWire } from "../generated/wire.ts";
 
 export async function runScenario() {
   const { gateway } = buildReadingCircle({
     ...deterministicImplementations({
-      identities: {
-        Discussing: identities("discussion-1", "response-1"),
-        Gathering: identities("after-dinner", "mara-membership", "lin-membership"),
-        Selecting: identities("selection-1"),
-      },
+      Discussing: ["discussion-1", "response-1"],
+      Gathering: ["after-dinner", "mara-membership", "lin-membership"],
+      Selecting: ["selection-1"],
     }),
   });
   const circles = createLocalClient<ReadingCircleWire>({ invoker: gateway });

@@ -64,7 +64,7 @@
   },
   "scripts": {
     "build": "bun scripts/build.ts",
-    "check": "bun scripts/check-architecture.ts && vp check",
+    "check": "bun scripts/check-architecture.ts && bun scripts/check-specs.ts && vp check",
     "coverage": "LOG_LEVEL=error vp test --coverage",
     "declarations:check": "bun run build && bun scripts/declarations.ts check",
     "declarations:pin": "bun run build && bun scripts/declarations.ts pin",

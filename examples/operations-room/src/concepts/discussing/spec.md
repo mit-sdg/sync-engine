@@ -32,7 +32,7 @@ order.
 ## Actions
 
 ```actions
-open (subject: Subject) : return (discussion: Discussion), refuse (message: String)
+open (subject: Subject) : return (discussion: Discussion)
   where no open discussion has subject
   then
     add a new discussion with subject
@@ -40,27 +40,33 @@ open (subject: Subject) : return (discussion: Discussion), refuse (message: Stri
     return discussion
   where some open discussion has subject
   then
-    refuse "This subject already has an open discussion."
+    refuse DISCUSSION_ALREADY_OPEN "This subject already has an open discussion."
 
-respond (discussion: Discussion, author: Person, text: String) : return (response: Response), refuse (message: String)
+respond (discussion: Discussion, author: Person, text: String) : return (response: Response)
   where discussion in open
   then
     add a new response with discussion, author, and text
     return response
   where discussion not in open
   then
-    refuse "This discussion is not open."
+    refuse DISCUSSION_NOT_OPEN "This discussion is not open."
 
-close (discussion: Discussion) : return (), refuse (message: String)
+close (discussion: Discussion) : return ()
   where discussion in open
   then
     remove discussion from open
     return
   where discussion not in open
   then
-    refuse "This discussion is not open."
+    refuse DISCUSSION_NOT_OPEN "This discussion is not open."
 ```
 
-`_openFor` answers zero or one open discussion for a subject. `_responses`
-answers every response for a discussion in arrival order. Subjects are opaque
-identities; Discussing neither creates nor interprets them.
+## Queries
+
+```queries
+_openFor (subject: Subject) : optional (discussion: Discussion)
+_responses (discussion: Discussion) : many (response: Response, author: Person, text: String)
+```
+
+`_responses` answers in arrival order. Subjects are opaque identities;
+Discussing neither creates nor interprets them.

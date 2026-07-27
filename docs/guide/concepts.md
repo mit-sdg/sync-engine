@@ -55,10 +55,10 @@ raise (recipient: Person, subject: Subject) : return (alert: Alert)
     add a new alert with recipient and subject
     return alert
 
-acknowledge (alert: Alert) : return (alert: Alert), refuse (message: String)
+acknowledge (alert: Alert) : return (alert: Alert)
   where alert not in alerts
   then
-    refuse "There is no such open alert."
+    refuse ALERT_NOT_FOUND "There is no such open alert."
   where alert in alerts
   then
     delete alert
@@ -69,6 +69,11 @@ acknowledge (alert: Alert) : return (alert: Alert), refuse (message: String)
 An **action** may change the concept's state. `raise` adds an alert;
 `acknowledge` removes one or refuses when the alert is no longer open. Every
 input is present, and every branch says what it returns.
+
+A `refuse` branch names the stable code the boundary returns and the sentence
+that explains it. Both are contract: registration derives which actions may
+refuse which codes from these lines, and the sentence is what a caller
+receives — so the class never has to repeat it.
 
 ## Implement the concept in ordinary TypeScript
 
@@ -95,19 +100,21 @@ _Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../ex
   }
 ```
 
-## Define the query shape
+## Declare the queries
 
-A **query** only reads state. Its registry may promise `one`, `optional`, or
-`many`. A `one` query returns one record. The other two return arrays containing
-at most one row or any number of rows. Without a declaration, a query may
-return one record or an array and is treated as potentially many. `_openFor`
-promises `many` because one recipient may have any number of open alerts:
+A **query** only reads state. The specification's `queries` fence names each
+one and promises `one`, `optional`, or `many`. A `one` query returns one
+record; the other two return arrays holding at most one row or any number of
+rows. `_openFor` promises `many` because one recipient may have any number of
+open alerts:
 
-_Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../examples/operations-room/src/concepts/alerting/registry.ts)_
+_Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../examples/operations-room/src/concepts/alerting/spec.md)_
 
-```ts
-queries: { _openFor: "many" },
+````text
+```queries
+_openFor (recipient: Person) : many (alert: Alert, subject: Subject)
 ```
+````
 
 Gathering shows both query shapes next to each other:
 
@@ -125,10 +132,12 @@ _Source: [`examples/operations-room/src/concepts/gathering/gathering.ts`](../../
   }
 ```
 
-Gathering's registry declares `_members: "many"` and `_membership: "one"`.
-The engine checks both the returned shape and each read's cardinality. A reaction
-cannot range with `each(...)` over `_membership`, and the implementation cannot
-answer `_membership` with an array.
+Gathering's specification promises `_members` as `many` and `_membership` as
+`one`. The engine checks both the returned shape and each read's cardinality. A
+reaction cannot range with `each(...)` over `_membership`, and the
+implementation cannot answer `_membership` with an array. Registration also
+holds the two documents to each other: a query the class implements but the
+specification omits — or the reverse — fails by name before anything runs.
 
 ## Test the principle directly
 
@@ -162,13 +171,11 @@ test("its principle: keep each recipient's alerts in order until acknowledged", 
 
 ## Give the concept its public name
 
-The registry beside the concept connects the plain class to its specification,
-declares its query promises, and maps each refusal class to the stable code an
-application can return.
-The code and its public category are the machine contract. The refusal sentence
-in the specification is the normative human explanation. When detail reaches a
-caller, the implementation must use that sentence exactly; otherwise the
-boundary must omit the competing detail.
+The registry beside the concept connects the plain class to its specification.
+It declares only what the specification cannot: which `Error` class signals
+each refusal code the document already named. The actions, the queries, their
+promises, which action refuses which code, and the sentence each refusal
+carries all come from `spec.md`.
 
 Use the canonical `assembly` entrypoint:
 
@@ -178,8 +185,10 @@ _Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../ex
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
 ```
 
-Alerting's registry keeps the prose in `spec.md`, registers the one deliberate
-refusal, and declares its participation in the deterministic example floor:
+Alerting's registry names the class that signals its one deliberate refusal,
+and declares its participation in the deterministic example floor. A floor
+factory receives the name the concept is registered under, so the registry
+never spells its own application name:
 
 _Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../examples/operations-room/src/concepts/alerting/registry.ts)_
 
@@ -187,16 +196,26 @@ _Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../ex
 export const alerting = registerConcept({
   class: AlertingConcept,
   spec,
-  queries: { _openFor: "many" },
-  refusals: {
-    ALERT_NOT_FOUND: { error: AlertNotFound, on: ["acknowledge"] },
-  },
+  refusals: { ALERT_NOT_FOUND: AlertNotFound },
   floors: {
-    deterministic: ({ identities }: { identities: { Alerting: () => string } }) =>
-      new AlertingConcept(identities.Alerting),
+    deterministic: ({ identities }: { identities: Record<string, () => string> }, name: string) =>
+      new AlertingConcept(identities[name]),
   },
 });
 ```
+
+Registration reads the specification and holds it to the class. A refusal the
+document declares with no `Error` class to signal it, an `Error` class for a
+branch the document never names, an action or query on one side but not the
+other, or a signature naming inputs the implementation does not destructure —
+each fails at registration, naming what disagreed.
+
+Inputs get a second, stricter pass before anything runs. TypeScript erases a
+parameter's type, so a method that names no inputs — `end(_: { session: string })`,
+or one taking a plain parameter, or none at all — reaches the engine with its
+signature gone. `scripts/check-specs.ts` reads the source instead, where the
+declared type survives, and compares every signature to its specification. It
+runs in `bun run check`.
 
 The operations room includes that registry once in its explicit concept set.
 The set derives its vocabulary, public references, ordinary implementations,

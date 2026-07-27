@@ -20,23 +20,27 @@ a set of Rooms with
 ## Actions
 
 ```actions
-open (name: String) : return (room: Room), refuse (message: String)
+open (name: String) : return (room: Room)
   where no room has name
   then
     add a new room with name
     return room
   where some room has name
   then
-    refuse "A room with this name is already open."
+    refuse ROOM_ALREADY_OPEN "A room with this name is already open."
 
-close (room: Room) : return (), refuse (message: String)
+close (room: Room) : return ()
   where room in rooms
   then
     delete room
     return
   where room not in rooms
   then
-    refuse "This room is not open."
+    refuse ROOM_NOT_OPEN "This room is not open."
 ```
 
-`_get` answers zero or one room for an identity.
+## Queries
+
+```queries
+_get (room: Room) : optional (name: String)
+```

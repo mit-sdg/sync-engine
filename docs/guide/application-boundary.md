@@ -208,8 +208,9 @@ or routing design.
 ## Generate the wire contract
 
 The tooling reads the assembled design and derives a TypeScript contract for
-every endpoint. One application descriptor gives the engine the assembly and
-the names and locations of both generated artifacts:
+every endpoint. One application descriptor names the assembly and the
+application; the artifact paths and type names follow from the title and the
+config's own location, and each may be overridden:
 
 _Source: [`examples/operations-room/generated.config.ts`](../../examples/operations-room/generated.config.ts)_
 
@@ -218,13 +219,7 @@ import { assembleOperationsRoom } from "./src/assembly.ts";
 
 export default {
   assemble: assembleOperationsRoom,
-  directory: new URL("./generated/", import.meta.url),
-  specification: "operations-room.md",
   title: "Operations room",
-  wire: "wire.ts",
-  wireBanner: "// Generated from the operations-room assembly. Do not edit.",
-  wireName: "OperationsRoomWire",
-  wireVocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
 };
 ```
 

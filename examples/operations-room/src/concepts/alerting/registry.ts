@@ -5,12 +5,9 @@ import spec from "./spec.md" with { type: "text" };
 export const alerting = registerConcept({
   class: AlertingConcept,
   spec,
-  queries: { _openFor: "many" },
-  refusals: {
-    ALERT_NOT_FOUND: { error: AlertNotFound, on: ["acknowledge"] },
-  },
+  refusals: { ALERT_NOT_FOUND: AlertNotFound },
   floors: {
-    deterministic: ({ identities }: { identities: { Alerting: () => string } }) =>
-      new AlertingConcept(identities.Alerting),
+    deterministic: ({ identities }: { identities: Record<string, () => string> }, name: string) =>
+      new AlertingConcept(identities[name]),
   },
 });

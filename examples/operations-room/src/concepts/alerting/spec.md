@@ -29,15 +29,21 @@ raise (recipient: Person, subject: Subject) : return (alert: Alert)
     add a new alert with recipient and subject
     return alert
 
-acknowledge (alert: Alert) : return (alert: Alert), refuse (message: String)
+acknowledge (alert: Alert) : return (alert: Alert)
   where alert not in alerts
   then
-    refuse "There is no such open alert."
+    refuse ALERT_NOT_FOUND "There is no such open alert."
   where alert in alerts
   then
     delete alert
     return alert
 ```
 
-`_openFor` answers every open alert for a recipient in order. Alerting does not
-decide which events deserve attention or what an alert's subject represents.
+## Queries
+
+```queries
+_openFor (recipient: Person) : many (alert: Alert, subject: Subject)
+```
+
+`_openFor` answers in the order the alerts were raised. Alerting does not decide
+which events deserve attention or what an alert's subject represents.

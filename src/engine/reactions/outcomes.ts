@@ -36,9 +36,7 @@ export type OutcomeContracts = Record<string, ActionContract>;
 export function contractOf(concept: object, action: string): ActionContract | undefined {
   const metadata = conceptMetadataOf(concept);
   const declared = metadata?.outcomes?.[action];
-  const refusalCodes = metadata?.refusals?.[action]
-    ? Object.keys(metadata.refusals[action])
-    : undefined;
+  const refusalCodes = metadata?.refusals?.[action]?.map((branch) => branch.code);
   if (declared !== undefined || refusalCodes !== undefined) {
     return { ...declared, ...(refusalCodes !== undefined ? { refusals: refusalCodes } : {}) };
   }

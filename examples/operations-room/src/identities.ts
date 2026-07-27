@@ -12,3 +12,21 @@ export function identities(...values: string[]): () => string {
     return next;
   };
 }
+
+/**
+ * Turn one sequence per concept name into the identity sources a deterministic
+ * floor supplies. Every concept in the set needs one: a missing name would
+ * quietly fall back to random ids and only surface as a puzzling diff.
+ */
+export function identitiesFor(
+  sequences: Readonly<Record<string, readonly string[]>>,
+  names: readonly string[],
+): Record<string, () => string> {
+  const missing = names.filter((name) => sequences[name] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`deterministic identities: nothing supplied for ${missing.join(", ")}.`);
+  }
+  return Object.fromEntries(
+    names.map((name) => [name, identities(...(sequences[name] as string[]))]),
+  );
+}

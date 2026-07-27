@@ -31,4 +31,8 @@ choose (room: Room, mitigation: String) : return (selection: Selection)
     return selection
 ```
 
-`_current` answers zero or one current mitigation for a room.
+## Queries
+
+```queries
+_current (room: Room) : optional (selection: Selection, mitigation: String)
+```

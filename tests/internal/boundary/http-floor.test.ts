@@ -34,18 +34,46 @@ class Sessioning {
   }
 }
 
+const sessioningSpec = `# Sessioning
+
+## Purpose
+
+Identify a caller.
+
+## Principle
+
+A session expires.
+
+## Actions
+
+\`\`\`actions
+start () : return (session: Session, expiresAt: Time, user: Person)
+  then
+    add a new session
+    return session, expiresAt, and user
+
+verify (session: Session) : return (user: Person)
+  where session not in sessions
+  then
+    refuse UNKNOWN_SESSION "This session is not known."
+  where session in sessions
+  then
+    return user
+
+end (session: Session) : return (ok: Flag)
+  then
+    delete session
+    return ok
+\`\`\`
+`;
+
 function setup() {
   const set = conceptSet({
     Sessioning: registerConcept({
       class: Sessioning,
-      spec: "# Sessioning\n\n## Purpose\n\nIdentify a caller.\n\n## Principle\n\nA session expires.",
-      refusals: {
-        UNKNOWN_SESSION: {
-          error: UnknownSession,
-          on: ["verify"],
-          public: PublicError.UNAUTHORIZED,
-        },
-      },
+      spec: sessioningSpec,
+      refusals: { UNKNOWN_SESSION: UnknownSession },
+      publicErrors: { UNKNOWN_SESSION: PublicError.UNAUTHORIZED },
     }),
   });
   const { Sessioning: Sessions } = set.concepts;

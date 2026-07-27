@@ -15,15 +15,7 @@ import { alerting } from "./concepts/alerting/registry.ts";
 import { discussing } from "./concepts/discussing/registry.ts";
 import { gathering } from "./concepts/gathering/registry.ts";
 import { selecting } from "./concepts/selecting/registry.ts";
-
-interface DeterministicFloorContext {
-  identities: {
-    Alerting: () => string;
-    Discussing: () => string;
-    Gathering: () => string;
-    Selecting: () => string;
-  };
-}
+import { identitiesFor } from "./identities.ts";
 
 export const operationsRoomConcepts = conceptSet({
   Gathering: gathering,
@@ -34,6 +26,11 @@ export const operationsRoomConcepts = conceptSet({
 
 export const { concepts, vocabulary } = operationsRoomConcepts;
 
-export function deterministicImplementations(context: DeterministicFloorContext) {
-  return operationsRoomConcepts.implementations("deterministic", context);
+/** Build the concept set with one fixed id sequence per concept name. */
+export function deterministicImplementations(
+  sequences: Readonly<Record<string, readonly string[]>>,
+) {
+  return operationsRoomConcepts.implementations("deterministic", {
+    identities: identitiesFor(sequences, Object.keys(concepts)),
+  });
 }

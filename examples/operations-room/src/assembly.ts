@@ -16,32 +16,8 @@ import {
   SelectedMitigationOpensDiscussion,
 } from "./composition/packs.ts";
 import * as respondersMayContribute from "./composition/responders-may-contribute.ts";
-import {
-  ChooseMitigation,
-  CreateRoom,
-  currentMitigation,
-  GetRoom,
-  JoinRoom,
-  responderRoster,
-  responseStats,
-  requiredCurrentMitigation,
-  roomDashboard,
-  roomSummary,
-} from "./composition/room.ts";
+import * as room from "./composition/room.ts";
 import { operationsRoomConcepts, vocabulary } from "./concept-set.ts";
-
-const room = {
-  responderRoster,
-  roomSummary,
-  requiredCurrentMitigation,
-  currentMitigation,
-  responseStats,
-  roomDashboard,
-  CreateRoom,
-  JoinRoom,
-  ChooseMitigation,
-  GetRoom,
-};
 
 export type OperationsRoomOverrides = ImplementationOverrides<typeof vocabulary>;
 

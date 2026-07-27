@@ -41,7 +41,15 @@ const appVocabulary = vocabulary({
   concepts: {
     Answering: {
       class: AnsweringConcept,
-      refusals: { echo: { INVALID_MESSAGE: InvalidMessage } },
+      refusals: {
+        echo: [
+          {
+            code: "INVALID_MESSAGE",
+            error: InvalidMessage,
+            message: "The message is not one this concept can echo.",
+          },
+        ],
+      },
     },
   },
   computations: {},

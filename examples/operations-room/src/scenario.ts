@@ -12,7 +12,6 @@
  *   src/edge.ts                       — gateway and HTTP wiring
  */
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
-import { identities } from "./identities.ts";
 import { deterministicImplementations } from "./concept-set.ts";
 import { buildOperationsRoom } from "./edge.ts";
 import type { OperationsRoomWire } from "../generated/wire.ts";
@@ -20,12 +19,10 @@ import type { OperationsRoomWire } from "../generated/wire.ts";
 export async function runScenario() {
   const { gateway } = buildOperationsRoom({
     ...deterministicImplementations({
-      identities: {
-        Alerting: identities("alert-mara", "alert-lin"),
-        Discussing: identities("discussion-1", "response-1"),
-        Gathering: identities("checkout-latency", "member-mara", "member-lin"),
-        Selecting: identities("selection-1"),
-      },
+      Alerting: ["alert-mara", "alert-lin"],
+      Discussing: ["discussion-1", "response-1"],
+      Gathering: ["checkout-latency", "member-mara", "member-lin"],
+      Selecting: ["selection-1"],
     }),
   });
   const operations = createLocalClient<OperationsRoomWire>({ invoker: gateway });

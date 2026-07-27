@@ -17,7 +17,7 @@ the formatter, linter, typechecker, and test runner beneath those scripts.
 | Task                              | Command                      |
 | --------------------------------- | ---------------------------- |
 | Install dependencies              | `bun install`                |
-| Format, lint, and typecheck       | `bun run check`              |
+| Architecture, specs, lint, types  | `bun run check`              |
 | Run the full test suite           | `bun run test`               |
 | Build JavaScript and declarations | `bun run build`              |
 | Check declaration snapshot        | `bun run declarations:check` |

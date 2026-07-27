@@ -45,9 +45,15 @@ const eliminatedIdentifiers = new Set([
   "specificationProse",
 ]);
 const failures: string[] = [];
-const exampleDirectories = new Set(
-  Object.values(applicationExamples).map(({ directory }) => `examples/${directory}/`),
-);
+/**
+ * Roots of self-contained shipped projects. Each carries its own copy of the
+ * concepts it uses, so two of them may hold identical files; duplication
+ * *within* one project is still a finding.
+ */
+const projectDirectories = new Set([
+  ...Object.values(applicationExamples).map(({ directory }) => `examples/${directory}/`),
+  "tests/package/application/",
+]);
 
 const tsFilesBelow = (directory: string): Promise<string[]> =>
   filesBelow(directory, (name) => name.endsWith(".ts"));
@@ -82,8 +88,8 @@ function repositoryFiles(): string[] {
     .sort();
 }
 
-function exampleDirectoryOf(path: string): string | undefined {
-  return [...exampleDirectories].find((directory) => path.startsWith(directory));
+function projectDirectoryOf(path: string): string | undefined {
+  return [...projectDirectories].find((directory) => path.startsWith(directory));
 }
 
 function sourceDependencies(path: string): string[] {
@@ -270,9 +276,9 @@ for (const path of repository) {
   const duplicate = hashes.get(hash);
   if (
     duplicate !== undefined &&
-    (exampleDirectoryOf(path) === undefined ||
-      exampleDirectoryOf(duplicate) === undefined ||
-      exampleDirectoryOf(path) === exampleDirectoryOf(duplicate))
+    (projectDirectoryOf(path) === undefined ||
+      projectDirectoryOf(duplicate) === undefined ||
+      projectDirectoryOf(path) === projectDirectoryOf(duplicate))
   ) {
     failures.push(`${path}: exact duplicate of ${duplicate}`);
   } else hashes.set(hash, path);
@@ -281,7 +287,7 @@ for (const path of repository) {
     (parts.length === 1 && allowedRootFiles.has(path)) ||
     (head === ".github" && parts[1] === "workflows" && parts.length === 3) ||
     (head === "src" &&
-      ((parts[1] === "command" && parts.length === 3 && parts[2] === "artifacts.ts") ||
+      ((parts[1] === "command" && parts.length === 3 && path.endsWith(".ts")) ||
         (publicSubpaths.has(parts[1] ?? "") && parts.length === 3 && parts[2] === "index.ts") ||
         (parts[1] === "engine" && path.endsWith(".ts")))) ||
     (head === "docs" && path.endsWith(".md")) ||

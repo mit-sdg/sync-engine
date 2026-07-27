@@ -14,8 +14,6 @@ export type {
   ImplementationOverrides,
   Implementations,
   PublicErrorCategory,
-  QueryRegistration,
-  RefusalRegistration,
   RegisteredConcept,
   RegisteredConceptSet,
 } from "@engine/boundary/concept-set";

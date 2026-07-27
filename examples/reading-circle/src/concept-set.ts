@@ -14,14 +14,7 @@ import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { discussing } from "./concepts/discussing/registry.ts";
 import { gathering } from "./concepts/gathering/registry.ts";
 import { selecting } from "./concepts/selecting/registry.ts";
-
-interface DeterministicFloorContext {
-  identities: {
-    Gathering: () => string;
-    Selecting: () => string;
-    Discussing: () => string;
-  };
-}
+import { identitiesFor } from "./identities.ts";
 
 export const readingCircleConcepts = conceptSet({
   Gathering: gathering,
@@ -31,6 +24,11 @@ export const readingCircleConcepts = conceptSet({
 
 export const { concepts, vocabulary } = readingCircleConcepts;
 
-export function deterministicImplementations(context: DeterministicFloorContext) {
-  return readingCircleConcepts.implementations("deterministic", context);
+/** Build the concept set with one fixed id sequence per concept name. */
+export function deterministicImplementations(
+  sequences: Readonly<Record<string, readonly string[]>>,
+) {
+  return readingCircleConcepts.implementations("deterministic", {
+    identities: identitiesFor(sequences, Object.keys(concepts)),
+  });
 }

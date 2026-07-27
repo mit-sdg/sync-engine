@@ -31,7 +31,7 @@ import { computationRef } from "@engine/reads/computations";
 import { actionLine } from "./nodes.ts";
 import { lineOf } from "@engine/reads/lines";
 import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
-import { parseSpecProse } from "./concept-spec.ts";
+import { parseSpec } from "./concept-spec.ts";
 import type { ComputationFn, ComputationRef } from "@engine/reads/computations";
 import type { ConceptMetadata } from "./concept-metadata.ts";
 import type {
@@ -235,6 +235,18 @@ export interface VocabularyDeclaration<
   computations?: TComputations;
 }
 
+/**
+ * The contracts a specification supplies on its own. Refusal branches need the
+ * Error class that signals each code, so a registration derives those; prose
+ * and query promises the document already states in full.
+ */
+function specifiedContracts(spec: string): ConceptMetadata {
+  const { purpose, principle, queries } = parseSpec(spec);
+  const promises: Record<string, QueryPromise> = {};
+  for (const query of queries) promises[query.name] = query.promise;
+  return { purpose, principle, queries: promises };
+}
+
 function validateConceptMetadata(
   conceptName: string,
   cls: ConceptClass,
@@ -250,9 +262,8 @@ function validateConceptMetadata(
       throw new Error(`Vocabulary: "${conceptName}.${action}" is not an action of ${cls.name}.`);
     }
   }
-  for (const [action, refusals] of Object.entries(metadata.refusals ?? {})) {
-    const constructors = Object.entries(refusals);
-    for (const [code, Constructor] of constructors) {
+  for (const [action, branches] of Object.entries(metadata.refusals ?? {})) {
+    for (const { code, error: Constructor } of branches) {
       if (
         code === "" ||
         typeof Constructor !== "function" ||
@@ -263,10 +274,12 @@ function validateConceptMetadata(
         );
       }
     }
-    for (let left = 0; left < constructors.length; left += 1) {
-      for (let right = left + 1; right < constructors.length; right += 1) {
-        const Left = constructors[left][1];
-        const Right = constructors[right][1];
+    // An action's branches are matched by `instanceof` in order, so two
+    // branches on one action must never admit the same thrown error.
+    for (let left = 0; left < branches.length; left += 1) {
+      for (let right = left + 1; right < branches.length; right += 1) {
+        const Left = branches[left].error;
+        const Right = branches[right].error;
         if (Left === Right || Left.prototype instanceof Right || Right.prototype instanceof Left) {
           throw new Error(
             `Vocabulary: refusal classes for "${conceptName}.${action}" must not overlap.`,
@@ -276,7 +289,9 @@ function validateConceptMetadata(
     }
   }
   const declaredCodes = new Set(
-    Object.values(metadata.refusals ?? {}).flatMap((refusals) => Object.keys(refusals)),
+    Object.values(metadata.refusals ?? {}).flatMap((branches) =>
+      branches.map((branch) => branch.code),
+    ),
   );
   for (const code of Object.keys(metadata.publicErrors ?? {})) {
     if (!declaredCodes.has(code)) {
@@ -362,7 +377,8 @@ export function vocabulary(
     let declaredMetadata: ConceptMetadata | undefined;
     if (descriptor !== undefined) {
       const { class: _class, spec, ...contracts } = descriptor;
-      declaredMetadata = spec === undefined ? contracts : { ...parseSpecProse(spec), ...contracts };
+      declaredMetadata =
+        spec === undefined ? contracts : { ...specifiedContracts(spec), ...contracts };
       validateConceptMetadata(name, cls, declaredMetadata);
       metadata[name] = declaredMetadata;
     }
