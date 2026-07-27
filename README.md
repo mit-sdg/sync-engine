@@ -39,8 +39,7 @@ version such as `@mit-sdg/sync-engine@1.0.0-alpha.0` instead of the moving
 ### Upgrading Alpha Versions
 
 Alpha releases carry no migration guarantee. Before changing a pinned version,
-read the [changelog](https://github.com/mit-sdg/sync-engine/blob/main/CHANGELOG.md)
-and matching [GitHub
+read the [changelog](CHANGELOG.md) and matching [GitHub
 release](https://github.com/mit-sdg/sync-engine/releases); release-specific
 migration guidance is published there when available.
 
@@ -197,10 +196,12 @@ Choose a path based on what you need next:
 - [Public API](docs/public-surface.md): find package subpaths, exports, and
   signatures.
 - [Release status](#alpha-status), [migration guidance](#upgrading-alpha-versions),
-  and [changelog](https://github.com/mit-sdg/sync-engine/blob/main/CHANGELOG.md):
+  and [changelog](CHANGELOG.md):
   evaluate or upgrade an alpha version.
 - [Engine architecture](docs/architecture.md): navigate the implementation as
   a contributor.
+- [Contributor release procedure](docs/releasing.md): prepare, publish, verify,
+  or respond to a release.
 
 ## License
 

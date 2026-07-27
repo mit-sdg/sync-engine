@@ -16,9 +16,15 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@mit-sdg/sync-engine
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -26,15 +32,23 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - name: Verify release tag
-        run: >-
+        run: |
           node -e 'const { version } = require("./package.json");
           const expected = `v${version}`;
           if (process.env.GITHUB_REF_NAME !== expected || !/-alpha\.\d+$/.test(version)) {
             throw new Error(`Expected alpha tag ${expected}; received ${process.env.GITHUB_REF_NAME}`);
           }'
+          tagged_commit="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          if ! git merge-base --is-ancestor "$tagged_commit" origin/main; then
+            echo "Release tag $GITHUB_REF_NAME is not on origin/main" >&2
+            exit 1
+          fi
       - run: bun run check
       - run: bun run test
+      - run: bun run coverage
       - run: bun run declarations:check
+      - run: bun run examples:check
+      - run: bun run scenario
       - run: bun run package:check
       - run: bun audit
-      - run: npm publish --tag alpha --access public
+      - run: npm publish --provenance --tag alpha --access public
