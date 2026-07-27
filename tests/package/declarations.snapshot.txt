@@ -63,6 +63,12 @@ export {};
 /** Write a new project into `directory`, refusing to overwrite existing files. */
 export declare function scaffoldProject(directory: string): Promise<string[]>;
 
+=== dist/command/scaffold/text.d.ts ===
+declare module "*.md" {
+  const text: string;
+  export default text;
+}
+
 === dist/engine/boundary/admit.d.ts ===
 /**
  * Validate declared endpoint input for both direct invocation and the gateway.
@@ -4437,6 +4443,16 @@ export declare function inspectAssembly(assembly: Assembly<Record<string, new (.
     occurrences: ObservedOccurrence[];
     readBack: string;
 };
+
+=== dist/engine/utils/case.d.ts ===
+/** `operations-room` → `OperationsRoom` */
+export declare function pascal(name: string): string;
+/** `operations-room` → `operationsRoom` */
+export declare function camel(name: string): string;
+/** `operations-room` → `Operations room` */
+export declare function heading(name: string): string;
+/** `Operations room` → `operations-room` */
+export declare function slug(headingText: string): string;
 
 === dist/engine/utils/framework-error-codes.d.ts ===
 export declare const FrameworkErrorCode: {
