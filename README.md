@@ -168,7 +168,7 @@ Choose a path based on what you need next:
 
 - [Getting started](docs/guide/getting-started.md): scaffold a project, then
   walk through its concept, composition, and boundary.
-- [Authoring guides](docs/guide/getting-started.md): follow the curriculum from
+- [Authoring guides](docs/guide/concepts.md): follow the curriculum from
   one concept through a complete boundary.
 - [Examples map](examples/README.md): compare the compact Reading Circle with
   the modular Operations Room.

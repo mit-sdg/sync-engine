@@ -72,7 +72,6 @@ the book.
 | `.github/`                     | Continuous integration using the same named package commands contributors run               |
 | `tests/internal/`              | Focused units mirroring reactions, reads, boundary, and hosting                             |
 | `tests/package/`               | Source and packed type contracts, the isolated consumer fixture, and generated declarations |
-| `tests/fixtures/`              | Shared test concepts, reactions, and app builders                                           |
 | `examples/*/tests/`            | End-to-end coverage colocated with each self-contained example                              |
 | `tests/docs/`                  | Guide source-link and excerpt verification                                                  |
 | `tests/utils/`                 | Public utility contract coverage                                                            |

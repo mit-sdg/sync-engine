@@ -71,13 +71,10 @@
     "declarations:pin": "bun run build && bun scripts/declarations.ts pin",
     "example": "bun run build && bun scripts/examples.ts scenario readingCircle",
     "example:operations": "bun run build && bun scripts/examples.ts scenario operationsRoom",
-    "example:operations:pin": "bun scripts/examples.ts pin operationsRoom",
-    "example:pin": "bun scripts/examples.ts pin readingCircle",
     "examples:check": "bun scripts/examples.ts check",
     "package:check": "bun run build && bun scripts/verify-package.ts",
     "prepack": "bun run build",
     "scenario": "bun run build && bun scripts/examples.ts scenario",
-    "stitch:pin": "bun scripts/pin-stitch-spec.ts",
     "test": "LOG_LEVEL=error vp test",
     "typecheck": "tsc --noEmit"
   },
@@ -88,10 +85,6 @@
     "typescript": "^5.9.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.6",
     "vite-plus": "0.2.6"
-  },
-  "overrides": {
-    "postcss": "8.5.23",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.6"
   },
   "engines": {
     "bun": ">=1.3.0",
