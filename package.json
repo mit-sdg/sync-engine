@@ -22,6 +22,7 @@
     "sync-engine": "./dist/command/main.js"
   },
   "files": [
+    "CHANGELOG.md",
     "dist",
     "docs",
     "examples",
@@ -72,7 +73,7 @@
     "example": "bun run build && bun scripts/examples.ts scenario readingCircle",
     "example:operations": "bun run build && bun scripts/examples.ts scenario operationsRoom",
     "examples:check": "bun scripts/examples.ts check",
-    "package:check": "bun run build && bun scripts/verify-package.ts",
+    "package:check": "bun scripts/verify-package.ts",
     "prepack": "bun run build",
     "scenario": "bun run build && bun scripts/examples.ts scenario",
     "test": "LOG_LEVEL=error vp test",

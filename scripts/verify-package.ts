@@ -8,7 +8,6 @@ import { applicationExamples } from "../examples/register.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
-const tarball = resolve(temporary, "sync-engine.tgz");
 const consumer = resolve(temporary, "consumer");
 const standalone = resolve(temporary, "application");
 const expectedAuthor = "Barish Namazov and Eagon Meng";
@@ -21,12 +20,20 @@ function run(command: string, args: string[], cwd = root): void {
   });
 }
 
+function runNpm(args: string[], cwd = root): void {
+  run("bun", ["run", "npm", ...args], cwd);
+}
+
 function requireEntry(entries: Set<string>, path: string): void {
   if (!entries.has(`package/${path}`)) throw new Error(`packed package omits ${path}`);
 }
 
 function portablePath(path: string): string {
   return path.split(sep).join(posix.sep);
+}
+
+function tarballSpecifier(from: string, tarball: string): string {
+  return `file:${portablePath(relative(from, tarball))}`;
 }
 
 function packedPathExists(entries: Set<string>, path: string): boolean {
@@ -57,7 +64,19 @@ async function verifyPackedDocLinks(entries: Set<string>, installed: string): Pr
 
 try {
   const examples = Object.values(applicationExamples).map(({ directory }) => directory);
-  run("bun", ["pm", "pack", "--filename", tarball, "--ignore-scripts", "--quiet"]);
+  const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
+    author: string;
+    bin: Record<string, string>;
+    exports: Record<string, { import: string; types: string }>;
+    license: string;
+    name: string;
+    version: string;
+  };
+  const tarball = resolve(
+    temporary,
+    `${packageJson.name.replace(/^@/, "").replaceAll("/", "-")}-${packageJson.version}.tgz`,
+  );
+  runNpm(["pack", "--loglevel=error", "--pack-destination", temporary]);
 
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
   const entries = new Set(listing.trim().split(/\r?\n/));
@@ -69,13 +88,6 @@ try {
     requireEntry(entries, portablePath(relative(root, path)));
   }
 
-  const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
-    author: string;
-    bin: Record<string, string>;
-    exports: Record<string, { import: string; types: string }>;
-    license: string;
-    version: string;
-  };
   if (packageJson.license !== "Apache-2.0") {
     throw new Error(`package license is ${packageJson.license}; expected Apache-2.0`);
   }
@@ -92,17 +104,18 @@ try {
     requireEntry(entries, target.types.replace(/^\.\//, ""));
   }
 
+  await mkdir(consumer);
   await writeFile(
-    resolve(temporary, "package.json"),
+    resolve(consumer, "package.json"),
     `${JSON.stringify({
       private: true,
       type: "module",
-      dependencies: { "@mit-sdg/sync-engine": `file:${tarball}` },
+      dependencies: { "@mit-sdg/sync-engine": tarballSpecifier(consumer, tarball) },
     })}\n`,
   );
-  run("bun", ["install", "--ignore-scripts", "--cwd", temporary]);
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], consumer);
 
-  const installed = resolve(temporary, "node_modules/@mit-sdg/sync-engine");
+  const installed = resolve(consumer, "node_modules/@mit-sdg/sync-engine");
   await verifyPackedDocLinks(entries, installed);
   for (const path of await filesBelow(
     resolve(installed, "dist"),
@@ -122,6 +135,16 @@ try {
   if (scaffoldManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
     throw new Error(`packed scaffold must depend on version ${packageJson.version}`);
   }
+  scaffoldManifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(scaffold, tarball);
+  await writeFile(
+    resolve(scaffold, "package.json"),
+    `${JSON.stringify(scaffoldManifest, null, 2)}\n`,
+  );
+  run("bun", ["install", "--ignore-scripts"], scaffold);
+  run("bun", ["run", "generate"], scaffold);
+  run("bun", ["run", "check"], scaffold);
+  run("bun", ["run", "principle"], scaffold);
+  run("bun", ["run", "start"], scaffold);
 
   for (const example of examples) {
     const isolated = resolve(temporary, example);
@@ -133,7 +156,7 @@ try {
     if (manifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
       throw new Error(`${example} must depend on the package version ${packageJson.version}`);
     }
-    manifest.dependencies["@mit-sdg/sync-engine"] = `file:${tarball}`;
+    manifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(isolated, tarball);
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     run("bun", ["install", "--ignore-scripts"], isolated);
     run("bun", ["run", "check"], isolated);
@@ -148,7 +171,7 @@ try {
   if (standaloneManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
     throw new Error(`package application must depend on version ${packageJson.version}`);
   }
-  standaloneManifest.dependencies["@mit-sdg/sync-engine"] = `file:${tarball}`;
+  standaloneManifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(standalone, tarball);
   await writeFile(
     resolve(standalone, "package.json"),
     `${JSON.stringify(standaloneManifest, null, 2)}\n`,
@@ -159,17 +182,47 @@ try {
   run("bun", ["run", "principle"], standalone);
   run("bun", ["run", "start"], standalone);
 
+  await copyFile(
+    resolve(root, "tests/package/node-runtime-scenario.ts"),
+    resolve(consumer, "node-runtime-scenario.ts"),
+  );
   await writeFile(
-    resolve(temporary, "runtime-import.mjs"),
+    resolve(consumer, "tsconfig.runtime.json"),
+    `${JSON.stringify({
+      compilerOptions: {
+        lib: ["ESNext", "DOM"],
+        target: "ES2022",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        noEmit: false,
+        outDir: "compiled",
+        strict: true,
+        skipLibCheck: false,
+      },
+      files: ["node-runtime-scenario.ts"],
+    })}\n`,
+  );
+  run(
+    "node",
+    [
+      resolve(consumer, "node_modules/typescript/bin/tsc"),
+      "--project",
+      resolve(consumer, "tsconfig.runtime.json"),
+    ],
+    consumer,
+  );
+  run("node", [resolve(consumer, "compiled/node-runtime-scenario.js")], consumer);
+
+  await writeFile(
+    resolve(consumer, "runtime-import.mjs"),
     `await Promise.all(${JSON.stringify(
       Object.keys(packageJson.exports).map((entrypoint) =>
         entrypoint === "." ? "@mit-sdg/sync-engine" : `@mit-sdg/sync-engine/${entrypoint.slice(2)}`,
       ),
     )}.map((entrypoint) => import(entrypoint)));\n`,
   );
-  run("node", [resolve(temporary, "runtime-import.mjs")], temporary);
+  run("node", [resolve(consumer, "runtime-import.mjs")], consumer);
 
-  await mkdir(consumer);
   await writeFile(
     resolve(consumer, "all-entrypoints.ts"),
     Object.keys(packageJson.exports)
