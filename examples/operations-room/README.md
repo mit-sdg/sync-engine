@@ -24,7 +24,7 @@ read-back and wire contract.
 | Path                                                           | Role                                                                                                  |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `src/concepts/`                                                | Vendored Alerting, Discussing, Gathering, and Selecting concepts, specifications, and principle tests |
-| `src/support/`                                                 | Deterministic identities and floor context                                                            |
+| `src/concept-set.ts`, `src/identities.ts`                      | Concept registration, deterministic floor construction, and identities                                |
 | `src/composition/`                                             | Room formers, endpoints, optional reaction packs, and contribution policies                           |
 | `src/assembly.ts`                                              | Application assembly and selectable options                                                           |
 | `src/edge.ts`                                                  | Gateway and HTTP wiring                                                                               |

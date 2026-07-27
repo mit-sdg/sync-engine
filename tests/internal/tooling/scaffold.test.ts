@@ -31,6 +31,14 @@ describe("sync-engine new", () => {
 
     const assembly = await readFile(join(project, "src/assembly.ts"), "utf8");
     expect(assembly).toContain("export function assembleNoteKeeper()");
+
+    const generatedManifest = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+    };
+    const packageManifest = JSON.parse(
+      await readFile(new URL("../../../package.json", import.meta.url), "utf8"),
+    ) as { version: string };
+    expect(generatedManifest.dependencies["@mit-sdg/sync-engine"]).toBe(packageManifest.version);
   });
 
   test("the written concept registry names only what the specification cannot", async () => {

@@ -9,7 +9,7 @@
     "start": "bun src/scenario.ts"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "latest"
+    "@mit-sdg/sync-engine": "{{version}}"
   },
   "devDependencies": {
     "typescript": "^5.9.0"

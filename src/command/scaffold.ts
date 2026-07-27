@@ -38,11 +38,15 @@ function templatesDir(): string {
  * return them keyed by their path relative to the project root.
  */
 async function projectFiles(name: string, templates: string): Promise<Record<string, string>> {
+  const packageManifest = JSON.parse(
+    await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+  ) as { version: string };
   const replacements: Record<string, string> = {
     App: pascal(name),
     app: camel(name),
     heading: heading(name),
     name,
+    version: packageManifest.version,
   };
   replacements.slug = slug(replacements.heading);
 

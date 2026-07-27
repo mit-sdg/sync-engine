@@ -17,8 +17,8 @@ description and TypeScript wire contract from the assembled application.
 ## Install
 
 ```sh
-bun add @mit-sdg/sync-engine
-# or: npm install @mit-sdg/sync-engine
+bun add @mit-sdg/sync-engine@alpha
+# or: npm install @mit-sdg/sync-engine@alpha
 ```
 
 The library is ESM-only and supports Node.js 20 or newer. The generated-artifact

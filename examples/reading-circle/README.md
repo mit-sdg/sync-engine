@@ -31,7 +31,7 @@ responses, and prints both the full circle page and the refusals.
 ## Files
 
 - `src/concepts/*/`: concept implementations, principle tests, and specs
-- `src/support/`: deterministic identity support
+- `src/concept-set.ts`, `src/identities.ts`: concept registration and deterministic identity support
 - `src/composition/reading-circle.ts`: reactions, views, formers, and boundaries
 - `src/assembly.ts`, `src/edge.ts`, `src/client.ts`: assembly and boundary wiring
 - `src/scenario.ts`: complete local-gateway story

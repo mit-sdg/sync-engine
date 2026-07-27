@@ -1,0 +1,41 @@
+name: Publish alpha
+
+on:
+  push:
+    tags:
+      - "v*.*.*-alpha.*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Verify release tag
+        run: >-
+          node -e 'const { version } = require("./package.json");
+          const expected = `v${version}`;
+          if (process.env.GITHUB_REF_NAME !== expected || !/-alpha\.\d+$/.test(version)) {
+            throw new Error(`Expected alpha tag ${expected}; received ${process.env.GITHUB_REF_NAME}`);
+          }'
+      - run: bun run check
+      - run: bun run test
+      - run: bun run declarations:check
+      - run: bun run package:check
+      - run: bun run goldens
+      - run: bun audit
+      - run: npm publish --tag alpha --access public

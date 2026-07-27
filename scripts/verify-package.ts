@@ -70,6 +70,7 @@ try {
     bin: Record<string, string>;
     exports: Record<string, { import: string; types: string }>;
     license: string;
+    version: string;
   };
   if (packageJson.license !== "Apache-2.0") {
     throw new Error(`package license is ${packageJson.license}; expected Apache-2.0`);
@@ -109,6 +110,15 @@ try {
     }
   }
 
+  const scaffold = resolve(temporary, "scaffold");
+  run("bun", [resolve(installed, packageJson.bin["sync-engine"]), "new", scaffold], temporary);
+  const scaffoldManifest = JSON.parse(
+    await readFile(resolve(scaffold, "package.json"), "utf8"),
+  ) as { dependencies: Record<string, string> };
+  if (scaffoldManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
+    throw new Error(`packed scaffold must depend on version ${packageJson.version}`);
+  }
+
   for (const example of examples) {
     const isolated = resolve(temporary, example);
     await cp(resolve(installed, "examples", example), isolated, { recursive: true });
@@ -116,6 +126,9 @@ try {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
       dependencies: Record<string, string>;
     };
+    if (manifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
+      throw new Error(`${example} must depend on the package version ${packageJson.version}`);
+    }
     manifest.dependencies["@mit-sdg/sync-engine"] = `file:${tarball}`;
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     run("bun", ["install", "--ignore-scripts"], isolated);
@@ -128,6 +141,9 @@ try {
   const standaloneManifest = JSON.parse(
     await readFile(resolve(standalone, "package.json"), "utf8"),
   ) as { dependencies: Record<string, string> };
+  if (standaloneManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
+    throw new Error(`package application must depend on version ${packageJson.version}`);
+  }
   standaloneManifest.dependencies["@mit-sdg/sync-engine"] = `file:${tarball}`;
   await writeFile(
     resolve(standalone, "package.json"),
