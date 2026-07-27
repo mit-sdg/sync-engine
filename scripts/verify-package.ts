@@ -28,6 +28,13 @@ function requireEntry(entries: Set<string>, path: string): void {
   if (!entries.has(`package/${path}`)) throw new Error(`packed package omits ${path}`);
 }
 
+function requireExecutable(tarball: string, path: string): void {
+  const listing = execFileSync("tar", ["-tvzf", tarball], { encoding: "utf8" });
+  const entry = listing.split(/\r?\n/).find((line) => line.trimEnd().endsWith(`package/${path}`));
+  const mode = entry?.trim().split(/\s+/, 1)[0];
+  if (mode?.[3] !== "x") throw new Error(`packed package does not mark ${path} executable`);
+}
+
 function portablePath(path: string): string {
   return path.split(sep).join(posix.sep);
 }
@@ -98,7 +105,9 @@ try {
   if (packageJson.bin["sync-engine"] !== "./dist/command/main.js") {
     throw new Error("package must expose the sync-engine command as ./dist/command/main.js");
   }
-  requireEntry(entries, packageJson.bin["sync-engine"].replace(/^\.\//, ""));
+  const executable = packageJson.bin["sync-engine"].replace(/^\.\//, "");
+  requireEntry(entries, executable);
+  requireExecutable(tarball, executable);
   for (const target of Object.values(packageJson.exports)) {
     requireEntry(entries, target.import.replace(/^\.\//, ""));
     requireEntry(entries, target.types.replace(/^\.\//, ""));
