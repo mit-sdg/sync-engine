@@ -3,13 +3,19 @@
  * place of an {@link InvocationResult}, and the reading that recovers a result
  * from a respond output or wire reply. A success is its bare value; an error
  * is `{ error }` — a domain value that already spells itself as an error
- * envelope passes through untouched, a framework code carries its optional
+ * envelope passes through untouched, and a framework code carries its optional
  * `detail`. The distinction the flat form drops (domain vs framework) is
- * carried on the way back by the internal `errorKind` tag when present.
+ * carried beside the response by the request boundary.
  */
 
-import { domainError, FRAMEWORK_ERROR_KIND_FIELD, frameworkError, success } from "./errors.ts";
-import type { EmittedFrameworkErrorCode, InvocationResult } from "./errors.ts";
+import {
+  domainError,
+  FrameworkErrorCode,
+  frameworkError,
+  isEmittedFrameworkErrorCode,
+  success,
+} from "./errors.ts";
+import type { InvocationResult } from "./errors.ts";
 
 /**
  * An {@link InvocationResult} as its flat wire body: the success value bare,
@@ -55,15 +61,20 @@ export function toJsonEnvelope(result: InvocationResult): unknown {
 }
 
 /**
- * A respond output or wire reply read back as an {@link InvocationResult}: the
- * internal `errorKind` tag names a framework fault, a bare `error` key names a
- * domain error, and anything else is the success body.
+ * A respond output read back as an {@link InvocationResult}. Framework
+ * classification comes from the boundary action that settled the request,
+ * never from an authored envelope field.
  */
-export function fromEnvelope(output: Record<string, unknown>): InvocationResult {
-  if (output[FRAMEWORK_ERROR_KIND_FIELD] === "framework" && typeof output.error === "string") {
-    return frameworkError(output.error as EmittedFrameworkErrorCode);
+export function fromEnvelope(
+  output: Record<string, unknown>,
+  classification: "authored" | "framework" = "authored",
+): InvocationResult {
+  if (classification === "framework") {
+    return frameworkError(
+      isEmittedFrameworkErrorCode(output.error) ? output.error : FrameworkErrorCode.INTERNAL_ERROR,
+    );
   }
-  if (typeof output === "object" && output !== null && "error" in output) {
+  if ("error" in output) {
     return domainError(output.error);
   }
   return success(output);

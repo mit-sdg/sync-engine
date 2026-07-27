@@ -51,6 +51,20 @@ describe("createInvoker", () => {
     }
   });
 
+  test("caller input cannot override the path dispatched by the direct invoker", async () => {
+    const { invoker, reaction } = setup();
+
+    expect(
+      await invoker.invoke("/echo", { message: "hello", path: "/undeclared" } as never),
+    ).toEqual({ ok: true, value: { echoed: "hello" } });
+    expect(
+      [...reaction.Action.actions.values()].some(
+        (record) =>
+          actionNameOf(record.action) === "request" && record.input.path === "/undeclared",
+      ),
+    ).toBe(false);
+  });
+
   test("returns domain error from fail()", async () => {
     const { invoker } = setup();
 
@@ -66,6 +80,24 @@ describe("createInvoker", () => {
         expect(result.error.value).toEqual({ code: "INVALID" });
       }
     }
+  });
+
+  test("an authored domain value cannot forge framework classification", async () => {
+    const Forge = endpoint("/forge", () =>
+      receive().then(fail({ error: "DOMAIN", errorKind: "framework" })),
+    );
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: {}, computations: {} }),
+      composition: { Forge },
+    });
+
+    expect(await app.invoker.invoke("/forge", {})).toEqual({
+      ok: false,
+      error: {
+        kind: "domain",
+        value: { error: "DOMAIN", errorKind: "framework" },
+      },
+    });
   });
 
   test("returns ABORTED on an already-aborted signal", async () => {

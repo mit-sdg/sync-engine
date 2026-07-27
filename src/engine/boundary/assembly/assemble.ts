@@ -68,13 +68,21 @@ const Boundary = makeVocabulary({
 const requestIdVar = Symbol("requestId");
 
 export function receive(input: Mapping = {}): WhenBuilder {
+  if (Object.hasOwn(input, "path")) {
+    throw new Error('receive(...) cannot author the boundary-owned "path" field.');
+  }
+  if (Object.hasOwn(input, "requestId")) {
+    throw new Error('receive(...) cannot author the boundary-owned "requestId" field.');
+  }
   return when(Boundary.request({ ...input, requestId: requestIdVar }).responds());
 }
 
 /** Answer the request this reaction was triggered by. */
 export function respond(body: Mapping = {}) {
-  if (Object.hasOwn(body, "requestId")) {
-    throw new Error('respond(...) cannot author the boundary-owned "requestId" field.');
+  for (const field of ["requestId", "errorKind"]) {
+    if (Object.hasOwn(body, field)) {
+      throw new Error(`respond(...) cannot author the boundary-owned "${field}" field.`);
+    }
   }
   return Boundary.respond({ ...body, requestId: requestIdVar });
 }
@@ -136,7 +144,7 @@ export function isEndpointDef(value: unknown): value is EndpointDef {
 function pinToPath(decl: ReactionDeclaration, path: string): ReactionDeclaration {
   for (const clause of decl.when) {
     if ("channel" in clause) continue;
-    if (clause.action === Boundary.request && !("path" in clause.input)) {
+    if (clause.action === Boundary.request) {
       clause.input = { ...clause.input, path };
     }
   }

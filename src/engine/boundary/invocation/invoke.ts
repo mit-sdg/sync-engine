@@ -16,11 +16,36 @@ interface PendingRequest {
   signalListener?: () => void;
 }
 
+const frameworkResponses = new WeakSet<Record<string, unknown>>();
+
 function disposePending(pending: PendingRequest): void {
   clearTimeout(pending.timer);
   if (pending.signalListener !== undefined && pending.signal !== undefined) {
     pending.signal.removeEventListener("abort", pending.signalListener);
   }
+}
+
+function settlePending(
+  requests: Map<string, PendingRequest>,
+  args: Record<string, unknown>,
+  framework: boolean,
+): Record<string, unknown> {
+  const requestId = args.requestId;
+  if (typeof requestId !== "string") {
+    throw new Refuse("NOT_PENDING", { detail: "respond carries no requestId" });
+  }
+  const { requestId: _, ...output } = args;
+  const pending = requests.get(requestId);
+  if (pending === undefined) {
+    throw new Refuse("NOT_PENDING", {
+      detail: `request ${requestId} is not pending — already answered, timed out, or unknown`,
+    });
+  }
+  requests.delete(requestId);
+  disposePending(pending);
+  if (framework) frameworkResponses.add(output);
+  pending.resolve(output);
+  return args;
 }
 
 export class Requesting {
@@ -38,6 +63,7 @@ export class Requesting {
   static readonly outcomes: OutcomeContracts = {
     request: {},
     respond: { refusals: ["NOT_PENDING"] },
+    respondFramework: { refusals: ["NOT_PENDING"] },
   };
 
   private pending = new Map<string, PendingRequest>();
@@ -47,21 +73,12 @@ export class Requesting {
   }
 
   respond(args: Record<string, unknown>): Record<string, unknown> {
-    const requestId = args.requestId;
-    if (typeof requestId !== "string") {
-      throw new Refuse("NOT_PENDING", { detail: "respond carries no requestId" });
-    }
-    const { requestId: _, ...output } = args;
-    const pending = this.pending.get(requestId);
-    if (pending === undefined) {
-      throw new Refuse("NOT_PENDING", {
-        detail: `request ${requestId} is not pending — already answered, timed out, or unknown`,
-      });
-    }
-    this.pending.delete(requestId);
-    disposePending(pending);
-    pending.resolve(output);
-    return args;
+    return settlePending(this.pending, args, false);
+  }
+
+  /** Framework-only response channel; application authoring exposes only `respond`. */
+  protected respondFramework(args: Record<string, unknown>): Record<string, unknown> {
+    return settlePending(this.pending, args, true);
   }
 
   register(
@@ -193,10 +210,18 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
             describeError(completion.error),
           );
         }
-        return fromEnvelope(first.value);
+        return fromEnvelope(
+          first.value,
+          frameworkResponses.has(first.value) ? "framework" : "authored",
+        );
       }
       const settled = first.kind === "dispatched" ? await response : first;
-      if (settled.kind === "response") return fromEnvelope(settled.value);
+      if (settled.kind === "response") {
+        return fromEnvelope(
+          settled.value,
+          frameworkResponses.has(settled.value) ? "framework" : "authored",
+        );
+      }
       try {
         throw settled.error;
       } catch (err) {

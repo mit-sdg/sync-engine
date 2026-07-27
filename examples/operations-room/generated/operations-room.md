@@ -17,6 +17,7 @@ Actions:
 
 - `request (…)`
 - `respond (…)` — may refuse `NOT_PENDING`
+- `respondFramework (…)` — may refuse `NOT_PENDING`
 - `register (…)`
 - `cancel (…)`
 
@@ -325,7 +326,7 @@ when any action is faulted, not asked by DeliverFaultToAsker
 where
   earlier, RequestBoundary.request (requestId)
 then
-  RequestBoundary.respond (requestId, error: "INTERNAL_ERROR", errorKind: "framework")
+  RequestBoundary.respondFramework (requestId, error: "INTERNAL_ERROR")
 ```
 
 ## Endpoint input contracts

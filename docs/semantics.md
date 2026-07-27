@@ -231,6 +231,10 @@ do not create a runtime join.
 At the application boundary, `receive(...)` supplies the outside-request
 trigger to the same sibling tree. Path pinning, input contracts, request
 correlation, response shaping, and wire derivation remain endpoint concerns.
+The endpoint's declared path is authoritative: `receive(...)` cannot author
+the boundary-owned `path`. Authored responses likewise cannot provide the
+boundary-owned `requestId` or `errorKind`; framework classification travels on
+a separate internal response channel and accepts only declared framework codes.
 An endpoint records at most one answer. An uncovered input, a dropped plain
 line, or a failed `where` can leave the request unanswered. Parallel endpoint
 declarations and sibling answers remain ordinary alternatives, so any matching

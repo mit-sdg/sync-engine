@@ -52,6 +52,16 @@ describe("endpoint", () => {
     });
   });
 
+  test("rejects an authored receive path when the endpoint is registered", () => {
+    const Colliding = endpoint("/declared", ({ path }: Vars) =>
+      receive({ path }).then(respond({ ok: true })),
+    );
+
+    expect(() => assemble({ vocabulary: emptyVocabulary, composition: { Colliding } })).toThrow(
+      'receive(...) cannot author the boundary-owned "path" field.',
+    );
+  });
+
   test("respond carries the body and fail carries a domain error", () => {
     const Success = endpoint("/success", () => receive().then(respond({ ok: true, id: "abc" })));
     const Failure = endpoint("/failure", () => receive().then(fail({ code: "NOPE" })));
@@ -99,6 +109,12 @@ describe("endpoint", () => {
   test("reserves the response correlation field for the boundary", () => {
     expect(() => respond({ requestId: "author value" })).toThrow(
       'respond(...) cannot author the boundary-owned "requestId" field.',
+    );
+  });
+
+  test("reserves framework classification for the boundary", () => {
+    expect(() => respond({ error: "DOMAIN", errorKind: "framework" })).toThrow(
+      'respond(...) cannot author the boundary-owned "errorKind" field.',
     );
   });
 

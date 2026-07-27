@@ -17,8 +17,11 @@ export const FrameworkErrorCode = Codes;
 export type FrameworkErrorCode = FrameworkErrorCodeValue;
 export type { EmittedFrameworkErrorCode };
 
-/** Internal request-boundary tag used to keep framework faults out of domain errors. */
-export const FRAMEWORK_ERROR_KIND_FIELD = "errorKind";
+const emittedFrameworkErrorCodes = new Set<string>(Object.values(FrameworkErrorCode));
+
+export function isEmittedFrameworkErrorCode(value: unknown): value is EmittedFrameworkErrorCode {
+  return typeof value === "string" && emittedFrameworkErrorCodes.has(value);
+}
 
 export function success<T>(value: T): InvocationResult<T, never> {
   return { ok: true, value };

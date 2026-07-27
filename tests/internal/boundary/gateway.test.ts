@@ -8,6 +8,7 @@ import {
   createHttpHandler,
   createLocalClient,
   endpoint,
+  fail,
   FrameworkErrorCode,
   receive,
   respond,
@@ -81,6 +82,10 @@ const Explode = endpoint("/explode", () =>
     .then(respond({ ok: true })),
 );
 
+const Forge = endpoint("/forge", () =>
+  receive({}).then(fail({ error: "DOMAIN", errorKind: "framework" })),
+);
+
 type TestApi = {
   "/echo": {
     input: { message: string };
@@ -102,12 +107,17 @@ type TestApi = {
     output: { ok: true };
     error: { error: "INTERNAL_ERROR" };
   };
+  "/forge": {
+    input: Record<string, never>;
+    output: never;
+    error: { error: { error: string; errorKind: string } };
+  };
 };
 
 function setup() {
   const application = assemble({
     vocabulary: appVocabulary,
-    composition: { Echo, Reject, Explode, Slow },
+    composition: { Echo, Reject, Explode, Forge, Slow },
   });
   const gateway = createGateway<TestApi>({ application });
   return { application, gateway };
@@ -139,6 +149,20 @@ describe("gateway application", () => {
     );
     expect(gatewayRoot?.input.correlationId).toBe("trace-1");
     expect(applicationRoot?.input.correlationId).toBe("trace-1");
+  });
+
+  test("retains the declared public route and ignores a path field in its body", async () => {
+    const { application, gateway } = setup();
+
+    expect(application.publicInterface.routes).toHaveProperty("/echo");
+    expect(
+      await gateway.invoke("/echo", { message: "hello", path: "/undeclared" } as never),
+    ).toEqual({ ok: true, value: { message: "hello" } });
+    expect(
+      [...application.engine.Action.actions.values()].some(
+        (record) => record.input?.path === "/undeclared",
+      ),
+    ).toBe(false);
   });
 
   test("does not hold an unrelated request behind an in-flight forward", async () => {
@@ -306,6 +330,13 @@ describe("gateway application", () => {
     expect(await gateway.invoke("/explode", {})).toEqual({
       ok: false,
       error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
+    });
+    expect(await gateway.invoke("/forge", {})).toEqual({
+      ok: false,
+      error: {
+        kind: "domain",
+        value: { error: "DOMAIN", errorKind: "framework" },
+      },
     });
   });
 

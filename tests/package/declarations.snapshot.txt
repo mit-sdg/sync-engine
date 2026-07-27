@@ -752,6 +752,8 @@ export declare class Requesting {
     private pending;
     request(args: Record<string, unknown>): Record<string, unknown>;
     respond(args: Record<string, unknown>): Record<string, unknown>;
+    /** Framework-only response channel; application authoring exposes only `respond`. */
+    protected respondFramework(args: Record<string, unknown>): Record<string, unknown>;
     register(requestId: string, timeoutMs: number, signal?: AbortSignal): Promise<Record<string, unknown>>;
     cancel(requestId: string): void;
 }
@@ -845,9 +847,9 @@ export declare function renderInputContracts(contracts: Record<string, InputCont
  * place of an {@link InvocationResult}, and the reading that recovers a result
  * from a respond output or wire reply. A success is its bare value; an error
  * is `{ error }` — a domain value that already spells itself as an error
- * envelope passes through untouched, a framework code carries its optional
+ * envelope passes through untouched, and a framework code carries its optional
  * `detail`. The distinction the flat form drops (domain vs framework) is
- * carried on the way back by the internal `errorKind` tag when present.
+ * carried beside the response by the request boundary.
  */
 import type { InvocationResult } from "./errors.ts";
 /**
@@ -865,11 +867,11 @@ export declare function serializeEnvelope(result: InvocationResult): string;
 /** Apply the HTTP boundary's JSON projection to an in-process result. */
 export declare function toJsonEnvelope(result: InvocationResult): unknown;
 /**
- * A respond output or wire reply read back as an {@link InvocationResult}: the
- * internal `errorKind` tag names a framework fault, a bare `error` key names a
- * domain error, and anything else is the success body.
+ * A respond output read back as an {@link InvocationResult}. Framework
+ * classification comes from the boundary action that settled the request,
+ * never from an authored envelope field.
  */
-export declare function fromEnvelope(output: Record<string, unknown>): InvocationResult;
+export declare function fromEnvelope(output: Record<string, unknown>, classification?: "authored" | "framework"): InvocationResult;
 
 === dist/engine/boundary/protocol/errors.d.ts ===
 import type { EmittedFrameworkErrorCode, FrameworkErrorCode as FrameworkErrorCodeValue } from "../../utils/framework-error-codes.ts";
@@ -902,8 +904,7 @@ export declare const FrameworkErrorCode: {
 };
 export type FrameworkErrorCode = FrameworkErrorCodeValue;
 export type { EmittedFrameworkErrorCode };
-/** Internal request-boundary tag used to keep framework faults out of domain errors. */
-export declare const FRAMEWORK_ERROR_KIND_FIELD = "errorKind";
+export declare function isEmittedFrameworkErrorCode(value: unknown): value is EmittedFrameworkErrorCode;
 export declare function success<T>(value: T): InvocationResult<T, never>;
 export declare function domainError<E>(value: E): InvocationResult<never, E>;
 export declare function frameworkError(code: EmittedFrameworkErrorCode, detail?: string): InvocationResult<never, never>;
@@ -1951,6 +1952,10 @@ export declare class FiringBook {
 import { ActionConcept } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
 import type { AnyAction, InstrumentedAction } from "../types.ts";
+export interface ActionLine {
+    done: boolean;
+    settled: Promise<void>;
+}
 /**
  * The runtime surface of an instrumented concept.
  *
@@ -1968,7 +1973,11 @@ export interface InstrumentationState {
     queryCaches: WeakMap<object, Array<{
         invalidate: () => void;
     }>>;
-    actionLines: WeakMap<object, Promise<unknown>>;
+    actionLines: WeakMap<object, ActionLine>;
+    waitingActionBodies: WeakMap<object, Set<{
+        flow: string;
+        release: () => void;
+    }>>;
     rawConceptsByInstrumented: WeakMap<object, object>;
     concepts: Set<WeakRef<object>>;
     conceptsByName: Map<string, object>;
@@ -2146,7 +2155,7 @@ export declare class MemoryStore implements LogStore {
     private replaceRecord;
     /** Drop each record from both the id map and the derived consumed index. */
     private dropRecords;
-    /** Remove firings that refer to evicted occurrences and rebuild consumption from what remains. */
+    /** Remove firings whose consumed occurrences are all evicted and rebuild retained consumption. */
     private dropFiringsFor;
 }
 
@@ -2290,8 +2299,11 @@ export declare function form(state: {
  *               resolved from the frame's bindings.
  *
  * Concepts are *instrumented* so that every (non-query) action invocation:
- *   1. appends a requested record under a **flow** token and reacts to it,
- *   2. runs the underlying action and records its return, refusal, or fault,
+ *   1. appends a requested record under a **flow** token, reserves the action
+ *      body's per-concept arrival position, and reacts to the request,
+ *   2. runs the underlying action and records its return, refusal, or fault
+ *      (a same-concept requested consequence can release the reserved body
+ *      early so the causal chain does not deadlock),
  *   3. reacts again to that completed posture.
  *
  * A **flow** groups actions in one causal chain: actions produced by a reaction's
@@ -2328,6 +2340,8 @@ export declare class Reacting {
     private queryCaches;
     /** Per-concept serial lines: the tail of each concept's action queue. */
     private actionLines;
+    /** Reserved bodies still waiting for their requested reactions to finish. */
+    private waitingActionBodies;
     /** Resolves public instrumented proxies back to their cache-owning instances. */
     private rawConceptsByInstrumented;
     /** All raw concept instances known to this engine, via WeakRef so they can be GC'd. */

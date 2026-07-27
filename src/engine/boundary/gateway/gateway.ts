@@ -9,7 +9,7 @@ import { admitInput } from "../protocol/admit.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
-import { FrameworkErrorCode } from "../protocol/errors.ts";
+import { FrameworkErrorCode, isEmittedFrameworkErrorCode } from "../protocol/errors.ts";
 import type { EmittedFrameworkErrorCode, InvocationResult } from "../protocol/errors.ts";
 import { assemble, endpoint, receive, respond } from "../assembly/assemble.ts";
 import type { ClientError } from "../client/client.ts";
@@ -227,7 +227,7 @@ export function createGateway<C extends ContractShape = ContractShape>(
         };
       }
       if (result.error.kind === "domain") {
-        if (isEmittedFrameworkCode(result.error.value)) {
+        if (isEmittedFrameworkErrorCode(result.error.value)) {
           return {
             ok: false,
             error: {
@@ -247,13 +247,6 @@ export function createGateway<C extends ContractShape = ContractShape>(
       >;
     },
   } as Gateway<C>;
-}
-
-function isEmittedFrameworkCode(value: unknown): value is EmittedFrameworkErrorCode {
-  return (
-    typeof value === "string" &&
-    (Object.values(FrameworkErrorCode) as readonly string[]).includes(value)
-  );
 }
 
 /** The raw result shape a client sees after a gateway invocation. */

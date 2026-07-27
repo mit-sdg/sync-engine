@@ -19,9 +19,8 @@ import { faulted, refused } from "@engine/reactions/authoring/channels";
 import { actionLine } from "@engine/reactions/authoring/nodes";
 import { reaction } from "@engine/reactions/authoring/refs";
 import { earlier, when } from "@engine/reactions/authoring/words";
-import type { Reaction, Vars } from "@engine/reactions/types";
+import type { InstrumentedAction, Reaction, Vars } from "@engine/reactions/types";
 import type { RequestBoundaryActions } from "../protocol/endpoints.ts";
-import { FRAMEWORK_ERROR_KIND_FIELD } from "../protocol/errors.ts";
 
 /** The generic public reply for an internal runtime fault. */
 export const FAULT_REPLY = "INTERNAL_ERROR";
@@ -30,7 +29,10 @@ export const FAULT_REPLY = "INTERNAL_ERROR";
 export const FAULT_REACTION = "DeliverFaultToAsker";
 
 export function refusalFunnel(boundary: RequestBoundaryActions): Record<string, Reaction> {
-  const except = [boundary.request, boundary.respond];
+  const respondFramework = (
+    boundary as RequestBoundaryActions & { respondFramework: InstrumentedAction }
+  ).respondFramework;
+  const except = [boundary.request, boundary.respond, respondFramework];
 
   const DeliverRefusalToAsker = reaction(({ requestId, message }: Vars) =>
     when(refused({ message }, { except }))
@@ -42,10 +44,9 @@ export function refusalFunnel(boundary: RequestBoundaryActions): Record<string, 
     when(faulted({}, { exceptBy: [FAULT_REACTION] }))
       .where(earlier(boundary.request, { requestId }))
       .then(
-        actionLine(boundary.respond, {
+        actionLine(respondFramework, {
           requestId,
           error: FAULT_REPLY,
-          [FRAMEWORK_ERROR_KIND_FIELD]: "framework",
         }) as never,
       ),
   );

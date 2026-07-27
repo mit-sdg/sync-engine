@@ -229,7 +229,7 @@ describe("faults while forming response input", () => {
 
     // The standard fault-delivery response is the only successful response.
     const delivered = records.filter(
-      (r) => actionNameOf(r.action) === "respond" && r.outcome?.kind === "result",
+      (r) => actionNameOf(r.action) === "respondFramework" && r.outcome?.kind === "result",
     );
     expect(delivered).toHaveLength(1);
     expect(reaction._getFirings(FAULT_REACTION)).toHaveLength(1);
@@ -239,7 +239,7 @@ describe("faults while forming response input", () => {
     // This boundary always faults while responding. The delivery reaction skips
     // the response it asked for itself, preventing recursion.
     class FailingBoundary extends Requesting {
-      override respond(_: { requestId: string }): { requestId: string } {
+      override respondFramework(_: { requestId: string }): { requestId: string } {
         throw new Error("concept unavailable");
       }
     }
@@ -266,7 +266,7 @@ describe("faults while forming response input", () => {
     // by DeliverFaultToAsker does not start another.
     expect(reaction._getFirings(FAULT_REACTION)).toHaveLength(1);
     const faultedResponds = [...reaction.Action.actions.values()].filter(
-      (r) => actionNameOf(r.action) === "respond" && r.fault !== undefined,
+      (r) => actionNameOf(r.action) === "respondFramework" && r.fault !== undefined,
     );
     expect(faultedResponds).toHaveLength(1);
   });

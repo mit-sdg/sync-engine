@@ -297,7 +297,10 @@ For the exact persistence, eviction, and restart limits, see
 with `receive(input)`, may add `.where(...)`, and continues through the same
 single-path or labeled-sibling `then(...)` tree as `when`. `receive` adds the
 request trigger; the endpoint adds its path and optional input contract.
-Callable action lines ask concept actions, and `respond(body)` answers the caller.
+The declared path is boundary-owned and cannot appear in `receive(input)`.
+Callable action lines ask concept actions, and `respond(body)` answers the caller;
+`requestId` and `errorKind` are boundary-owned response fields and are rejected
+when authored in that body.
 `EndpointDef` and `InputContractDecl` are the corresponding declaration types.
 
 `createGateway(options)` places standard routing, input admission, forwarding,
