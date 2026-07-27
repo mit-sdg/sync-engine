@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
 import { applicationExamples } from "../../examples/register.ts";
+import { FrameworkErrorCode } from "../../src/boundary/index.ts";
 
 const root = new URL("../../", import.meta.url);
 
@@ -13,6 +14,13 @@ function table(document: string, header: string): string {
   if (start < 0) throw new Error(`missing table header: ${header}`);
   const end = document.indexOf("\n\n", start);
   return document.slice(start, end < 0 ? undefined : end);
+}
+
+function tableCells(row: string): string[] {
+  return row
+    .slice(1, -1)
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim());
 }
 
 describe("documented inventories", () => {
@@ -69,5 +77,32 @@ describe("documented inventories", () => {
     expect(docsIndex).not.toContain("| Package path");
     expect(guide).not.toContain("| Consumer");
     expect(table(publicSurface, "| Consumer")).toContain("`.count()`");
+  });
+
+  test("the public API tables are well formed and list every framework error", async () => {
+    const publicSurface = await text("docs/public-surface.md");
+    const tables = [...publicSurface.matchAll(/^(?:\|.*\|\n?){2,}/gm)].map((match) =>
+      match[0].trim(),
+    );
+    expect(tables.length).toBeGreaterThan(0);
+
+    for (const markdown of tables) {
+      const rows = markdown.split("\n").map(tableCells);
+      expect(
+        rows[1].every((cell) => /^:?-{3,}:?$/.test(cell)),
+        markdown,
+      ).toBe(true);
+      expect(
+        rows.map((row) => row.length),
+        markdown,
+      ).toEqual(Array.from({ length: rows.length }, () => rows[0].length));
+    }
+
+    const documentedErrors = table(publicSurface, "| Code")
+      .split("\n")
+      .slice(2)
+      .map((row) => tableCells(row)[0].replaceAll("`", ""))
+      .sort();
+    expect(documentedErrors).toEqual(Object.values(FrameworkErrorCode).sort());
   });
 });

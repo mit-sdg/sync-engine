@@ -17,6 +17,7 @@ const excerptDocs = [
 
 const sourceBlock =
   /(?:_Source|Source): \[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)_?\n\n(`{3,})([^\n]*)\n([\s\S]*?)\n\2/g;
+const sourceLabel = /^(?:_Source|Source): \[[^\]]+\]\([^)]+\)_?$/gm;
 const typeScriptBlock = /^```ts\n([\s\S]*?)\n```$/gm;
 const repositoryOnlySources = new Map<string, URL[]>([
   [
@@ -115,14 +116,33 @@ describe("guided curriculum", () => {
     expect(guide).toContain("bun run start");
   });
 
-  test("every TypeScript example remains byte-exact source", async () => {
+  test("every stated excerpt remains byte-exact with its stated source", async () => {
     for (const docUrl of excerptDocs) {
       const doc = await readFile(docUrl, "utf8");
-      const sources: string[] = [];
-      for (const match of doc.matchAll(sourceBlock)) {
-        const [, relativeSource] = match;
-        sources.push(await readFile(new URL(relativeSource, docUrl), "utf8"));
+      const excerpts = [...doc.matchAll(sourceBlock)];
+      expect(excerpts, `${docUrl.pathname}: source labels`).toHaveLength(
+        [...doc.matchAll(sourceLabel)].length,
+      );
+      for (const match of excerpts) {
+        const [, relativeSource, , , excerpt] = match;
+        const source = await readFile(new URL(relativeSource, docUrl), "utf8");
+        expect(
+          atExcerptIndents(source).some((candidate) => candidate.includes(excerpt)),
+          `${docUrl.pathname}: ${relativeSource}: ${excerpt.slice(0, 80)}`,
+        ).toBe(true);
       }
+    }
+  });
+
+  test("every unlabelled TypeScript example remains byte-exact executable source", async () => {
+    for (const docUrl of excerptDocs) {
+      const doc = await readFile(docUrl, "utf8");
+      const labelled = new Set(
+        [...doc.matchAll(sourceBlock)]
+          .filter((match) => match[3].trim() === "ts")
+          .map((match) => match[4]),
+      );
+      const sources: string[] = [];
       for (const sourceUrl of repositoryOnlySources.get(docUrl.pathname) ?? []) {
         const text = await readFile(sourceUrl, "utf8");
         sources.push(text);
@@ -133,6 +153,7 @@ describe("guided curriculum", () => {
 
       const candidates = sources.flatMap(atExcerptIndents);
       for (const [, excerpt] of doc.matchAll(typeScriptBlock)) {
+        if (labelled.has(excerpt)) continue;
         expect(
           candidates.some((source) => source.includes(excerpt)),
           `${docUrl.pathname}: ${excerpt.slice(0, 80)}`,
