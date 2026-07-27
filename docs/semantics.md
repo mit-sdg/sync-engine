@@ -33,6 +33,13 @@ throw reach a direct caller. Failure delivery during reaction matching and at
 the application boundary is covered in
 [Failures between action asks](#failures-between-action-asks).
 
+For a direct call through `Assembly.concepts`, a returned action resolves to its
+success value and a refusal resolves to an `ActionRefusal` mapping with an
+`error` code. A registered exception refusal also carries the specification's
+sentence as `detail`; a `Refuse` escape hatch may carry other data. A fault
+rejects the direct call. Underscore-prefixed query calls keep their declared
+return shape and do not return action refusals.
+
 The operations room shows three client-visible cases:
 
 - choosing a mitigation returns `{ mitigation }`;

@@ -22,19 +22,25 @@ export interface ActionLine {
   settled: Promise<void>;
 }
 
+/** A deliberate refusal returned to the direct caller of an instrumented action. */
+export type ActionRefusal = Readonly<Record<string, unknown>> & {
+  readonly error: string;
+};
+
 /**
  * The runtime surface of an instrumented concept.
  *
  * Concept classes stay ordinary: an action may return synchronously and may
  * throw its declared refusal. Once instrumented, every action is asynchronous
  * because the engine records and reacts to its occurrence before settling the
- * caller. Queries retain their declared return shape.
+ * caller. A deliberate refusal resolves to its refusal mapping; ordinary
+ * faults reject. Queries retain their declared return shape.
  */
 export type InstrumentedConcept<T extends object> = {
   [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result
     ? Key extends `_${string}`
       ? T[Key]
-      : (...args: Args) => Promise<Awaited<Result>>
+      : (...args: Args) => Promise<Awaited<Result> | ActionRefusal>
     : T[Key];
 };
 

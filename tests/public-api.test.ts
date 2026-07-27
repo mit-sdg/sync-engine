@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { readFileSync, readdirSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, test } from "vite-plus/test";
-import { assemble } from "@sync-engine/assembly";
+import { assemble, Logging } from "@sync-engine/assembly";
 import {
   createGateway,
   endpoint,
@@ -104,6 +104,7 @@ describe("canonical public API", () => {
         .then(respond({ title })),
     );
     const system = assemble({ vocabulary: words, composition: { Add } });
+    expect(Logging.OFF).toBe(0);
     expect(await system.invoker.invoke("/catalog/add", { raw: "  Example " })).toEqual({
       ok: true,
       value: { title: "example" },
@@ -114,6 +115,10 @@ describe("canonical public API", () => {
         kind: "domain",
         value: "DUPLICATE_TITLE",
       },
+    });
+    expect(await system.concepts.Cataloging.add({ title: "example" })).toEqual({
+      error: "DUPLICATE_TITLE",
+      detail: "This title is already in the catalog.",
     });
 
     const gateway = createGateway({
@@ -269,6 +274,7 @@ const register = {
     "whether",
   ],
   assembly: [
+    "ActionRefusal",
     "Assembly",
     "AssemblyOptions",
     "ConceptFloor",
@@ -280,6 +286,7 @@ const register = {
     "Implementations",
     "LogEntry",
     "LogStore",
+    "Logging",
     "MemoryStore",
     "PersistingConcept",
     "PublicError",

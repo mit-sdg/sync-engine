@@ -1,4 +1,6 @@
-import { assemble, conceptSet, registerConcept } from "@sync-engine/assembly";
+import { assemble, conceptSet, Logging, registerConcept } from "@sync-engine/assembly";
+import type { ActionRefusal, AssemblyOptions } from "@sync-engine/assembly";
+import type { GatewayOptions } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/language";
 
 class FirstConcept {}
@@ -64,18 +66,47 @@ incomplete.implementations();
 incomplete.implementations("mongo", context);
 
 class SynchronousActionConcept {
+  constructor(readonly prefix = "") {}
+
   save({ value }: { value: string }) {
-    return { value };
+    return { value: `${this.prefix}${value}` };
+  }
+
+  _saved(_: Record<string, never>): { value: string }[] {
+    return [];
   }
 }
 
-const instrumentedSurface = assemble({
-  vocabulary: vocabulary({ concepts: { Saving: SynchronousActionConcept }, computations: {} }),
-  composition: {},
+const synchronousVocabulary = vocabulary({
+  concepts: { Saving: SynchronousActionConcept },
+  computations: {},
 });
+const synchronousOptions: AssemblyOptions<{ Saving: typeof SynchronousActionConcept }, {}> = {
+  vocabulary: synchronousVocabulary,
+  composition: {},
+  initialize: { Saving: ["saved:"] },
+  logging: Logging.TRACE,
+};
+const instrumentedSurface = assemble(synchronousOptions);
 
-const saved: Promise<{ value: string }> = instrumentedSurface.concepts.Saving.save({ value: "ok" });
+const saved: Promise<{ value: string } | ActionRefusal> = instrumentedSurface.concepts.Saving.save({
+  value: "ok",
+});
 void saved;
+const queried: { value: string }[] = instrumentedSurface.concepts.Saving._saved({});
+void queried;
+
+const gatewayOptions: GatewayOptions = {
+  application: instrumentedSurface,
+  logging: Logging.VERBOSE,
+};
+void gatewayOptions;
+
+// @ts-expect-error Direct action calls may resolve to an ActionRefusal.
+const successOnly: Promise<{ value: string }> = instrumentedSurface.concepts.Saving.save({
+  value: "unchecked",
+});
+void successOnly;
 
 // @ts-expect-error Instrumented actions settle asynchronously even when the plain class action is sync.
 const notSaved: { value: string } = instrumentedSurface.concepts.Saving.save({ value: "not yet" });

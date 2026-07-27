@@ -220,16 +220,32 @@ fault.
 
 <!-- register:assembly:start -->
 
-`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
-`assemble({ vocabulary, composition, instances?, retention? })` installs one
-vocabulary and composition. It returns an `Assembly` with `concepts`,
-`invoker`, `publicInterface`, and `form(fusedFormer)`. `AssemblyOptions` names
-its input type. The default in-memory occurrence log retains the 100 most
-recent settled causal flows; `retention` accepts `"keepAll"`,
+`assemble(options)` installs one vocabulary and composition. `AssemblyOptions`
+names every option: `vocabulary` and `composition` are required; `instances`
+supplies ready concept implementations; and `initialize` supplies constructor
+argument tuples by vocabulary name. An instance takes precedence over its
+`initialize` tuple. Without either option, the declared class is constructed
+with no arguments.
+
+`logging` controls interpreter diagnostics and defaults to `Logging.OFF`.
+`Logging.TRACE` writes concise action lines and `Logging.VERBOSE` writes action
+records and interpreter frames. The in-memory occurrence log retains the 100
+most recent settled causal flows by default; `retention` accepts `"keepAll"`,
 `"evictConsumed"`, or `{ window: number }`.
+
+The returned `Assembly` exposes `concepts`, `invoker`, `publicInterface`, and
+`form(fusedFormer)`. A direct non-query concept action is asynchronous. It
+resolves to the action's success value or an `ActionRefusal`, whose `error`
+field is the refusal code and whose other fields are refusal data. Registered
+exception refusals include the specification's sentence as `detail`. An
+ordinary fault rejects the promise. Underscore-prefixed queries retain the
+class's declared return type and are not widened with `ActionRefusal`. Use the
+boundary `invoker` when the caller needs the boundary's explicit domain and
+framework error envelope instead.
 
 A named former is callable with one object-shaped input mapping: the former
 `"the operations room"` is fused as `roomDashboard({ room })`. Pass that
@@ -304,13 +320,16 @@ when authored in that body.
 `EndpointDef` and `InputContractDecl` are the corresponding declaration types.
 
 `createGateway(options)` places standard routing, input admission, forwarding,
-and refusal handling before an assembled application. `GatewayOptions`,
-`Gateway`, `GatewayTarget`, and `GatewayClientError` describe that
-construction; a target's `publicInterface` is the `ApplicationInterface` an
-assembly exposes. `Invoker`, `InvokeOptions`, and `InvocationResult` describe
-transport-independent calls. `FrameworkErrorCode` contains the stable
-framework codes; `EmittedFrameworkErrorCode` is the union that a boundary can
-emit.
+and refusal handling before an assembled application. `GatewayOptions`
+requires the `application` target. `additionalComposition` defaults to none;
+`logging` defaults to `Logging.OFF`, imported from `assembly`; and `retention`
+defaults to the 100 most recent settled gateway flows with the same values as
+assembly retention. `Gateway`, `GatewayTarget`, and `GatewayClientError`
+describe that construction; a target's `publicInterface` is the
+`ApplicationInterface` an assembly exposes. `Invoker`, `InvokeOptions`, and
+`InvocationResult` describe transport-independent calls. `FrameworkErrorCode`
+contains the stable framework codes; `EmittedFrameworkErrorCode` is the union
+that a boundary can emit.
 
 `createHttpHandler({ gateway, basePath? })` adapts the gateway to a Fetch
 handler. It accepts JSON `POST` requests beneath the base path.

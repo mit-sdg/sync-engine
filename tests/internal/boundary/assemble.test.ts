@@ -10,6 +10,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   MemoryStore,
+  Logging,
   no,
   request,
   reaction,
@@ -67,10 +68,13 @@ describe("assemble", () => {
       vocabulary: vocab,
       composition: { Increment },
       retention: "keepAll",
+      logging: Logging.TRACE,
     });
 
     expect((app.engine.Action.store as MemoryStore).policy).toEqual({ window: 100 });
+    expect(app.engine.logging).toBe(Logging.OFF);
     expect((keepAll.engine.Action.store as MemoryStore).policy).toBe("keepAll");
+    expect(keepAll.engine.logging).toBe(Logging.TRACE);
   });
 
   test("reactions register under their dotted composition path", async () => {

@@ -172,6 +172,7 @@ export interface GatewayOptions {
   };
   /** Additional gateway reactions, views, and formers. */
   composition?: Record<string, unknown>;
+  /** Gateway interpreter diagnostics; defaults to `Logging.OFF`. */
   logging?: Logging;
   /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
   retention?: RetentionPolicy;

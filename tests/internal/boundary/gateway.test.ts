@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
-import { actionNameOf, request, Refuse, vocabulary } from "@sync-engine/internal/reactions";
+import {
+  actionNameOf,
+  Logging,
+  request,
+  Refuse,
+  vocabulary,
+} from "@sync-engine/internal/reactions";
 import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import {
   assemble,
@@ -124,9 +130,12 @@ function setup() {
 }
 
 describe("gateway application", () => {
-  test("uses bounded occurrence retention by default", () => {
-    const { gateway } = setup();
+  test("uses bounded occurrence retention and disabled logging by default", () => {
+    const { application, gateway } = setup();
+    const traced = createGateway<TestApi>({ application, logging: Logging.TRACE });
     expect((gateway.engine.Action.store as MemoryStore).policy).toEqual({ window: 100 });
+    expect(gateway.engine.logging).toBe(Logging.OFF);
+    expect(traced.engine.logging).toBe(Logging.TRACE);
   });
 
   test("forwards an admitted request and keeps a separate log", async () => {

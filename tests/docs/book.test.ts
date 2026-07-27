@@ -398,10 +398,12 @@ describe("the example book", () => {
       await app.engine.form(theRespondedCircleActivityOf({ circle: "after-dinner" })),
     ).toBeNull();
 
-    const { selection } = await app.concepts.Selecting.choose({
+    const chosen = await app.concepts.Selecting.choose({
       scope: "after-dinner",
       item: "The Dispossessed",
     });
+    if ("error" in chosen) throw new Error(chosen.error);
+    const { selection } = chosen;
     const [{ discussion }] = await app.concepts.Discussing._openFor({ subject: selection });
 
     expect(await app.engine.form(theCircleActivityOf({ circle: "after-dinner" }))).toEqual({

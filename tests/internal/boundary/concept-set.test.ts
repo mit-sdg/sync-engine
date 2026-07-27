@@ -126,6 +126,10 @@ describe("external concept registration", () => {
       ok: true,
       value: { detail: "There is no such item." },
     });
+    expect(await application.concepts.Cataloging.find({})).toEqual({
+      error: "ITEM_NOT_FOUND",
+      detail: "There is no such item.",
+    });
   });
 });
 

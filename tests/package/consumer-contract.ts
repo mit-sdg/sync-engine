@@ -1,6 +1,8 @@
 import { createClient, createHttpClient, createLocalClient } from "@mit-sdg/sync-engine/client";
 import type { ClientError } from "@mit-sdg/sync-engine/client";
-import type { InvocationResult, Invoker } from "@mit-sdg/sync-engine/boundary";
+import { assemble, Logging } from "@mit-sdg/sync-engine/assembly";
+import type { ActionRefusal, AssemblyOptions } from "@mit-sdg/sync-engine/assembly";
+import type { GatewayOptions, InvocationResult, Invoker } from "@mit-sdg/sync-engine/boundary";
 import { vocabulary } from "@mit-sdg/sync-engine/language";
 
 class QueriedConcept {
@@ -13,6 +15,42 @@ vocabulary({
   concepts: { QueriedConcept: { class: QueriedConcept, queries: { _answer: "optional" } } },
   computations: {},
 });
+
+class DirectConcept {
+  constructor(readonly prefix = "") {}
+
+  act({ value }: { value: string }) {
+    return { value: `${this.prefix}${value}` };
+  }
+
+  _read(_: Record<string, never>): { value: string }[] {
+    return [];
+  }
+}
+
+const directVocabulary = vocabulary({ concepts: { Direct: DirectConcept }, computations: {} });
+const directOptions: AssemblyOptions<{ Direct: typeof DirectConcept }, {}> = {
+  vocabulary: directVocabulary,
+  composition: {},
+  initialize: { Direct: ["direct:"] },
+  logging: Logging.TRACE,
+};
+const directAssembly = assemble(directOptions);
+const directAction: Promise<{ value: string } | ActionRefusal> = directAssembly.concepts.Direct.act(
+  { value: "value" },
+);
+const directQuery: { value: string }[] = directAssembly.concepts.Direct._read({});
+const gatewayOptions: GatewayOptions = {
+  application: directAssembly,
+  logging: Logging.VERBOSE,
+};
+void [directAction, directQuery, gatewayOptions];
+
+// @ts-expect-error A direct action caller must account for refusal mappings.
+const directSuccessOnly: Promise<{ value: string }> = directAssembly.concepts.Direct.act({
+  value: "unchecked",
+});
+void directSuccessOnly;
 
 type ConsumerApi = {
   "/roster/sections/create": {

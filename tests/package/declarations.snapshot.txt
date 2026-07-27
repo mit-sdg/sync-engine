@@ -19,6 +19,8 @@ export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engi
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
 export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
 export { MemoryStore } from "../engine/reactions/runtime/log-store.ts";
+export { Logging } from "../engine/reactions/runtime/logging.ts";
+export type { ActionRefusal } from "../engine/reactions/runtime/instrumenting.ts";
 export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
 
 === dist/boundary/index.d.ts ===
@@ -135,11 +137,11 @@ export declare function isEndpointDef(value: unknown): value is EndpointDef;
 export interface AssembleOptions<T extends Record<string, ConceptClass>> {
     /** The concept vocabulary: every name bound to its canonical class. */
     vocabulary: DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>;
-    /** Constructor args per name; a missing name default-constructs with none. */
+    /** Constructor args per name; by default every concept is constructed with no arguments. */
     initialize?: {
         [K in keyof T]?: ConstructorParameters<T[K]>;
     };
-    /** Ready instances per name; these replace construction from the declared class. */
+    /** Ready instances per name; these take precedence over `initialize`. */
     instances?: {
         [K in keyof T]?: object;
     };
@@ -148,6 +150,7 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
      * declarations are boundary-specialized reactions.
      */
     composition: Record<string, unknown>;
+    /** Interpreter diagnostics; defaults to `Logging.OFF`. */
     logging?: Logging;
     /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
     retention?: RetentionPolicy;
@@ -602,6 +605,7 @@ export interface GatewayOptions {
     };
     /** Additional gateway reactions, views, and formers. */
     composition?: Record<string, unknown>;
+    /** Gateway interpreter diagnostics; defaults to `Logging.OFF`. */
     logging?: Logging;
     /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
     retention?: RetentionPolicy;
@@ -628,6 +632,7 @@ export interface GatewayOptions {
     application: GatewayTarget;
     /** Declarations added beside the standard gateway composition. */
     additionalComposition?: Record<string, unknown>;
+    /** Gateway interpreter diagnostics; defaults to `Logging.OFF`. */
     logging?: Logging;
     /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
     retention?: RetentionPolicy;
@@ -1956,16 +1961,21 @@ export interface ActionLine {
     done: boolean;
     settled: Promise<void>;
 }
+/** A deliberate refusal returned to the direct caller of an instrumented action. */
+export type ActionRefusal = Readonly<Record<string, unknown>> & {
+    readonly error: string;
+};
 /**
  * The runtime surface of an instrumented concept.
  *
  * Concept classes stay ordinary: an action may return synchronously and may
  * throw its declared refusal. Once instrumented, every action is asynchronous
  * because the engine records and reacts to its occurrence before settling the
- * caller. Queries retain their declared return shape.
+ * caller. A deliberate refusal resolves to its refusal mapping; ordinary
+ * faults reject. Queries retain their declared return shape.
  */
 export type InstrumentedConcept<T extends object> = {
-    [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result ? Key extends `_${string}` ? T[Key] : (...args: Args) => Promise<Awaited<Result>> : T[Key];
+    [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result ? Key extends `_${string}` ? T[Key] : (...args: Args) => Promise<Awaited<Result> | ActionRefusal> : T[Key];
 };
 export interface InstrumentationState {
     actions: ActionConcept;

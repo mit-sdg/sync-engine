@@ -156,15 +156,16 @@ function pinToPath(decl: ReactionDeclaration, path: string): ReactionDeclaration
 export interface AssembleOptions<T extends Record<string, ConceptClass>> {
   /** The concept vocabulary: every name bound to its canonical class. */
   vocabulary: DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>;
-  /** Constructor args per name; a missing name default-constructs with none. */
+  /** Constructor args per name; by default every concept is constructed with no arguments. */
   initialize?: { [K in keyof T]?: ConstructorParameters<T[K]> };
-  /** Ready instances per name; these replace construction from the declared class. */
+  /** Ready instances per name; these take precedence over `initialize`. */
   instances?: { [K in keyof T]?: object };
   /**
    * The application composition: reactions, views, and formers. Endpoint
    * declarations are boundary-specialized reactions.
    */
   composition: Record<string, unknown>;
+  /** Interpreter diagnostics; defaults to `Logging.OFF`. */
   logging?: Logging;
   /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
   retention?: RetentionPolicy;
