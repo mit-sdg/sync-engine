@@ -12,10 +12,14 @@ const consumer = resolve(temporary, "consumer");
 const standalone = resolve(temporary, "application");
 const expectedAuthor = "Barish Namazov and Eagon Meng";
 
+function commandEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, BUN_INSTALL_CACHE_DIR: resolve(temporary, "cache"), TMPDIR: temporary };
+}
+
 function run(command: string, args: string[], cwd = root): void {
   execFileSync(command, args, {
     cwd,
-    env: { ...process.env, BUN_INSTALL_CACHE_DIR: resolve(temporary, "cache"), TMPDIR: temporary },
+    env: commandEnv(),
     stdio: "inherit",
   });
 }
@@ -28,11 +32,40 @@ function requireEntry(entries: Set<string>, path: string): void {
   if (!entries.has(`package/${path}`)) throw new Error(`packed package omits ${path}`);
 }
 
-function requireExecutable(tarball: string, path: string): void {
-  const listing = execFileSync("tar", ["-tvzf", tarball], { encoding: "utf8" });
-  const entry = listing.split(/\r?\n/).find((line) => line.trimEnd().endsWith(`package/${path}`));
-  const mode = entry?.trim().split(/\s+/, 1)[0];
-  if (mode?.[3] !== "x") throw new Error(`packed package does not mark ${path} executable`);
+interface NpmPackResult {
+  filename: string;
+  size: number;
+  unpackedSize: number;
+  files: Array<{ path: string; mode: number }>;
+}
+
+function packWithNpm(): NpmPackResult {
+  const output = execFileSync(
+    "bun",
+    ["run", "npm", "pack", "--json", "--loglevel=error", "--pack-destination", temporary],
+    {
+      cwd: root,
+      env: commandEnv(),
+      encoding: "utf8",
+      stdio: ["inherit", "pipe", "inherit"],
+    },
+  );
+  const jsonStart = output.search(/^\[/m);
+  if (jsonStart === -1) throw new Error("npm pack did not emit its JSON manifest");
+  const parsed = JSON.parse(output.slice(jsonStart)) as NpmPackResult[];
+  if (parsed.length !== 1) throw new Error(`npm pack described ${parsed.length} artifacts`);
+  const packed = parsed[0];
+  if (packed.size <= 0 || packed.unpackedSize <= 0) {
+    throw new Error("npm pack reported an empty artifact");
+  }
+  return packed;
+}
+
+function requireExecutable(packed: NpmPackResult, path: string): void {
+  const mode = packed.files.find((file) => file.path === path)?.mode;
+  if (mode === undefined || (mode & 0o100) === 0) {
+    throw new Error(`packed package does not mark ${path} executable`);
+  }
 }
 
 function portablePath(path: string): string {
@@ -79,11 +112,12 @@ try {
     name: string;
     version: string;
   };
-  const tarball = resolve(
-    temporary,
-    `${packageJson.name.replace(/^@/, "").replaceAll("/", "-")}-${packageJson.version}.tgz`,
-  );
-  runNpm(["pack", "--loglevel=error", "--pack-destination", temporary]);
+  const packed = packWithNpm();
+  const expectedFilename = `${packageJson.name.replace(/^@/, "").replaceAll("/", "-")}-${packageJson.version}.tgz`;
+  if (packed.filename !== expectedFilename) {
+    throw new Error(`npm packed ${packed.filename}; expected ${expectedFilename}`);
+  }
+  const tarball = resolve(temporary, packed.filename);
 
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
   const entries = new Set(listing.trim().split(/\r?\n/));
@@ -110,7 +144,7 @@ try {
   }
   const executable = packageJson.bin["sync-engine"].replace(/^\.\//, "");
   requireEntry(entries, executable);
-  requireExecutable(tarball, executable);
+  requireExecutable(packed, executable);
   for (const target of Object.values(packageJson.exports)) {
     requireEntry(entries, target.import.replace(/^\.\//, ""));
     requireEntry(entries, target.types.replace(/^\.\//, ""));
