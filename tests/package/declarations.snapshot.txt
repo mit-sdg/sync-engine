@@ -16,7 +16,7 @@ export type { EngineObserver, LogEvent } from "../engine/reactions/observer.ts";
 export { assemble } from "../engine/boundary/assembly-facade.ts";
 export type { Assembly, AssemblyOptions } from "../engine/boundary/assembly-facade.ts";
 export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engine/boundary/concept-set.ts";
-export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, QueryRegistration, RefusalRegistration, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/concept-set.ts";
+export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/concept-set.ts";
 export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
 export { MemoryStore } from "../engine/reactions/log-store.ts";
 export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord, } from "../engine/reactions/log-store.ts";
@@ -49,6 +49,19 @@ export type { HeadersOption, HttpClientOptions } from "../engine/boundary/http-c
 === dist/command/artifacts.d.ts ===
 #!/usr/bin/env bun
 export {};
+
+=== dist/command/scaffold.d.ts ===
+/**
+ * **`sync-engine new`** — write a runnable project.
+ *
+ * The generated project is the smallest complete slice: one concept with its
+ * specification, class, registry and principle test; a concept set; a
+ * composition holding an endpoint; an assembly; and the config the artifact
+ * commands read. It is the same shape the getting-started guide builds, so a
+ * reader can continue from either one.
+ */
+/** Write a new project into `directory`, refusing to overwrite existing files. */
+export declare function scaffoldProject(directory: string): Promise<string[]>;
 
 === dist/engine/boundary/admit.d.ts ===
 /**
@@ -372,8 +385,9 @@ export {};
 === dist/engine/boundary/concept-set.d.ts ===
 import { type ConceptClass, type ConceptClassesOf, type ConceptEntry, type DeclaredVocabulary } from "../reactions/refs.ts";
 import type { ErrorConstructor, PublicErrorCategory as MetadataPublicErrorCategory, RefusalContracts } from "../reactions/concept-metadata.ts";
+import { type ConceptSpec } from "../reactions/concept-spec.ts";
 import type { ComputationFn } from "../reads/computations.ts";
-import { type QueryPromises, type QueryPromise } from "../reads/query-contracts.ts";
+import type { QueryPromises } from "../reads/query-contracts.ts";
 export type PublicErrorCategory = MetadataPublicErrorCategory;
 export declare const PublicError: {
     readonly INVALID_REQUEST: "INVALID_REQUEST";
@@ -397,29 +411,27 @@ export interface ConceptFloor<V extends DeclaredVocabulary<Record<string, Concep
     close(): Promise<void>;
 }
 export declare function conceptFloor<V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>>(vocabularyDeclaration: V, floor: ConceptFloor<V>): ConceptFloor<V>;
-type ActionName<C extends ConceptClass> = {
-    [Name in keyof InstanceType<C>]: Name extends string ? Name extends `_${string}` ? never : InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never : never;
-}[keyof InstanceType<C>];
-type QueryName<C extends ConceptClass> = {
-    [Name in keyof InstanceType<C>]: Name extends string ? Name extends `_${string}` ? InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never : never : never;
-}[keyof InstanceType<C>];
-export type QueryRegistration<C extends ConceptClass> = Partial<Record<QueryName<C>, QueryPromise>>;
-type FloorFactory = (context: never) => object;
-export interface RefusalRegistration<C extends ConceptClass> {
-    error: ErrorConstructor;
-    on: readonly ActionName<C>[];
-    public?: PublicErrorCategory;
-}
+/**
+ * Builds one concept instance for a named floor. The registered concept name
+ * arrives as the second argument, so a registry never has to spell its own
+ * application name.
+ */
+type FloorFactory = (context: never, name: string) => object;
 export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory> = Record<never, never>> {
     class: C;
+    /** The concept's specification markdown — the source of its contract. */
     spec: string;
-    queries?: QueryRegistration<C>;
-    refusals?: Record<string, RefusalRegistration<C>>;
+    /** The Error class that signals each refusal code the specification declares. */
+    refusals?: Readonly<Record<string, ErrorConstructor>>;
+    /** The boundary category for refusal codes that reach a public caller. */
+    publicErrors?: Readonly<Record<string, PublicErrorCategory>>;
     floors?: F;
 }
 declare const RegistrationBrand: unique symbol;
 export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory> = Record<never, never>> = ConceptRegistration<C, F> & {
     readonly [RegistrationBrand]: true;
+    /** The contract read from the registration's specification. */
+    readonly specification: ConceptSpec;
 };
 export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory> = Record<never, never>>(registration: ConceptRegistration<C, F>): RegisteredConcept<C, F>;
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
@@ -427,7 +439,8 @@ type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, Record<string
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
     [Name in keyof S]: {
         class: ClassOfRegistration<S[Name]>;
-        spec: string;
+        purpose?: string;
+        principle?: string;
         queries?: QueryPromises;
         refusals?: RefusalContracts;
         publicErrors?: Record<string, PublicErrorCategory>;
@@ -444,7 +457,7 @@ type CompleteFloorName<S extends Record<string, AnyRegistration>, Floor extends 
 type CompleteFloorNames<S extends Record<string, AnyRegistration>> = CompleteFloorName<S, DeclaredFloorNames<S>>;
 type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Intersection) => void ? Intersection : never;
 type FloorContext<S extends Record<string, AnyRegistration>, Floor extends CompleteFloorNames<S>> = UnionToIntersection<{
-    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? Floor extends keyof F ? F[Floor] extends (context: infer Context) => object ? Context : never : never : never;
+    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? Floor extends keyof F ? Parameters<F[Floor]>[0] : never : never;
 }[keyof S]>;
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>> {
     vocabulary: VocabularyOf<S>;
@@ -1338,8 +1351,15 @@ import type { OutcomeContracts } from "./outcomes.ts";
 import type { QueryPromise } from "../reads/query-contracts.ts";
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 export type PublicErrorCategory = "INVALID_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT";
-/** Error classes admitted as refusals, grouped by the action that may throw them. */
-export type RefusalContracts = Record<string, Record<string, ErrorConstructor>>;
+/** One refusal branch: the code it returns, the class that signals it, and its sentence. */
+export interface RefusalBranch {
+    code: string;
+    error: ErrorConstructor;
+    /** The normative sentence the specification gives this branch. */
+    message: string;
+}
+/** Refusal branches admitted for each action, keyed by the action that may signal them. */
+export type RefusalContracts = Record<string, readonly RefusalBranch[]>;
 /** Contracts owned by a vocabulary name rather than embedded in its class. */
 export interface ConceptMetadata {
     purpose?: string;
@@ -1351,26 +1371,86 @@ export interface ConceptMetadata {
 }
 export declare function attachConceptMetadata(concept: object, metadata: ConceptMetadata): void;
 export declare function conceptMetadataOf(concept: object): ConceptMetadata | undefined;
-export interface RegisteredRefusal {
+/**
+ * What a thrown error means for the action that threw it: a refusal branch the
+ * specification declares here, or one it declares only for other actions —
+ * which is a specification the implementation has outgrown, not a refusal.
+ */
+export type RefusalMatch = {
+    kind: "declared";
     code: string;
-    error: Error;
-}
-/** Match a thrown error to an action's vocabulary-declared refusal branch. */
-export declare function registeredRefusalOf(concept: object, action: string, thrown: unknown): RegisteredRefusal | undefined;
+    message: string;
+} | {
+    kind: "misplaced";
+    code: string;
+    declaredOn: readonly string[];
+};
+/** Match a thrown error against the concept's specified refusal branches. */
+export declare function refusalFor(concept: object, action: string, thrown: unknown): RefusalMatch | undefined;
 
 === dist/engine/reactions/concept-spec.d.ts ===
-/** Read purpose and principle from their single authored specification. */
-/** The prose a concept's specification document authors. */
-export interface ConceptSpecProse {
+/**
+ * **The concept specification, read as contract.**
+ *
+ * A concept's `spec.md` is the single authored source for what the concept
+ * promises: its purpose and principle in prose, its actions and their refusal
+ * branches in an `actions` fence, and its queries and their cardinality in a
+ * `queries` fence. Registration parses the document and derives the contract
+ * from it, so the same facts are never restated in TypeScript.
+ *
+ * ````md
+ * ## Actions
+ *
+ * ```actions
+ * join (gathering: Gathering, member: Person) : return (membership: Membership)
+ *   where gathering not in gatherings
+ *   then
+ *     refuse GATHERING_NOT_FOUND "There is no such gathering."
+ * ```
+ *
+ * ## Queries
+ *
+ * ```queries
+ * _members (gathering: Gathering) : many (member: Person)
+ * ```
+ * ````
+ *
+ * A signature line starts at the left margin and everything indented under it
+ * is the action's authored behavior. The parser reads the signatures and the
+ * `refuse CODE "message"` lines; the rest of the body stays prose for a reader.
+ * A refusal's message is the normative sentence the boundary reports.
+ */
+import type { QueryPromise } from "../reads/query-contracts.ts";
+/** One refusal branch: the code the boundary returns and the sentence it carries. */
+export interface SpecRefusal {
+    code: string;
+    message: string;
+}
+/** One action the specification declares. */
+export interface SpecAction {
+    name: string;
+    inputs: readonly string[];
+    refusals: readonly SpecRefusal[];
+}
+/** One query the specification declares, with the row count it promises. */
+export interface SpecQuery {
+    name: string;
+    inputs: readonly string[];
+    promise: QueryPromise;
+}
+/** A concept's complete authored contract. */
+export interface ConceptSpec {
     purpose: string;
     principle: string;
+    actions: readonly SpecAction[];
+    queries: readonly SpecQuery[];
 }
 /**
- * Extract the purpose and principle from a concept specification's markdown
- * text (import the document with `{ type: "text" }`). Throws, loudly and by
- * section name, when either is missing or empty.
+ * Read a concept's contract from its specification's markdown text (import the
+ * document with `{ type: "text" }`). Throws, naming the section or line, when
+ * the document is missing or malformed.
  */
-export declare function parseSpecProse(markdown: string): ConceptSpecProse;
+export declare function parseSpec(markdown: string): ConceptSpec;
 
 === dist/engine/reactions/engine.d.ts ===
 /**
@@ -1467,8 +1547,8 @@ export { isRefuse, Refuse, refusalMapping } from "./refuse.ts";
 export { contractOf } from "./outcomes.ts";
 export type { ActionContract, OutcomeContracts } from "./outcomes.ts";
 export { QueryAnswerFault, rowsOfAnswer } from "../reads/queries.ts";
-export { parseSpecProse } from "./concept-spec.ts";
-export type { ConceptSpecProse } from "./concept-spec.ts";
+export { parseSpec } from "./concept-spec.ts";
+export type { ConceptSpec, SpecAction, SpecQuery, SpecRefusal } from "./concept-spec.ts";
 export { faulted, isChannelPattern, refused, returned } from "./channels.ts";
 export type { ChannelOptions } from "./channels.ts";
 export { computationRef, is, isFusedComputation, standardComputations, } from "../reads/computations.ts";
@@ -4267,23 +4347,56 @@ export declare function viewLine(view: RelationView, input: Mapping): ReadLine;
 import type { Assembly } from "../boundary/assembly-facade.ts";
 import type { HttpFloor } from "../boundary/http-floor.ts";
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
+/**
+ * What a project's `generated.config.ts` declares. Only `assemble` and `title`
+ * are required — every path and name below follows from the title and the
+ * config's own location, and each may be overridden.
+ */
 export interface GeneratedApplication {
     assemble: () => InspectableAssembly;
-    directory: URL;
-    specification: string;
+    /** The application's name, used as the document title and to derive the rest. */
     title: string;
-    wire: string;
-    wireBanner?: string;
+    /** Where generated files are written; defaults to `generated/` beside the config. */
+    directory?: URL;
+    /** The read-back's filename; defaults to the title, slugged, with `.md`. */
+    specification?: string;
+    /** The wire contract's filename; defaults to `wire.ts`. */
+    wire?: string;
+    /** The wire contract's type name; defaults to the title in Pascal case, with `Wire`. */
     wireName?: string;
+    /** The wire contract's banner; defaults to one naming the assembly. */
+    wireBanner?: string;
     /** HTTP-projected contract name; defaults to `${wireName}Http`. */
     httpWireName?: string;
-    wireVocabulary: {
-        from: string;
-        export: string;
+    /**
+     * The module whose export anchors generated wire types to concept
+     * signatures; defaults to `src/concept-set.ts` beside the config, exporting
+     * `vocabulary`.
+     */
+    vocabulary?: {
+        module?: URL;
+        export?: string;
     };
     httpFloor?: HttpFloor;
 }
-export declare function renderGenerated(application: GeneratedApplication): {
+type ResolvedApplication = GeneratedApplication & {
+    directory: URL;
+    specification: string;
+    wire: string;
+    wireName: string;
+    wireBanner: string;
+    /** The specifier the generated wire imports its type anchor from. */
+    vocabularyFrom: {
+        from: string;
+        export: string;
+    };
+};
+/**
+ * Fill an application's defaults from its title and the location of the config
+ * that declared it.
+ */
+export declare function resolveApplication(application: GeneratedApplication, config: URL): ResolvedApplication;
+export declare function renderGenerated(application: ResolvedApplication): {
     metrics: {
         reactions: number;
         views: number;
@@ -4294,8 +4407,8 @@ export declare function renderGenerated(application: GeneratedApplication): {
     specification: string;
     wire: string;
 };
-export declare function pinGenerated(application: GeneratedApplication, artifact?: "all" | "specification" | "wire"): Promise<void>;
-export declare function checkGenerated(application: GeneratedApplication): Promise<void>;
+export declare function pinGenerated(application: ResolvedApplication, artifact?: "all" | "specification" | "wire"): Promise<void>;
+export declare function checkGenerated(application: ResolvedApplication): Promise<void>;
 export {};
 
 === dist/engine/tooling/index.d.ts ===

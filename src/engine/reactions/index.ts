@@ -15,8 +15,8 @@ export type { ActionContract, OutcomeContracts } from "./outcomes.ts";
 // Read-side contracts — imported through the reads barrel for explicit dependency tracking.
 export { QueryAnswerFault, rowsOfAnswer } from "@engine/reads/queries";
 
-export { parseSpecProse } from "./concept-spec.ts";
-export type { ConceptSpecProse } from "./concept-spec.ts";
+export { parseSpec } from "./concept-spec.ts";
+export type { ConceptSpec, SpecAction, SpecQuery, SpecRefusal } from "./concept-spec.ts";
 export { faulted, isChannelPattern, refused, returned } from "./channels.ts";
 export type { ChannelOptions } from "./channels.ts";
 

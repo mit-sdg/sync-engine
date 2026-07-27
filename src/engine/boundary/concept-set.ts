@@ -10,12 +10,10 @@ import type {
   PublicErrorCategory as MetadataPublicErrorCategory,
   RefusalContracts,
 } from "@engine/reactions/concept-metadata";
+import { parseSpec, type ConceptSpec } from "@engine/reactions/concept-spec";
+import { rolesOf } from "@engine/reactions/introspect";
 import type { ComputationFn } from "@engine/reads/computations";
-import {
-  validateQueryContractMap,
-  type QueryPromises,
-  type QueryPromise,
-} from "@engine/reads/query-contracts";
+import type { QueryPromises, QueryPromise } from "@engine/reads/query-contracts";
 import { PUBLIC_ERROR_CATEGORIES } from "./public-errors.ts";
 
 export type PublicErrorCategory = MetadataPublicErrorCategory;
@@ -78,44 +76,24 @@ export function conceptFloor<
   return floor;
 }
 
-type ActionName<C extends ConceptClass> = {
-  [Name in keyof InstanceType<C>]: Name extends string
-    ? Name extends `_${string}`
-      ? never
-      : InstanceType<C>[Name] extends (...args: never[]) => unknown
-        ? Name
-        : never
-    : never;
-}[keyof InstanceType<C>];
-
-type QueryName<C extends ConceptClass> = {
-  [Name in keyof InstanceType<C>]: Name extends string
-    ? Name extends `_${string}`
-      ? InstanceType<C>[Name] extends (...args: never[]) => unknown
-        ? Name
-        : never
-      : never
-    : never;
-}[keyof InstanceType<C>];
-
-export type QueryRegistration<C extends ConceptClass> = Partial<Record<QueryName<C>, QueryPromise>>;
-
-type FloorFactory = (context: never) => object;
-
-export interface RefusalRegistration<C extends ConceptClass> {
-  error: ErrorConstructor;
-  on: readonly ActionName<C>[];
-  public?: PublicErrorCategory;
-}
+/**
+ * Builds one concept instance for a named floor. The registered concept name
+ * arrives as the second argument, so a registry never has to spell its own
+ * application name.
+ */
+type FloorFactory = (context: never, name: string) => object;
 
 export interface ConceptRegistration<
   C extends ConceptClass,
   F extends Record<string, FloorFactory> = Record<never, never>,
 > {
   class: C;
+  /** The concept's specification markdown — the source of its contract. */
   spec: string;
-  queries?: QueryRegistration<C>;
-  refusals?: Record<string, RefusalRegistration<C>>;
+  /** The Error class that signals each refusal code the specification declares. */
+  refusals?: Readonly<Record<string, ErrorConstructor>>;
+  /** The boundary category for refusal codes that reach a public caller. */
+  publicErrors?: Readonly<Record<string, PublicErrorCategory>>;
   floors?: F;
 }
 
@@ -124,10 +102,111 @@ declare const RegistrationBrand: unique symbol;
 export type RegisteredConcept<
   C extends ConceptClass,
   F extends Record<string, FloorFactory> = Record<never, never>,
-> = ConceptRegistration<C, F> & { readonly [RegistrationBrand]: true };
+> = ConceptRegistration<C, F> & {
+  readonly [RegistrationBrand]: true;
+  /** The contract read from the registration's specification. */
+  readonly specification: ConceptSpec;
+};
 
 function isErrorConstructor(value: unknown): value is ErrorConstructor {
   return typeof value === "function" && value.prototype instanceof Error;
+}
+
+/** The class's own action and query method names, read without invoking getters. */
+function membersOf(cls: ConceptClass): { actions: string[]; queries: string[] } {
+  const prototype = cls.prototype as object;
+  const actions: string[] = [];
+  const queries: string[] = [];
+  for (const name of Object.getOwnPropertyNames(prototype)) {
+    if (name === "constructor") continue;
+    if (typeof Object.getOwnPropertyDescriptor(prototype, name)?.value !== "function") continue;
+    (name.startsWith("_") ? queries : actions).push(name);
+  }
+  return { actions, queries };
+}
+
+function listed(names: readonly string[]): string {
+  return names.map((name) => `\`${name}\``).join(", ");
+}
+
+/**
+ * Hold the specification and the class to each other: neither may describe a
+ * member the other omits, and a declared signature must name the inputs the
+ * implementation destructures.
+ */
+function checkAgainstClass(cls: ConceptClass, spec: ConceptSpec): void {
+  const fail = (what: string): never => {
+    throw new Error(`registerConcept(${cls.name}): ${what}`);
+  };
+  const implemented = membersOf(cls);
+  const prototype = cls.prototype as Record<string, (...args: never[]) => unknown>;
+
+  for (const [kind, declarations, members] of [
+    ["action", spec.actions, implemented.actions],
+    ["query", spec.queries, implemented.queries],
+  ] as const) {
+    const declared = declarations.map((declaration) => declaration.name);
+    const missing = declared.filter((name) => !members.includes(name));
+    if (missing.length > 0) {
+      fail(
+        `the specification declares the ${kind} ${listed(missing)}, which the class does not implement.`,
+      );
+    }
+    const unspecified = members.filter((name) => !declared.includes(name));
+    if (unspecified.length > 0) {
+      fail(
+        `the class implements the ${kind} ${listed(unspecified)}, which the specification does not declare.`,
+      );
+    }
+    for (const declaration of declarations) {
+      // A member that takes a placeholder parameter, or destructures nothing
+      // from it, names no roles and so says nothing about its inputs. Compare
+      // only against an implementation that states them.
+      const roles = rolesOf(prototype[declaration.name]);
+      if (roles === undefined || roles.length === 0) continue;
+      const inputs = [...declaration.inputs].sort();
+      if (inputs.join() === [...roles].sort().join()) continue;
+      fail(
+        `the ${kind} \`${declaration.name}\` declares the inputs ${listed(declaration.inputs)} ` +
+          `but the class takes ${listed(roles)}.`,
+      );
+    }
+  }
+}
+
+/** Pair every refusal code the specification declares with the class that signals it. */
+function checkRefusals(
+  cls: ConceptClass,
+  spec: ConceptSpec,
+  registration: ConceptRegistration<ConceptClass, Record<string, FloorFactory>>,
+): void {
+  const fail = (what: string): never => {
+    throw new Error(`registerConcept(${cls.name}): ${what}`);
+  };
+  const signals = registration.refusals ?? {};
+  const declared = new Set(
+    spec.actions.flatMap((action) => action.refusals.map(({ code }) => code)),
+  );
+
+  const unsignalled = [...declared].filter((code) => signals[code] === undefined);
+  if (unsignalled.length > 0) {
+    fail(`the specification refuses with ${listed(unsignalled)}, which no Error class signals.`);
+  }
+  const byClass = new Map<ErrorConstructor, string>();
+  for (const [code, error] of Object.entries(signals)) {
+    if (!declared.has(code)) {
+      fail(`the refusal ${listed([code])} names no branch of the specification.`);
+    }
+    if (!isErrorConstructor(error)) fail(`the refusal \`${code}\` needs an Error class.`);
+    const prior = byClass.get(error);
+    if (prior !== undefined) {
+      fail(`the refusals \`${prior}\` and \`${code}\` share one Error class.`);
+    }
+    byClass.set(error, code);
+  }
+  for (const code of Object.keys(registration.publicErrors ?? {})) {
+    if (!declared.has(code)) fail(`the public error \`${code}\` is not a declared refusal.`);
+  }
 }
 
 export function registerConcept<
@@ -137,48 +216,19 @@ export function registerConcept<
   if (typeof registration.class !== "function" || registration.class.prototype === undefined) {
     throw new Error("registerConcept: class must be a constructable concept class.");
   }
-  if (typeof registration.spec !== "string") {
-    throw new Error("registerConcept: spec must contain the concept specification.");
-  }
-  const prototype = registration.class.prototype as Record<string, unknown>;
-  validateQueryContractMap(
-    registration.queries,
-    prototype,
-    "registerConcept",
-    registration.class.name,
+  const specification = parseSpec(registration.spec);
+  checkAgainstClass(registration.class, specification);
+  checkRefusals(
+    registration.class,
+    specification,
+    registration as ConceptRegistration<ConceptClass, Record<string, FloorFactory>>,
   );
-  const constructors = new Map<ErrorConstructor, string>();
-  for (const [code, refusal] of Object.entries(registration.refusals ?? {})) {
-    if (code === "" || !isErrorConstructor(refusal.error)) {
-      throw new Error(`registerConcept: refusal "${code}" needs a distinct Error class.`);
-    }
-    const prior = constructors.get(refusal.error);
-    if (prior !== undefined && prior !== code) {
-      throw new Error(
-        `registerConcept: refusal codes "${prior}" and "${code}" use the same Error class.`,
-      );
-    }
-    constructors.set(refusal.error, code);
-    if (!Array.isArray(refusal.on) || refusal.on.length === 0) {
-      throw new Error(`registerConcept: refusal "${code}" must name at least one action.`);
-    }
-    const seen = new Set<string>();
-    for (const action of refusal.on as readonly string[]) {
-      if (seen.has(action)) {
-        throw new Error(`registerConcept: refusal "${code}" repeats action "${action}".`);
-      }
-      seen.add(action);
-      if (action.startsWith("_") || typeof prototype[action] !== "function") {
-        throw new Error(`registerConcept: refusal "${code}" names unknown action "${action}".`);
-      }
-    }
-  }
   for (const [name, factory] of Object.entries(registration.floors ?? {})) {
     if (name === "" || typeof factory !== "function") {
       throw new Error(`registerConcept: floor "${name}" needs an implementation factory.`);
     }
   }
-  return registration as RegisteredConcept<C, F>;
+  return { ...registration, specification } as RegisteredConcept<C, F>;
 }
 
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
@@ -187,7 +237,8 @@ type ClassOfRegistration<R> =
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
   [Name in keyof S]: {
     class: ClassOfRegistration<S[Name]>;
-    spec: string;
+    purpose?: string;
+    principle?: string;
     queries?: QueryPromises;
     refusals?: RefusalContracts;
     publicErrors?: Record<string, PublicErrorCategory>;
@@ -232,9 +283,7 @@ type FloorContext<
   {
     [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F>
       ? Floor extends keyof F
-        ? F[Floor] extends (context: infer Context) => object
-          ? Context
-          : never
+        ? Parameters<F[Floor]>[0]
         : never
       : never;
   }[keyof S]
@@ -257,31 +306,42 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
   const entries: Record<string, ConceptEntry> = {};
   const publicErrors: Record<string, PublicErrorCategory> = {};
   for (const [conceptName, registration] of Object.entries(registrations)) {
+    const { purpose, principle, actions, queries } = registration.specification;
+    const signals = registration.refusals ?? {};
+
+    // The specification says which action refuses with which code and sentence;
+    // the registration says which Error class signals each code.
     const refusals: RefusalContracts = {};
-    const conceptPublicErrors: Record<string, PublicErrorCategory> = {};
-    for (const [code, refusal] of Object.entries(registration.refusals ?? {})) {
-      for (const action of refusal.on as readonly string[]) {
-        (refusals[action] ??= {})[code] = refusal.error;
-      }
-      if (refusal.public !== undefined) {
-        conceptPublicErrors[code] = refusal.public;
-        const prior = publicErrors[code];
-        if (prior !== undefined && prior !== refusal.public) {
-          throw new Error(
-            `conceptSet: refusal "${code}" has conflicting public categories "${prior}" and "${refusal.public}".`,
-          );
-        }
-        publicErrors[code] = refusal.public;
-      }
+    for (const action of actions) {
+      if (action.refusals.length === 0) continue;
+      refusals[action.name] = action.refusals.map(({ code, message }) => ({
+        code,
+        message,
+        error: signals[code],
+      }));
     }
+    const promises: Record<string, QueryPromise> = {};
+    for (const query of queries) promises[query.name] = query.promise;
+
+    for (const [code, category] of Object.entries(registration.publicErrors ?? {})) {
+      const prior = publicErrors[code];
+      if (prior !== undefined && prior !== category) {
+        throw new Error(
+          `conceptSet: refusal "${code}" has conflicting public categories "${prior}" and "${category}".`,
+        );
+      }
+      publicErrors[code] = category;
+    }
+
     entries[conceptName] = {
       class: registration.class,
-      spec: registration.spec,
-      ...(registration.queries === undefined ? {} : { queries: registration.queries }),
+      purpose,
+      principle,
+      ...(queries.length === 0 ? {} : { queries: promises }),
       ...(Object.keys(refusals).length === 0 ? {} : { refusals }),
-      ...(Object.keys(conceptPublicErrors).length === 0
+      ...(registration.publicErrors === undefined
         ? {}
-        : { publicErrors: conceptPublicErrors }),
+        : { publicErrors: { ...registration.publicErrors } }),
     };
   }
   const declared = vocabulary({ concepts: entries, computations: {} });
@@ -310,7 +370,7 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
         if (factory === undefined) {
           throw new Error(`conceptSet: floor "${floor}" disappeared during construction.`);
         }
-        result[name] = factory(context as never);
+        result[name] = factory(context as never, name);
       }
     }
     return result;

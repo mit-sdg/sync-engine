@@ -153,21 +153,11 @@ Former "the operations room (room)" — inputs (room); bindings (name, host, res
 ```
 
 ```former
-Former "the responder roster of (room)" — inputs (room); bindings (responder); promises exactly one record — forms:
+Former "the current mitigation (room)" — inputs (room); bindings (mitigation); promises at most one record — forms:
   a record of
-    responders: each Gathering._members (gathering: room) has (member: responder)
-      form a record of
-        responder
-```
-
-```former
-Former "the room summary (room)" — inputs (room); bindings (name, host); promises exactly one record — forms:
-  a record of
-    where Gathering._get (gathering: room) has (name, host)
+    where Selecting._current (scope: room) has (item: mitigation)
     room
-    name
-    host
-    … former "the responder roster of (room)" with (room)
+    mitigation
 ```
 
 ```former
@@ -179,11 +169,11 @@ Former "the required current mitigation (room)" — inputs (room); bindings (mit
 ```
 
 ```former
-Former "the current mitigation (room)" — inputs (room); bindings (mitigation); promises at most one record — forms:
+Former "the responder roster of (room)" — inputs (room); bindings (responder); promises exactly one record — forms:
   a record of
-    where Selecting._current (scope: room) has (item: mitigation)
-    room
-    mitigation
+    responders: each Gathering._members (gathering: room) has (member: responder)
+      form a record of
+        responder
 ```
 
 ```former
@@ -192,6 +182,16 @@ Former "the response stats of (discussion)" — inputs (discussion); bindings (r
     responseCount: the count of Discussing._responses (discussion) has (response, author: responder)
     firstResponse: the response of the first Discussing._responses (discussion) has (response, author: responder)
     responders: the distinct responder of each Discussing._responses (discussion) has (response, author: responder)
+```
+
+```former
+Former "the room summary (room)" — inputs (room); bindings (name, host); promises exactly one record — forms:
+  a record of
+    where Gathering._get (gathering: room) has (name, host)
+    room
+    name
+    host
+    … former "the responder roster of (room)" with (room)
 ```
 
 ## Reactions

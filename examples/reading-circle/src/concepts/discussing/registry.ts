@@ -5,13 +5,12 @@ import spec from "./spec.md" with { type: "text" };
 export const discussing = registerConcept({
   class: DiscussingConcept,
   spec,
-  queries: { _openFor: "optional", _responses: "many" },
   refusals: {
-    DISCUSSION_ALREADY_OPEN: { error: DiscussionAlreadyOpen, on: ["open"] },
-    DISCUSSION_NOT_OPEN: { error: DiscussionNotOpen, on: ["respond", "close"] },
+    DISCUSSION_ALREADY_OPEN: DiscussionAlreadyOpen,
+    DISCUSSION_NOT_OPEN: DiscussionNotOpen,
   },
   floors: {
-    deterministic: ({ identities }: { identities: { Discussing: () => string } }) =>
-      new DiscussingConcept(identities.Discussing),
+    deterministic: ({ identities }: { identities: Record<string, () => string> }, name: string) =>
+      new DiscussingConcept(identities[name]),
   },
 });

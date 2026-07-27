@@ -5,9 +5,8 @@ import spec from "./spec.md" with { type: "text" };
 export const rooming = registerConcept({
   class: RoomingConcept,
   spec,
-  queries: { _get: "optional" },
   refusals: {
-    ROOM_ALREADY_OPEN: { error: RoomAlreadyOpen, on: ["open"] },
-    ROOM_NOT_OPEN: { error: RoomNotOpen, on: ["close"] },
+    ROOM_ALREADY_OPEN: RoomAlreadyOpen,
+    ROOM_NOT_OPEN: RoomNotOpen,
   },
 });

@@ -79,7 +79,15 @@ describe("canonical public API", () => {
           class: Cataloging,
           purpose: "Keep one catalog of distinct titles.",
           principle: "Adding a new title records it; adding the same title is refused.",
-          refusals: { add: { DUPLICATE_TITLE: DuplicateTitle } },
+          refusals: {
+            add: [
+              {
+                code: "DUPLICATE_TITLE",
+                error: DuplicateTitle,
+                message: "This title is already in the catalog.",
+              },
+            ],
+          },
         },
       },
       computations: {
@@ -203,7 +211,11 @@ describe("canonical public API", () => {
         concepts: {
           Cataloging: {
             class: Cataloging,
-            refusals: { missingAction: { NOPE: DuplicateTitle } },
+            refusals: {
+              missingAction: [
+                { code: "NOPE", error: DuplicateTitle, message: "There is no such action." },
+              ],
+            },
           },
         },
         computations: {},
@@ -272,9 +284,7 @@ const register = {
     "PersistingConcept",
     "PublicError",
     "PublicErrorCategory",
-    "QueryRegistration",
     "ReactionFailureRecord",
-    "RefusalRegistration",
     "RegisteredConcept",
     "RegisteredConceptSet",
     "assemble",

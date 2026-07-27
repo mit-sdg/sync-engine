@@ -36,15 +36,21 @@ choose (scope: Scope, item: Item) : return (selection: Selection)
     add selection to current
     return selection
 
-clear (scope: Scope) : return (selection: Selection), refuse (message: String)
+clear (scope: Scope) : return (selection: Selection)
   where some current selection has scope
   then
     remove that selection from current
     return selection
   where no current selection has scope
   then
-    refuse "This scope has no current selection."
+    refuse NO_CURRENT_SELECTION "This scope has no current selection."
 ```
 
-`_current` answers zero or one row for a scope. `_get` answers zero or one row
-for a selection. Selecting treats scopes and items as opaque identities.
+## Queries
+
+```queries
+_current (scope: Scope) : optional (selection: Selection, item: Item)
+_get (selection: Selection) : optional (scope: Scope, item: Item)
+```
+
+Selecting treats scopes and items as opaque identities.

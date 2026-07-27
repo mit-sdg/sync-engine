@@ -6,32 +6,41 @@ import {
   checkGenerated,
   pinGenerated,
   renderGenerated,
+  resolveApplication,
   type GeneratedApplication,
 } from "@engine/tooling/generated-artifacts";
+import { scaffoldProject } from "./scaffold.ts";
 
-const usage = `Usage: sync-engine artifacts <command> [--config path]
+const usage = `Usage: sync-engine <topic> <command>
 
-Commands:
-  check      Verify the assembled read-back and wire contract against the assembly.
-  pin        Regenerate the assembled read-back and wire contract.
-  pin-spec   Regenerate only the assembled read-back.
-  pin-wire   Regenerate only the wire contract.
-  spec       Print assembly counts and the assembled read-back.
-  wire       Print the wire contract.
+  sync-engine new <directory>
+    Write a runnable project: one concept, its composition, and its config.
+
+  sync-engine artifacts <command> [--config path]
+    check      Verify the assembled read-back and wire contract against the assembly.
+    pin        Regenerate the assembled read-back and wire contract.
+    pin-spec   Regenerate only the assembled read-back.
+    pin-wire   Regenerate only the wire contract.
+    spec       Print assembly counts and the assembled read-back.
+    wire       Print the wire contract.
 
 The configuration path defaults to generated.config.ts.`;
 
+const HELP = new Set([undefined, "help", "--help", "-h"]);
+
 async function main(): Promise<void> {
   const [topic, action, ...options] = process.argv.slice(2);
-  if (
-    topic === undefined ||
-    topic === "help" ||
-    topic === "--help" ||
-    topic === "-h" ||
-    (topic === "artifacts" &&
-      (action === undefined || action === "help" || action === "--help" || action === "-h"))
-  ) {
+  if (HELP.has(topic) || (topic === "artifacts" && HELP.has(action))) {
     console.log(usage);
+    return;
+  }
+
+  if (topic === "new") {
+    if (action === undefined) throw new Error(usage);
+    const written = await scaffoldProject(action);
+    console.log(`Wrote ${written.length} files into ${action}:`);
+    for (const path of written) console.log(`  ${path}`);
+    console.log(`\nNext: cd ${action} && bun install && bun run generate && bun run start`);
     return;
   }
   if (topic !== "artifacts") throw new Error(usage);
@@ -39,13 +48,12 @@ async function main(): Promise<void> {
   const configIndex = options.indexOf("--config");
   const configPath = configIndex === -1 ? "generated.config.ts" : options.at(configIndex + 1);
   if (configPath === undefined) throw new Error(usage);
-  const module = (await import(pathToFileURL(resolve(process.cwd(), configPath)).href)) as {
-    default?: GeneratedApplication;
-  };
+  const configUrl = pathToFileURL(resolve(process.cwd(), configPath));
+  const module = (await import(configUrl.href)) as { default?: GeneratedApplication };
   if (module.default === undefined) {
     throw new Error(`${configPath} must default-export an application artifact configuration`);
   }
-  const application = module.default;
+  const application = resolveApplication(module.default, configUrl);
 
   switch (action) {
     case "check":

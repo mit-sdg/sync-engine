@@ -5,12 +5,9 @@ import spec from "./spec.md" with { type: "text" };
 export const selecting = registerConcept({
   class: SelectingConcept,
   spec,
-  queries: { _current: "optional", _get: "optional" },
-  refusals: {
-    NO_CURRENT_SELECTION: { error: NoCurrentSelection, on: ["clear"] },
-  },
+  refusals: { NO_CURRENT_SELECTION: NoCurrentSelection },
   floors: {
-    deterministic: ({ identities }: { identities: { Selecting: () => string } }) =>
-      new SelectingConcept(identities.Selecting),
+    deterministic: ({ identities }: { identities: Record<string, () => string> }, name: string) =>
+      new SelectingConcept(identities[name]),
   },
 });

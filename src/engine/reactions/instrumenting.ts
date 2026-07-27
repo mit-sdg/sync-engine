@@ -4,7 +4,7 @@ import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
 import { ActionConcept } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
-import { registeredRefusalOf } from "./concept-metadata.ts";
+import { refusalFor } from "./concept-metadata.ts";
 import { CONCEPT_NAME, conceptNameOf } from "./introspect.ts";
 import { contractOf } from "./outcomes.ts";
 import type { ActionContract } from "./outcomes.ts";
@@ -252,14 +252,18 @@ export function instrumentConcept<T extends object>(
               outcome = { kind: "error", error: output };
               warnUndeclaredRefusal(displayName, contract, error.message);
             } else {
-              const refusal = registeredRefusalOf(concept, actionName, error);
-              if (refusal !== undefined) {
-                output = {
-                  error: refusal.code,
-                  ...(refusal.error.message !== "" && refusal.error.message !== refusal.code
-                    ? { detail: refusal.error.message }
-                    : {}),
-                };
+              const refusal = refusalFor(concept, actionName, error);
+              if (refusal?.kind === "misplaced") {
+                logger.error(
+                  `${displayName} signalled the refusal "${refusal.code}", which its specification ` +
+                    `declares only on ${refusal.declaredOn.join(", ")} — give this action the branch ` +
+                    `or stop signalling it here.`,
+                );
+              }
+              if (refusal?.kind === "declared") {
+                // The specification's sentence is the normative one, so the
+                // class need not carry the message the caller receives.
+                output = { error: refusal.code, detail: refusal.message };
                 outcome = { kind: "error", error: output };
                 warnUndeclaredRefusal(displayName, contract, refusal.code);
               } else {

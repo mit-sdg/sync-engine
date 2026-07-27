@@ -34,12 +34,14 @@ Use `language` to name a design: its concepts, reactions, views, and formers.
 `vocabulary({ concepts, computations })` gives plain concept classes and pure
 computations their application names. A concept entry may be the class itself,
 or a descriptor with `class` and any of `spec`, `purpose`, `principle`,
-`queries`, `outcomes`, `refusals`, and `publicErrors`. `spec` contains the concept's
-markdown specification; explicit `purpose` or `principle` fields replace the
-prose parsed from it. `outcomes` names action contracts, `refusals` maps each
-action's stable code to its `Error` class, and `publicErrors` maps those codes
-to public boundary categories. `registerConcept(...)` and `conceptSet(...)`
-derive this descriptor for the ordinary registration path.
+`queries`, `outcomes`, `refusals`, and `publicErrors`. `spec` contains the
+concept's markdown specification; its purpose, principle, and query promises
+are read from that document, and explicit fields replace what it states.
+`outcomes` names action contracts, `refusals` lists each action's refusal
+branches — a code, the `Error` class that signals it, and its sentence — and
+`publicErrors` maps those codes to public boundary categories. This is the
+low-level seat; `registerConcept(...)` derives the whole descriptor from a
+specification for the ordinary registration path.
 
 `Vars` is the inferred variable bag used by a reaction callback.
 `InputBindings`, `OutputBindings`, and `FreeBindings` distinguish the binding
@@ -55,7 +57,11 @@ export const words = vocabulary({
     Drafting: {
       class: Drafting,
       spec: draftingSpec,
-      refusals: { publish: { DRAFT_NOT_FOUND: DraftNotFound } },
+      refusals: {
+        publish: [
+          { code: "DRAFT_NOT_FOUND", error: DraftNotFound, message: "There is no such draft." },
+        ],
+      },
     },
   },
   computations: {
@@ -112,10 +118,9 @@ reaction(({ refusal }) =>
 
 ### Reads and conditions
 
-A concept registry may declare a query as `"one"`, `"optional"`, or `"many"`.
-`QueryPromise` names their union and `QueryRegistration` describes the map for
-one concept class. An undeclared query keeps the general answer contract: one
-record or an array of records.
+A concept specification promises each query as `"one"`, `"optional"`, or
+`"many"`; `QueryPromise` names their union. An undeclared query keeps the
+general answer contract: one record or an array of records.
 
 Calling a concept query with its input pattern produces a `ReadLine`. Extend
 the line with `.is({ ... })` to match output slots. A fresh name opens and
@@ -215,7 +220,7 @@ fault.
 
 <!-- register:assembly:start -->
 
-`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `QueryRegistration`, `ReactionFailureRecord`, `RefusalRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -251,8 +256,17 @@ implementation set has been chosen.
 plugin. `registerConcept(...)` and `conceptSet(...)` provide the external
 integration seats that derive vocabulary entries and complete implementation
 sets while plain concept classes and exception classes remain framework-free.
-The registry's query promises apply to every implementation selected for that
-concept name.
+
+`registerConcept({ class, spec, refusals?, publicErrors?, floors? })` reads the
+specification and derives the concept's actions, queries, query promises, and
+refusal branches from it. `refusals` supplies only what the document cannot: the
+`Error` class that signals each code it declares. Registration then holds the two
+to each other and fails, naming what disagreed, when either describes a member or
+a refusal the other omits. The specification's promises apply to every
+implementation selected for that concept name.
+
+A floor factory receives the floor context and the name the concept is
+registered under, so a registry never spells its own application name.
 
 `MemoryStore` and `FileStore` implement `LogStore` for occurrence records.
 `LogEntry` names the store's entry union. `FiringRecord` describes one reaction

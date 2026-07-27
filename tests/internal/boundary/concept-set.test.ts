@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { conceptFloor, conceptSet, PublicError, registerConcept } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { assemble } from "@sync-engine/internal/boundary";
@@ -29,24 +29,43 @@ class PersistentCataloging extends Cataloging {
   }
 }
 
-const spec =
-  "# Concept\n\n## Purpose\n\nTest concept floors.\n\n## Principle\n\nA concept uses its selected floor.";
+/** A specification document with the given fences under the required prose. */
+function specFor(body = ""): string {
+  return `# Concept\n\n## Purpose\n\nKeep a catalog.\n\n## Principle\n\nA missing item is refused.\n${body}`;
+}
+
+const bare = specFor();
+
+const catalogingSpec = specFor(`
+## Actions
+
+\`\`\`actions
+find () : return ()
+  where the item is absent
+  then
+    refuse ITEM_NOT_FOUND "There is no such item."
+
+misplaced () : return ()
+  then
+    return
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+_find () : optional (item: Item)
+\`\`\`
+`);
 
 const cataloging = registerConcept({
   class: Cataloging,
-  spec: "# Cataloging\n\n## Purpose\n\nKeep a catalog.\n\n## Principle\n\nA missing item is refused.",
-  queries: { _find: "optional" },
-  refusals: {
-    ITEM_NOT_FOUND: {
-      error: MissingItem,
-      on: ["find"],
-      public: PublicError.NOT_FOUND,
-    },
-  },
+  spec: catalogingSpec,
+  refusals: { ITEM_NOT_FOUND: MissingItem },
+  publicErrors: { ITEM_NOT_FOUND: PublicError.NOT_FOUND },
 });
 
 describe("external concept registration", () => {
-  test("inverts one refusal entry into action-aware instrumentation", async () => {
+  test("carries the specification's refusal branch into action-aware instrumentation", async () => {
     const set = conceptSet({ Cataloging: cataloging });
     const { Cataloging: Catalog } = set.concepts;
     const Find = endpoint("/find", () =>
@@ -69,10 +88,18 @@ describe("external concept registration", () => {
       ok: false,
       error: { kind: "domain", value: "ITEM_NOT_FOUND" },
     });
+    // `misplaced` signals the same class, but no branch declares it there.
+    // That is a specification the implementation has outgrown: it stays a
+    // fault, and it says so rather than passing silently.
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(await application.invoker.invoke("/misplaced", {})).toEqual({
       ok: false,
       error: { kind: "framework", code: "INTERNAL_ERROR" },
     });
+    const said = reported.mock.calls.flat().join("\n");
+    reported.mockRestore();
+    expect(said).toContain("ITEM_NOT_FOUND");
+    expect(said).toContain("which its specification declares only on find");
     expect(application.publicErrors).toEqual({ ITEM_NOT_FOUND: "NOT_FOUND" });
     expect(
       (application.concepts.Cataloging._find as unknown as { queryPromise?: string }).queryPromise,
@@ -80,28 +107,129 @@ describe("external concept registration", () => {
     expect((Catalog._find as unknown as { queryPromise?: string }).queryPromise).toBe("optional");
   });
 
-  test("rejects unknown actions and incomplete concept floors", () => {
+  test("reports the specification's sentence, not the class's, as the refusal detail", async () => {
+    const set = conceptSet({ Cataloging: cataloging });
+    // The class throws `new MissingItem("missing")`; the specification's
+    // sentence is the one a caller is entitled to see.
+    const Find = endpoint("/find", ({ detail }) =>
+      receive({})
+        .then(set.concepts.Cataloging.find({}).refuses({ detail }))
+        .then(respond({ detail })),
+    );
+    const application = assemble({
+      vocabulary: set.vocabulary,
+      composition: { Find },
+      instances: { Cataloging: new Cataloging() },
+    });
+
+    expect(await application.invoker.invoke("/find", {})).toEqual({
+      ok: true,
+      value: { detail: "There is no such item." },
+    });
+  });
+});
+
+describe("the specification and the class hold each other", () => {
+  test("an action the class does not implement fails by name", () => {
+    expect(() =>
+      registerConcept({
+        class: Remembering,
+        spec: specFor("\n## Actions\n\n```actions\nforget () : return ()\n```\n"),
+      }),
+    ).toThrow(/declares the action `forget`, which the class does not implement/);
+  });
+
+  test("an action the specification does not declare fails by name", () => {
+    expect(() => registerConcept({ class: Cataloging, spec: bare })).toThrow(
+      /implements the action `find`, `misplaced`, which the specification does not declare/,
+    );
+  });
+
+  test("a query the specification does not declare fails by name", () => {
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: "spec",
-        refusals: {
-          ITEM_NOT_FOUND: {
-            error: MissingItem,
-            on: ["absent"],
-          },
-        },
-      } as never),
-    ).toThrow(/unknown action "absent"/);
+        spec: specFor("\n```actions\nfind () : return ()\nmisplaced () : return ()\n```\n"),
+      }),
+    ).toThrow(/implements the query `_find`, which the specification does not declare/);
+  });
 
+  test("a signature naming inputs the class does not take fails", () => {
+    class Shelving {
+      shelve({ item, shelf }: { item: string; shelf: string }) {
+        return { item, shelf };
+      }
+    }
+    expect(() =>
+      registerConcept({
+        class: Shelving,
+        spec: specFor("\n```actions\nshelve (item: Item, aisle: Aisle) : return ()\n```\n"),
+      }),
+    ).toThrow(/`shelve` declares the inputs `item`, `aisle` but the class takes `item`, `shelf`/);
+  });
+
+  test("a member naming no inputs is left to its specification", () => {
+    // `misplaced(_)` states nothing about what it takes, so the signature stands.
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: "spec",
-        queries: { _absent: "many" },
-      } as never),
-    ).toThrow(/queries contract names "_absent"/);
+        spec: specFor(
+          "\n```actions\nfind () : return ()\n  then\n" +
+            '    refuse ITEM_NOT_FOUND "There is no such item."\n' +
+            "misplaced (shelf: Shelf) : return ()\n```\n" +
+            "\n```queries\n_find () : optional (item: Item)\n```\n",
+        ),
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+      }),
+    ).not.toThrow();
+  });
 
+  test("a refusal branch no Error class signals fails by code", () => {
+    expect(() => registerConcept({ class: Cataloging, spec: catalogingSpec })).toThrow(
+      /refuses with `ITEM_NOT_FOUND`, which no Error class signals/,
+    );
+  });
+
+  test("an Error class for a branch the specification lacks fails by code", () => {
+    expect(() =>
+      registerConcept({
+        class: Cataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem, ABSENT: MissingItem },
+      }),
+    ).toThrow(/`ABSENT` names no branch of the specification/);
+  });
+
+  test("two codes sharing one Error class fail", () => {
+    expect(() =>
+      registerConcept({
+        class: Cataloging,
+        spec: specFor(
+          "\n```actions\nfind () : return ()\n  then\n" +
+            '    refuse ITEM_NOT_FOUND "There is no such item."\n' +
+            "misplaced () : return ()\n  then\n" +
+            '    refuse SHELVED_WRONG "The item sits on the wrong shelf."\n```\n' +
+            "\n```queries\n_find () : optional (item: Item)\n```\n",
+        ),
+        refusals: { ITEM_NOT_FOUND: MissingItem, SHELVED_WRONG: MissingItem },
+      }),
+    ).toThrow(/share one Error class/);
+  });
+
+  test("a public category for an undeclared refusal fails", () => {
+    expect(() =>
+      registerConcept({
+        class: Cataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        publicErrors: { ABSENT: PublicError.NOT_FOUND },
+      }),
+    ).toThrow(/public error `ABSENT` is not a declared refusal/);
+  });
+});
+
+describe("concept floors", () => {
+  test("an incomplete floor names what it is missing", () => {
     const set = conceptSet({ Cataloging: cataloging });
     expect(() =>
       conceptFloor(set.vocabulary, {
@@ -117,12 +245,13 @@ describe("external concept registration", () => {
     const set = conceptSet({
       Remembering: registerConcept({
         class: Remembering,
-        spec,
+        spec: bare,
         floors: { mongo: ({ store }: { store: string }) => new Remembering(store) },
       }),
       Cataloging: registerConcept({
         class: Cataloging,
-        spec,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
         floors: { mongo: ({ store }: { store: string }) => new PersistentCataloging(store) },
       }),
     });
@@ -136,12 +265,23 @@ describe("external concept registration", () => {
     expect(mongo.Cataloging).toEqual(new PersistentCataloging("primary"));
   });
 
+  test("a floor factory receives the name the concept is registered under", () => {
+    const set = conceptSet({
+      Warehouse: registerConcept({
+        class: Remembering,
+        spec: bare,
+        floors: { named: (_: Record<string, never>, name: string) => new Remembering(name) },
+      }),
+    });
+    expect(set.implementations("named", {}).Warehouse).toEqual(new Remembering("Warehouse"));
+  });
+
   test("reports every missing named-floor registration before any factory runs", () => {
     const constructed: string[] = [];
     const set = conceptSet({
       Complete: registerConcept({
         class: Remembering,
-        spec,
+        spec: bare,
         floors: {
           mongo: () => {
             constructed.push("Complete");
@@ -149,8 +289,8 @@ describe("external concept registration", () => {
           },
         },
       }),
-      MissingFirst: registerConcept({ class: Cataloging, spec }),
-      MissingSecond: registerConcept({ class: Remembering, spec }),
+      MissingFirst: registerConcept({ class: Remembering, spec: bare }),
+      MissingSecond: registerConcept({ class: Remembering, spec: bare }),
     });
 
     expect(() => set.implementations("mongo" as never, undefined as never)).toThrow(
