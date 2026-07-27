@@ -11,15 +11,17 @@ function stableErrorName(error: Error): string {
 }
 
 /**
- * Return the stable class of a thrown value for an ordinary log.
+ * Return human-readable text from a thrown value.
  *
- * Messages, stacks, causes, and attached fields are deliberately omitted:
- * exception text can contain credentials, private paths, request URLs, or
- * attacker-controlled input. A value thrown without `Error` supplies no safe
- * class and is identified only as `NonErrorThrown`.
+ * This text is deliberately not sanitized or redacted. Use it only in a
+ * caller-reviewed diagnostic channel, never as an automatic public envelope.
  */
 export function describeError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  try {
+    return err instanceof Error ? err.message : String(err);
+  } catch {
+    return "Unknown error";
+  }
 }
 
 export function serializeError(err: unknown, depth = 0): Record<string, unknown> {

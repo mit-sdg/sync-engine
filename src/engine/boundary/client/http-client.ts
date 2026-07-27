@@ -8,7 +8,6 @@
  * setup.
  */
 
-import { describeError } from "@engine/utils/redaction";
 import { FrameworkErrorCode } from "../protocol/errors.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Client, ClientTransport } from "./client.ts";
@@ -81,11 +80,8 @@ async function httpRequest(
   try {
     extraHeaders =
       typeof headersOption === "function" ? await headersOption() : (headersOption ?? {});
-  } catch (e) {
-    return {
-      error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED,
-      detail: describeError(e),
-    };
+  } catch {
+    return { error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED };
   }
 
   let response: Response;
@@ -96,11 +92,8 @@ async function httpRequest(
       body: JSON.stringify(body ?? {}),
       credentials: credentials ?? "include",
     });
-  } catch (e) {
-    return {
-      error: FrameworkErrorCode.NETWORK_ERROR,
-      detail: `Network request to ${path} failed: ${describeError(e)}`,
-    };
+  } catch {
+    return { error: FrameworkErrorCode.NETWORK_ERROR };
   }
 
   let text: string;

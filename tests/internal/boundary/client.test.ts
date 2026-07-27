@@ -143,9 +143,6 @@ describe("createClient (transport-agnostic)", () => {
 
     const result = await client.auth.login({ username: "a", password: "b" });
 
-    expect(result).toEqual({
-      error: "TRANSPORT_ERROR",
-      detail: expect.stringContaining("boom"),
-    });
+    expect(result).toEqual({ error: "TRANSPORT_ERROR" });
   });
 });

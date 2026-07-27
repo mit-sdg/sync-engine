@@ -244,7 +244,7 @@ describe("createCliApp", () => {
     expect(run).toHaveBeenCalledWith(42);
   });
 
-  test("run returns a thrown parser error on stderr without calling the command handler", async () => {
+  test("run returns an opaque parser failure without calling the command handler", async () => {
     const run = vi.fn(async () => ok("unreachable"));
     const app = createCliApp({
       broken: {
@@ -257,7 +257,7 @@ describe("createCliApp", () => {
 
     await expect(app.run(["broken"])).resolves.toEqual({
       stdout: "",
-      stderr: "bad parse\n",
+      stderr: "Command failed.\n",
       exitCode: 1,
     });
     expect(run).not.toHaveBeenCalled();
@@ -277,7 +277,7 @@ describe("createCliApp", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  test("run returns a thrown command error on stderr", async () => {
+  test("run returns an opaque command failure on stderr", async () => {
     const app = createCliApp({
       explode: {
         run: async () => {
@@ -288,7 +288,7 @@ describe("createCliApp", () => {
 
     const result = await app.run(["explode"]);
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("boom");
+    expect(result.stderr).toBe("Command failed.\n");
   });
 
   test("a command without a parser receives ParsedArgs", async () => {
@@ -403,7 +403,7 @@ describe("createCliApp", () => {
     expect(typedList.stdout).toBe("open items\n");
   });
 
-  test("run returns a command exception inside the CliResult boundary", async () => {
+  test("run contains a command exception inside an opaque CliResult boundary", async () => {
     const app = createCliApp({
       broken: {
         parse: (positionals) => ({ msg: positionals.join(" ") }),
@@ -415,7 +415,7 @@ describe("createCliApp", () => {
 
     await expect(app.run(["broken", "hello"])).resolves.toEqual({
       stdout: "",
-      stderr: "parse-ok-but-run-boom\n",
+      stderr: "Command failed.\n",
       exitCode: 1,
     });
   });
@@ -432,7 +432,7 @@ describe("createCliApp", () => {
     });
   });
 
-  test("dispatch catches an error thrown by a plain command", async () => {
+  test("dispatch catches a plain command error without exposing its message", async () => {
     const app = createCliApp({
       boom: {
         run: async () => {
@@ -442,6 +442,6 @@ describe("createCliApp", () => {
     });
     const result = await app.dispatch("boom", {});
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("dispatch-boom");
+    expect(result.stderr).toBe("Command failed.\n");
   });
 });

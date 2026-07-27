@@ -27,194 +27,41 @@ update.
 
 <!-- register:language:end -->
 
-Use `language` to name a design: its concepts, reactions, views, and formers.
+`language` declares designs; it does not execute them. These are the primary
+call shapes:
 
-### Vocabulary
+| API                    | Compact signature                                                            |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `vocabulary`           | `vocabulary({ concepts, computations })`                                     |
+| `reaction`             | `reaction(vars => when(trigger).where(...conditions).then(...consequences))` |
+| `returned` / `refused` | `(pattern, { by?, except?, exceptBy? }?)`                                    |
+| `where`                | `where(...conditions)`                                                       |
+| `no` / `whether`       | `(readLine)`                                                                 |
+| `earlier`              | `earlier(action, input, output?)`                                            |
+| `view`                 | `view(name, (input, output, free) => where(...))`                            |
+| `count`                | `count(query, input, outputVariable)`                                        |
+| `former`               | `former(name, (input, free) => form(...) \| where(...).form(...))`           |
+| `form`                 | `form({ ...shape })`                                                         |
+| `each`                 | `each(readLine).where(...).arranged(...).form(...)` or a fold                |
+| `is`                   | `is.lt`, `is.le`, `is.gt`, `is.ge`, and `is.among` comparisons               |
 
-`vocabulary({ concepts, computations })` gives plain concept classes and pure
-computations their application names. A concept entry may be the class itself,
-or a descriptor with `class` and any of `spec`, `purpose`, `principle`,
-`queries`, `outcomes`, `refusals`, and `publicErrors`. `spec` contains the
-concept's markdown specification; its purpose, principle, and query promises
-are read from that document, and explicit fields replace what it states.
-`outcomes` names action contracts, `refusals` lists each action's refusal
-branches — a code, the `Error` class that signals it, and its sentence — and
-`publicErrors` maps those codes to public boundary categories. This is the
-low-level seat; `registerConcept(...)` derives the whole descriptor from a
-specification for the ordinary registration path.
-
-`Vars` is the inferred variable bag used by a reaction callback.
-`InputBindings`, `OutputBindings`, and `FreeBindings` distinguish the binding
-partitions supplied to view and former callbacks; callback parameters normally
-infer them without annotations. `RelationView` is useful when a function
-accepts a policy view as an argument.
-
-```ts
-import { vocabulary } from "@mit-sdg/sync-engine/language";
-
-export const words = vocabulary({
-  concepts: {
-    Drafting: {
-      class: Drafting,
-      spec: draftingSpec,
-      refusals: {
-        publish: [
-          { code: "DRAFT_NOT_FOUND", error: DraftNotFound, message: "There is no such draft." },
-        ],
-      },
-    },
-  },
-  computations: {
-    normalizeContent: ({ content }) => String(content).trim(),
-  },
-});
-```
-
-### Reactions and consequences
-
-`reaction(callback)` declares one named reaction in a composition. The
-callback returns one reaction tree. The ordinary single-path frame is:
-
-```ts
-reaction(({ source, result }) =>
-  when(Source.finish({ source }).responds({ result })).then(Target.record({ source, result })),
-);
-```
-
-Callable action lines state posture. A bare call watches or asks at the
-requested posture; `.responds(pattern?)` states a returned occurrence;
-`.refuses(pattern?)` states a refusal. Trigger input patterns may be partial,
-while consequence calls must supply every required input.
-
-Several arguments in one `then(...)` group are independent siblings. Every
-sibling carries a distinct trailing `.named(label)`. A later `then(...)`
-extends every current path independently. `where(...).then(action).named(label)`
-qualifies one sibling without asserting that siblings are disjoint or complete.
-A qualified sibling may chain one action per local `.then(actionLine)` before
-its trailing label. Names opened by a local returned or refused line remain on
-that branch and are available to its local and parent descendants, never to a
-sibling. Once the branch is named it is terminal as a sibling member.
-
-`returned(pattern, options?)` and `refused(pattern, options?)` watch posture
-channels rather than one named action. A returned channel pattern can bind
-`concept`, `action`, `input`, and the whole `result`. A refused channel pattern
-can bind `concept`, `action`, `input`, the whole `refusal`, and its `message`.
-The `message` binding carries the registered stable refusal code, not the
-specification's human sentence. These are payload-and-provenance channels, not
-wrappers around an action.
-
-Use `{ by: "ReactionName" }` to accept only occurrences asked for by that
-reaction. `except` skips named concept objects and `exceptBy` skips asking
-reaction names. For example, this recovery belongs only to the refusal caused
-by `TryPublish`:
-
-```ts
-reaction(({ refusal }) =>
-  when(refused({ action: "publish", refusal }, { by: "TryPublish" })).then(
-    Reporting.record({ refusal }),
-  ),
-);
-```
-
-### Reads and conditions
-
-A concept specification promises each query as `"one"`, `"optional"`, or
-`"many"`; `QueryPromise` names their union. An undeclared query keeps the
-general answer contract: one record or an array of records.
-
-Calling a concept query with its input pattern produces a `ReadLine`. Extend
-the line with `.is({ ... })` to match output slots. A fresh name opens and
-binds; a name already bound by the trigger or another line tests equality; a
-literal tests directly. Omitting output slots ignores them. A bare call, with
-no `.is`, asks only whether a row exists.
-
-Three forms modify a plain read:
-
-- `no(line)` holds only when no matching row exists. Its `.is` pattern may use
-  bound names and literals and opens nothing.
-- `whether(line)` lets authors continue matching when the source legitimately
-  answers no rows; newly opened names are blank in that binding. Authors may
-  pass a present value to a later query. If the value is blank, a plain query
-  finds no row and matching stops for that binding. A later query wrapped in
-  `whether(...)` may receive the blank value without stopping the match.
-- `line.is.not({ ... })` requires each stated slot to differ. It accepts bound
-  names and literals and opens nothing.
-
-`is` supplies the closed comparisons `lt`, `le`, `gt`, `ge`, and `among` over
-values that are already bound. [Execution semantics](./semantics.md#reading-declarations-govern)
-owns scheduling, promise, absence, and integrity guarantees.
-
-`earlier(action, input, output?)` is the occurrence read used in a reaction
-chain. It requires a matching action occurrence strictly before the trigger
-in the same causal flow, never consumes that occurrence, and drops the case
-when none matches.
-
-`Condition` names anything accepted by a `where(...)` clause. `ReadLine` names the
-uniform query-or-view line, while `SlotPattern` describes its typed `.is`
-pattern.
-
-### Views
-
-`view(name, callback)` gives a standing policy question a human name. The
-callback receives separate typed proxies for input, output, and free bindings,
-then returns one `where(...)` conjunction or several as alternatives. End a
-predicate view in `.holds()`. An output view defaults to `.many()` and may
-state `.one()`, `.optional()`, or `.many()` explicitly. The name carries no
-signature or cardinality, and local bindings do not escape.
-
-At a use-site, call a view with one object-shaped input mapping and read it
-exactly like a concept query. Predicate views are bare lines; output views bind
-or test only through `.is({ ... })`. `RelationView` is the type for this
-callable declaration.
-
-`count(query, input, outputVariable)` is the aggregate allowed inside a view's
-`where(...)`. It binds the number of matching rows, including `0`; a later
-closed line such as `is.lt(outputVariable, limit)` can test it. The count is
-taken when the view is asked and is never stored.
-
-### Formers
-
-`former(name, callback)` names a shaped read. The callback receives separate
-typed proxies for input and free bindings. A record-rooted former promises one
-answer unless it ends in `.optional()`; a selection-root former is many-valued
-and rejects that modifier. The name carries no signature or cardinality. The
-callback produces a record with `form({ ... })` or
-`where(...conditions).form({ ... })`. A plain optional line drops the candidate
-record when absent; wrapping it in `whether(...)` keeps the record and leaves
-its opened names blank. The former's own promise is checked against the body at
-registration and enforced when needed at run.
-
-Entries may be bound names, nested formed values, or calls to named formers.
-A named former used plainly drops the host row when it declines. Under
-`whether`, the host remains and the nested former's leaves become `null`.
-
-`each(line)` captures every row of one query or view line for production. It
-may refine the selection with `.where(...)` and order it with
-`.arranged(...)`, then ends in one consumer:
-
-| Consumer           | Result for matches                | Empty selection |
+| Consumer           | Result                            | Empty selection |
 | ------------------ | --------------------------------- | --------------- |
-| `.form({ ... })`   | one record per row                | `[]`            |
-| `.count()`         | number of rows                    | `0`             |
-| `.first(value)`    | value from the first arranged row | `null`          |
-| `.distinct(value)` | first-seen distinct values        | `[]`            |
+| `.form({ ... })`   | One record per row                | `[]`            |
+| `.count()`         | Number of rows                    | `0`             |
+| `.first(value)`    | Value from the first arranged row | `null`          |
+| `.distinct(value)` | First-seen distinct values        | `[]`            |
 
-`.count()` ignores ordering and therefore rejects `.arranged(...)`.
-`.distinct(...)` keeps first-seen order and also rejects an explicit
-arrangement. `.first(...)` uses the query's declared order unless the
-selection states `.arranged(variable, "ascending" | "descending")`,
-`.arranged("newest")`, or `.arranged("oldest")`.
+Concept entries accepted by `vocabulary` are either a concept class or
+`{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals?,
+publicErrors? }`. `QueryPromise` is `"one" | "optional" | "many"`.
+`Condition`, `ReadLine`, `SlotPattern`, and `RelationView` name reusable
+declaration shapes; the binding types are normally inferred.
 
-A fold over a relation promised at most one row is rejected because its
-declaration already answers how many values may be returned.
-
-A former with inputs can serve as a fragment. Fill its object-shaped input at
-the use site and pass the result to `.splicing(...)` to merge its record keys into the
-host record. A plain fragment call drops the host row when the fragment
-declines; `whether(fragment(...))` keeps the host and fills the merged leaves
-with `null`. Registration rejects key collisions and fragments that are not
-record-rooted. A fragment that answers outside its promise raises an integrity
-fault.
+For progressive examples, see the [reactions guide](./guide/reactions.md) and
+[views and formers guide](./guide/views-and-formers.md). The normative matching,
+cardinality, sibling, absence, and production rules live in [Execution
+semantics](./semantics.md#reactions).
 
 ## `assembly`
 
@@ -224,82 +71,45 @@ fault.
 
 <!-- register:assembly:end -->
 
-`assemble(options)` installs one vocabulary and composition. `AssemblyOptions`
-names every option: `vocabulary` and `composition` are required; `instances`
-supplies ready concept implementations; and `initialize` supplies constructor
-argument tuples by vocabulary name. An instance takes precedence over its
-`initialize` tuple. Without either option, the declared class is constructed
-with no arguments.
-
-`logging` controls interpreter diagnostics and defaults to `Logging.OFF`.
-`Logging.TRACE` writes concise action lines and `Logging.VERBOSE` writes action
-records and interpreter frames. The in-memory occurrence log retains the 100
-most recent settled causal flows by default; `retention` accepts `"keepAll"`,
-`"evictConsumed"`, or `{ window: number }`.
-
-The returned `Assembly` exposes `concepts`, `invoker`, `publicInterface`, and
-`form(fusedFormer)`. A direct non-query concept action is asynchronous. It
-resolves to the action's success value or an `ActionRefusal`, whose `error`
-field is the refusal code and whose other fields are refusal data. Registered
-exception refusals include the specification's sentence as `detail`. An
-ordinary fault rejects the promise. Underscore-prefixed queries retain the
-class's declared return type and are not widened with `ActionRefusal`. Use the
-boundary `invoker` when the caller needs the boundary's explicit domain and
-framework error envelope instead.
-
-A named former is callable with one object-shaped input mapping: the former
-`"the operations room"` is fused as `roomDashboard({ room })`. Pass that
-fused value to the assembly when a backend caller needs the formed answer
-directly:
+### Assembly construction
 
 ```ts
-const dashboard = await application.form(roomDashboard({ room }));
+assemble(options: AssemblyOptions): Assembly
 ```
 
-The former must be included in the assembly's composition. Passing the former
-definition without its input mapping is invalid; the runtime reports the valid
-shape as `form(roomDashboard({ room }))`. An endpoint normally carries the same
-fused value through `respond({ dashboard: roomDashboard({ room }) })`, so the
-outside caller receives the formed tree.
+| `AssemblyOptions` field | Required | Default / effect                                                                |
+| ----------------------- | -------- | ------------------------------------------------------------------------------- |
+| `vocabulary`            | yes      | Declared application vocabulary                                                 |
+| `composition`           | yes      | Reactions, endpoints, views, and formers to register                            |
+| `initialize`            | no       | Constructor argument tuples by concept name; otherwise `[]`                     |
+| `instances`             | no       | Ready implementations by concept name; each overrides `initialize`              |
+| `logging`               | no       | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                           |
+| `retention`             | no       | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"` |
 
-`ConceptImplementation<Class>` describes one concrete object through the
-class's public concept surface. `Implementations<typeof vocabulary>` maps every
-concept name to one implementation. `ImplementationOverrides<typeof
-vocabulary>` makes that map partial for test substitution after a complete
-implementation set has been chosen.
+`Assembly` exposes `concepts`, `invoker`, `publicInterface`, and
+`form(fusedFormer)`. `ActionRefusal` is the direct-action refusal result.
+`ConceptImplementation`, `Implementations`, and `ImplementationOverrides` name
+complete or partial implementation maps.
 
-`conceptFloor(vocabulary, floor)` checks a `ConceptFloor`: a name, one complete
-`instances` map, the names of its shared resources, and an asynchronous
-`close()` operation. A floor is a runtime substrate, not an application-policy
-plugin. `registerConcept(...)` and `conceptSet(...)` provide the external
-integration seats that derive vocabulary entries and complete implementation
-sets while plain concept classes and exception classes remain framework-free.
+### Registration and floors
 
-`registerConcept({ class, spec, refusals?, publicErrors?, floors? })` reads the
-specification and derives the concept's actions, queries, query promises, and
-refusal branches from it. `refusals` supplies only what the document cannot: the
-`Error` class that signals each code it declares. Registration then holds the two
-to each other and fails, naming what disagreed, when either describes a member or
-a refusal the other omits. The specification's promises apply to every
-implementation selected for that concept name.
+| API               | Compact signature                                                     |
+| ----------------- | --------------------------------------------------------------------- |
+| `registerConcept` | `registerConcept({ class, spec, refusals?, publicErrors?, floors? })` |
+| `conceptSet`      | `conceptSet({ ...registeredConcepts })`                               |
+| `conceptFloor`    | `conceptFloor(vocabulary, { name, instances, resources, close })`     |
 
-A floor factory receives the floor context and the name the concept is
-registered under, so a registry never spells its own application name.
+`ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
+`ConceptFloor` name those descriptors. `PublicError` contains the public HTTP
+categories and `PublicErrorCategory` names their union.
 
-`MemoryStore` and `FileStore` implement `LogStore` for occurrence records;
-`RetentionPolicy` configures their in-memory folds.
-`LogEntry` names the store's entry union. `FiringRecord` describes one reaction
-firing; `ReactionFailureRecord` describes a non-consuming failure while
-evaluating a matched reaction. Supply a log store through advanced `createEngine(store?)`
-constructor; ordinary `assemble(...)` uses its bounded in-memory occurrence log.
-`FileStore` appends a JSONL occurrence record.
+### Log stores
 
-`PersistingConcept` keeps a subject registry for application-supplied
-`LogStore` instances. `bind`, `release`, and its query manage the registry;
-`prune` delegates to the bound store.
-
-For the exact persistence, eviction, and restart limits, see
-[Logs, concept implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).
+`MemoryStore` and `FileStore` implement `LogStore`; `FileStore` appends JSONL.
+`RetentionPolicy`, `LogEntry`, `FiringRecord`, and `ReactionFailureRecord` name
+the corresponding contracts. `PersistingConcept` manages an
+application-supplied store registry. Persistence, eviction, redaction, and
+restart limits are normative in [Execution semantics](./semantics.md#logs-concept-implementations-and-restart).
 
 ## `boundary`
 
@@ -309,64 +119,92 @@ For the exact persistence, eviction, and restart limits, see
 
 <!-- register:boundary:end -->
 
-`endpoint(path, callback)` declares one outside request. The callback begins
-with `receive(input)`, may add `.where(...)`, and continues through the same
-single-path or labeled-sibling `then(...)` tree as `when`. `receive` adds the
-request trigger; the endpoint adds its path and optional input contract.
-The declared path is boundary-owned and cannot appear in `receive(input)`.
-Callable action lines ask concept actions, and `respond(body)` answers the caller;
-`requestId` and `errorKind` are boundary-owned response fields and are rejected
-when authored in that body.
-`EndpointDef` and `InputContractDecl` are the corresponding declaration types.
+### Endpoints
 
-`createGateway(options)` places standard routing, input admission, forwarding,
-and refusal handling before an assembled application. `GatewayOptions`
-requires the `application` target. `additionalComposition` defaults to none;
-`logging` defaults to `Logging.OFF`, imported from `assembly`; and `retention`
-defaults to the 100 most recent settled gateway flows with the same values as
-assembly retention. `Gateway`, `GatewayTarget`, and `GatewayClientError`
-describe that construction; a target's `publicInterface` is the
-`ApplicationInterface` an assembly exposes. `Invoker`, `InvokeOptions`, and
-`InvocationResult` describe transport-independent calls. `FrameworkErrorCode`
-contains the stable framework codes; `EmittedFrameworkErrorCode` is the union
-that a boundary can emit.
+| API        | Compact signature                                                           |
+| ---------- | --------------------------------------------------------------------------- |
+| `endpoint` | `endpoint(path, vars => receive(input)...then(respond(body)), { input? }?)` |
+| `receive`  | `receive(input?)`                                                           |
+| `respond`  | `respond(body?)`                                                            |
 
-`createHttpHandler({ gateway, basePath? })` adapts the gateway to a Fetch
-handler. It accepts JSON `POST` requests beneath the base path.
+`EndpointDef` and `InputContractDecl` name the declaration and optional runtime
+outer-shape contract. The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
+shows the authoring path; [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
+owns settlement.
 
-`httpFloor({ origin, credential })` declares one closed cookie-credential
-boundary. `HttpFloor` and `HttpCredentialBinding` name that descriptor. The
-application chooses the logical credential name and input, the issuing endpoint
-and its token and expiry outputs, the successful clearing endpoints, and its
-public origin:
+| `InputContractDecl` field | Default / effect                                 |
+| ------------------------- | ------------------------------------------------ |
+| `required`                | `[]`; missing listed keys return `INVALID_INPUT` |
+| `defaults`                | `{}`; fills listed keys only when absent         |
+
+### Gateway and invocation
 
 ```ts
-const floor = httpFloor({
-  origin: "https://learning.example",
-  credential: {
-    name: "session",
-    input: "session",
-    issue: { path: "/auth/login", output: "session", expires: "expiresAt" },
-    clear: ["/auth/logout", "/auth/changePassword"],
-  },
-});
-
-const handler = createHttpHandler({ gateway, application, floor });
+createGateway<Contract>(options: GatewayOptions): Gateway<Contract>
+invoker.invoke(path, input, options?: InvokeOptions): Promise<InvocationResult>
 ```
 
-The fixed adapter derives protected routes from their declared credential
-input. [Execution semantics](./semantics.md#boundary-gateway-and-client) owns
-its request, credential, projection, and failure guarantees;
-[Cancellation](./semantics.md#cancellation)
-owns cancellation.
+| `GatewayOptions` field  | Required | Default / effect                                              |
+| ----------------------- | -------- | ------------------------------------------------------------- |
+| `application`           | yes      | `GatewayTarget` exposing `invoker` and `publicInterface`      |
+| `additionalComposition` | no       | No additional gateway declarations                            |
+| `logging`               | no       | `Logging.OFF` from the `assembly` subpath                     |
+| `retention`             | no       | `{ window: 100 }`; same accepted values as assembly retention |
 
-The CLI construction uses `command(...)` and `createCliApp(...)`.
-`CliCommand`, `EndpointCliCommand`, `CommandInput`, `CliAppOptions`, and
-`CliApp` describe commands and the assembled adapter. `parseArgs(...)` splits
-raw arguments into `ParsedArgs`. An endpoint command's parser returns the
-`ParseResult` union; `parseOk(...)` and `parseFail(...)` construct its branches.
-Command handlers return `CliResult`, commonly through `ok(...)` or
-`fail(...)`.
+| `InvokeOptions` field | Default / effect                                                             |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `signal`              | No signal; an abort ends the wait with `ABORTED`                             |
+| `timeoutMs`           | `30_000`; expiry ends the wait with `TIMED_OUT`                              |
+| `correlationId`       | The generated request id; supplied values cross gateway and application logs |
+
+`Gateway`, `GatewayTarget`, `GatewayClientError`, `Invoker`, and
+`InvocationResult` name these contracts. Timeout and abort stop waiting but do
+not cancel forwarded application work; see [Cancellation](./semantics.md#cancellation).
+
+### HTTP
+
+| API                 | Compact signature / options                                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `createHttpHandler` | `({ gateway, basePath? })`, `({ invoker, basePath? })`, or `({ gateway, application, floor })`; `basePath` defaults to `""` |
+| `httpFloor`         | `httpFloor({ origin, credential: { name, input, issue: { path, output, expires }, clear } })`                               |
+
+`HttpFloor` and `HttpCredentialBinding` name the cookie-floor descriptor. The
+fixed request, cookie, projection, and deployment guarantees live in [Execution
+semantics](./semantics.md#boundary-gateway-and-client).
+
+### CLI
+
+| API                     | Compact signature                                        |
+| ----------------------- | -------------------------------------------------------- |
+| `command`               | `command({ path }, { description?, parse, format })`     |
+| `createCliApp`          | `createCliApp(commands, { name?, version?, invoker? }?)` |
+| `parseArgs`             | `parseArgs(args): ParsedArgs`                            |
+| `parseOk` / `parseFail` | Constructors for `ParseResult`                           |
+| `ok` / `fail`           | Constructors for `CliResult` with exit codes `0` / `1`   |
+
+`CliAppOptions.name` and `.version` default to `""`; `invoker` defaults to
+absent and is required only by endpoint commands. `CliCommand`,
+`EndpointCliCommand`, and `CommandInput` name command contracts.
+
+### Framework Errors
+
+`FrameworkErrorCode` is the stable value object;
+`EmittedFrameworkErrorCode` is its value union. Controlled admission details
+may accompany an error, but exception text from an unknown failure is omitted.
+
+| Code                       | Ordinary source                                                | HTTP status when emitted by the server adapter |
+| -------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
+| `INVALID_INPUT`            | Gateway input admission                                        | 422                                            |
+| `NOT_FOUND`                | Unknown route                                                  | 404                                            |
+| `TIMED_OUT`                | Invocation wait expired                                        | 504                                            |
+| `ABORTED`                  | Invocation signal aborted                                      | 499                                            |
+| `INTERNAL_ERROR`           | Application/framework fault                                    | 500                                            |
+| `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure              | 500                                            |
+| `BAD_JSON`                 | HTTP request or response parsing                               | 400 for a bad request                          |
+| `BAD_STATUS`               | Unsupported request method or client-side status normalization | 405 for an unsupported method                  |
+| `NETWORK_ERROR`            | HTTP client could not complete `fetch`                         | No response                                    |
+| `HEADER_RESOLUTION_FAILED` | HTTP client header provider failed                             | No response                                    |
+| `UNKNOWN_ERROR`            | Unclassified framework envelope                                | 500                                            |
 
 ## `client`
 
@@ -376,22 +214,34 @@ Command handlers return `CliResult`, commonly through `ok(...)` or
 
 <!-- register:client:end -->
 
-`createHttpClient<Contract>(options?)` is the ordinary frontend construction.
-It returns `Client<Contract>`, which supports both grouped paths such as
-`client.rooms.get(input)` and full-path index access. Each call resolves to the
-route's success body or an `{ error, detail? }` envelope.
+### Constructors
 
-`HttpClientOptions` selects `baseUrl`, `fetch`, `headers`, and `credentials`.
-`HeadersOption` may be a header record or a function evaluated for every call.
-`createHttpTransport(...)` returns the transport alone.
+| API                   | Compact signature                                                           |
+| --------------------- | --------------------------------------------------------------------------- |
+| `createHttpClient`    | `createHttpClient<Contract>(options?: HttpClientOptions): Client<Contract>` |
+| `createHttpTransport` | `createHttpTransport(options?: HttpClientOptions): ClientTransport`         |
+| `createLocalClient`   | `createLocalClient<Contract>({ invoker }): Client<Contract>`                |
+| `createClient`        | `createClient<Contract>({ transport }: ClientOptions): Client<Contract>`    |
 
-`createLocalClient({ invoker })` uses the same generated contract in process.
-For another transport, implement `ClientTransport` over `ClientRequest` and
-pass it through `ClientOptions` to `createClient(...)`.
+| `HttpClientOptions` field | Default / effect                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `baseUrl`                 | `API_BASE_URL`, then `"/api"`                                                      |
+| `fetch`                   | `globalThis.fetch`                                                                 |
+| `headers`                 | No extra headers; a record or synchronous/asynchronous provider evaluated per call |
+| `credentials`             | `"include"`; also accepts `"omit"` or `"same-origin"`                              |
 
-`ContractShape` is the path-to-input/output/error record accepted by these
-builders. `ClientError` is the framework envelope, and `DomainErrorValue`
-extracts the error value from a generated route envelope.
+`ClientOptions.transport` and `createLocalClient`'s `invoker` are required.
+`HeadersOption`, `ClientTransport`, and `ClientRequest` name those extension
+contracts. A `Client<Contract>` supports grouped access such as
+`client.rooms.get(input)` and indexed access such as
+`client["/rooms/get"]`, followed by the input call.
+
+`ContractShape` is the path-to-input/output/error record accepted by every
+constructor. `ClientError` is `{ error: EmittedFrameworkErrorCode; detail?:
+string }`; `DomainErrorValue` extracts a generated route's domain error value.
+Calls resolve to success or error envelopes rather than throwing for handled
+transport failures. JSON projection and error delivery are normative in
+[Execution semantics](./semantics.md#boundary-gateway-and-client).
 
 ## `tooling`
 
@@ -401,42 +251,64 @@ extracts the error value from a generated route envelope.
 
 <!-- register:tooling:end -->
 
-`inspectAssembly(assembly)` returns read-only design data without exposing the
-interpreter: the application `AppIR`, concept inventories, input contracts,
-`ObservedOccurrence` summaries, and the application's whole read-back as its
-`readBack` string. `ReactionIR`, `ViewIR`, `FormerIR`, and `ConceptInventoryIR`
-name the main pieces.
+### Inspection and rendering
 
-`renderApp(ir)` renders the assembly's read-back. `renderReaction(reaction)`
-renders one exported reaction. A view that no reaction or
-former reads does not appear in the rendering.
-`wireContracts(app, options)` derives `WireContractsIR`; `renderWireTypes(...)`
-prints its TypeScript contract. `WireOptions`, `WireEndpoint`, and `WireType`
-describe the derivation. `WireRenderOptions` configures the generated module:
-`moduleName` names its exported contract, `vocabulary: { from, export }` points
-to the canonical vocabulary for type-only leaf references, and `strictLeaves`
-rejects generation when a leaf has no such reference instead of falling back
-to `Json`. `appWideErrorName` gives an appended contract its own error alias;
-`preamble: false` reuses the first contract's imports and type helpers.
-`renderInputContracts(...)` prints admitted input contracts for inspection and
-tests.
+| API                    | Compact signature                                                 |
+| ---------------------- | ----------------------------------------------------------------- |
+| `inspectAssembly`      | `inspectAssembly(assembly)`                                       |
+| `renderApp`            | `renderApp(ir): string`                                           |
+| `renderReaction`       | `renderReaction(reaction): string`                                |
+| `renderInputContracts` | `renderInputContracts(contracts): string`                         |
+| `wireContracts`        | `wireContracts(app, options?: WireOptions): WireContractsIR`      |
+| `renderWireTypes`      | `renderWireTypes(wire, moduleName? \| options?): string`          |
+| `httpFloorReadBack`    | `httpFloorReadBack(application, floor): string`                   |
+| `floorReadBack`        | `floorReadBack({ application, conceptFloor, httpFloor }): string` |
 
-`floorReadBack(...)` names the selected concept implementations and shared
-resources, then appends the HTTP floor read-back. `httpFloorReadBack(application,
-floor)` validates the descriptor against the
-assembly and prints its public origin, credential binding, protected-route
-count, issuing fields, and clearing endpoints. Neither form adds transport
-details to the assembled read-back.
+`AppIR`, `ReactionIR`, `ViewIR`, `FormerIR`, `ConceptInventoryIR`, and
+`ObservedOccurrence` name inspected data. `WireContractsIR`, `WireEndpoint`,
+and `WireType` name derived wire data.
 
-The package command reads `generated.config.ts`, assembles the application,
-and renders, checks, or pins the assembled read-back and wire contract in
-`generated/`. The application provides the descriptor; the command handles
-inspection and file updates. A
-descriptor with an HTTP floor emits the logical contract named by `wireName`
-and the projected HTTP contract named by `httpWireName` or `${wireName}Http`
-in that one wire module.
-The [application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
-shows the complete path.
+| `WireOptions` field | Default                     |
+| ------------------- | --------------------------- |
+| `boundary.concept`  | `"RequestBoundary"`         |
+| `boundary.request`  | `"request"`                 |
+| `boundary.respond`  | `"respond"`                 |
+| `contracts`         | No declared input contracts |
+| `inventories`       | No concept inventories      |
+
+| `WireRenderOptions` field | Default / effect                                                        |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `moduleName`              | `"WireContracts"`                                                       |
+| `vocabulary`              | No type anchor; `{ from, export }` enables signature references         |
+| `strictLeaves`            | `false`; `true` requires an anchor and rejects unresolved `Json` leaves |
+| `appWideErrorName`        | `"AppWideError"`                                                        |
+| `preamble`                | `true`; set `false` when appending another contract to one module       |
+
+### Generated descriptor
+
+The `sync-engine artifacts` command reads the default export of the
+application-owned `generated.config.ts`. The descriptor is a CLI configuration
+shape rather than an exported package type.
+
+| Field               | Required | Default                                                               |
+| ------------------- | -------- | --------------------------------------------------------------------- |
+| `assemble`          | yes      | Function that builds the application                                  |
+| `title`             | yes      | Application title used to derive names                                |
+| `directory`         | no       | `new URL("./generated/", configUrl)`                                  |
+| `specification`     | no       | Slugged title plus `.md`                                              |
+| `wire`              | no       | `"wire.ts"`                                                           |
+| `wireName`          | no       | Pascal-cased title plus `Wire`                                        |
+| `wireBanner`        | no       | `// Generated by sync-engine from the <title> assembly. Do not edit.` |
+| `httpWireName`      | no       | `${wireName}Http` when `httpFloor` is present                         |
+| `vocabulary.module` | no       | `new URL("./src/concept-set.ts", configUrl)`                          |
+| `vocabulary.export` | no       | `"vocabulary"`                                                        |
+| `httpFloor`         | no       | No HTTP projection                                                    |
+
+Artifact generation always uses the vocabulary anchor with strict leaves. With
+an HTTP floor, the one wire module contains the logical contract and the
+projected HTTP contract. The [application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
+shows the application-owned command path; [Generated wire](./semantics.md#generated-wire)
+owns derivation guarantees.
 
 ## `advanced`
 
@@ -446,28 +318,21 @@ shows the complete path.
 
 <!-- register:advanced:end -->
 
-This public subpath crosses the ordinary application boundary. `createEngine(store?)`
-constructs the interpreter directly. `Engine` can instrument concepts,
-register authored reactions or `ReactionIR`, export or render the application,
-observe the log, and evaluate formers. The optional store receives
-occurrence-log entries.
-`Requesting` is the request/response boundary concept. It accepts one response
-for a pending request and leaves a timed-out or aborted request unanswered.
-`refusalFunnel` is the standard reaction pack that carries registered concept
-refusals to it. `Refuse` is the low-level refusal error.
+This subpath crosses the ordinary application boundary.
 
-`EngineObserver` receives `LogEvent` action observations. `compute(...)` runs
-a named vocabulary computation. `custom(fn, inputs, outputs)` runs an opaque
-operation with an explicit variable footprint when a named computation cannot
-express the work.
+| API             | Compact signature / role                         |
+| --------------- | ------------------------------------------------ |
+| `createEngine`  | `createEngine(store?: LogStore): Engine`         |
+| `compute`       | `compute(namedComputation, input, output)`       |
+| `custom`        | `custom(fn, inputs, outputs)`                    |
+| `faulted`       | `faulted(pattern, { by?, except?, exceptBy? }?)` |
+| `refusalFunnel` | `refusalFunnel(boundaryActions)`                 |
 
-`faulted(pattern, options?)` watches faults from concept implementations and
-other runtime code. Its payload key is `fault`; the shared channel keys are
-`concept`, `action`, and `input`.
-`{ by: "ReactionName" }` pins provenance exactly as it does for `returned` and
-`refused`. A fault is not a concept refusal: the interrupted ask remains
-unanswered. The delivery limits are documented under
-[Failures between action asks](./semantics.md#failures-between-action-asks).
+`Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
+observation contracts. `Requesting` is the low-level request/response concept;
+`Refuse` is the low-level refusal error. Fault delivery and unanswered asks are
+normative under [Failures between action asks](./semantics.md#failures-between-action-asks)
+and [Cancellation](./semantics.md#cancellation).
 
 ## `utils`
 
@@ -479,9 +344,11 @@ unanswered. The delivery limits are documented under
 
 `logger` is the package logger. `Logger` and `LogLevel` describe its public API.
 `serializeError(...)` returns only an `Error` class name, or
-`NonErrorThrown` for another thrown value. `describeError(...)` returns the
-message of an `Error` or the string representation of another thrown value
-for safe use in error envelopes.
+`NonErrorThrown` for another thrown value, and is the opaque form for ordinary
+logging. `describeError(...)` returns an `Error` message or the string form of
+another thrown value. It does not sanitize or redact that text; use it only in
+a caller-reviewed diagnostic channel, never automatically in a public error
+envelope.
 
 `configureRedaction(policy)` sets the process redaction policy. `redact(value)`
 returns a copy that replaces values whose field names match `RedactionPolicy`

@@ -30,7 +30,6 @@ import type { Prettify } from "../protocol/endpoints.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import { FrameworkErrorCode } from "../protocol/errors.ts";
 import type { EmittedFrameworkErrorCode } from "../protocol/errors.ts";
-import { describeError } from "@engine/utils/redaction";
 
 export type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
 
@@ -185,11 +184,8 @@ export function createClient<C extends ContractShape, TError = ClientError>(
   const call = async (path: string, body: unknown) => {
     try {
       return await options.transport({ path, input: body ?? {} });
-    } catch (e) {
-      return {
-        error: FrameworkErrorCode.TRANSPORT_ERROR,
-        detail: describeError(e),
-      };
+    } catch {
+      return { error: FrameworkErrorCode.TRANSPORT_ERROR };
     }
   };
   return makeProxy([], call) as Client<C, TError>;

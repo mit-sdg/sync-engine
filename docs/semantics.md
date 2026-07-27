@@ -246,9 +246,12 @@ An endpoint records at most one answer. An uncovered input, a dropped plain
 line, or a failed `where` can leave the request unanswered. Parallel endpoint
 declarations and sibling answers remain ordinary alternatives, so any matching
 path may answer; `NOT_PENDING` refuses another answer after settlement.
-[Cancellation](#cancellation) owns what timeout
-and abort do with a pending call. Disjointness and coverage belong to advisory
-analysis over exported IR.
+An unanswered invocation waits 30 seconds by default and then returns the
+framework error `TIMED_OUT`. `InvokeOptions.timeoutMs` overrides that wait.
+Public endpoints should provide explicit coverage or fallback branches rather
+than use timeout as an authored outcome. [Cancellation](#cancellation) owns
+what timeout and abort do with a pending call. Disjointness and coverage belong
+to advisory analysis over exported IR.
 
 ## Boundary, gateway, and client
 
@@ -267,7 +270,9 @@ success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
 boundary answer keeps domain errors and framework errors distinct. The HTTP
 adapter also owns method, JSON parsing, a one-mebibyte request-body limit, and
 status mapping; framework failures mapped to 5xx responses omit diagnostic
-detail. See the exact [cancellation boundary](#cancellation).
+detail. Client, invocation, and CLI adapters also omit exception text when an
+unknown thrown value becomes a framework error. See the exact [cancellation
+boundary](#cancellation).
 
 An HTTP floor may bind one logical credential input to a cookie. The application
 declares the credential name and input, the endpoint that issues it and the
@@ -286,13 +291,15 @@ and an unauthorized protected request clear the cookie. Credential responses
 use `Cache-Control: no-store`. The floor is a same-origin boundary: it does not
 answer CORS preflights or emit CORS headers.
 
-Gateway admission validates the route and the request's outer shape. The input
-must be an object and contain every required key. Admission does not validate a
-present value's primitive type or nested shape; explicit `null` therefore
-passes a required-key check. The concept action accepts the admitted values or
-refuses them through its registered vocabulary. Any unexpected throw is the
-opaque framework fault `INTERNAL_ERROR`. The generated TypeScript contract
-checks callers during typecheck but adds no runtime value validator.
+**Runtime validation boundary.** Gateway admission validates the route and the
+request's outer shape. The input must be an object and contain every required
+key. Admission does not validate a present value's primitive type or nested
+shape; explicit `null` therefore passes a required-key check. The concept
+action accepts the admitted values or refuses them through its registered
+vocabulary. Any unexpected throw is the opaque framework fault
+`INTERNAL_ERROR`. The generated TypeScript contract checks callers during
+typecheck but adds no runtime value validator or schema derived from concept
+specifications.
 
 Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
 `Domain`. An HTTPS origin uses a `Secure` cookie whose name has the `__Host-`
@@ -332,8 +339,9 @@ issuing route's output. Its error union carries public categories rather than
 private refusal codes. Both contracts share the generated type helpers and
 vocabulary anchor.
 
-These are TypeScript guarantees. The runtime validation limit is stated under
-[Boundary operations](#boundary-operations).
+These are TypeScript guarantees. Input admission is stated under
+[Boundary, gateway, and client](#boundary-gateway-and-client); output validation
+limits are stated under [Boundary operations](#boundary-operations).
 
 ## Operational limits
 
@@ -386,7 +394,9 @@ explicit policy alternatives.
 An invocation already aborted when it begins does not reach the gateway. While
 a request is pending, aborting marks it to resolve with `ABORTED`; the signal is
 not forwarded to the application and does not cancel, prevent, or roll back
-forwarded work. Timeout and abort end the pending wait but record no
+forwarded work. The default timeout is 30 seconds; `InvokeOptions.timeoutMs`
+selects another duration, and expiry resolves with `TIMED_OUT`. Timeout and
+abort end the pending wait but record no
 `RequestBoundary.respond` occurrence, so recorded application work may remain
 unanswered.
 
@@ -401,7 +411,10 @@ The configured field-name redaction policy applies before entries reach a
 store, observer, or inspection summary. During an active causal flow, the
 interpreter privately retains original values for execution and matching, then
 clears them when the outermost action settles. Ordinary process logs omit
-exception messages, stacks, causes, and attached fields.
+exception messages, stacks, causes, and attached fields. `serializeError(...)`
+provides that opaque class-only representation. `describeError(...)` instead
+returns unredacted exception text and is suitable only for a caller-reviewed
+diagnostic channel, not an automatic public error envelope.
 
 Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
 most recent settled causal flows. Its `retention` option can select another

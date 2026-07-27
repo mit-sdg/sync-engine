@@ -152,10 +152,7 @@ describe("createHttpClient", () => {
 
     const result = await client.auth.login({ username: "a", password: "b" });
 
-    expect(result).toEqual({
-      error: FrameworkErrorCode.NETWORK_ERROR,
-      detail: expect.stringContaining("Connection refused"),
-    });
+    expect(result).toEqual({ error: FrameworkErrorCode.NETWORK_ERROR });
   });
 
   test("a non-JSON success response returns BAD_JSON", async () => {
@@ -207,10 +204,7 @@ describe("createHttpClient", () => {
 
     const result = await client.auth.login({ username: "a", password: "b" });
 
-    expect(result).toEqual({
-      error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED,
-      detail: expect.stringContaining("token expired"),
-    });
+    expect(result).toEqual({ error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED });
   });
 
   test("object headers are merged with the JSON content type", async () => {

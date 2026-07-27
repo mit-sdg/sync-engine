@@ -7,57 +7,21 @@ contract, correlation, and a response from the authored design.
 This page assembles the room, declares one endpoint, places the gateway in front
 of it, and calls the result through a generated TypeScript contract.
 
-## Application files and floors
+## Run the shipped path
 
-Small applications can keep the assembly in one file:
+The Operations Room scenario already crosses an assembled application, the
+standard gateway, and a local client typed by its generated contract. From this
+repository's root, run:
 
-| Location              | Contents                                                                       |
-| --------------------- | ------------------------------------------------------------------------------ |
-| `src/concepts/`       | Generic behavior: specification, class, refusals, registry, and principle test |
-| `src/concept-set.ts`  | One explicit set deriving vocabulary, references, and implementation floors    |
-| `src/composition/`    | Reactions, views, formers, boundary declarations, and selectable packs         |
-| `src/assembly.ts`     | Vocabulary, composition, and concept implementation choices                    |
-| `src/edge.ts`         | Standard gateway and transport handler                                         |
-| `src/client.ts`       | Generated-contract client used outside the backend                             |
-| `src/scenario.ts`     | A runnable path through the assembled application                              |
-| `generated/`          | Pinned assembled read-back and wire contract                                   |
-| `generated.config.ts` | Assembly and output metadata for checking or pinning generated artifacts       |
+```sh
+bun run example:operations
+```
 
-Larger applications can make the runtime choices visible in one assembly
-folder:
-
-| Location                        | Contents                                                             |
-| ------------------------------- | -------------------------------------------------------------------- |
-| `src/assembly/application.ts`   | The stable join of the concept set and explicit composition manifest |
-| `src/assembly/concept-floor.ts` | Complete named implementation sets, shared resources, and `close()`  |
-| `src/assembly/http-floor.ts`    | Credential binding and public origin for the fixed HTTP boundary     |
-| `src/assembly/process.ts`       | Process startup and shutdown ownership                               |
-| `src/assembly/README.md`        | Configuration router and the application's floor boundary            |
-
-An **implementation** is one concrete concept object. An **override** replaces
-one implementation after an application has selected a complete floor; it is
-useful for a test substitution but is not another production floor. A
-**concept floor** is a named, complete implementation map together with its
-shared resources and shutdown operation. An **HTTP floor** carries the logical
-application interface over HTTP: credentials, origin checks, parsing,
-serialization, cookies, and status decoration belong there, while domain
-authorization and concept meaning do not. The **process** creates and owns the
-selected resources, starts the boundary handler, and closes the floor during
-shutdown.
-
-In the folder form, `application.ts` should not change for an ordinary feature.
-A new concept changes the explicit concept set; a new composition file changes
-the explicit composition manifest. Floor and process files change only when
-the runtime substrate or deployment boundary changes.
-
-Each example owns its concepts under `src/concepts/`, so its directory remains
-independently installable and testable. A small application may keep its composition in one file; the
-reading circle uses a vocabulary and one composition module. The operations
-room separates policy, reaction packs, reads, and endpoints within
-`src/composition/`. A larger application may divide the same directory by
-product area. Those are folder-depth choices, not different conventions:
-authored application source lives under `src/`, while generated artifacts stay
-visibly derived beside it.
+The scenario source is
+[`examples/operations-room/src/scenario.ts`](../../examples/operations-room/src/scenario.ts).
+The sections below follow that runnable path from `assembly.ts` through
+`edge.ts`, `generated/wire.ts`, and `client.ts` before discussing larger
+deployment layouts.
 
 ## Assemble one application
 
@@ -185,6 +149,12 @@ book](../book.md#12--an-endpoint-uses-the-same-sibling-shape) shows this boundar
 specialization, and [Execution semantics](../semantics.md#sibling-paths-and-endpoint-settlement)
 defines its lowering and settlement.
 
+Cover every admitted case on a public endpoint with an answer or an explicit
+fallback branch. If no branch responds, invocation waits 30 seconds by default
+and then returns `TIMED_OUT`. A direct `Invoker` caller can set
+`InvokeOptions.timeoutMs` or supply an abort `signal`; neither operation cancels
+work already forwarded into the application.
+
 ## Put the standard gateway in front
 
 The public gateway factory has one ordinary shape. Give it the assembled
@@ -227,11 +197,14 @@ export default {
 };
 ```
 
-From a project where `@mit-sdg/sync-engine` is installed, this command pins
-both shipped example files:
+Generation writes beside the config by default. Work from an
+application-owned copy, never from the example under `node_modules`. After
+copying `examples/operations-room/` into your project and installing its
+dependencies, run this in the copied application's directory to pin both
+files:
 
 ```sh
-bunx sync-engine artifacts pin --config node_modules/@mit-sdg/sync-engine/examples/operations-room/generated.config.ts
+bun run artifacts:pin
 ```
 
 Write the concepts, vocabulary, composition, and assembly first. The command
@@ -246,8 +219,8 @@ An application with a cookie credential also supplies its `httpFloor` in this
 descriptor, so the generated module carries both the logical application
 contract and its HTTP form. [Execution
 semantics](../semantics.md#boundary-gateway-and-client) owns the fixed cookie
-and HTTP behavior; the [public API](../public-surface.md#boundary) names the
-descriptor fields.
+and HTTP behavior; the [public API](../public-surface.md#generated-descriptor)
+lists every descriptor field and default.
 
 The generated route records its admitted input, success body, and every
 endpoint or application error derived from the assembly. Here the
@@ -289,6 +262,14 @@ declarations beside the wire. The import is type-only and does not add concept
 instances or engine code to the browser bundle. Before publishing, regenerate
 the files, review the wire diff, and typecheck a consumer against the packed
 package.
+
+The generated contract is a compile-time guarantee, not a runtime schema
+validator. Standard gateway admission checks that input is an object and that
+required keys are present; it does not check primitive types, nested shapes, or
+the value of a present key, so explicit `null` passes required-key admission.
+Treat untyped or hostile input as untrusted and enforce value and domain rules
+in the receiving concept. [Execution semantics](../semantics.md#boundary-gateway-and-client)
+defines the complete admission boundary.
 
 ## Call the typed client
 
@@ -339,13 +320,48 @@ read. The [public API](../public-surface.md#client) names the client options;
 [execution semantics](../semantics.md#boundary-gateway-and-client) owns the
 result, transport, and framework-error guarantees.
 
-## Contract boundaries
+## Scale the deployment
 
-The generated TypeScript contract checks typed callers. Runtime admission,
-concept refusals, framework faults, serialization, and the limits of that type
-contract belong to [execution
-semantics](../semantics.md#boundary-gateway-and-client). Review that boundary
-before publishing a client contract.
+The shipped examples keep the assembly in one file. Their application-owned
+source and generated outputs follow this layout:
+
+| Location              | Contents                                                                       |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `src/concepts/`       | Generic behavior: specification, class, refusals, registry, and principle test |
+| `src/concept-set.ts`  | One explicit set deriving vocabulary, references, and implementation floors    |
+| `src/composition/`    | Reactions, views, formers, boundary declarations, and selectable packs         |
+| `src/assembly.ts`     | Vocabulary, composition, and concept implementation choices                    |
+| `src/edge.ts`         | Standard gateway and transport handler                                         |
+| `src/client.ts`       | Generated-contract client used outside the backend                             |
+| `src/scenario.ts`     | A runnable path through the assembled application                              |
+| `generated/`          | Pinned assembled read-back and wire contract                                   |
+| `generated.config.ts` | Assembly and output metadata for checking or pinning generated artifacts       |
+
+When deployment owns several resource sets, make those choices visible in one
+assembly folder:
+
+| Location                        | Contents                                                             |
+| ------------------------------- | -------------------------------------------------------------------- |
+| `src/assembly/application.ts`   | The stable join of the concept set and explicit composition manifest |
+| `src/assembly/concept-floor.ts` | Complete named implementation sets, shared resources, and `close()`  |
+| `src/assembly/http-floor.ts`    | Credential binding and public origin for the fixed HTTP boundary     |
+| `src/assembly/process.ts`       | Process startup and shutdown ownership                               |
+| `src/assembly/README.md`        | Configuration router and the application's floor boundary            |
+
+An implementation is one concrete concept object. An override replaces one
+implementation after selecting a complete floor and is suitable for test
+substitution, not as another production floor. A concept floor is a named,
+complete implementation map with its shared resources and asynchronous
+`close()`. An HTTP floor carries credentials, origin checks, parsing,
+serialization, cookies, and status decoration; domain authorization and
+concept meaning remain in the application. The process creates and owns the
+selected resources, starts the handler, and closes the floor during shutdown.
+
+In the folder form, ordinary features change the concept set or composition
+manifest. Floor and process files change only with the runtime substrate or
+deployment boundary. These are folder-depth choices, not different authoring
+conventions: source stays under `src/`, while generated artifacts remain
+visibly derived beside it.
 
 The complete local scenario crosses the same gateway with a generated client
 contract in [`scenario.ts`](../../examples/operations-room/src/scenario.ts).

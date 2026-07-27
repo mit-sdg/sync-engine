@@ -1,7 +1,6 @@
 import type { OutcomeContracts } from "@engine/reactions/concepts/outcomes";
 import { Refuse } from "@engine/reactions/concepts/refuse";
 import { admitInput } from "../protocol/admit.ts";
-import { describeError } from "@engine/utils/redaction";
 import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import { fromEnvelope } from "../protocol/envelope.ts";
@@ -177,8 +176,8 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       let responsePromise: Promise<Record<string, unknown>>;
       try {
         responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal);
-      } catch (err) {
-        return frameworkError(FrameworkErrorCode.TIMED_OUT, describeError(err));
+      } catch {
+        return frameworkError(FrameworkErrorCode.TIMED_OUT);
       }
 
       const reqFn = instrumented.request as unknown as (
@@ -197,7 +196,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
 
       if (first.kind === "dispatch-error") {
         boundary.cancel(requestId);
-        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR, describeError(first.error));
+        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
       }
 
       if (first.kind === "response") {
@@ -205,10 +204,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         // guarantee that its firing and outcome records are complete on return.
         const completion = await dispatch;
         if (completion.kind === "dispatch-error") {
-          return frameworkError(
-            FrameworkErrorCode.TRANSPORT_ERROR,
-            describeError(completion.error),
-          );
+          return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
         }
         return fromEnvelope(
           first.value,
@@ -232,7 +228,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         if (isAborted(invokeOpts.signal)) {
           return frameworkError(FrameworkErrorCode.ABORTED);
         }
-        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR, describeError(err));
+        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
       }
     },
   } as Invoker<C>;

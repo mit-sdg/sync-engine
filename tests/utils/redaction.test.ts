@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { configureRedaction, redact } from "@sync-engine/utils";
+import { configureRedaction, describeError, redact } from "@sync-engine/utils";
 
 beforeEach(() => configureRedaction({ fields: [] }));
 afterEach(() => configureRedaction({ fields: [] }));
@@ -104,5 +104,23 @@ describe("redact", () => {
 
   test("configureRedaction with non-iterable fields does not throw", () => {
     expect(() => configureRedaction({ fields: 123 as any })).not.toThrow();
+  });
+});
+
+describe("describeError", () => {
+  test("returns unredacted diagnostic text", () => {
+    expect(describeError(new Error("private diagnostic"))).toBe("private diagnostic");
+  });
+
+  test("contains a value whose string conversion throws", () => {
+    const value = Object.create(null, {
+      toString: {
+        value() {
+          throw new Error("private conversion failure");
+        },
+      },
+    });
+
+    expect(describeError(value)).toBe("Unknown error");
   });
 });
