@@ -87,6 +87,9 @@ try {
 
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
   const entries = new Set(listing.trim().split(/\r?\n/));
+  if ([...entries].some((entry) => entry.startsWith("package/docs/tmp-"))) {
+    throw new Error("packed package contains temporary internal documentation");
+  }
   if ([...entries].some((entry) => entry.endsWith(".map"))) {
     throw new Error("packed package contains source maps whose implementation sources are omitted");
   }
