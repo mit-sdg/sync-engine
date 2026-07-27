@@ -203,6 +203,48 @@ describe("sibling paths", () => {
     expect(raw.Auditing.calls.sort(byText)).toEqual(["c:one", "c:one", "d:one", "d:one"]);
   });
 
+  test("registration rejects unnamed siblings", () => {
+    const { engine } = setup();
+    expect(() =>
+      engine.register({
+        NoNames: reaction(({ item }) =>
+          when(Starting.start({ item }).responds()).then(
+            Handling.left({ item }) as any,
+            Handling.right({ item }) as any,
+          ),
+        ),
+      }),
+    ).toThrow("every sibling in then(...) needs .named(...).");
+  });
+
+  test("registration rejects reserved label characters", () => {
+    const { engine } = setup();
+    expect(() =>
+      engine.register({
+        BadChar: reaction(({ item }) =>
+          when(Starting.start({ item }).responds()).then(
+            Handling.left({ item }).named("bad!"),
+            Handling.right({ item }).named("ok"),
+          ),
+        ),
+      }),
+    ).toThrow("reserved character");
+  });
+
+  test("registration rejects duplicate sibling labels", () => {
+    const { engine } = setup();
+    expect(() =>
+      engine.register({
+        Dup: reaction(({ item }) =>
+          when(Starting.start({ item }).responds()).then(
+            Handling.left({ item }).named("same"),
+            Handling.right({ item }).named("same"),
+          ),
+        ),
+      }),
+    ).toThrow("stated twice");
+  });
+
   test("registration names the path and fresh name used by an unreachable stage", () => {
     const { engine } = setup();
     expect(() =>
@@ -218,6 +260,14 @@ describe("sibling paths", () => {
 });
 
 describe("branch-local chains", () => {
+  test("branch-local then(...) rejects non-reaction-node argument", () => {
+    expect(() =>
+      where(Routing._enabled({ item: "ready" }).is({ enabled: true }))
+        .then(Preparing.prepare({ item: "ready" }))
+        .then("not a node" as any),
+    ).toThrow("a branch-local then(...) takes one callable action line.");
+  });
+
   test("runtime rejects variadic local stages and labels inside the path", () => {
     expect(() =>
       (where(Routing._enabled({ item: "ready" }).is({ enabled: true })).then as Function)(

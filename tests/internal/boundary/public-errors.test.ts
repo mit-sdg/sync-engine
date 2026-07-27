@@ -18,6 +18,7 @@ describe("HTTP public error projection", () => {
     const categories = { SESSION_EXPIRED: "UNAUTHORIZED" } as const;
     expect(publicCategoryOf(FrameworkErrorCode.INVALID_INPUT, categories)).toBe("INVALID_REQUEST");
     expect(publicCategoryOf(FrameworkErrorCode.NOT_FOUND, categories)).toBe("NOT_FOUND");
+    expect(publicCategoryOf(FrameworkErrorCode.INTERNAL_ERROR, {})).toBe("INTERNAL_ERROR");
     expect(publicCategoryOf(FrameworkErrorCode.TIMED_OUT, categories)).toBe("INTERNAL_ERROR");
     expect(publicCategoryOf("SESSION_EXPIRED", categories)).toBe("UNAUTHORIZED");
     expect(publicCategoryOf("PRIVATE", categories)).toBe("INTERNAL_ERROR");

@@ -3,11 +3,13 @@ import { actionNameOf, vocabulary } from "@sync-engine/internal/reactions";
 import type { Vars } from "@sync-engine/internal/reactions";
 import {
   assemble,
+  createInvoker,
   createLocalClient,
   endpoint,
   fail,
   FrameworkErrorCode,
   receive,
+  Requesting,
   respond,
 } from "@sync-engine/internal/boundary";
 import type { InvocationResult } from "@sync-engine/internal/boundary";
@@ -179,5 +181,61 @@ describe("createLocalClient", () => {
     const client = createLocalClient<TestApi>({ invoker: invoker as never });
 
     expect(await client.err({ kind: "INVALID" })).toEqual({ error: { code: "INVALID" } });
+  });
+});
+
+describe("createInvoker non-DOMException with aborted signal", () => {
+  test("returns ABORTED when response rejects with non-DOMException and signal is aborted", async () => {
+    const controller = new AbortController();
+
+    const boundary = {
+      register(_requestId: string, _timeoutMs: number, _signal?: AbortSignal) {
+        controller.abort(new Error("custom"));
+        return Promise.reject(new Error("transport error"));
+      },
+      cancel() {},
+    };
+
+    const mockRequest = async () => {};
+    const mockRespond = () => {};
+
+    const invoker = createInvoker({
+      boundary: boundary as unknown as Requesting,
+      instrumented: {
+        request: mockRequest as never,
+        respond: mockRespond as never,
+      },
+      contracts: {},
+    });
+
+    const result = await invoker.invoke("/test", {} as never, { signal: controller.signal });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.kind === "framework") {
+      expect(result.error.code).toBe(FrameworkErrorCode.ABORTED);
+    }
+  });
+});
+
+describe("Requesting", () => {
+  test("register attaches an abort listener to a live signal", async () => {
+    const boundary = new Requesting();
+    const controller = new AbortController();
+
+    const signalPromise = boundary.register("test-id", 5000, controller.signal);
+
+    let settled = false;
+    signalPromise.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await new Promise((r) => setTimeout(r, 10));
+    expect(settled).toBe(false);
+
+    boundary.cancel("test-id");
   });
 });

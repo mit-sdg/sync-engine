@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Reacting } from "@sync-engine/internal/reactions/reacting.ts";
+import { createEngine } from "@sync-engine/internal/reactions/engine.ts";
+import { MemoryStore } from "@sync-engine/internal/reactions/log-store.ts";
 import { request, when } from "./historical-authoring.ts";
 
 describe("Reacting interpreter loop", () => {
@@ -41,5 +43,12 @@ describe("Reacting interpreter loop", () => {
       const consequence = request(SinkConcept.note, { value: { $var: name } });
       expect(() => reacting.matchThen(consequence.action, {})).toThrow("is not bound");
     }
+  });
+
+  test("createEngine with a LogStore returns an Engine", () => {
+    const engine = createEngine(new MemoryStore());
+    expect(engine.instrument).instanceOf(Function);
+    expect(engine.register).instanceOf(Function);
+    expect(engine.logging).toBeDefined();
   });
 });

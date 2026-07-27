@@ -12,6 +12,7 @@ import {
   Refuse,
   Reacting,
 } from "@sync-engine/internal/reactions";
+import { attachConceptMetadata } from "@sync-engine/internal/reactions/concept-metadata.ts";
 
 class ContractedConcept {
   static readonly outcomes: OutcomeContracts = {
@@ -60,6 +61,12 @@ describe("declared outcomes", () => {
     expect(undeclared).toEqual({ error: "TOO_BIG" });
     const outcomes = [...reacting.Action.actions.values()].map((r) => r.outcome?.kind);
     expect(outcomes).toEqual(["error", "error"]);
+  });
+
+  test("contractOf finds outcomes from attached metadata", () => {
+    const concept = new ContractedConcept();
+    attachConceptMetadata(concept, { outcomes: { myAction: { refusals: ["DENIED"] } } });
+    expect(contractOf(concept, "myAction")).toEqual({ refusals: ["DENIED"] });
   });
 
   test("an action without declared refusals may return an object with an error property", async () => {

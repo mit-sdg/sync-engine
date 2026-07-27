@@ -2,10 +2,15 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   literalEquals,
   matchArguments,
+  matchChannel,
   unifyPattern,
 } from "@sync-engine/internal/reactions/matching.ts";
 import type { ActionRecord } from "@sync-engine/internal/reactions/actions.ts";
-import type { ActionPattern, InstrumentedAction } from "@sync-engine/internal/reactions/types.ts";
+import type {
+  ActionPattern,
+  ChannelPattern,
+  InstrumentedAction,
+} from "@sync-engine/internal/reactions/types.ts";
 
 describe("reaction matching", () => {
   test("binds a fresh variable and tests an existing binding", () => {
@@ -53,5 +58,95 @@ describe("reaction matching", () => {
     expect(literalEquals(new Date("2024-01-01"), new Date("2024-01-01"))).toBe(true);
     expect(literalEquals(new Map(), new Map())).toBe(false);
     expect(literalEquals(new Set(), new Set())).toBe(false);
+  });
+
+  test("matchArguments accepts a record with fault when posture is faulted", () => {
+    const concept = {};
+    const action = (async () => ({})) as InstrumentedAction;
+    action.concept = concept;
+    const record: ActionRecord = {
+      id: "one",
+      action,
+      concept,
+      input: { key: "value" },
+      output: {},
+      outcome: { kind: "result", value: {} },
+      fault: { message: "boom" },
+      flow: "flow",
+    };
+    const pattern: ActionPattern = {
+      action,
+      concept,
+      input: { key: "value" },
+      output: {},
+      flow: Symbol("flow"),
+      posture: "faulted",
+    };
+    expect(matchArguments(record, pattern, {}, Symbol("record"))).toBeDefined();
+  });
+
+  test("matchArguments rejects a record without fault when posture is faulted", () => {
+    const concept = {};
+    const action = (async () => ({})) as InstrumentedAction;
+    action.concept = concept;
+    const record: ActionRecord = {
+      id: "one",
+      action,
+      concept,
+      input: { key: "value" },
+      output: {},
+      outcome: { kind: "result", value: {} },
+      flow: "flow",
+    };
+    const pattern: ActionPattern = {
+      action,
+      concept,
+      input: { key: "value" },
+      output: {},
+      flow: Symbol("flow"),
+      posture: "faulted",
+    };
+    expect(matchArguments(record, pattern, {}, Symbol("record"))).toBeUndefined();
+  });
+
+  test("matchChannel with returned channel rejects a record whose outcome is a refusal", () => {
+    const concept = {};
+    const record: ActionRecord = {
+      id: "one",
+      action: (async () => ({})) as InstrumentedAction,
+      concept,
+      input: {},
+      flow: "flow",
+      outcome: { kind: "error", error: {} },
+    };
+    const clause: ChannelPattern = {
+      channel: "returned",
+      pattern: {},
+      except: [],
+    };
+    expect(matchChannel(record, clause, {}, Symbol("record"), new WeakMap())).toBeUndefined();
+  });
+
+  test("matchArguments throws when the pattern is missing output", () => {
+    const concept = {};
+    const action = (async () => ({})) as InstrumentedAction;
+    action.concept = concept;
+    const record: ActionRecord = {
+      id: "one",
+      action,
+      concept,
+      input: {},
+      flow: "flow",
+      outcome: { kind: "result", value: {} },
+    };
+    const pattern: ActionPattern = {
+      action,
+      concept,
+      input: {},
+      flow: Symbol("flow"),
+    };
+    expect(() => matchArguments(record, pattern, {}, Symbol("record"))).toThrow(
+      "is missing output pattern",
+    );
   });
 });

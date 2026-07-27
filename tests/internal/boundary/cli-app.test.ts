@@ -5,6 +5,7 @@ import {
   command,
   createCliApp,
   parseArgs,
+  parseFail,
   parseOk,
 } from "@sync-engine/internal/boundary";
 import type { ParsedArgs } from "@sync-engine/internal/boundary";
@@ -72,6 +73,12 @@ describe("ok / fail", () => {
 
   test("fail preserves an existing stderr newline", () => {
     expect(fail("bad\n")).toEqual({ stdout: "", stderr: "bad\n", exitCode: 1 });
+  });
+});
+
+describe("parseFail", () => {
+  test("produces an explicit failure with a message", () => {
+    expect(parseFail("bad input")).toEqual({ ok: false, message: "bad input" });
   });
 });
 
@@ -356,5 +363,44 @@ describe("createCliApp", () => {
 
     const typedList = await app.dispatch("list", { all: false });
     expect(typedList.stdout).toBe("open items\n");
+  });
+
+  test("run catches an error thrown in the command handler after parse succeeds", async () => {
+    const app = createCliApp({
+      broken: {
+        parse: (positionals) => ({ msg: positionals.join(" ") }),
+        run: async () => {
+          throw new Error("parse-ok-but-run-boom");
+        },
+      },
+    });
+    const result = await app.run(["broken", "hello"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("parse-ok-but-run-boom");
+  });
+
+  test("dispatch on an endpoint command without an invoker fails clearly", async () => {
+    const app = createCliApp({
+      ep: command({ path: "/ep" }, { parse: () => parseOk({}), format: () => ok("unreachable") }),
+    });
+    const result = await app.dispatch("ep", {} as never);
+    expect(result).toEqual({
+      stdout: "",
+      stderr: 'Endpoint command "/ep" needs an invoker.\n',
+      exitCode: 1,
+    });
+  });
+
+  test("dispatch catches an error thrown by a plain command", async () => {
+    const app = createCliApp({
+      boom: {
+        run: async () => {
+          throw new Error("dispatch-boom");
+        },
+      },
+    });
+    const result = await app.dispatch("boom", {});
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("dispatch-boom");
   });
 });

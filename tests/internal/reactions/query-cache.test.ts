@@ -36,4 +36,38 @@ describe("query cache", () => {
     query.invalidate();
     expect(query({ value: 1 })).not.toBe(first);
   });
+
+  test("keys bigint values", () => {
+    expect(queryCacheKey([42n])).toBe("bigint:42");
+  });
+
+  test("evicts cache entry when a memoized async function rejects", async () => {
+    let calls = 0;
+    let rejectNext = false;
+    const query = memoizeQuery(async (input: { value: number }) => {
+      calls += 1;
+      if (rejectNext) {
+        rejectNext = false;
+        throw new Error("boom");
+      }
+      return { call: calls, value: input.value };
+    });
+
+    const first = await query({ value: 1 });
+    expect(calls).toBe(1);
+
+    // cached
+    expect(await query({ value: 1 })).toBe(first);
+    expect(calls).toBe(1);
+
+    // reject — cache entry evicted
+    rejectNext = true;
+    await expect(query({ value: 2 })).rejects.toThrow("boom");
+    expect(calls).toBe(2);
+
+    // re-executes because the rejected entry was evicted
+    const second = await query({ value: 2 });
+    expect(calls).toBe(3);
+    expect(second).not.toBe(first);
+  });
 });

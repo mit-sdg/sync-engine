@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
-import { earlier } from "@sync-engine/internal/reactions/words.ts";
+import { earlier, when as rawWhen } from "@sync-engine/internal/reactions/words.ts";
 import { request, when } from "./historical-authoring.ts";
 import { declarationsOf } from "@sync-engine/internal/reactions/partitions.ts";
+import { actionLine } from "@sync-engine/internal/reactions/nodes.ts";
+import { brand, CountOpBrand } from "@sync-engine/internal/reads/brands";
 import type { InstrumentedAction } from "@sync-engine/internal/reactions/types.ts";
 
 function action(name: string): InstrumentedAction {
@@ -27,5 +29,26 @@ describe("reaction words", () => {
       op: "earlier",
       pattern: { action: opened, input: { id: "a" }, output: {} },
     });
+  });
+
+  test("when rejects arguments that are not step nodes", () => {
+    expect(() => rawWhen({} as any).then(action("x") as any)).toThrow(
+      "when(...) takes one callable action line or posture channel.",
+    );
+  });
+
+  test("where rejects count operators", () => {
+    const a = action("a");
+    const step = actionLine(a, {});
+    const countOp = brand({ op: "count", query: a as any, in: {}, out: Symbol() }, CountOpBrand);
+    expect(() => rawWhen(step).where(countOp as any)).toThrow(
+      "count(...) cannot be used in a reaction condition.",
+    );
+  });
+
+  test("where rejects zero arguments", () => {
+    const a = action("a");
+    const step = actionLine(a, {});
+    expect(() => rawWhen(step).where()).toThrow("states at least one condition line.");
   });
 });
