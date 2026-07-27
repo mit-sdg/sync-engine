@@ -17,9 +17,6 @@ Actions:
 
 - `request (…)`
 - `respond (…)` — may refuse `NOT_PENDING`
-- `respondFramework (…)` — may refuse `NOT_PENDING`
-- `register (…)`
-- `cancel (…)`
 
 ### Gathering
 

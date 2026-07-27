@@ -6,6 +6,19 @@ import type { AppIR, ConceptInventoryIR } from "@engine/reads/ir";
 import type { ActionOutcome } from "@engine/reactions/types";
 import { redact } from "@engine/utils/redaction";
 
+const INTERNAL_BOUNDARY_ACTIONS = new Set(["register", "cancel", "respondFramework"]);
+
+function applicationConcepts(concepts: ConceptInventoryIR[]): ConceptInventoryIR[] {
+  return concepts.map((concept) =>
+    concept.name === "RequestBoundary"
+      ? {
+          ...concept,
+          actions: concept.actions.filter(({ name }) => !INTERNAL_BOUNDARY_ACTIONS.has(name)),
+        }
+      : concept,
+  );
+}
+
 export interface ObservedOccurrence {
   concept: string;
   action: string;
@@ -27,7 +40,7 @@ export function inspectAssembly(
   const assembled = assemblyBehind(assembly);
   return {
     app: assembled.engine.exportReactions(),
-    concepts: assembled.engine.exportConcepts(),
+    concepts: applicationConcepts(assembled.engine.exportConcepts()),
     readBack: assembled.engine.readBack(),
     inputContracts: assembled.contracts,
     occurrences: [...assembled.engine.Action.actions.values()].map(

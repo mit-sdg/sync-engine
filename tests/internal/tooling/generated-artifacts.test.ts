@@ -11,6 +11,7 @@ import {
   renderGenerated,
   resolveApplication,
 } from "../../../src/engine/tooling/generated-artifacts.ts";
+import { inspectAssembly } from "../../../src/engine/tooling/inspection.ts";
 
 /**
  * A real config location — the packaged sample application — so the defaults
@@ -68,6 +69,34 @@ const InternalClosure = reaction(({ hidden, user }) =>
 );
 
 describe("generated application artifacts", () => {
+  test("the request boundary inventory contains only author-facing actions", () => {
+    const application = assemble({
+      vocabulary: vocabularyDeclaration,
+      composition: { Login },
+    });
+    const boundary = inspectAssembly(application).concepts.find(
+      ({ name }) => name === "RequestBoundary",
+    );
+    const rendered = renderGenerated(
+      resolveApplication(
+        {
+          assemble: () => application,
+          directory: new URL("./generated/", import.meta.url),
+          title: "Application",
+          vocabulary: { module: languageModule },
+        },
+        configUrl,
+      ),
+    ).specification;
+
+    expect(boundary?.actions.map(({ name }) => name)).toEqual(["request", "respond"]);
+    expect(rendered).toContain("- `request (…)`");
+    expect(rendered).toContain("- `respond (…)` — may refuse `NOT_PENDING`");
+    expect(rendered).not.toMatch(/- `(register|cancel|respondFramework) /);
+    expect(rendered).toContain("when RequestBoundary.request");
+    expect(rendered).toContain("RequestBoundary.respond (");
+  });
+
   test("the installed command prints exact, stackless help", () => {
     const root = fileURLToPath(new URL("../../../", import.meta.url));
     const expected = `Usage: sync-engine <topic> <command>
