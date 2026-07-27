@@ -302,7 +302,7 @@ export class MemoryStore implements LogStore {
     }
   }
 
-  /** Remove firings that refer to evicted occurrences and rebuild consumption from what remains. */
+  /** Remove firings whose consumed occurrences are all evicted and rebuild retained consumption. */
   private dropFiringsFor(records: Iterable<ActionRecord>): void {
     const ids = new Set(
       [...records].flatMap((record) => (record.id === undefined ? [] : [record.id])),
@@ -310,7 +310,11 @@ export class MemoryStore implements LogStore {
     if (ids.size === 0) return;
 
     for (const [reaction, firings] of this.firings) {
-      const retained = firings.filter((firing) => !firing.consumed.some((id) => ids.has(id)));
+      const retained = firings.filter(
+        (firing) =>
+          !firing.consumed.some((id) => ids.has(id)) ||
+          firing.consumed.some((id) => !ids.has(id) && this.actions.has(id)),
+      );
       if (retained.length === 0) this.firings.delete(reaction);
       else if (retained.length !== firings.length) this.firings.set(reaction, retained);
     }
@@ -319,6 +323,7 @@ export class MemoryStore implements LogStore {
     for (const [reaction, firings] of this.firings) {
       for (const firing of firings) {
         for (const id of firing.consumed) {
+          if (ids.has(id) || !this.actions.has(id)) continue;
           const consumers = this.consumedIndex.get(id) ?? new Set<string>();
           consumers.add(reaction);
           this.consumedIndex.set(id, consumers);

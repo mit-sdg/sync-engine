@@ -28,6 +28,22 @@ function record(overrides: Partial<ActionRecord> = {}): ActionRecord {
   };
 }
 
+function appendFiring(store: MemoryStore, id: string, reaction: string, consumed: string[]): void {
+  store.append({
+    kind: "firing",
+    at: Date.now(),
+    firing: {
+      id,
+      reaction,
+      flow: "flow-1",
+      bindings: {},
+      consumed,
+      produced: [],
+      at: Date.now(),
+    },
+  });
+}
+
 function reflectedText(value: unknown): string {
   const seen = new Set<object>();
   const visit = (current: unknown): string => {
@@ -583,5 +599,59 @@ describe("log store: eviction is a prune policy", () => {
     expect(evicted).toBe(1);
     expect(log._getById(consumed)).toBeUndefined();
     expect(log._getById(kept)).toBeDefined();
+  });
+
+  test("pruning [a, gap, b] preserves a multi-trigger firing's evidence for a", () => {
+    const store = new MemoryStore();
+    const log = new ActionConcept(store);
+    for (const id of ["a", "gap", "b"]) log.invoke(record({ id }));
+    appendFiring(store, "pair-firing", "Pair", ["a", "b"]);
+
+    expect(store.prune()).toBe(1);
+
+    expect(log._getByFlow("flow-1")?.map(({ id }) => id)).toEqual(["a", "gap"]);
+    expect(store.hasConsumed("a", "Pair")).toBe(true);
+    expect(store.hasConsumed("b", "Pair")).toBe(false);
+    expect(store.firingsByReaction("Pair")).toMatchObject([
+      { id: "pair-firing", consumed: ["a", "b"] },
+    ]);
+  });
+
+  test("repeated pruning preserves evidence through successive partial firing eviction", () => {
+    const store = new MemoryStore();
+    const log = new ActionConcept(store);
+    for (const id of ["a", "gap-1", "b", "gap-2", "c"]) log.invoke(record({ id }));
+    appendFiring(store, "triple-firing", "Triple", ["a", "b", "c"]);
+
+    expect(store.prune()).toBe(1);
+    appendFiring(store, "gap-firing", "Gap", ["gap-2"]);
+    expect(store.prune()).toBe(2);
+    expect(store.prune()).toBe(0);
+
+    expect(log._getByFlow("flow-1")?.map(({ id }) => id)).toEqual(["a", "gap-1"]);
+    expect(store.hasConsumed("a", "Triple")).toBe(true);
+    expect(store.hasConsumed("b", "Triple")).toBe(false);
+    expect(store.hasConsumed("c", "Triple")).toBe(false);
+    expect(store.firingsByReaction("Triple")).toHaveLength(1);
+  });
+
+  test("mixed retained and evicted consumption keeps only firings with retained evidence", () => {
+    const store = new MemoryStore();
+    const log = new ActionConcept(store);
+    for (const id of ["a", "gap", "b"]) log.invoke(record({ id }));
+    appendFiring(store, "pair-firing", "Pair", ["a", "b"]);
+    appendFiring(store, "tail-firing", "Tail", ["b"]);
+
+    expect(store.prune()).toBe(1);
+
+    expect(store.firingsByReaction("Pair")).toHaveLength(1);
+    expect(store.firingsByReaction("Tail")).toEqual([]);
+    expect(store.consumedBy("a")).toEqual(["Pair"]);
+    expect(store.consumedBy("b")).toEqual([]);
+
+    appendFiring(store, "gap-firing", "Gap", ["gap"]);
+    expect(store.prune()).toBe(2);
+    expect(store.firingsByReaction("Pair")).toEqual([]);
+    expect(store.consumedBy("a")).toEqual([]);
   });
 });
