@@ -1,4 +1,4 @@
-import { actionNameOf, conceptNameOf } from "@engine/reactions/introspect";
+import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import type { ReactionDeclaration, StepNode } from "@engine/reactions/types";
 import { isFusedFormer } from "./former-nodes.ts";
 import { isMatcher, isPlainMapping } from "./matchers.ts";

@@ -20,7 +20,7 @@ import {
   type LogEvent,
   type Vars,
 } from "@sync-engine/internal/reactions";
-import { ActionConcept } from "@sync-engine/internal/reactions/actions.ts";
+import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
 import { FrameworkErrorCode } from "@sync-engine/internal/boundary";
 import {
   AuditFeed,

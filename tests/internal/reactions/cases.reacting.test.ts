@@ -11,7 +11,7 @@ import {
   when,
 } from "@sync-engine/internal/reactions";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
-import { ActionConcept } from "@sync-engine/internal/reactions/actions";
+import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";
 import {
   ButtonConcept,
   CounterConcept,

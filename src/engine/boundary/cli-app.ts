@@ -1,7 +1,7 @@
-import type { InvocationResult } from "./errors.ts";
-import type { Invoker } from "./invoke.ts";
-import type { ContractShape } from "./client.ts";
-import { describeError } from "../utils/redaction.ts";
+import type { Invoker } from "./invocation/invoke.ts";
+import type { ContractShape } from "./protocol/contract-shape.ts";
+import type { InvocationResult } from "./protocol/errors.ts";
+import { describeError } from "@engine/utils/redaction";
 
 export interface CliResult {
   stdout: string;

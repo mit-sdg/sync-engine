@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import ts from "typescript";
-import { parseSpec, type ConceptSpec } from "@engine/reactions/concept-spec";
+import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 
 async function filesBelow(
   directory: string,

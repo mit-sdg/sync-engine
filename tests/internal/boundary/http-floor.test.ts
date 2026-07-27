@@ -9,9 +9,9 @@ import {
   respond,
 } from "@sync-engine/boundary";
 import { httpFloorReadBack } from "@sync-engine/tooling";
-import { projectAssemblyHttpWire } from "@sync-engine/internal/boundary/http-floor";
-import { assemblyBehind } from "@sync-engine/internal/boundary/assembly-registry";
-import { wireContracts } from "@sync-engine/internal/boundary/wire";
+import { projectAssemblyHttpWire } from "@sync-engine/internal/boundary/http/http-floor";
+import { assemblyBehind } from "@sync-engine/internal/boundary/assembly/assembly-registry";
+import { wireContracts } from "@sync-engine/internal/boundary/wire/wire";
 
 class UnknownSession extends Error {}
 

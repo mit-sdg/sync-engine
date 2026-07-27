@@ -5,16 +5,16 @@
  * and evaluate formers. Everything else about the interpreter is internal.
  */
 
-import { ActionConcept } from "./actions.ts";
-import type { LogStore } from "./log-store.ts";
-import type { Logging } from "./logging.ts";
-import type { EngineObserver } from "./observer.ts";
+import { ActionConcept } from "./runtime/actions.ts";
+import type { LogStore } from "./runtime/log-store.ts";
+import type { Logging } from "./runtime/logging.ts";
+import type { EngineObserver } from "./runtime/observer.ts";
 import type { ReactionMap } from "./types.ts";
 import type { ComputationRef } from "@engine/reads/computations";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
 import type { RelationView } from "@engine/reads/lines";
 import type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
-import { Reacting } from "./reacting.ts";
+import { Reacting } from "./runtime/reacting.ts";
 
 export interface Engine {
   /** Instrument every concept in a record, preserving keys. */

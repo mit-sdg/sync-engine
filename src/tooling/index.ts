@@ -2,9 +2,9 @@
 export { inspectAssembly } from "@engine/tooling/inspection";
 export type { ObservedOccurrence } from "@engine/tooling/inspection";
 export { renderApp, renderReaction } from "@engine/reads/render";
-export { renderWireTypes, wireContracts } from "@engine/boundary/wire";
-export { renderInputContracts } from "@engine/boundary/endpoints";
-export { floorReadBack, httpFloorReadBack } from "@engine/boundary/http-floor";
+export { renderWireTypes, wireContracts } from "@engine/boundary/wire/wire";
+export { renderInputContracts } from "@engine/boundary/protocol/endpoints";
+export { floorReadBack, httpFloorReadBack } from "@engine/boundary/http/http-floor";
 export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
 export type {
   WireContractsIR,
@@ -12,4 +12,4 @@ export type {
   WireOptions,
   WireRenderOptions,
   WireType,
-} from "@engine/boundary/wire";
+} from "@engine/boundary/wire/wire";

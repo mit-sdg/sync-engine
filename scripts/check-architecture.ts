@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, normalize, relative, resolve, sep } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, join, normalize, relative, resolve, sep } from "node:path";
 import ts from "typescript";
 import { applicationExamples } from "../examples/register.ts";
 import { filesBelow } from "./walk.ts";
@@ -10,6 +10,9 @@ const root = resolve(import.meta.dirname, "..");
 const sourceRoot = join(root, "src");
 const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
   exports: Record<string, unknown>;
+};
+const tsconfig = JSON.parse(readFileSync(join(root, "tsconfig.json"), "utf8")) as {
+  compilerOptions: { paths: Record<string, string[]> };
 };
 const publicSubpaths = new Set(
   Object.keys(packageJson.exports).map((subpath) => subpath.replace(/^\.\//, "")),
@@ -22,6 +25,25 @@ const dependencies = new Map([
   ["hosting", new Set(["hosting", "reactions", "reads", "utils"])],
   ["tooling", new Set(["tooling", "boundary", "reactions", "reads", "utils"])],
   ["utils", new Set(["utils"])],
+]);
+const reactionAreas = new Set(["authoring", "concepts", "runtime"]);
+const boundaryAreas = new Set([
+  "protocol",
+  "invocation",
+  "assembly",
+  "client",
+  "gateway",
+  "http",
+  "wire",
+]);
+const boundaryDependencies = new Map([
+  ["protocol", new Set(["protocol"])],
+  ["invocation", new Set(["invocation", "protocol"])],
+  ["wire", new Set(["wire", "protocol"])],
+  ["assembly", new Set(["assembly", "protocol", "invocation", "wire"])],
+  ["client", new Set(["client", "protocol", "invocation"])],
+  ["gateway", new Set(["gateway", "protocol", "invocation", "assembly", "client"])],
+  ["http", new Set(["http", "protocol", "invocation", "assembly", "client", "wire"])],
 ]);
 const unsupportedTopLevelDirectories = new Set([
   "cli",
@@ -68,14 +90,50 @@ function engineConcern(path: string): string | undefined {
   return parts[0] === "engine" && concerns.has(parts[1]) ? parts[1] : undefined;
 }
 
-function targetOf(source: string, specifier: string): string | undefined {
-  if (specifier.startsWith(".")) return normalize(resolve(dirname(source), specifier));
-  if (specifier.startsWith("@engine/")) {
-    const target = join(sourceRoot, "engine", specifier.slice("@engine/".length));
-    return existsSync(target) ? target : `${target}.ts`;
+function isConcernRootIndex(path: string): boolean {
+  const parts = relative(join(sourceRoot, "engine"), path).split(sep);
+  return parts.length === 2 && concerns.has(parts[0]) && parts[1] === "index.ts";
+}
+
+function nestedArea(path: string, concern: string, areas: Set<string>): string | undefined {
+  if (engineConcern(path) !== concern) return undefined;
+  const [area] = relative(join(sourceRoot, "engine", concern), path).split(sep);
+  return area !== undefined && areas.has(area) ? area : "root";
+}
+
+function modulePath(path: string): string | undefined {
+  const candidates = [path, `${path}.ts`, join(path, "index.ts")];
+  if (path.endsWith(".js")) candidates.splice(1, 0, `${path.slice(0, -3)}.ts`);
+  return candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
+}
+
+function aliasPath(specifier: string): string | undefined {
+  const aliases = Object.entries(tsconfig.compilerOptions.paths).sort(
+    ([left], [right]) => right.replace("*", "").length - left.replace("*", "").length,
+  );
+  for (const [alias, targets] of aliases) {
+    const star = alias.indexOf("*");
+    const prefix = star === -1 ? alias : alias.slice(0, star);
+    const suffix = star === -1 ? "" : alias.slice(star + 1);
+    if (
+      (star === -1 && specifier !== alias) ||
+      (star !== -1 && (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)))
+    ) {
+      continue;
+    }
+    const capture =
+      star === -1 ? "" : specifier.slice(prefix.length, specifier.length - suffix.length);
+    for (const target of targets) {
+      const resolved = modulePath(resolve(root, target.replace("*", capture)));
+      if (resolved !== undefined) return normalize(resolved);
+    }
   }
-  const match = /^@sync-engine\/(.+?)(?:\/|$)/.exec(specifier);
-  return match === null ? undefined : join(sourceRoot, match[1]);
+  return undefined;
+}
+
+function targetOf(source: string, specifier: string): string | undefined {
+  if (specifier.startsWith(".")) return modulePath(normalize(resolve(dirname(source), specifier)));
+  return aliasPath(specifier);
 }
 
 function repositoryFiles(): string[] {
@@ -102,13 +160,27 @@ function sourceDependencies(path: string): string[] {
     ts.ScriptKind.TS,
   );
   const found: string[] = [];
-  for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) continue;
-    const specifier = statement.moduleSpecifier;
-    if (specifier === undefined || !ts.isStringLiteral(specifier)) continue;
+  function add(specifier: ts.Expression | undefined): void {
+    if (specifier === undefined || !ts.isStringLiteral(specifier)) return;
     const target = targetOf(path, specifier.text);
     if (target !== undefined) found.push(target);
   }
+  function visit(node: ts.Node): void {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      add(node.moduleSpecifier);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    ) {
+      add(node.moduleReference.expression);
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      add(node.argument.literal);
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      add(node.arguments[0]);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
   return found;
 }
 
@@ -142,9 +214,6 @@ const shippedFiles = [
   ).flat(),
   ...(await tsFilesBelow(join(sourceRoot, "engine"))),
 ];
-const tsconfig = JSON.parse(readFileSync(join(root, "tsconfig.json"), "utf8")) as {
-  compilerOptions: { paths: Record<string, string[]> };
-};
 for (const [alias, targets] of Object.entries(tsconfig.compilerOptions.paths)) {
   for (const target of targets) {
     if (!target.includes("*") && !existsSync(resolve(root, target))) {
@@ -215,20 +284,14 @@ for (const subpath of publicSubpaths) {
 }
 
 for (const sourcePath of await tsFilesBelow(join(sourceRoot, "engine"))) {
-  const source = ts.createSourceFile(
-    sourcePath,
-    readFileSync(sourcePath, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const relativeEnginePath = relative(join(sourceRoot, "engine"), sourcePath);
+  if (sourcePath.endsWith(`${sep}index.ts`) && relativeEnginePath.split(sep).length > 2) {
+    failures.push(
+      `${relative(root, sourcePath)}: nested engine index barrels are forbidden; only a concern-root index.ts is allowed`,
+    );
+  }
   const owner = engineConcern(sourcePath);
-  for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) continue;
-    const specifier = statement.moduleSpecifier;
-    if (specifier === undefined || !ts.isStringLiteral(specifier)) continue;
-    const target = targetOf(sourcePath, specifier.text);
-    if (target === undefined) continue;
+  for (const target of sourceDependencies(sourcePath)) {
     const targetTop = top(target);
     if (publicSubpaths.has(targetTop)) {
       failures.push(
@@ -243,6 +306,35 @@ for (const sourcePath of await tsFilesBelow(join(sourceRoot, "engine"))) {
       dependencies.get(owner)?.has(targetConcern) !== true
     ) {
       failures.push(`${relative(root, sourcePath)}: ${owner} may not depend on ${targetConcern}`);
+      continue;
+    }
+
+    const sourceReactionArea = nestedArea(sourcePath, "reactions", reactionAreas);
+    const targetReactionArea = nestedArea(target, "reactions", reactionAreas);
+    if (
+      targetReactionArea === "runtime" &&
+      (sourceReactionArea === "authoring" || sourceReactionArea === "concepts" || owner === "reads")
+    ) {
+      const sourceArea = owner === "reads" ? "reads" : `reactions/${sourceReactionArea}`;
+      failures.push(
+        `${relative(root, sourcePath)}: forbidden area dependency ${sourceArea} -> reactions/runtime`,
+      );
+    }
+
+    const sourceBoundaryArea = nestedArea(sourcePath, "boundary", boundaryAreas);
+    const targetBoundaryArea = nestedArea(target, "boundary", boundaryAreas);
+    const isBoundaryBridge =
+      sourceBoundaryArea === "root" &&
+      (basename(sourcePath) === "index.ts" || basename(sourcePath) === "cli-app.ts");
+    if (
+      sourceBoundaryArea !== undefined &&
+      targetBoundaryArea !== undefined &&
+      !isBoundaryBridge &&
+      boundaryDependencies.get(sourceBoundaryArea)?.has(targetBoundaryArea) !== true
+    ) {
+      failures.push(
+        `${relative(root, sourcePath)}: forbidden area dependency boundary/${sourceBoundaryArea} -> boundary/${targetBoundaryArea}`,
+      );
     }
   }
 }
@@ -319,11 +411,19 @@ for (const path of repository.filter((candidate) => candidate.includes("/generat
 }
 
 const shippedSources = new Set(shippedFiles.map((path) => normalize(path)));
+const configuredInternalEntrypoints = Object.entries(tsconfig.compilerOptions.paths)
+  .filter(([alias]) => alias.startsWith("@sync-engine/internal/") && !alias.includes("*"))
+  .flatMap(([, targets]) => targets)
+  .map((target) => modulePath(resolve(root, target)))
+  .filter((path): path is string => path !== undefined);
+const internalEntrypoints = configuredInternalEntrypoints.flatMap((path) =>
+  shippedSources.has(path)
+    ? [path]
+    : sourceDependencies(path).filter((dependency) => shippedSources.has(dependency)),
+);
 const entrypoints = [
   ...[...publicSubpaths].map((subpath) => join(sourceRoot, subpath, "index.ts")),
-  ...[...concerns]
-    .map((concern) => join(sourceRoot, "engine", concern, "index.ts"))
-    .filter(existsSync),
+  ...internalEntrypoints,
   join(sourceRoot, "command", "main.ts"),
 ].map(normalize);
 const reachable = new Set<string>();
@@ -338,7 +438,9 @@ while (pending.length > 0) {
   }
 }
 for (const path of shippedSources) {
-  if (!reachable.has(path)) failures.push(`${relative(root, path)}: shipped source is unreachable`);
+  if (!reachable.has(path) && !isConcernRootIndex(path)) {
+    failures.push(`${relative(root, path)}: shipped source is unreachable`);
+  }
 }
 
 if (failures.length > 0) {

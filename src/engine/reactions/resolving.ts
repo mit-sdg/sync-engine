@@ -1,7 +1,7 @@
 import type { ComputationRef } from "@engine/reads/computations";
 import type { InstrumentedAction, InstrumentedQuery, Mapping } from "./types.ts";
 import type { ActionPattern, ActionPosture } from "./types.ts";
-import { flow } from "./matching.ts";
+import { flow } from "./context.ts";
 
 function diagnosticSite(site: string): string {
   return /^(?:Reaction|View|Former) "/.test(site) ? site : `Reaction "${site}"`;

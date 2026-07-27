@@ -24,7 +24,7 @@ import { liveOf } from "./ir.ts";
 import { walkValueTree } from "./value-tree.ts";
 import type { QueryRefIR, ViewOpIR } from "./ir.ts";
 import type { ReadEnv } from "./env.ts";
-import { isQueryRef } from "@engine/reactions/refs";
+import { isQueryRef } from "@engine/reactions/authoring/refs";
 import { isReadLine, lineOf } from "./lines.ts";
 import type { ReadLine, RelationView, ViewReadLine } from "./lines.ts";
 import { isFusedFormer, useFormer } from "./former-nodes.ts";

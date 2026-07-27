@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Reacting } from "@sync-engine/internal/reactions/reacting.ts";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting.ts";
 import { createEngine } from "@sync-engine/internal/reactions/engine.ts";
-import { MemoryStore } from "@sync-engine/internal/reactions/log-store.ts";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { request, when } from "./historical-authoring.ts";
 
 describe("Reacting interpreter loop", () => {

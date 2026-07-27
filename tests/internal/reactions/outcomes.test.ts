@@ -12,7 +12,7 @@ import {
   Refuse,
   Reacting,
 } from "@sync-engine/internal/reactions";
-import { attachConceptMetadata } from "@sync-engine/internal/reactions/concept-metadata.ts";
+import { attachConceptMetadata } from "@sync-engine/internal/reactions/concepts/concept-metadata.ts";
 
 class ContractedConcept {
   static readonly outcomes: OutcomeContracts = {

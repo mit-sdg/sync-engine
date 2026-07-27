@@ -1,8 +1,8 @@
 /** Words used to declare concepts, reactions, views, and formers. */
-export { reaction, vocabulary } from "@engine/reactions/refs";
-export { earlier } from "@engine/reactions/words";
-export { when } from "@engine/reactions/public-words";
-export { refused, returned } from "@engine/reactions/channels";
+export { reaction, vocabulary } from "@engine/reactions/authoring/refs";
+export { earlier } from "@engine/reactions/authoring/words";
+export { when } from "@engine/reactions/authoring/public-words";
+export { refused, returned } from "@engine/reactions/authoring/channels";
 export { no, whether } from "@engine/reads/where-ops";
 export { is } from "@engine/reads/computations";
 export { count, view, where } from "@engine/reads/views";

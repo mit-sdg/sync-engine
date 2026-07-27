@@ -1,7 +1,7 @@
 /** Consume a generated wire contract, locally or over HTTP. */
-export { createClient } from "@engine/boundary/client";
-export { createHttpClient, createHttpTransport } from "@engine/boundary/http-client";
-export { createLocalClient } from "@engine/boundary/local-client";
+export { createClient } from "@engine/boundary/client/client";
+export { createHttpClient, createHttpTransport } from "@engine/boundary/client/http-client";
+export { createLocalClient } from "@engine/boundary/client/local-client";
 export type {
   Client,
   ClientError,
@@ -10,5 +10,5 @@ export type {
   ClientTransport,
   ContractShape,
   DomainErrorValue,
-} from "@engine/boundary/client";
-export type { HeadersOption, HttpClientOptions } from "@engine/boundary/http-client";
+} from "@engine/boundary/client/client";
+export type { HeadersOption, HttpClientOptions } from "@engine/boundary/client/http-client";

@@ -1,9 +1,9 @@
-import type { Assembly } from "@engine/boundary/assembly-facade";
-import { assemblyBehind } from "@engine/boundary/assembly-registry";
-import { actionNameOf, conceptNameOf } from "@engine/reactions/introspect";
+import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
+import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
+import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
+import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import type { AppIR, ConceptInventoryIR } from "@engine/reads/ir";
 import type { ActionOutcome } from "@engine/reactions/types";
-import type { InputContractDecl } from "@engine/boundary/endpoints";
 import { redact } from "@engine/utils/redaction";
 
 export interface ObservedOccurrence {

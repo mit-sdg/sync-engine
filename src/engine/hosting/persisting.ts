@@ -12,20 +12,19 @@
 
 import { appendFileSync } from "node:fs";
 
+import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
+import type { OutcomeContracts } from "@engine/reactions/concepts/outcomes";
+import { Refuse } from "@engine/reactions/concepts/refuse";
 import {
   MemoryStore,
-  Refuse,
-  actionNameOf,
   assertRetentionPolicy,
-  conceptNameOf,
-  type ActionOutcome,
   type ActionRecord,
   type FiringRecord,
   type LogEntry,
   type LogStore,
-  type OutcomeContracts,
   type RetentionPolicy,
-} from "@engine/reactions/index";
+} from "@engine/reactions/runtime/log-store";
+import type { ActionOutcome } from "@engine/reactions/types";
 import { redact } from "@engine/utils/redaction";
 
 /** A long-lived resource that a host can stop during shutdown. */

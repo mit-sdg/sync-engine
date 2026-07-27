@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
-import { ActionConcept } from "@sync-engine/internal/reactions/actions.ts";
+import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
 import {
   instrumentConcept,
   type InstrumentationState,
-} from "@sync-engine/internal/reactions/instrumenting.ts";
-import { actionId, flow } from "@sync-engine/internal/reactions/matching.ts";
+} from "@sync-engine/internal/reactions/runtime/instrumenting.ts";
+import { actionId, flow } from "@sync-engine/internal/reactions/context.ts";
 
 describe("concept instrumentation", () => {
   test("memoizes action wrappers and records one returned occurrence", async () => {

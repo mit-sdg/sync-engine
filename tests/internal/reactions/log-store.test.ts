@@ -8,12 +8,15 @@
 
 import { describe, expect, test } from "vite-plus/test";
 
-import { ActionConcept, type ActionRecord } from "@sync-engine/internal/reactions/actions.ts";
+import {
+  ActionConcept,
+  type ActionRecord,
+} from "@sync-engine/internal/reactions/runtime/actions.ts";
 import {
   MemoryStore,
   type FiringRecord,
   type LogEntry,
-} from "@sync-engine/internal/reactions/log-store.ts";
+} from "@sync-engine/internal/reactions/runtime/log-store.ts";
 
 function record(overrides: Partial<ActionRecord> = {}): ActionRecord {
   return {

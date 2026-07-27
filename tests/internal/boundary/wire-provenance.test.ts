@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { AppIR, PatternIR } from "@sync-engine/internal/reads/ir";
-import { renderWireTypes, wireContracts } from "@sync-engine/internal/boundary/wire";
-import type { WireType } from "@sync-engine/internal/boundary/wire";
+import { renderWireTypes, wireContracts } from "@sync-engine/internal/boundary/wire/wire";
+import type { WireType } from "@sync-engine/internal/boundary/wire/wire";
 
 const variable = (name: string): { $var: string } => ({ $var: name });
 const execFileAsync = promisify(execFile);

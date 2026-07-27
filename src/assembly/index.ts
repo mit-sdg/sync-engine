@@ -1,12 +1,12 @@
 /** Install a vocabulary and its composition into one coherent running system. */
-export { assemble } from "@engine/boundary/assembly-facade";
-export type { Assembly, AssemblyOptions } from "@engine/boundary/assembly-facade";
+export { assemble } from "@engine/boundary/assembly/assembly-facade";
+export type { Assembly, AssemblyOptions } from "@engine/boundary/assembly/assembly-facade";
 export {
   conceptFloor,
   conceptSet,
   PublicError,
   registerConcept,
-} from "@engine/boundary/concept-set";
+} from "@engine/boundary/assembly/concept-set";
 export type {
   ConceptImplementation,
   ConceptFloor,
@@ -16,13 +16,13 @@ export type {
   PublicErrorCategory,
   RegisteredConcept,
   RegisteredConceptSet,
-} from "@engine/boundary/concept-set";
+} from "@engine/boundary/assembly/concept-set";
 export { FileStore, PersistingConcept } from "@engine/hosting/index";
-export { MemoryStore } from "@engine/reactions/log-store";
+export { MemoryStore } from "@engine/reactions/runtime/log-store";
 export type {
   FiringRecord,
   LogEntry,
   LogStore,
   ReactionFailureRecord,
   RetentionPolicy,
-} from "@engine/reactions/log-store";
+} from "@engine/reactions/runtime/log-store";

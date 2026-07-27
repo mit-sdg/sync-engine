@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { actionNameOf, request, Refuse, vocabulary } from "@sync-engine/internal/reactions";
-import { MemoryStore } from "@sync-engine/internal/reactions/log-store.ts";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import {
   assemble,
   createGateway,

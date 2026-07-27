@@ -1,8 +1,12 @@
 import { describe, expect, test } from "vite-plus/test";
-import { actionPattern, earlier, when as rawWhen } from "@sync-engine/internal/reactions/words.ts";
+import {
+  actionPattern,
+  earlier,
+  when as rawWhen,
+} from "@sync-engine/internal/reactions/authoring/words.ts";
 import { request, when } from "./historical-authoring.ts";
-import { declarationsOf } from "@sync-engine/internal/reactions/partitions.ts";
-import { actionLine } from "@sync-engine/internal/reactions/nodes.ts";
+import { declarationsOf } from "@sync-engine/internal/reactions/authoring/partitions.ts";
+import { actionLine } from "@sync-engine/internal/reactions/authoring/nodes.ts";
 import { brand, CountOpBrand } from "@sync-engine/internal/reads/brands";
 import type { InstrumentedAction } from "@sync-engine/internal/reactions/types.ts";
 

@@ -4,8 +4,8 @@ import {
   matchArguments,
   matchChannel,
   unifyPattern,
-} from "@sync-engine/internal/reactions/matching.ts";
-import type { ActionRecord } from "@sync-engine/internal/reactions/actions.ts";
+} from "@sync-engine/internal/reactions/runtime/matching.ts";
+import type { ActionRecord } from "@sync-engine/internal/reactions/runtime/actions.ts";
 import type {
   ActionPattern,
   ChannelPattern,

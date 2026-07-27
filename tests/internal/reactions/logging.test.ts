@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { ActionConcept } from "@sync-engine/internal/reactions/actions.ts";
-import { ReactionLogger, Logging } from "@sync-engine/internal/reactions/logging.ts";
+import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
+import { ReactionLogger, Logging } from "@sync-engine/internal/reactions/runtime/logging.ts";
 import type { InstrumentedAction } from "@sync-engine/internal/reactions/types.ts";
 
 describe("reaction logging", () => {

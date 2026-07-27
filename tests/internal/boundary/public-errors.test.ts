@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
 import { FrameworkErrorCode } from "@sync-engine/internal/boundary";
-import { publicCategoryOf, publicErrorStatus } from "@sync-engine/internal/boundary/public-errors";
+import {
+  publicCategoryOf,
+  publicErrorStatus,
+} from "@sync-engine/internal/boundary/protocol/public-errors";
 
 describe("HTTP public error projection", () => {
   test.each([

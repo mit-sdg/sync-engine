@@ -11,8 +11,8 @@
  * `exportReactions().unlowered` with a reason.
  */
 
-import { actionNameOf, conceptNameOf } from "@engine/reactions/introspect";
-import { isQueryRef } from "@engine/reactions/refs";
+import { isQueryRef } from "@engine/reactions/authoring/refs";
+import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import { isMatcher, isPlainMapping } from "./matchers.ts";
 import { liveOf, withLive } from "./ir.ts";
 import { foldFormerNode } from "./schema.ts";

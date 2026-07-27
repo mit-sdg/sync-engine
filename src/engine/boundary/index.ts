@@ -1,4 +1,4 @@
-export { createClient } from "./client.ts";
+export { createClient } from "./client/client.ts";
 export type {
   Client,
   ClientError,
@@ -7,15 +7,15 @@ export type {
   ClientTransport,
   ContractShape,
   DomainErrorValue,
-} from "./client.ts";
+} from "./client/client.ts";
 
-export { createHttpTransport, createHttpClient } from "./http-client.ts";
-export type { HeadersOption, HttpClientOptions } from "./http-client.ts";
+export { createHttpTransport, createHttpClient } from "./client/http-client.ts";
+export type { HeadersOption, HttpClientOptions } from "./client/http-client.ts";
 
-export { createHttpHandler } from "./http.ts";
+export { createHttpHandler } from "./http/http.ts";
 
-export { renderInputContracts } from "./endpoints.ts";
-export type { InputContractDecl, Prettify, RequestBoundaryActions } from "./endpoints.ts";
+export { renderInputContracts } from "./protocol/endpoints.ts";
+export type { InputContractDecl, Prettify, RequestBoundaryActions } from "./protocol/endpoints.ts";
 
 export {
   FrameworkErrorCode,
@@ -24,29 +24,29 @@ export {
   domainError,
   frameworkError,
   success,
-} from "./errors.ts";
+} from "./protocol/errors.ts";
 
-export { createInvoker, Requesting } from "./invoke.ts";
-export { createLocalClient } from "./local-client.ts";
-export type { Invoker, InvokeOptions } from "./invoke.ts";
+export { createInvoker, Requesting } from "./invocation/invoke.ts";
+export { createLocalClient } from "./client/local-client.ts";
+export type { Invoker, InvokeOptions } from "./invocation/invoke.ts";
 
-export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./funnel.ts";
+export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./invocation/funnel.ts";
 
-export { assemble, endpoint, fail, isEndpointDef, receive, respond } from "./assemble.ts";
-export type { AssembledApp, AssembleOptions, EndpointDef } from "./assemble.ts";
-export type { ApplicationInterface } from "./application-interface.ts";
+export { assemble, endpoint, fail, isEndpointDef, receive, respond } from "./assembly/assemble.ts";
+export type { AssembledApp, AssembleOptions, EndpointDef } from "./assembly/assemble.ts";
+export type { ApplicationInterface } from "./protocol/application-interface.ts";
 
-export { createGateway } from "./gateway.ts";
-export type { Gateway, GatewayClientError, GatewayOptions } from "./gateway.ts";
+export { createGateway } from "./gateway/gateway.ts";
+export type { Gateway, GatewayClientError, GatewayOptions } from "./gateway/gateway.ts";
 
-export { deriveInputContracts, renderWireTypes, wireContracts } from "./wire.ts";
+export { deriveInputContracts, renderWireTypes, wireContracts } from "./wire/wire.ts";
 export type {
   WireContractsIR,
   WireEndpoint,
   WireOptions,
   WireRenderOptions,
   WireType,
-} from "./wire.ts";
+} from "./wire/wire.ts";
 
 // `fail` is the endpoint word (assemble.ts); the CLI results export as cli-prefixed.
 export {

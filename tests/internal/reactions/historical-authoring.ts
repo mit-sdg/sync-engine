@@ -6,10 +6,10 @@
 import { applyWhereOps, conditionOp, isCondition } from "../../../src/engine/reads/where-ops.ts";
 import type { AnyWhereOp, WhereOp } from "../../../src/engine/reads/where-ops.ts";
 import { isCountOp } from "../../../src/engine/reads/views.ts";
-import { actionLine, assertReactionNodes } from "../../../src/engine/reactions/nodes.ts";
-import { siblingTree } from "../../../src/engine/reactions/partitions.ts";
-import { isChannelPattern } from "../../../src/engine/reactions/channels.ts";
-import { actionPattern } from "../../../src/engine/reactions/words.ts";
+import { actionLine, assertReactionNodes } from "../../../src/engine/reactions/authoring/nodes.ts";
+import { siblingTree } from "../../../src/engine/reactions/authoring/partitions.ts";
+import { isChannelPattern } from "../../../src/engine/reactions/authoring/channels.ts";
+import { actionPattern } from "../../../src/engine/reactions/authoring/words.ts";
 import type {
   ChannelPattern,
   InstrumentedAction,

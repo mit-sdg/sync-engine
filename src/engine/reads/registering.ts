@@ -6,7 +6,7 @@
  * are rejected because JSON does not carry their implementation.
  */
 
-import { isActionRef, isQueryRef } from "@engine/reactions/refs";
+import { isActionRef, isQueryRef } from "@engine/reactions/authoring/refs";
 import { NameResolver } from "@engine/reactions/resolving";
 import type {
   ActionPattern,

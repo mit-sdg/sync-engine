@@ -1,0 +1,218 @@
+import type { OutcomeContracts } from "@engine/reactions/concepts/outcomes";
+import { Refuse } from "@engine/reactions/concepts/refuse";
+import { admitInput } from "../protocol/admit.ts";
+import { describeError } from "@engine/utils/redaction";
+import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
+import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
+import { fromEnvelope } from "../protocol/envelope.ts";
+import { FrameworkErrorCode, frameworkError } from "../protocol/errors.ts";
+import type { InvocationResult } from "../protocol/errors.ts";
+
+interface PendingRequest {
+  resolve: (value: Record<string, unknown>) => void;
+  reject: (reason: unknown) => void;
+  timer: ReturnType<typeof setTimeout>;
+  signal?: AbortSignal;
+  signalListener?: () => void;
+}
+
+function disposePending(pending: PendingRequest): void {
+  clearTimeout(pending.timer);
+  if (pending.signalListener !== undefined && pending.signal !== undefined) {
+    pending.signal.removeEventListener("abort", pending.signalListener);
+  }
+}
+
+export class Requesting {
+  static readonly purpose =
+    "Let the outside world ask for things and receive answers, so each answer belongs to one pending call and unanswered calls remain unanswered.";
+
+  static readonly principle =
+    "A call arrives and becomes pending. When something answers, the reply travels back and a second answer is refused. If the caller times out or aborts first, waiting ends without recording an answer.";
+
+  /**
+   * `request` accepts every ask. `respond` accepts one answer for each pending
+   * request and refuses later answers with `NOT_PENDING`. Declared outcomes
+   * keep a returned body containing an `error` key distinct from a refusal.
+   */
+  static readonly outcomes: OutcomeContracts = {
+    request: {},
+    respond: { refusals: ["NOT_PENDING"] },
+  };
+
+  private pending = new Map<string, PendingRequest>();
+
+  request(args: Record<string, unknown>): Record<string, unknown> {
+    return args;
+  }
+
+  respond(args: Record<string, unknown>): Record<string, unknown> {
+    const requestId = args.requestId;
+    if (typeof requestId !== "string") {
+      throw new Refuse("NOT_PENDING", { detail: "respond carries no requestId" });
+    }
+    const { requestId: _, ...output } = args;
+    const pending = this.pending.get(requestId);
+    if (pending === undefined) {
+      throw new Refuse("NOT_PENDING", {
+        detail: `request ${requestId} is not pending — already answered, timed out, or unknown`,
+      });
+    }
+    this.pending.delete(requestId);
+    disposePending(pending);
+    pending.resolve(output);
+    return args;
+  }
+
+  register(
+    requestId: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const pending = this.pending.get(requestId);
+        if (pending !== undefined) {
+          this.pending.delete(requestId);
+          disposePending(pending);
+        }
+        reject(new DOMException("Timed out", "TimeoutError"));
+      }, timeoutMs);
+
+      let signalListener: (() => void) | undefined;
+      if (signal !== undefined) {
+        if (signal.aborted) {
+          clearTimeout(timer);
+          reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+          return;
+        }
+        signalListener = () => {
+          const pending = this.pending.get(requestId);
+          if (pending !== undefined) {
+            this.pending.delete(requestId);
+            disposePending(pending);
+          }
+          reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+        };
+        signal.addEventListener("abort", signalListener, { once: true });
+      }
+
+      this.pending.set(requestId, { resolve, reject, timer, signal, signalListener });
+    });
+  }
+
+  cancel(requestId: string): void {
+    const pending = this.pending.get(requestId);
+    if (pending === undefined) return;
+    this.pending.delete(requestId);
+    disposePending(pending);
+  }
+}
+
+export interface Invoker<C extends ContractShape> {
+  invoke<P extends keyof C & string>(
+    path: P,
+    input: C[P]["input"],
+    options?: InvokeOptions,
+  ): Promise<InvocationResult<C[P]["output"], DomainErrorValue<C[P]["error"]>>>;
+}
+
+export interface InvokeOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  /** A trace token carried across gateway and application logs. */
+  correlationId?: string;
+}
+
+export function createInvoker<C extends ContractShape = ContractShape>(opts: {
+  boundary: Requesting;
+  instrumented: RequestBoundaryActions;
+  /** Declared input contracts by path; undeclared paths are unchecked. */
+  contracts?: Record<string, InputContractDecl>;
+  /** Refresh standing reads before a new application-interface ask. */
+  refresh?: () => void;
+}): Invoker<C> {
+  const { boundary, instrumented, contracts, refresh } = opts;
+
+  return {
+    async invoke(path, input, invokeOpts: InvokeOptions = {}) {
+      if (invokeOpts.signal?.aborted === true) {
+        return frameworkError(FrameworkErrorCode.ABORTED);
+      }
+      refresh?.();
+
+      // Validate the declared outer shape before recording an ask. Required
+      // keys test presence, so explicit null passes; defaults fill absent keys.
+      const contract = contracts?.[path];
+      if (contract !== undefined) {
+        const admitted = admitInput(contract, path, input);
+        if (!admitted.ok) {
+          return frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail);
+        }
+        input = admitted.admitted as typeof input;
+      }
+
+      const requestId = crypto.randomUUID();
+      const correlationId = invokeOpts.correlationId ?? requestId;
+      const DEFAULT_TIMEOUT_MS = 30_000;
+      const timeoutMs = invokeOpts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+      let responsePromise: Promise<Record<string, unknown>>;
+      try {
+        responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal);
+      } catch (err) {
+        return frameworkError(FrameworkErrorCode.TIMED_OUT, describeError(err));
+      }
+
+      const reqFn = instrumented.request as unknown as (
+        args: Record<string, unknown>,
+      ) => Promise<Record<string, unknown>>;
+      const resolvedInput = (input as Record<string, unknown> | undefined) ?? {};
+      const dispatch = reqFn({ ...resolvedInput, requestId, correlationId, path }).then(
+        () => ({ kind: "dispatched" }) as const,
+        (error: unknown) => ({ kind: "dispatch-error", error }) as const,
+      );
+      const response = responsePromise.then(
+        (value) => ({ kind: "response", value }) as const,
+        (error: unknown) => ({ kind: "response-error", error }) as const,
+      );
+      const first = await Promise.race([dispatch, response]);
+
+      if (first.kind === "dispatch-error") {
+        boundary.cancel(requestId);
+        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR, describeError(first.error));
+      }
+
+      if (first.kind === "response") {
+        // A response may land from inside the dispatch cascade. Preserve the
+        // guarantee that its firing and outcome records are complete on return.
+        const completion = await dispatch;
+        if (completion.kind === "dispatch-error") {
+          return frameworkError(
+            FrameworkErrorCode.TRANSPORT_ERROR,
+            describeError(completion.error),
+          );
+        }
+        return fromEnvelope(first.value);
+      }
+      const settled = first.kind === "dispatched" ? await response : first;
+      if (settled.kind === "response") return fromEnvelope(settled.value);
+      try {
+        throw settled.error;
+      } catch (err) {
+        if (err instanceof DOMException) {
+          if (err.name === "TimeoutError") return frameworkError(FrameworkErrorCode.TIMED_OUT);
+          if (err.name === "AbortError") return frameworkError(FrameworkErrorCode.ABORTED);
+        }
+        if (isAborted(invokeOpts.signal)) {
+          return frameworkError(FrameworkErrorCode.ABORTED);
+        }
+        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR, describeError(err));
+      }
+    },
+  } as Invoker<C>;
+}
+
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}

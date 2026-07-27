@@ -4,27 +4,27 @@
  * its authored vocabulary, and the read-side contracts that runtime uses.
  */
 
-export { normalizeOutcome } from "./actions.ts";
-export type { ActionRecord } from "./actions.ts";
-export { assertRetentionPolicy, MemoryStore } from "./log-store.ts";
+export { normalizeOutcome } from "./runtime/actions.ts";
+export type { ActionRecord } from "./runtime/actions.ts";
+export { assertRetentionPolicy, MemoryStore } from "./runtime/log-store.ts";
 export type {
   FiringRecord,
   LogEntry,
   LogStore,
   ReactionFailureRecord,
   RetentionPolicy,
-} from "./log-store.ts";
-export { isRefuse, Refuse, refusalMapping } from "./refuse.ts";
-export { contractOf } from "./outcomes.ts";
-export type { ActionContract, OutcomeContracts } from "./outcomes.ts";
+} from "./runtime/log-store.ts";
+export { isRefuse, Refuse, refusalMapping } from "./concepts/refuse.ts";
+export { contractOf } from "./concepts/outcomes.ts";
+export type { ActionContract, OutcomeContracts } from "./concepts/outcomes.ts";
 
 // Read-side contracts — imported through the reads barrel for explicit dependency tracking.
 export { QueryAnswerFault, rowsOfAnswer } from "@engine/reads/queries";
 
-export { parseSpec } from "./concept-spec.ts";
-export type { ConceptSpec, SpecAction, SpecQuery, SpecRefusal } from "./concept-spec.ts";
-export { faulted, isChannelPattern, refused, returned } from "./channels.ts";
-export type { ChannelOptions } from "./channels.ts";
+export { parseSpec } from "./concepts/concept-spec.ts";
+export type { ConceptSpec, SpecAction, SpecQuery, SpecRefusal } from "./concepts/concept-spec.ts";
+export { faulted, isChannelPattern, refused, returned } from "./authoring/channels.ts";
+export type { ChannelOptions } from "./authoring/channels.ts";
 
 export {
   computationRef,
@@ -74,7 +74,7 @@ export type {
 export { count, isCountOp, view, where } from "@engine/reads/views";
 export type { CountOp, ViewOp } from "@engine/reads/views";
 
-export { declarationsOf, isReactionPartition } from "./partitions.ts";
+export { declarationsOf, isReactionPartition } from "./authoring/partitions.ts";
 export { each, form, former } from "@engine/reads/former-builders";
 export type { FreeBindings, InputBindings, OutputBindings } from "@engine/reads/sentence";
 
@@ -119,7 +119,7 @@ export {
   vocabularyClasses,
   vocabularyComputations,
   vocabularyMetadata,
-} from "./refs.ts";
+} from "./authoring/refs.ts";
 export type {
   ActionRef,
   ConceptClass,
@@ -132,9 +132,13 @@ export type {
   QueryRef,
   VocabularyDeclaration,
   VocabularyRefs,
-} from "./refs.ts";
+} from "./authoring/refs.ts";
 
-export type { ConceptMetadata, ErrorConstructor, RefusalContracts } from "./concept-metadata.ts";
+export type {
+  ConceptMetadata,
+  ErrorConstructor,
+  RefusalContracts,
+} from "./concepts/concept-metadata.ts";
 export {
   actionNameOf,
   actionNodeId,
@@ -142,8 +146,8 @@ export {
   conceptNameOf,
   inventoryOf,
   rolesOf,
-} from "./introspect.ts";
-export type { EngineObserver, LogEvent } from "./observer.ts";
+} from "./concepts/introspect.ts";
+export type { EngineObserver, LogEvent } from "./runtime/observer.ts";
 
 export { opaqueCount } from "@engine/reads/ir";
 export type {
@@ -183,9 +187,9 @@ export type { AppSpecIR } from "@engine/reads/render";
 export type { LoweredReaction, LoweredWhereOp } from "@engine/reads/lower";
 export { isMatcher, oneOf } from "@engine/reads/matchers";
 
-export { Logging } from "./logging.ts";
-export { Reacting } from "./reacting.ts";
-export { earlier, when } from "./words.ts";
+export { Logging } from "./runtime/logging.ts";
+export { Reacting } from "./runtime/reacting.ts";
+export { earlier, when } from "./authoring/words.ts";
 
 export type {
   ActionOutcome,
@@ -211,4 +215,4 @@ export type {
   WhenBuilderWithFunctionWhere,
   WhereFn,
 } from "./types.ts";
-export { $vars } from "./vars.ts";
+export { $vars } from "./authoring/vars.ts";

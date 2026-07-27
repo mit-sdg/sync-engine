@@ -597,7 +597,7 @@ describe("public API register", () => {
 
   test("persisted firing fields use the public register", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const file = resolve(root, "src/engine/reactions/log-store.ts");
+    const file = resolve(root, "src/engine/reactions/runtime/log-store.ts");
     const source = ts.createSourceFile(
       file,
       readFileSync(file, "utf8"),
@@ -610,7 +610,7 @@ describe("public API register", () => {
       for (const member of statement.members) {
         if (ts.isPropertySignature(member) && unsupportedIdentifier(member.name.getText(source))) {
           unsupportedFields.push(
-            `src/engine/reactions/log-store.ts:FiringRecord.${member.name.getText(source)}`,
+            `src/engine/reactions/runtime/log-store.ts:FiringRecord.${member.name.getText(source)}`,
           );
         }
       }

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
-import { memoizeQuery, queryCacheKey } from "@sync-engine/internal/reactions/query-cache.ts";
+import {
+  memoizeQuery,
+  queryCacheKey,
+} from "@sync-engine/internal/reactions/runtime/query-cache.ts";
 
 describe("query cache", () => {
   test("keys equivalent plain mappings independently of property order", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { FiringBook, type FiringFill } from "@sync-engine/internal/reactions/firing.ts";
-import { MemoryStore } from "@sync-engine/internal/reactions/log-store.ts";
+import { FiringBook, type FiringFill } from "@sync-engine/internal/reactions/runtime/firing.ts";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 
 describe("firing bookkeeping", () => {
   test("an in-flight mark hands consumption to the durable firing record", () => {
