@@ -4,6 +4,12 @@ import {
   queryCacheKey,
 } from "@sync-engine/internal/reactions/runtime/query-cache.ts";
 
+function deeplyNested(wrap: (value: unknown, depth: number) => unknown): unknown {
+  let value: unknown = "leaf";
+  for (let depth = 0; depth < 20_000; depth += 1) value = wrap(value, depth);
+  return value;
+}
+
 describe("query cache", () => {
   test("keys equivalent plain mappings independently of property order", () => {
     expect(queryCacheKey([{ left: 1, right: 2 }])).toBe(queryCacheKey([{ right: 2, left: 1 }]));
@@ -14,6 +20,46 @@ describe("query cache", () => {
     value.self = value;
 
     expect(() => queryCacheKey([value])).not.toThrow();
+  });
+
+  test.each([
+    ["objects", (value: unknown) => ({ value })],
+    ["arrays", (value: unknown) => [value]],
+    ["maps", (value: unknown) => new Map([["value", value]])],
+    ["sets", (value: unknown) => new Set([value])],
+    [
+      "mixed values",
+      (value: unknown, depth: number) => {
+        const wrappers = [
+          () => ({ value }),
+          () => [value],
+          () => new Map([["value", value]]),
+          () => new Set([value]),
+        ];
+        return wrappers[depth % wrappers.length]!();
+      },
+    ],
+  ])("rejects deeply nested %s with a bounded error", (_name, wrap) => {
+    expect(() => queryCacheKey([deeplyNested(wrap)])).toThrow(
+      "Query cache key exceeds maximum depth of 100",
+    );
+  });
+
+  test("bypasses caching for over-limit keys and still caches normal keys", () => {
+    let calls = 0;
+    const query = memoizeQuery((input: unknown) => ({ call: ++calls, input }));
+    const deep = deeplyNested((value) => ({ value }));
+
+    expect(query(deep)).not.toBe(query(deep));
+    const normal = query({ value: [1, 2, 3] });
+    expect(query({ value: [1, 2, 3] })).toBe(normal);
+    expect(calls).toBe(3);
+  });
+
+  test("does not treat a normal key's argument position as nesting depth", () => {
+    const args = Array.from({ length: 200 }, (_, index) => index);
+
+    expect(queryCacheKey(args).split("|")).toHaveLength(200);
   });
 
   test("does not conflate collection values", () => {

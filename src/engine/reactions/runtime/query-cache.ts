@@ -7,6 +7,15 @@
 
 type AnyFn = (...args: never[]) => unknown;
 
+const MAX_QUERY_CACHE_KEY_DEPTH = 100;
+
+class QueryCacheKeyDepthError extends Error {
+  constructor() {
+    super(`Query cache key exceeds maximum depth of ${MAX_QUERY_CACHE_KEY_DEPTH}`);
+    this.name = "QueryCacheKeyDepthError";
+  }
+}
+
 export interface MemoizedQuery<T extends AnyFn> {
   (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
   invalidate(): void;
@@ -35,7 +44,8 @@ export function queryCacheKey(args: readonly unknown[], identities = identityTab
     return id;
   };
 
-  const encode = (value: unknown): string => {
+  const encode = (value: unknown, depth = 0): string => {
+    if (depth > MAX_QUERY_CACHE_KEY_DEPTH) throw new QueryCacheKeyDepthError();
     if (value === null) return "null";
     switch (typeof value) {
       case "undefined":
@@ -67,24 +77,34 @@ export function queryCacheKey(args: readonly unknown[], identities = identityTab
     const id = referenceId(value);
     if (value instanceof Date) return `date:${id}:${value.getTime()}`;
     if (value instanceof RegExp) return `regexp:${id}:${value.source}/${value.flags}`;
-    if (Array.isArray(value)) return `array:${id}:[${value.map(encode).join(",")}]`;
+    if (Array.isArray(value)) {
+      return `array:${id}:[${value.map((entry) => encode(entry, depth + 1)).join(",")}]`;
+    }
     if (value instanceof Map) {
       const entries = [...value.entries()]
-        .map(([key, entry]) => `${encode(key)}=>${encode(entry)}`)
+        .map(([key, entry]) => `${encode(key, depth + 1)}=>${encode(entry, depth + 1)}`)
         .sort();
       return `map:${id}:{${entries.join(",")}}`;
     }
-    if (value instanceof Set) return `set:${id}:{${[...value].map(encode).sort().join(",")}}`;
+    if (value instanceof Set) {
+      return `set:${id}:{${[...value]
+        .map((entry) => encode(entry, depth + 1))
+        .sort()
+        .join(",")}}`;
+    }
 
     const prototype = Object.getPrototypeOf(value);
     const label = prototype === null ? "null" : (prototype.constructor?.name ?? "object");
     const entries = Object.keys(value)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${encode((value as Record<string, unknown>)[key])}`);
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${encode((value as Record<string, unknown>)[key], depth + 1)}`,
+      );
     return `object:${label}:${id}:{${entries.join(",")}}`;
   };
 
-  return args.map(encode).join("|");
+  return args.map((value) => encode(value)).join("|");
 }
 
 /** Memoize a query until invalidated; a rejected promise is never retained. */
@@ -92,7 +112,13 @@ export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
   let cache = new Map<string, unknown>();
   const identities = identityTable();
   const wrapper = function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
-    const key = queryCacheKey(args, identities);
+    let key: string;
+    try {
+      key = queryCacheKey(args, identities);
+    } catch (error) {
+      if (error instanceof QueryCacheKeyDepthError) return fn.call(this, ...args) as ReturnType<T>;
+      throw error;
+    }
     if (cache.has(key)) return cache.get(key) as ReturnType<T>;
     const result = fn.call(this, ...args);
     cache.set(key, result);
