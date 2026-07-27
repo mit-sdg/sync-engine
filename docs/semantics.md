@@ -317,6 +317,12 @@ including `Date` to `string`. Strict generation rejects any leaf that cannot be
 traced to a signature. Without an anchor, the renderer emits a structural
 contract and uses `Json` for leaves it cannot trace to a signature.
 
+Artifact rendering, checking, and pinning also reject an executable endpoint
+that could not be lowered to portable reaction data. The error names the
+endpoint and unsupported construction; generation never emits a partial wire
+surface that silently omits such an endpoint. Executable-only non-endpoint
+reactions remain listed in the generated read-back.
+
 When a generated application descriptor supplies an HTTP floor, one module
 contains both contracts. The contract named by `wireName` retains the logical
 application inputs, outputs, and refusal codes for a local client. A second

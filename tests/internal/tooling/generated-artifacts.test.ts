@@ -1,11 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
-import { request, vocabulary } from "@sync-engine/internal/reactions";
+import { Frames, reaction, request, vocabulary, when } from "@sync-engine/internal/reactions";
 import { endpoint, receive, respond } from "@sync-engine/internal/boundary";
 import { assemble } from "@sync-engine/assembly";
 import { httpFloor } from "@sync-engine/boundary";
 import {
+  checkGenerated,
+  pinGenerated,
   renderGenerated,
   resolveApplication,
 } from "../../../src/engine/tooling/generated-artifacts.ts";
@@ -49,6 +51,20 @@ const Current = endpoint(
       .then(request(Sessioning.current, { session }, { user }))
       .then(respond({ user })),
   { input: { required: ["session"] } },
+);
+
+const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
+  receive({})
+    .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
+    .then(request(Sessioning.current, { session: "fixed" }, { user }))
+    .then(respond({ hidden })),
+);
+
+const InternalClosure = reaction(({ hidden, user }) =>
+  when(Sessioning.start, { user }, {})
+    .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
+    .then(request(Sessioning.current, { session: "fixed" }, {}))
+    .then(request(Sessioning.start, { user: hidden }, {})),
 );
 
 describe("generated application artifacts", () => {
@@ -124,6 +140,72 @@ describe("generated application artifacts", () => {
     expect(rendered.wire).toContain("export type ApplicationWireHttp = {");
     const projected = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp"));
     expect(projected).not.toContain('"session":');
+  });
+
+  test("render, check, and pin reject an executable endpoint absent from portable IR", async () => {
+    const application = resolveApplication(
+      {
+        assemble: () =>
+          assemble({
+            vocabulary: vocabularyDeclaration,
+            composition: { Api: { ClosureEndpoint } },
+          }),
+        directory: new URL("./not-written/", import.meta.url),
+        title: "Incomplete application",
+        vocabulary: { module: languageModule },
+      },
+      configUrl,
+    );
+    const message =
+      'endpoint "Api.ClosureEndpoint" at "/closure" (reaction "Api.ClosureEndpoint"): ' +
+      "step 2 needs a value bound by a closure where";
+
+    expect(() => renderGenerated(application)).toThrow(message);
+    await expect(checkGenerated(application)).rejects.toThrow(message);
+    await expect(pinGenerated(application)).rejects.toThrow(message);
+  });
+
+  test("the CLI fails closed instead of printing a partial wire contract", () => {
+    const root = fileURLToPath(new URL("../../../", import.meta.url));
+    const config = fileURLToPath(new URL("./unlowered-endpoint.config.ts", import.meta.url));
+    const result = spawnSync(
+      "bun",
+      ["src/command/main.ts", "artifacts", "wire", "--config", config],
+      { cwd: root, encoding: "utf8" },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      'endpoint "Api.ClosureEndpoint" at "/closure" (reaction "Api.ClosureEndpoint")',
+    );
+    expect(result.stderr).toContain("step 2 needs a value bound by a closure where");
+  });
+
+  test("an ordinary unlowered internal reaction remains visible in read-back", () => {
+    const rendered = renderGenerated(
+      resolveApplication(
+        {
+          assemble: () =>
+            assemble({
+              vocabulary: vocabularyDeclaration,
+              composition: { InternalClosure },
+            }),
+          directory: new URL("./generated/", import.meta.url),
+          title: "Internal application",
+          vocabulary: { module: languageModule },
+        },
+        configUrl,
+      ),
+    );
+
+    expect(rendered.metrics.unlowered).toEqual([
+      { name: "InternalClosure", reason: "step 2 needs a value bound by a closure where" },
+    ]);
+    expect(rendered.specification).toContain("## Reactions represented only by executable code");
+    expect(rendered.specification).toContain(
+      "`InternalClosure` — step 2 needs a value bound by a closure where",
+    );
   });
 });
 

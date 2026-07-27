@@ -207,10 +207,14 @@ or routing design.
 
 ## Generate the wire contract
 
-The tooling reads the assembled design and derives a TypeScript contract for
-every endpoint. One application descriptor names the assembly and the
-application; the artifact paths and type names follow from the title and the
-config's own location, and each may be overridden:
+The tooling reads the assembled design and derives TypeScript contracts from
+portable reaction data. Generation is all-or-nothing: if an executable endpoint
+uses a construction that cannot be lowered to that data, render, check, and pin
+fail with the endpoint name and unsupported construction rather than omit its
+contract. Unlowered non-endpoint reactions remain visible in the assembled
+read-back. One application descriptor names the assembly and the application;
+the artifact paths and type names follow from the title and the config's own
+location, and each may be overridden:
 
 _Source: [`examples/operations-room/generated.config.ts`](../../examples/operations-room/generated.config.ts)_
 

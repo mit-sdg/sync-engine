@@ -184,6 +184,8 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   publicInterface: ApplicationInterface;
   /** Public boundary categories declared beside concept refusals. */
   publicErrors: Readonly<Record<string, PublicErrorCategory>>;
+  /** Endpoint identity retained even when a reaction has no portable IR. */
+  endpointOfReaction: ReadonlyMap<string, { name: string; path: string }>;
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
   form(fused: FusedFormer): Promise<unknown>;
 }
@@ -287,6 +289,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   // ── The composition: tagged exports register under their dotted path ─────
   const reactions: Record<string, Reaction> = {};
   const contracts: Record<string, InputContractDecl> = {};
+  const endpointOfReaction = new Map<string, { name: string; path: string }>();
   const views: RelationView[] = [];
   const formers: FormerRef[] = [];
 
@@ -301,6 +304,10 @@ export function assemble<T extends Record<string, ConceptClass>>(
       const declared = value.reaction($vars);
       const declarations = declarationsOf(declared);
       declarations.forEach((entry) => pinToPath(entry, value.path));
+      declarations.forEach((_, index) => {
+        const reactionName = index === 0 ? name : `${name}:${index + 1}`;
+        endpointOfReaction.set(reactionName, { name, path: value.path });
+      });
       if (reactions[name] !== undefined)
         throw new Error(`assemble: two reactions named "${name}".`);
       reactions[name] = () => declared;
@@ -372,6 +379,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     contracts,
     publicInterface,
     publicErrors,
+    endpointOfReaction,
     form: (fused) => engine.form(fused),
   };
 }
