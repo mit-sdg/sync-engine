@@ -53,7 +53,7 @@ import { Registry } from "@engine/reads/registering";
 import type { BoundReaction, BoundWhereOp } from "@engine/reads/registering";
 import { varKeyOf } from "@engine/reads/frames";
 import { hasMarkerKey, liveOf } from "@engine/reads/ir";
-import type { FiringRecord } from "./log-store.ts";
+import type { FiringRecord, ReactionFailureRecord } from "./log-store.ts";
 import { Frames } from "@engine/reads/frames";
 import { actionNameOf } from "../concepts/introspect.ts";
 import type { EngineObserver } from "./observer.ts";
@@ -101,6 +101,13 @@ import { declarationsOf } from "../authoring/partitions.ts";
 import { exportConcepts, exportReactions, form, readBack, renderApp } from "./reacting-export.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
+
+interface FrameProvenance {
+  flow: string;
+  triggerIds: string[];
+  frameTriggerIds: string[][];
+  triggerSignatures?: Set<string>;
+}
 
 export class Reacting {
   /** Registered reactions, by name. */
@@ -554,32 +561,12 @@ export class Reacting {
     ]);
 
     for (const reaction of reactions) {
+      let matched: Frames;
+      let actionSymbols: symbol[];
       try {
-        const [matched, actionSymbols] = this.matchWhen(record, reaction);
-        if (matched.length === 0) continue;
-
-        this.reactionLogger.frames(
-          `Matched \`reaction\`: ${reaction.name} with \`when\`:`,
-          matched,
-        );
-
-        let frames = matched;
-        if (reaction.where !== undefined) {
-          try {
-            const maybeFrames = reaction.where(frames);
-            frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
-          } catch (err) {
-            logger.error(`Reaction "${reaction.name}": where condition evaluation failed`, {
-              error: serializeError(err),
-            });
-            this.recordReactionFailure(reaction, matched, actionSymbols, "where", err);
-            continue;
-          }
-          this.reactionLogger.frames(`After processing \`where\`:`, frames);
-        }
-        await this.addThen(frames, reaction, actionSymbols);
+        [matched, actionSymbols] = this.matchWhen(record, reaction);
       } catch (err) {
-        logger.error(`Reaction "${reaction.name}": occurrence processing failed`, {
+        logger.error(`Reaction "${reaction.name}": trigger matching failed`, {
           error: serializeError(err),
         });
         this.appendReactionFailure(
@@ -587,6 +574,51 @@ export class Reacting {
           record.flow,
           record.id === undefined ? [] : [record.id],
           "trigger",
+          err,
+        );
+        continue;
+      }
+      if (matched.length === 0) continue;
+
+      this.reactionLogger.frames(`Matched \`reaction\`: ${reaction.name} with \`when\`:`, matched);
+
+      const provenance = this.captureFrameProvenance(matched, record.flow, actionSymbols);
+      let frameTriggerIds = provenance.frameTriggerIds;
+      let frames = matched;
+      if (reaction.where !== undefined) {
+        try {
+          const maybeFrames = reaction.where(frames);
+          frames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
+          if (!(frames instanceof Frames)) {
+            throw new TypeError("A reaction where function must return Frames.");
+          }
+          frameTriggerIds = this.assertFrameProvenance(frames, provenance, actionSymbols);
+        } catch (err) {
+          logger.error(`Reaction "${reaction.name}": where condition evaluation failed`, {
+            error: serializeError(err),
+          });
+          this.appendReactionFailure(
+            reaction.name,
+            provenance.flow,
+            provenance.triggerIds,
+            "where",
+            err,
+          );
+          continue;
+        }
+        this.reactionLogger.frames(`After processing \`where\`:`, frames);
+      }
+      try {
+        await this.addThen(frames, reaction, actionSymbols, provenance, frameTriggerIds);
+      } catch (err) {
+        logger.error(`Reaction "${reaction.name}": consequence processing failed`, {
+          error: serializeError(err),
+        });
+        this.appendReactionFailure(
+          reaction.name,
+          provenance.flow,
+          provenance.triggerIds,
+          "consequence-dispatch",
           err,
         );
       }
@@ -705,25 +737,39 @@ export class Reacting {
     frames: Frames,
     reaction: ExecutableReaction,
     actionSymbols: symbol[],
+    captured?: FrameProvenance,
+    validatedTriggerIds?: string[][],
   ): Promise<void> {
-    for (const frame of frames) {
-      let whenIds: string[];
-      try {
-        whenIds = this.resolveWhenIds(frame, actionSymbols);
-      } catch (err) {
+    const provenance =
+      captured ??
+      this.captureFrameProvenance(
+        frames,
+        typeof frames[0]?.[flow] === "string" ? frames[0][flow] : "",
+        actionSymbols,
+      );
+    const triggerIdsByFrame = validatedTriggerIds ?? provenance.frameTriggerIds;
+    for (const [index, frame] of frames.entries()) {
+      const whenIds = triggerIdsByFrame[index];
+      if (whenIds === undefined) {
+        const err = new Error(`Matched frame has no captured trigger occurrences.`);
         logger.warn(
           `Reaction "${reaction.name}": matched bindings could not resolve every trigger occurrence`,
           {
             error: serializeError(err),
           },
         );
-        this.recordReactionFailure(reaction, new Frames(frame), actionSymbols, "trigger", err);
+        this.appendReactionFailure(
+          reaction.name,
+          provenance.flow,
+          provenance.triggerIds,
+          "trigger",
+          err,
+        );
         continue;
       }
-      const flowToken = frame[flow];
       const fill: FiringFill = {
         reaction: reaction.name,
-        flow: typeof flowToken === "string" ? flowToken : "",
+        flow: provenance.flow,
         whenIds,
         bindings: this.bindingsOf(frame, actionSymbols),
         produced: [],
@@ -758,6 +804,59 @@ export class Reacting {
     return bindings;
   }
 
+  /** Snapshot engine-owned provenance before authored frame code can mutate it. */
+  private captureFrameProvenance(
+    frames: Frames,
+    flowToken: string,
+    actionSymbols: symbol[],
+  ): FrameProvenance {
+    const frameTriggerIds = frames.map((frame) => this.triggerIdsOf(frame, actionSymbols));
+    const triggerIds = [...new Set(frameTriggerIds.flat())];
+    return {
+      flow: flowToken,
+      triggerIds,
+      frameTriggerIds,
+      ...(actionSymbols.length > 0
+        ? {
+            triggerSignatures: new Set(frameTriggerIds.map((ids) => JSON.stringify(ids))),
+          }
+        : {}),
+    };
+  }
+
+  private triggerIdsOf(frame: Frame, actionSymbols: symbol[]): string[] {
+    return actionSymbols.map((actionSymbol, index) => {
+      const id = frame[actionSymbol];
+      if (typeof id !== "string") {
+        throw new Error(`Matched frame has no action id for trigger ${index + 1}.`);
+      }
+      return id;
+    });
+  }
+
+  /** Keep snapshotted causal provenance intact across authored frame transforms. */
+  private assertFrameProvenance(
+    frames: Frames,
+    provenance: FrameProvenance,
+    actionSymbols: symbol[] = [],
+  ): string[][] {
+    const frameTriggerIds: string[][] = [];
+    for (const frame of frames) {
+      if (frame[flow] !== provenance.flow) {
+        throw new TypeError("A frame transform must preserve the causal flow.");
+      }
+      const triggerIds = this.triggerIdsOf(frame, actionSymbols);
+      if (
+        provenance.triggerSignatures !== undefined &&
+        !provenance.triggerSignatures.has(JSON.stringify(triggerIds))
+      ) {
+        throw new TypeError("A reaction where function must preserve its trigger occurrences.");
+      }
+      frameTriggerIds.push(triggerIds);
+    }
+    return frameTriggerIds;
+  }
+
   private async runPipelineForFrame(
     frame: Frame,
     nodes: StepNode[],
@@ -784,6 +883,8 @@ export class Reacting {
   private failStep(
     reaction: ExecutableReaction,
     node: StepNode,
+    branch: FiringBranch,
+    stage: ReactionFailureRecord["stage"],
     message: string,
     err: unknown,
     actionId?: string,
@@ -793,7 +894,22 @@ export class Reacting {
       ...(actionId !== undefined ? { actionId } : {}),
       error: serializeError(err),
     });
+    this.recordStepFailure(reaction, node, branch, stage, err, actionId);
     return this.stopped();
+  }
+
+  private recordStepFailure(
+    reaction: ExecutableReaction,
+    node: StepNode,
+    branch: FiringBranch,
+    stage: ReactionFailureRecord["stage"],
+    error: unknown,
+    actionId?: string,
+  ): void {
+    this.appendReactionFailure(reaction.name, branch.fill.flow, branch.fill.whenIds, stage, error, {
+      action: actionNameOf(node.action.action as InstrumentedAction),
+      ...(actionId !== undefined ? { actionId } : {}),
+    });
   }
 
   private async runStepNode(
@@ -804,16 +920,16 @@ export class Reacting {
   ): Promise<{ frames: Frames; stop: boolean }> {
     let matched: ActionArguments;
     try {
-      matched = this.matchThen(node.action, frame, reaction.name);
+      matched = this.matchThen(node.action, frame, reaction.name, branch.fill.flow);
     } catch (err) {
-      logger.warn(
-        `Reaction "${reaction.name}": consequence input could not be formed from the matched bindings`,
-        {
-          action: actionNameOf(node.action.action as InstrumentedAction),
-          error: serializeError(err),
-        },
+      return this.failStep(
+        reaction,
+        node,
+        branch,
+        "consequence-input",
+        "consequence input could not be formed from the matched bindings",
+        err,
       );
-      return this.stopped();
     }
 
     // Evaluate former inputs at the moment of asking. If a former violates its
@@ -855,6 +971,9 @@ export class Reacting {
             error: serializeError(err),
           },
         );
+        if (settlement !== "fault-recorded") {
+          this.recordStepFailure(reaction, node, branch, "consequence-dispatch", err, id);
+        }
         return this.stopped();
       }
       // An infrastructure-level throw before the ask landed: roll back this
@@ -864,6 +983,7 @@ export class Reacting {
         actionId: id,
         error: serializeError(err),
       });
+      this.recordStepFailure(reaction, node, branch, "consequence-dispatch", err, id);
       this.firingBook.unmark(branch);
       return this.stopped();
     }
@@ -883,12 +1003,15 @@ export class Reacting {
           ? new Frames({ ...frame })
           : this.framesWithStepOutput(frame, node.action, outcome);
     } catch (err) {
-      logger.error(`Reaction "${reaction.name}": consequence output matching failed`, {
-        action: actionNameOf(node.action.action as InstrumentedAction),
-        actionId: id,
-        error: serializeError(err),
-      });
-      return this.stopped();
+      return this.failStep(
+        reaction,
+        node,
+        branch,
+        "consequence-output",
+        "consequence output matching failed",
+        err,
+        id,
+      );
     }
     if (childFrames.length === 0) return { frames: childFrames, stop: true };
 
@@ -896,13 +1019,24 @@ export class Reacting {
       try {
         const maybeFrames = node.transform(childFrames);
         childFrames = maybeFrames instanceof Promise ? await maybeFrames : maybeFrames;
-      } catch (err) {
-        logger.error(`Reaction "${reaction.name}": ask result condition failed`, {
-          action: actionNameOf(node.action.action as InstrumentedAction),
-          actionId: id,
-          error: serializeError(err),
+        if (!(childFrames instanceof Frames)) {
+          throw new TypeError("An ask result transform must return Frames.");
+        }
+        this.assertFrameProvenance(childFrames, {
+          flow: branch.fill.flow,
+          triggerIds: branch.fill.whenIds,
+          frameTriggerIds: [],
         });
-        return this.stopped();
+      } catch (err) {
+        return this.failStep(
+          reaction,
+          node,
+          branch,
+          "result-transform",
+          "ask result condition failed",
+          err,
+          id,
+        );
       }
     }
 
@@ -923,63 +1057,24 @@ export class Reacting {
     return extended === undefined ? new Frames() : new Frames(extended);
   }
 
-  /** Recover the immutable ids captured when this frame matched. */
-  private resolveWhenIds(frame: Frame, actionSymbols: symbol[]): string[] {
-    return actionSymbols.map((actionSymbol, index) => {
-      const id = frame[actionSymbol];
-      if (typeof id !== "string") {
-        throw new Error(`Matched frame has no action id for trigger ${index + 1}.`);
-      }
-      return id;
-    });
-  }
-
-  /** Persist pre-firing failures without changing trigger consumption. */
-  private recordReactionFailure(
-    reaction: ExecutableReaction,
-    frames: Frames,
-    actionSymbols: symbol[],
-    stage: "where" | "trigger",
-    error: unknown,
-  ): void {
-    const triggerIds = [
-      ...new Set(
-        frames.flatMap((frame) =>
-          actionSymbols.flatMap((symbol) =>
-            typeof frame[symbol] === "string" ? [frame[symbol] as string] : [],
-          ),
-        ),
-      ),
-    ];
-    const flowToken = frames[0]?.[flow];
-    this.appendReactionFailure(
-      reaction.name,
-      typeof flowToken === "string" ? flowToken : "",
-      triggerIds,
-      stage,
-      error,
-    );
-  }
-
   private appendReactionFailure(
     reaction: string,
     flowToken: string,
     triggerIds: string[],
-    stage: "where" | "trigger",
+    stage: ReactionFailureRecord["stage"],
     error: unknown,
+    consequence: Pick<ReactionFailureRecord, "action" | "actionId"> = {},
   ): void {
     const at = Date.now();
-    this.Action.store.append({
-      kind: "reaction-failure",
+    const serialized = serializeError(error);
+    this.Action._recordReactionFailure({
+      reaction,
+      flow: flowToken,
+      triggerIds,
+      stage,
+      ...consequence,
+      errorClass: typeof serialized.name === "string" ? serialized.name : "Error",
       at,
-      failure: {
-        reaction,
-        flow: flowToken,
-        triggerIds,
-        stage,
-        errorClass: error instanceof Error ? error.name : typeof error,
-        at,
-      },
     });
   }
 
@@ -988,7 +1083,12 @@ export class Reacting {
    * inputs with their frame bindings (a missing binding is an error), then
    * attach the flow token and a fresh action id.
    */
-  matchThen(then: ActionPattern, frame: Frame, by?: string): ActionArguments {
+  matchThen(
+    then: ActionPattern,
+    frame: Frame,
+    by?: string,
+    authoritativeFlow?: string,
+  ): ActionArguments {
     const resolve = (value: unknown): unknown =>
       mapValueTree(value, (node) => {
         const key = varKeyOf(node);
@@ -1026,7 +1126,7 @@ export class Reacting {
     for (const [key, value] of Object.entries(then.input)) {
       setOwn(input, key, resolve(value));
     }
-    input[flow] = frame[flow];
+    input[flow] = authoritativeFlow ?? frame[flow];
     input[actionId] = uuid();
     if (by !== undefined) input[byAskingReaction] = by;
     return input;

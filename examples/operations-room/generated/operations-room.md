@@ -9,9 +9,9 @@ _specifications and composition source, then regenerate this file._
 
 ### RequestBoundary
 
-**Purpose.** Let the outside world ask for things and receive answers, so each answer belongs to one pending call and unanswered calls remain unanswered.
+**Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
 
-**Principle.** A call arrives and becomes pending. When something answers, the reply travels back and a second answer is refused. If the caller times out or aborts first, waiting ends without recording an answer.
+**Principle.** A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.
 
 Actions:
 

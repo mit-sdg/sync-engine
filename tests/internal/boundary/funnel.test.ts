@@ -1,4 +1,3 @@
-import { lineOf } from "@sync-engine/internal/reads/lines";
 /** Standard delivery of concept refusals and runtime faults to boundary requests. */
 
 import { describe, expect, test } from "vite-plus/test";
@@ -194,7 +193,7 @@ describe("faults while forming response input", () => {
     const { Profiling } = words.concepts;
 
     const card = former("the card of (owner)", ({ owner }, { profile, bio }) =>
-      where(lineOf({ query: Profiling._ofOwner }, { owner }).is({ profile, bio })).form({
+      where(Profiling._ofOwner({ owner }).is({ profile, bio })).form({
         profile,
         bio,
       }),

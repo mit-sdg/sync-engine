@@ -1,5 +1,6 @@
 import type { OutcomeContracts } from "@engine/reactions/concepts/outcomes";
 import { Refuse } from "@engine/reactions/concepts/refuse";
+import { flow } from "@engine/reactions/context";
 import { admitInput } from "../protocol/admit.ts";
 import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
@@ -16,12 +17,41 @@ interface PendingRequest {
 }
 
 const frameworkResponses = new WeakSet<Record<string, unknown>>();
+const pendingRequests = new WeakMap<Requesting, Map<string, PendingRequest>>();
+
+function requestsFor(boundary: Requesting): Map<string, PendingRequest> {
+  const requests = pendingRequests.get(boundary);
+  if (requests === undefined) throw new Error("Requesting boundary is not initialized.");
+  return requests;
+}
 
 function disposePending(pending: PendingRequest): void {
   clearTimeout(pending.timer);
   if (pending.signalListener !== undefined && pending.signal !== undefined) {
     pending.signal.removeEventListener("abort", pending.signalListener);
   }
+}
+
+async function waitForDispatch(
+  dispatch: Promise<unknown>,
+  deadline: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (signal?.aborted === true) return;
+  const remaining = Math.max(0, deadline - performance.now());
+  if (remaining === 0) return;
+
+  await new Promise<void>((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener("abort", finish);
+      resolve();
+    };
+    timer = setTimeout(finish, remaining);
+    signal?.addEventListener("abort", finish, { once: true });
+    void dispatch.then(finish, finish);
+  });
 }
 
 function settlePending(
@@ -49,10 +79,10 @@ function settlePending(
 
 export class Requesting {
   static readonly purpose =
-    "Let the outside world ask for things and receive answers, so each answer belongs to one pending call and unanswered calls remain unanswered.";
+    "Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.";
 
   static readonly principle =
-    "A call arrives and becomes pending. When something answers, the reply travels back and a second answer is refused. If the caller times out or aborts first, waiting ends without recording an answer.";
+    "A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.";
 
   /**
    * `request` accepts every ask. `respond` accepts one answer for each pending
@@ -65,19 +95,21 @@ export class Requesting {
     respondFramework: { refusals: ["NOT_PENDING"] },
   };
 
-  private pending = new Map<string, PendingRequest>();
+  constructor() {
+    pendingRequests.set(this, new Map());
+  }
 
   request(args: Record<string, unknown>): Record<string, unknown> {
     return args;
   }
 
   respond(args: Record<string, unknown>): Record<string, unknown> {
-    return settlePending(this.pending, args, false);
+    return settlePending(requestsFor(this), args, false);
   }
 
   /** Framework-only response channel; application authoring exposes only `respond`. */
   protected respondFramework(args: Record<string, unknown>): Record<string, unknown> {
-    return settlePending(this.pending, args, true);
+    return settlePending(requestsFor(this), args, true);
   }
 
   register(
@@ -85,11 +117,15 @@ export class Requesting {
     timeoutMs: number,
     signal?: AbortSignal,
   ): Promise<Record<string, unknown>> {
+    const requests = requestsFor(this);
+    if (requests.has(requestId)) {
+      throw new Error(`Request ${requestId} is already pending.`);
+    }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        const pending = this.pending.get(requestId);
+        const pending = requests.get(requestId);
         if (pending !== undefined) {
-          this.pending.delete(requestId);
+          requests.delete(requestId);
           disposePending(pending);
         }
         reject(new DOMException("Timed out", "TimeoutError"));
@@ -103,9 +139,9 @@ export class Requesting {
           return;
         }
         signalListener = () => {
-          const pending = this.pending.get(requestId);
+          const pending = requests.get(requestId);
           if (pending !== undefined) {
-            this.pending.delete(requestId);
+            requests.delete(requestId);
             disposePending(pending);
           }
           reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
@@ -113,16 +149,25 @@ export class Requesting {
         signal.addEventListener("abort", signalListener, { once: true });
       }
 
-      this.pending.set(requestId, { resolve, reject, timer, signal, signalListener });
+      requests.set(requestId, { resolve, reject, timer, signal, signalListener });
     });
   }
 
   cancel(requestId: string): void {
-    const pending = this.pending.get(requestId);
+    const requests = requestsFor(this);
+    const pending = requests.get(requestId);
     if (pending === undefined) return;
-    this.pending.delete(requestId);
+    requests.delete(requestId);
     disposePending(pending);
   }
+}
+
+/** Settle an unanswered request after its root flow encountered an interpreter failure. */
+export function settleRequestInterpreterFailure(boundary: Requesting, requestId: string): boolean {
+  const requests = requestsFor(boundary);
+  if (!requests.has(requestId)) return false;
+  settlePending(requests, { requestId, error: FrameworkErrorCode.INTERNAL_ERROR }, true);
+  return true;
 }
 
 export interface Invoker<C extends ContractShape> {
@@ -152,7 +197,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
 
   return {
     async invoke(path, input, invokeOpts: InvokeOptions = {}) {
-      if (invokeOpts.signal?.aborted === true) {
+      if (isAborted(invokeOpts.signal)) {
         return frameworkError(FrameworkErrorCode.ABORTED);
       }
       refresh?.();
@@ -173,25 +218,46 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       const DEFAULT_TIMEOUT_MS = 30_000;
       const timeoutMs = invokeOpts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
+      let reqFn: (args: Record<string | symbol, unknown>) => unknown;
+      let request: Record<string | symbol, unknown>;
+      try {
+        reqFn = instrumented.request as unknown as typeof reqFn;
+        const resolvedInput = (input as Record<string, unknown> | undefined) ?? {};
+        request = {
+          ...resolvedInput,
+          requestId,
+          correlationId,
+          path,
+          [flow]: requestId,
+        };
+      } catch {
+        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
+      }
+      if (isAborted(invokeOpts.signal)) {
+        return frameworkError(FrameworkErrorCode.ABORTED);
+      }
+
       let responsePromise: Promise<Record<string, unknown>>;
+      const deadline = performance.now() + timeoutMs;
       try {
         responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal);
       } catch {
-        return frameworkError(FrameworkErrorCode.TIMED_OUT);
+        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
       }
-
-      const reqFn = instrumented.request as unknown as (
-        args: Record<string, unknown>,
-      ) => Promise<Record<string, unknown>>;
-      const resolvedInput = (input as Record<string, unknown> | undefined) ?? {};
-      const dispatch = reqFn({ ...resolvedInput, requestId, correlationId, path }).then(
-        () => ({ kind: "dispatched" }) as const,
-        (error: unknown) => ({ kind: "dispatch-error", error }) as const,
-      );
       const response = responsePromise.then(
         (value) => ({ kind: "response", value }) as const,
         (error: unknown) => ({ kind: "response-error", error }) as const,
       );
+      if (isAborted(invokeOpts.signal)) {
+        boundary.cancel(requestId);
+        return frameworkError(FrameworkErrorCode.ABORTED);
+      }
+      const dispatch = Promise.resolve()
+        .then(() => reqFn(request))
+        .then(
+          () => ({ kind: "dispatched" }) as const,
+          (error: unknown) => ({ kind: "dispatch-error", error }) as const,
+        );
       const first = await Promise.race([dispatch, response]);
 
       if (first.kind === "dispatch-error") {
@@ -200,12 +266,9 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       }
 
       if (first.kind === "response") {
-        // A response may land from inside the dispatch cascade. Preserve the
-        // guarantee that its firing and outcome records are complete on return.
-        const completion = await dispatch;
-        if (completion.kind === "dispatch-error") {
-          return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
-        }
+        // Let the causal cascade finish when it can, but an accepted answer is
+        // authoritative and cannot wait beyond the caller's original deadline.
+        await waitForDispatch(dispatch, deadline, invokeOpts.signal);
         return fromEnvelope(
           first.value,
           frameworkResponses.has(first.value) ? "framework" : "authored",
