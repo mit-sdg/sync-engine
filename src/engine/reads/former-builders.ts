@@ -34,7 +34,7 @@ import {
   useFormer,
 } from "./former-nodes.ts";
 import { assertBound, symbolsUsed } from "./former-analysis.ts";
-import { lowerFormerBody } from "./lower.ts";
+import { lowerFormerBody } from "./former-lowering.ts";
 
 /** The ordering vocabulary: `arranged.oldest`, `arranged.newest`, `arranged.by(v)`. */
 export const arranged = {

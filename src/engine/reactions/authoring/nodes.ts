@@ -1,4 +1,4 @@
-import { actionPattern } from "./words.ts";
+import { actionPattern } from "./patterns.ts";
 import type {
   BranchChain,
   InstrumentedAction,

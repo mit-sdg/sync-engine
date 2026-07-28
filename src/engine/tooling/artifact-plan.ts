@@ -1,5 +1,5 @@
 import { renderInputContracts } from "@engine/boundary/protocol/endpoints";
-import { renderWireTypes } from "@engine/boundary/wire/wire";
+import { renderWireTypes } from "@engine/boundary/wire/wire-renderer";
 import { renderApp } from "@engine/reads/render";
 import { canonicalDigest } from "@engine/utils/canonical-json";
 import type { ApplicationManifestV1 } from "./manifest.ts";

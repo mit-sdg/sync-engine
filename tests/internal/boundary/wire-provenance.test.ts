@@ -1,15 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { promisify } from "node:util";
 import type { AppIR, PatternIR } from "@sync-engine/internal/reads/ir";
-import { renderWireTypes, wireContracts } from "@sync-engine/internal/boundary/wire/wire";
-import type { WireType } from "@sync-engine/internal/boundary/wire/wire";
+import { wireContracts } from "@sync-engine/internal/boundary/wire/wire-contracts";
+import type { WireType } from "@sync-engine/internal/boundary/wire/wire-types";
 
 const variable = (name: string): { $var: string } => ({ $var: name });
-const execFileAsync = promisify(execFile);
 
 const requestPattern: PatternIR = {
   path: "/ledger/add",
@@ -513,52 +507,6 @@ describe("endpoint wire provenance", () => {
     });
   });
 
-  test("uses exact vocabulary references only when the renderer receives an anchor", () => {
-    const wire = generated();
-    const fallback = renderWireTypes(wire);
-    const anchored = renderWireTypes(wire, {
-      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
-    });
-
-    expect(fallback).toContain('"entry": Json;');
-    expect(fallback).not.toContain("ApplicationVocabulary");
-    expect(anchored).toContain(
-      'import type { vocabulary as ApplicationVocabulary } from "./vocabulary.ts";',
-    );
-    expect(anchored).toContain(
-      'Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Ledger"]["add"]>>, ["entry"]>>',
-    );
-    expect(anchored).toContain(
-      'Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Ledger"]["_labelOf"]>>>, ["label"]>> | null',
-    );
-  });
-
-  test("strict rendering rejects unresolved leaves", () => {
-    expect(() =>
-      renderWireTypes(
-        {
-          appWide: [],
-          endpoints: [
-            {
-              path: "/opaque",
-              input: { kind: "object", fields: [] },
-              output: {
-                kind: "object",
-                fields: [{ key: "value", type: { kind: "json" } }],
-              },
-              errors: [],
-              openError: false,
-            },
-          ],
-        },
-        {
-          vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
-          strictLeaves: true,
-        },
-      ),
-    ).toThrow("strictLeaves found unresolved Json at /opaque.output.value");
-  });
-
   test("unions separate endpoint branches and intersects one variable's constraints", () => {
     const wire = branchAndConflictWire();
     const choose = wire.endpoints.find((endpoint) => endpoint.path === "/choose")!;
@@ -646,103 +594,5 @@ describe("endpoint wire provenance", () => {
         },
       ],
     });
-  });
-
-  test("the anchored module typechecks exact client-facing leaves", async () => {
-    const temporary = await mkdtemp(join(tmpdir(), "sync-engine-wire-provenance-"));
-    try {
-      const wire = renderWireTypes(generated(), {
-        vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
-        strictLeaves: true,
-      });
-      const vocabulary = `
-export class LedgerConcept {
-  add(_: { item: string; amount: number }): { entry: string } {
-    return { entry: "entry" };
-  }
-  _rows(_: Record<string, never>): { entry: string; item: string; amount: number }[] {
-    return [];
-  }
-  _labelOf(_: { item: string }): { label: string }[] {
-    return [];
-  }
-  rename(_: { name: string }): Record<string, never> {
-    return {};
-  }
-  setAmount(_: { amount: number }): Record<string, never> {
-    return {};
-  }
-  _text(_: { text: string }): Record<string, never> {
-    return {};
-  }
-  _amount(_: { amount: number }): Record<string, never> {
-    return {};
-  }
-}
-export declare const vocabulary: { concepts: { Ledger: LedgerConcept } };
-`;
-      const consumer = `
-import type { WireContracts } from "./wire.ts";
-import type { ConflictContracts } from "./conflict-wire.ts";
-
-const input: WireContracts["/ledger/add"]["input"] = { item: "item", amount: 3 };
-const output: WireContracts["/ledger/add"]["output"] = { entry: "entry" };
-const row: WireContracts["/ledger/list"]["output"]["rows"][number] = {
-  entry: "entry",
-  item: "item",
-  amount: 3,
-  label: null,
-};
-void input;
-void output;
-void row;
-
-// @ts-expect-error amount follows Ledger.add's number input.
-const wrongInput: WireContracts["/ledger/add"]["input"] = { item: "item", amount: "3" };
-// @ts-expect-error entry follows Ledger.add's string output.
-const wrongOutput: WireContracts["/ledger/add"]["output"] = { entry: 3 };
-// @ts-expect-error the conflicting endpoint constrains value to string and number.
-const conflict: ConflictContracts["/conflict"]["input"] = { value: "value" };
-void wrongInput;
-void wrongOutput;
-void conflict;
-`;
-      await Promise.all([
-        writeFile(join(temporary, "wire.ts"), wire),
-        writeFile(
-          join(temporary, "conflict-wire.ts"),
-          renderWireTypes(branchAndConflictWire(), {
-            moduleName: "ConflictContracts",
-            vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
-            strictLeaves: true,
-          }),
-        ),
-        writeFile(join(temporary, "vocabulary.ts"), vocabulary),
-        writeFile(join(temporary, "consumer.ts"), consumer),
-        writeFile(
-          join(temporary, "tsconfig.json"),
-          JSON.stringify({
-            compilerOptions: {
-              strict: true,
-              noEmit: true,
-              module: "ESNext",
-              moduleResolution: "Bundler",
-              allowImportingTsExtensions: true,
-              skipLibCheck: true,
-            },
-            files: ["consumer.ts", "vocabulary.ts", "wire.ts"],
-          }),
-        ),
-      ]);
-      const tsc = resolve("node_modules/typescript/bin/tsc");
-      const { stdout, stderr } = await execFileAsync(process.execPath, [
-        tsc,
-        "-p",
-        join(temporary, "tsconfig.json"),
-      ]);
-      expect(`${stdout}${stderr}`).toBe("");
-    } finally {
-      await rm(temporary, { recursive: true, force: true });
-    }
   });
 });

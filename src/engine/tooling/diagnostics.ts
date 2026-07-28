@@ -1,5 +1,6 @@
 import type { EndpointDeclaration } from "@engine/boundary/assembly/endpoint-portability";
-import type { WireContractsIR, WireType } from "@engine/boundary/wire/wire";
+import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
+import type { WireType } from "@engine/boundary/wire/wire-types";
 import type { AppIR, FormerIR, PatternIR, ReactionIR, ValueIR } from "@engine/reads/ir";
 import { foldFormerNode, foldReaction, foldView } from "@engine/reads/schema";
 

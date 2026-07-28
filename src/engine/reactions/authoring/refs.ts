@@ -40,17 +40,15 @@ import type {
   InstrumentedAction,
   Mapping,
   Reaction,
-  StepNode,
   TriggerActionLine,
 } from "../types.ts";
-import {
-  validateQueryContractMap,
-  type QueryPromises,
-  type QueryPromise,
-} from "@engine/reads/query-contracts";
+import { validateQueryContractMap } from "@engine/reads/query-contracts";
+import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
+import { brandActionRef, brandQueryRef, type ActionRef, type QueryRef } from "./references.ts";
 
-const ActionRefBrand: unique symbol = Symbol("ActionRefBrand");
-const QueryRefBrand: unique symbol = Symbol("QueryRefBrand");
+export { isActionRef, isQueryRef } from "./references.ts";
+export type { ActionRef, QueryRef } from "./references.ts";
+
 const ReactionBrand: unique symbol = Symbol("ReactionBrand");
 const VocabularyClasses: unique symbol = Symbol("VocabularyClasses");
 const VocabularyComputations: unique symbol = Symbol("VocabularyComputations");
@@ -59,41 +57,12 @@ const VocabularyMetadata: unique symbol = Symbol("VocabularyMetadata");
 /** Any concept class the vocabulary can hold. */
 export type ConceptClass = new (...args: never[]) => object;
 
-/** A static reference to one concept action: `{ concept, action }` as data. */
-export interface ActionRef {
-  (input: Mapping): StepNode;
-  readonly refConcept: string;
-  readonly refAction: string;
-}
-
-/**
- * A static reference to one concept query. Calling it with an input pattern
- * returns a typed query line whose `.is(...)` method declares output matches.
- * The reference carries the query's name and promise; a missing `.concept`
- * marks it unresolved.
- */
-export interface QueryRef {
-  (pattern: Mapping): QueryReadLine;
-  readonly refConcept: string;
-  readonly refQuery: string;
-  readonly queryName: string;
-  readonly queryPromise?: QueryPromise;
-}
-
-export function isActionRef(value: unknown): value is ActionRef {
-  return hasFuncBrand(value, ActionRefBrand);
-}
-
-export function isQueryRef(value: unknown): value is QueryRef {
-  return hasFuncBrand(value, QueryRefBrand);
-}
-
 function makeActionRef(concept: string, action: string): ActionRef {
   const ref = ((input: Mapping) => actionLine(ref, input)) as unknown as ActionRef;
   Object.defineProperty(ref, "name", { value: `${concept}.${action}` });
   Object.defineProperty(ref, "refConcept", { value: concept, enumerable: true });
   Object.defineProperty(ref, "refAction", { value: action, enumerable: true });
-  return brand(ref, ActionRefBrand);
+  return brandActionRef(ref);
 }
 
 function makeQueryRef(concept: string, query: string, promise: QueryPromise | undefined): QueryRef {
@@ -108,7 +77,7 @@ function makeQueryRef(concept: string, query: string, promise: QueryPromise | un
   if (promise !== undefined) {
     Object.defineProperty(ref, "queryPromise", { value: promise, enumerable: true });
   }
-  return brand(ref, QueryRefBrand);
+  return brandQueryRef(ref);
 }
 
 /** Property names a ref proxy answers with `undefined` instead of an error. */

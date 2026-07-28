@@ -1,8 +1,8 @@
 import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
 import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
 import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
-import { wireContracts } from "@engine/boundary/wire/wire";
-import type { WireContractsIR } from "@engine/boundary/wire/wire";
+import { wireContracts } from "@engine/boundary/wire/wire-contracts";
+import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import type { AppIR, ConceptInventoryIR, FormerIR, ViewIR } from "@engine/reads/ir";
 import { foldFormerNode } from "@engine/reads/schema";
 import { canonicalJson, canonicalValue } from "@engine/utils/canonical-json";

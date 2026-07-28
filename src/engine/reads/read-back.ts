@@ -5,7 +5,7 @@
  * returns the complete string, and registration also sends it to the logger.
  */
 
-import type { QueryPromise } from "./query-contracts.ts";
+import type { QueryPromise } from "./query-metadata.ts";
 import type {
   PatternIR,
   QueryRefIR,

@@ -30,7 +30,7 @@
  * A refusal's message is the normative sentence the boundary reports.
  */
 
-import type { QueryPromise } from "@engine/reads/query-contracts";
+import type { QueryPromise } from "@engine/reads/query-metadata";
 
 /** One refusal branch: the code the boundary returns and the sentence it carries. */
 export interface SpecRefusal {

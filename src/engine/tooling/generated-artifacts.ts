@@ -8,7 +8,8 @@ import { assertPortableEndpoints } from "@engine/boundary/assembly/endpoint-port
 import type { HttpFloor } from "@engine/boundary/http/http-floor";
 import { projectAssemblyHttpWire } from "@engine/boundary/http/http-floor";
 import { renderInputContracts } from "@engine/boundary/protocol/endpoints";
-import { renderWireTypes, wireContracts } from "@engine/boundary/wire/wire";
+import { wireContracts } from "@engine/boundary/wire/wire-contracts";
+import { renderWireTypes } from "@engine/boundary/wire/wire-renderer";
 import { renderApp } from "@engine/reads/render";
 import { pascal, slug } from "@engine/utils/case";
 import { inspectAssembly } from "./inspection.ts";

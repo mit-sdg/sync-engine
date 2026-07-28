@@ -10,7 +10,7 @@ import { objectRef } from "./sentence.ts";
 import type { Mapping } from "@engine/reactions/types";
 import { liveOf } from "./ir.ts";
 import type { FormerNodeIR } from "./ir.ts";
-import type { QueryPromise } from "./query-contracts.ts";
+import type { QueryPromise } from "./query-metadata.ts";
 import type { FindOp, WhereOp } from "./where-ops.ts";
 
 // ── Node shapes ────────────────────────────────────────────────────────────

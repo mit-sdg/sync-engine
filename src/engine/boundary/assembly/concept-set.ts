@@ -13,7 +13,7 @@ import type {
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
 import type { ComputationFn } from "@engine/reads/computations";
-import type { QueryPromises, QueryPromise } from "@engine/reads/query-contracts";
+import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
 import { PUBLIC_ERROR_CATEGORIES } from "../protocol/public-errors.ts";
 
 export type PublicErrorCategory = MetadataPublicErrorCategory;

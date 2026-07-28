@@ -1,7 +1,7 @@
 /** Evaluate a fused former into its shaped tree, at the moment of asking. */
 
 import { Frames, readPatternValue } from "./frames.ts";
-import { applyWhereOps } from "./where-ops.ts";
+import { applyWhereOps } from "./where-evaluation.ts";
 import { varNamesInPattern } from "./former-analysis.ts";
 import { FormerFault } from "./former-nodes.ts";
 import type { FormerRef, FusedFormer } from "./former-nodes.ts";

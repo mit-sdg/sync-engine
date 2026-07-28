@@ -4,10 +4,8 @@ import { isCountOp } from "@engine/reads/views";
 import { assertReactionNodes } from "./nodes.ts";
 import { siblingTree } from "./partitions.ts";
 import { isChannelPattern } from "./channels.ts";
-import { isActionRef } from "./refs.ts";
-import { flow } from "../context.ts";
+import { actionPattern } from "./patterns.ts";
 import type {
-  ActionPattern,
   ChannelPattern,
   InstrumentedAction,
   Mapping,
@@ -20,21 +18,7 @@ import type {
   WhereFn,
 } from "../types.ts";
 
-/** Normalize one action and its patterns into the occurrence data the engine matches. */
-export function actionPattern(
-  action: InstrumentedAction,
-  input: Mapping,
-  output?: Mapping,
-): ActionPattern {
-  const concept = action.concept;
-  if (concept === undefined) {
-    if (isActionRef(action)) {
-      return { concept: action, action, input, flow, ...(output ? { output } : {}) };
-    }
-    throw new Error(`Action ${action.name} is not instrumented.`);
-  }
-  return { concept, action, input, flow, ...(output ? { output } : {}) };
-}
+export { actionPattern } from "./patterns.ts";
 
 /** Read matching occurrences strictly before a trigger in its causal flow. */
 export function earlier(action: InstrumentedAction, input: Mapping, output?: Mapping): EarlierOp {

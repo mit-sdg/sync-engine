@@ -33,19 +33,12 @@
  *
  */
 
-import type {
-  BranchChain,
-  InstrumentedQuery,
-  Mapping,
-  StepNode,
-  UnnamedStepNode,
-} from "@engine/reactions/types";
+import type { InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import { conditionOp } from "./where-ops.ts";
 import { brand, CountOpBrand, hasBrand, ViewBlockBrand } from "./brands.ts";
-import { branchChain } from "@engine/reactions/authoring/nodes";
 import type { ViewOpIR } from "./ir.ts";
-import { lowerRelationBlocks } from "./lower.ts";
+import { lowerRelationBlocks } from "./view-lowering.ts";
 import { assertConceptQuery } from "./queries.ts";
 import {
   assertSeparateBags,
@@ -56,7 +49,7 @@ import {
 } from "./sentence.ts";
 import { brandRelationView, lineOf } from "./lines.ts";
 import type { RelationView } from "./lines.ts";
-import type { QueryPromise } from "./query-contracts.ts";
+import type { QueryPromise } from "./query-metadata.ts";
 import { symbolsInMapping } from "./former-analysis.ts";
 import { opNamesIR, scheduleBlock } from "./schedule.ts";
 import { formFrom } from "./former-builders.ts";
@@ -84,7 +77,6 @@ declare const ViewBlockType: unique symbol;
 export type ViewBlock = ViewOp[] & {
   readonly [ViewBlockType]: true;
   form(entries: Record<string, FormerEntry>): FormNode;
-  then(node: UnnamedStepNode): BranchChain;
 };
 
 /** State one view alternative as a variadic conjunction. */
@@ -95,21 +87,6 @@ export function where(...conditions: Array<Condition | CountOp>): ViewBlock {
   const block = brand(ops, ViewBlockBrand) as ViewBlock;
   Object.defineProperty(block, "form", {
     value: (entries: Record<string, FormerEntry>) => formFrom(block, entries),
-  });
-  Object.defineProperty(block, "then", {
-    value: (...nodes: StepNode[]) => {
-      if (nodes.length !== 1) {
-        throw new Error("a branch-local then(...) takes one callable action line.");
-      }
-      if (block.some(isCountOp)) {
-        throw new Error(
-          "count(...) cannot be used in a reaction condition. " +
-            "To return a row count, use each(line).count() in a former. " +
-            "To test a count as policy, define a view and read that view.",
-        );
-      }
-      return branchChain(block as WhereOp[], nodes[0] as UnnamedStepNode);
-    },
   });
   return block;
 }

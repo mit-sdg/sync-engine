@@ -12,16 +12,7 @@ import type {
   ViewOpIR,
   WhereOpIR,
 } from "@engine/reads/ir";
-
-export type WireOrigin =
-  | {
-      source: "action-input" | "action-output" | "query-input" | "query-output";
-      concept: string;
-      member: string;
-      path: string[];
-    }
-  | { source: "literal"; value: null | boolean | number | string }
-  | { source: "number" };
+import type { WireOrigin } from "./wire-types.ts";
 
 export interface ProvenanceCell {
   alternatives: WireOrigin[][];

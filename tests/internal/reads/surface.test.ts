@@ -22,7 +22,7 @@ import {
 import type { Vars } from "@sync-engine/language";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { isReadLine } from "@sync-engine/internal/reads/lines";
-import { applyWhereOps } from "@sync-engine/internal/reads/where-ops";
+import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { $vars } from "@sync-engine/internal/reactions/authoring/vars";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 

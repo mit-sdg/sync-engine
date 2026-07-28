@@ -6,7 +6,7 @@
  * are rejected because JSON does not carry their implementation.
  */
 
-import { isActionRef, isQueryRef } from "@engine/reactions/authoring/refs";
+import { isActionRef, isQueryRef } from "@engine/reactions/authoring/references";
 import { NameResolver } from "@engine/reactions/resolving";
 import type {
   ActionPattern,
@@ -39,12 +39,11 @@ import type { ReadBackEnv } from "./read-back.ts";
 import {
   fragmentChannelsOfFormer,
   fusedFormersOf,
-  serializeFormer,
-  serializeView,
   viewChannelsOfFormer,
-  viewChannelsOfView,
-  viewLineIR,
-} from "./lower.ts";
+} from "./former-collection.ts";
+import { serializeFormer } from "./former-lowering.ts";
+import { viewChannelsOfView } from "./view-collection.ts";
+import { serializeView, viewLineIR } from "./view-lowering.ts";
 import type { RelationView } from "./lines.ts";
 import { foldFormerNode } from "./schema.ts";
 import { varNamesInPattern } from "./former-analysis.ts";
@@ -52,9 +51,10 @@ import { isPlainObject } from "./matchers.ts";
 import { opNamesIR, scheduleBlock } from "./schedule.ts";
 import { walkValueTree } from "./value-tree.ts";
 import { relationViewWith } from "./views.ts";
-import { applyWhereOps, brandWhereOp } from "./where-ops.ts";
+import { applyWhereOps } from "./where-evaluation.ts";
+import { brandWhereOp } from "./where-ops.ts";
 import type { AnyWhereOp, EarlierOp, WhereOp } from "./where-ops.ts";
-import type { QueryPromise } from "./query-contracts.ts";
+import type { QueryPromise } from "./query-metadata.ts";
 
 /** A where op as a bound reaction executes it: the IR, plus bound `earlier` reads. */
 export type BoundWhereOp = Exclude<WhereOpIR, { op: "earlier" }> | EarlierOp;

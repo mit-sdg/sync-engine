@@ -49,23 +49,23 @@ export type {
 } from "./ir.ts";
 export { brandRelationView, isQueryReadLine, isReadLine, isRelationView, lineOf } from "./lines.ts";
 export type { QueryReadLine, ReadLine, RelationView, SlotPattern, ViewReadLine } from "./lines.ts";
+export { serializeApp } from "./application-lowering.ts";
+export { collectViews, viewChannelsOfView } from "./view-collection.ts";
 export {
-  collectViews,
   fragmentChannelsOfFormer,
   fusedFormersOf,
-  lowerFormerBody,
-  lowerReaction,
+  viewChannelsOfFormer,
+} from "./former-collection.ts";
+export type { FormerChannel } from "./former-collection.ts";
+export { lowerFormerBody, serializeFormer } from "./former-lowering.ts";
+export { lowerReaction, serializeReaction } from "./reaction-lowering.ts";
+export type { LowerOutcome, LoweredReaction, LoweredWhereOp } from "./reaction-lowering.ts";
+export {
   lowerRelationBlocks,
   lowerViewAlternatives,
-  serializeApp,
-  serializeFormer,
-  serializeReaction,
   serializeView,
-  viewChannelsOfFormer,
-  viewChannelsOfView,
   viewLineIR,
-} from "./lower.ts";
-export type { FormerChannel, LowerOutcome, LoweredReaction, LoweredWhereOp } from "./lower.ts";
+} from "./view-lowering.ts";
 export { isMatcher, isPlainMapping, isPlainObject, oneOf } from "./matchers.ts";
 export { assertConceptQuery, QueryAnswerFault, queryRows, rowsOfAnswer } from "./queries.ts";
 export type { NamedQuery } from "./queries.ts";
@@ -74,7 +74,7 @@ export {
   validateQueryContractMap,
   validateQueryContracts,
 } from "./query-contracts.ts";
-export type { QueryPromise, QueryPromises } from "./query-contracts.ts";
+export type { QueryMetadata, QueryPromise, QueryPromises } from "./query-metadata.ts";
 export {
   assertThenInputsAreData,
   copyReactionLintExtraUses,
@@ -119,7 +119,6 @@ export { DESCEND, mapValueTree, mapValueTreeAsync, walkValueTree } from "./value
 export { count, isCountOp, relationViewWith, view, where } from "./views.ts";
 export type { CountOp, ViewBlock, ViewOp } from "./views.ts";
 export {
-  applyWhereOps,
   brandWhereOp,
   compute,
   conditionOp,
@@ -131,13 +130,14 @@ export {
   viewLine,
   whether,
 } from "./where-ops.ts";
+export { applyWhereOps } from "./where-evaluation.ts";
+export type { EvaluableOp } from "./where-evaluation.ts";
 export type {
   AnyWhereOp,
   ComputeOp,
   Condition,
   CustomOp,
   EarlierOp,
-  EvaluableOp,
   FindOp,
   HoldsOp,
   LineRef,

@@ -51,9 +51,12 @@ plain concept action
 ```
 
 `src/engine/reactions/runtime/instrumenting.ts` is the sole interception boundary
-for an ordinary concept instance. It wraps actions, invalidates standing query
-caches, records invocation/outcome/fault entries, and asks the reaction runtime
-to process each occurrence.
+for an ordinary concept instance. It selects and memoizes action or query
+wrappers, invalidates standing query caches, records invocation/outcome/fault
+entries, and asks the reaction runtime to process each occurrence. It delegates
+action-body reservation and execution to `action-scheduler.ts`, whose isolated
+per-concept state machine preserves arrival order, releases same-flow reentrant
+work, and removes the final serial line after settlement.
 
 `src/engine/reactions/runtime/log-store.ts` owns the append-only folded
 occurrence indexes. `ActionConcept` in
@@ -64,11 +67,11 @@ entries and retains unredacted values only while their causal flow is active.
 
 The reaction concern has three capability areas:
 
-| Area      | Main files                                                                                                               | Responsibility                                                                                                                     |
-| --------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Authoring | `src/engine/reactions/authoring/refs.ts`, `words.ts`, `nodes.ts`, `partitions.ts`, `channels.ts`                         | Build vocabulary references, triggers, branches, and consequences as declarations without executing actions.                       |
-| Concepts  | `src/engine/reactions/concepts/concept-spec.ts`, `concept-metadata.ts`, `outcomes.ts`, `refuse.ts`, `introspect.ts`      | Describe and inspect concept contracts, metadata, outcomes, and refusals independently of the interpreter.                         |
-| Runtime   | `src/engine/reactions/runtime/reacting.ts`, `instrumenting.ts`, `matching.ts`, `firing.ts`, `actions.ts`, `log-store.ts` | Instrument instances, register executable reactions, land and match occurrences, fire consequences, and retain the occurrence log. |
+| Area      | Main files                                                                                                                                      | Responsibility                                                                                                                                             |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authoring | `src/engine/reactions/authoring/refs.ts`, `words.ts`, `nodes.ts`, `partitions.ts`, `channels.ts`                                                | Build vocabulary references, triggers, branches, and consequences as declarations without executing actions.                                               |
+| Concepts  | `src/engine/reactions/concepts/concept-spec.ts`, `concept-metadata.ts`, `outcomes.ts`, `refuse.ts`, `introspect.ts`                             | Describe and inspect concept contracts, metadata, outcomes, and refusals independently of the interpreter.                                                 |
+| Runtime   | `src/engine/reactions/runtime/reacting.ts`, `instrumenting.ts`, `action-scheduler.ts`, `matching.ts`, `firing.ts`, `actions.ts`, `log-store.ts` | Instrument instances, schedule action bodies, register executable reactions, land and match occurrences, fire consequences, and retain the occurrence log. |
 
 Dependencies point toward definitions and away from execution. Both authoring
 and concepts use the concern-wide contracts at the reaction root; authoring may
@@ -226,10 +229,8 @@ packing.
 `scripts/check-architecture.ts` enforces those spellings and dependency
 directions, verifies each package export's source and emitted targets, rejects
 nested engine barrels, checks generated-file provenance, and rejects
-unreachable shipped source. It also computes strongly connected components in
+unreachable shipped source. It rejects every strongly connected component in
 the engine's runtime import graph while ignoring type-only imports and exports.
-Runtime SCCs are reported but are not yet failures because the current
-reaction-authoring/read-construction graph still contains one. Run
-`bun run check` after moving code; it remains the aggregate source of truth for
-the repository's structural rules, specifications, formatting, lint, and
+Run `bun run check` after moving code; it remains the aggregate source of truth
+for the repository's structural rules, specifications, formatting, lint, and
 types.

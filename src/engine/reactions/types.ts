@@ -1,7 +1,7 @@
 /** Core type vocabulary for declarative reactions. */
 import type { Frames } from "@engine/reads/frames";
 import type { AnyWhereOp, Condition, WhereOp } from "@engine/reads/where-ops";
-import type { QueryPromise } from "@engine/reads/query-contracts";
+import type { QueryMetadata } from "@engine/reads/query-metadata";
 
 /** A plain, string-keyed record — the shape an action's input/output takes. */
 export type Mapping = Record<string, unknown>;
@@ -284,14 +284,10 @@ export interface InstrumentedAction extends AnyAction {
  * carrying identity back-references, so a where op that reads state stays
  * data: the op serializes as (concept name, query name) rather than a closure.
  */
-export interface InstrumentedQuery {
+export interface InstrumentedQuery extends QueryMetadata {
   (input: Mapping): unknown | Promise<unknown>;
   concept?: object;
   queryName?: string;
-  /** `Concept.query`, for contract faults that name their source. */
-  queryLabel?: string;
-  /** The concept's cardinality promise, checked against the determiner at registration. */
-  queryPromise?: QueryPromise;
 }
 
 /** The untyped logic-variable proxy supplied to reaction functions. */

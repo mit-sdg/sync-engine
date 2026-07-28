@@ -13,14 +13,10 @@ import { actionId, actionSettlement, byReaction, flow } from "../context.ts";
 import type { ActionSettlement } from "../context.ts";
 import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
 import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
+import type { ActionScheduling } from "./action-scheduler.ts";
 import { memoizeQuery } from "./query-cache.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
-
-export interface ActionLine {
-  done: boolean;
-  settled: Promise<void>;
-}
 
 /** A deliberate refusal returned to the direct caller of an instrumented action. */
 export type ActionRefusal = Readonly<Record<string, unknown>> & {
@@ -48,8 +44,7 @@ export interface InstrumentationState {
   actions: ActionConcept;
   boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
   queryCaches: WeakMap<object, Array<{ invalidate: () => void }>>;
-  actionLines: WeakMap<object, ActionLine>;
-  waitingActionBodies: WeakMap<object, Set<{ flow: string; release: () => void }>>;
+  scheduler: ActionScheduling;
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
   conceptsByName: Map<string, object>;
@@ -205,90 +200,12 @@ export function instrumentConcept<T extends object>(
           state.actions.invoke(record);
           report?.("ask-recorded");
 
-          let waiting = state.waitingActionBodies.get(concept);
-          if (waiting === undefined) {
-            waiting = new Set();
-            state.waitingActionBodies.set(concept, waiting);
-          }
-          // A requested consequence on this concept cannot wait behind the
-          // body whose requested reaction is awaiting that consequence. Make
-          // every earlier slot runnable; the serial line still preserves their
-          // invocation order.
-          const earlierReservations = [...waiting];
-          if (earlierReservations.some((entry) => entry.flow === flowToken)) {
-            for (const entry of earlierReservations) entry.release();
-          }
-
-          let resolveRun = (_value: unknown): void => {};
-          let rejectRun = (_error: unknown): void => {};
-          const run = new Promise<unknown>((resolve, reject) => {
-            resolveRun = resolve;
-            rejectRun = reject;
-          });
-          let started: number | undefined;
-          const prior = state.actionLines.get(concept);
-          let predecessorDone = prior?.done ?? true;
-          let released = false;
-          let bodyStarted = false;
-          let line: ActionLine;
-          const startBody = () => {
-            if (!released || !predecessorDone || bodyStarted) return;
-            bodyStarted = true;
-            started ??= performance.now();
-            try {
-              const result = action(input);
-              if (result instanceof Promise) {
-                void result.then(
-                  (output) => {
-                    invalidate();
-                    line.done = true;
-                    resolveRun(output);
-                  },
-                  (error) => {
-                    invalidate();
-                    line.done = true;
-                    rejectRun(error);
-                  },
-                );
-              } else {
-                invalidate();
-                line.done = true;
-                resolveRun(result);
-              }
-            } catch (error) {
-              invalidate();
-              line.done = true;
-              rejectRun(error);
-            }
-          };
-          const reservation = {
+          const reservation = state.scheduler.reserve({
+            concept,
             flow: flowToken,
-            release: () => {
-              if (released) return;
-              released = true;
-              waiting.delete(reservation);
-              if (waiting.size === 0) state.waitingActionBodies.delete(concept);
-              if (prior?.done === true) predecessorDone = true;
-              startBody();
-            },
-          };
-          waiting.add(reservation);
-          state.waitingActionBodies.set(concept, waiting);
-
-          if (prior !== undefined && !prior.done) {
-            void prior.settled.then(() => {
-              predecessorDone = true;
-              startBody();
-            });
-          }
-          const tail = run.then(
-            () => undefined,
-            () => undefined,
-          );
-          line = { done: false, settled: tail };
-          state.actionLines.set(concept, line);
-          void tail.then(() => {
-            if (state.actionLines.get(concept) === line) state.actionLines.delete(concept);
+            body: action,
+            input,
+            onBodySettled: invalidate,
           });
 
           try {
@@ -301,13 +218,12 @@ export function instrumentConcept<T extends object>(
               error: serializeError(error),
             });
           }
-          started ??= performance.now();
           reservation.release();
 
           let output: Record<string, unknown>;
           let outcome: ActionOutcome | undefined;
           try {
-            output = (await run) as Record<string, unknown>;
+            output = (await reservation.result) as Record<string, unknown>;
             if (contract !== undefined) {
               outcome = {
                 kind: "result",
@@ -335,7 +251,7 @@ export function instrumentConcept<T extends object>(
                 outcome = { kind: "error", error: output };
                 warnUndeclaredRefusal(displayName, contract, refusal.code);
               } else {
-                const durationMs = performance.now() - started;
+                const durationMs = reservation.durationMs();
                 state.actions.faulted({ id, fault: errorOutputFromThrown(error) });
                 report?.("fault-recorded");
                 try {
@@ -353,7 +269,7 @@ export function instrumentConcept<T extends object>(
               }
             }
           }
-          const durationMs = performance.now() - started;
+          const durationMs = reservation.durationMs();
           state.actions.invoked({ id, output, outcome });
           try {
             await state.react({ ...record, output }, durationMs);

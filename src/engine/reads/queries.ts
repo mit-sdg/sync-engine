@@ -5,7 +5,7 @@
 
 import type { Frame, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import { bindInputMapping } from "./frames.ts";
-import type { QueryPromise } from "./query-contracts.ts";
+import type { QueryMetadata } from "./query-metadata.ts";
 
 /**
  * A query returned something other than one record or an array of records.
@@ -20,11 +20,7 @@ export class QueryAnswerFault extends Error {
 }
 
 /** Query metadata used in cardinality-fault messages. */
-export interface NamedQuery {
-  queryName?: string;
-  queryLabel?: string;
-  queryPromise?: QueryPromise;
-}
+export interface NamedQuery extends QueryMetadata {}
 
 /**
  * A state read ranges only over a concept query — an instrumented,

@@ -4,7 +4,7 @@ import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import type { AppIR, ConceptInventoryIR } from "@engine/reads/ir";
 import type { ActionOutcome } from "@engine/reactions/types";
-import { wireContracts } from "@engine/boundary/wire/wire";
+import { wireContracts } from "@engine/boundary/wire/wire-contracts";
 import { applicationDiagnostics } from "./diagnostics.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 

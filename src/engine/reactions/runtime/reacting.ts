@@ -30,12 +30,16 @@ import { serializeError } from "@engine/utils/redaction";
 import { ActionConcept, type ActionRecord, normalizeOutcome } from "./actions.ts";
 import { DESCEND, mapValueTree, mapValueTreeAsync, walkValueTree } from "@engine/reads/value-tree";
 import { setOwn } from "@engine/reads/brands";
-import { applyWhereOps } from "@engine/reads/where-ops";
+import { applyWhereOps } from "@engine/reads/where-evaluation";
 import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { ComputationRef } from "@engine/reads/computations";
 import type { RelationView } from "@engine/reads/lines";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
-import { type LoweredReaction, lowerReaction, serializeReaction } from "@engine/reads/lower";
+import {
+  type LoweredReaction,
+  lowerReaction,
+  serializeReaction,
+} from "@engine/reads/reaction-lowering";
 import {
   assertThenInputsAreData,
   copyReactionLintExtraUses,
@@ -78,9 +82,9 @@ import {
   errorOutputFromThrown,
   instrument as instrumentMany,
   instrumentConcept as instrumentSingle,
-  type ActionLine,
   type InstrumentationState,
 } from "./instrumenting.ts";
+import { ActionScheduler } from "./action-scheduler.ts";
 import type {
   ActionOutcome,
   ActionPattern,
@@ -127,10 +131,8 @@ export class Reacting {
     new WeakMap();
   /** Tracks query cache invalidators per concept instance. */
   private queryCaches: WeakMap<object, Array<{ invalidate: () => void }>> = new WeakMap();
-  /** Per-concept serial lines: the tail of each concept's action queue. */
-  private actionLines: WeakMap<object, ActionLine> = new WeakMap();
-  /** Reserved bodies still waiting for their requested reactions to finish. */
-  private waitingActionBodies = new WeakMap<object, Set<{ flow: string; release: () => void }>>();
+  /** Owns per-concept action reservation and serial body execution. */
+  private readonly actionScheduler = new ActionScheduler();
   /** Resolves public instrumented proxies back to their cache-owning instances. */
   private rawConceptsByInstrumented = new WeakMap<object, object>();
   /** All raw concept instances known to this engine, via WeakRef so they can be GC'd. */
@@ -1292,8 +1294,7 @@ export class Reacting {
       actions: this.Action,
       boundActionsByConcept: this.boundActionsByConcept,
       queryCaches: this.queryCaches,
-      actionLines: this.actionLines,
-      waitingActionBodies: this.waitingActionBodies,
+      scheduler: this.actionScheduler,
       rawConceptsByInstrumented: this.rawConceptsByInstrumented,
       concepts: this.concepts,
       conceptsByName: this.registry.concepts,

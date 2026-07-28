@@ -2,8 +2,9 @@ import type { Assembly } from "../assembly/assembly-facade.ts";
 import { assemblyBehind } from "../assembly/assembly-registry.ts";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
 import { publicCategoryOf } from "../protocol/public-errors.ts";
-import { wireContracts } from "../wire/wire.ts";
-import type { WireContractsIR, WireType } from "../wire/wire.ts";
+import { wireContracts } from "../wire/wire-contracts.ts";
+import type { WireContractsIR } from "../wire/wire-contracts.ts";
+import type { WireType } from "../wire/wire-types.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
 
 export interface HttpCredentialBinding {

@@ -1,9 +1,7 @@
-/** The promised number of rows a concept query may answer. */
-export type QueryPromise = "one" | "optional" | "many";
-
 import { conceptMetadataOf } from "@engine/reactions/concepts/concept-metadata";
+import type { QueryPromise } from "./query-metadata.ts";
 
-export type QueryPromises = Readonly<Record<string, QueryPromise>>;
+export type { QueryPromise, QueryPromises } from "./query-metadata.ts";
 
 function staticQueryPromisesOf(concept: object): unknown {
   return (Object.getPrototypeOf(concept) as { constructor?: { queries?: unknown } })?.constructor

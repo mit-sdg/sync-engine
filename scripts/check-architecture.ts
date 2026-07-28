@@ -73,11 +73,4 @@ if (result.failures.length > 0) {
   );
 }
 
-const cycleNotice =
-  result.runtimeCycles.length === 0
-    ? ""
-    : `; ${result.runtimeCycles.length} runtime import SCC(s) observed (not gated)`;
-console.log(`architecture check passed for ${repository.length} repository files${cycleNotice}`);
-for (const cycle of result.runtimeCycles) {
-  console.log(`runtime import SCC observed (not gated): ${cycle.join(", ")}`);
-}
+console.log(`architecture check passed for ${repository.length} repository files`);

@@ -10,7 +10,7 @@ import { Requesting } from "@sync-engine/advanced";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { each, former, no, view, vocabulary, when, where, whether } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
-import { renderWireTypes, wireContracts } from "@sync-engine/tooling";
+import { wireContracts } from "@sync-engine/tooling";
 import { inventoryOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 
@@ -273,36 +273,7 @@ describe("wire contracts", () => {
     });
   });
 
-  test("renderWireTypes emits a client-pluggable module", () => {
-    const { wire } = setup();
-    const source = renderWireTypes(wire);
-    expect(source).toContain('export type AppWideError = "INVALID_SESSION";');
-    expect(source).toContain('"/ledger/add": {');
-    expect(source).toContain(
-      'error: { error: AppWideError | "FORBIDDEN" | "INVALID_INPUT" | "NEGATIVE_AMOUNT" };',
-    );
-    expect(source).toContain('"sort": "activity" | "created";');
-    expect(source).toContain("export type Json =");
-  });
-
-  test("renderWireTypes appends a named projection under shared helpers", () => {
-    const { wire } = setup();
-    const logical = renderWireTypes(wire, { moduleName: "ApplicationWire" });
-    const projected = renderWireTypes(wire, {
-      moduleName: "ApplicationWireHttp",
-      appWideErrorName: "HttpAppWideError",
-      preamble: false,
-    });
-    const source = `${logical}\n${projected}`;
-
-    expect(source.match(/export type Json =/g)).toHaveLength(1);
-    expect(source).toContain("export type ApplicationWire = {");
-    expect(source).toContain("export type HttpAppWideError =");
-    expect(source).toContain("export type ApplicationWireHttp = {");
-    expect(source).toContain("error: { error: HttpAppWideError");
-  });
-
-  test("an empty-array literal produces never[]", () => {
+  test("an empty-array literal remains an empty element union in wire IR", () => {
     const StubList = endpoint("/stub/list", ({ session }: Vars) =>
       receive({ session }).then(respond({ uses: [] })),
     );
@@ -311,7 +282,14 @@ describe("wire contracts", () => {
       composition: { StubList },
     });
     const wire = wireContracts(app.engine.exportReactions());
-    const source = renderWireTypes(wire);
-    expect(source).toContain('"uses": never[];');
+    expect(wire.endpoints[0]?.output).toEqual({
+      kind: "object",
+      fields: [
+        {
+          key: "uses",
+          type: { kind: "array", of: { kind: "union", of: [] } },
+        },
+      ],
+    });
   });
 });

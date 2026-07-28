@@ -1,7 +1,8 @@
 import type { Registry } from "@engine/reads/registering";
 import type { AppIR, ConceptInventoryIR, ReactionIR } from "@engine/reads/ir";
 import { renderApp as renderAppSpec } from "@engine/reads/render";
-import { serializeApp, serializeView } from "@engine/reads/lower";
+import { serializeApp } from "@engine/reads/application-lowering";
+import { serializeView } from "@engine/reads/view-lowering";
 import { readBackApp } from "@engine/reads/read-back";
 import type { FusedFormer } from "@engine/reads/former-nodes";
 import { isFusedFormer } from "@engine/reads/former-nodes";

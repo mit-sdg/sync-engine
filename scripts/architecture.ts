@@ -15,7 +15,7 @@ export interface ArchitectureProject {
 
 export interface ArchitectureResult {
   failures: string[];
-  /** Runtime import SCCs are analyzed but are not structural failures yet. */
+  /** Runtime import SCCs, each also reported as a structural failure. */
   runtimeCycles: string[][];
 }
 
@@ -654,5 +654,10 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     );
   }
 
-  return { failures, runtimeCycles: stronglyConnectedComponents(runtimeGraph) };
+  const runtimeCycles = stronglyConnectedComponents(runtimeGraph);
+  for (const cycle of runtimeCycles) {
+    failures.push(`runtime import cycle: ${cycle.join(", ")}`);
+  }
+
+  return { failures, runtimeCycles };
 }

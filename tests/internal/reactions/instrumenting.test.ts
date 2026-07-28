@@ -5,6 +5,7 @@ import {
   type InstrumentationState,
 } from "@sync-engine/internal/reactions/runtime/instrumenting.ts";
 import { actionId, flow } from "@sync-engine/internal/reactions/context.ts";
+import { ActionScheduler } from "@sync-engine/internal/reactions/runtime/action-scheduler.ts";
 
 describe("concept instrumentation", () => {
   test("memoizes action wrappers and records one returned occurrence", async () => {
@@ -20,8 +21,7 @@ describe("concept instrumentation", () => {
       actions,
       boundActionsByConcept: new WeakMap(),
       queryCaches: new WeakMap(),
-      actionLines: new WeakMap(),
-      waitingActionBodies: new WeakMap(),
+      scheduler: new ActionScheduler(),
       rawConceptsByInstrumented: new WeakMap(),
       concepts: new Set(),
       conceptsByName: new Map(),
@@ -45,8 +45,7 @@ describe("concept instrumentation", () => {
       actions,
       boundActionsByConcept: new WeakMap(),
       queryCaches: new WeakMap(),
-      actionLines: new WeakMap(),
-      waitingActionBodies: new WeakMap(),
+      scheduler: new ActionScheduler(),
       rawConceptsByInstrumented: new WeakMap(),
       concepts: new Set(),
       conceptsByName: new Map(),

@@ -174,15 +174,16 @@ describe("architecture rule fixtures", () => {
 });
 
 describe("runtime import SCC fixtures", () => {
-  test("reports a runtime cycle without making it an architecture failure", () => {
+  test("rejects and reports a runtime cycle", () => {
     const project = fixture({
       "src/engine/utils/value.ts":
         'import { other } from "./other.ts";\nexport const value = other;\n',
       "src/engine/utils/other.ts":
         'import { value } from "./value.ts";\nexport const other = value;\n',
     });
-    expect(checkArchitecture(project)).toEqual({
-      failures: [],
+    const result = checkArchitecture(project);
+    expect(result).toEqual({
+      failures: ["runtime import cycle: src/engine/utils/other.ts, src/engine/utils/value.ts"],
       runtimeCycles: [["src/engine/utils/other.ts", "src/engine/utils/value.ts"]],
     });
   });
@@ -197,6 +198,6 @@ describe("runtime import SCC fixtures", () => {
         'import { other } from "./other.ts";\nexport type Value = string;\nexport const value = other;\n',
       "src/engine/utils/other.ts": typeOnlyImport,
     });
-    expect(checkArchitecture(project).runtimeCycles).toEqual([]);
+    expect(checkArchitecture(project)).toEqual({ failures: [], runtimeCycles: [] });
   });
 });
