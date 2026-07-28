@@ -17,8 +17,9 @@ workflow cannot create or enforce them.
   tags, add required reviewers, and prevent self-review where the plan allows.
 - Configure npm trusted publishing for package `@mit-sdg/sync-engine`, GitHub
   organization `mit-sdg`, repository `sync-engine`, workflow
-  `.github/workflows/publish.yml`, and environment `npm`. Keep `latest` on the
-  stable line; prereleases use the `alpha` dist-tag.
+  `.github/workflows/publish.yml`, and environment `npm`. While only prereleases
+  are supported, leave `latest` unset and publish alphas through the `alpha`
+  dist-tag. The first stable release establishes `latest`.
 
 Recheck branch, tag, environment, npm trusted-publisher, and repository security
 settings before each release. They are external state and are not established
@@ -93,7 +94,9 @@ packing machinery.
 ## Verify the registry
 
 - Confirm `npm view @mit-sdg/sync-engine dist-tags versions` shows the new exact
-  version under `alpha` and leaves `latest` on the intended stable version.
+  version under `alpha`. While the project has no stable release, confirm
+  `latest` is absent; after the first stable release, confirm it remains on the
+  intended stable version.
 - Check the npm package page for the GitHub Actions provenance attestation and
   verify the tarball integrity and repository, license, executable, and file
   metadata.
