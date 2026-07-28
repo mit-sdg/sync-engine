@@ -1,7 +1,7 @@
 # Getting started
 
 This introductory walkthrough creates and runs the smallest complete
-sync-engine application. It assumes TypeScript `>=5.9 <6` and supports Bun
+sync-engine application. It assumes TypeScript `>=6 <7` and supports Bun
 `>=1.3.14 <1.4`.
 The walkthrough does not cover every authoring form; use the [Public
 API](../public-surface.md) and [Execution semantics](../semantics.md) as the

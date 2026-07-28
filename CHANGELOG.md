@@ -19,7 +19,7 @@ and generated-contract coupling explicit.
   unsupported. Beta releases may make incompatible changes with release-specific
   migration notes; `/advanced` remains the highest-churn public surface.
 - The supported ranges are Node.js `>=24 <25`, Bun `>=1.3.14 <1.4`, and
-  TypeScript `>=5.9 <6`. Current Linux, macOS, and Windows GitHub-hosted runners
+  TypeScript `>=6 <7`. Current Linux, macOS, and Windows GitHub-hosted runners
   exercise package and test behavior.
 - Only the newest beta is supported. Alpha releases are unsupported at beta.0,
   and the newest beta support window ends 30 days after stable 1.0.0 unless a
@@ -32,7 +32,7 @@ and generated-contract coupling explicit.
 
 - Move runtime deployments to Node.js 24 and keep Node below 25. Run the CLI,
   examples, and source scripts with Bun 1.3.14 through the 1.3 line, and use
-  TypeScript 5.9 through the 5.x line.
+  TypeScript 6 through the 6.x line.
 - Inventory every local reaction, view, and former. Non-boundary local behavior
   now requires an exact, sorted `AssemblyOptions.localBehavior` contract and a
   reviewed non-empty revision. Local behavior is forbidden in endpoints,

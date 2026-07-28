@@ -16,7 +16,7 @@
     "@mit-sdg/sync-engine": "1.0.0-beta.0"
   },
   "devDependencies": {
-    "typescript": ">=5.9 <6"
+    "typescript": ">=6 <7"
   },
   "engines": {
     "node": ">=24 <25"

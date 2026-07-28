@@ -4,7 +4,7 @@ Operations Room is a modular incident-response example. It combines Gathering,
 Selecting, Discussing, and Alerting while keeping reaction packs, contribution
 policy, and concept implementation overrides selectable at assembly time. Its
 formers build a nested dashboard. It supports Bun `>=1.3.14 <1.4`, Node.js
-`>=24 <25`, and TypeScript `>=5.9 <6`.
+`>=24 <25`, and TypeScript `>=6 <7`.
 
 ## Run the example
 

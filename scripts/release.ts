@@ -52,7 +52,7 @@ const requiredHeadings = [
   "Runtime and security support",
 ] as const;
 const expectedEngines = { bun: ">=1.3.14 <1.4", node: ">=24 <25" } as const;
-const expectedTypeScript = ">=5.9 <6";
+const expectedTypeScript = ">=6 <7";
 const expectedPackageManager = "bun@1.3.14";
 const releasedChangelogDigests = new Map([
   ["1.0.0-alpha.0", "92e21d62558b5e7aa66a5c2c30c20633534f5dfc144506bd11e9643f8cd7dd21"],
@@ -271,7 +271,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "Only the newest beta is supported.",
     "Node.js `>=24 <25`",
     "Bun `>=1.3.14 <1.4`",
-    "TypeScript `>=5.9 <6`",
+    "TypeScript `>=6 <7`",
     "sync-engine.application-manifest` version 2",
     "sync-engine.application-dependency-graph` version 2",
   ]) {

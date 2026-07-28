@@ -53,11 +53,11 @@ generated Markdown, wire contracts, manifests, or dependency graphs.
 
 The supported runtime and toolchain ranges are:
 
-| Surface                                     | Supported range       |
-| ------------------------------------------- | --------------------- |
-| Built ESM library                           | Node.js `>=24 <25`    |
-| CLI, source scripts, examples, and scaffold | Bun `>=1.3.14 <1.4`   |
-| Type checking and generated TypeScript      | TypeScript `>=5.9 <6` |
+| Surface                                     | Supported range     |
+| ------------------------------------------- | ------------------- |
+| Built ESM library                           | Node.js `>=24 <25`  |
+| CLI, source scripts, examples, and scaffold | Bun `>=1.3.14 <1.4` |
+| Type checking and generated TypeScript      | TypeScript `>=6 <7` |
 
 CI exercises current GitHub-hosted Linux, macOS, and Windows images for package
 and test behavior. Host-specific filesystems, databases, proxies, TLS, process

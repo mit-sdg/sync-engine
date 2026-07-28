@@ -66,10 +66,13 @@ async function projectFiles(name: string, templates: string): Promise<Record<str
 export async function scaffoldProject(directory: string): Promise<string[]> {
   const root = resolve(process.cwd(), directory);
   const name = basename(root);
-  if (!PROJECT_NAME.test(name) || WINDOWS_DEVICE_NAME.test(name)) {
+  if (!PROJECT_NAME.test(name)) {
     throw new Error(
-      `sync-engine new: project name "${name}" must begin with a lowercase letter, contain only lowercase letters, digits, and single hyphens, and not be a reserved Windows device name.`,
+      `sync-engine new: project name "${name}" must begin with a lowercase letter and contain only lowercase letters, digits, and single hyphens.`,
     );
+  }
+  if (WINDOWS_DEVICE_NAME.test(name)) {
+    throw new Error(`sync-engine new: project name "${name}" is a reserved Windows device name.`);
   }
   const files = await projectFiles(name, templatesDir());
   const existing = Object.keys(files).filter((path) => existsSync(resolve(root, path)));

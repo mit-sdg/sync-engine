@@ -3,7 +3,7 @@
 This project contains one complete sync-engine application: the Noting concept,
 two endpoints, an assembly, a local-gateway scenario, and generated contracts.
 It supports Bun `>=1.3.14 <1.4`, Node.js `>=24 <25`, and TypeScript
-`>=5.9 <6`.
+`>=6 <7`.
 
 ## Install and run
 

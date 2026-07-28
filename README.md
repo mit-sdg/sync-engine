@@ -26,7 +26,7 @@ limits](docs/operations.md) before choosing a deployment.
 
 The package is ESM-only. Shipped TypeScript projects and CLI commands support
 Bun `>=1.3.14 <1.4`; built library modules support Node.js `>=24 <25`; package
-types and generated TypeScript support TypeScript `>=5.9 <6`.
+types and generated TypeScript support TypeScript `>=6 <7`.
 
 ## Install in an existing project
 

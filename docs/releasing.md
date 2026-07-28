@@ -172,7 +172,7 @@ commit, then repeat every external-setting check above.
 - Check the npm package page for GitHub Actions provenance and verify tarball
   integrity, repository, license, executable, policy files, and file metadata.
 - In clean directories, install the exact registry version with npm and Bun,
-  import every public subpath under Node 24, and typecheck with TypeScript 5.9.
+  import every public subpath under Node 24, and typecheck with TypeScript 6.
 - Run `bunx --package @mit-sdg/sync-engine@$VERSION sync-engine --help` and
   scaffold a project from that exact version. Run its generation, check,
   principle, and scenario commands. Check artifacts from an application-owned

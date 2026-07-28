@@ -74,7 +74,7 @@ describe("sync-engine new", () => {
     expect(await readFile(join(project, "README.md"), "utf8")).toBe("mine");
   });
 
-  test.each(["123", "---", "Bad-Name", "bad_name", "bad--name", "bad-", "con", "com1", "lpt9"])(
+  test.each(["123", "---", "Bad-Name", "bad_name", "bad--name", "bad-"])(
     "rejects invalid project name %s before creating it",
     async (name) => {
       const project = join(directory, name);
@@ -84,4 +84,10 @@ describe("sync-engine new", () => {
       expect(existsSync(project)).toBe(false);
     },
   );
+
+  test.each(["con", "com1", "lpt9"])("rejects reserved project name %s", async (name) => {
+    const project = join(directory, name);
+    await expect(scaffoldProject(project)).rejects.toThrow(/reserved Windows device name/);
+    expect(existsSync(project)).toBe(false);
+  });
 });
