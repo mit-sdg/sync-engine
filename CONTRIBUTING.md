@@ -60,7 +60,7 @@ the committed files with fresh output.
 
 ## Public entrypoints
 
-The seven files under `src/<subpath>/index.ts` are export-only public barrels.
+The six files under `src/<subpath>/index.ts` are export-only public barrels.
 Internal engine code imports engine modules rather than public barrels. The
 architecture check enforces dependency direction and rejects unsupported
 entrypoints. Any export change requires corresponding public API and declaration

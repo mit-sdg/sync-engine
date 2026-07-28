@@ -7,6 +7,7 @@ import {
   type EmittedFrameworkErrorCode,
   type InvocationResult,
 } from "../protocol/errors.ts";
+import { toJsonValue } from "../protocol/envelope.ts";
 import type { Invoker, InvokeOptions } from "../invocation/invoke.ts";
 import { RuntimeLifecycle, type ExecutionLimits } from "../invocation/lifecycle.ts";
 
@@ -45,6 +46,21 @@ function frameworkFailure(code: EmittedFrameworkErrorCode, detail?: string): Gat
       ...(detail === undefined ? {} : { detail }),
     },
   };
+}
+
+function projectResult(result: GatewayResult): GatewayResult {
+  try {
+    if (result.ok) return { ok: true, value: toJsonValue(result.value) };
+    if (result.error.kind === "domain") {
+      return {
+        ok: false,
+        error: { kind: "domain", value: toJsonValue(result.error.value) },
+      };
+    }
+    return result;
+  } catch {
+    return frameworkFailure(FrameworkErrorCode.INTERNAL_ERROR);
+  }
 }
 
 function waitForInvocation(
@@ -167,7 +183,7 @@ export function createGateway<C extends ContractShape = ContractShape>(
         if (invocation === undefined) lifecycle.flowSettled(flow);
       }
 
-      return settle(result) as never;
+      return settle(projectResult(result)) as never;
     },
   };
 }

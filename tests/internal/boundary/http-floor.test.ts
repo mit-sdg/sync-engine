@@ -344,6 +344,90 @@ describe("HTTP floor", () => {
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
   });
+
+  test.each([
+    ["credential issue", "/login"],
+    ["credential clear", "/logout"],
+    ["ordinary success", "/me"],
+  ])("contains hostile %s result access as opaque INTERNAL_ERROR", async (_case, path) => {
+    const { application, floor } = setup();
+    const result = {
+      ok: true as const,
+      get value(): unknown {
+        throw new Error("hostile success value");
+      },
+    };
+    const fetch = createHttpHandler({
+      application,
+      floor,
+      gateway: { invoke: async () => result } as never,
+      correlation: {
+        resolve: () => "hostile-result",
+        responseHeader: "X-Request-Id",
+      },
+    });
+
+    const response = await fetch(
+      new Request(`http://learning.test${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("X-Request-Id")).toBe("hostile-result");
+    expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
+  });
+
+  test.each([
+    [
+      "cookie encoding",
+      {
+        session: "\ud800",
+        expiresAt: new Date("2026-07-20T12:00:00.000Z"),
+        user: "maya",
+      },
+    ],
+    [
+      "public projection",
+      new Proxy(
+        {
+          session: "secret-session",
+          expiresAt: new Date("2026-07-20T12:00:00.000Z"),
+          user: "maya",
+        },
+        {
+          ownKeys() {
+            throw new Error("hostile projection");
+          },
+        },
+      ),
+    ],
+  ])("contains credential issue %s failures as opaque INTERNAL_ERROR", async (_case, value) => {
+    const { application, floor } = setup();
+    const fetch = createHttpHandler({
+      application,
+      floor,
+      gateway: { invoke: async () => ({ ok: true as const, value }) } as never,
+      correlation: {
+        resolve: () => "hostile-issue",
+        responseHeader: "X-Request-Id",
+      },
+    });
+
+    const response = await fetch(
+      new Request("http://learning.test/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("X-Request-Id")).toBe("hostile-issue");
+    expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
+  });
 });
 
 describe("production HTTP profile", () => {
@@ -490,9 +574,8 @@ describe("production HTTP profile", () => {
     );
   });
 
-  test("keeps route identity across direct, gateway, raw, profile, and floor calls", async () => {
+  test("keeps route identity across direct, gateway, profile, and floor calls", async () => {
     const { application, floor, gateway } = setup();
-    const raw = createHttpHandler({ gateway, basePath: "/api/" });
     const profile = createHttpHandler({
       application,
       gateway,
@@ -522,13 +605,12 @@ describe("production HTTP profile", () => {
         },
         body: cookie ? "{}" : '{"session":"secret-session"}',
       });
-    const rawResponse = await raw(request("http://learning.test"));
     const profileResponse = await profile(request("https://learning.test"));
     const floorResponse = await floored(request("http://learning.test", true));
 
     expect(directResult).toEqual({ ok: true, value: { user: "maya" } });
     expect(gatewayResult).toEqual({ ok: true, value: { user: "maya" } });
-    for (const response of [rawResponse, profileResponse, floorResponse]) {
+    for (const response of [profileResponse, floorResponse]) {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ user: "maya" });
     }
@@ -547,10 +629,6 @@ describe("production HTTP profile", () => {
     ["malformed percent encoding", "/api/%xx"],
     ["URL-normalized separator", "/api\\v2"],
   ])("rejects a nonportable %s base path on every HTTP policy", (_case, basePath) => {
-    const gateway = { invoke: async () => ({ ok: true as const, value: {} }) };
-    expect(() => createHttpHandler({ gateway: gateway as never, basePath })).toThrow(
-      /basePath: path/,
-    );
     expect(() => productionHttpProfile({ origin: "https://learning.test", basePath })).toThrow(
       /productionHttpProfile: basePath: path/,
     );

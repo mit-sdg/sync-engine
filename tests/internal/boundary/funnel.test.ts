@@ -6,7 +6,7 @@ import { Logging } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import type { InvocationResult } from "@sync-engine/boundary";
 import { former, vocabulary, where, when } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import type { Empty } from "@sync-engine/internal/reactions/types";

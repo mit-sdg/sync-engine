@@ -2,14 +2,8 @@ import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
 import { vocabulary } from "@sync-engine/language";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
-import {
-  createHttpHandler,
-  endpoint,
-  FrameworkErrorCode,
-  receive,
-  respond,
-} from "@sync-engine/boundary";
-import { createHttpClient, createLocalClient } from "@sync-engine/client";
+import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
+import { createLocalClient } from "@sync-engine/client";
 import type { OperationalEvent, OperationalObserver } from "@sync-engine/boundary";
 import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 import { createGateway } from "@sync-engine/internal/boundary/gateway/gateway";
@@ -154,6 +148,72 @@ describe("gateway decorator", () => {
       (record) => record.input?.path === "/echo",
     );
     expect(applicationRoot?.input.correlationId).toBe("trace-1");
+  });
+
+  test("projects generated success and domain values to JSON without changing classification", async () => {
+    type DatedApi = {
+      "/dated": {
+        input: Record<string, never>;
+        output: { at: string };
+        error: { error: { at: string } };
+      };
+    };
+    const at = new Date("2026-07-28T12:00:00.000Z");
+    let domain = false;
+    const gateway = createGateway<DatedApi>({
+      application: {
+        invoker: {
+          async invoke() {
+            return domain
+              ? { ok: false as const, error: { kind: "domain" as const, value: { at } } }
+              : { ok: true as const, value: { at, omitted: undefined } };
+          },
+        } as never,
+        publicInterface: { routes: { "/dated": {} } },
+      },
+    });
+
+    await expect(gateway.invoke("/dated", {})).resolves.toEqual({
+      ok: true,
+      value: { at: "2026-07-28T12:00:00.000Z" },
+    });
+    domain = true;
+    await expect(gateway.invoke("/dated", {})).resolves.toEqual({
+      ok: false,
+      error: {
+        kind: "domain",
+        value: { at: "2026-07-28T12:00:00.000Z" },
+      },
+    });
+  });
+
+  test("settles JSON projection failures as framework internal errors", async () => {
+    const value: Record<string, unknown> = {};
+    value.self = value;
+    const events: OperationalEvent[] = [];
+    const gateway = createGateway<TestApi>({
+      application: {
+        invoker: {
+          async invoke() {
+            return { ok: true as const, value };
+          },
+        } as never,
+        publicInterface: { routes: { "/echo": {} } },
+      },
+      observers: [(event) => events.push(event)],
+    });
+
+    await expect(gateway.invoke("/echo", { message: "circular" })).resolves.toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
+    });
+    expect(invocationSettlements(events)).toEqual([
+      expect.objectContaining({
+        route: "/echo",
+        result: "framework-error",
+        frameworkCode: FrameworkErrorCode.INTERNAL_ERROR,
+      }),
+    ]);
   });
 
   test("emits one public success settlement after downstream completion", async () => {
@@ -545,33 +605,5 @@ describe("gateway decorator", () => {
 
     expect(await client.echo({ message: "local" })).toEqual({ message: "local" });
     expect(await client.reject()).toEqual({ error: FrameworkErrorCode.NOT_FOUND });
-  });
-
-  test("the HTTP handler and client preserve the same result shape", async () => {
-    const { gateway } = setup();
-    const handler = createHttpHandler({ gateway, basePath: "/api" });
-    const fetch = ((input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit) =>
-      handler(new Request(input, init))) as typeof globalThis.fetch;
-    const client = createHttpClient<TestApi>({ baseUrl: "http://gateway/api", fetch });
-
-    expect(await client.echo({ message: "http" })).toEqual({ message: "http" });
-    expect(await client.reject()).toEqual({ error: FrameworkErrorCode.NOT_FOUND });
-
-    const applicationNotFound = await handler(
-      new Request("http://gateway/api/reject", { method: "POST", body: "{}" }),
-    );
-    expect(applicationNotFound.status).toBe(400);
-    expect(await applicationNotFound.json()).toEqual({
-      error: FrameworkErrorCode.NOT_FOUND,
-    });
-
-    const missing = await handler(
-      new Request("http://gateway/api/missing", { method: "POST", body: "{}" }),
-    );
-    expect(missing.status).toBe(404);
-    expect(await missing.json()).toEqual({
-      error: FrameworkErrorCode.NOT_FOUND,
-      detail: "Unknown endpoint: /missing",
-    });
   });
 });

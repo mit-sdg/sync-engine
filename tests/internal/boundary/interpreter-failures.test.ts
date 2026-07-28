@@ -4,7 +4,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { MemoryStore } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { reaction, view, vocabulary, when, where } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { custom } from "@sync-engine/internal/reads/where-ops";
 import { FAULT_REPLY } from "@sync-engine/internal/boundary/invocation/funnel";

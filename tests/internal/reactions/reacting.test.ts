@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting.ts";
 import { createEngine } from "@sync-engine/internal/reactions/engine.ts";
 import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
-import { vocabulary, when } from "@sync-engine/language";
+import { each, former, vocabulary, when } from "@sync-engine/language";
 
 describe("Reacting interpreter loop", () => {
   test("fires a registered consequence exactly once", async () => {
@@ -54,5 +54,33 @@ describe("Reacting interpreter loop", () => {
     expect(engine.instrument).instanceOf(Function);
     expect(engine.register).instanceOf(Function);
     expect(engine.logging).toBeDefined();
+  });
+
+  test("createEngine form evaluation reuses manual query caches", async () => {
+    class Reading {
+      calls = 0;
+
+      touch(_: Record<string, never>) {
+        return {};
+      }
+
+      _rows(_: Record<string, never>) {
+        this.calls += 1;
+        return [{ value: this.calls }];
+      }
+    }
+    const { Reading: ReadingRef } = vocabulary({ concepts: { Reading } }).concepts;
+    const snapshot = former("manual snapshot ()", (_input, { value }) =>
+      each(ReadingRef._rows({}).is({ value })).form({ value }),
+    );
+    const engine = createEngine();
+    const ReadingConcept = engine.instrumentConcept(new Reading());
+
+    expect(await engine.form(snapshot({}))).toEqual([{ value: 1 }]);
+    expect(await engine.form(snapshot({}))).toEqual([{ value: 1 }]);
+    expect(ReadingConcept.calls).toBe(1);
+
+    await ReadingConcept.touch({});
+    expect(await engine.form(snapshot({}))).toEqual([{ value: 2 }]);
   });
 });

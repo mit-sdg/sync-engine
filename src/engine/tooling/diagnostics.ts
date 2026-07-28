@@ -4,6 +4,7 @@ import type { WireType } from "@engine/boundary/wire/wire-types";
 import type { AppIR, FormerIR, ReactionIR } from "@engine/reads/ir";
 import { analyzeLocalBehavior, localDefinitionKey } from "@engine/reads/local-behavior";
 import { foldFormerNode } from "@engine/reads/schema";
+import { canonicalJson } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
 import { reactionNameBelongsTo } from "@engine/utils/reaction-name";
 
@@ -16,7 +17,6 @@ export type DiagnosticCode =
   | "OPAQUE_PATTERN"
   | "UNRESOLVED_WIRE_LEAF"
   | "ENDPOINT_PATH_OVERLAP"
-  | "MULTIPLE_RESPOND_CONSEQUENCES"
   | "MISSING_ENDPOINT_FALLBACK"
   | "ORDER_SENSITIVE_FORMER";
 
@@ -30,6 +30,52 @@ export interface ApplicationDiagnostic {
 
 function reactionBelongsTo(reaction: ReactionIR, endpoint: EndpointDeclaration): boolean {
   return reactionNameBelongsTo(reaction.name, endpoint.reactions);
+}
+
+function hasEndpointCondition(reaction: ReactionIR): boolean {
+  return reaction.where.some(({ op }) => op !== "earlier");
+}
+
+function endpointConditions(reaction: ReactionIR): ReactionIR["where"] {
+  return reaction.where.filter(({ op }) => op !== "earlier");
+}
+
+interface ReadCondition {
+  posture: "find" | "no";
+  line: string;
+}
+
+function singleReadCondition(reaction: ReactionIR): ReadCondition | undefined {
+  const conditions = endpointConditions(reaction);
+  if (conditions.length !== 1) return undefined;
+  const condition = conditions[0];
+  if (condition.op !== "find" && condition.op !== "no") return undefined;
+  const { op, ...line } = condition;
+  return { posture: op, line: canonicalJson(line) };
+}
+
+function readConditions(reactions: readonly ReactionIR[]): ReadCondition[] {
+  return reactions
+    .map(singleReadCondition)
+    .filter((condition): condition is ReadCondition => condition !== undefined);
+}
+
+function exhaustiveReadPair(reactions: readonly ReactionIR[]): boolean {
+  const reads = readConditions(reactions);
+  const present = new Set(
+    reads.filter(({ posture }) => posture === "find").map(({ line }) => line),
+  );
+  return reads.some(({ posture, line }) => posture === "no" && present.has(line));
+}
+
+function duplicateReadPosture(reactions: readonly ReactionIR[]): "find" | "no" | undefined {
+  const seen = new Set<string>();
+  for (const { posture, line } of readConditions(reactions)) {
+    const key = `${posture}\0${line}`;
+    if (seen.has(key)) return posture;
+    seen.add(key);
+  }
+  return undefined;
 }
 
 function endpointDiagnostics(
@@ -58,33 +104,21 @@ function endpointDiagnostics(
         ({ concept, action }) => concept === "RequestBoundary" && action === "respond",
       ),
     );
-    const responseCount = related.reduce(
-      (count, reaction) =>
-        count +
-        reaction.then.filter(
-          ({ concept, action }) => concept === "RequestBoundary" && action === "respond",
-        ).length,
-      0,
-    );
-    if (responseCount > 1) {
-      diagnostics.push({
-        severity: "warning",
-        code: "MULTIPLE_RESPOND_CONSEQUENCES",
-        definition: { kind: "endpoint", name: endpoint.name },
-        endpoint: { name: endpoint.name, path: endpoint.path },
-        message: `Endpoint "${endpoint.name}" at "${endpoint.path}" has ${responseCount} possible respond consequences; all matching branches run.`,
-      });
-    }
-    if (answers.filter(({ where }) => where.length === 0).length > 1) {
+    const unconditional = answers.filter((reaction) => !hasEndpointCondition(reaction)).length;
+    const duplicate = duplicateReadPosture(answers);
+    if (unconditional > 1 || duplicate !== undefined) {
       diagnostics.push({
         severity: "warning",
         code: "ENDPOINT_PATH_OVERLAP",
         definition: { kind: "endpoint", name: endpoint.name },
         endpoint: { name: endpoint.name, path: endpoint.path },
-        message: `Endpoint "${endpoint.name}" at "${endpoint.path}" has overlapping unconditional answer paths.`,
+        message:
+          duplicate === undefined
+            ? `Endpoint "${endpoint.name}" at "${endpoint.path}" has overlapping unconditional answer paths.`
+            : `Endpoint "${endpoint.name}" at "${endpoint.path}" has duplicate ${duplicate} answer conditions; both can respond to the same request.`,
       });
     }
-    if (answers.length > 0 && answers.every(({ where }) => where.length > 0)) {
+    if (answers.length > 0 && answers.every(hasEndpointCondition) && !exhaustiveReadPair(answers)) {
       diagnostics.push({
         severity: "warning",
         code: "MISSING_ENDPOINT_FALLBACK",

@@ -68,6 +68,42 @@ function resolveBaseUrl(baseUrl: string | undefined): string {
     : (cleanBaseUrl(baseUrl) ?? FALLBACK_BASE_URL);
 }
 
+type HeaderResolution = { aborted: true } | { aborted: false; headers: Record<string, string> };
+
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
+async function resolveHeaders(
+  option: HeadersOption | undefined,
+  signal: AbortSignal | undefined,
+): Promise<HeaderResolution> {
+  if (isAborted(signal)) return { aborted: true };
+  if (typeof option !== "function") return { aborted: false, headers: option ?? {} };
+
+  const pending = Promise.resolve(option());
+  if (signal === undefined) return { aborted: false, headers: await pending };
+  if (signal.aborted) return { aborted: true };
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      resolve({ aborted: true });
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    pending.then(
+      (headers) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve({ aborted: false, headers });
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 /**
  * Builds the HTTP `fetch` invocation for a single client request. Never
  * throws: transport/parse failures become `{ error }` envelopes.
@@ -81,27 +117,28 @@ async function httpRequest(
   body: unknown,
   signal?: AbortSignal,
 ): Promise<unknown> {
-  let extraHeaders: Record<string, string> = {};
+  let resolvedHeaders: HeaderResolution;
   try {
-    extraHeaders =
-      typeof headersOption === "function" ? await headersOption() : (headersOption ?? {});
+    resolvedHeaders = await resolveHeaders(headersOption, signal);
   } catch {
     return { error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED };
+  }
+  if (resolvedHeaders.aborted || isAborted(signal)) {
+    return { error: FrameworkErrorCode.ABORTED };
   }
 
   let response: Response;
   try {
     response = await fetchImpl(baseUrl + path, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...extraHeaders },
+      headers: { "Content-Type": "application/json", ...resolvedHeaders.headers },
       body: JSON.stringify(body ?? {}),
       credentials: credentials ?? "include",
       signal,
     });
   } catch {
     return {
-      error:
-        signal?.aborted === true ? FrameworkErrorCode.ABORTED : FrameworkErrorCode.NETWORK_ERROR,
+      error: isAborted(signal) ? FrameworkErrorCode.ABORTED : FrameworkErrorCode.NETWORK_ERROR,
     };
   }
 
@@ -109,7 +146,7 @@ async function httpRequest(
   try {
     text = await response.text();
   } catch {
-    if (signal?.aborted === true) return { error: FrameworkErrorCode.ABORTED };
+    if (isAborted(signal)) return { error: FrameworkErrorCode.ABORTED };
     return {
       error: FrameworkErrorCode.BAD_JSON,
       detail: `Failed to read response body from ${path} (status ${response.status}).`,

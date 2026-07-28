@@ -2,11 +2,10 @@ import { describe, expect, test } from "vite-plus/test";
 import { MemoryStore } from "@sync-engine/assembly";
 import { createLocalClient } from "@sync-engine/client";
 import { vocabulary } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import {
   createGateway,
-  createHttpHandler,
   endpoint,
   FrameworkErrorCode,
   receive,
@@ -80,7 +79,7 @@ describe("endpoint runtime validators", () => {
     ).toBe(false);
   });
 
-  test("input validation has the same result through local, gateway, and HTTP calls", async () => {
+  test("input validation has the same result through local and gateway calls", async () => {
     const { app, gateway } = setup();
     const local = createLocalClient<CheckedContract>({ invoker: app.invoker as never });
 
@@ -95,19 +94,6 @@ describe("endpoint runtime validators", () => {
         code: FrameworkErrorCode.INVALID_INPUT,
         detail: "payload.message must be a string",
       },
-    });
-
-    const response = await createHttpHandler({ gateway })(
-      new Request("http://localhost/checked", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload: { message: 7 } }),
-      }),
-    );
-    expect(response.status).toBe(422);
-    expect(await response.json()).toEqual({
-      error: FrameworkErrorCode.INVALID_INPUT,
-      detail: "payload.message must be a string",
     });
   });
 

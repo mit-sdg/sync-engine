@@ -70,22 +70,25 @@ export class FiringBook {
   }
 
   record(fill: FiringFill): void {
-    if (fill.branches.some((branch) => branch.marked)) {
-      this.store.append({
-        kind: "firing",
-        at: Date.now(),
-        firing: {
-          id: uuid(),
-          reaction: fill.reaction,
-          flow: fill.flow,
-          bindings: this.redactor.redact(fill.bindings) as Record<string, unknown>,
-          consumed: fill.whenIds,
-          produced: fill.produced,
+    try {
+      if (fill.branches.some((branch) => branch.marked)) {
+        this.store.append({
+          kind: "firing",
           at: Date.now(),
-        },
-      });
+          firing: {
+            id: uuid(),
+            reaction: fill.reaction,
+            flow: fill.flow,
+            bindings: this.redactor.redact(fill.bindings) as Record<string, unknown>,
+            consumed: fill.whenIds,
+            produced: fill.produced,
+            at: Date.now(),
+          },
+        });
+      }
+    } finally {
+      for (const branch of fill.branches) this.unmark(branch);
     }
-    for (const branch of fill.branches) this.unmark(branch);
   }
 
   firings(reaction: string): FiringRecord[] {

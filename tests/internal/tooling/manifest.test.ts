@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { no, vocabulary, where } from "@mit-sdg/sync-engine/language";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import {
@@ -34,6 +34,32 @@ function application(reverse = false) {
   });
 }
 
+class LookingConcept {
+  static readonly queries = { _get: "optional" } as const;
+
+  _get(_: { item: string }): { item: string }[] {
+    return [];
+  }
+}
+
+const lookup = vocabulary({ concepts: { Looking: LookingConcept } });
+const { Looking } = lookup.concepts;
+
+function lookupApplication(duplicatePositive = false) {
+  const Get = endpoint("/get", ({ item }) => {
+    const found = where(Looking._get({ item })).then(respond({ item })).named("found");
+    const missing = where(no(Looking._get({ item })))
+      .then(respond({ error: "NOT_FOUND" }))
+      .named("missing");
+    if (!duplicatePositive) return receive({ item }).then(found, missing);
+    const alsoFound = where(Looking._get({ item }))
+      .then(respond({ item, source: "duplicate" }))
+      .named("also-found");
+    return receive({ item }).then(found, missing, alsoFound);
+  });
+  return assemble({ vocabulary: lookup, composition: { Get } });
+}
+
 describe("application manifest", () => {
   test("contains complete static design and structured endpoint diagnostics", () => {
     const manifest = applicationManifest(application());
@@ -58,11 +84,26 @@ describe("application manifest", () => {
         },
       ],
     });
-    expect(manifest.diagnostics.map(({ code }) => code)).toEqual(
-      expect.arrayContaining(["ENDPOINT_PATH_OVERLAP", "MULTIPLE_RESPOND_CONSEQUENCES"]),
-    );
+    expect(manifest.diagnostics.map(({ code }) => code)).toContain("ENDPOINT_PATH_OVERLAP");
     expect(diagnosticsFail(manifest.diagnostics)).toBe(false);
     expect(diagnosticsFail(manifest.diagnostics, "warnings")).toBe(true);
+  });
+
+  test("recognizes an exact existence and absence partition", () => {
+    expect(applicationManifest(lookupApplication()).diagnostics).toEqual([]);
+  });
+
+  test("reports a duplicate positive branch beside an exhaustive pair", () => {
+    expect(applicationManifest(lookupApplication(true)).diagnostics).toEqual([
+      {
+        severity: "warning",
+        code: "ENDPOINT_PATH_OVERLAP",
+        definition: { kind: "endpoint", name: "Get" },
+        endpoint: { name: "Get", path: "/get" },
+        message:
+          'Endpoint "Get" at "/get" has duplicate find answer conditions; both can respond to the same request.',
+      },
+    ]);
   });
 
   test("is JSON-round-trippable and byte-identical for equivalent assembly order", () => {

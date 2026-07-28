@@ -2,15 +2,15 @@ import { describe, expect, test } from "vite-plus/test";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
 import {
   applyArtifactPlan,
-  applicationManifest,
   artifactPlan,
   checkArtifactPlan,
   normalizeArtifactPath,
   planGenerated,
-} from "@mit-sdg/sync-engine/tooling";
-import type { ArtifactFilesystem } from "@mit-sdg/sync-engine/tooling";
+} from "@engine/tooling/artifact-plan";
+import type { ArtifactFilesystem } from "@engine/tooling/artifact-plan";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
 class MemoryFilesystem implements ArtifactFilesystem {

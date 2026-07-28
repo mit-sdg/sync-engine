@@ -4,7 +4,9 @@ import { setOwn } from "@engine/utils/own-property";
 import type { ComputationRef } from "@engine/reads/computations";
 import type { ReadEnv } from "@engine/reads/env";
 import { Frames, varKeyOf } from "@engine/reads/frames";
+import { isFusedFormer } from "@engine/reads/former-nodes";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
+import { formTree } from "@engine/reads/former-evaluation";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
 import {
   type LoweredReaction,
@@ -25,6 +27,7 @@ import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { RelationView } from "@engine/reads/lines";
 import { canonicalJson } from "@engine/utils/canonical-json";
 import { logger } from "@engine/utils/logger";
+import { uuid } from "@engine/utils/runtime";
 import { $vars } from "../authoring/vars.ts";
 import { declarationsOf } from "../authoring/partitions.ts";
 import { actionNameOf, conceptNameOf } from "../concepts/introspect.ts";
@@ -51,7 +54,7 @@ import { Logging, ReactionLogger } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./observer.ts";
 import { ReactionCatalog } from "./reaction-catalog.ts";
-import { exportConcepts, exportReactions, form, readBack, renderApp } from "./reacting-export.ts";
+import { exportConcepts, exportReactions, readBack, renderApp } from "./reacting-export.ts";
 import { matchArguments as matchActionArguments } from "./matching.ts";
 import { TriggerMatcher } from "./trigger-matching.ts";
 
@@ -84,6 +87,7 @@ export class Reacting {
     rows(count: number): boolean;
     admitFlow?(flow: string, route: string, correlationId: string): unknown;
     abandon?(flow: string): void;
+    flowSettled?(flow: string): void;
   };
 
   constructor(
@@ -94,6 +98,7 @@ export class Reacting {
       rows(count: number): boolean;
       admitFlow?(flow: string, route: string, correlationId: string): unknown;
       abandon?(flow: string): void;
+      flowSettled?(flow: string): void;
     },
   ) {
     this.Action = actionConcept;
@@ -120,8 +125,11 @@ export class Reacting {
       emit: (record, durationMs) => this.reactionLogger.emit(record, durationMs),
       registerConcept: (name, instrumented) => this.registry.registerConcept(name, instrumented),
     });
-    this.triggerMatcher = new TriggerMatcher(actionConcept, this.firingBook, (instrumented) =>
-      this.instrumentation.rawConceptOf(instrumented),
+    this.triggerMatcher = new TriggerMatcher(
+      actionConcept,
+      this.firingBook,
+      (instrumented) => this.instrumentation.rawConceptOf(instrumented),
+      (flowToken, count) => this.assertRows(flowToken, count),
     );
     this.consequencePipeline = new ConsequencePipeline(
       actionConcept,
@@ -282,7 +290,26 @@ export class Reacting {
   }
 
   async form(fused: FusedFormer): Promise<unknown> {
-    return form({ registry: this.registry }, fused);
+    if (!isFusedFormer(fused)) {
+      throw new Error(
+        "form(...) takes a named former with its input mapping filled, " +
+          "for example form(roomDashboard(room)).",
+      );
+    }
+    const flowToken = uuid();
+    const route = `form:${fused.former.formerName}`;
+    if (this.execution?.admitFlow?.(flowToken, route, flowToken) !== undefined) {
+      throw new Error(`Read "${route}" is unavailable.`);
+    }
+    if (this.execution !== undefined) this.instrumentation.invalidateAll();
+    try {
+      this.registry.assertFormable(fused.former);
+      return await formTree(fused, this.registry.readEnv(), (count) =>
+        this.assertRows(flowToken, count),
+      );
+    } finally {
+      this.execution?.flowSettled?.(flowToken);
+    }
   }
 
   readBack(): string {
@@ -458,7 +485,12 @@ export class Reacting {
       current =
         op.op === "earlier"
           ? this.applyEarlier(current, op.pattern)
-          : await applyWhereOps(current, [op], this.registry.readEnv());
+          : await applyWhereOps(current, [op], this.registry.readEnv(), (count) =>
+              this.assertRows(
+                typeof current[0]?.[flow] === "string" ? current[0][flow] : "",
+                count,
+              ),
+            );
       if (current.length === 0) break;
     }
     if (optionalBindings.size === 0) return current;
@@ -493,6 +525,7 @@ export class Reacting {
         );
         if (matched !== undefined) {
           const { [probe]: _recordId, ...rest } = matched;
+          this.assertRows(typeof flowToken === "string" ? flowToken : "", result.length + 1);
           result.push(rest);
         }
       }

@@ -6,7 +6,7 @@ import { custom } from "@sync-engine/internal/reads/where-ops";
 import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
 import type { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { earlier, when } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { mockRefs } from "./mocks.ts";
 
 /** The tag carries no ":" — it is a root tag, not one derived by a chain. */

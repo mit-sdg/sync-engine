@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { httpFloor, productionHttpProfile } from "@mit-sdg/sync-engine/boundary";
+import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
 import { buildProductionHttp } from "../src/edge.ts";
 import { runScenario } from "../src/scenario.ts";
 import { SessioningConcept } from "../src/concepts/sessioning/sessioning.ts";
@@ -27,18 +28,19 @@ function post(path: string, body: unknown, options: { cookie?: string; requestId
 describe("production HTTP application", () => {
   test("issues, binds, rejects, and clears the cookie credential", async () => {
     const { floorHandler } = buildProductionHttp({
-      Sessioning: new SessioningConcept(() => new Date("2026-07-20T12:00:00.000Z")),
+      Sessioning: new SessioningConcept(
+        () => new Date("2026-07-20T12:00:00.000Z"),
+        () => "credential-4f91b4d2",
+      ),
     });
-    const started = await floorHandler(
-      post("/sessions/start", { user: "Maya" }, { requestId: "request-42" }),
-    );
+    const started = await floorHandler(post("/sessions/start", {}, { requestId: "request-42" }));
     expect(started.status).toBe(200);
-    expect(await started.json()).toEqual({ user: "Maya" });
+    expect(await started.json()).toEqual({});
     expect(started.headers.get("Cache-Control")).toBe("no-store");
     expect(started.headers.get("X-Request-Id")).toBe("request-42");
     const setCookie = started.headers.get("Set-Cookie");
     expect(setCookie).toBe(
-      "__Host-session=session-maya; HttpOnly; SameSite=Strict; Path=/; " +
+      "__Host-session=credential-4f91b4d2; HttpOnly; SameSite=Strict; Path=/; " +
         "Expires=Mon, 20 Jul 2026 12:30:00 GMT; Secure",
     );
     const cookie = setCookie?.split(";", 1)[0];
@@ -48,9 +50,11 @@ describe("production HTTP application", () => {
       post("/sessions/current", { session: "body-credential" }, { cookie }),
     );
     expect(protectedResponse.status).toBe(200);
-    expect(await protectedResponse.json()).toEqual({ user: "Maya" });
+    expect(await protectedResponse.json()).toEqual({ active: true });
 
-    const unauthorized = await floorHandler(post("/sessions/current", { session: "session-maya" }));
+    const unauthorized = await floorHandler(
+      post("/sessions/current", { session: "body-credential" }),
+    );
     expect(unauthorized.status).toBe(401);
     expect(await unauthorized.json()).toEqual({ error: "UNAUTHORIZED" });
     expect(unauthorized.headers.get("Set-Cookie")).toContain(
@@ -69,9 +73,12 @@ describe("production HTTP application", () => {
   test("rejects, clears, and deletes an expired cookie credential", async () => {
     let now = new Date("2026-07-20T12:00:00.000Z");
     const { floorHandler } = buildProductionHttp({
-      Sessioning: new SessioningConcept(() => now),
+      Sessioning: new SessioningConcept(
+        () => now,
+        () => "credential-expiring",
+      ),
     });
-    const started = await floorHandler(post("/sessions/start", { user: "Maya" }));
+    const started = await floorHandler(post("/sessions/start", {}));
     const cookie = started.headers.get("Set-Cookie")?.split(";", 1)[0];
     if (cookie === undefined) throw new Error("Expected the issued credential cookie.");
 
@@ -99,6 +106,31 @@ describe("production HTTP application", () => {
     expect(duplicate.status).toBe(409);
     expect(await duplicate.json()).toEqual({ error: "CONFLICT" });
     expect(duplicate.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  test("validates hostile inputs and enforces the configured request deadline", async () => {
+    const { application, floorHandler, gateway, profileHandler } = buildProductionHttp();
+
+    const identityClaim = await floorHandler(post("/sessions/start", { user: "Maya" }));
+    expect(identityClaim.status).toBe(400);
+    expect(await identityClaim.json()).toEqual({ error: "INVALID_REQUEST" });
+
+    const invalidName = await profileHandler(post("/names/claim", { name: 42 }));
+    expect(invalidName.status).toBe(400);
+    expect(await invalidName.json()).toEqual({ error: "INVALID_REQUEST" });
+
+    await expect(
+      gateway.invoke("/names/claim", { name: "atlas" }, { timeoutMs: 5_001 }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { kind: "framework", code: "INVALID_INPUT" },
+    });
+
+    expect(
+      applicationManifest(application).endpoints.every(
+        ({ validators }) => validators.input && validators.output,
+      ),
+    ).toBe(true);
   });
 
   test("rejects non-HTTPS public origins in production", () => {
@@ -130,10 +162,10 @@ describe("production HTTP application", () => {
     expect(projected).not.toContain('"NAME_TAKEN"');
   });
 
-  test("runs the checked scenario through both HTTP policy forms", async () => {
+  test("runs the checked scenario through the projected HTTP client", async () => {
     await expect(runScenario()).resolves.toEqual({
-      started: { user: "Maya" },
-      current: { user: "Maya" },
+      started: {},
+      current: { active: true },
       claimed: { name: "atlas" },
       duplicate: { error: "CONFLICT" },
       ended: { ended: true },

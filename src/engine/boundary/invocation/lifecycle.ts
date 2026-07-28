@@ -9,6 +9,8 @@ export interface ExecutionLimits {
 
 export type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
 
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
 function assertPositiveInteger(value: number, name: keyof ExecutionLimits): void {
   if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
     throw new Error(`executionLimits.${name} must be a positive finite integer.`);
@@ -26,6 +28,12 @@ export function assertExecutionLimits(limits: ExecutionLimits): void {
   ];
   for (const name of names) {
     assertPositiveInteger(limits[name], name);
+  }
+  if (limits.maxRequestDurationMs > MAX_TIMER_DELAY_MS) {
+    throw new Error(
+      `executionLimits.maxRequestDurationMs must not exceed ${MAX_TIMER_DELAY_MS}, ` +
+        "the reliable platform timer maximum.",
+    );
   }
 }
 
@@ -139,6 +147,9 @@ export class RuntimeLifecycle {
   validateTimeout(timeoutMs: number): string | undefined {
     if (!Number.isFinite(timeoutMs) || !Number.isInteger(timeoutMs) || timeoutMs <= 0) {
       return "timeoutMs must be a positive finite integer";
+    }
+    if (timeoutMs > MAX_TIMER_DELAY_MS) {
+      return `timeoutMs exceeds the reliable platform timer maximum of ${MAX_TIMER_DELAY_MS} ms`;
     }
     if (this.limits !== undefined && timeoutMs > this.limits.maxRequestDurationMs) {
       return `timeoutMs exceeds the configured ${this.limits.maxRequestDurationMs} ms maximum`;

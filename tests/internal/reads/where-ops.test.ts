@@ -7,7 +7,7 @@ import { lineOf } from "@sync-engine/internal/reads/lines";
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
 import { is, no, reaction, whether, vocabulary, when } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { compute, custom } from "@sync-engine/internal/reads/where-ops";

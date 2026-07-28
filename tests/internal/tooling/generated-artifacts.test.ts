@@ -68,26 +68,31 @@ const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
 );
 
 describe("generated application artifacts", () => {
-  test("the request boundary inventory contains only author-facing actions", () => {
+  test("the request boundary inventory contains only author-facing actions", async () => {
     const application = assemble({
       vocabulary: vocabularyDeclaration,
       composition: { Login },
     });
     const inspection = inspectAssembly(application);
     const boundary = inspection.concepts.find(({ name }) => name === "RequestBoundary");
-    const rendered = renderGenerated(
-      resolveApplication(
-        {
-          assemble: () => application,
-          directory: new URL("./generated/", import.meta.url),
-          title: "Application",
-          vocabulary: { module: languageModule },
-        },
-        configUrl,
-      ),
+    const rendered = (
+      await renderGenerated(
+        resolveApplication(
+          {
+            assemble: () => application,
+            directory: new URL("./generated/", import.meta.url),
+            title: "Application",
+            vocabulary: { module: languageModule },
+          },
+          configUrl,
+        ),
+      )
     ).specification;
 
     expect(boundary?.actions.map(({ name }) => name)).toEqual(["request", "respond"]);
+    expect(inspection.diagnostics.map(({ code }) => code)).not.toContain(
+      "MISSING_ENDPOINT_FALLBACK",
+    );
     expect(rendered).toContain("- `request (…)`");
     expect(rendered).toContain("- `respond (…)` — may refuse `NOT_PENDING`");
     expect(rendered).not.toMatch(/- `(register|cancel|respondFramework) /);
@@ -135,12 +140,12 @@ describe("generated application artifacts", () => {
     });
   });
 
-  test("an HTTP floor emits logical and projected named contracts", () => {
+  test("an HTTP floor emits logical and projected named contracts", async () => {
     const application = assemble({
       vocabulary: vocabularyDeclaration,
       composition: { Login, Current },
     });
-    const rendered = renderGenerated(
+    const rendered = await renderGenerated(
       resolveApplication(
         {
           assemble: () => application,
@@ -170,12 +175,12 @@ describe("generated application artifacts", () => {
     expect(projected).not.toContain('"session":');
   });
 
-  test("a production HTTP profile projects errors without consuming logical fields", () => {
+  test("a production HTTP profile projects errors without consuming logical fields", async () => {
     const application = assemble({
       vocabulary: vocabularyDeclaration,
       composition: { Login, Current },
     });
-    const rendered = renderGenerated(
+    const rendered = await renderGenerated(
       resolveApplication(
         {
           assemble: () => application,
@@ -211,7 +216,7 @@ describe("generated application artifacts", () => {
       'local reaction "Api.ClosureEndpoint": unlowered reaction: ' +
       "step 2 needs a value bound by a closure where";
 
-    expect(() => renderGenerated(application)).toThrow(message);
+    await expect(renderGenerated(application)).rejects.toThrow(message);
     await expect(checkGenerated(application)).rejects.toThrow(message);
     await expect(pinGenerated(application)).rejects.toThrow(message);
   });
@@ -350,6 +355,55 @@ describe("generated application artifacts", () => {
       await rm(temporary, { recursive: true, force: true });
     }
   });
+
+  test("drains inspection before closing application-owned generation resources", async () => {
+    const lifecycle: string[] = [];
+    const application = resolveApplication(
+      {
+        assemble: () =>
+          assemble({
+            vocabulary: vocabularyDeclaration,
+            composition: { Login },
+            observers: [
+              (event) => {
+                if (event.type === "drain-state") lifecycle.push(event.state);
+              },
+            ],
+          }),
+        async close() {
+          lifecycle.push("closed");
+        },
+        directory: new URL("./not-written/", import.meta.url),
+        title: "Lifecycle application",
+        vocabulary: { module: languageModule },
+      },
+      configUrl,
+    );
+
+    await renderGenerated(application);
+
+    expect(lifecycle).toEqual(["draining", "idle", "closed"]);
+  });
+
+  test("closes application-owned resources when assembly inspection fails", async () => {
+    let closed = false;
+    const application = resolveApplication(
+      {
+        assemble: () => {
+          throw new Error("assembly failed");
+        },
+        async close() {
+          closed = true;
+        },
+        title: "Failed lifecycle application",
+        vocabulary: { module: languageModule },
+      },
+      configUrl,
+    );
+
+    await expect(renderGenerated(application)).rejects.toThrow("assembly failed");
+    expect(closed).toBe(true);
+  });
 });
 
 describe("an artifact configuration's defaults", () => {
@@ -378,7 +432,7 @@ describe("an artifact configuration's defaults", () => {
     });
   });
 
-  test("explicit names, paths, and banners override the derived output", () => {
+  test("explicit names, paths, and banners override the derived output", async () => {
     const resolved = resolveApplication(
       {
         assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
@@ -391,7 +445,7 @@ describe("an artifact configuration's defaults", () => {
       },
       configUrl,
     );
-    const rendered = renderGenerated(resolved);
+    const rendered = await renderGenerated(resolved);
     expect(resolved.specification).toBe("book.md");
     expect(resolved.wireName).toBe("CircleContracts");
     expect(resolved.vocabularyFrom.export).toBe("words");
@@ -424,5 +478,18 @@ describe("an artifact configuration's defaults", () => {
     expect(() => resolveApplication({ title: "" } as never, configUrl)).toThrow(
       "title must name the application",
     );
+  });
+
+  test("a configuration close hook must be callable", () => {
+    expect(() =>
+      resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
+          close: true,
+          title: "Invalid lifecycle",
+        } as never,
+        configUrl,
+      ),
+    ).toThrow("close must release generation resources");
   });
 });

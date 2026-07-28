@@ -7,7 +7,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
 import { when } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
 import type { ReactionIR, WhereOpIR } from "@sync-engine/internal/reads/ir";
 import { renderReaction, renderWhereOp } from "@sync-engine/internal/reads/render";
@@ -321,6 +321,41 @@ describe("inventoryOf", () => {
     const inventory = inventoryOf(new GreetingConcept());
     expect(inventory.purpose).toBe("Let a greeting be spoken.");
     expect(inventory.principle).toBe("Ada greets Sam, and the application records the greeting.");
+  });
+
+  test("inventories inherited protocol methods without publishing injected callbacks", () => {
+    class BaseConcept {
+      zeta(_: Record<string, never>) {
+        return {};
+      }
+      _zeta(_: Record<string, never>) {
+        return [];
+      }
+    }
+    class CompleteConcept extends BaseConcept {
+      constructor(readonly freshID = () => "generated") {
+        super();
+      }
+      alpha(_: Record<string, never>) {
+        return {};
+      }
+      _alpha(_: Record<string, never>) {
+        return [];
+      }
+    }
+
+    const inventory = inventoryOf(new CompleteConcept());
+    expect(inventory).toMatchObject({
+      actions: [
+        { name: "alpha", roles: [] },
+        { name: "zeta", roles: [] },
+      ],
+      queries: [
+        { name: "_alpha", roles: [] },
+        { name: "_zeta", roles: [] },
+      ],
+    });
+    expect(inventory.actions.map(({ name }) => name)).not.toContain("freshID");
   });
 
   test("rolesOf declines to guess", () => {

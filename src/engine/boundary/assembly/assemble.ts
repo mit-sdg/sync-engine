@@ -53,6 +53,7 @@ import type { ComputationFn } from "@engine/reads/computations";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
 import { isRelationView } from "@engine/reads/lines";
 import type { RelationView } from "@engine/reads/lines";
+import { canonicalValue } from "@engine/utils/canonical-json";
 import { logger } from "@engine/utils/logger";
 import { createRedactor } from "@engine/utils/redaction";
 import type { RedactionPolicy } from "@engine/utils/redaction";
@@ -76,6 +77,7 @@ import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import { deriveInputContracts } from "../wire/wire-contracts.ts";
 import type { EndpointDeclaration, EndpointIdentity } from "./endpoint-portability.ts";
 import { assertApplicationLocality } from "./locality-validation.ts";
+import { validateConceptImplementation } from "./concept-set.ts";
 
 // Endpoints author against these request-boundary references.
 
@@ -229,6 +231,24 @@ function isFormerRef(value: unknown): value is FormerRef {
   return typeof value === "function" && typeof (value as FormerRef).formerName === "string";
 }
 
+function portableInputContract(path: string, contract: InputContractDecl): InputContractDecl {
+  let defaults: Record<string, unknown> | undefined;
+  try {
+    defaults =
+      contract.defaults === undefined
+        ? undefined
+        : (canonicalValue(contract.defaults) as Record<string, unknown>);
+  } catch (error) {
+    throw new TypeError(`assemble: input defaults for ${path} must be canonical JSON-portable.`, {
+      cause: error,
+    });
+  }
+  return {
+    ...(contract.required === undefined ? {} : { required: [...contract.required] }),
+    ...(defaults === undefined ? {} : { defaults }),
+  };
+}
+
 /**
  * A value the composition walk may descend into: a plain record or a module
  * namespace. Namespaces are recognized by their `Symbol.toStringTag` as well
@@ -322,6 +342,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
       setOwn(publicErrors, code, category);
     }
     if (provided !== undefined) {
+      validateConceptImplementation("assemble", name, cls, provided);
       if (metadata !== undefined) attachConceptMetadata(provided, metadata);
       setOwn(concepts, name, engine.instrumentConcept(provided, name));
       continue;
@@ -333,6 +354,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
         : undefined;
     const Constructor = cls as new (...ctorArgs: unknown[]) => object;
     const instance = new Constructor(...(args ?? []));
+    validateConceptImplementation("assemble", name, cls, instance);
     if (metadata !== undefined) attachConceptMetadata(instance, metadata);
     setOwn(concepts, name, engine.instrumentConcept(instance, name));
   }
@@ -372,7 +394,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
             `assemble: duplicate input contract for ${value.path} — a path's contract is declared at most once.`,
           );
         }
-        setOwn(contracts, value.path, value.input);
+        setOwn(contracts, value.path, portableInputContract(value.path, value.input));
       }
       if (value.validators !== undefined) {
         let existing = validators[value.path] ?? {};
@@ -449,7 +471,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     routes: Object.fromEntries(
       [...new Set(endpoints.map(({ path }) => path))]
         .sort()
-        .map((path) => [path, contracts[path] ?? {}]),
+        .map((path) => [path, canonicalValue(contracts[path] ?? {}) as InputContractDecl]),
     ),
   };
 

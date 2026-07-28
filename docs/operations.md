@@ -202,11 +202,6 @@ error categories plus opaque protocol categories. Unknown or private refusals
 and all framework server failures become `INTERNAL_ERROR`. Use `httpFloor(...)`
 only when the application also needs the narrow same-origin cookie binding.
 
-The gateway/invoker-only `createHttpHandler` forms are lower-level raw envelope
-adapters. They preserve logical domain codes and selected framework statuses;
-do not expose them directly unless a host-owned outer policy deliberately
-provides the public projection.
-
 Both production descriptors require an HTTPS public origin when
 `NODE_ENV=production`, but the Fetch handlers do not terminate TLS. The
 credential floor enforces its configured origin when an `Origin` header is

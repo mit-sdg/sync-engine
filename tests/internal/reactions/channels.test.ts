@@ -10,7 +10,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { faulted, Refuse } from "@sync-engine/advanced";
 import { Logging } from "@sync-engine/assembly";
 import { earlier, refused, returned, vocabulary, when } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import type { Empty } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, RecorderConcept } from "./mocks.ts";

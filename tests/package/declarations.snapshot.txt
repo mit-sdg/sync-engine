@@ -215,10 +215,14 @@ export declare function assemble<TEntries extends Record<string, ConceptEntry>, 
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { AssembledApp, AssembleOptions } from "./assemble.ts";
+import type { ConceptImplementation } from "./concept-set.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
 export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
-export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary"> & {
+export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary" | "instances"> & {
     vocabulary: DeclaredVocabulary<TEntries, TComputations>;
+    instances?: {
+        [Name in keyof ConceptClassesOf<TEntries>]?: ConceptImplementation<ConceptClassesOf<TEntries>[Name]>;
+    };
 };
 export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: AssemblyOptions<TEntries, TComputations>): Assembly<ConceptClassesOf<TEntries>>;
 
@@ -242,8 +246,8 @@ export declare const PublicError: {
     readonly CONFLICT: "CONFLICT";
 };
 type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result ? (...args: Args) => Result | Promise<Awaited<Result>> : Member;
-export type ConceptImplementation<C extends ConceptClass> = {
-    [Name in keyof InstanceType<C>]: ImplementationMember<InstanceType<C>[Name]>;
+export type ConceptImplementation<C extends ConceptClass> = object & {
+    [Name in keyof InstanceType<C> as InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never]: ImplementationMember<InstanceType<C>[Name]>;
 };
 export type Implementations<V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>> = V extends DeclaredVocabulary<infer Entries, Record<string, ComputationFn>> ? {
     [Name in keyof ConceptClassesOf<Entries>]: ConceptImplementation<ConceptClassesOf<Entries>[Name]>;
@@ -261,8 +265,8 @@ export declare function conceptFloor<V extends DeclaredVocabulary<Record<string,
  * arrives as the second argument, so a registry never has to spell its own
  * application name.
  */
-type FloorFactory = (context: never, name: string) => object;
-export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory> = Record<never, never>> {
+type FloorFactory<C extends ConceptClass = ConceptClass> = (context: never, name: string) => ConceptImplementation<C>;
+export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>> {
     class: C;
     /** Markdown containing the concept's parsed registration contract and human prose. */
     spec: string;
@@ -273,14 +277,15 @@ export interface ConceptRegistration<C extends ConceptClass, F extends Record<st
     floors?: F;
 }
 declare const RegistrationBrand: unique symbol;
-export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory> = Record<never, never>> = ConceptRegistration<C, F> & {
+export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>> = ConceptRegistration<C, F> & {
     readonly [RegistrationBrand]: true;
     /** The machine-readable contract extracted from the registration's specification. */
     readonly specification: ConceptSpec;
 };
-export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory> = Record<never, never>>(registration: ConceptRegistration<C, F>): RegisteredConcept<C, F>;
+export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
+export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>>(registration: ConceptRegistration<C, F>): RegisteredConcept<C, F>;
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
-type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, Record<string, FloorFactory>> ? C : never;
+type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
     [Name in keyof S]: {
         class: ClassOfRegistration<S[Name]>;
@@ -472,12 +477,12 @@ type PathChain<P extends string, C extends ContractShape, TError = ClientError, 
 } : P extends `/${infer S}` ? {
     [K in S]: Endpoint<C, FullPath, TError>;
 } : {};
-type AllPathChains<C extends ContractShape, TError, P extends keyof C & string = keyof C & string> = P extends unknown ? PathChain<P, C, TError, P> : never;
+type AllPathChains<C extends ContractShape, TError, P extends keyof C & string = keyof C & string> = P extends unknown ? P extends "/then" | `/then/${string}` ? {} : PathChain<P, C, TError, P> : never;
 /**
  * The first segment as a property and the remaining path as one key:
  * `client.roster["sections/create"](...)`.
  */
-type RemainderPathChain<P extends keyof C & string, C extends ContractShape, TError = ClientError> = P extends `/${infer First}/${infer Rest}` ? {
+type RemainderPathChain<P extends keyof C & string, C extends ContractShape, TError = ClientError> = P extends "/then" | `/then/${string}` ? {} : P extends `/${infer First}/${infer Rest}` ? {
     [K in First]: {
         [R in Rest]: Endpoint<C, P, TError>;
     };
@@ -485,7 +490,8 @@ type RemainderPathChain<P extends keyof C & string, C extends ContractShape, TEr
 /**
  * The full client type for a contract `C`. Both calling styles coexist because
  * the contract paths (`/group/method`) cleanly split into a flat index and an
- * arbitrarily-deep grouped tree.
+ * arbitrarily-deep grouped tree. Paths rooted at `/then` are indexed-only so
+ * the root client cannot be mistaken for a promise.
  */
 export type Client<C extends ContractShape, TError = ClientError> = IndexedClient<C, TError> & GroupedClient<C, TError>;
 /**
@@ -638,25 +644,20 @@ export interface HttpCorrelationOptions {
     resolve(request: Request): string | undefined;
     responseHeader?: string;
 }
-export declare function createHttpHandler(options: {
-    gateway: Invoker<ContractShape>;
-    basePath?: string;
-    correlation?: HttpCorrelationOptions;
-} | {
-    invoker: Invoker<ContractShape>;
-    basePath?: string;
-    correlation?: HttpCorrelationOptions;
-} | {
-    gateway: Invoker<ContractShape>;
-    application: Assembly<Record<string, new (...args: never[]) => object>>;
-    profile: ProductionHttpProfile;
-    correlation?: HttpCorrelationOptions;
-} | {
+type FloorHandlerOptions = {
     gateway: Invoker<ContractShape>;
     application: Assembly<Record<string, new (...args: never[]) => object>>;
     floor: HttpFloor;
     correlation?: HttpCorrelationOptions;
-}): (request: Request) => Promise<Response>;
+};
+type ProfileHandlerOptions = {
+    gateway: Invoker<ContractShape>;
+    application: Assembly<Record<string, new (...args: never[]) => object>>;
+    profile: ProductionHttpProfile;
+    correlation?: HttpCorrelationOptions;
+};
+export declare function createHttpHandler(options: FloorHandlerOptions | ProfileHandlerOptions): (request: Request) => Promise<Response>;
+export {};
 
 === dist/engine/boundary/invocation/funnel.d.ts ===
 /**
@@ -976,7 +977,7 @@ export interface WireEndpoint {
     path: string;
     input: WireType;
     output: WireType;
-    /** Refusal codes this path's own reactions and asked actions can answer. */
+    /** Refusal codes this path's own and causally surrounding reactions can answer. */
     errors: string[];
     /** Whether boundary input admission can add framework `INVALID_INPUT`. */
     inputAdmissionError?: boolean;
@@ -1292,7 +1293,7 @@ export declare function isQueryRef(value: unknown): value is QueryRef;
  */
 import type { QueryReadLine, SlotPattern } from "../../reads/lines.ts";
 import type { ComputationFn, ComputationRef } from "../../reads/computations.ts";
-import type { ConceptMetadata } from "../concepts/concept-metadata.ts";
+import { type ConceptMetadata } from "../concepts/concept-metadata.ts";
 import type { ActionCall, InstrumentedAction, Reaction, TriggerActionLine } from "../types.ts";
 export { isActionRef, isQueryRef } from "./references.ts";
 export type { ActionRef, QueryRef } from "./references.ts";
@@ -1445,8 +1446,19 @@ export interface RefusalBranch {
 }
 /** Refusal branches admitted for each action, keyed by the action that may signal them. */
 export type RefusalContracts = Record<string, readonly RefusalBranch[]>;
+/** Canonical callable surface retained from the vocabulary's concept class. */
+export interface ConceptProtocol {
+    readonly actions: readonly string[];
+    readonly queries: readonly string[];
+}
+export declare const CONCEPT_PROTOCOL: unique symbol;
+/** Resolve one own or inherited protocol method without invoking accessors. */
+export declare function callableConceptMember(value: object, name: string): ((...args: never[]) => unknown) | undefined;
+/** Read the callable protocol declared by a class prototype and its bases. */
+export declare function conceptProtocolOf(prototype: object): ConceptProtocol;
 /** Contracts owned by a vocabulary name rather than embedded in its class. */
 export interface ConceptMetadata {
+    readonly [CONCEPT_PROTOCOL]?: ConceptProtocol;
     purpose?: string;
     principle?: string;
     queries?: Readonly<Record<string, QueryPromise>>;
@@ -1979,10 +1991,11 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
  * throw its declared refusal. Once instrumented, every action is asynchronous
  * because the engine records and reacts to its occurrence before settling the
  * caller. A deliberate refusal resolves to its refusal mapping; ordinary
- * faults reject. Queries retain their declared return shape.
+ * faults reject. Queries are asynchronous roots so admission, limits, drain,
+ * and idle observation include their complete evaluation.
  */
 export type InstrumentedConcept<T extends object> = {
-    [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result ? Key extends `_${string}` ? T[Key] : (...args: Args) => Promise<Awaited<Result> | ActionRefusal> : T[Key];
+    [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result ? Key extends `_${string}` ? (...args: Args) => Promise<Awaited<Result>> : (...args: Args) => Promise<Awaited<Result> | ActionRefusal> : T[Key];
 };
 export interface InstrumentationState {
     actions: ActionConcept;
@@ -1996,8 +2009,10 @@ export interface InstrumentationState {
     registerConcept(name: string, instrumented: object): void;
     execution?: {
         action(flow: string): boolean;
+        rows(count: number): boolean;
         admitFlow?(flow: string, route: string, correlationId: string): unknown;
         abandon?(flow: string): void;
+        flowSettled?(flow: string): void;
     };
     react(record: ActionRecord, durationMs?: number): Promise<void>;
     emit(record: ActionRecord, durationMs?: number): void;
@@ -2020,8 +2035,10 @@ export declare class ConceptInstrumentation {
         scheduler: ActionScheduling;
         execution?: {
             action(flow: string): boolean;
+            rows(count: number): boolean;
             admitFlow?(flow: string, route: string, correlationId: string): unknown;
             abandon?(flow: string): void;
+            flowSettled?(flow: string): void;
         };
         react(record: ActionRecord, durationMs?: number): Promise<void>;
         emit(record: ActionRecord, durationMs?: number): void;
@@ -2467,6 +2484,7 @@ export declare class Reacting {
         rows(count: number): boolean;
         admitFlow?(flow: string, route: string, correlationId: string): unknown;
         abandon?(flow: string): void;
+        flowSettled?(flow: string): void;
     });
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
@@ -2534,9 +2552,10 @@ export declare class TriggerMatcher {
     private readonly records;
     private readonly consumption;
     private readonly rawConceptOf;
+    private readonly assertRows?;
     constructor(records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">, consumption: {
         hasConsumed(recordId: string | undefined, reaction: string): boolean;
-    }, rawConceptOf: (instrumented: object) => object);
+    }, rawConceptOf: (instrumented: object) => object, assertRows?: ((flow: string, count: number) => void) | undefined);
     match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
     posture(record: ActionRecord): ChannelPosture | undefined;
     matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, actionSymbol: symbol): Frame | undefined;
@@ -3092,6 +3111,7 @@ export declare function fusedFormersOf(mapping: Mapping): FusedFormer[];
 /** Evaluate a fused former into its shaped tree, at the moment of asking. */
 import type { FusedFormer } from "./former-nodes.ts";
 import type { ReadEnv } from "./env.ts";
+type AssertRows = (count: number) => void;
 /**
  * Evaluate a fused former into its tree, at the moment of asking, resolving
  * its names through the engine's read environment. Slot values must be
@@ -3099,7 +3119,8 @@ import type { ReadEnv } from "./env.ts";
  * engine evaluates). A violated former promise throws {@link FormerFault}.
  * When forming a consequence input, the engine records that fault on the ask.
  */
-export declare function formTree(fused: FusedFormer, env: ReadEnv): Promise<unknown>;
+export declare function formTree(fused: FusedFormer, env: ReadEnv, assertRows?: AssertRows): Promise<unknown>;
+export {};
 
 === dist/engine/reads/former-lowering.d.ts ===
 /** Lower authored former trees and serialize registered formers. */
@@ -3792,6 +3813,8 @@ export declare function patternVariables(...mappings: Array<Mapping | undefined>
  */
 import type { Frame, InstrumentedQuery, Mapping } from "../reactions/types.ts";
 import type { QueryMetadata } from "./query-metadata.ts";
+/** Give engine-owned evaluations the cached implementation behind a direct-read root. */
+export declare function registerEvaluationQuery(direct: InstrumentedQuery, evaluation: InstrumentedQuery): void;
 /**
  * A query returned something other than one record or an array of records.
  * This is a runtime fault, never a refusal: queries have no refusal posture, so
@@ -4292,8 +4315,10 @@ import type { ViewOp } from "./views.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
 /** An op as evaluation accepts it: authored (live refs, symbols) or IR (names). */
 export type EvaluableOp = ViewOp | ViewOpIR;
+type AssertRows = (count: number) => void;
 /** Evaluate a where-op list over the working set, one op at a time. */
-export declare function applyWhereOps(frames: Frames, ops: readonly (WhereOp | ViewOpIR | Condition)[], env?: ReadEnv): Promise<Frames>;
+export declare function applyWhereOps(frames: Frames, ops: readonly (WhereOp | ViewOpIR | Condition)[], env?: ReadEnv, assertRows?: AssertRows): Promise<Frames>;
+export {};
 
 === dist/engine/reads/where-ops.d.ts ===
 /**
@@ -4455,7 +4480,7 @@ import type { EndpointDeclaration } from "../boundary/assembly/endpoint-portabil
 import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { AppIR } from "../reads/ir.ts";
 export type DiagnosticSeverity = "info" | "warning" | "error";
-export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "UNRESOLVED_WIRE_LEAF" | "ENDPOINT_PATH_OVERLAP" | "MULTIPLE_RESPOND_CONSEQUENCES" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER";
+export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "UNRESOLVED_WIRE_LEAF" | "ENDPOINT_PATH_OVERLAP" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER";
 export interface ApplicationDiagnostic {
     severity: DiagnosticSeverity;
     code: DiagnosticCode;
@@ -4484,6 +4509,8 @@ type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => obj
  */
 export interface GeneratedApplication {
     assemble: () => InspectableAssembly;
+    /** Release resources owned by this generation descriptor after assembly drain. */
+    close?: () => void | Promise<void>;
     /** The application's name, used as the document title and to derive the rest. */
     title: string;
     /** Where generated files are written; defaults to `generated/` beside the config. */
@@ -4528,7 +4555,8 @@ type ResolvedApplication = GeneratedApplication & {
  * that declared it.
  */
 export declare function resolveApplication(application: GeneratedApplication, config: URL): ResolvedApplication;
-export declare function renderGenerated(application: ResolvedApplication): {
+export declare function inspectGenerated<T>(application: ResolvedApplication, inspect: (assembly: InspectableAssembly) => T | Promise<T>): Promise<T>;
+export declare function renderGenerated(application: ResolvedApplication): Promise<{
     metrics: {
         reactions: number;
         views: number;
@@ -4537,7 +4565,7 @@ export declare function renderGenerated(application: ResolvedApplication): {
     };
     specification: string;
     wire: string;
-};
+}>;
 export declare function pinGenerated(application: ResolvedApplication, artifact?: "all" | "specification" | "wire"): Promise<void>;
 export declare function checkGenerated(application: ResolvedApplication): Promise<void>;
 export {};
@@ -4724,11 +4752,9 @@ export { compute, no, whether } from "../engine/reads/where-ops.ts";
 export { is } from "../engine/reads/computations.ts";
 export { count, view } from "../engine/reads/views.ts";
 export { each, form, former } from "../engine/reads/former-builders.ts";
-export type { ReadLine, RelationView, SlotPattern } from "../engine/reads/lines.ts";
+export type { ReadLine, RelationView } from "../engine/reads/lines.ts";
 export type { Condition } from "../engine/reads/where-ops.ts";
-export type { ActionCall, RefusedActionLine, ReturnedActionLine, Vars, } from "../engine/reactions/types.ts";
 export type { QueryPromise } from "../engine/reads/query-metadata.ts";
-export type { FreeBindings, InputBindings, OutputBindings } from "../engine/reads/sentence.ts";
 
 === dist/tooling/index.d.ts ===
 /** Supported inspection, rendering, and generated-contract tools. */
@@ -4738,8 +4764,6 @@ export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagn
 export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
 export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
 export type { ApplicationManifestV3, ManifestEndpointV3 } from "../engine/tooling/manifest.ts";
-export { applyArtifactPlan, artifactPlan, checkArtifactPlan, normalizeArtifactPath, planGenerated, } from "../engine/tooling/artifact-plan.ts";
-export type { ArtifactFilesystem, ArtifactKind, ArtifactPlan, ArtifactPlanEntry, ArtifactStatus, GeneratedPlanOptions, } from "../engine/tooling/artifact-plan.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
 export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";

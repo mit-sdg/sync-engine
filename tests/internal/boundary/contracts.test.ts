@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from "vite-plus/test";
 import { vocabulary } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { renderInputContracts } from "@sync-engine/internal/boundary/protocol/endpoints";

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { assemble, fail, isEndpointDef } from "@sync-engine/internal/boundary/assembly/assemble";
 import { declarationsOf } from "@sync-engine/internal/reactions/authoring/partitions";
 import type { ActionPattern } from "@sync-engine/internal/reactions/types";
@@ -195,6 +195,33 @@ describe("endpoint", () => {
       input: { required: ["note"], defaults: { note: null } },
     });
     expect(Note.input).toEqual({ required: ["note"], defaults: { note: null } });
+  });
+
+  test("assembly rejects nonportable endpoint defaults", () => {
+    const Dated = endpoint("/dated", () => receive().then(respond({ ok: true })), {
+      input: { defaults: { at: new Date(0) } },
+    });
+
+    expect(() => assemble({ vocabulary: emptyVocabulary, composition: { Dated } })).toThrow(
+      "input defaults for /dated must be canonical JSON-portable",
+    );
+  });
+
+  test("public routes receive a canonical deep copy of endpoint defaults", () => {
+    const defaults = { settings: { z: 2, a: 1 } };
+    const Configured = endpoint("/configured", () => receive().then(respond({ ok: true })), {
+      input: { defaults },
+    });
+    const app = assemble({ vocabulary: emptyVocabulary, composition: { Configured } });
+
+    defaults.settings.a = 9;
+    expect(app.publicInterface.routes["/configured"]?.defaults).toEqual({
+      settings: { a: 1, z: 2 },
+    });
+    expect(
+      Object.keys((app.publicInterface.routes["/configured"]?.defaults?.settings ?? {}) as object),
+    ).toEqual(["a", "z"]);
+    expect(app.publicInterface.routes["/configured"]).not.toBe(app.contracts["/configured"]);
   });
 
   test("receive and respond share one correlation binding", () => {

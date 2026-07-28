@@ -27,7 +27,7 @@ export type ProductionHttpWire = {
       "session": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
     };
     output: {
-      "user": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["current"]>>, ["user"]>>;
+      "active": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["current"]>>, ["active"]>>;
     };
     error: { error: AppWideError | "INVALID_INPUT" | "UNKNOWN_SESSION" };
   };
@@ -41,13 +41,10 @@ export type ProductionHttpWire = {
     error: { error: AppWideError | "INVALID_INPUT" | "UNKNOWN_SESSION" };
   };
   "/sessions/start": {
-    input: {
-      "user": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>[0], ["user"]>>;
-    };
+    input: Record<string, never>;
     output: {
       "expiresAt": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>>, ["expiresAt"]>>;
       "session": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>>, ["session"]>>;
-      "user": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>[0], ["user"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>>, ["user"]>]>>;
     };
     error: { error: AppWideError | "INVALID_INPUT" };
   };
@@ -68,7 +65,7 @@ export type ProductionHttpWireHttp = {
   "/sessions/current": {
     input: Record<string, never>;
     output: {
-      "user": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["current"]>>, ["user"]>>;
+      "active": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["current"]>>, ["active"]>>;
     };
     error: { error: HttpAppWideError | "INVALID_REQUEST" | "UNAUTHORIZED" };
   };
@@ -80,12 +77,8 @@ export type ProductionHttpWireHttp = {
     error: { error: HttpAppWideError | "INVALID_REQUEST" | "UNAUTHORIZED" };
   };
   "/sessions/start": {
-    input: {
-      "user": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>[0], ["user"]>>;
-    };
-    output: {
-      "user": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>[0], ["user"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>>, ["user"]>]>>;
-    };
+    input: Record<string, never>;
+    output: Record<string, never>;
     error: { error: HttpAppWideError | "INVALID_REQUEST" };
   };
 };

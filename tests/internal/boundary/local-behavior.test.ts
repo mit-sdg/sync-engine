@@ -3,7 +3,7 @@ import { custom } from "@sync-engine/advanced";
 import { assemble } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { each, former, reaction, view, vocabulary, when, where } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { oneOf } from "@sync-engine/internal/reads/matchers";
 

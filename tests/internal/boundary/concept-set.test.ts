@@ -366,6 +366,99 @@ describe("concept floors", () => {
     expect(mongo.Cataloging).toEqual(new PersistentCataloging("primary"));
   });
 
+  test("accepts an inherited subclass replacement and inventories its complete protocol", () => {
+    const set = conceptSet({
+      Cataloging: registerConcept({
+        class: Cataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        floors: { persistent: () => new PersistentCataloging("primary") },
+      }),
+    });
+    const application = assembleApplication({
+      vocabulary: set.vocabulary,
+      composition: {},
+      instances: set.implementations("persistent", undefined),
+    });
+
+    expect(applicationManifest(application).concepts).toContainEqual({
+      name: "Cataloging",
+      purpose: "Keep a catalog.",
+      principle: "A missing item is refused.",
+      actions: [
+        { name: "find", roles: [], refusals: ["ITEM_NOT_FOUND"] },
+        { name: "misplaced", roles: [] },
+      ],
+      queries: [{ name: "_find", roles: [], returns: "optional" }],
+    });
+  });
+
+  test("accepts own-method object replacements and inventories them deterministically", () => {
+    const set = conceptSet({
+      Cataloging: registerConcept({
+        class: Cataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        floors: {
+          structural: () => ({
+            freshID: () => "injected-helper",
+            misplaced(_: Record<string, never>) {
+              throw new MissingItem("same class, wrong action");
+            },
+            _find(_: Record<string, never>): { item: string }[] {
+              return [];
+            },
+            find(_: Record<string, never>) {
+              throw new MissingItem("missing");
+            },
+          }),
+        },
+      }),
+    });
+    const application = assembleApplication({
+      vocabulary: set.vocabulary,
+      composition: {},
+      instances: set.implementations("structural", undefined),
+    });
+
+    expect(applicationManifest(application).concepts).toContainEqual({
+      name: "Cataloging",
+      purpose: "Keep a catalog.",
+      principle: "A missing item is refused.",
+      actions: [
+        { name: "find", roles: [], refusals: ["ITEM_NOT_FOUND"] },
+        { name: "misplaced", roles: [] },
+      ],
+      queries: [{ name: "_find", roles: [], returns: "optional" }],
+    });
+    expect(JSON.stringify(applicationManifest(application).concepts)).not.toContain("freshID");
+  });
+
+  test("rejects a malformed floor implementation before it reaches assembly", () => {
+    const set = conceptSet({
+      Cataloging: registerConcept({
+        class: Cataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        floors: {
+          malformed: (() => ({
+            find: "not callable",
+            misplaced(_: Record<string, never>) {
+              return {};
+            },
+            _find(_: Record<string, never>) {
+              return [];
+            },
+          })) as never,
+        },
+      }),
+    });
+
+    expect(() => set.implementations("malformed", undefined)).toThrow(
+      'floor "malformed": implementation for "Cataloging" does not implement `find`',
+    );
+  });
+
   test("a floor factory receives the name the concept is registered under", () => {
     const set = conceptSet({
       Warehouse: registerConcept({

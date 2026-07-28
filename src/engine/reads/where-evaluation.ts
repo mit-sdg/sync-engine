@@ -6,7 +6,6 @@ import type { ComputationRef } from "./computations.ts";
 import type { ReadEnv } from "./env.ts";
 import {
   bindInputMapping,
-  distinctFrames,
   expandOutputRows,
   Frames,
   readPatternValue,
@@ -24,6 +23,34 @@ import { setOwn } from "@engine/utils/own-property";
 
 /** An op as evaluation accepts it: authored (live refs, symbols) or IR (names). */
 export type EvaluableOp = ViewOp | ViewOpIR;
+type AssertRows = (count: number) => void;
+
+function pushFrame(into: Frames, frame: Frame, assertRows?: AssertRows): void {
+  assertRows?.(into.length + 1);
+  into.push(frame);
+}
+
+function appendFrames(into: Frames, frames: Iterable<Frame>, assertRows?: AssertRows): void {
+  for (const frame of frames) pushFrame(into, frame, assertRows);
+}
+
+function expandDistinctRows(
+  frame: Frame,
+  rows: readonly unknown[],
+  output: Mapping,
+  assertRows?: AssertRows,
+): Frames {
+  const matches = new Frames();
+  for (const row of rows) {
+    const candidate = new Frames();
+    expandOutputRows(candidate, frame, [row], output);
+    const matched = candidate[0];
+    if (matched === undefined || matches.some((prior) => structurallyEqual(prior, matched)))
+      continue;
+    pushFrame(matches, matched, assertRows);
+  }
+  return matches;
+}
 
 interface ViewShape {
   name: string;
@@ -89,6 +116,7 @@ async function viewRows(
   input: Mapping,
   frame: Frame,
   env: ReadEnv | undefined,
+  assertRows?: AssertRows,
 ): Promise<unknown[]> {
   const shape = viewShapeOf(view);
   const filled = bindInputMapping(frame, input);
@@ -98,7 +126,10 @@ async function viewRows(
   }
   const survivors: Frame[] = [];
   for (const block of shape.alternatives) {
-    survivors.push(...(await applyViewOps(new Frames(seed), block, env)));
+    for (const survivor of await applyViewOps(new Frames(seed), block, env, assertRows)) {
+      assertRows?.(survivors.length + 1);
+      survivors.push(survivor);
+    }
     if (shape.outs.length === 0 && survivors.length > 0) break;
   }
   if (shape.outs.length === 0) return survivors.length > 0 ? [{}] : [];
@@ -106,7 +137,10 @@ async function viewRows(
   for (const survivor of survivors) {
     const row: Record<string, unknown> = {};
     for (const out of shape.outs) setOwn(row, out, survivor[out]);
-    if (!rows.some((prior) => structurallyEqual(prior, row))) rows.push(row);
+    if (!rows.some((prior) => structurallyEqual(prior, row))) {
+      assertRows?.(rows.length + 1);
+      rows.push(row);
+    }
   }
   if (shape.promise === "one" && rows.length !== 1) {
     throw new QueryAnswerFault(
@@ -130,9 +164,14 @@ async function lineRows(
   frame: Frame,
   env: ReadEnv | undefined,
   site: string,
+  assertRows?: AssertRows,
 ): Promise<unknown[]> {
-  if (op.query !== undefined) return queryRows(queryOf(op.query, env, site), op.in, frame);
-  return viewRows(viewOf(op, env), op.in, frame, env);
+  if (op.query !== undefined) {
+    const rows = await queryRows(queryOf(op.query, env, site), op.in, frame);
+    assertRows?.(rows.length);
+    return rows;
+  }
+  return viewRows(viewOf(op, env), op.in, frame, env, assertRows);
 }
 
 function passesNot(not: Mapping | undefined, frame: Frame, row: unknown): boolean {
@@ -155,55 +194,61 @@ function hasUnboundInput(frame: Frame, input: Mapping): boolean {
   return unbound;
 }
 
-async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined): Promise<Frames> {
+async function applyOp(
+  frames: Frames,
+  op: EvaluableOp,
+  env: ReadEnv | undefined,
+  assertRows?: AssertRows,
+): Promise<Frames> {
+  assertRows?.(frames.length);
   const result = new Frames();
   for (const frame of frames) {
     switch (op.op) {
       case "find": {
         if (hasUnboundInput(frame, op.in)) break;
-        const rows = (await lineRows(op, frame, env, "find")).filter((row) =>
-          passesNot("not" in op ? op.not : undefined, frame, row),
-        );
+        const rows = await lineRows(op, frame, env, "find", assertRows);
         if (Object.keys(op.out).length === 0) {
-          if (rows.length > 0) result.push(frame);
+          if (rows.some((row) => passesNot("not" in op ? op.not : undefined, frame, row))) {
+            pushFrame(result, frame, assertRows);
+          }
           break;
         }
-        const matches = new Frames();
-        expandOutputRows(matches, frame, rows, op.out);
-        result.push(...distinctFrames(matches));
+        const passing = rows.filter((row) =>
+          passesNot("not" in op ? op.not : undefined, frame, row),
+        );
+        appendFrames(result, expandDistinctRows(frame, passing, op.out, assertRows), assertRows);
         break;
       }
       case "whether": {
         if (hasUnboundInput(frame, op.in)) {
-          result.push({ ...frame });
+          pushFrame(result, { ...frame }, assertRows);
           break;
         }
-        const rows = await lineRows(op, frame, env, "whether");
-        const matches = new Frames();
-        expandOutputRows(matches, frame, rows, op.out);
-        if (matches.length === 0) result.push({ ...frame });
-        else result.push(...distinctFrames(matches));
+        const rows = await lineRows(op, frame, env, "whether", assertRows);
+        const matches = expandDistinctRows(frame, rows, op.out, assertRows);
+        if (matches.length === 0) pushFrame(result, { ...frame }, assertRows);
+        else appendFrames(result, matches, assertRows);
         break;
       }
       case "no": {
         if (hasUnboundInput(frame, op.in)) break;
-        const rows = await lineRows(op, frame, env, "no");
-        const matches = new Frames();
-        expandOutputRows(matches, frame, rows, op.out);
-        if (matches.length === 0) result.push(frame);
+        const rows = await lineRows(op, frame, env, "no", assertRows);
+        const matches = expandDistinctRows(frame, rows, op.out, assertRows);
+        if (matches.length === 0) pushFrame(result, frame, assertRows);
         break;
       }
       case "count": {
         const query = queryOf(op.query, env, "count");
         const rows = await queryRows(query, op.in, frame);
+        assertRows?.(rows.length);
         if (op.out in frame && frame[op.out] !== rows.length) break;
-        result.push({ ...frame, [op.out]: rows.length });
+        pushFrame(result, { ...frame, [op.out]: rows.length }, assertRows);
         break;
       }
       case "holds": {
         if ("fused" in op) {
           if ((await op.fused.computation.fn(bindInputMapping(frame, op.fused.in))) === true) {
-            result.push(frame);
+            pushFrame(result, frame, assertRows);
           }
           break;
         }
@@ -213,7 +258,9 @@ async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined
             op.computation,
             op.computation,
           );
-        if ((await ref.fn(bindInputMapping(frame, op.in))) === true) result.push(frame);
+        if ((await ref.fn(bindInputMapping(frame, op.in))) === true) {
+          pushFrame(result, frame, assertRows);
+        }
         break;
       }
       case "compute": {
@@ -227,7 +274,7 @@ async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined
               ));
         const value = await ref.fn(bindInputMapping(frame, op.in));
         if (op.out in frame && frame[op.out] !== value) break;
-        result.push({ ...frame, [op.out]: value });
+        pushFrame(result, { ...frame, [op.out]: value }, assertRows);
         break;
       }
       case "custom": {
@@ -239,7 +286,7 @@ async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined
         const args = op.in.map((variable) => frame[variable]);
         const value = await fn(...args);
         if (op.out.length === 0) {
-          result.push(frame);
+          pushFrame(result, frame, assertRows);
           break;
         }
         const values = op.out.length === 1 ? [value] : value;
@@ -256,7 +303,7 @@ async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined
           if (Object.hasOwn(frame, variable) && frame[variable] !== values[index]) unifies = false;
           else setOwn(next, variable, values[index]);
         });
-        if (unifies) result.push(next);
+        if (unifies) pushFrame(result, next, assertRows);
         break;
       }
       default: {
@@ -276,10 +323,12 @@ async function applyViewOps(
   frames: Frames,
   ops: readonly EvaluableOp[],
   env: ReadEnv | undefined,
+  assertRows?: AssertRows,
 ): Promise<Frames> {
   let current = frames;
+  assertRows?.(current.length);
   for (const op of ops) {
-    current = await applyOp(current, op, env);
+    current = await applyOp(current, op, env, assertRows);
     if (current.length === 0) break;
   }
   return current;
@@ -290,11 +339,12 @@ export async function applyWhereOps(
   frames: Frames,
   ops: readonly (WhereOp | ViewOpIR | Condition)[],
   env?: ReadEnv,
+  assertRows?: AssertRows,
 ): Promise<Frames> {
   const normalized = ops.map((op) =>
     typeof (op as { op?: unknown }).op === "string"
       ? (op as EvaluableOp)
       : (conditionOp(op as Condition, "where") as EvaluableOp),
   );
-  return applyViewOps(frames, normalized, env);
+  return applyViewOps(frames, normalized, env, assertRows);
 }

@@ -1,4 +1,7 @@
-import { conceptMetadataOf } from "@engine/reactions/concepts/concept-metadata";
+import {
+  callableConceptMember,
+  conceptMetadataOf,
+} from "@engine/reactions/concepts/concept-metadata";
 import type { QueryPromise } from "./query-metadata.ts";
 
 export type { QueryPromise, QueryPromises } from "./query-metadata.ts";
@@ -29,7 +32,7 @@ export function validateQueryContractMap(
     );
   }
   for (const [name, promise] of Object.entries(contracts)) {
-    if (!name.startsWith("_") || typeof prototype[name] !== "function") {
+    if (!name.startsWith("_") || callableConceptMember(prototype, name) === undefined) {
       throw new Error(
         `${conceptName}: the queries contract names "${name}", which is not a query ` +
           `(a \`_\`-prefixed method) of ${className}.`,
@@ -51,7 +54,7 @@ export function validateQueryContracts(concept: object, conceptName: string): vo
   const contracts = conceptMetadataOf(concept)?.queries ?? cls?.queries;
   validateQueryContractMap(
     contracts,
-    Object.getPrototypeOf(concept) as Record<string, unknown>,
+    concept as Record<string, unknown>,
     conceptName,
     cls?.name ?? "the concept",
   );

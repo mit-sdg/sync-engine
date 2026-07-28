@@ -21,7 +21,7 @@ export type ReadingCircleWire = {
     output: {
       "reading": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Selecting"]["choose"]>[0], ["item"]>>;
     };
-    error: { error: AppWideError | "INVALID_INPUT" };
+    error: { error: AppWideError | "DISCUSSION_ALREADY_OPEN" | "INVALID_INPUT" };
   };
   "/circles/create": {
     input: {

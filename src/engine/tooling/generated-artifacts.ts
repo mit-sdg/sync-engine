@@ -26,6 +26,8 @@ type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => obj
  */
 export interface GeneratedApplication {
   assemble: () => InspectableAssembly;
+  /** Release resources owned by this generation descriptor after assembly drain. */
+  close?: () => void | Promise<void>;
   /** The application's name, used as the document title and to derive the rest. */
   title: string;
   /** Where generated files are written; defaults to `generated/` beside the config. */
@@ -81,6 +83,9 @@ export function resolveApplication(
   if (typeof application.assemble !== "function") {
     throw new Error("generated config: assemble must build the application.");
   }
+  if (application.close !== undefined && typeof application.close !== "function") {
+    throw new Error("generated config: close must release generation resources.");
+  }
   if (application.httpProfile !== undefined && application.httpFloor !== undefined) {
     throw new Error("generated config: httpProfile and httpFloor are mutually exclusive.");
   }
@@ -105,11 +110,13 @@ export function resolveApplication(
   };
 }
 
-function completeGeneratedPlan(application: ResolvedApplication): {
+function completeGeneratedPlan(
+  application: ResolvedApplication,
+  assembled: InspectableAssembly,
+): {
   manifest: ApplicationManifestV3;
   plan: ArtifactPlan;
 } {
-  const assembled = application.assemble();
   const manifest = applicationManifest(assembled);
   const httpWire =
     application.httpFloor !== undefined
@@ -136,8 +143,30 @@ function completeGeneratedPlan(application: ResolvedApplication): {
   };
 }
 
-export function renderGenerated(application: ResolvedApplication) {
-  const { manifest, plan } = completeGeneratedPlan(application);
+export async function inspectGenerated<T>(
+  application: ResolvedApplication,
+  inspect: (assembly: InspectableAssembly) => T | Promise<T>,
+): Promise<T> {
+  let assembled: InspectableAssembly | undefined;
+  try {
+    assembled = application.assemble();
+    return await inspect(assembled);
+  } finally {
+    try {
+      if (assembled !== undefined) {
+        await assembled.beginDrain();
+        await assembled.whenIdle();
+      }
+    } finally {
+      await application.close?.();
+    }
+  }
+}
+
+export async function renderGenerated(application: ResolvedApplication) {
+  const { manifest, plan } = await inspectGenerated(application, (assembled) =>
+    completeGeneratedPlan(application, assembled),
+  );
   const specification = plan.entries.find(({ kind }) => kind === "specification")?.content;
   const wire = plan.entries.find(({ kind }) => kind === "wire")?.content;
   if (specification === undefined || wire === undefined) {
@@ -155,11 +184,14 @@ export function renderGenerated(application: ResolvedApplication) {
   };
 }
 
-function generatedPlan(
+async function generatedPlan(
   application: ResolvedApplication,
   artifact: "all" | "specification" | "wire" = "all",
-): ArtifactPlan {
-  const plan = completeGeneratedPlan(application).plan;
+): Promise<ArtifactPlan> {
+  const plan = await inspectGenerated(
+    application,
+    (assembled) => completeGeneratedPlan(application, assembled).plan,
+  );
   if (artifact === "all") return plan;
   return { entries: plan.entries.filter(({ kind }) => kind === artifact) };
 }
@@ -194,7 +226,7 @@ export async function pinGenerated(
   artifact: "all" | "specification" | "wire" = "all",
 ): Promise<void> {
   const status = await applyArtifactPlan(
-    generatedPlan(application, artifact),
+    await generatedPlan(application, artifact),
     nodeFilesystem(application.directory),
   );
   const failed = status.filter(({ status: state }) => state === "failed");
@@ -207,7 +239,7 @@ export async function pinGenerated(
 
 export async function checkGenerated(application: ResolvedApplication): Promise<void> {
   const status = await checkArtifactPlan(
-    generatedPlan(application),
+    await generatedPlan(application),
     nodeFilesystem(application.directory),
   );
   const failed = status.filter(({ status: state }) => state === "failed");

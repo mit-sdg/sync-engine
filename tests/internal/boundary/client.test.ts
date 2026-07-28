@@ -9,6 +9,8 @@ type TestApi = {
   "/admin/users/roles/assign": { input: { userId: string; role: string }; output: { ok: boolean } };
   "/ping": { input: Record<string, never>; output: { ok: boolean } };
   "/auth/then": { input: { code: string }; output: { ok: boolean } };
+  "/then": { input: { code: string }; output: { ok: boolean } };
+  "/then/continue": { input: { code: string }; output: { ok: boolean } };
 };
 
 function fakeTransport(response?: unknown): ClientTransport {
@@ -125,6 +127,27 @@ describe("createClient (transport-agnostic)", () => {
     expect(transport).toHaveBeenCalledWith({
       path: "/auth/then",
       input: { code: "continue" },
+    });
+  });
+
+  test("paths rooted at then are indexed-only and remain callable", async () => {
+    const transport = fakeTransport({ ok: true });
+    const client = createClient<TestApi>({ transport });
+    type HasGroupedRootThen = "then" extends keyof typeof client ? true : false;
+    const hasGroupedRootThen: HasGroupedRootThen = false;
+
+    expect(hasGroupedRootThen).toBe(false);
+    expect(Reflect.get(client, "then")).toBeUndefined();
+    await client["/then"]({ code: "continue" });
+    await client["/then/continue"]({ code: "next" });
+
+    expect(transport).toHaveBeenNthCalledWith(1, {
+      path: "/then",
+      input: { code: "continue" },
+    });
+    expect(transport).toHaveBeenNthCalledWith(2, {
+      path: "/then/continue",
+      input: { code: "next" },
     });
   });
 

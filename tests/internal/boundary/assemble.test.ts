@@ -109,6 +109,16 @@ describe("assemble", () => {
     expect(substituted.count).toBe(101);
   });
 
+  test("rejects a supplied implementation that omits the concept protocol", () => {
+    expect(() =>
+      assemble({
+        vocabulary: vocab,
+        instances: { Counting: {} } as never,
+        composition: {},
+      }),
+    ).toThrow('assemble: implementation for "Counting" does not implement `increment`, `_current`');
+  });
+
   test("a name outside the vocabulary is an assembly error", () => {
     expect(() =>
       assemble({

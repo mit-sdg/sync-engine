@@ -2,39 +2,39 @@
 
 ## Purpose
 
-Issue, verify, and end short-lived sessions without exposing transport policy.
+Issue, verify, and end short-lived anonymous sessions without exposing transport
+policy or accepting an identity claim.
 
 ## Principle
 
-Maya starts a session with a bounded expiry and can use it before that time. At
-expiry it is removed and refused, just like an unknown or ended session. Ending
-an active session makes it unknown.
+A caller starts a session with a bounded expiry and can use it before that time.
+At expiry it is removed and refused, just like an unknown or ended session.
+Ending an active session makes it unknown.
 
 ## State
 
 ```state
 a set of Sessions with
   a session Session
-  a user Person
   an expiry Time
 ```
 
 ## Actions
 
 ```actions
-start (user: Person) : return (session: Session, expiresAt: Time, user: Person)
+start () : return (session: Session, expiresAt: Time)
   then
-    add a new session for user with an expiry
-    return session, expiresAt, and user
+    add a new session with an unguessable identity and an expiry
+    return session and expiresAt
 
-current (session: Session) : return (user: Person)
+current (session: Session) : return (active: Flag)
   where session is unknown, ended, or expired
   then
     delete session if expired
     refuse UNKNOWN_SESSION "This session is not active."
   where session is active
   then
-    return its user
+    return active true
 
 end (session: Session) : return (ended: Flag)
   where session is unknown, ended, or expired

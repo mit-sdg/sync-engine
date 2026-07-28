@@ -309,36 +309,26 @@ complete admission boundary.
 
 ## Call the typed client
 
-Frontend code imports the generated wire and the canonical `client` subpath.
-It does not import concepts, reactions, the gateway, or the application.
+Code outside the assembly accepts a client typed by the generated wire. It does
+not import concepts, reactions, the gateway, or the application, and it does not
+need to choose a transport.
 
 _Source: [`examples/operations-room/src/client.ts`](../../examples/operations-room/src/client.ts)_
 
 ```ts
 export type OperationsRoomClient = Client<OperationsRoomWire>;
 
-export function createOperationsRoomClient(options: HttpClientOptions = {}): OperationsRoomClient {
-  return createHttpClient<OperationsRoomWire>(options);
+export async function loadRoomDashboard(client: OperationsRoomClient, room: string) {
+  const result = await client.rooms.get({ room });
+  if ("error" in result) return { message: `Could not load the room: ${result.error}` };
+  return result.dashboard;
 }
 ```
 
-The operations-room edge uses the low-level raw HTTP adapter with the same
-`/api` prefix as the browser client:
-
-_Source: [`examples/operations-room/src/edge.ts`](../../examples/operations-room/src/edge.ts)_
-
-```ts
-export function buildOperationsRoomHttp(instances: OperationsRoomOverrides = {}) {
-  const { application, gateway } = buildOperationsRoom(instances);
-  const handler = createHttpHandler({ gateway, basePath: "/api" });
-  return { application, gateway, handler };
-}
-```
-
-That gateway-only form deliberately preserves logical error envelopes and is
-not the recommended direct public deployment boundary. A public JSON host uses
-the production profile and supplies the assembly so registered category
-metadata is available:
+Reading Circle and Operations Room stop at the standard gateway. They do not
+present the raw logical-envelope HTTP adapter as a public deployment boundary.
+A public JSON host chooses a production profile and supplies the assembly so
+registered category metadata is available:
 
 _Source: [`examples/production-http/src/edge.ts`](../../examples/production-http/src/edge.ts)_
 
@@ -367,18 +357,16 @@ one logical credential to a same-origin cookie. The complete cookie path and
 generated projection are checked in the [Production HTTP
 example](../../examples/production-http/README.md).
 
-The client creates a browser-facing instance with that prefix and narrows the result before
-reading the dashboard:
+An HTTP-floor caller uses the projected contract, whose type omits credential
+fields supplied and consumed by the cookie binding:
 
-_Source: [`examples/operations-room/src/client.ts`](../../examples/operations-room/src/client.ts)_
+_Source: [`examples/production-http/src/client.ts`](../../examples/production-http/src/client.ts)_
 
 ```ts
-export const operations = createOperationsRoomClient({ baseUrl: "/api" });
+export type ProductionHttpClient = Client<ProductionHttpWireHttp>;
 
-export async function loadRoomDashboard(client: OperationsRoomClient, room: string) {
-  const result = await client.rooms.get({ room });
-  if ("error" in result) return { message: `Could not load the room: ${result.error}` };
-  return result.dashboard;
+export function createProductionHttpClient(options: HttpClientOptions = {}): ProductionHttpClient {
+  return createHttpClient<ProductionHttpWireHttp>(options);
 }
 ```
 
@@ -401,8 +389,8 @@ source and generated outputs follow this layout:
 | `src/concept-set.ts`  | One explicit set deriving vocabulary, references, and implementation floors    |
 | `src/composition/`    | Reactions, views, formers, boundary declarations, and selectable packs         |
 | `src/assembly.ts`     | Vocabulary, composition, and concept implementation choices                    |
-| `src/edge.ts`         | Standard gateway and transport handler                                         |
-| `src/client.ts`       | Generated-contract client used outside the backend                             |
+| `src/edge.ts`         | Standard gateway; production examples also own transport policy and handlers   |
+| `src/client.ts`       | Transport-neutral helper or projected generated-contract HTTP client           |
 | `src/scenario.ts`     | A runnable path through the assembled application                              |
 | `generated/`          | Pinned assembled read-back and wire contract                                   |
 | `generated.config.ts` | Assembly and output metadata for checking or pinning generated artifacts       |

@@ -1,9 +1,10 @@
 # Production HTTP
 
-Production HTTP is a complete application showing the production public-error
-profile separately from same-origin cookie credentials. `Sessioning` owns
-credential meaning and expiry; `Naming` contributes a non-authentication
-`CONFLICT` category. The transport owns JSON safety, public projection,
+Production HTTP is a compact application showing the production public-error
+profile separately from same-origin cookie credentials. `Sessioning` issues
+random anonymous credentials and owns their expiry; it does not accept a caller's
+identity claim. `Naming` allocates non-identity namespace labels and contributes
+a `CONFLICT` category. The transport owns JSON safety, public projection,
 correlation, and the cookie binding. Runtime and toolchain requirements are
 declared in `package.json` and the repository [support policy](../../SUPPORT.md).
 
@@ -17,9 +18,9 @@ bun run check
 bun run start
 ```
 
-The scenario issues a session, uses it on a protected endpoint, claims a name
-through the credential-free production profile, observes the projected
-duplicate-name conflict, and ends the session.
+The scenario uses the generated projected HTTP client to issue and use a session,
+claim a namespace label through the credential-free production profile, observe
+the projected duplicate-name conflict, and end the session.
 
 ## What the example establishes
 
@@ -30,11 +31,16 @@ duplicate-name conflict, and ends the session.
 - Unauthorized protected requests and successful session ending clear the
   cookie; issuance and clearing responses are not stored.
 - Sessioning stores each expiry, issues it thirty minutes from its injected
-  clock, and removes expired credentials before refusing them as unauthorized.
+  clock with `crypto.randomUUID()` credentials, and removes expired credentials
+  before refusing them as unauthorized.
+- Every endpoint has runtime input and output validators; application and gateway
+  execution limits bound admission, work expansion, and request duration.
 - The explicit `/api` base path and correlation response header apply to both
   production handler forms.
 - Production configuration rejects an HTTP public origin.
 - The pinned module contains the logical wire and its projected HTTP form.
+- `src/client.ts` binds callers to that projected form rather than the logical
+  cookie fields removed by the HTTP floor.
 
 The Fetch handlers are not complete servers. CORS, TLS termination, HSTS,
 trusted proxies, reverse-proxy policy, connection and rate limits, and the
@@ -48,6 +54,7 @@ application's authentication design remain host or application concerns.
 | `src/composition.ts`                                           | Session and naming endpoints                            |
 | `src/assembly.ts`                                              | Application assembly                                    |
 | `src/edge.ts`                                                  | Production profile, cookie floor, gateway, and handlers |
+| `src/client.ts`                                                | Projected generated-contract HTTP client                |
 | `src/scenario.ts`                                              | Runnable path through both production HTTP forms        |
 | `tests/application.test.ts`                                    | End-to-end HTTP and generated-wire contract             |
 | `generated.config.ts`                                          | Logical and projected artifact configuration            |

@@ -50,7 +50,7 @@ const directAssembly = assemble(directOptions);
 const directAction: Promise<{ value: string } | ActionRefusal> = directAssembly.concepts.Direct.act(
   { value: "value" },
 );
-const directQuery: { value: string }[] = directAssembly.concepts.Direct._read({});
+const directQuery: Promise<{ value: string }[]> = directAssembly.concepts.Direct._read({});
 const gatewayOptions: GatewayOptions = {
   application: directAssembly,
 };

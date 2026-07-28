@@ -1,6 +1,6 @@
 export class UnknownSession extends Error {}
 
-type Session = { user: string; expiresAt: number };
+type Session = { expiresAt: number };
 
 const SESSION_LIFETIME_MS = 30 * 60 * 1000;
 
@@ -16,27 +16,32 @@ function activeSession(sessions: Map<string, Session>, session: string, now: num
 
 export class SessioningConcept {
   private readonly sessions = new Map<string, Session>();
+  private readonly runtime: { clock: () => Date; freshCredential: () => string };
 
-  constructor(private readonly clock: () => Date = () => new Date()) {}
+  constructor(
+    clock: () => Date = () => new Date(),
+    freshCredential: () => string = () => crypto.randomUUID(),
+  ) {
+    this.runtime = { clock, freshCredential };
+  }
 
-  start({ user }: { user: string }) {
-    const session = `session-${user.toLowerCase()}`;
-    const expiresAt = this.clock().getTime() + SESSION_LIFETIME_MS;
-    this.sessions.set(session, { user, expiresAt });
+  start(_input: Record<string, never>) {
+    const session = this.runtime.freshCredential();
+    const expiresAt = this.runtime.clock().getTime() + SESSION_LIFETIME_MS;
+    this.sessions.set(session, { expiresAt });
     return {
       session,
       expiresAt: new Date(expiresAt),
-      user,
     };
   }
 
   current({ session }: { session: string }) {
-    const found = activeSession(this.sessions, session, this.clock().getTime());
-    return { user: found.user };
+    activeSession(this.sessions, session, this.runtime.clock().getTime());
+    return { active: true };
   }
 
   end({ session }: { session: string }) {
-    activeSession(this.sessions, session, this.clock().getTime());
+    activeSession(this.sessions, session, this.runtime.clock().getTime());
     this.sessions.delete(session);
     return { ended: true };
   }

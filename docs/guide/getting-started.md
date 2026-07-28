@@ -125,14 +125,21 @@ export const WriteNote = endpoint("/notes/write", ({ text, note }) =>
 );
 
 export const GetNote = endpoint("/notes/get", ({ note }) =>
-  receive({ note }).then(respond({ page: notePage({ note }) })),
+  receive({ note }).then(
+    where(Noting._get({ note }))
+      .then(respond({ page: notePage({ note }) }))
+      .named("found"),
+    where(no(Noting._get({ note })))
+      .then(respond({ error: "NOTE_NOT_FOUND" }))
+      .named("missing"),
+  ),
 );
 ```
 
 `WriteNote` receives `text`, asks `Noting.write`, waits for its returned
-occurrence, and responds with the new identifier. `GetNote` forms a page from
-the current query result. These declarations do not execute while the module is
-loaded.
+occurrence, and responds with the new identifier. `GetNote` forms a page when
+the note exists and returns `NOTE_NOT_FOUND` when it does not. These declarations
+do not execute while the module is loaded.
 
 ## Assemble and invoke
 

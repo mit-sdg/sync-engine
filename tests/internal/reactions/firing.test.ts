@@ -41,4 +41,30 @@ describe("firing bookkeeping", () => {
     book.unmark(branch1);
     expect(book.hasConsumed("ask", "Notify")).toBe(true);
   });
+
+  test("record releases every in-flight mark when appending the firing throws", () => {
+    const failure = new Error("append failed");
+    const store = new MemoryStore();
+    store.append = () => {
+      throw failure;
+    };
+    const book = new FiringBook(store);
+    const fill: FiringFill = {
+      reaction: "Notify",
+      flow: "flow",
+      whenIds: ["ask"],
+      bindings: { item: "a" },
+      produced: [],
+      branches: [],
+    };
+    const branch1 = book.newBranch(fill);
+    const branch2 = book.newBranch(fill);
+    book.mark(branch1);
+    book.mark(branch2);
+
+    expect(() => book.record(fill)).toThrow(failure);
+    expect(branch1.marked).toBe(false);
+    expect(branch2.marked).toBe(false);
+    expect(book.hasConsumed("ask", "Notify")).toBe(false);
+  });
 });

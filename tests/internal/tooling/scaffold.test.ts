@@ -76,6 +76,24 @@ describe("sync-engine new", () => {
     expect(conceptFailures(join(project, "src/concepts/noting"))).toEqual([]);
   });
 
+  test("the default check inspects the application and the scenario covers a missing note", async () => {
+    const project = join(directory, "note-keeper");
+    await scaffoldProject(project);
+
+    const manifest = await readFile(join(project, "package.json"), "utf8");
+    expect(manifest).toContain("sync-engine check --config generated.config.ts");
+
+    const composition = await readFile(join(project, "src/composition.ts"), "utf8");
+    expect(composition).toContain('respond({ error: "NOTE_NOT_FOUND" })');
+    expect(composition).toContain("no(Noting._get({ note }))");
+
+    const scenario = await readFile(join(project, "src/scenario.ts"), "utf8");
+    expect(scenario).toContain('notes.notes.get({ note: "missing-note" })');
+    expect(scenario).toContain('missing.error !== "NOTE_NOT_FOUND"');
+    expect(scenario).not.toContain("FORMER_NONE");
+    expect(scenario).not.toContain("INTERNAL_ERROR");
+  });
+
   test("refuses to overwrite a file that is already there", async () => {
     const project = join(directory, "note-keeper");
     await scaffoldProject(project);

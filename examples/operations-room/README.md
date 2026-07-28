@@ -51,10 +51,10 @@ endpoint declaration unchanged.
 | `src/composition/room.ts`                                      | Room endpoints and staged formers                                                                               |
 | `src/composition/contributions.ts`                             | Policy-parameterized contribution endpoints                                                                     |
 | `src/assembly.ts`                                              | Composition and implementation selection                                                                        |
-| `src/edge.ts`                                                  | Standard gateway and generic HTTP handler                                                                       |
-| `src/client.ts`                                                | Generated-contract HTTP client                                                                                  |
+| `src/edge.ts`                                                  | Standard gateway                                                                                                |
+| `src/client.ts`                                                | Transport-neutral generated-contract client helper                                                              |
 | `src/scenario.ts`                                              | End-to-end local scenario                                                                                       |
-| `tests/application.test.ts`                                    | Default, pack, policy, client, and HTTP behavior                                                                |
+| `tests/application.test.ts`                                    | Default, pack, policy, and client behavior                                                                      |
 | `generated.config.ts`                                          | Artifact command configuration                                                                                  |
 | [`generated/operations-room.md`](generated/operations-room.md) | Pinned assembled read-back                                                                                      |
 | [`generated/wire.ts`](generated/wire.ts)                       | Pinned TypeScript wire contract                                                                                 |

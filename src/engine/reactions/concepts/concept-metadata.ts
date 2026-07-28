@@ -21,8 +21,54 @@ export interface RefusalBranch {
 /** Refusal branches admitted for each action, keyed by the action that may signal them. */
 export type RefusalContracts = Record<string, readonly RefusalBranch[]>;
 
+/** Canonical callable surface retained from the vocabulary's concept class. */
+export interface ConceptProtocol {
+  readonly actions: readonly string[];
+  readonly queries: readonly string[];
+}
+
+export const CONCEPT_PROTOCOL: unique symbol = Symbol("conceptProtocol");
+
+/** Resolve one own or inherited protocol method without invoking accessors. */
+export function callableConceptMember(
+  value: object,
+  name: string,
+): ((...args: never[]) => unknown) | undefined {
+  let current: object | null = value;
+  while (current !== null && current !== Object.prototype) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, name);
+    if (descriptor !== undefined) {
+      return typeof descriptor.value === "function" ? descriptor.value : undefined;
+    }
+    current = Object.getPrototypeOf(current) as object | null;
+  }
+  return undefined;
+}
+
+/** Read the callable protocol declared by a class prototype and its bases. */
+export function conceptProtocolOf(prototype: object): ConceptProtocol {
+  const actions: string[] = [];
+  const queries: string[] = [];
+  const seen = new Set<string>();
+  let current: object | null = prototype;
+  while (current !== null && current !== Object.prototype) {
+    for (const name of Object.getOwnPropertyNames(current)) {
+      if (name === "constructor" || seen.has(name)) continue;
+      seen.add(name);
+      const descriptor = Object.getOwnPropertyDescriptor(current, name);
+      if (typeof descriptor?.value !== "function") continue;
+      (name.startsWith("_") ? queries : actions).push(name);
+    }
+    current = Object.getPrototypeOf(current) as object | null;
+  }
+  actions.sort();
+  queries.sort();
+  return { actions, queries };
+}
+
 /** Contracts owned by a vocabulary name rather than embedded in its class. */
 export interface ConceptMetadata {
+  readonly [CONCEPT_PROTOCOL]?: ConceptProtocol;
   purpose?: string;
   principle?: string;
   queries?: Readonly<Record<string, QueryPromise>>;

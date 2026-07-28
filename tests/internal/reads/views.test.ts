@@ -9,7 +9,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
 import { count, earlier, is, reaction, view, vocabulary, when, where } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
 import type { AppIR } from "@sync-engine/internal/reads/ir";

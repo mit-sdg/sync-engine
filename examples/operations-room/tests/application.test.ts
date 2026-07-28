@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { createLocalClient } from "@mit-sdg/sync-engine/client";
 import { describe, expect, test } from "vite-plus/test";
-import { createOperationsRoomClient, loadRoomDashboard } from "../src/client.ts";
+import type { OperationsRoomWire } from "../generated/wire.ts";
+import { loadRoomDashboard } from "../src/client.ts";
 import { AlertingConcept } from "../src/concepts/alerting/alerting.ts";
 import { DiscussingConcept } from "../src/concepts/discussing/discussing.ts";
 import { GatheringConcept } from "../src/concepts/gathering/gathering.ts";
@@ -12,7 +14,7 @@ import {
   requiredCurrentMitigation,
   roomSummary,
 } from "../src/composition/room.ts";
-import { buildOperationsRoomHttp } from "../src/edge.ts";
+import { buildOperationsRoom } from "../src/edge.ts";
 import { runScenario } from "../src/scenario.ts";
 import { identities } from "../src/identities.ts";
 
@@ -87,12 +89,9 @@ describe("operations-room composition", () => {
     });
   });
 
-  test("the frontend client reaches the fixed gateway through HTTP", async () => {
-    const { handler } = buildOperationsRoomHttp();
-    const local = createOperationsRoomClient({
-      baseUrl: "http://operations.test/api",
-      fetch: (input, init) => handler(new Request(input, init)),
-    });
+  test("the client-facing helper accepts a transport-neutral typed client", async () => {
+    const { gateway } = buildOperationsRoom();
+    const local = createLocalClient<OperationsRoomWire>({ invoker: gateway });
     const created = await local.rooms.create({ name: "Release response", host: "Mara" });
     if ("error" in created) throw new Error(String(created.error));
     const room = String(created.room);

@@ -1,5 +1,6 @@
 import {
   vocabulary,
+  vocabularyClasses,
   type ConceptClass,
   type ConceptClassesOf,
   type ConceptEntry,
@@ -9,6 +10,10 @@ import type {
   ErrorConstructor,
   PublicErrorCategory as MetadataPublicErrorCategory,
   RefusalContracts,
+} from "@engine/reactions/concepts/concept-metadata";
+import {
+  callableConceptMember,
+  conceptProtocolOf,
 } from "@engine/reactions/concepts/concept-metadata";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
@@ -25,8 +30,10 @@ type ImplementationMember<Member> = Member extends (...args: infer Args) => infe
   ? (...args: Args) => Result | Promise<Awaited<Result>>
   : Member;
 
-export type ConceptImplementation<C extends ConceptClass> = {
-  [Name in keyof InstanceType<C>]: ImplementationMember<InstanceType<C>[Name]>;
+export type ConceptImplementation<C extends ConceptClass> = object & {
+  [Name in keyof InstanceType<C> as InstanceType<C>[Name] extends (...args: never[]) => unknown
+    ? Name
+    : never]: ImplementationMember<InstanceType<C>[Name]>;
 };
 
 export type Implementations<
@@ -74,6 +81,10 @@ export function conceptFloor<
   if (typeof floor.close !== "function") {
     throw new Error("conceptFloor: close must release the floor's resources.");
   }
+  const classes = vocabularyClasses(vocabularyDeclaration);
+  for (const name of expected) {
+    validateConceptImplementation("conceptFloor", name, classes[name], floor.instances[name]);
+  }
   return floor;
 }
 
@@ -82,11 +93,14 @@ export function conceptFloor<
  * arrives as the second argument, so a registry never has to spell its own
  * application name.
  */
-type FloorFactory = (context: never, name: string) => object;
+type FloorFactory<C extends ConceptClass = ConceptClass> = (
+  context: never,
+  name: string,
+) => ConceptImplementation<C>;
 
 export interface ConceptRegistration<
   C extends ConceptClass,
-  F extends Record<string, FloorFactory> = Record<never, never>,
+  F extends Record<string, FloorFactory<C>> = Record<never, never>,
 > {
   class: C;
   /** Markdown containing the concept's parsed registration contract and human prose. */
@@ -102,7 +116,7 @@ declare const RegistrationBrand: unique symbol;
 
 export type RegisteredConcept<
   C extends ConceptClass,
-  F extends Record<string, FloorFactory> = Record<never, never>,
+  F extends Record<string, FloorFactory<C>> = Record<never, never>,
 > = ConceptRegistration<C, F> & {
   readonly [RegistrationBrand]: true;
   /** The machine-readable contract extracted from the registration's specification. */
@@ -113,17 +127,24 @@ function isErrorConstructor(value: unknown): value is ErrorConstructor {
   return typeof value === "function" && value.prototype instanceof Error;
 }
 
-/** The class's own action and query method names, read without invoking getters. */
-function membersOf(cls: ConceptClass): { actions: string[]; queries: string[] } {
-  const prototype = cls.prototype as object;
-  const actions: string[] = [];
-  const queries: string[] = [];
-  for (const name of Object.getOwnPropertyNames(prototype)) {
-    if (name === "constructor") continue;
-    if (typeof Object.getOwnPropertyDescriptor(prototype, name)?.value !== "function") continue;
-    (name.startsWith("_") ? queries : actions).push(name);
+export function validateConceptImplementation(
+  source: string,
+  conceptName: string,
+  cls: ConceptClass,
+  implementation: unknown,
+): asserts implementation is object {
+  if (implementation === null || typeof implementation !== "object") {
+    throw new Error(`${source}: implementation for "${conceptName}" must be an object.`);
   }
-  return { actions, queries };
+  const expected = conceptProtocolOf(cls.prototype as object);
+  const missing = [...expected.actions, ...expected.queries].filter(
+    (name) => callableConceptMember(implementation, name) === undefined,
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `${source}: implementation for "${conceptName}" does not implement ${listed(missing)}.`,
+    );
+  }
 }
 
 function listed(names: readonly string[]): string {
@@ -138,7 +159,7 @@ function checkAgainstClass(cls: ConceptClass, spec: ConceptSpec): void {
   const fail = (what: string): never => {
     throw new Error(`registerConcept(${cls.name}): ${what}`);
   };
-  const implemented = membersOf(cls);
+  const implemented = conceptProtocolOf(cls.prototype as object);
   const prototype = cls.prototype as Record<string, (...args: never[]) => unknown>;
 
   for (const [kind, declarations, members] of [
@@ -212,7 +233,7 @@ function checkRefusals(
 
 export function registerConcept<
   C extends ConceptClass,
-  const F extends Record<string, FloorFactory> = Record<never, never>,
+  const F extends Record<string, FloorFactory<C>> = Record<never, never>,
 >(registration: ConceptRegistration<C, F>): RegisteredConcept<C, F> {
   if (typeof registration.class !== "function" || registration.class.prototype === undefined) {
     throw new Error("registerConcept: class must be a constructable concept class.");
@@ -233,8 +254,7 @@ export function registerConcept<
 }
 
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
-type ClassOfRegistration<R> =
-  R extends RegisteredConcept<infer C, Record<string, FloorFactory>> ? C : never;
+type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
   [Name in keyof S]: {
     class: ClassOfRegistration<S[Name]>;
@@ -368,15 +388,23 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
 
     const result: Record<string, object> = {};
     for (const [name, registration] of Object.entries(registrations)) {
+      let implementation: unknown;
       if (floor === undefined) {
-        setOwn(result, name, new (registration.class as new () => object)());
+        implementation = new (registration.class as new () => object)();
       } else {
         const factory = registration.floors?.[floor];
         if (factory === undefined) {
           throw new Error(`conceptSet: floor "${floor}" disappeared during construction.`);
         }
-        setOwn(result, name, factory(context as never, name));
+        implementation = factory(context as never, name);
       }
+      validateConceptImplementation(
+        floor === undefined ? "conceptSet" : `conceptSet: floor "${floor}"`,
+        name,
+        registration.class,
+        implementation,
+      );
+      setOwn(result, name, implementation);
     }
     return result;
   };

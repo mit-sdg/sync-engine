@@ -9,10 +9,10 @@ _specifications and composition source, then regenerate this file._
 
 ### Naming
 
-**Purpose.** Claim distinct public names.
+**Purpose.** Reserve distinct non-identity namespace labels.
 
-**Principle.** Maya claims atlas once. A second claim of atlas is refused because public names
-are unique.
+**Principle.** An application reserves atlas once. A second claim of atlas is refused because
+namespace labels are unique; the label is not a person's authenticated identity.
 
 Actions:
 
@@ -31,17 +31,18 @@ Actions:
 
 ### Sessioning
 
-**Purpose.** Issue, verify, and end short-lived sessions without exposing transport policy.
+**Purpose.** Issue, verify, and end short-lived anonymous sessions without exposing transport
+policy or accepting an identity claim.
 
-**Principle.** Maya starts a session with a bounded expiry and can use it before that time. At
-expiry it is removed and refused, just like an unknown or ended session. Ending
-an active session makes it unknown.
+**Principle.** A caller starts a session with a bounded expiry and can use it before that time.
+At expiry it is removed and refused, just like an unknown or ended session.
+Ending an active session makes it unknown.
 
 Actions:
 
 - `current (session)` — may refuse `UNKNOWN_SESSION`
 - `end (session)` — may refuse `UNKNOWN_SESSION`
-- `start (user)`
+- `start (…)`
 
 ## Reactions
 
@@ -74,11 +75,11 @@ then
 ### CurrentSession#2
 
 ```reaction
-when Sessioning.current (session, user), asked by CurrentSession
+when Sessioning.current (session, active), asked by CurrentSession
 where
   earlier, RequestBoundary.request (path: "/sessions/current", requestId, session)
 then
-  RequestBoundary.respond (requestId, user)
+  RequestBoundary.respond (active, requestId)
 ```
 
 ### DeliverFaultToAsker
@@ -122,19 +123,19 @@ then
 ### StartSession
 
 ```reaction
-when RequestBoundary.request (path: "/sessions/start", requestId, user)
+when RequestBoundary.request (path: "/sessions/start", requestId)
 then
-  Sessioning.start (user)
+  Sessioning.start ()
 ```
 
 ### StartSession#2
 
 ```reaction
-when Sessioning.start (user, expiresAt, session), asked by StartSession
+when Sessioning.start (expiresAt, session), asked by StartSession
 where
-  earlier, RequestBoundary.request (path: "/sessions/start", requestId, user)
+  earlier, RequestBoundary.request (path: "/sessions/start", requestId)
 then
-  RequestBoundary.respond (expiresAt, requestId, session, user)
+  RequestBoundary.respond (expiresAt, requestId, session)
 ```
 
 ## Endpoint input contracts
@@ -147,4 +148,3 @@ not listed here have no explicit input contract.
 - `/names/claim` — requires `name`
 - `/sessions/current` — requires `session`
 - `/sessions/end` — requires `session`
-- `/sessions/start` — requires `user`

@@ -1,9 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
 import { createLocalClient } from "@sync-engine/client";
 import { vocabulary } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { createInvoker, Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
 import type { InvocationResult } from "@sync-engine/boundary";
 import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
@@ -41,6 +42,22 @@ function setup() {
 }
 
 describe("createInvoker", () => {
+  test("refreshes standing reads before admitting each application ask", async () => {
+    const refreshes: string[] = [];
+    const requesting = new Requesting();
+    const reaction = new Reacting();
+    const invoker = createInvoker({
+      boundary: requesting,
+      instrumented: reaction.instrumentConcept(requesting, "RequestBoundary"),
+      contracts: { "/required": { required: ["value"] } },
+      refresh: () => refreshes.push("refreshed"),
+    });
+
+    await invoker.invoke("/required", {});
+
+    expect(refreshes).toEqual(["refreshed"]);
+  });
+
   test("invokes endpoint and returns success with echoed value", async () => {
     const { invoker } = setup();
 

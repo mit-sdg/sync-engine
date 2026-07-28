@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { Logging, MemoryStore } from "@sync-engine/assembly";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
 import { earlier, when } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
 import { actionNodeId } from "@sync-engine/internal/reactions/concepts/introspect";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";
@@ -243,7 +243,7 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     expect(c3).toBe(1);
   });
 
-  test("invalidateCaches refreshes one concept's memoized query", async () => {
+  test("manual engine queries retain memoized results until invalidated", async () => {
     class CachingConcept {
       calls = 0;
       _data(_: Record<PropertyKey, never>) {

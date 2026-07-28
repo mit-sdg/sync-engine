@@ -1,7 +1,7 @@
 import type { InvocationResult } from "../protocol/errors.ts";
 import { FrameworkErrorCode } from "../protocol/errors.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
-import { serializeEnvelope, serializeJsonValue } from "../protocol/envelope.ts";
+import { serializeJsonValue } from "../protocol/envelope.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import { assemblyBehind } from "../assembly/assembly-registry.ts";
@@ -18,58 +18,11 @@ import {
 import { isPlainObject } from "@engine/reads/matchers";
 import { setOwn } from "@engine/utils/own-property";
 
-// The body is the flat wire envelope; http adds only the status decoration —
-// 200 for success, 400 for a domain error, and the code's own status for a
-// framework fault.
-function mapResultToResponse(result: InvocationResult): Response {
-  const status = result.ok
-    ? 200
-    : result.error.kind === "domain"
-      ? 400
-      : statusFor(result.error.code, 500);
-  const exposed =
-    !result.ok && result.error.kind === "framework" && status >= 500
-      ? ({
-          ok: false,
-          error: { kind: "framework", code: result.error.code },
-        } satisfies InvocationResult)
-      : result;
-  let body: string;
-  try {
-    body = serializeEnvelope(exposed);
-  } catch {
-    return internalErrorResponse();
-  }
-  return new Response(body, {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
 function internalErrorResponse(): Response {
   return new Response(`{"error":"${FrameworkErrorCode.INTERNAL_ERROR}"}`, {
     status: 500,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-function statusFor(code: unknown, fallback = 400): number {
-  switch (code) {
-    case FrameworkErrorCode.NOT_FOUND:
-      return 404;
-    case FrameworkErrorCode.UNAVAILABLE:
-      return 503;
-    case FrameworkErrorCode.INVALID_INPUT:
-      return 422;
-    case FrameworkErrorCode.TIMED_OUT:
-      return 504;
-    case FrameworkErrorCode.ABORTED:
-      return 499;
-    case FrameworkErrorCode.INTERNAL_ERROR:
-      return 500;
-    default:
-      return fallback;
-  }
 }
 
 const MAX_BODY_BYTES = 1_048_576;
@@ -151,124 +104,6 @@ async function readRequestText(request: Request): Promise<RequestTextResult> {
   }
 }
 
-export function createHttpHandler(
-  options:
-    | {
-        gateway: Invoker<ContractShape>;
-        basePath?: string;
-        correlation?: HttpCorrelationOptions;
-      }
-    | {
-        invoker: Invoker<ContractShape>;
-        basePath?: string;
-        correlation?: HttpCorrelationOptions;
-      }
-    | {
-        gateway: Invoker<ContractShape>;
-        application: Assembly<Record<string, new (...args: never[]) => object>>;
-        profile: ProductionHttpProfile;
-        correlation?: HttpCorrelationOptions;
-      }
-    | {
-        gateway: Invoker<ContractShape>;
-        application: Assembly<Record<string, new (...args: never[]) => object>>;
-        floor: HttpFloor;
-        correlation?: HttpCorrelationOptions;
-      },
-): (request: Request) => Promise<Response> {
-  if ("floor" in options) return createFloorHandler(options);
-  if ("profile" in options) return createProfileHandler(options);
-  const base = normalizeHttpBasePath(options.basePath);
-  const target = "gateway" in options ? options.gateway : options.invoker;
-
-  return async (request) => {
-    const correlationId = correlationIdFor(request, options.correlation);
-    const reply = (response: Response) =>
-      withCorrelation(response, correlationId, options.correlation);
-    if (request.method !== "POST") {
-      return reply(
-        new Response(
-          JSON.stringify({ error: FrameworkErrorCode.BAD_STATUS, detail: "Method not allowed" }),
-          { status: 405, headers: { "Content-Type": "application/json" } },
-        ),
-      );
-    }
-
-    const url = new URL(request.url);
-    let path = url.pathname;
-    if (base !== "" && path !== base && !path.startsWith(`${base}/`)) {
-      return reply(
-        new Response(
-          JSON.stringify({
-            error: FrameworkErrorCode.NOT_FOUND,
-            detail: `Unknown endpoint: ${path}`,
-          }),
-          { status: 404, headers: { "Content-Type": "application/json" } },
-        ),
-      );
-    }
-    if (base !== "") {
-      path = path.slice(base.length);
-    }
-
-    if (!path.startsWith("/") || path === "") {
-      return reply(
-        new Response(
-          JSON.stringify({
-            error: FrameworkErrorCode.NOT_FOUND,
-            detail: `Unknown endpoint: ${path}`,
-          }),
-          { status: 404, headers: { "Content-Type": "application/json" } },
-        ),
-      );
-    }
-
-    let body: unknown;
-    const requestText = await readRequestText(request);
-    if (!requestText.ok) {
-      if (requestText.reason === "too_large") {
-        return reply(
-          new Response(
-            JSON.stringify({
-              error: FrameworkErrorCode.INVALID_INPUT,
-              detail: "Request body exceeds the 1 MiB limit",
-            }),
-            { status: 413, headers: { "Content-Type": "application/json" } },
-          ),
-        );
-      }
-      return reply(
-        new Response(
-          JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        ),
-      );
-    }
-    try {
-      body = requestText.text === "" ? {} : JSON.parse(requestText.text);
-    } catch {
-      return reply(
-        new Response(
-          JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        ),
-      );
-    }
-
-    let result: InvocationResult;
-    try {
-      result = await target.invoke(path, body as never, {
-        signal: request.signal,
-        correlationId,
-      });
-    } catch {
-      return reply(internalErrorResponse());
-    }
-
-    return reply(mapResultToResponse(result));
-  };
-}
-
 type FloorHandlerOptions = {
   gateway: Invoker<ContractShape>;
   application: Assembly<Record<string, new (...args: never[]) => object>>;
@@ -284,6 +119,12 @@ type ProfileHandlerOptions = {
 };
 
 type PolicyHandlerOptions = FloorHandlerOptions | ProfileHandlerOptions;
+
+export function createHttpHandler(
+  options: FloorHandlerOptions | ProfileHandlerOptions,
+): (request: Request) => Promise<Response> {
+  return "floor" in options ? createFloorHandler(options) : createProfileHandler(options);
+}
 
 function publicFailure(
   result: Exclude<InvocationResult, { ok: true }>,
@@ -318,16 +159,15 @@ function publicJson(
   status: number,
   options: { cookie?: string; noStore?: boolean } = {},
 ): Response {
-  let serialized: string;
   try {
-    serialized = serializeJsonValue(body);
+    const serialized = serializeJsonValue(body);
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (options.cookie !== undefined) headers.set("Set-Cookie", options.cookie);
+    if (options.noStore === true) headers.set("Cache-Control", "no-store");
+    return new Response(serialized, { status, headers });
   } catch {
     return internalErrorResponse();
   }
-  const headers = new Headers({ "Content-Type": "application/json" });
-  if (options.cookie !== undefined) headers.set("Set-Cookie", options.cookie);
-  if (options.noStore === true) headers.set("Cache-Control", "no-store");
-  return new Response(serialized, { status, headers });
 }
 
 function createFloorHandler(options: FloorHandlerOptions): (request: Request) => Promise<Response> {
@@ -424,41 +264,48 @@ function createPolicyHandler(
     } catch {
       return reply(internalErrorResponse());
     }
-    if (!result.ok) {
-      const failure = publicFailure(result, categories);
-      const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";
-      return reply(
-        publicJson(
-          { error: failure.error },
-          failure.status,
-          clear ? { cookie: clearedCookie(), noStore: true } : {},
-        ),
-      );
-    }
+    try {
+      if (!result.ok) {
+        const failure = publicFailure(result, categories);
+        const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";
+        return reply(
+          publicJson(
+            { error: failure.error },
+            failure.status,
+            clear ? { cookie: clearedCookie(), noStore: true } : {},
+          ),
+        );
+      }
 
-    const value = result.value;
-    if (credential === undefined) return reply(publicJson(value, 200));
-    if (path === credential.issue.path) {
-      if (!isPlainObject(value)) {
-        return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
+      const value = result.value;
+      if (credential === undefined) return reply(publicJson(value, 200));
+      if (path === credential.issue.path) {
+        if (!isPlainObject(value)) {
+          return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
+        }
+        const record = value as Record<string, unknown>;
+        const token = record[credential.issue.output];
+        const sourceExpiry = record[credential.issue.expires];
+        const expires =
+          sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
+        if (typeof token !== "string" || Number.isNaN(expires.getTime())) {
+          return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
+        }
+        const publicValue = Object.fromEntries(
+          Object.entries(record).filter(
+            ([key]) => key !== credential.issue.output && key !== credential.issue.expires,
+          ),
+        );
+        return reply(
+          publicJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true }),
+        );
       }
-      const record = value as Record<string, unknown>;
-      const token = record[credential.issue.output];
-      const sourceExpiry = record[credential.issue.expires];
-      const expires = sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
-      if (typeof token !== "string" || Number.isNaN(expires.getTime())) {
-        return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
+      if (credential.clear.includes(path)) {
+        return reply(publicJson(value, 200, { cookie: clearedCookie(), noStore: true }));
       }
-      const publicValue = Object.fromEntries(
-        Object.entries(record).filter(
-          ([key]) => key !== credential.issue.output && key !== credential.issue.expires,
-        ),
-      );
-      return reply(publicJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true }));
+      return reply(publicJson(value, 200));
+    } catch {
+      return reply(internalErrorResponse());
     }
-    if (credential.clear.includes(path)) {
-      return reply(publicJson(value, 200, { cookie: clearedCookie(), noStore: true }));
-    }
-    return reply(publicJson(value, 200));
   };
 }

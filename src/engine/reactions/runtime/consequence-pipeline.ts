@@ -409,7 +409,11 @@ export class ConsequencePipeline {
         result,
         key,
         await mapValueTreeAsync(value, (node) =>
-          isFusedFormer(node) ? formTree(node as FusedFormer, this.definitions.readEnv()) : DESCEND,
+          isFusedFormer(node)
+            ? formTree(node as FusedFormer, this.definitions.readEnv(), (count) =>
+                this.assertRows(input[flow] as string, count),
+              )
+            : DESCEND,
         ),
       );
     }

@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Claim distinct public names.
+Reserve distinct non-identity namespace labels.
 
 ## Principle
 
-Maya claims atlas once. A second claim of atlas is refused because public names
-are unique.
+An application reserves atlas once. A second claim of atlas is refused because
+namespace labels are unique; the label is not a person's authenticated identity.
 
 ## State
 

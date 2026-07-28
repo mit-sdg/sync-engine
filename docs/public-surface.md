@@ -30,7 +30,7 @@ update.
 
 <!-- register:language:start -->
 
-`Condition`, `ActionCall`, `FreeBindings`, `InputBindings`, `OutputBindings`, `QueryPromise`, `ReadLine`, `RefusedActionLine`, `RelationView`, `ReturnedActionLine`, `SlotPattern`, `Vars`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
+`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -63,8 +63,8 @@ call shapes:
 Concept entries accepted by `vocabulary` are either a concept class or
 `{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals?,
 publicErrors? }`. `QueryPromise` is `"one" | "optional" | "many"`.
-`Condition`, `ReadLine`, `SlotPattern`, and `RelationView` name reusable
-declaration shapes; the binding types are normally inferred.
+`Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes;
+bindings are inferred from their declaration callbacks.
 
 For progressive examples, see the [reactions guide](./guide/reactions.md) and
 [views and formers guide](./guide/views-and-formers.md). The normative matching,
@@ -103,13 +103,14 @@ allows an active flow to complete before automatic eviction.
 
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
 `whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
-both lifecycle promises resolve when accepted causal work actually settles.
+both lifecycle promises resolve when accepted action, query, and former work
+actually settles.
 `ActionRefusal` is the direct-action refusal result.
 `ConceptImplementation`, `Implementations`, and `ImplementationOverrides` name
 complete or partial implementation maps. Assembled non-query actions are
 asynchronous and conservatively resolve to their awaited result or an
-`ActionRefusal`; underscore-prefixed queries retain their implementation return
-shape.
+`ActionRefusal`; underscore-prefixed queries resolve asynchronously to their
+declared implementation answer.
 
 Closures, explicit `custom` operations, `$is` object-identity patterns, raw
 transforms, and whole unlowered reactions are local. Ordinary assembly rejects
@@ -270,15 +271,11 @@ asks](./semantics.md#failures-between-action-asks) and
 
 ### HTTP
 
-| API                     | Compact signature / options                                                                                                             |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `createHttpHandler`     | Raw `({ gateway \| invoker, basePath? })`; production `({ gateway, application, profile })`; cookie `({ gateway, application, floor })` |
-| `productionHttpProfile` | `productionHttpProfile({ origin, basePath? }): ProductionHttpProfile`                                                                   |
-| `httpFloor`             | `httpFloor({ origin, basePath?, credential: { name, input, issue: { path, output, expires }, clear } })`                                |
-
-The raw gateway/invoker forms are low-level envelope adapters. They preserve
-logical domain codes and selected framework statuses and are not the
-recommended public deployment boundary.
+| API                     | Compact signature / options                                                                              |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `createHttpHandler`     | Profile `({ gateway, application, profile })`; cookie floor `({ gateway, application, floor })`          |
+| `productionHttpProfile` | `productionHttpProfile({ origin, basePath? }): ProductionHttpProfile`                                    |
+| `httpFloor`             | `httpFloor({ origin, basePath?, credential: { name, input, issue: { path, output, expires }, clear } })` |
 
 `ProductionHttpProfile` is the credential-free production policy. It requires
 an HTTP or HTTPS public origin, accepts an optional normalized base path, and
@@ -333,20 +330,20 @@ absent and is required only by endpoint commands. `CliCommand`,
 `EmittedFrameworkErrorCode` is its value union. Controlled admission details
 may accompany an error, but exception text from an unknown failure is omitted.
 
-| Code                       | Ordinary source                                                | HTTP status from the low-level raw adapter |
-| -------------------------- | -------------------------------------------------------------- | ------------------------------------------ |
-| `INVALID_INPUT`            | Gateway input admission or oversized request body              | 422 for admission; 413 for oversized body  |
-| `NOT_FOUND`                | Unknown route                                                  | 404                                        |
-| `UNAVAILABLE`              | Overload or draining admission                                 | 503                                        |
-| `TIMED_OUT`                | Invocation wait expired                                        | 504                                        |
-| `ABORTED`                  | Invocation signal aborted                                      | 499                                        |
-| `INTERNAL_ERROR`           | Application, framework, or interpreter fault                   | 500                                        |
-| `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure              | 500                                        |
-| `BAD_JSON`                 | HTTP request or response parsing                               | 400 for a bad request                      |
-| `BAD_STATUS`               | Unsupported request method or client-side status normalization | 405 for an unsupported method              |
-| `NETWORK_ERROR`            | HTTP client could not complete `fetch`                         | No response                                |
-| `HEADER_RESOLUTION_FAILED` | HTTP client header provider failed                             | No response                                |
-| `UNKNOWN_ERROR`            | Unclassified framework envelope                                | 500                                        |
+| Code                       | Ordinary source                                                |
+| -------------------------- | -------------------------------------------------------------- |
+| `INVALID_INPUT`            | Gateway input admission or oversized request body              |
+| `NOT_FOUND`                | Unknown route                                                  |
+| `UNAVAILABLE`              | Overload or draining admission                                 |
+| `TIMED_OUT`                | Invocation wait expired                                        |
+| `ABORTED`                  | Invocation signal aborted                                      |
+| `INTERNAL_ERROR`           | Application, framework, or interpreter fault                   |
+| `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure              |
+| `BAD_JSON`                 | HTTP request or response parsing                               |
+| `BAD_STATUS`               | Unsupported request method or client-side status normalization |
+| `NETWORK_ERROR`            | HTTP client could not complete `fetch`                         |
+| `HEADER_RESOLUTION_FAILED` | HTTP client header provider failed                             |
+| `UNKNOWN_ERROR`            | Unclassified framework envelope                                |
 
 ## `client`
 
@@ -397,7 +394,7 @@ the client call.
 
 <!-- register:tooling:start -->
 
-`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV3`, `ArtifactFilesystem`, `ArtifactKind`, `ArtifactPlan`, `ArtifactPlanEntry`, `ArtifactStatus`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedPlanOptions`, `ManifestEndpointV3`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `applyArtifactPlan`, `artifactPlan`, `checkArtifactPlan`, `diagnosticsFail`, `inspectAssembly`, `normalizeArtifactPath`, `planGenerated`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
+`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV3`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `ManifestEndpointV3`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `diagnosticsFail`, `inspectAssembly`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
 
 <!-- register:tooling:end -->
 
@@ -444,29 +441,6 @@ machine-readable advisory surface. `diagnosticsFail` treats error diagnostics as
 failures by default and can promote warnings; informational diagnostics remain
 advisory.
 
-`planGenerated(manifest, options)` is a filesystem-free specification and wire
-planner. Every `ArtifactPlanEntry` has a normalized relative POSIX path,
-content, kind, and stable digest. `artifactPlan` plans caller-rendered entries,
-while `normalizeArtifactPath` rejects absolute, parent, empty-segment, and
-backslash paths, plus `%`, `?`, `#`, and `:` URL metacharacters that cannot be
-passed losslessly through the built-in file-URL adapter. Default generated Markdown and TypeScript banners include the
-exact package version. Custom specification and wire banners retain a mandatory
-generator line. Planning rejects a manifest whose version or generator identity
-differs from the installed package and rejects forged non-portable application
-IR. `httpWire` may append one already-projected HTTP contract to the logical wire
-module under `httpWireName`; both contracts share the vocabulary anchor,
-strict-leaf policy, and generated preamble.
-
-`checkArtifactPlan(plan, filesystem)` classifies entries as `missing`,
-`changed`, `unchanged`, or `failed`. `applyArtifactPlan` validates and reads the
-complete plan before its first write, skips unchanged files, and leaves unknown
-files untouched. Its environment-independent `ArtifactFilesystem.writeAtomic`
-contract requires same-directory temporary-file replacement. The installed CLI
-implements that contract with write and rename; public tooling has no Node
-filesystem dependency. Atomicity is per file, not per plan. A write failure can
-leave earlier entries updated; `applyArtifactPlan` does not roll back completed
-writes.
-
 The structural argument consumed by `renderApp` has `title: string`,
 `concepts: ConceptInventoryIR[]`, and `app: AppIR`. The package does not export
 a separate public name for that aggregate argument type.
@@ -497,6 +471,7 @@ shape rather than an exported package type.
 | ------------------- | -------- | ---------------------------------------------------------- |
 | `assemble`          | yes      | Function that builds the application                       |
 | `title`             | yes      | Application title used to derive names                     |
+| `close`             | no       | Runs after the generated assembly drains                   |
 | `directory`         | no       | `new URL("./generated/", configUrl)`                       |
 | `specification`     | no       | Slugged title plus `.md`                                   |
 | `wire`              | no       | `"wire.ts"`                                                |

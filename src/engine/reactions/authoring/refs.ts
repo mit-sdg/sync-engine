@@ -34,7 +34,11 @@ import { lineOf } from "@engine/reads/lines";
 import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
 import { parseSpec } from "../concepts/concept-spec.ts";
 import type { ComputationFn, ComputationRef } from "@engine/reads/computations";
-import type { ConceptMetadata } from "../concepts/concept-metadata.ts";
+import {
+  CONCEPT_PROTOCOL,
+  conceptProtocolOf,
+  type ConceptMetadata,
+} from "../concepts/concept-metadata.ts";
 import type {
   ActionCall,
   InstrumentedAction,
@@ -343,15 +347,19 @@ export function vocabulary(
       throw new Error(`Vocabulary: "${name}" must be a concept class.`);
     }
     setOwn(classes, name, cls);
-    let declaredMetadata: ConceptMetadata | undefined;
+    let declaredContracts: ConceptMetadata = {};
     if (descriptor !== undefined) {
       const { class: _class, spec, ...contracts } = descriptor;
-      declaredMetadata =
+      declaredContracts =
         spec === undefined ? contracts : { ...specifiedContracts(spec), ...contracts };
-      validateConceptMetadata(name, cls, declaredMetadata);
-      setOwn(metadata, name, declaredMetadata);
     }
-    setOwn(refs, name, conceptRefProxy(name, cls, declaredMetadata?.queries));
+    const declaredMetadata: ConceptMetadata = {
+      ...declaredContracts,
+      [CONCEPT_PROTOCOL]: conceptProtocolOf(cls.prototype as object),
+    };
+    validateConceptMetadata(name, cls, declaredMetadata);
+    setOwn(metadata, name, declaredMetadata);
+    setOwn(refs, name, conceptRefProxy(name, cls, declaredMetadata.queries));
   }
   Object.defineProperty(refs, VocabularyClasses, { value: { ...classes } });
 

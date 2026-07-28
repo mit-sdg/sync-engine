@@ -72,6 +72,7 @@ export class TriggerMatcher {
       hasConsumed(recordId: string | undefined, reaction: string): boolean;
     },
     private readonly rawConceptOf: (instrumented: object) => object,
+    private readonly assertRows?: (flow: string, count: number) => void,
   ) {}
 
   match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]] {
@@ -94,6 +95,7 @@ export class TriggerMatcher {
         "channel" in clause
           ? this.matchChannel(landed, clause, seed, actionSymbol)
           : matchArguments(landed, clause, seed, actionSymbol);
+      if (matched !== undefined) this.assertRows?.(record.flow, 1);
       return [matched === undefined ? new Frames() : new Frames(matched), [actionSymbol]];
     }
 
@@ -121,6 +123,7 @@ export class TriggerMatcher {
           if (matched === undefined) continue;
           const childConsumed = new Set(parentConsumed);
           if (candidate.id !== undefined) childConsumed.add(candidate.id);
+          this.assertRows?.(record.flow, next.length + 1);
           next.push([matched, childConsumed]);
         }
       }

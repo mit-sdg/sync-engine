@@ -119,7 +119,11 @@ type AllPathChains<
   C extends ContractShape,
   TError,
   P extends keyof C & string = keyof C & string,
-> = P extends unknown ? PathChain<P, C, TError, P> : never;
+> = P extends unknown
+  ? P extends "/then" | `/then/${string}`
+    ? {}
+    : PathChain<P, C, TError, P>
+  : never;
 
 /**
  * The first segment as a property and the remaining path as one key:
@@ -129,14 +133,17 @@ type RemainderPathChain<
   P extends keyof C & string,
   C extends ContractShape,
   TError = ClientError,
-> = P extends `/${infer First}/${infer Rest}`
-  ? { [K in First]: { [R in Rest]: Endpoint<C, P, TError> } }
-  : {};
+> = P extends "/then" | `/then/${string}`
+  ? {}
+  : P extends `/${infer First}/${infer Rest}`
+    ? { [K in First]: { [R in Rest]: Endpoint<C, P, TError> } }
+    : {};
 
 /**
  * The full client type for a contract `C`. Both calling styles coexist because
  * the contract paths (`/group/method`) cleanly split into a flat index and an
- * arbitrarily-deep grouped tree.
+ * arbitrarily-deep grouped tree. Paths rooted at `/then` are indexed-only so
+ * the root client cannot be mistaken for a promise.
  */
 export type Client<C extends ContractShape, TError = ClientError> = IndexedClient<C, TError> &
   GroupedClient<C, TError>;

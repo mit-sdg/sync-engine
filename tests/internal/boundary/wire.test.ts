@@ -7,12 +7,23 @@
 
 import { describe, expect, test } from "vite-plus/test";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { each, former, no, view, vocabulary, when, where, whether } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import {
+  each,
+  former,
+  no,
+  reaction,
+  view,
+  vocabulary,
+  when,
+  where,
+  whether,
+} from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { wireContracts } from "@sync-engine/tooling";
 import { inventoryOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 import { Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
+import type { AppIR } from "@sync-engine/internal/reads/ir";
 
 class LedgerConcept {
   static readonly outcomes = {
@@ -176,6 +187,446 @@ describe("wire contracts", () => {
     const add = wire.endpoints.find((e) => e.path === "/ledger/add")!;
     expect(add.errors).toEqual(["FORBIDDEN", "INVALID_INPUT", "NEGATIVE_AMOUNT"]);
     expect(wire.appWide).toEqual(["INVALID_SESSION"]);
+  });
+
+  test("includes refusals from causal surrounding and transitive reactions only", () => {
+    class SelectingConcept {
+      choose(_: { room: string }) {
+        return { selection: "selection-1" };
+      }
+    }
+    class DiscussingConcept {
+      static readonly outcomes = { open: { refusals: ["DISCUSSION_ALREADY_OPEN"] } };
+      open(_: { subject: string }) {
+        return { discussion: "discussion-1" };
+      }
+    }
+    class AlertingConcept {
+      static readonly outcomes = { raise: { refusals: ["ALERT_BLOCKED"] } };
+      raise(_: { discussion: string }) {
+        return { alert: "alert-1" };
+      }
+    }
+    class ArchivingConcept {
+      static readonly outcomes = { archive: { refusals: ["ARCHIVE_LOCKED"] } };
+      archive(_: Record<string, never>) {
+        return {};
+      }
+    }
+
+    const selecting = new SelectingConcept();
+    const discussing = new DiscussingConcept();
+    const alerting = new AlertingConcept();
+    const archiving = new ArchivingConcept();
+    const words = vocabulary({
+      concepts: {
+        Selecting: SelectingConcept,
+        Discussing: DiscussingConcept,
+        Alerting: AlertingConcept,
+        Archiving: ArchivingConcept,
+      },
+      computations: {},
+    });
+    const { Selecting, Discussing, Alerting, Archiving } = words.concepts;
+    const ChooseMitigation = endpoint("/rooms/choose-mitigation", ({ room, selection }: Vars) =>
+      receive({ room })
+        .then(Selecting.choose({ room }).responds({ selection }))
+        .then(respond({ selection })),
+    );
+    const Archive = endpoint("/archive", () =>
+      receive({})
+        .then(Archiving.archive({}))
+        .then(respond({ archived: true })),
+    );
+    const SelectedMitigationOpensDiscussion = reaction(({ selection, discussion }: Vars) =>
+      when(Selecting.choose({}).responds({ selection })).then(
+        Discussing.open({ subject: selection }).responds({ discussion }),
+      ),
+    );
+    const OpenDiscussionRaisesAlert = reaction(({ discussion }: Vars) =>
+      when(Discussing.open({}).responds({ discussion })).then(Alerting.raise({ discussion })),
+    );
+    const app = assemble({
+      vocabulary: words,
+      instances: {
+        Selecting: selecting,
+        Discussing: discussing,
+        Alerting: alerting,
+        Archiving: archiving,
+      },
+      composition: {
+        ChooseMitigation,
+        Archive,
+        SelectedMitigationOpensDiscussion,
+        OpenDiscussionRaisesAlert,
+      },
+    });
+    const wire = wireContracts(app.engine.exportReactions(), {
+      inventories: [selecting, discussing, alerting, archiving].map(inventoryOf),
+    });
+
+    expect(wire.endpoints.find(({ path }) => path === "/rooms/choose-mitigation")?.errors).toEqual([
+      "ALERT_BLOCKED",
+      "DISCUSSION_ALREADY_OPEN",
+    ]);
+    expect(wire.endpoints.find(({ path }) => path === "/archive")?.errors).toEqual([
+      "ARCHIVE_LOCKED",
+    ]);
+  });
+
+  test("combines global and route seeds without widening app-wide errors", () => {
+    const app = {
+      reactions: [
+        {
+          name: "GlobalGuard",
+          when: [
+            {
+              kind: "action",
+              concept: "RequestBoundary",
+              action: "request",
+              posture: "returned",
+              input: {},
+              output: {},
+            },
+          ],
+          where: [],
+          then: [{ kind: "request", concept: "GlobalPolicy", action: "check", input: {} }],
+        },
+        {
+          name: "MixedRoute",
+          when: [
+            {
+              kind: "action",
+              concept: "RequestBoundary",
+              action: "request",
+              posture: "returned",
+              input: { path: "/mixed" },
+              output: {},
+            },
+          ],
+          where: [],
+          then: [{ kind: "request", concept: "RouteWork", action: "start", input: {} }],
+        },
+        {
+          name: "OtherRoute",
+          when: [
+            {
+              kind: "action",
+              concept: "RequestBoundary",
+              action: "request",
+              posture: "returned",
+              input: { path: "/other" },
+              output: {},
+            },
+          ],
+          where: [],
+          then: [{ kind: "request", concept: "OtherWork", action: "start", input: {} }],
+        },
+        {
+          name: "GlobalAndRouteWork",
+          when: [
+            {
+              kind: "action",
+              concept: "GlobalPolicy",
+              action: "check",
+              posture: "returned",
+              input: {},
+              output: {},
+            },
+            {
+              kind: "action",
+              concept: "RouteWork",
+              action: "start",
+              posture: "returned",
+              input: {},
+              output: {},
+            },
+          ],
+          where: [],
+          then: [{ kind: "request", concept: "MixedRisk", action: "take", input: {} }],
+        },
+      ],
+      views: [],
+      formers: [],
+      unlowered: [],
+    } satisfies AppIR;
+    const wire = wireContracts(app, {
+      inventories: [
+        {
+          name: "GlobalPolicy",
+          actions: [{ name: "check", refusals: ["GLOBAL_DENIED"] }],
+          queries: [],
+        },
+        {
+          name: "MixedRisk",
+          actions: [{ name: "take", refusals: ["MIXED_DENIED"] }],
+          queries: [],
+        },
+      ],
+    });
+
+    expect(wire.appWide).toEqual(["GLOBAL_DENIED"]);
+    expect(wire.endpoints.find(({ path }) => path === "/mixed")?.errors).toEqual(["MIXED_DENIED"]);
+    expect(wire.endpoints.find(({ path }) => path === "/other")?.errors).toEqual([]);
+  });
+
+  test("requires distinct asked occurrences for duplicate trigger clauses", () => {
+    const requestSeed = (name: string, path: string) => ({
+      name,
+      when: [
+        {
+          kind: "action" as const,
+          concept: "RequestBoundary",
+          action: "request",
+          posture: "returned" as const,
+          input: { path },
+          output: {},
+        },
+      ],
+      where: [],
+      then: [{ kind: "request" as const, concept: "Work", action: "start", input: {} }],
+    });
+    const workTrigger = {
+      kind: "action" as const,
+      concept: "Work",
+      action: "start",
+      posture: "returned" as const,
+      input: {},
+      output: {},
+    };
+    const app = {
+      reactions: [
+        requestSeed("SingleWork", "/single"),
+        requestSeed("FirstWork", "/double"),
+        requestSeed("SecondWork", "/double"),
+        {
+          name: "NeedsTwoWorkOccurrences",
+          when: [workTrigger, workTrigger],
+          where: [],
+          then: [{ kind: "request", concept: "Risk", action: "take", input: {} }],
+        },
+      ],
+      views: [],
+      formers: [],
+      unlowered: [],
+    } satisfies AppIR;
+    const wire = wireContracts(app, {
+      inventories: [
+        {
+          name: "Risk",
+          actions: [{ name: "take", refusals: ["TWO_REQUIRED"] }],
+          queries: [],
+        },
+      ],
+    });
+
+    expect(wire.endpoints.find(({ path }) => path === "/single")?.errors).toEqual([]);
+    expect(wire.endpoints.find(({ path }) => path === "/double")?.errors).toEqual(["TWO_REQUIRED"]);
+  });
+
+  test("propagates repeated relay firings from separate upstream occurrences", () => {
+    const requestSeed = (name: string) => ({
+      name,
+      when: [
+        {
+          kind: "action" as const,
+          concept: "RequestBoundary",
+          action: "request",
+          posture: "returned" as const,
+          input: { path: "/relayed" },
+          output: {},
+        },
+      ],
+      where: [],
+      then: [{ kind: "request" as const, concept: "Source", action: "emit", input: {} }],
+    });
+    const relayedTrigger = {
+      kind: "action" as const,
+      concept: "Relayed",
+      action: "arrive",
+      posture: "returned" as const,
+      input: {},
+      output: {},
+    };
+    const app = {
+      reactions: [
+        requestSeed("FirstSource"),
+        requestSeed("SecondSource"),
+        {
+          name: "RelayEachSource",
+          when: [
+            {
+              kind: "action",
+              concept: "Source",
+              action: "emit",
+              posture: "returned",
+              input: {},
+              output: {},
+            },
+          ],
+          where: [],
+          then: [{ kind: "request", concept: "Relayed", action: "arrive", input: {} }],
+        },
+        {
+          name: "NeedsTwoRelays",
+          when: [relayedTrigger, relayedTrigger],
+          where: [],
+          then: [{ kind: "request", concept: "Risk", action: "take", input: {} }],
+        },
+      ],
+      views: [],
+      formers: [],
+      unlowered: [],
+    } satisfies AppIR;
+    const wire = wireContracts(app, {
+      inventories: [
+        {
+          name: "Risk",
+          actions: [{ name: "take", refusals: ["RELAY_OVERLOAD"] }],
+          queries: [],
+        },
+      ],
+    });
+
+    expect(wire.endpoints.find(({ path }) => path === "/relayed")?.errors).toEqual([
+      "RELAY_OVERLOAD",
+    ]);
+  });
+
+  test("saturates fan-in multiplicity without losing compression chains", () => {
+    const requestSeed = (index: number) => ({
+      name: `SourceSeed${index}`,
+      when: [
+        {
+          kind: "action" as const,
+          concept: "RequestBoundary",
+          action: "request",
+          posture: "returned" as const,
+          input: { path: "/fan-in" },
+          output: {},
+        },
+      ],
+      where: [],
+      then: [{ kind: "request" as const, concept: "Upstream", action: "emit", input: {} }],
+    });
+    const sourceTrigger = {
+      kind: "action" as const,
+      concept: "Source",
+      action: "emit",
+      posture: "returned" as const,
+      input: {},
+      output: {},
+    };
+    const pairTrigger = {
+      kind: "action" as const,
+      concept: "Pair",
+      action: "complete",
+      posture: "returned" as const,
+      input: {},
+      output: {},
+    };
+    const app = {
+      reactions: [
+        ...Array.from({ length: 6 }, (_, index) => requestSeed(index)),
+        {
+          name: "EmitSourceForEachUpstream",
+          when: [
+            {
+              kind: "action",
+              concept: "Upstream",
+              action: "emit",
+              posture: "returned",
+              input: {},
+              output: {},
+            },
+          ],
+          where: [],
+          then: [{ kind: "request", concept: "Source", action: "emit", input: {} }],
+        },
+        {
+          name: "CompleteEachSourcePair",
+          when: [sourceTrigger, sourceTrigger],
+          where: [],
+          then: [{ kind: "request", concept: "Pair", action: "complete", input: {} }],
+        },
+        {
+          name: "NeedsThreePairs",
+          when: [pairTrigger, pairTrigger, pairTrigger],
+          where: [],
+          then: [{ kind: "request", concept: "Risk", action: "take", input: {} }],
+        },
+      ],
+      views: [],
+      formers: [],
+      unlowered: [],
+    } satisfies AppIR;
+    const wire = wireContracts(app, {
+      inventories: [
+        {
+          name: "Risk",
+          actions: [{ name: "take", refusals: ["PAIR_LIMIT"] }],
+          queries: [],
+        },
+      ],
+    });
+
+    expect(wire.endpoints.find(({ path }) => path === "/fan-in")?.errors).toEqual(["PAIR_LIMIT"]);
+  });
+
+  test("saturates cyclic multiplicity without losing downstream reachability", () => {
+    const pulseTrigger = {
+      kind: "action" as const,
+      concept: "Pulse",
+      action: "tick",
+      posture: "returned" as const,
+      input: {},
+      output: {},
+    };
+    const app = {
+      reactions: [
+        {
+          name: "CycleSeed",
+          when: [
+            {
+              kind: "action",
+              concept: "RequestBoundary",
+              action: "request",
+              posture: "returned",
+              input: { path: "/cycle" },
+              output: {},
+            },
+          ],
+          where: [],
+          then: [{ kind: "request", concept: "Pulse", action: "tick", input: {} }],
+        },
+        {
+          name: "PulseCycle",
+          when: [pulseTrigger],
+          where: [],
+          then: [{ kind: "request", concept: "Pulse", action: "tick", input: {} }],
+        },
+        {
+          name: "NeedsThreePulses",
+          when: [pulseTrigger, pulseTrigger, pulseTrigger],
+          where: [],
+          then: [{ kind: "request", concept: "Risk", action: "take", input: {} }],
+        },
+      ],
+      views: [],
+      formers: [],
+      unlowered: [],
+    } satisfies AppIR;
+    const wire = wireContracts(app, {
+      inventories: [
+        {
+          name: "Risk",
+          actions: [{ name: "take", refusals: ["PULSE_LIMIT"] }],
+          queries: [],
+        },
+      ],
+    });
+
+    expect(wire.endpoints.find(({ path }) => path === "/cycle")?.errors).toEqual(["PULSE_LIMIT"]);
   });
 
   test("former outputs derive structurally: arrays, records, nullability", () => {

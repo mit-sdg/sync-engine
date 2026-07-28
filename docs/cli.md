@@ -132,6 +132,12 @@ Every artifact command imports and assembles the configured application.
 Assembly, import, configuration, or rendering failures therefore fail the
 command before comparison or writing.
 
+After inspection, the command begins assembly drain and waits for idle before
+returning. A descriptor that owns generation-only resources may supply a
+`close()` callback; the command invokes it after drain, including when inspection
+or rendering fails. This cleanup belongs to the descriptor and does not make
+ordinary assembly own concept-floor or store resources.
+
 Assembly rejects every local reaction, view, or former. This rejection applies
 before every artifact subcommand, including `spec`, can expose a route or write
 a path. Local executable behavior remains available only through manual engines

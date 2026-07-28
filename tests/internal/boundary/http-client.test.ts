@@ -181,6 +181,46 @@ describe("createHttpClient", () => {
     expect(result).toEqual({ error: FrameworkErrorCode.ABORTED });
   });
 
+  test("abort settles while async headers are pending and does not call fetch", async () => {
+    const controller = new AbortController();
+    const fetch = mockFetch({ token: "should-not-arrive" });
+    let headersStarted!: () => void;
+    let releaseHeaders!: (headers: Record<string, string>) => void;
+    const started = new Promise<void>((resolve) => {
+      headersStarted = resolve;
+    });
+    const client = createHttpClient<TestApi>({
+      baseUrl: "http://localhost",
+      fetch,
+      headers: () => {
+        headersStarted();
+        return new Promise((resolve) => {
+          releaseHeaders = resolve;
+        });
+      },
+    });
+
+    const pending = client.auth.login(
+      { username: "a", password: "b" },
+      { signal: controller.signal },
+    );
+    await started;
+    controller.abort();
+    let promptResult: Awaited<typeof pending> | "still-pending";
+    try {
+      promptResult = await Promise.race([
+        pending,
+        new Promise<"still-pending">((resolve) => setTimeout(() => resolve("still-pending"), 20)),
+      ]);
+    } finally {
+      releaseHeaders({ Authorization: "Bearer late" });
+    }
+
+    expect(promptResult).toEqual({ error: FrameworkErrorCode.ABORTED });
+    await expect(pending).resolves.toEqual({ error: FrameworkErrorCode.ABORTED });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test("an abort while reading the response body returns ABORTED", async () => {
     const controller = new AbortController();
     const fetch: typeof globalThis.fetch = vi.fn(() =>

@@ -168,7 +168,7 @@ describe("advanced persistence recipe", () => {
     await expect(
       first.application.concepts.Notes.save({ note: "n1", text: "Durable note" }),
     ).resolves.toEqual({ note: "n1", text: "Durable note" });
-    expect(first.application.concepts.SearchIndex._all({})).toEqual([
+    expect(await first.application.concepts.SearchIndex._all({})).toEqual([
       { note: "n1", text: "Durable note" },
     ]);
 
@@ -187,14 +187,14 @@ describe("advanced persistence recipe", () => {
 
     const restarted = assembleNotebook(statePath, occurrencePath);
     expect(restarted.occurrenceStore.actions.size).toBe(0);
-    expect(restarted.application.concepts.Notes._all({})).toEqual([
+    expect(await restarted.application.concepts.Notes._all({})).toEqual([
       { note: "n1", text: "Durable note" },
     ]);
-    expect(restarted.application.concepts.SearchIndex._all({})).toEqual([]);
+    expect(await restarted.application.concepts.SearchIndex._all({})).toEqual([]);
     expect(fs.readFileSync(occurrencePath, "utf8")).toBe(firstEvidence);
 
     await recoverSearchIndex(restarted.application);
-    expect(restarted.application.concepts.SearchIndex._all({})).toEqual([
+    expect(await restarted.application.concepts.SearchIndex._all({})).toEqual([
       { note: "n1", text: "Durable note" },
     ]);
     expect(restarted.occurrenceStore.actions.size).toBe(1);

@@ -16,8 +16,9 @@ bun run start
 
 `generate` writes `generated/{{slug}}.md` and `generated/wire.ts`. `check`
 compares parsed action and query declarations with the class source, checks both
-generated files, and typechecks the project. `principle` tests Noting without an
-assembly. `start` writes a note and reads it back through the standard gateway.
+generated files, runs application diagnostics, and typechecks the project.
+`principle` tests Noting without an assembly. `start` writes and reads a note,
+then observes the explicit `NOTE_NOT_FOUND` result through the standard gateway.
 
 A concept's State section is optional uninterpreted human notation. It is not a
 schema, is not compared with class fields or storage, and does not enter
@@ -28,7 +29,7 @@ Use these commands to isolate a failed check:
 
 ```sh
 bun run typecheck
-bunx sync-engine check
+bunx sync-engine check --config generated.config.ts
 bunx sync-engine artifacts check
 ```
 

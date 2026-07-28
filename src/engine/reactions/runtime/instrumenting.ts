@@ -13,6 +13,7 @@ import { actionId, actionSettlement, byReaction, flow } from "../context.ts";
 import type { ActionSettlement } from "../context.ts";
 import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
 import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
+import { registerEvaluationQuery } from "@engine/reads/queries";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import { memoizeQuery } from "./query-cache.ts";
 
@@ -30,12 +31,13 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
  * throw its declared refusal. Once instrumented, every action is asynchronous
  * because the engine records and reacts to its occurrence before settling the
  * caller. A deliberate refusal resolves to its refusal mapping; ordinary
- * faults reject. Queries retain their declared return shape.
+ * faults reject. Queries are asynchronous roots so admission, limits, drain,
+ * and idle observation include their complete evaluation.
  */
 export type InstrumentedConcept<T extends object> = {
   [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result
     ? Key extends `_${string}`
-      ? T[Key]
+      ? (...args: Args) => Promise<Awaited<Result>>
       : (...args: Args) => Promise<Awaited<Result> | ActionRefusal>
     : T[Key];
 };
@@ -50,8 +52,10 @@ export interface InstrumentationState {
   registerConcept(name: string, instrumented: object): void;
   execution?: {
     action(flow: string): boolean;
+    rows(count: number): boolean;
     admitFlow?(flow: string, route: string, correlationId: string): unknown;
     abandon?(flow: string): void;
+    flowSettled?(flow: string): void;
   };
   react(record: ActionRecord, durationMs?: number): Promise<void>;
   emit(record: ActionRecord, durationMs?: number): void;
@@ -128,21 +132,53 @@ export function instrumentConcept<T extends object>(
         const memoized = boundActions.get(actionKey);
         if (memoized !== undefined) return memoized;
         const withCache = memoizeQuery(value.bind(concept));
-        const query = withCache as typeof withCache & {
+        const displayName = `${conceptNameOf(concept)}.${String(property)}`;
+        const directQuery =
+          state.execution?.admitFlow === undefined
+            ? withCache
+            : async (...args: Parameters<typeof withCache>) => {
+                const flowToken = uuid();
+                if (state.execution?.admitFlow?.(flowToken, displayName, flowToken) !== undefined) {
+                  throw new Error(`Read "${displayName}" is unavailable.`);
+                }
+                withCache.invalidate();
+                try {
+                  const result = await withCache(...args);
+                  const count = Array.isArray(result) ? result.length : 1;
+                  if (state.execution?.rows(count) === false) {
+                    state.actions._recordIntegrityFailure({
+                      kind: "execution-limit",
+                      flow: flowToken,
+                      limit: "rows",
+                      errorClass: "ExecutionLimitExceeded",
+                      at: Date.now(),
+                    });
+                    throw new Error("The evaluation exceeded its row limit.");
+                  }
+                  return result;
+                } finally {
+                  state.execution?.flowSettled?.(flowToken);
+                }
+              };
+        const instrumentedQuery = directQuery as typeof directQuery & {
           concept?: object;
           queryName?: string;
           queryLabel?: string;
           queryPromise?: import("@engine/reads/query-contracts").QueryPromise;
         };
-        query.concept = concept;
-        query.queryName = String(property);
-        query.queryLabel = `${conceptNameOf(concept)}.${String(property)}`;
-        query.queryPromise = queryPromiseOf(concept, String(property));
-        boundActions.set(actionKey, withCache as unknown as InstrumentedAction);
+        instrumentedQuery.concept = concept;
+        instrumentedQuery.queryName = String(property);
+        instrumentedQuery.queryLabel = displayName;
+        instrumentedQuery.queryPromise = queryPromiseOf(concept, String(property));
+        registerEvaluationQuery(
+          instrumentedQuery as import("../types.ts").InstrumentedQuery,
+          withCache as import("../types.ts").InstrumentedQuery,
+        );
+        boundActions.set(actionKey, instrumentedQuery as unknown as InstrumentedAction);
         const caches = state.queryCaches.get(concept) ?? [];
         if (!state.queryCaches.has(concept)) state.queryCaches.set(concept, caches);
         caches.push(withCache);
-        return withCache;
+        return instrumentedQuery;
       }
 
       let instrumented = boundActions.get(actionKey);
@@ -361,8 +397,10 @@ export class ConceptInstrumentation {
       scheduler: ActionScheduling;
       execution?: {
         action(flow: string): boolean;
+        rows(count: number): boolean;
         admitFlow?(flow: string, route: string, correlationId: string): unknown;
         abandon?(flow: string): void;
+        flowSettled?(flow: string): void;
       };
       react(record: ActionRecord, durationMs?: number): Promise<void>;
       emit(record: ActionRecord, durationMs?: number): void;

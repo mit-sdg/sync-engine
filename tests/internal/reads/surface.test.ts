@@ -19,7 +19,7 @@ import {
   where,
   whether,
 } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { isReadLine } from "@sync-engine/internal/reads/lines";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";

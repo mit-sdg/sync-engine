@@ -21,7 +21,7 @@ export interface WireEndpoint {
   path: string;
   input: WireType;
   output: WireType;
-  /** Refusal codes this path's own reactions and asked actions can answer. */
+  /** Refusal codes this path's own and causally surrounding reactions can answer. */
   errors: string[];
   /** Whether boundary input admission can add framework `INVALID_INPUT`. */
   inputAdmissionError?: boolean;
@@ -50,6 +50,198 @@ const RESERVED_BOUNDARY_KEYS = new Set(["path", "requestId", "correlationId"]);
 interface BoundaryNames {
   concept: string;
   request: string;
+}
+
+type RefusalsOf = (concept: string, action: string) => readonly string[];
+
+interface AskedAction {
+  concept: string;
+  action: string;
+  by: string;
+}
+
+function triggerCanObserve(
+  trigger: ReactionIR["when"][number],
+  asked: AskedAction,
+  refusalsOf: RefusalsOf,
+): boolean {
+  if (trigger.by !== undefined && trigger.by !== asked.by) return false;
+  if (trigger.kind === "action") {
+    if (trigger.concept !== asked.concept || trigger.action !== asked.action) return false;
+    return trigger.posture !== "refused" || refusalsOf(asked.concept, asked.action).length > 0;
+  }
+  if (trigger.except.includes(asked.concept) || trigger.exceptBy?.includes(asked.by) === true) {
+    return false;
+  }
+  return trigger.channel !== "refused" || refusalsOf(asked.concept, asked.action).length > 0;
+}
+
+type Multiplicity = number | "many";
+
+interface AskedSite {
+  occurrence: AskedAction;
+  count: Multiplicity;
+}
+
+interface FlowEdge {
+  to: number;
+  reverse: number;
+  capacity: number;
+}
+
+function canAssignTriggerFirings(
+  triggers: readonly ReactionIR["when"][number][],
+  asked: readonly AskedSite[],
+  refusalsOf: RefusalsOf,
+  firingCount: number,
+): boolean {
+  const source = 0;
+  const triggerStart = 1;
+  const askedStart = triggerStart + triggers.length;
+  const sink = askedStart + asked.length;
+  const graph: FlowEdge[][] = Array.from({ length: sink + 1 }, () => []);
+  const addEdge = (from: number, to: number, capacity: number) => {
+    const forward = { to, reverse: graph[to].length, capacity };
+    const reverse = { to: from, reverse: graph[from].length, capacity: 0 };
+    graph[from].push(forward);
+    graph[to].push(reverse);
+  };
+  const demand = triggers.length * firingCount;
+  for (let triggerIndex = 0; triggerIndex < triggers.length; triggerIndex += 1) {
+    const triggerNode = triggerStart + triggerIndex;
+    addEdge(source, triggerNode, firingCount);
+    for (let askedIndex = 0; askedIndex < asked.length; askedIndex += 1) {
+      if (triggerCanObserve(triggers[triggerIndex], asked[askedIndex].occurrence, refusalsOf)) {
+        addEdge(triggerNode, askedStart + askedIndex, demand);
+      }
+    }
+  }
+  for (let askedIndex = 0; askedIndex < asked.length; askedIndex += 1) {
+    const count = asked[askedIndex].count;
+    addEdge(askedStart + askedIndex, sink, count === "many" ? demand : count);
+  }
+
+  let flow = 0;
+  while (flow < demand) {
+    const level = Array.from({ length: graph.length }, () => -1);
+    level[source] = 0;
+    const queue = [source];
+    for (let index = 0; index < queue.length; index += 1) {
+      const node = queue[index];
+      for (const edge of graph[node]) {
+        if (edge.capacity > 0 && level[edge.to] === -1) {
+          level[edge.to] = level[node] + 1;
+          queue.push(edge.to);
+        }
+      }
+    }
+    if (level[sink] === -1) break;
+    const nextEdge = Array.from({ length: graph.length }, () => 0);
+    const send = (node: number, available: number): number => {
+      if (node === sink) return available;
+      for (; nextEdge[node] < graph[node].length; nextEdge[node] += 1) {
+        const edge = graph[node][nextEdge[node]];
+        if (edge.capacity === 0 || level[edge.to] !== level[node] + 1) continue;
+        const sent = send(edge.to, Math.min(available, edge.capacity));
+        if (sent === 0) continue;
+        edge.capacity -= sent;
+        graph[edge.to][edge.reverse].capacity += sent;
+        return sent;
+      }
+      return 0;
+    };
+    let sent = send(source, demand - flow);
+    while (sent > 0) {
+      flow += sent;
+      sent = send(source, demand - flow);
+    }
+  }
+  return flow === demand;
+}
+
+function possibleFirings(
+  reaction: ReactionIR,
+  asked: readonly AskedSite[],
+  refusalsOf: RefusalsOf,
+  exactLimit: number,
+): Multiplicity {
+  for (let count = 1; count <= exactLimit + 1; count += 1) {
+    if (!canAssignTriggerFirings(reaction.when, asked, refusalsOf, count)) return count - 1;
+  }
+  return "many";
+}
+
+function addMultiplicity(
+  current: Multiplicity,
+  added: Multiplicity,
+  exactLimit: number,
+): Multiplicity {
+  if (current === "many" || added === "many") return "many";
+  const total = current + added;
+  return total > exactLimit ? "many" : total;
+}
+
+function addedFirings(current: Multiplicity, next: Multiplicity): Multiplicity {
+  if (current === "many" || current === next) return 0;
+  if (next === "many") return "many";
+  return next > current ? next - current : 0;
+}
+
+/** Follow only reactions whose complete trigger can observe actions asked by this causal flow. */
+function causalReactionClosure(
+  reactions: readonly ReactionIR[],
+  seeds: readonly ReactionIR[],
+  refusalsOf: RefusalsOf,
+  terminal: { concept: string; action: string },
+  include: (reaction: ReactionIR) => boolean,
+): ReactionIR[] {
+  // Counts stay exact while any trigger can distinguish them. Larger counts
+  // saturate to `many`: unlike numeric truncation this can only widen causal
+  // reachability, and cycles stabilize after each finite ask site saturates.
+  const exactLimit = Math.max(1, ...reactions.map((reaction) => reaction.when.length));
+  const firings = new Map<ReactionIR, Multiplicity>();
+  const askedBySite = new Map<string, AskedSite>();
+  const addAsked = (reaction: ReactionIR, count: Multiplicity) => {
+    for (const consequence of reaction.then) {
+      if (consequence.concept === terminal.concept && consequence.action === terminal.action) {
+        continue;
+      }
+      const occurrence = {
+        concept: consequence.concept,
+        action: consequence.action,
+        by: reaction.name,
+      };
+      const key = JSON.stringify([occurrence.concept, occurrence.action, occurrence.by]);
+      const site = askedBySite.get(key);
+      if (site === undefined) {
+        askedBySite.set(key, { occurrence, count });
+      } else {
+        site.count = addMultiplicity(site.count, count, exactLimit);
+      }
+    }
+  };
+  for (const seed of new Set(seeds)) {
+    firings.set(seed, 1);
+    addAsked(seed, 1);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const reaction of reactions) {
+      if (!include(reaction) || reaction.when.length === 0) {
+        continue;
+      }
+      const possible = possibleFirings(reaction, [...askedBySite.values()], refusalsOf, exactLimit);
+      const previous = firings.get(reaction) ?? 0;
+      const added = addedFirings(previous, possible);
+      if (added === 0) continue;
+      firings.set(reaction, possible);
+      addAsked(reaction, added);
+      changed = true;
+    }
+  }
+  return [...firings.keys()];
 }
 
 function isBoundaryRequest(
@@ -127,6 +319,8 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
   }
   const buckets = new Map<string, Bucket>();
   const appWide = new Set<string>();
+  const directByPath = new Map<string, ReactionIR[]>();
+  const globalSeeds: ReactionIR[] = [];
 
   const bucketFor = (path: string): Bucket => {
     let bucket = buckets.get(path);
@@ -149,9 +343,15 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
   for (const reaction of app.reactions) {
     const path = pathOf(reaction);
     if (path === null) {
-      if (isGlobalGuard(reaction)) collectReactionErrors(reaction, boundary, refusalsOf, appWide);
+      if (isGlobalGuard(reaction)) {
+        globalSeeds.push(reaction);
+        collectReactionErrors(reaction, boundary, refusalsOf, appWide);
+      }
       continue;
     }
+    const direct = directByPath.get(path) ?? [];
+    direct.push(reaction);
+    directByPath.set(path, direct);
     const bucket = bucketFor(path);
     const provenance = analyzeReactionProvenance(reaction, boundary, viewsByName);
     for (const consequence of reaction.then) {
@@ -181,6 +381,36 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
       const forKey = bucket.inputOrigins.get(key) ?? [];
       forKey.push(source);
       bucket.inputOrigins.set(key, forKey);
+    }
+  }
+
+  const terminal = { concept: boundary.concept, action: boundary.respond };
+  const globalCausal = causalReactionClosure(
+    app.reactions,
+    globalSeeds,
+    refusalsOf,
+    terminal,
+    (candidate) => pathOf(candidate) === null,
+  );
+  const globalOnly = new Set(globalCausal);
+  for (const reaction of globalCausal) {
+    collectReactionErrors(reaction, boundary, refusalsOf, appWide);
+  }
+
+  for (const [path, bucket] of buckets) {
+    const causal = causalReactionClosure(
+      app.reactions,
+      [...globalSeeds, ...(directByPath.get(path) ?? [])],
+      refusalsOf,
+      terminal,
+      (reaction) => {
+        const ownedPath = pathOf(reaction);
+        return ownedPath === null || ownedPath === path;
+      },
+    );
+    for (const reaction of causal) {
+      if (globalOnly.has(reaction)) continue;
+      collectReactionErrors(reaction, boundary, refusalsOf, bucket.errors);
     }
   }
 
@@ -235,9 +465,7 @@ export function deriveInputContracts(
   return out;
 }
 
-function buildRefusalIndex(
-  inventories: ConceptInventoryIR[],
-): (concept: string, action: string) => readonly string[] {
+function buildRefusalIndex(inventories: ConceptInventoryIR[]): RefusalsOf {
   const index = new Map<string, readonly string[]>();
   for (const inventory of inventories) {
     for (const action of inventory.actions) {
@@ -252,7 +480,7 @@ function buildRefusalIndex(
 function collectReactionErrors(
   reaction: ReactionIR,
   boundary: { concept: string; respond: string },
-  refusalsOf: (concept: string, action: string) => readonly string[],
+  refusalsOf: RefusalsOf,
   into: Set<string>,
 ): void {
   for (const consequence of reaction.then) {

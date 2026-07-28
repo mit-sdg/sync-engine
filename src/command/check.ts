@@ -6,7 +6,7 @@ import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 import { applicationManifest } from "@engine/tooling/manifest";
 import { diagnosticsFail } from "@engine/tooling/diagnostics";
-import { resolveApplication } from "@engine/tooling/generated-artifacts";
+import { inspectGenerated, resolveApplication } from "@engine/tooling/generated-artifacts";
 import type { GeneratedApplication } from "@engine/tooling/generated-artifacts";
 
 async function filesBelow(
@@ -284,7 +284,10 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
       throw new Error(`${configPath} must default-export an application artifact configuration`);
     }
     const application = resolveApplication(module.default, configUrl);
-    const diagnostics = applicationManifest(application.assemble()).diagnostics;
+    const diagnostics = await inspectGenerated(
+      application,
+      (assembled) => applicationManifest(assembled).diagnostics,
+    );
     for (const diagnostic of diagnostics) {
       console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
     }

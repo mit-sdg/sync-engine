@@ -11,7 +11,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
 import { Logging } from "@sync-engine/assembly";
 import { reaction, vocabulary, when } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { isRefuse, refusalMapping } from "@sync-engine/internal/reactions/concepts/refuse";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import type { Empty } from "@sync-engine/internal/reactions/types";

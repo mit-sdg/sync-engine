@@ -72,8 +72,8 @@ For a direct call through `Assembly.concepts`, a returned action resolves to its
 success value and a refusal resolves to an `ActionRefusal` mapping with an
 `error` code. A registered exception refusal also carries the specification's
 sentence as `detail`; a `Refuse` escape hatch may carry other data. A fault
-rejects the direct call. Underscore-prefixed query calls keep their declared
-return shape and do not return action refusals.
+rejects the direct call. Underscore-prefixed query calls are asynchronous roots
+with their declared answer inside the promise and do not return action refusals.
 
 The direct caller receives a scalar action return unchanged. Occurrence
 matching normalizes a non-object return to an empty successful result, so
@@ -529,15 +529,10 @@ not have identical error codes: the local transport normally reports
 `TRANSPORT_ERROR`, while HTTP request serialization can report `NETWORK_ERROR`
 and server response serialization can report `INTERNAL_ERROR`.
 
-The raw HTTP adapter, production profile, and credential floor are different
-protocol surfaces. The raw `{ gateway | invoker, basePath? }` form is a
-low-level logical-envelope adapter: it exposes ordinary domain failures as HTTP
-400 and maps selected framework codes to statuses. It is preserved for hosts
-that deliberately own an outer projection and is not the recommended direct
-public deployment profile. The production profile exposes only registered
-categories and opaque protocol failures. The floor adds cookie consumption and
-issuance to that production policy. Do not infer one surface's status, detail,
-or field behavior from another.
+The production profile exposes only registered categories and opaque protocol
+failures. The credential floor adds cookie consumption and issuance to that
+production policy. Both handlers apply the same request limits, JSON projection,
+correlation, and public status mapping.
 
 ## Generated wire
 
@@ -608,9 +603,11 @@ responsibilities.
 
 Every HTTP handler limits one request body to 1,048,576 bytes, automatic log
 retention bounds settled-flow inspection, and `ExecutionLimits` provides the
-engine-owned production budget. Row limits are checked at reaction matching,
-where evaluation, and each consequence stage. They do not replace host limits
-for connections, request rate, DDoS protection, exporter queues, or autoscaling.
+engine-owned production budget. Row limits stop engine-owned expansion during
+reaction matching, where evaluation, direct reads, and former evaluation. A
+query implementation still owns the memory needed to construct its answer.
+These limits do not replace host limits for connections, request rate, DDoS
+protection, exporter queues, or autoscaling.
 
 `beginDrain()` on an assembly rejects its new roots immediately and resolves
 when accepted causal flows become idle. A gateway first rejects new public
@@ -622,11 +619,12 @@ without changing admission. Caller timeout and abort remove a pending wait but
 never release active-flow accounting. The host still owns the listener, OS
 signals, hard shutdown deadline, floor and log-store closure, and process exit.
 
-A direct call through `Assembly.concepts` is an assembly root: it participates
-in active-root limits, idle observation, and drain admission. A direct root
-rejected by overload or drain resolves to `{ error: "UNAVAILABLE" }` before an
-action occurrence is recorded. Pending-request limits apply only to boundary
-invocations because direct action calls do not create request waits.
+A direct call through `Assembly.concepts`, and direct `Assembly.form(...)`
+evaluation, is an assembly root: it participates in active-root limits, idle
+observation, row limits, and drain admission. A rejected direct action resolves
+to `{ error: "UNAVAILABLE" }` before an action occurrence is recorded; a
+rejected direct query or former evaluation rejects. Pending-request limits apply
+only to boundary invocations because direct roots do not create request waits.
 
 ### Ordering and state-read timing
 

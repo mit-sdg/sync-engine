@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   checkGenerated,
+  inspectGenerated,
   pinGenerated,
   renderGenerated,
   resolveApplication,
@@ -53,10 +54,14 @@ export async function artifactsCommand(args: readonly string[]): Promise<void> {
       await pinGenerated(application, "wire");
       break;
     case "manifest":
-      process.stdout.write(renderApplicationManifest(applicationManifest(application.assemble())));
+      process.stdout.write(
+        await inspectGenerated(application, (assembled) =>
+          renderApplicationManifest(applicationManifest(assembled)),
+        ),
+      );
       break;
     case "spec": {
-      const rendered = renderGenerated(application);
+      const rendered = await renderGenerated(application);
       console.log("Assembly summary");
       console.log(`registered reactions: ${rendered.metrics.reactions}`);
       console.log(`registered views: ${rendered.metrics.views}`);
@@ -67,7 +72,7 @@ export async function artifactsCommand(args: readonly string[]): Promise<void> {
       break;
     }
     case "wire":
-      console.log(renderGenerated(application).wire);
+      console.log((await renderGenerated(application)).wire);
       break;
     default:
       throw new Error(usage);

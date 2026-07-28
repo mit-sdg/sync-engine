@@ -100,12 +100,10 @@ An assembly can expose the endpoint through a direct invoker, the standard
 gateway, a local JSON-parity client, or HTTP. Use the production HTTP profile to
 project only registered public error categories without choosing a credential
 mechanism; add the same-origin cookie floor only when the application needs that
-binding. The gateway/invoker-only HTTP form is a low-level raw envelope adapter,
-not the recommended direct public boundary. Generated TypeScript
-describes accepted inputs and possible outputs. It does not validate hostile
-values at runtime; endpoint validator hooks provide that separate runtime
-contract when an application needs it. Validators are application-supplied;
-the engine does not infer them from concept specifications.
+binding. Generated TypeScript describes accepted inputs and possible outputs. It
+does not validate hostile values at runtime; endpoint validator hooks provide
+that separate runtime contract when an application needs it. Validators are
+application-supplied; the engine does not infer them from concept specifications.
 
 Endpoint behavior must be portable: canonical JSON-round-trippable and
 re-registerable against the same named vocabulary. Closures, custom operations,

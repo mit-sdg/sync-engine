@@ -1,33 +1,43 @@
+import { createProductionHttpClient } from "./client.ts";
 import { buildProductionHttp } from "./edge.ts";
 
-function post(path: string, body: unknown, cookie?: string): Request {
-  return new Request(`https://production-http.test/api${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(cookie === undefined ? {} : { Cookie: cookie }),
-    },
-    body: JSON.stringify(body),
-  });
+function inProcessFetch(handler: (request: Request) => Promise<Response>, keepCookie = false) {
+  let cookie: string | undefined;
+  return async (input: string | URL | Request, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    if (cookie !== undefined) headers.set("Cookie", cookie);
+    const response = await handler(new Request(input, { ...init, headers }));
+    if (keepCookie) {
+      const setCookie = response.headers.get("Set-Cookie");
+      if (setCookie?.includes("Max-Age=0")) cookie = undefined;
+      else if (setCookie !== null) cookie = setCookie.split(";", 1)[0];
+    }
+    return response;
+  };
 }
 
 export async function runScenario() {
   const { floorHandler, profileHandler } = buildProductionHttp();
-  const started = await floorHandler(post("/sessions/start", { user: "Maya" }));
-  const cookie = started.headers.get("Set-Cookie")?.split(";", 1)[0];
-  if (cookie === undefined) throw new Error("Session cookie was not issued.");
-
-  const current = await floorHandler(post("/sessions/current", {}, cookie));
-  const claimed = await profileHandler(post("/names/claim", { name: "atlas" }));
-  const duplicate = await profileHandler(post("/names/claim", { name: "atlas" }));
-  const ended = await floorHandler(post("/sessions/end", {}, cookie));
+  const sessions = createProductionHttpClient({
+    baseUrl: "https://production-http.test/api",
+    fetch: inProcessFetch(floorHandler, true),
+  });
+  const names = createProductionHttpClient({
+    baseUrl: "https://production-http.test/api",
+    fetch: inProcessFetch(profileHandler),
+  });
+  const started = await sessions.sessions.start({});
+  const current = await sessions.sessions.current({});
+  const claimed = await names.names.claim({ name: "atlas" });
+  const duplicate = await names.names.claim({ name: "atlas" });
+  const ended = await sessions.sessions.end({});
 
   return {
-    started: await started.json(),
-    current: await current.json(),
-    claimed: await claimed.json(),
-    duplicate: await duplicate.json(),
-    ended: await ended.json(),
+    started,
+    current,
+    claimed,
+    duplicate,
+    ended,
   };
 }
 

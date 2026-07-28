@@ -19,7 +19,7 @@ import {
   where,
   whether,
 } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
 import { FormerFault } from "@sync-engine/internal/reads/former-nodes";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
 import { renderFormer } from "@sync-engine/internal/reads/render";
