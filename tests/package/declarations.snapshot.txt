@@ -5,10 +5,8 @@
 export { createEngine } from "../engine/reactions/engine.ts";
 export type { Engine } from "../engine/reactions/engine.ts";
 export { faulted } from "../engine/reactions/authoring/channels.ts";
-export { compute, custom } from "../engine/reads/where-ops.ts";
+export { custom } from "../engine/reads/where-ops.ts";
 export { Refuse } from "../engine/reactions/concepts/refuse.ts";
-export { Requesting } from "../engine/boundary/invocation/invoke.ts";
-export { refusalFunnel } from "../engine/boundary/invocation/funnel.ts";
 export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/observer.ts";
 
 === dist/assembly/index.d.ts ===
@@ -4722,7 +4720,7 @@ export { earlier } from "../engine/reactions/authoring/words.ts";
 export { when } from "../engine/reactions/authoring/public-words.ts";
 export { refused, returned } from "../engine/reactions/authoring/channels.ts";
 export { where } from "../engine/reactions/authoring/where.ts";
-export { no, whether } from "../engine/reads/where-ops.ts";
+export { compute, no, whether } from "../engine/reads/where-ops.ts";
 export { is } from "../engine/reads/computations.ts";
 export { count, view } from "../engine/reads/views.ts";
 export { each, form, former } from "../engine/reads/former-builders.ts";
@@ -4750,11 +4748,3 @@ export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "..
 export type { WireContractsIR, WireEndpoint, WireOptions, } from "../engine/boundary/wire/wire-contracts.ts";
 export type { WireRenderOptions } from "../engine/boundary/wire/wire-renderer.ts";
 export type { WireType } from "../engine/boundary/wire/wire-types.ts";
-
-=== dist/utils/index.d.ts ===
-export { logger } from "../engine/utils/logger.ts";
-export type { Logger, LogLevel } from "../engine/utils/logger.ts";
-export { serializeError } from "../engine/utils/logger.ts";
-export { createRedactor, describeError, redact, UNIVERSAL_SENSITIVE_PATTERNS, } from "../engine/utils/redaction.ts";
-export type { RedactionPolicy } from "../engine/utils/redaction.ts";
-export type { Redactor } from "../engine/utils/redaction.ts";

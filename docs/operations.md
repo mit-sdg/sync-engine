@@ -229,10 +229,9 @@ application responsibilities to the engine.
 Assembly-scoped field-name redaction runs before occurrence entries reach
 stores, observers, or inspection. Each assembly creates its own redactor and
 copies the policy's exact field names and pattern list, but retains the supplied
-`RegExp` objects. Do not mutate those expressions after constructing an assembly
-or standalone redactor. `redact(...)` uses the exported universal expressions,
-whose array and `RegExp` objects callers must also treat as immutable. Redaction matches
-field names; it does not search arbitrary string contents. During an active flow, the interpreter privately
+`RegExp` objects. Do not mutate those expressions after constructing an
+assembly. Redaction matches field names; it does not search arbitrary string
+contents. During an active flow, the interpreter privately
 retains original values needed for matching and clears them when the outermost
 action settles.
 

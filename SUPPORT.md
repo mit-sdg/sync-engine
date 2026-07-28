@@ -2,7 +2,7 @@
 
 ## Public beta surface
 
-The supported public API is exactly these seven package subpaths:
+The supported public API is exactly these six package subpaths:
 
 - `@mit-sdg/sync-engine/language`
 - `@mit-sdg/sync-engine/assembly`
@@ -10,7 +10,6 @@ The supported public API is exactly these seven package subpaths:
 - `@mit-sdg/sync-engine/client`
 - `@mit-sdg/sync-engine/tooling`
 - `@mit-sdg/sync-engine/advanced`
-- `@mit-sdg/sync-engine/utils`
 
 The package root and all deep imports are unsupported. The [Public
 API](docs/public-surface.md) is the exact export register.

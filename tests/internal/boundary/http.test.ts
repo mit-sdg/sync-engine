@@ -1,9 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Requesting } from "@sync-engine/advanced";
 import { Logging, assemble } from "@sync-engine/assembly";
 import { vocabulary } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
-import { createInvoker } from "@sync-engine/internal/boundary/invocation/invoke";
+import { createInvoker, Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import {
   createHttpHandler,

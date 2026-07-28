@@ -9,15 +9,18 @@ review the [operational limits](docs/operations.md) before deployment.
 
 The beta cutover completes the support, compatibility, production-boundary,
 operational-control, and release-supply-chain work audited after alpha.0. It
-retains the seven explicit public subpaths and makes their beta expectations
+defines six explicit public subpaths and makes their beta expectations
 and generated-contract coupling explicit.
 
 ### Compatibility
 
 - The supported package surface remains `/language`, `/assembly`, `/boundary`,
-  `/client`, `/tooling`, `/advanced`, and `/utils`. Root and deep imports remain
+  `/client`, `/tooling`, and `/advanced`. Root and deep imports remain
   unsupported. Beta releases may make incompatible changes with release-specific
   migration notes; `/advanced` remains the highest-churn public surface.
+- `compute` moves from `/advanced` to `/language`. The process-level `/utils`
+  entrypoint and the implementation-level `Requesting` and `refusalFunnel`
+  exports are removed.
 - The supported ranges are Node.js `>=24 <25`, Bun `>=1.3.14 <1.4`, and
   TypeScript `>=6 <7`. Current Linux, macOS, and Windows GitHub-hosted runners
   exercise package and test behavior.
@@ -36,6 +39,10 @@ and generated-contract coupling explicit.
 - Use manual engines under `/advanced` for closures, custom operations,
   object-identity patterns, raw transforms, and whole unlowered definitions.
   Ordinary `assemble(...)` accepts portable reactions, views, and formers.
+- Import `compute` from `/language`. Configure redaction through
+  `AssemblyOptions.redaction`; hosts own any standalone logging, redaction, or
+  diagnostic helpers. There is no public replacement for `Requesting` or
+  `refusalFunnel`.
 - Treat each endpoint's declared path as authoritative, leave framework-owned
   `path` and `requestId` fields to `receive(...)`, canonicalize endpoint/base
   paths, and declare `basePath: "/api"` explicitly when needed.
@@ -67,8 +74,8 @@ and generated-contract coupling explicit.
   JSONL audit sink.
 - Artifact commands and `planGenerated(...)` share one manifest-driven
   rendering pipeline.
-- Own application redaction through `createRedactor(policy)`; `redact(...)`
-  applies immutable universal sensitive-name patterns.
+- Own application redaction through `AssemblyOptions.redaction`; universal
+  sensitive-name patterns remain active alongside application fields and patterns.
 - Keep a concept specification's optional State section as prose only. It is
   not checked against class fields or storage and does not enter manifests,
   read-back, wire types, input contracts, or runtime validators; prove state

@@ -736,15 +736,11 @@ Each ordinary assembly creates its own field-name redactor before entries reach
 a store, observer, or inspection summary. During an active causal flow, the
 interpreter privately retains original values for execution and matching, then
 clears them when the outermost action settles. Ordinary process logs omit
-exception messages, stacks, causes, and attached fields. `serializeError(...)`
-provides that opaque class-only representation. `describeError(...)` instead
-returns unredacted exception text and is suitable only for a caller-reviewed
-diagnostic channel, not an automatic public error envelope.
-`createRedactor(...)` copies exact field names and the pattern list for one
-standalone owner, but it retains the supplied `RegExp` objects. Callers must not
-mutate those expressions after constructing a redactor or assembly. The
-`redact(...)` convenience uses the exported universal expressions; callers must
-also treat the exported array and its expressions as immutable. There is no setter for a
+exception messages, stacks, causes, and attached fields. Caller-reviewed
+diagnostic channels may expose exception text, but automatic public error
+envelopes do not. Assembly redaction copies exact field names and the pattern
+list but retains the supplied `RegExp` objects; callers must not mutate those
+expressions after constructing an assembly. There is no setter for a
 process-global redaction policy.
 
 Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100

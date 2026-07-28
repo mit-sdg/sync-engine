@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { createRedactor, describeError, redact } from "@sync-engine/utils";
+import { createRedactor, describeError, redact } from "@engine/utils/redaction";
 
 describe("configured redaction policy", () => {
   test("redacts configured field names and pattern-matched field names", () => {

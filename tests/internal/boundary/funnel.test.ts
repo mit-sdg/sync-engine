@@ -1,7 +1,7 @@
 /** Standard delivery of concept refusals and runtime faults to boundary requests. */
 
 import { describe, expect, test } from "vite-plus/test";
-import { Refuse, Requesting, refusalFunnel } from "@sync-engine/advanced";
+import { Refuse } from "@sync-engine/advanced";
 import { Logging } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import type { InvocationResult } from "@sync-engine/boundary";
@@ -10,7 +10,12 @@ import type { Vars } from "@sync-engine/language";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import type { Empty } from "@sync-engine/internal/reactions/types";
-import { FAULT_REPLY, FAULT_REACTION } from "@sync-engine/internal/boundary/invocation/funnel";
+import {
+  FAULT_REPLY,
+  FAULT_REACTION,
+  refusalFunnel,
+} from "@sync-engine/internal/boundary/invocation/funnel";
+import { Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 
 const faultSentinels = {

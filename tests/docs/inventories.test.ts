@@ -88,15 +88,7 @@ describe("documented inventories", () => {
     expect(table(semantics, "| Contract need")).toContain(
       "#logs-concept-implementations-and-restart",
     );
-    for (const subpath of [
-      "language",
-      "assembly",
-      "boundary",
-      "client",
-      "tooling",
-      "advanced",
-      "utils",
-    ]) {
+    for (const subpath of ["language", "assembly", "boundary", "client", "tooling", "advanced"]) {
       expect(table(publicSurface, "| Package path")).toContain(
         `[\`@mit-sdg/sync-engine/${subpath}\`](#${subpath})`,
       );

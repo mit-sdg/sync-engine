@@ -5,7 +5,7 @@ import { vocabulary } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
-import { createRedactor, redact, UNIVERSAL_SENSITIVE_PATTERNS } from "@sync-engine/utils";
+import { createRedactor, redact, UNIVERSAL_SENSITIVE_PATTERNS } from "@engine/utils/redaction";
 
 describe("redact — universal credential patterns (no policy registered)", () => {
   test("redacts credential-shaped keys regardless of domain", () => {

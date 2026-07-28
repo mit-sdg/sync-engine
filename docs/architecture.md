@@ -246,7 +246,7 @@ but engine concerns do not import the command.
 ## Public package boundary
 
 Each supported subpath has one export-only file under `src/<subpath>/index.ts`.
-`package.json` exposes exactly those seven subpaths and no root barrel. The
+`package.json` exposes exactly those six subpaths and no root barrel. The
 public API test checks exact symbol identity, nested constants, unsupported
 historical names, and package-path reachability. The declaration snapshot and
 packed-consumer fixture separately check the emitted type graph.

@@ -11,8 +11,7 @@ import {
   receive,
   respond,
 } from "@sync-engine/boundary";
-import { compute } from "@sync-engine/advanced";
-import { reaction, vocabulary, when } from "@sync-engine/language";
+import { compute, reaction, vocabulary, when } from "@sync-engine/language";
 import { inspectAssembly, renderInputContracts } from "@sync-engine/tooling";
 
 class DuplicateTitle extends Error {}
@@ -254,6 +253,7 @@ const register = {
     "SlotPattern",
     "Vars",
     "count",
+    "compute",
     "each",
     "earlier",
     "form",
@@ -402,30 +402,7 @@ const register = {
     "renderWireTypes",
     "wireContracts",
   ],
-  advanced: [
-    "Engine",
-    "EngineObserver",
-    "LogEvent",
-    "Refuse",
-    "Requesting",
-    "createEngine",
-    "compute",
-    "custom",
-    "faulted",
-    "refusalFunnel",
-  ],
-  utils: [
-    "LogLevel",
-    "Logger",
-    "RedactionPolicy",
-    "Redactor",
-    "UNIVERSAL_SENSITIVE_PATTERNS",
-    "createRedactor",
-    "describeError",
-    "logger",
-    "redact",
-    "serializeError",
-  ],
+  advanced: ["Engine", "EngineObserver", "LogEvent", "Refuse", "createEngine", "custom", "faulted"],
 } as const;
 
 const packageJson = JSON.parse(

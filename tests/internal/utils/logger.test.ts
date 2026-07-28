@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { serializeError } from "@sync-engine/utils";
+import { serializeError } from "@engine/utils/redaction";
 
 describe("serializeError", () => {
   test("keeps only an Error's stable class", () => {
@@ -182,7 +182,7 @@ describe("logger", () => {
     try {
       process.env.LOG_LEVEL = "debug";
       vi.resetModules();
-      const mod = await import("@sync-engine/utils");
+      const mod = await import("@engine/utils/logger");
 
       const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
       mod.logger.debug("debug msg");
@@ -199,7 +199,7 @@ describe("logger", () => {
     try {
       process.env.LOG_LEVEL = "error";
       vi.resetModules();
-      const mod = await import("@sync-engine/utils");
+      const mod = await import("@engine/utils/logger");
 
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -223,7 +223,7 @@ describe("logger", () => {
     try {
       process.env.LOG_LEVEL = "info";
       vi.resetModules();
-      const mod = await import("@sync-engine/utils");
+      const mod = await import("@engine/utils/logger");
 
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 

@@ -6,13 +6,13 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { Requesting } from "@sync-engine/advanced";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { each, former, no, view, vocabulary, when, where, whether } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import { wireContracts } from "@sync-engine/tooling";
 import { inventoryOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
 
 class LedgerConcept {
   static readonly outcomes = {

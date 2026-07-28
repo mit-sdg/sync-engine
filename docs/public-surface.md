@@ -11,7 +11,7 @@ churn, exact-version generated contracts, and format-version rules. The
 
 Most backend files use `language`, `assembly`, and `boundary`; frontend files
 use `client`; generation scripts use `tooling`. `advanced` marks deliberate
-manual construction, while `utils` contains process-level support functions.
+manual construction and explicit escape hatches.
 
 | Package path                                 | Role                                                          |
 | -------------------------------------------- | ------------------------------------------------------------- |
@@ -21,7 +21,6 @@ manual construction, while `utils` contains process-level support functions.
 | [`@mit-sdg/sync-engine/client`](#client)     | Local and HTTP clients over a generated contract              |
 | [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation |
 | [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches        |
-| [`@mit-sdg/sync-engine/utils`](#utils)       | Logging, redaction, and opaque error serialization            |
 
 The public API test compares each inventory below with the corresponding
 package barrel. An export change therefore requires an explicit reference
@@ -31,7 +30,7 @@ update.
 
 <!-- register:language:start -->
 
-`Condition`, `ActionCall`, `FreeBindings`, `InputBindings`, `OutputBindings`, `QueryPromise`, `ReadLine`, `RefusedActionLine`, `RelationView`, `ReturnedActionLine`, `SlotPattern`, `Vars`, `count`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
+`Condition`, `ActionCall`, `FreeBindings`, `InputBindings`, `OutputBindings`, `QueryPromise`, `ReadLine`, `RefusedActionLine`, `RelationView`, `ReturnedActionLine`, `SlotPattern`, `Vars`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -48,6 +47,7 @@ call shapes:
 | `earlier`              | `earlier(action, input, output?)`                                            |
 | `view`                 | `view(name, (input, output, free) => where(...))`                            |
 | `count`                | `count(query, input, outputVariable)`                                        |
+| `compute`              | `compute(namedComputation, input, output)`                                   |
 | `former`               | `former(name, (input, free) => form(...) \| where(...).form(...))`           |
 | `form`                 | `form({ ...shape })`                                                         |
 | `each`                 | `each(readLine).where(...).arranged(...).form(...)` or a fold                |
@@ -523,7 +523,7 @@ owns derivation guarantees.
 
 <!-- register:advanced:start -->
 
-`Engine`, `EngineObserver`, `LogEvent`, `Refuse`, `Requesting`, `createEngine`, `compute`, `custom`, `faulted`, `refusalFunnel`
+`Engine`, `EngineObserver`, `LogEvent`, `Refuse`, `createEngine`, `custom`, `faulted`
 
 <!-- register:advanced:end -->
 
@@ -531,17 +531,14 @@ This subpath crosses the ordinary application boundary. Prefer the ordinary
 assembly APIs unless the host needs manual engine construction or an explicit
 escape hatch.
 
-| API             | Compact signature / role                         |
-| --------------- | ------------------------------------------------ |
-| `createEngine`  | `createEngine(store?: LogStore): Engine`         |
-| `compute`       | `compute(namedComputation, input, output)`       |
-| `custom`        | `custom(fn, inputs, outputs)`                    |
-| `faulted`       | `faulted(pattern, { by?, except?, exceptBy? }?)` |
-| `refusalFunnel` | `refusalFunnel(boundaryActions)`                 |
+| API            | Compact signature / role                         |
+| -------------- | ------------------------------------------------ |
+| `createEngine` | `createEngine(store?: LogStore): Engine`         |
+| `custom`       | `custom(fn, inputs, outputs)`                    |
+| `faulted`      | `faulted(pattern, { by?, except?, exceptBy? }?)` |
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
-observation contracts. `Requesting` is the low-level request/response concept;
-`Refuse` is the low-level refusal marker. Its `message` becomes the refusal's
+observation contracts. `Refuse` is the low-level refusal marker. Its `message` becomes the refusal's
 `error` field and takes precedence over an `error` field in its optional data.
 An undeclared code remains a refusal. The current implementation warns only
 when the action has an explicit refusal contract that omits the code. The
@@ -550,40 +547,3 @@ ordinary assembly's quiescent interpreter-failure settlement policy. Standard
 assembly behavior is normative under [Failures between action
 asks](./semantics.md#failures-between-action-asks) and
 [Cancellation](./semantics.md#cancellation).
-
-## `utils`
-
-<!-- register:utils:start -->
-
-`LogLevel`, `Logger`, `RedactionPolicy`, `Redactor`, `UNIVERSAL_SENSITIVE_PATTERNS`, `createRedactor`, `describeError`, `logger`, `redact`, `serializeError`
-
-<!-- register:utils:end -->
-
-`logger` writes one JSON line per accepted call. Each line contains `level`,
-`message`, and an ISO timestamp plus redacted metadata. `LogLevel` is `debug`,
-`info`, `warn`, `error`, or `none`. The logger reads `LOG_LEVEL` when its module
-loads, defaults invalid or absent values to `info`, and does not expose a
-runtime threshold setter. Metadata receives universal field-name redaction;
-the message string is not sanitized or redacted and must not contain secrets.
-`Logger` describes the callable surface.
-`serializeError(...)` returns only an `Error` class name, or
-`NonErrorThrown` for another thrown value, and is the opaque form for ordinary
-logging. `describeError(...)` returns an `Error` message or the string form of
-another thrown value. It does not sanitize or redact that text; use it only in
-a caller-reviewed diagnostic channel, never automatically in a public error
-envelope.
-
-`createRedactor(policy)` returns a scoped `Redactor` for one application or
-standalone owner. It copies field names and the pattern list but retains the
-supplied `RegExp` objects; callers must not mutate those expressions after
-construction. Ordinary assembly uses this scoped form. `redact(value)` applies
-`UNIVERSAL_SENSITIVE_PATTERNS`; callers must treat the exported array and its
-expressions as immutable. Domain fields require an explicitly owned redactor.
-The exact storage and redaction guarantees live under [Logs, concept
-implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).
-
-Redaction matches field names rather than arbitrary string contents and stops
-traversal after five levels. Nested cycles, unreadable values, functions,
-symbols, non-finite numbers, `undefined`, and values beyond the depth limit are
-replaced rather than preserved. A top-level `undefined` remains `undefined`;
-other ordinary results are JSON-safe projections.

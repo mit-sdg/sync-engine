@@ -133,7 +133,7 @@ export function conditionOp(value: Condition, site: string): AnyWhereOp {
   if (isFusedComputation(value)) return brandOp({ op: "holds" as const, fused: value });
   throw new Error(
     `${site}: each condition is a line (a called query or view, is.lt(...), ` +
-      "no(...), whether(...)) or an advanced op (compute/custom/earlier).",
+      "no(...), whether(...)) or a condition operation (compute/custom/earlier).",
   );
 }
 
