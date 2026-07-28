@@ -44,6 +44,12 @@ using the same external storage are not serialized by the engine. The concept
 implementation and storage layer must provide any cross-process locking,
 transactions, isolation, and conflict handling.
 
+Queries and read evaluation do not enter the action queue. They can overlap an
+asynchronous action body and other queries, and they do not receive a
+transactional or as-of-action snapshot. Query implementations must be
+side-effect-free. The storage layer must provide any read/write isolation the
+application requires.
+
 A reaction chain is not a transaction. If an early consequence changes state
 and a later consequence refuses or faults, the earlier change remains. Put
 uniqueness, capacity, first-writer, and answer-once decisions inside the action
@@ -93,7 +99,10 @@ Tracking HTTP promises is insufficient because a timed-out request can outlive
 its transport wait. A host can stop accepting new requests and apply a hard
 shutdown deadline. Call `beginDrain()` to stop root admission and await its
 promise (or `whenIdle()`) until accepted causal flows settle. Timed-out and
-aborted calls remain active until their real work settles.
+aborted calls remain active until their real work settles. During gateway drain,
+accepted gateway roots cross application admission before the application
+begins draining. Do not expose the downstream application invoker as a second
+public admission path during this interval.
 
 `ConceptFloor.close()` is a descriptor operation supplied by the host. Assembly
 does not call it automatically. The host owns listener shutdown, process
@@ -103,7 +112,9 @@ through its host-defined API after drain.
 
 The host sequence is: stop the listener, call `beginDrain()`, await it up to the
 host's hard deadline, invoke each concept floor's `close()` exactly once, close
-host-owned log-store resources, then exit.
+host-owned log-store resources, then exit. Closing resources after the hard
+deadline is forced shutdown: it can interrupt accepted work, so the application
+must define recovery for partially completed operations.
 
 ## Runtime validation
 
@@ -182,11 +193,13 @@ Use an assembly observer for application-engine telemetry and a gateway
 observer for gateway-boundary telemetry. Gateway action, interpreter,
 integrity, limit, and drain events identify the gateway's internal concepts and
 routes. For request-level counts and latency, use its single
-`invocation-settled` event: it is emitted after final downstream completion and
-identifies the caller-requested application route, effective correlation id,
-result class, and applicable framework code. The internal `/gateway/receive`
-settlement is deliberately hidden, and the public settlement may have no
-`flow` field.
+`invocation-settled` event: it is emitted after the final result visible to the
+caller and identifies the caller-requested application route, effective
+correlation id, result class, and applicable framework code. The internal
+`/gateway/receive` settlement is deliberately hidden, and the public settlement
+may have no `flow` field. The event does not imply causal quiescence. Accepted
+sibling work can continue afterward; use `whenIdle()` or a completed drain to
+observe quiescence.
 
 Observer handoff is synchronous but isolated: throws and rejected promises do
 not alter invocation behavior. Keep callbacks bounded and move queueing,
@@ -226,10 +239,11 @@ application responsibilities to the engine.
 ## Logs and sensitive values
 
 Assembly-scoped field-name redaction runs before occurrence entries reach
-stores, observers, or inspection, so separate applications cannot mix domain
-policies. Each assembly keeps an immutable snapshot of its own policy.
-`createRedactor(...)` provides the same scoped ownership to standalone callers;
-`redact(...)` is an immutable universal-pattern convenience. Redaction matches
+stores, observers, or inspection. Each assembly creates its own redactor and
+copies the policy's exact field names and pattern list, but retains the supplied
+`RegExp` objects. Do not mutate those expressions after constructing an assembly
+or standalone redactor. `redact(...)` uses the exported universal expressions,
+whose array and `RegExp` objects callers must also treat as immutable. Redaction matches
 field names; it does not search arbitrary string contents. During an active flow, the interpreter privately
 retains original values needed for matching and clears them when the outermost
 action settles.

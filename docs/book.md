@@ -116,7 +116,8 @@ Reaction "bad.ReopenOnJoin": "reading" is opened and never used — omit the key
 ## 2 · The promise decides, not the words
 
 `_membership` promises exactly one row — every member-circle pair has a
-standing — so a line reading it can never drop anything:
+standing. This line accepts that row and binds its `joined` field, so the line
+cannot drop the case:
 
 ```ts
 const theStandingOf = view(
@@ -132,6 +133,9 @@ const theStandingOf = view(
   own `one()` terminal carries that promise outward, and the engine checks it
   when the view is read.
 - **Opens**: `joined`.
+
+A `one` promise guarantees the source row, not a pattern match. A literal or an
+already-bound name in `.is(...)` can still reject that row and drop the case.
 
 ```
 the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); checked when read

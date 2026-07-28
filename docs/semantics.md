@@ -109,12 +109,12 @@ The trigger form selects the posture:
 | `when(Concept.action(pattern).refuses(refusal))` | the refused outcome                            |
 | `when(returned(...))` / `when(refused(...))`     | the corresponding cross-action posture channel |
 
-Each returned or refused outcome, and each fault mark watched by a framework
-reaction, gives each matching public single-trigger reaction one evaluation. A
-later record cannot make that reaction reconsider an earlier trigger. Manually
-registered multi-trigger IR can instead join a newly landed record with earlier
-unconsumed records in the flow. A `where` block may produce several bindings,
-so one evaluation may produce several firings. Each firing record
+Each requested ask, returned or refused outcome, and fault mark watched by a
+framework reaction gives each matching public single-trigger reaction one
+evaluation. A later record cannot make that reaction reconsider an earlier
+trigger. Manually registered multi-trigger IR can instead join a newly landed
+record with earlier unconsumed records in the flow. A `where` block may produce
+several bindings, so one evaluation may produce several firings. Each firing record
 names the reaction, its binding, the trigger it consumed, and the asks it
 produced. Once an evaluation records a firing, consumption prevents that
 reaction from evaluating the trigger again; other reactions consume it
@@ -278,13 +278,15 @@ A rejected native `Promise` from the same JavaScript realm is removed from the
 cache. Arbitrary thenables are cached as ordinary values. Direct state mutation
 or an external database change that bypasses an instrumented action can remain
 hidden until the next invalidation; a query call is not guaranteed to execute
-its implementation on every read.
+its implementation on every read. Cache-key construction traverses at most 100
+nested levels. A call with a deeper argument still executes but bypasses
+memoization for that call.
 
 Read equality and literal action-pattern equality are structural for arrays and
 plain records, timestamp-based for `Date`, and identity-based for maps, sets,
-class instances, and other objects. Reusing an already bound variable in an
-action pattern uses strict identity/value comparison instead. Many-row read
-matching retains the first structurally distinct fill. Former `.distinct(...)`
+class instances, and other objects. Reusing an already-bound variable in an
+action pattern uses this same equality. Many-row read matching retains the first
+structurally distinct fill. Former `.distinct(...)`
 uses JavaScript `Set` semantics and skips `undefined`. `.first(...)` uses the
 first selected row after optional arrangement. `arranged("newest")` reverses
 source order; it does not inspect a timestamp field.
@@ -297,10 +299,11 @@ How such a fault is delivered depends on where the read occurs. See
 A **view** names a match. Its builder receives separate input, output, and free
 binding bags. A predicate view ends in `.holds()`. A view with outputs defaults
 to `.many()` and may instead declare `.one()` or `.optional()`. Its human name
-carries no signature or cardinality. At a use-site a view takes one
-object-shaped input mapping and is read exactly like a concept query. Its local
-bindings do not escape. Stacked `where` blocks are alternatives; any matching
-block can supply a result.
+carries no signature or cardinality. At a use-site a view takes one plain
+object input mapping. Every enumerable own key must be declared, and every
+declared input must be present according to the JavaScript `in` operator. The
+view is read exactly like a concept query. Its local bindings do not escape.
+Stacked `where` blocks are alternatives; any matching block can supply a result.
 
 The engine checks a concept query's declared promise whenever it reads the
 query and checks a view's declared promise whenever it reads the view. The
@@ -316,7 +319,8 @@ always produces one result whose shape is determined by `.form`, `.count`,
 selection already has a defined result. The human name carries neither inputs
 nor cardinality. The engine checks the promise when the former is evaluated. A
 record's `where` cannot open a name from a `many` source. Use `each` when the
-result should contain rows.
+result should contain rows. Like a view, a former call takes one plain object
+mapping with the same enumerable-own-key and required-input checks.
 
 Production handles absence and plurality in three ways:
 
@@ -340,7 +344,9 @@ formed result.
 If a former faults while forming a reaction consequence, that consequence ask
 is recorded with the fault and remains unanswered. Calling a former directly
 has no action ask to mark, so the evaluation rejects instead. The operational
-delivery boundary is described under
+fault is a `FormerFault`: `FORMER_NONE` means a former promising one answer
+produced none, and `FORMER_MANY` means a record body produced several matches.
+These faults are not domain refusals. The operational delivery boundary is described under
 [Failures between action asks](#failures-between-action-asks).
 
 ## Decisions that must not race
@@ -475,12 +481,16 @@ crosses this policy. The declared origin identifies public deployment and
 enforces the production HTTPS check; the credential-free profile does not use
 an inbound `Origin` header as an authorization or CORS decision.
 
-An HTTP floor may additionally bind one logical credential input to a cookie. The application
-declares the credential name and input, the endpoint that issues it and the
-returned token and expiry fields, the successful endpoints that clear it, and
-the public origin. Registration checks those names against the assembly. Any
-endpoint whose input contract requires that credential becomes protected
-without another floor edit.
+An HTTP floor may additionally bind one logical credential input to a cookie.
+The application declares the credential name and input, the endpoint that
+issues it and the returned token and expiry fields, the successful endpoints
+that clear it, and the public origin. Credential and output field names must be
+JavaScript-style identifiers. Issue and clear paths must be canonical portable
+paths, and clear paths must be distinct. Assembly validation requires every
+named path to exist, at least one endpoint to require the credential input, and
+every top-level alternative of the issuing endpoint's successful output to
+contain the token and expiry fields. Any endpoint whose input contract requires
+that credential becomes protected without another floor edit.
 
 The fixed floor uses the production profile's request and public-error policy,
 enforces the declared origin when
@@ -488,10 +498,12 @@ an `Origin` header is present, replaces a protected request's credential input
 with the cookie value, and never accepts that value from the body. It projects
 concept refusal codes through the same registered categories. The issuing
 endpoint's token and expiry fields become the cookie and do not enter its HTTP
-response. Successful clearing endpoints and an unauthorized protected request
-clear the cookie. Responses that issue or clear the cookie use `Cache-Control:
-no-store`. The floor is a same-origin boundary: it does not answer CORS
-preflights or emit CORS headers.
+response. At runtime, the token must be a string and the expiry must be a valid
+`Date` or a value whose string representation is date-parsable; malformed issue
+output becomes opaque `INTERNAL_ERROR`. Successful clearing endpoints and an
+unauthorized protected request clear the cookie. Responses that issue or clear
+the cookie use `Cache-Control: no-store`. The floor is a same-origin boundary:
+it does not answer CORS preflights or emit CORS headers.
 The floor adds no implicit `/api` route alias; serving below `/api` requires an
 explicit `basePath: "/api"` declaration.
 
@@ -654,6 +666,12 @@ earlier actions are not rolled back when a later action refuses or faults.
 The runtime provides no retry deduplication or exactly-once guarantee. A retry
 may repeat a completed action or overlap work that continued after timeout.
 
+Queries and read evaluation do not enter the action queue. A query can overlap
+an asynchronous action body or another query and does not receive a
+transactional snapshot of concept state. Query implementations must avoid side
+effects; concept storage must provide any isolation required between reads and
+writes.
+
 `earlier` reads matching action records whose invocation position precedes the
 trigger in the same flow. Ordinary query reads instead read concept state when
 the reaction runs. A later reaction may therefore observe state changed by an
@@ -733,18 +751,20 @@ its `LogStore`, which folds them into indexes for matching and inspection.
 Retention may evict indexed entries, so no assembly promises to retain every
 occurrence forever.
 
-Each ordinary assembly snapshots its own field-name redaction policy before
-entries reach a store, observer, or inspection summary. One assembly's domain
-fields cannot change another's policy. During an active causal flow, the
+Each ordinary assembly creates its own field-name redactor before entries reach
+a store, observer, or inspection summary. During an active causal flow, the
 interpreter privately retains original values for execution and matching, then
 clears them when the outermost action settles. Ordinary process logs omit
 exception messages, stacks, causes, and attached fields. `serializeError(...)`
 provides that opaque class-only representation. `describeError(...)` instead
 returns unredacted exception text and is suitable only for a caller-reviewed
 diagnostic channel, not an automatic public error envelope.
-Standalone callers use `createRedactor(...)` for an immutable domain policy.
-The `redact(...)` convenience applies only immutable universal patterns; there
-is no mutable process-global redaction policy.
+`createRedactor(...)` copies exact field names and the pattern list for one
+standalone owner, but it retains the supplied `RegExp` objects. Callers must not
+mutate those expressions after constructing a redactor or assembly. The
+`redact(...)` convenience uses the exported universal expressions; callers must
+also treat the exported array and its expressions as immutable. There is no setter for a
+process-global redaction policy.
 
 Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
 most recent settled causal flows. Its `retention` option can select another

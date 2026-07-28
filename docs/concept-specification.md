@@ -26,6 +26,10 @@ Describe one concrete sequence that demonstrates the behavior.
 The parser includes all text after each heading up to the next second-level
 heading. Heading text, capitalization, and level are significant.
 
+Within each `actions` or `queries` fence, every name must be unique. An indented
+declaration body must follow a left-aligned signature; a body before the first
+signature is rejected.
+
 ## Action declarations
 
 An `actions` fence contains zero or more left-aligned signatures. Indented lines
@@ -114,8 +118,10 @@ descriptor; prose in a State section will not be inferred as that descriptor.
 
 ## `registerConcept` checks
 
-`registerConcept({ class, spec, ... })` performs checks available from the
-runtime class and parsed document:
+`registerConcept({ class, spec, ... })` inspects only own prototype methods
+declared directly on the registered class. An inherited method cannot satisfy a
+specification declaration or enter this validation inventory. The function
+performs these checks against the parsed document:
 
 - action and query names agree in both directions;
 - every declared refusal code has one distinct `Error` class;
@@ -132,8 +138,11 @@ input-name comparison.
 ## `sync-engine check` checks
 
 `sync-engine check` reads `spec.md`, `registry.ts`, and the registered class's
-TypeScript source. It compares action and query names and fails closed when it
-cannot interpret a method's parameter syntax.
+TypeScript source. `registry.ts` must use a named import whose module specifier
+resolves directly to the source file that declares the class; the checker does
+not follow re-export chains or perform general TypeScript module resolution. It
+compares methods declared directly in that class with the action and query
+names and fails closed when it cannot interpret a method's parameter syntax.
 
 Supported method parameter forms are:
 

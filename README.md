@@ -153,7 +153,7 @@ The [documentation index](docs/index.md) separates the material by task.
 
 - [Getting started](docs/guide/getting-started.md) — scaffold and run the
   smallest complete application.
-- [Authoring guide](docs/guide/concepts.md) — concepts, reactions, views,
+- [Authoring guide](docs/index.md#start-an-application) — concepts, reactions, views,
   formers, and endpoints in dependency order.
 - [Example book](docs/book.md) — small, tested reading constructions and exact
   registration failures.

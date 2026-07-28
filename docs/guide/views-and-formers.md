@@ -139,9 +139,10 @@ runtime meaning.
 
 The source declaration governs matching. A plain line continues once per
 distinct match or drops the candidate when none remain;
-`whether(optionalLine)` keeps the candidate when the row is absent and leaves
-its fresh names blank. Use `each(line)` when a former needs every row. At the
-production site, choose whether to form those rows or reduce them with a fold.
+`whether(optionalLine)` keeps the candidate when no row matches the complete
+line, including its `.is(...)` pattern, and leaves its fresh names blank. Use
+`each(line)` when a former needs every row. At the production site, choose
+whether to form those rows or reduce them with a fold.
 
 The [public API's selection table](../public-surface.md#language) names each
 callable consumer, its result for matches, and its empty-selection value.

@@ -40,7 +40,7 @@ installing, generating, checking, and running the project.
 ## `sync-engine check`
 
 ```text
-sync-engine check [--concepts <path...>]
+sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
 ```
 
 `check` recursively finds `spec.md` under each supplied root. The default root
@@ -52,6 +52,10 @@ query names and supported input parameter forms. It does not read State notation
 as grammar or compare it with class fields or storage. [Concept specification
 format](concept-specification.md) defines the accepted machine grammar and
 uninterpreted boundary.
+
+`--config` also assembles the application and prints its structured diagnostics.
+`--fail-on-warnings` promotes warning diagnostics only when `--config` is
+present; without a config there are no application diagnostics to promote.
 
 Success prints:
 
@@ -87,7 +91,9 @@ artifacts.
 Renders and validates both artifacts before its first filesystem effect. The
 command creates configured parent directories, skips byte-identical files, and
 replaces changed files through a same-directory temporary file and rename. It
-does not delete unknown files and is silent on success.
+does not delete unknown files and is silent on success. Replacement is atomic
+per file, not across both artifacts. A later write failure can leave an earlier
+artifact updated; the command does not roll back completed writes.
 
 ### `pin-spec`
 

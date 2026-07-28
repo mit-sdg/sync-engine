@@ -23,7 +23,7 @@ the formatter, linter, typechecker, and test runner beneath those scripts.
 | Build JavaScript and declarations | `bun run build`              |
 | Check declaration snapshot        | `bun run declarations:check` |
 | Check packed consumer             | `bun run package:check`      |
-| Run both example scenarios        | `bun run scenario`           |
+| Run all example scenarios         | `bun run scenario`           |
 | Check pinned generated artifacts  | `bun run examples:check`     |
 | Typecheck only                    | `bun run typecheck`          |
 

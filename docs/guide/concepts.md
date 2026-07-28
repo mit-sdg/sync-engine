@@ -119,11 +119,14 @@ _Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../ex
 
 ## Declare the queries
 
-A **query** only reads state. The specification's `queries` fence names each
-one and promises `one`, `optional`, or `many`. A `one` query returns one
-record; the other two return arrays holding at most one row or any number of
-rows. `_openFor` promises `many` because one recipient may have any number of
-open alerts:
+A **query** must only read state. The engine identifies queries by their
+underscore-prefixed method names; it does not inspect or enforce their purity.
+Queries are memoized, so side effects would occur only on cache misses at
+invalidation-dependent times. The specification's `queries`
+fence names each query and promises `one`, `optional`, or `many`. A `one` query
+returns one record; the other two return arrays holding at most one row or any
+number of rows. `_openFor` promises `many` because one recipient may have any
+number of open alerts:
 
 _Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../examples/operations-room/src/concepts/alerting/spec.md)_
 

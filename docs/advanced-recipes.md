@@ -2,7 +2,8 @@
 
 These recipes address host-owned edges after an application already has its
 concepts, composition, and assembly. Start with the [application authoring
-guide](./guide/getting-started.md) for the ordinary web application path. The
+guide](./index.md#start-an-application) for the complete path from a scaffold to
+an HTTP boundary. The
 contracts behind these examples live in [Operational limits](./operations.md)
 and [Execution semantics](./semantics.md).
 

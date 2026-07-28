@@ -108,7 +108,9 @@ export const AddResponse = endpoint(
 The second stage can use `response` because the first action returned it. A
 refusal or fault stops this chain. When a sibling group precedes a later
 stage, each sibling continues independently; the later stage does not wait for
-the other siblings.
+the other siblings. The chained `Discussing.respond(...).responds(...)` stage is
+automatically pinned to the exact ask made by the preceding stage; another
+matching `respond` call cannot advance this path.
 
 A qualified sibling can carry its own chain before its trailing label:
 
@@ -125,10 +127,10 @@ named branch cannot be extended.
 ## Condition on an action's outcome
 
 The output pattern in `when` can test a returned value as well as bind one. A
-literal tests the output; a fresh symbol binds it. An action-specific
-`.responds(...)` trigger has no provenance constraint unless the declaration
-uses a cross-action channel with a `by` option, so any matching call to that
-concept action can trigger it.
+literal tests the output; a fresh symbol binds it. A top-level action-specific
+`.responds(...)` trigger has no provenance constraint, so any matching call to
+that concept action can trigger it. A chained `.then(Action(...).responds(...))`
+stage is different: lowering pins it to the preceding ask automatically.
 
 `returned(...)` and `refused(...)` are cross-action posture channels. Their
 patterns can bind `concept`, `action`, and `input`; returned payloads use

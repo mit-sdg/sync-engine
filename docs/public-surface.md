@@ -263,7 +263,7 @@ invoker.invoke(path, input, options?: InvokeOptions): Promise<InvocationResult>
 | `InvokeOptions` field | Default / effect                                                             |
 | --------------------- | ---------------------------------------------------------------------------- |
 | `signal`              | No signal; an abort ends the wait with `ABORTED`                             |
-| `timeoutMs`           | `30_000`; expiry ends the wait with `TIMED_OUT`                              |
+| `timeoutMs`           | `30_000` without `executionLimits`; otherwise `maxRequestDurationMs`         |
 | `correlationId`       | The generated request id; supplied values cross gateway and application logs |
 
 `ExecutionLimits` requires positive finite integers for active root flows,
@@ -272,13 +272,20 @@ maximum caller deadline. Overload and drain return `UNAVAILABLE`. `Gateway`
 also exposes `beginDrain()` and `whenIdle()` and includes the target assembly's
 lifecycle when that target supplies it.
 
+An explicit `timeoutMs` must be a positive finite integer. When execution limits
+are configured, it must not exceed the layer's maximum request duration. An
+invalid value returns `INVALID_INPUT` before work is recorded. Gateway and
+application invokers apply the option as separate durations; it is not one
+absolute deadline shared by both layers.
+
 Gateway action, interpreter, integrity, limit, and drain events describe its
 internal engine. Its `/gateway/receive` invocation settlement is hidden;
 observers instead receive exactly one `invocation-settled` event for each
 public `invoke` call after the final result is known. That event uses the
 requested application route and effective correlation id, includes the final
-result class and applicable framework code, covers full completion in its
-duration, and may omit `flow`.
+result class and applicable framework code, measures through the final
+caller-visible result, and may omit `flow`. Accepted sibling work can continue
+afterward; use `whenIdle()` to observe flow quiescence.
 
 `Gateway`, `GatewayTarget`, `GatewayClientError`, `Invoker`, and
 `InvocationResult` name these contracts. Timeout and abort stop waiting but do
@@ -308,6 +315,14 @@ same-origin cookie preset. Both production forms use the same bounded request,
 JSON, status, category, success-value, and correlation pipeline. The fixed
 request, cookie, projection, and deployment guarantees live in [Execution
 semantics](./semantics.md#boundary-gateway-and-client).
+
+`httpFloor(...)` requires identifier-shaped credential and output field names,
+canonical issue and clear paths, and distinct clear paths. Assembly validation
+requires those paths to exist, at least one endpoint to require the credential
+input, and every top-level alternative of the issue endpoint's successful
+output to expose the token and expiry fields. At runtime, a token that is not a
+string or an expiry that is not a valid `Date` or date-parsable value produces
+opaque `INTERNAL_ERROR`.
 
 Endpoint and base paths must be canonical portable URL pathnames. `/` remains a
 supported endpoint and no-prefix base, and trailing base-path slashes normalize
@@ -498,7 +513,9 @@ complete plan before its first write, skips unchanged files, and leaves unknown
 files untouched. Its environment-independent `ArtifactFilesystem.writeAtomic`
 contract requires same-directory temporary-file replacement. The installed CLI
 implements that contract with write and rename; public tooling has no Node
-filesystem dependency.
+filesystem dependency. Atomicity is per file, not per plan. A write failure can
+leave earlier entries updated; `applyArtifactPlan` does not roll back completed
+writes.
 
 The structural argument consumed by `renderApp` has `title: string`,
 `concepts: ConceptInventoryIR[]`, and `app: AppIR`. The package does not export
@@ -526,25 +543,28 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. The descriptor is a CLI configuration
 shape rather than an exported package type.
 
-| Field               | Required | Default                                                               |
-| ------------------- | -------- | --------------------------------------------------------------------- |
-| `assemble`          | yes      | Function that builds the application                                  |
-| `title`             | yes      | Application title used to derive names                                |
-| `directory`         | no       | `new URL("./generated/", configUrl)`                                  |
-| `specification`     | no       | Slugged title plus `.md`                                              |
-| `wire`              | no       | `"wire.ts"`                                                           |
-| `wireName`          | no       | Pascal-cased title plus `Wire`                                        |
-| `wireBanner`        | no       | `// Generated by sync-engine from the <title> assembly. Do not edit.` |
-| `httpWireName`      | no       | `${wireName}Http` when an HTTP profile or floor is present            |
-| `vocabulary.module` | no       | `new URL("./src/concept-set.ts", configUrl)`                          |
-| `vocabulary.export` | no       | `"vocabulary"`                                                        |
-| `httpProfile`       | no       | No production HTTP projection                                         |
-| `httpFloor`         | no       | No cookie-bound production HTTP projection                            |
+| Field               | Required | Default                                                    |
+| ------------------- | -------- | ---------------------------------------------------------- |
+| `assemble`          | yes      | Function that builds the application                       |
+| `title`             | yes      | Application title used to derive names                     |
+| `directory`         | no       | `new URL("./generated/", configUrl)`                       |
+| `specification`     | no       | Slugged title plus `.md`                                   |
+| `wire`              | no       | `"wire.ts"`                                                |
+| `wireName`          | no       | Pascal-cased title plus `Wire`                             |
+| `wireBanner`        | no       | Exact package/version generator banner                     |
+| `httpWireName`      | no       | `${wireName}Http` when an HTTP profile or floor is present |
+| `vocabulary.module` | no       | `new URL("./src/concept-set.ts", configUrl)`               |
+| `vocabulary.export` | no       | `"vocabulary"`                                             |
+| `httpProfile`       | no       | No production HTTP projection                              |
+| `httpFloor`         | no       | No cookie-bound production HTTP projection                 |
 
-`httpProfile` and `httpFloor` are mutually exclusive. Artifact generation
-always uses the vocabulary anchor with strict leaves. With either descriptor,
-the one wire module contains the logical contract and the projected public HTTP
-contract. A floor additionally removes cookie-consumed credential fields. The
+The default wire banner is
+`// Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit.`
+A custom banner receives a second mandatory generator line. `httpProfile` and
+`httpFloor` are mutually exclusive. Artifact generation always uses the
+vocabulary anchor with strict leaves. With either descriptor, the one wire
+module contains the logical contract and the projected public HTTP contract. A
+floor additionally removes cookie-consumed credential fields. The
 [application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
 shows the application-owned command path; [Generated wire](./semantics.md#generated-wire)
 owns derivation guarantees.
@@ -589,7 +609,13 @@ asks](./semantics.md#failures-between-action-asks) and
 
 <!-- register:utils:end -->
 
-`logger` is the package logger. `Logger` and `LogLevel` describe its public API.
+`logger` writes one JSON line per accepted call. Each line contains `level`,
+`message`, and an ISO timestamp plus redacted metadata. `LogLevel` is `debug`,
+`info`, `warn`, `error`, or `none`. The logger reads `LOG_LEVEL` when its module
+loads, defaults invalid or absent values to `info`, and does not expose a
+runtime threshold setter. Metadata receives universal field-name redaction;
+the message string is not sanitized or redacted and must not contain secrets.
+`Logger` describes the callable surface.
 `serializeError(...)` returns only an `Error` class name, or
 `NonErrorThrown` for another thrown value, and is the opaque form for ordinary
 logging. `describeError(...)` returns an `Error` message or the string form of
@@ -597,11 +623,14 @@ another thrown value. It does not sanitize or redact that text; use it only in
 a caller-reviewed diagnostic channel, never automatically in a public error
 envelope.
 
-`createRedactor(policy)` returns an immutable `Redactor` for one application or
-standalone owner. Ordinary assembly uses this scoped form. `redact(value)` is an
-immutable convenience that applies `UNIVERSAL_SENSITIVE_PATTERNS`; domain fields
-require an explicitly owned redactor. The exact storage and redaction guarantees
-live under [Logs, concept implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).
+`createRedactor(policy)` returns a scoped `Redactor` for one application or
+standalone owner. It copies field names and the pattern list but retains the
+supplied `RegExp` objects; callers must not mutate those expressions after
+construction. Ordinary assembly uses this scoped form. `redact(value)` applies
+`UNIVERSAL_SENSITIVE_PATTERNS`; callers must treat the exported array and its
+expressions as immutable. Domain fields require an explicitly owned redactor.
+The exact storage and redaction guarantees live under [Logs, concept
+implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).
 
 Redaction matches field names rather than arbitrary string contents and stops
 traversal after five levels. Nested cycles, unreadable values, functions,

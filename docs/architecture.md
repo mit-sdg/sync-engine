@@ -207,8 +207,10 @@ gateway or HTTP. The standalone `src/engine/boundary/cli-app.ts` likewise adapts
 protocol results and an invoker without inspecting concept state.
 
 `src/engine/boundary/assembly/concept-set.ts` turns plain concept registrations
-into a vocabulary, default implementations, optional named floors, and refusal
-metadata. `src/engine/boundary/assembly/assemble.ts` creates one engine,
+into a vocabulary, default implementations, floor-specific implementation
+factories, complete implementation maps, and refusal metadata. A host-created
+`ConceptFloor` descriptor separately groups one such map with resources and a
+`close()` operation. `src/engine/boundary/assembly/assemble.ts` creates one engine,
 instruments its selected instances, collects tagged composition exports, and
 returns the application-facing invoker/form interface. Plain concept actions
 may be synchronous, but the assembled `concepts` surface types every action as
