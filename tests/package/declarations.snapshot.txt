@@ -17,7 +17,7 @@ export { assemble } from "../engine/boundary/assembly/assembly-facade.ts";
 export type { Assembly, AssemblyOptions } from "../engine/boundary/assembly/assembly-facade.ts";
 export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engine/boundary/assembly/concept-set.ts";
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
-export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
+export { FileStore, PersistingConcept } from "../engine/hosting/persisting.ts";
 export { MemoryStore } from "../engine/reactions/runtime/log-store.ts";
 export { Logging } from "../engine/reactions/runtime/logging.ts";
 export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
@@ -643,7 +643,7 @@ export declare const gatewayVocabulary: import("../../reactions/authoring/refs.t
  * The outer transport calls this one stable endpoint with the requested
  * application path carried as data.
  */
-export declare const ReceiveApplicationRequest: import("../index.ts").EndpointDef<import("../../reactions/types.ts").ReactionPartition>;
+export declare const ReceiveApplicationRequest: import("../assembly/assemble.ts").EndpointDef<import("../../reactions/types.ts").ReactionPartition>;
 export interface Gateway<C extends ContractShape> extends Invoker<C> {
     /** The gateway's own engine and log, separate from the application. */
     readonly engine: Reacting;
@@ -776,33 +776,6 @@ export declare function createHttpHandler(options: {
     floor: HttpFloor;
     correlation?: HttpCorrelationOptions;
 }): (request: Request) => Promise<Response>;
-
-=== dist/engine/boundary/index.d.ts ===
-export { createClient } from "./client/client.ts";
-export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "./client/client.ts";
-export { createHttpTransport, createHttpClient } from "./client/http-client.ts";
-export type { HeadersOption, HttpClientOptions } from "./client/http-client.ts";
-export { createHttpHandler } from "./http/http.ts";
-export type { HttpCorrelationOptions } from "./http/http.ts";
-export { renderInputContracts } from "./protocol/endpoints.ts";
-export type { InputContractDecl, Prettify, RequestBoundaryActions } from "./protocol/endpoints.ts";
-export type { EndpointValidator, EndpointValidators, ValidationResult, } from "./protocol/validation.ts";
-export { FrameworkErrorCode, type EmittedFrameworkErrorCode, type InvocationResult, domainError, frameworkError, success, } from "./protocol/errors.ts";
-export { createInvoker, Requesting } from "./invocation/invoke.ts";
-export { createLocalClient } from "./client/local-client.ts";
-export type { Invoker, InvokeOptions } from "./invocation/invoke.ts";
-export type { ExecutionLimits } from "./invocation/lifecycle.ts";
-export type { OperationalEvent, OperationalObserver, OperationalResultClass, } from "../reactions/runtime/operational.ts";
-export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./invocation/funnel.ts";
-export { assemble, endpoint, fail, isEndpointDef, receive, respond } from "./assembly/assemble.ts";
-export type { AssembledApp, AssembleOptions, EndpointDef, EndpointOptions, } from "./assembly/assemble.ts";
-export type { ApplicationInterface } from "./protocol/application-interface.ts";
-export { createGateway } from "./gateway/gateway.ts";
-export type { Gateway, GatewayClientError, GatewayOptions } from "./gateway/gateway.ts";
-export { deriveInputContracts, renderWireTypes, wireContracts } from "./wire/wire.ts";
-export type { WireContractsIR, WireEndpoint, WireOptions, WireRenderOptions, WireType, } from "./wire/wire.ts";
-export { command, createCliApp, fail as cliFail, ok as cliOk, parseArgs, parseFail, parseOk, } from "./cli-app.ts";
-export type { CliApp, CliAppOptions, CliCommand, CliResult, CommandInput, EndpointCliCommand, ParsedArgs, ParseResult, } from "./cli-app.ts";
 
 === dist/engine/boundary/invocation/funnel.d.ts ===
 /**
@@ -1270,11 +1243,6 @@ export type { WireContractsIR, WireEndpoint, WireOptions } from "./wire-contract
 export { renderWireTypes } from "./wire-renderer.ts";
 export type { WireRenderOptions } from "./wire-renderer.ts";
 export type { WireType } from "./wire-types.ts";
-
-=== dist/engine/hosting/index.d.ts ===
-export { AuditFeed, FileStore, PersistingConcept } from "./persisting.ts";
-export type { AuditEntry, PersistBinding, PersistedEntry, Stoppable } from "./persisting.ts";
-export type { RetentionPolicy } from "../reactions/runtime/log-store.ts";
 
 === dist/engine/hosting/persisting.d.ts ===
 /**
@@ -3504,57 +3472,6 @@ export declare class Frames<TFrame extends Frame = Frame> extends Array<TFrame> 
     constructor(...frames: TFrame[]);
 }
 
-=== dist/engine/reads/index.d.ts ===
-export { among, computationRef, ge, gt, is, isFusedComputation, le, lt, standardComputations, } from "./computations.ts";
-export type { ComputationFn, ComputationRef, ComputationSource, FusedComputation, } from "./computations.ts";
-export type { ReadEnv } from "./env.ts";
-export { expandOutputRows, Frames, varKeyOf, readPatternValue, bindInputMapping, } from "./frames.ts";
-export type { Frames as FramesType } from "./frames.ts";
-export { asMarker, hasMarkerKey, isVarIR, LIVE, liveOf, opaqueCount, withLive } from "./ir.ts";
-export type { ActionInventoryIR, ActionTriggerIR, AppIR, ArrangedIR, ChannelTriggerIR, ConceptInventoryIR, ConsequenceIR, FormerIR, FormerNodeIR, FormerWhereOpIR, PatternIR, QueryInventoryIR, QueryRefIR, ReactionIR, TriggerIR, UnloweredIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR, } from "./ir.ts";
-export { brandRelationView, isQueryReadLine, isReadLine, isRelationView, lineOf } from "./lines.ts";
-export type { QueryReadLine, ReadLine, RelationView, SlotPattern, ViewReadLine } from "./lines.ts";
-export { serializeApp } from "./application-lowering.ts";
-export { collectViews, viewChannelsOfView } from "./view-collection.ts";
-export { fragmentChannelsOfFormer, fusedFormersOf, viewChannelsOfFormer, } from "./former-collection.ts";
-export type { FormerChannel } from "./former-collection.ts";
-export { lowerFormerBody, serializeFormer } from "./former-lowering.ts";
-export { lowerReaction, serializeReaction } from "./reaction-lowering.ts";
-export type { LowerOutcome, LoweredReaction, LoweredWhereOp } from "./reaction-lowering.ts";
-export { lowerRelationBlocks, lowerViewAlternatives, serializeView, viewLineIR, } from "./view-lowering.ts";
-export { isMatcher, isPlainMapping, isPlainObject, oneOf } from "./matchers.ts";
-export { assertConceptQuery, QueryAnswerFault, queryRows, rowsOfAnswer } from "./queries.ts";
-export type { NamedQuery } from "./queries.ts";
-export { queryPromiseOf, validateQueryContractMap, validateQueryContracts, } from "./query-contracts.ts";
-export type { QueryMetadata, QueryPromise, QueryPromises } from "./query-metadata.ts";
-export { assertThenInputsAreData, copyReactionLintExtraUses, lintReactionOpens, setReactionLintExtraUses, } from "./reaction-validation.ts";
-export { readBackApp, readBackFormer, readBackReaction, readBackView } from "./read-back.ts";
-export type { ReadBackEnv } from "./read-back.ts";
-export { Registry } from "./registering.ts";
-export type { BoundReaction, BoundWhereOp } from "./registering.ts";
-export { renderApp, renderFormer, renderReaction, renderRoles, renderValue, renderView, renderWhereOp, } from "./render.ts";
-export type { AppSpecIR } from "./render.ts";
-export { opNamesIR, scheduleBlock } from "./schedule.ts";
-export type { ScheduledBlock } from "./schedule.ts";
-export { foldFormerNode, foldOps, foldReaction, foldView, FORMER_NODE_FIELDS, OP_FIELDS, } from "./schema.ts";
-export type { IRFold } from "./schema.ts";
-export { objectRef, assertSeparateBags, bindingBag } from "./sentence.ts";
-export type { BindingBag, FreeBindings, InputBindings, ObjectRefSpec, OutputBindings, } from "./sentence.ts";
-export { structurallyEqual } from "./value-equality.ts";
-export { DESCEND, mapValueTree, mapValueTreeAsync, walkValueTree } from "./value-tree.ts";
-export { count, isCountOp, relationViewWith, view, where } from "./views.ts";
-export type { CountOp, ViewBlock, ViewOp } from "./views.ts";
-export { brandWhereOp, compute, conditionOp, custom, isCondition, isWhereOp, no, queryLine, viewLine, whether, } from "./where-ops.ts";
-export { applyWhereOps } from "./where-evaluation.ts";
-export type { EvaluableOp } from "./where-evaluation.ts";
-export type { AnyWhereOp, ComputeOp, Condition, CustomOp, EarlierOp, FindOp, HoldsOp, LineRef, NoOp, WhereOp, WhetherOp, } from "./where-ops.ts";
-export { arranged, each, form, former, leaf, countOf, distinctOf, firstOf, } from "./former-builders.ts";
-export type { EachFormNode, FormNode, SelectionBuilder, SelectionConsumers, } from "./former-builders.ts";
-export { assertBound, symbolsInMapping, symbolsUsed, varNamesInPattern, } from "./former-analysis.ts";
-export { formTree } from "./former-evaluation.ts";
-export { brandNode, contributedKeys, FormerFault, formerRefWith, fuseFormer, isFormerNode, isFormerUse, isFusedFormer, useFormer, } from "./former-nodes.ts";
-export type { Arranged, CountNode, DistinctNode, EachNode, FirstNode, FormerEntry, FormerNode, FormerRef, FormerUse, FusedFormer, LeafNode, RecordNode, } from "./former-nodes.ts";
-
 === dist/engine/reads/ir.d.ts ===
 /**
  * Serializable intermediate representation for registered reactions, views,
@@ -4899,20 +4816,6 @@ export declare function pinGenerated(application: ResolvedApplication, artifact?
 export declare function checkGenerated(application: ResolvedApplication): Promise<void>;
 export {};
 
-=== dist/engine/tooling/index.d.ts ===
-export { inspectAssembly } from "./inspection.ts";
-export type { ObservedOccurrence } from "./inspection.ts";
-export { applicationDiagnostics, diagnosticsFail } from "./diagnostics.ts";
-export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity } from "./diagnostics.ts";
-export { applicationManifest, renderApplicationManifest } from "./manifest.ts";
-export type { ApplicationManifestV1, ManifestEndpointV1 } from "./manifest.ts";
-export { affectedNodes, applicationDependencyGraph, applicationImpact, diffManifestNodes, } from "./dependency-graph.ts";
-export type { ApplicationDependencyGraphV1, ApplicationImpact, DependencyEdge, DependencyEdgeKind, DependencyNode, DependencyNodeKind, } from "./dependency-graph.ts";
-export { applyArtifactPlan, artifactPlan, checkArtifactPlan, normalizeArtifactPath, planGenerated, } from "./artifact-plan.ts";
-export type { ArtifactFilesystem, ArtifactKind, ArtifactPlan, ArtifactPlanEntry, ArtifactStatus, GeneratedPlanOptions, } from "./artifact-plan.ts";
-export { checkGenerated, pinGenerated, renderGenerated } from "./generated-artifacts.ts";
-export type { GeneratedApplication } from "./generated-artifacts.ts";
-
 === dist/engine/tooling/inspection.d.ts ===
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
@@ -5006,14 +4909,6 @@ export declare const FrameworkErrorCode: {
 export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode];
 /** Framework codes the shipped boundaries can emit. */
 export type EmittedFrameworkErrorCode = FrameworkErrorCode;
-
-=== dist/engine/utils/index.d.ts ===
-export { configureRedaction, redact, describeError, UNIVERSAL_SENSITIVE_PATTERNS, } from "./redaction.ts";
-export type { RedactionPolicy } from "./redaction.ts";
-export { logger } from "./logger.ts";
-export type { Logger, LogLevel } from "./logger.ts";
-export { inspect, inspectCustom, uuid } from "./runtime.ts";
-export { FrameworkErrorCode, type EmittedFrameworkErrorCode, type FrameworkErrorCode as FrameworkErrorCodeType, } from "./framework-error-codes.ts";
 
 === dist/engine/utils/logger.d.ts ===
 import { serializeError } from "./redaction.ts";

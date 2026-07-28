@@ -3,9 +3,8 @@
  * TypeScript excerpts byte-exact with this file and checks quoted read-backs
  * and registration errors against a live engine.
  *
- * Examples use public package subpaths wherever an application can. The test
- * imports internal assembly only to call `engine.form(...)` directly;
- * applications inspect an assembly through the public `tooling` subpath.
+ * Examples and their test harness use public package subpaths. Applications
+ * inspect an assembly through the public `tooling` subpath.
  */
 import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
@@ -19,8 +18,9 @@ import {
   where,
   whether,
 } from "@mit-sdg/sync-engine/language";
+import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { assemble } from "@sync-engine/internal/boundary";
+import { inspectAssembly } from "@mit-sdg/sync-engine/tooling";
 import { concepts, vocabulary as words } from "../../examples/reading-circle/src/concept-set.ts";
 
 const { Discussing, Gathering, Selecting } = concepts;
@@ -361,7 +361,7 @@ async function bookText(): Promise<string> {
 
 describe("the example book", () => {
   test("the engine states every read-back the book quotes", async () => {
-    const readBack = buildBook().engine.readBack();
+    const readBack = inspectAssembly(buildBook()).readBack;
     const book = await bookText();
     for (const pin of readBackPins) expect(readBack).toContain(pin);
     for (const pin of readBackPins) expect(book).toContain(pin);
@@ -377,10 +377,10 @@ describe("the example book", () => {
     expect(rejects({ GetCircleNameFirstDraft })).not.toThrow();
 
     const app = buildBook();
-    await expect(app.engine.form(theFirstReadingOf({ circle: "after-dinner" }))).rejects.toThrow(
+    await expect(app.form(theFirstReadingOf({ circle: "after-dinner" }))).rejects.toThrow(
       errorPins.foldAtMostOne,
     );
-    await expect(app.engine.form(theMemberCard({ circle: "after-dinner" }))).rejects.toThrow(
+    await expect(app.form(theMemberCard({ circle: "after-dinner" }))).rejects.toThrow(
       errorPins.recordFanOut,
     );
 
@@ -390,13 +390,11 @@ describe("the example book", () => {
   test("a former returns no result when a plain read receives a blank value from whether", async () => {
     const app = buildBook();
 
-    expect(await app.engine.form(theCircleActivityOf({ circle: "after-dinner" }))).toEqual({
+    expect(await app.form(theCircleActivityOf({ circle: "after-dinner" }))).toEqual({
       reading: null,
       discussion: null,
     });
-    expect(
-      await app.engine.form(theRespondedCircleActivityOf({ circle: "after-dinner" })),
-    ).toBeNull();
+    expect(await app.form(theRespondedCircleActivityOf({ circle: "after-dinner" }))).toBeNull();
 
     const chosen = await app.concepts.Selecting.choose({
       scope: "after-dinner",
@@ -406,20 +404,16 @@ describe("the example book", () => {
     const { selection } = chosen;
     const [{ discussion }] = await app.concepts.Discussing._openFor({ subject: selection });
 
-    expect(await app.engine.form(theCircleActivityOf({ circle: "after-dinner" }))).toEqual({
+    expect(await app.form(theCircleActivityOf({ circle: "after-dinner" }))).toEqual({
       reading: "The Dispossessed",
       discussion,
     });
-    expect(
-      await app.engine.form(theRespondedCircleActivityOf({ circle: "after-dinner" })),
-    ).toBeNull();
+    expect(await app.form(theRespondedCircleActivityOf({ circle: "after-dinner" }))).toBeNull();
 
     await app.concepts.Discussing.respond({ discussion, author: "Lin", text: "A response." });
-    expect(await app.engine.form(theRespondedCircleActivityOf({ circle: "after-dinner" }))).toEqual(
-      {
-        reading: "The Dispossessed",
-        discussion,
-      },
-    );
+    expect(await app.form(theRespondedCircleActivityOf({ circle: "after-dinner" }))).toEqual({
+      reading: "The Dispossessed",
+      discussion,
+    });
   });
 });

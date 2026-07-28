@@ -19,9 +19,7 @@
       "@sync-engine/*": ["./src/*/index.ts"],
       "@sync-engine/internal/reactions/*": ["./src/engine/reactions/*"],
       "@sync-engine/internal/reads/*": ["./src/engine/reads/*"],
-      "@sync-engine/internal/boundary": ["./src/engine/boundary/index.ts"],
       "@sync-engine/internal/boundary/*": ["./src/engine/boundary/*"],
-      "@sync-engine/internal/hosting": ["./src/engine/hosting/index.ts"],
       "@sync-engine/internal/hosting/*": ["./src/engine/hosting/*"]
     }
   },

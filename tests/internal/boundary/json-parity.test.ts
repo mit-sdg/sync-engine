@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { createHttpHandler, createLocalClient } from "@sync-engine/internal/boundary";
+import { createHttpHandler } from "@sync-engine/boundary";
+import { createLocalClient } from "@sync-engine/client";
 
 type JsonApi = {
   "/dated": {

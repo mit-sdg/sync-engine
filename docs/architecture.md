@@ -82,7 +82,7 @@ The architecture checker encodes those permissions as a complete area matrix:
 `authoring` may depend on `authoring`, `concepts`, and the reaction root;
 `concepts` may depend on `concepts` and the root; and `runtime` may depend on all
 three areas and the root. Root modules may depend on authoring and concepts;
-`index.ts` and `engine.ts` are the explicit root-to-runtime facade bridges.
+`engine.ts` is the explicit root-to-runtime facade bridge.
 Reads may consume reaction root, authoring, and concept modules, but not runtime
 modules.
 
@@ -92,8 +92,7 @@ three areas and by reads, `context.ts` owns reserved interpreter bindings shared
 by authored nodes and runtime instrumentation, and `resolving.ts` bridges named
 references to an assembly for registration. Keeping these files at the root
 avoids assigning common contracts to one subarea and creating a reverse
-dependency from its peers. `engine.ts` is the direct-host facade, while
-`index.ts` gathers the internal reaction surface.
+dependency from its peers. `engine.ts` is the direct-host facade.
 
 ## Authored design to executable reaction
 
@@ -168,8 +167,7 @@ adapters consume its transport-neutral shapes. `assembly/` composes protocol,
 invocation, wire, reaction, and read capabilities. `gateway/` and `http/` are
 outer adapters that consume those lower layers; lower layers do not depend on
 gateway or HTTP. The standalone `src/engine/boundary/cli-app.ts` likewise adapts
-protocol results and an invoker without inspecting concept state, and
-`src/engine/boundary/index.ts` only gathers the internal boundary surface.
+protocol results and an invoker without inspecting concept state.
 
 `src/engine/boundary/assembly/concept-set.ts` turns plain concept registrations
 into a vocabulary, default implementations, optional named floors, and refusal
@@ -228,7 +226,7 @@ imports with a `.ts` extension: `./module.ts` for a sibling or
 packing.
 `scripts/check-architecture.ts` enforces those spellings and dependency
 directions, verifies each package export's source and emitted targets, rejects
-nested engine barrels, checks generated-file provenance, and rejects
+engine barrels, checks generated-file provenance, and rejects
 unreachable shipped source. It rejects every strongly connected component in
 the engine's runtime import graph while ignoring type-only imports and exports.
 Run `bun run check` after moving code; it remains the aggregate source of truth

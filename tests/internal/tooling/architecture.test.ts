@@ -122,14 +122,14 @@ describe("architecture rule fixtures", () => {
     ).toContainEqual(expect.stringContaining("reactions/authoring -> reactions/runtime"));
   });
 
-  test("rejects a nested engine barrel", () => {
+  test("rejects an engine barrel", () => {
     expect(
       failures({
-        "src/language/index.ts": 'export { nested } from "@engine/utils/nested/index";\n',
+        "src/language/index.ts": 'export { gathered } from "@engine/utils/index";\n',
         "src/engine/utils/value.ts": undefined,
-        "src/engine/utils/nested/index.ts": 'export const nested = "nested-barrel";\n',
+        "src/engine/utils/index.ts": 'export const gathered = "root-barrel";\n',
       }),
-    ).toContainEqual(expect.stringContaining("nested engine index barrels are forbidden"));
+    ).toContainEqual(expect.stringContaining("engine index barrels are forbidden"));
   });
 
   test("rejects unreachable shipped source", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { FrameworkErrorCode } from "@sync-engine/internal/boundary";
+import { FrameworkErrorCode } from "@sync-engine/boundary";
 import {
   publicCategoryOf,
   publicErrorStatus,

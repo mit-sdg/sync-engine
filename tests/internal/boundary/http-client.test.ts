@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { createHttpClient, createHttpTransport } from "@sync-engine/internal/boundary";
-import type { Client } from "@sync-engine/internal/boundary";
-import { FrameworkErrorCode } from "@sync-engine/internal/boundary";
+import { FrameworkErrorCode } from "@sync-engine/boundary";
+import { createHttpClient, createHttpTransport } from "@sync-engine/client";
+import type { Client } from "@sync-engine/client";
 
 type TestApi = {
   "/auth/login": { input: { username: string; password: string }; output: { token: string } };

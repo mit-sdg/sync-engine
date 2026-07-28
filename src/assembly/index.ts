@@ -17,7 +17,7 @@ export type {
   RegisteredConcept,
   RegisteredConceptSet,
 } from "@engine/boundary/assembly/concept-set";
-export { FileStore, PersistingConcept } from "@engine/hosting/index";
+export { FileStore, PersistingConcept } from "@engine/hosting/persisting";
 export { MemoryStore } from "@engine/reactions/runtime/log-store";
 export { Logging } from "@engine/reactions/runtime/logging";
 export type { ExecutionLimits } from "@engine/boundary/invocation/lifecycle";

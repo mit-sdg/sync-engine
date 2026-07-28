@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { createClient } from "@sync-engine/internal/boundary";
-import type { ClientTransport } from "@sync-engine/internal/boundary";
+import { createClient } from "@sync-engine/client";
+import type { ClientTransport } from "@sync-engine/client";
 
 type TestApi = {
   "/auth/login": { input: { username: string; password: string }; output: { token: string } };

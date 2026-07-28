@@ -133,11 +133,6 @@ function engineConcern(path: string): string | undefined {
     : undefined;
 }
 
-function isConcernRootIndex(path: string): boolean {
-  const parts = posix.relative(engineRoot, normalized(path)).split("/");
-  return parts.length === 2 && concerns.has(parts[0]) && parts[1] === "index.ts";
-}
-
 function nestedArea(path: string, concern: string, areas: Set<string>): string | undefined {
   if (engineConcern(path) !== concern) return undefined;
   const [area] = posix.relative(`${engineRoot}/${concern}`, normalized(path)).split("/");
@@ -481,11 +476,8 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
   }
 
   for (const sourcePath of filesBelow(files, engineRoot)) {
-    const relativeEnginePath = posix.relative(engineRoot, sourcePath);
-    if (sourcePath.endsWith("/index.ts") && relativeEnginePath.split("/").length > 2) {
-      failures.push(
-        `${sourcePath}: nested engine index barrels are forbidden; only a concern-root index.ts is allowed`,
-      );
+    if (sourcePath.endsWith("/index.ts")) {
+      failures.push(`${sourcePath}: engine index barrels are forbidden`);
     }
     const owner = engineConcern(sourcePath);
     for (const dependency of sourceDependencies(sourcePath)) {
@@ -514,8 +506,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       const sourceReactionArea = nestedArea(sourcePath, "reactions", reactionAreas);
       const targetReactionArea = nestedArea(target, "reactions", reactionAreas);
       const isReactionBridge =
-        sourceReactionArea === "root" &&
-        (posix.basename(sourcePath) === "index.ts" || posix.basename(sourcePath) === "engine.ts");
+        sourceReactionArea === "root" && posix.basename(sourcePath) === "engine.ts";
       if (
         sourceReactionArea !== undefined &&
         targetReactionArea !== undefined &&
@@ -532,8 +523,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       const sourceBoundaryArea = nestedArea(sourcePath, "boundary", boundaryAreas);
       const targetBoundaryArea = nestedArea(target, "boundary", boundaryAreas);
       const isBoundaryBridge =
-        sourceBoundaryArea === "root" &&
-        (posix.basename(sourcePath) === "index.ts" || posix.basename(sourcePath) === "cli-app.ts");
+        sourceBoundaryArea === "root" && posix.basename(sourcePath) === "cli-app.ts";
       if (
         sourceBoundaryArea !== undefined &&
         targetBoundaryArea !== undefined &&
@@ -632,7 +622,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     }
   }
   for (const path of shippedSources) {
-    if (!reachable.has(path) && !isConcernRootIndex(path)) {
+    if (!reachable.has(path)) {
       failures.push(`${path}: shipped source is unreachable`);
     }
   }

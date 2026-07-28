@@ -1,14 +1,14 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 import {
-  cliFail as fail,
-  cliOk as ok,
   command,
   createCliApp,
+  fail,
+  ok,
   parseArgs,
   parseFail,
   parseOk,
-} from "@sync-engine/internal/boundary";
-import type { ParsedArgs } from "@sync-engine/internal/boundary";
+} from "@sync-engine/boundary";
+import type { ParsedArgs } from "@sync-engine/boundary";
 
 describe("parseArgs", () => {
   test("no arguments produce empty positional and option groups", () => {

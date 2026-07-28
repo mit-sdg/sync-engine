@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 import { conceptFloor, conceptSet, PublicError, registerConcept } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { assemble } from "@sync-engine/internal/boundary";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 
 class MissingItem extends Error {}
 
