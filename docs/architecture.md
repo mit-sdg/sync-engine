@@ -75,6 +75,14 @@ and concepts use the concern-wide contracts at the reaction root; authoring may
 use concept descriptions, and runtime may use both authoring and concepts.
 Concept and authoring modules do not depend on runtime modules.
 
+The architecture checker encodes those permissions as a complete area matrix:
+`authoring` may depend on `authoring`, `concepts`, and the reaction root;
+`concepts` may depend on `concepts` and the root; and `runtime` may depend on all
+three areas and the root. Root modules may depend on authoring and concepts;
+`index.ts` and `engine.ts` are the explicit root-to-runtime facade bridges.
+Reads may consume reaction root, authoring, and concept modules, but not runtime
+modules.
+
 The files at `src/engine/reactions/` are intentionally shared or compositional,
 not a fourth capability area. `types.ts` is the type vocabulary used by all
 three areas and by reads, `context.ts` owns reserved interpreter bindings shared
@@ -215,7 +223,13 @@ imports with a `.ts` extension: `./module.ts` for a sibling or
 `../area/module.ts` across nested capability directories. The build rewrites
 `@engine` to relative package paths and rejects unresolved aliases before
 packing.
-`scripts/check-architecture.ts` checks those
-directions, verifies package exports, and rejects unreachable shipped source.
-Run `bun run check` after moving code; it is the source of truth for the
-repository's structural rules.
+`scripts/check-architecture.ts` enforces those spellings and dependency
+directions, verifies each package export's source and emitted targets, rejects
+nested engine barrels, checks generated-file provenance, and rejects
+unreachable shipped source. It also computes strongly connected components in
+the engine's runtime import graph while ignoring type-only imports and exports.
+Runtime SCCs are reported but are not yet failures because the current
+reaction-authoring/read-construction graph still contains one. Run
+`bun run check` after moving code; it remains the aggregate source of truth for
+the repository's structural rules, specifications, formatting, lint, and
+types.

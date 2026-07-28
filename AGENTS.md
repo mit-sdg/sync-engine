@@ -81,8 +81,12 @@ the book.
 
 Public entrypoints contain exports only. Code under `src/engine/` imports other
 engine modules rather than a public entrypoint. The architecture check enforces
-these dependency directions, rejects unsupported top-level and test directories,
-and the public API test pins the exact export map and nested constants.
+these dependency directions and import spellings, rejects unsupported
+top-level and test directories, nested barrels, unreachable source, invalid
+generated provenance, and package export mismatches. It reports runtime import
+SCCs while ignoring type-only edges, but SCCs are not a failing gate until the
+current reaction-authoring/reads cycle is removed. The public API test pins the
+exact export map and nested constants.
 
 ### Import conventions
 
