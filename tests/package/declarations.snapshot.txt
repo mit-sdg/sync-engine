@@ -21,13 +21,14 @@ export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
 export { MemoryStore } from "../engine/reactions/runtime/log-store.ts";
 export { Logging } from "../engine/reactions/runtime/logging.ts";
 export type { ActionRefusal } from "../engine/reactions/runtime/instrumenting.ts";
-export type { FiringRecord, LogEntry, LogStore, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
+export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogStore, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
 
 === dist/boundary/index.d.ts ===
 /** Declare the public requests a composition can receive and answer. */
 export { endpoint, receive, respond } from "../engine/boundary/assembly/assemble.ts";
-export type { EndpointDef } from "../engine/boundary/assembly/assemble.ts";
+export type { EndpointDef, EndpointOptions } from "../engine/boundary/assembly/assemble.ts";
 export type { InputContractDecl } from "../engine/boundary/protocol/endpoints.ts";
+export type { EndpointValidator, EndpointValidators, ValidationResult, } from "../engine/boundary/protocol/validation.ts";
 export { FrameworkErrorCode } from "../engine/boundary/protocol/errors.ts";
 export type { EmittedFrameworkErrorCode, InvocationResult } from "../engine/boundary/protocol/errors.ts";
 export type { Invoker, InvokeOptions } from "../engine/boundary/invocation/invoke.ts";
@@ -103,8 +104,10 @@ import type { FusedFormer } from "../../reads/former-nodes.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
+import type { EndpointValidators } from "../protocol/validation.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import { Requesting } from "../invocation/invoke.ts";
+import type { EndpointIdentity } from "./endpoint-portability.ts";
 export declare function receive(input?: Mapping): WhenBuilder;
 /** Answer the request this reaction was triggered by. */
 export declare function respond(body?: Mapping): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
@@ -119,6 +122,11 @@ export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
     readonly path: string;
     readonly reaction: (vars: Vars) => TResult;
     readonly input?: InputContractDecl;
+    readonly validators?: EndpointValidators;
+}
+export interface EndpointOptions {
+    readonly input?: InputContractDecl;
+    readonly validators?: EndpointValidators;
 }
 /**
  * An endpoint specializes a reaction: the export names it, the path pins its
@@ -127,12 +135,8 @@ export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
  * several `endpoint(...)` exports with the same path; the contract may be
  * declared on at most one of them.
  */
-export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionDeclaration, opts?: {
-    input?: InputContractDecl;
-}): EndpointDef<ReactionDeclaration>;
-export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionPartition, opts?: {
-    input?: InputContractDecl;
-}): EndpointDef<ReactionPartition>;
+export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionDeclaration, opts?: EndpointOptions): EndpointDef<ReactionDeclaration>;
+export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionPartition, opts?: EndpointOptions): EndpointDef<ReactionPartition>;
 export declare function isEndpointDef(value: unknown): value is EndpointDef;
 export interface AssembleOptions<T extends Record<string, ConceptClass>> {
     /** The concept vocabulary: every name bound to its canonical class. */
@@ -166,15 +170,15 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
         [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>>;
     };
     contracts: Record<string, InputContractDecl>;
+    validators: Readonly<Record<string, EndpointValidators>>;
     /** The public route and admission facts a separate gateway may consume. */
     publicInterface: ApplicationInterface;
     /** Public boundary categories declared beside concept refusals. */
     publicErrors: Readonly<Record<string, PublicErrorCategory>>;
     /** Endpoint identity retained even when a reaction has no portable IR. */
-    endpointOfReaction: ReadonlyMap<string, {
-        name: string;
-        path: string;
-    }>;
+    endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
+    /** Every authored endpoint declaration, independent of lowering. */
+    endpoints: readonly EndpointIdentity[];
     /** Evaluate a fused former against this app's concepts, at the moment of asking. */
     form(fused: FusedFormer): Promise<unknown>;
 }
@@ -291,6 +295,19 @@ export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>>
 }
 export declare function conceptSet<const S extends Record<string, AnyRegistration>>(registrations: S): RegisteredConceptSet<S>;
 export {};
+
+=== dist/engine/boundary/assembly/endpoint-portability.d.ts ===
+import type { UnloweredIR } from "../../reads/ir.ts";
+export interface EndpointIdentity {
+    readonly name: string;
+    readonly path: string;
+}
+export interface UnsupportedEndpoint extends EndpointIdentity {
+    readonly reaction: string;
+    readonly reason: string;
+}
+export declare function unsupportedEndpoints(unlowered: readonly UnloweredIR[], endpointOfReaction: ReadonlyMap<string, EndpointIdentity>): UnsupportedEndpoint[];
+export declare function assertPortableEndpoints(owner: string, unlowered: readonly UnloweredIR[], endpointOfReaction: ReadonlyMap<string, EndpointIdentity>): void;
 
 === dist/engine/boundary/cli-app.d.ts ===
 import type { Invoker } from "./invocation/invoke.ts";
@@ -705,13 +722,14 @@ export type { HeadersOption, HttpClientOptions } from "./client/http-client.ts";
 export { createHttpHandler } from "./http/http.ts";
 export { renderInputContracts } from "./protocol/endpoints.ts";
 export type { InputContractDecl, Prettify, RequestBoundaryActions } from "./protocol/endpoints.ts";
+export type { EndpointValidator, EndpointValidators, ValidationResult, } from "./protocol/validation.ts";
 export { FrameworkErrorCode, type EmittedFrameworkErrorCode, type InvocationResult, domainError, frameworkError, success, } from "./protocol/errors.ts";
 export { createInvoker, Requesting } from "./invocation/invoke.ts";
 export { createLocalClient } from "./client/local-client.ts";
 export type { Invoker, InvokeOptions } from "./invocation/invoke.ts";
 export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./invocation/funnel.ts";
 export { assemble, endpoint, fail, isEndpointDef, receive, respond } from "./assembly/assemble.ts";
-export type { AssembledApp, AssembleOptions, EndpointDef } from "./assembly/assemble.ts";
+export type { AssembledApp, AssembleOptions, EndpointDef, EndpointOptions, } from "./assembly/assemble.ts";
 export type { ApplicationInterface } from "./protocol/application-interface.ts";
 export { createGateway } from "./gateway/gateway.ts";
 export type { Gateway, GatewayClientError, GatewayOptions } from "./gateway/gateway.ts";
@@ -750,6 +768,7 @@ import type { OutcomeContracts } from "../../reactions/concepts/outcomes.ts";
 import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { InvocationResult } from "../protocol/errors.ts";
+import type { EndpointValidator, EndpointValidators } from "../protocol/validation.ts";
 export declare class Requesting {
     static readonly purpose = "Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.";
     static readonly principle = "A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.";
@@ -764,7 +783,10 @@ export declare class Requesting {
     respond(args: Record<string, unknown>): Record<string, unknown>;
     /** Framework-only response channel; application authoring exposes only `respond`. */
     protected respondFramework(args: Record<string, unknown>): Record<string, unknown>;
-    register(requestId: string, timeoutMs: number, signal?: AbortSignal): Promise<Record<string, unknown>>;
+    register(requestId: string, timeoutMs: number, signal?: AbortSignal, output?: {
+        validator?: EndpointValidator;
+        onInvalid?: (errorClass: "ValidationFailure" | "ValidatorFault") => void;
+    }): Promise<Record<string, unknown>>;
     cancel(requestId: string): void;
 }
 /** Settle an unanswered request after its root flow encountered an interpreter failure. */
@@ -783,6 +805,16 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
     instrumented: RequestBoundaryActions;
     /** Declared input contracts by path; undeclared paths are unchecked. */
     contracts?: Record<string, InputContractDecl>;
+    /** Application-supplied runtime validators by endpoint path. */
+    validators?: Readonly<Record<string, EndpointValidators>>;
+    /** When supplied, reject paths outside the assembled public route set. */
+    routes?: ReadonlySet<string>;
+    /** Record an invalid successful result without exposing validator detail. */
+    onInvalidOutput?: (event: {
+        path: string;
+        requestId: string;
+        errorClass: "ValidationFailure" | "ValidatorFault";
+    }) => void;
     /** Refresh standing reads before a new application-interface ask. */
     refresh?: () => void;
 }): Invoker<C>;
@@ -933,6 +965,29 @@ export declare const PUBLIC_ERROR_CATEGORIES: {
 /** Project a domain or framework error code onto the HTTP floor's public vocabulary. */
 export declare function publicCategoryOf(code: string, categories: Readonly<Record<string, PublicErrorCategory>>): PublicErrorCategory | "INTERNAL_ERROR";
 export declare function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number;
+
+=== dist/engine/boundary/protocol/validation.d.ts ===
+/** A schema-library-neutral runtime check. Validators inspect but do not transform values. */
+export type ValidationResult = {
+    ok: true;
+} | {
+    ok: false;
+    detail?: string;
+};
+export type EndpointValidator = (value: unknown) => ValidationResult;
+export interface EndpointValidators {
+    readonly input?: EndpointValidator;
+    readonly output?: EndpointValidator;
+}
+export type RuntimeValidation = {
+    ok: true;
+} | {
+    ok: false;
+    detail?: string;
+    errorClass: "ValidationFailure" | "ValidatorFault";
+};
+export declare function validateRuntimeValue(validator: EndpointValidator, value: unknown): RuntimeValidation;
+export declare function assertEndpointValidators(value: EndpointValidators, path: string): void;
 
 === dist/engine/boundary/wire/wire-provenance.d.ts ===
 /** Endpoint-local type origins derived from registered reaction and read IR. */
@@ -1140,6 +1195,10 @@ export type PersistedEntry = {
     firing: unknown;
 } | {
     kind: "reaction-failure";
+    at: number;
+    failure: unknown;
+} | {
+    kind: "integrity-failure";
     at: number;
     failure: unknown;
 } | {
@@ -1855,7 +1914,7 @@ export declare class NameResolver {
  *    flow, which keeps independent invocations from cross-matching.
  */
 import type { ActionOutcome } from "../types.ts";
-import { type ActionRecord, type LogStore, type ReactionFailureRecord } from "./log-store.ts";
+import { type ActionRecord, type IntegrityFailureRecord, type LogStore, type ReactionFailureRecord } from "./log-store.ts";
 export type { ActionRecord } from "./log-store.ts";
 export interface FlowQuiescence {
     flow: string;
@@ -1902,6 +1961,8 @@ export declare class ActionConcept {
     _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void;
     /** Record durable interpreter evidence and mark its active flow as failed. */
     _recordReactionFailure(failure: ReactionFailureRecord): void;
+    /** Record a boundary integrity failure and make the active flow fail closed. */
+    _recordIntegrityFailure(failure: IntegrityFailureRecord): void;
     /** Return a transient record with raw input, output, and outcome while its flow is active. */
     _matchingRecord(record: ActionRecord): ActionRecord;
     /** Number of action records with raw input, output, or outcome retained for active flows. */
@@ -2092,6 +2153,14 @@ export interface ReactionFailureRecord {
     errorClass: string;
     at: number;
 }
+/** Opaque evidence that a successful endpoint value violated its reviewed runtime contract. */
+export interface IntegrityFailureRecord {
+    kind: "invalid-output";
+    flow: string;
+    route: string;
+    errorClass: "ValidationFailure" | "ValidatorFault";
+    at: number;
+}
 /** An entry appended to the log. Engine-created mappings are field-name redacted. */
 export type LogEntry = {
     kind: "invocation";
@@ -2111,6 +2180,10 @@ export type LogEntry = {
     kind: "reaction-failure";
     at: number;
     failure: ReactionFailureRecord;
+} | {
+    kind: "integrity-failure";
+    at: number;
+    failure: IntegrityFailureRecord;
 }
 /**
  * A fault entry names the interrupted ask and records its validated
@@ -2161,6 +2234,8 @@ export declare class MemoryStore implements LogStore {
     readonly firings: Map<string, FiringRecord[]>;
     /** Non-consuming evaluation failures, in occurrence order. */
     readonly reactionFailures: ReactionFailureRecord[];
+    /** Boundary integrity failures, in occurrence order. */
+    readonly integrityFailures: IntegrityFailureRecord[];
     /** Derived index folded from firing entries: record id → reactions that consumed it. */
     private consumedIndex;
     private settledFlowOrder;
@@ -2179,6 +2254,7 @@ export declare class MemoryStore implements LogStore {
     private enforceWindow;
     private isConsumed;
     private dropReactionFailures;
+    private dropIntegrityFailures;
     /**
      * Replace one folded record in the id map and flow array. The previous
      * record object remains unchanged.

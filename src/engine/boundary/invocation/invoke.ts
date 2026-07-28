@@ -7,6 +7,8 @@ import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endp
 import { fromEnvelope } from "../protocol/envelope.ts";
 import { FrameworkErrorCode, frameworkError } from "../protocol/errors.ts";
 import type { InvocationResult } from "../protocol/errors.ts";
+import { validateRuntimeValue } from "../protocol/validation.ts";
+import type { EndpointValidator, EndpointValidators } from "../protocol/validation.ts";
 
 interface PendingRequest {
   resolve: (value: Record<string, unknown>) => void;
@@ -14,6 +16,8 @@ interface PendingRequest {
   timer: ReturnType<typeof setTimeout>;
   signal?: AbortSignal;
   signalListener?: () => void;
+  outputValidator?: EndpointValidator;
+  onInvalidOutput?: (errorClass: "ValidationFailure" | "ValidatorFault") => void;
 }
 
 const frameworkResponses = new WeakSet<Record<string, unknown>>();
@@ -72,8 +76,17 @@ function settlePending(
   }
   requests.delete(requestId);
   disposePending(pending);
-  if (framework) frameworkResponses.add(output);
-  pending.resolve(output);
+  let settledOutput = output;
+  if (!framework && !("error" in output) && pending.outputValidator !== undefined) {
+    const validation = validateRuntimeValue(pending.outputValidator, output);
+    if (!validation.ok) {
+      pending.onInvalidOutput?.(validation.errorClass);
+      settledOutput = { error: FrameworkErrorCode.INTERNAL_ERROR };
+      framework = true;
+    }
+  }
+  if (framework) frameworkResponses.add(settledOutput);
+  pending.resolve(settledOutput);
   return args;
 }
 
@@ -116,6 +129,10 @@ export class Requesting {
     requestId: string,
     timeoutMs: number,
     signal?: AbortSignal,
+    output?: {
+      validator?: EndpointValidator;
+      onInvalid?: (errorClass: "ValidationFailure" | "ValidatorFault") => void;
+    },
   ): Promise<Record<string, unknown>> {
     const requests = requestsFor(this);
     if (requests.has(requestId)) {
@@ -149,7 +166,15 @@ export class Requesting {
         signal.addEventListener("abort", signalListener, { once: true });
       }
 
-      requests.set(requestId, { resolve, reject, timer, signal, signalListener });
+      requests.set(requestId, {
+        resolve,
+        reject,
+        timer,
+        signal,
+        signalListener,
+        outputValidator: output?.validator,
+        onInvalidOutput: output?.onInvalid,
+      });
     });
   }
 
@@ -190,12 +215,20 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
   instrumented: RequestBoundaryActions;
   /** Declared input contracts by path; undeclared paths are unchecked. */
   contracts?: Record<string, InputContractDecl>;
+  /** Application-supplied runtime validators by endpoint path. */
+  validators?: Readonly<Record<string, EndpointValidators>>;
   /** When supplied, reject paths outside the assembled public route set. */
   routes?: ReadonlySet<string>;
+  /** Record an invalid successful result without exposing validator detail. */
+  onInvalidOutput?: (event: {
+    path: string;
+    requestId: string;
+    errorClass: "ValidationFailure" | "ValidatorFault";
+  }) => void;
   /** Refresh standing reads before a new application-interface ask. */
   refresh?: () => void;
 }): Invoker<C> {
-  const { boundary, instrumented, contracts, routes, refresh } = opts;
+  const { boundary, instrumented, contracts, validators, routes, onInvalidOutput, refresh } = opts;
 
   return {
     async invoke(path, input, invokeOpts: InvokeOptions = {}) {
@@ -206,18 +239,31 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         return frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`);
       }
       refresh?.();
-
       // Validate the declared outer shape before recording an ask. Required
-      // keys test presence, so explicit null passes; defaults fill absent keys.
-      const contract = contracts?.[path];
-      if (contract !== undefined) {
-        const admitted = admitInput(contract, path, input);
-        if (!admitted.ok) {
-          return frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail);
+      // keys test presence, defaults fill absent keys, and then the endpoint's
+      // application-supplied validator checks the complete admitted value.
+      try {
+        const contract = contracts?.[path];
+        if (contract !== undefined) {
+          const admitted = admitInput(contract, path, input);
+          if (!admitted.ok) {
+            return frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail);
+          }
+          input = admitted.admitted as typeof input;
         }
-        input = admitted.admitted as typeof input;
+        const inputValidator = validators?.[path]?.input;
+        if (inputValidator !== undefined) {
+          const validation = validateRuntimeValue(inputValidator, input);
+          if (!validation.ok) {
+            return frameworkError(
+              FrameworkErrorCode.INVALID_INPUT,
+              validation.detail ?? `${path} failed runtime validation`,
+            );
+          }
+        }
+      } catch {
+        return frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`);
       }
-
       const requestId = crypto.randomUUID();
       const correlationId = invokeOpts.correlationId ?? requestId;
       const DEFAULT_TIMEOUT_MS = 30_000;
@@ -245,7 +291,10 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       let responsePromise: Promise<Record<string, unknown>>;
       const deadline = performance.now() + timeoutMs;
       try {
-        responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal);
+        responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal, {
+          validator: validators?.[path]?.output,
+          onInvalid: (errorClass) => onInvalidOutput?.({ path, requestId, errorClass }),
+        });
       } catch {
         return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
       }

@@ -98,7 +98,8 @@ export const ChooseMitigation = endpoint(
 An assembly can expose the endpoint through a direct invoker, the standard
 gateway, a local JSON-parity client, or the HTTP adapter. Generated TypeScript
 describes accepted inputs and possible outputs. It does not validate hostile
-values at runtime.
+values at runtime; endpoint validator hooks provide that separate runtime
+contract when an application needs it.
 
 ## Guarantees and non-guarantees
 
@@ -114,7 +115,8 @@ The ordinary assembly provides these guarantees:
 The ordinary assembly does not provide transactions across actions, rollback,
 concept-state persistence, occurrence replay, restart recovery, distributed
 serialization, exactly-once execution, or runtime validation of generated
-types. Timeout and abort stop waiting; they do not cancel accepted work. The
+types. Runtime validation is explicit per endpoint rather than inferred from
+those types. Timeout and abort stop waiting; they do not cancel accepted work. The
 default in-memory log retains a bounded inspection window rather than every
 occurrence forever.
 

@@ -78,20 +78,19 @@ own keys are present. It permits extra keys, uses shallow defaults for absent
 keys, and does not validate primitive types, nested shapes, or the value of a
 present key.
 Explicit `null` and, for direct invocation, explicit `undefined` satisfy
-required-key presence.
+required-key presence unless an endpoint input validator rejects them.
 
-The engine does not validate successful endpoint values against generated
-output types. Receiving concepts must validate untrusted values and enforce
-domain rules. Hosts that require schema validation must add it outside the
-current generated-contract mechanism.
+Applications may attach runtime input and successful-output validators to an
+endpoint without adopting a particular schema library. Input validation runs
+before application work. Invalid output is retained as integrity evidence and
+becomes opaque `INTERNAL_ERROR`. Validators are explicit application contracts;
+the engine does not infer them from generated types or concept state prose.
 
 ## Endpoint completeness
 
-Artifact generation rejects executable endpoints that cannot be lowered to the
-portable representation. Ordinary assembly can still contain a local-only
-endpoint that is executable through the direct invoker but absent from the
-standard public route set. Run `sync-engine artifacts check` as a required gate
-for every publicly served assembly.
+Ordinary assembly and artifact generation reject executable endpoints that
+cannot be lowered to the portable representation. Direct invocation, gateways,
+HTTP, and generated clients therefore use the same complete public route set.
 
 Endpoint branches have no priority or exclusivity. If more than one branch
 responds, one answer is accepted and the others receive `NOT_PENDING`; callers

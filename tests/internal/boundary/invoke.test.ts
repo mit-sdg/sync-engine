@@ -23,15 +23,24 @@ type TestApi = {
   };
 };
 
+class CompletingConcept {
+  complete(_: Record<string, never>) {
+    return {};
+  }
+}
+
 function setup() {
+  const words = vocabulary({ concepts: { Completing: CompletingConcept }, computations: {} });
+  const { Completing } = words.concepts;
   const composition = {
     Echo: endpoint("/echo", ({ message }: Vars) =>
       receive({ message }).then(respond({ echoed: message })),
     ),
     Err: endpoint("/err", ({ kind }: Vars) => receive({ kind }).then(fail({ code: kind }))),
+    Unanswered: endpoint("/unanswered", () => receive({}).then(Completing.complete({}))),
   };
   const app = assemble({
-    vocabulary: vocabulary({ concepts: {}, computations: {} }),
+    vocabulary: words,
     composition,
   });
   return { invoker: app.invoker, reaction: app.engine };

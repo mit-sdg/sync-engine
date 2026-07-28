@@ -54,6 +54,7 @@ export type PersistedEntry =
   | { kind: "outcome"; at: number; id: string; outcome: unknown }
   | { kind: "firing"; at: number; firing: unknown }
   | { kind: "reaction-failure"; at: number; failure: unknown }
+  | { kind: "integrity-failure"; at: number; failure: unknown }
   | { kind: "fault"; at: number; id: string; fault: unknown };
 
 function persistedEntryOf(entry: LogEntry): PersistedEntry {
@@ -78,6 +79,8 @@ function persistedEntryOf(entry: LogEntry): PersistedEntry {
       };
     case "reaction-failure":
       return { kind: "reaction-failure", at: entry.at, failure: entry.failure };
+    case "integrity-failure":
+      return { kind: "integrity-failure", at: entry.at, failure: entry.failure };
     case "fault":
       return { kind: "fault", at: entry.at, id: entry.id, fault: redact(entry.fault) };
   }

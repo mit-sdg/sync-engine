@@ -387,20 +387,23 @@ and an unauthorized protected request clear the cookie. Responses that issue
 or clear the cookie use `Cache-Control: no-store`. The floor is a same-origin boundary: it does not
 answer CORS preflights or emit CORS headers.
 
-**Runtime validation boundary.** Gateway admission validates the route and the
-request's outer shape. The input must be a non-null, non-array object and contain every
-required own key. Extra keys remain. Defaults are shallow and apply only when a
-key is absent; a present value is never overwritten. Admission does not
-validate primitive types or nested shapes. Explicit `null` and, for direct
-invocation, explicit `undefined` therefore pass a required-key check. JSON
-transport removes `undefined` object fields before admission. The concept
-action accepts the admitted values or refuses them through its registered
-vocabulary. Any unexpected throw is the opaque framework fault
-`INTERNAL_ERROR`. The generated TypeScript contract checks callers during
-typecheck but adds no runtime value validator or schema derived from concept
-specifications. Admission reads and spreads input properties outside the
-invoker's failure-normalization catch; a proxy or getter that throws can reject
-a direct `invoke(...)` call.
+**Runtime validation boundary.** Gateway admission and the assembled invoker
+validate the route and request's outer shape. The input must be a non-null,
+non-array object and contain every required own key. Extra keys remain. Defaults
+are shallow and apply only when a key is absent; a present value is never
+overwritten. An endpoint may additionally attach application-supplied input and
+successful-output validators. The input validator sees the admitted value after
+defaults and runs before the application boundary ask is recorded. Invalid
+input returns `INVALID_INPUT`. The output validator runs before a successful
+result leaves the invoker. Invalid output records integrity evidence and becomes
+opaque `INTERNAL_ERROR`; domain and framework failures are not output-validated.
+
+Without an input validator, primitive types and nested shapes are not checked,
+so explicit `null` and direct-invocation `undefined` pass required-key presence.
+JSON transport removes `undefined` object fields before admission. Validators
+inspect values but do not transform them, and thrown validator failures fail
+closed. The generated TypeScript contract remains a static caller check rather
+than runtime validation, and no schema is inferred from concept specifications.
 
 Absent an explicit endpoint input contract, assembly derives required keys from
 portable endpoint IR as the intersection of non-reserved keys mentioned by
@@ -439,17 +442,12 @@ including `Date` to `string`. Strict generation rejects any leaf that cannot be
 traced to a signature. Without an anchor, the renderer emits a structural
 contract and uses `Json` for leaves it cannot trace to a signature.
 
-Artifact rendering, checking, and pinning also reject an executable endpoint
-that could not be lowered to portable reaction data. The error names the
-endpoint and unsupported construction; generation never emits a partial wire
-surface that silently omits such an endpoint. Executable-only non-endpoint
-reactions remain listed in the generated read-back.
-
-Ordinary assembly does not apply that endpoint-lowering rejection. A
-local-only endpoint can therefore remain executable through the direct invoker
-while absent from `publicInterface.routes` and the standard gateway. Every
-served assembly should run artifact checking as a deployment gate until
-ordinary assembly makes endpoint identity authoritative.
+Ordinary assembly and artifact rendering, checking, and pinning reject an
+executable endpoint that could not be lowered to portable reaction data. The
+error names the endpoint and unsupported construction. Direct invocation,
+gateway routing, HTTP, and generation therefore share the declaration-owned
+route set instead of silently omitting a local-only endpoint. Executable-only
+non-endpoint reactions remain listed in the generated read-back.
 
 When a generated application descriptor supplies an HTTP floor, one module
 contains both contracts. The contract named by `wireName` retains the logical

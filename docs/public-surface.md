@@ -71,7 +71,7 @@ semantics](./semantics.md#reactions).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -132,8 +132,8 @@ instead supplies `{ window: 100 }`. `new FileStore(path)` defaults to
 `"keepAll"`; its synchronous append completes before the entry enters the
 in-memory fold, and `stop()` currently has no work to perform. Pruning does not
 rewrite its file.
-`RetentionPolicy`, `LogEntry`, `FiringRecord`, and `ReactionFailureRecord` name
-the corresponding contracts. `PersistingConcept` manages an
+`RetentionPolicy`, `LogEntry`, `FiringRecord`, `ReactionFailureRecord`, and
+`IntegrityFailureRecord` name the corresponding contracts. `PersistingConcept` manages an
 application-supplied store registry. Persistence, eviction, redaction, and
 restart limits are normative in [Execution semantics](./semantics.md#logs-concept-implementations-and-restart).
 
@@ -141,20 +141,22 @@ restart limits are normative in [Execution semantics](./semantics.md#logs-concep
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `ParseResult`, `ParsedArgs`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `receive`, `respond`
+`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `ParseResult`, `ParsedArgs`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `receive`, `respond`
 
 <!-- register:boundary:end -->
 
 ### Endpoints
 
-| API        | Compact signature                                                           |
-| ---------- | --------------------------------------------------------------------------- |
-| `endpoint` | `endpoint(path, vars => receive(input)...then(respond(body)), { input? }?)` |
-| `receive`  | `receive(input?)`                                                           |
-| `respond`  | `respond(body?)`                                                            |
+| API        | Compact signature                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| `endpoint` | `endpoint(path, vars => receive(input)...then(respond(body)), { input?, validators? }?)` |
+| `receive`  | `receive(input?)`                                                                        |
+| `respond`  | `respond(body?)`                                                                         |
 
-`EndpointDef` and `InputContractDecl` name the declaration and optional runtime
-outer-shape contract. The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
+`EndpointDef`, `EndpointOptions`, and `InputContractDecl` name the declaration
+and optional runtime outer-shape contract. `EndpointValidator`,
+`EndpointValidators`, and `ValidationResult` define schema-library-neutral
+input and successful-output checks. The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
 shows the authoring path; [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
 owns settlement.
 
@@ -174,6 +176,9 @@ required because at least one path alternative does not mention it. An
 executable-only endpoint has no derived contract. An explicit contract is
 authoritative and replaces the derived contract; it does not merge with it. At
 most one endpoint declaration may supply an explicit contract for a given path.
+Input validation follows shallow defaulting and precedes the application ask.
+Invalid successful output is recorded as an integrity failure and returned as
+opaque `INTERNAL_ERROR`. A path may declare each validator at most once.
 
 ### Gateway and invocation
 

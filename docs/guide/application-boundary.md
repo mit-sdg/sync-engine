@@ -270,13 +270,28 @@ instances or engine code to the browser bundle. Before publishing, regenerate
 the files, review the wire diff, and typecheck a consumer against the packed
 package.
 
-The generated contract is a compile-time guarantee, not a runtime schema
-validator. Standard gateway admission checks that input is an object and that
-required keys are present; it does not check primitive types, nested shapes, or
-the value of a present key, so explicit `null` passes required-key admission.
-Treat untyped or hostile input as untrusted and enforce value and domain rules
-in the receiving concept. [Execution semantics](../semantics.md#boundary-gateway-and-client)
-defines the complete admission boundary.
+The generated contract is a compile-time guarantee, not a runtime schema.
+Standard admission checks that input is an object and required keys are present.
+For untyped or hostile callers, attach schema-library-neutral validators to the
+endpoint:
+
+```typescript
+endpoint("/rooms/create", createRoom, {
+  validators: {
+    input: (value) =>
+      isCreateRoomInput(value)
+        ? { ok: true }
+        : { ok: false, detail: "host and name must be strings" },
+    output: (value) => (isCreateRoomOutput(value) ? { ok: true } : { ok: false }),
+  },
+});
+```
+
+The input validator runs after shallow defaults and before the application ask.
+The output validator protects successful results; a violation is retained as
+integrity evidence and leaves the invoker as opaque `INTERNAL_ERROR`.
+[Execution semantics](../semantics.md#boundary-gateway-and-client) defines the
+complete admission boundary.
 
 ## Call the typed client
 

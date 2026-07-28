@@ -23,6 +23,7 @@ import { logger } from "@engine/utils/logger";
 import {
   MemoryStore,
   type ActionRecord,
+  type IntegrityFailureRecord,
   type LogStore,
   type ReactionFailureRecord,
 } from "./log-store.ts";
@@ -154,6 +155,13 @@ export class ActionConcept {
     const active = this.activeFlowValues.get(failure.flow);
     if (active !== undefined) active.interpreterFailed = true;
     this.store.append({ kind: "reaction-failure", at: failure.at, failure });
+  }
+
+  /** Record a boundary integrity failure and make the active flow fail closed. */
+  _recordIntegrityFailure(failure: IntegrityFailureRecord): void {
+    const active = this.activeFlowValues.get(failure.flow);
+    if (active !== undefined) active.interpreterFailed = true;
+    this.store.append({ kind: "integrity-failure", at: failure.at, failure });
   }
 
   /** Return a transient record with raw input, output, and outcome while its flow is active. */

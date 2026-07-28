@@ -16,6 +16,11 @@ export { createHttpHandler } from "./http/http.ts";
 
 export { renderInputContracts } from "./protocol/endpoints.ts";
 export type { InputContractDecl, Prettify, RequestBoundaryActions } from "./protocol/endpoints.ts";
+export type {
+  EndpointValidator,
+  EndpointValidators,
+  ValidationResult,
+} from "./protocol/validation.ts";
 
 export {
   FrameworkErrorCode,
@@ -33,7 +38,12 @@ export type { Invoker, InvokeOptions } from "./invocation/invoke.ts";
 export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./invocation/funnel.ts";
 
 export { assemble, endpoint, fail, isEndpointDef, receive, respond } from "./assembly/assemble.ts";
-export type { AssembledApp, AssembleOptions, EndpointDef } from "./assembly/assemble.ts";
+export type {
+  AssembledApp,
+  AssembleOptions,
+  EndpointDef,
+  EndpointOptions,
+} from "./assembly/assemble.ts";
 export type { ApplicationInterface } from "./protocol/application-interface.ts";
 
 export { createGateway } from "./gateway/gateway.ts";

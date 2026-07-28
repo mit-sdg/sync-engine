@@ -88,6 +88,15 @@ export interface ReactionFailureRecord {
   at: number;
 }
 
+/** Opaque evidence that a successful endpoint value violated its reviewed runtime contract. */
+export interface IntegrityFailureRecord {
+  kind: "invalid-output";
+  flow: string;
+  route: string;
+  errorClass: "ValidationFailure" | "ValidatorFault";
+  at: number;
+}
+
 /** An entry appended to the log. Engine-created mappings are field-name redacted. */
 export type LogEntry =
   | { kind: "invocation"; at: number; record: ActionRecord }
@@ -100,6 +109,7 @@ export type LogEntry =
     }
   | { kind: "firing"; at: number; firing: FiringRecord }
   | { kind: "reaction-failure"; at: number; failure: ReactionFailureRecord }
+  | { kind: "integrity-failure"; at: number; failure: IntegrityFailureRecord }
   /**
    * A fault entry names the interrupted ask and records its validated
    * framework classification. The ask remains without an outcome.
@@ -145,6 +155,8 @@ export class MemoryStore implements LogStore {
   readonly firings: Map<string, FiringRecord[]> = new Map();
   /** Non-consuming evaluation failures, in occurrence order. */
   readonly reactionFailures: ReactionFailureRecord[] = [];
+  /** Boundary integrity failures, in occurrence order. */
+  readonly integrityFailures: IntegrityFailureRecord[] = [];
   /** Derived index folded from firing entries: record id → reactions that consumed it. */
   private consumedIndex: Map<string, Set<string>> = new Map();
   private settledFlowOrder: string[] = [];
@@ -195,6 +207,9 @@ export class MemoryStore implements LogStore {
       case "reaction-failure":
         this.reactionFailures.push(entry.failure);
         return;
+      case "integrity-failure":
+        this.integrityFailures.push(entry.failure);
+        return;
     }
   }
 
@@ -226,6 +241,7 @@ export class MemoryStore implements LogStore {
       this.flowIndex.delete(flow);
     }
     this.dropReactionFailures(flow);
+    this.dropIntegrityFailures(flow);
     this.activeFlows.delete(flow);
     const position = this.settledFlowOrder.indexOf(flow);
     if (position >= 0) this.settledFlowOrder.splice(position, 1);
@@ -288,6 +304,12 @@ export class MemoryStore implements LogStore {
   private dropReactionFailures(flow: string): void {
     for (let index = this.reactionFailures.length - 1; index >= 0; index--) {
       if (this.reactionFailures[index]?.flow === flow) this.reactionFailures.splice(index, 1);
+    }
+  }
+
+  private dropIntegrityFailures(flow: string): void {
+    for (let index = this.integrityFailures.length - 1; index >= 0; index--) {
+      if (this.integrityFailures[index]?.flow === flow) this.integrityFailures.splice(index, 1);
     }
   }
 

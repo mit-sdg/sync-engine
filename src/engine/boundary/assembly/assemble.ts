@@ -52,6 +52,8 @@ import { brand, hasBrand } from "@engine/reads/brands";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
+import { assertEndpointValidators } from "../protocol/validation.ts";
+import type { EndpointValidators } from "../protocol/validation.ts";
 import { refusalFunnel } from "../invocation/funnel.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import {
@@ -106,6 +108,12 @@ export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
   readonly path: string;
   readonly reaction: (vars: Vars) => TResult;
   readonly input?: InputContractDecl;
+  readonly validators?: EndpointValidators;
+}
+
+export interface EndpointOptions {
+  readonly input?: InputContractDecl;
+  readonly validators?: EndpointValidators;
 }
 
 /**
@@ -118,25 +126,23 @@ export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
 export function endpoint(
   path: string,
   reaction: (vars: Vars) => ReactionDeclaration,
-  opts?: { input?: InputContractDecl },
+  opts?: EndpointOptions,
 ): EndpointDef<ReactionDeclaration>;
 export function endpoint(
   path: string,
   reaction: (vars: Vars) => ReactionPartition,
-  opts?: { input?: InputContractDecl },
+  opts?: EndpointOptions,
 ): EndpointDef<ReactionPartition>;
-export function endpoint(
-  path: string,
-  reaction: Reaction,
-  opts?: { input?: InputContractDecl },
-): EndpointDef {
+export function endpoint(path: string, reaction: Reaction, opts?: EndpointOptions): EndpointDef {
   if (typeof path !== "string" || !path.startsWith("/")) {
     throw new Error(`endpoint(...): "${path}" is not a path.`);
   }
+  if (opts?.validators !== undefined) assertEndpointValidators(opts.validators, path);
   const def = {
     path,
     reaction,
     ...(opts?.input !== undefined ? { input: opts.input } : {}),
+    ...(opts?.validators !== undefined ? { validators: opts.validators } : {}),
   } as EndpointDef;
   brand(def, EndpointBrand);
   return def;
@@ -186,6 +192,7 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   /** The instrumented concepts, by vocabulary name — the canonical class types them. */
   concepts: { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> };
   contracts: Record<string, InputContractDecl>;
+  validators: Readonly<Record<string, EndpointValidators>>;
   /** The public route and admission facts a separate gateway may consume. */
   publicInterface: ApplicationInterface;
   /** Public boundary categories declared beside concept refusals. */
@@ -300,6 +307,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   // ── The composition: tagged exports register under their dotted path ─────
   const reactions: Record<string, Reaction> = {};
   const contracts: Record<string, InputContractDecl> = {};
+  const validators: Record<string, EndpointValidators> = {};
   const endpointOfReaction = new Map<string, EndpointIdentity>();
   const endpoints: EndpointIdentity[] = [];
   const views: RelationView[] = [];
@@ -331,6 +339,20 @@ export function assemble<T extends Record<string, ConceptClass>>(
           );
         }
         contracts[value.path] = value.input;
+      }
+      if (value.validators !== undefined) {
+        let existing = validators[value.path] ?? {};
+        for (const kind of ["input", "output"] as const) {
+          const validator = value.validators[kind];
+          if (validator === undefined) continue;
+          if (existing[kind] !== undefined) {
+            throw new Error(
+              `assemble: duplicate ${kind} validator for ${value.path} — a path's validator is declared at most once.`,
+            );
+          }
+          existing = { ...existing, [kind]: validator };
+          validators[value.path] = existing;
+        }
       }
       return;
     }
@@ -374,7 +396,17 @@ export function assemble<T extends Record<string, ConceptClass>>(
     boundary,
     instrumented: instrumentedBoundary as unknown as RequestBoundaryActions,
     contracts,
+    validators,
     routes: new Set(endpoints.map(({ path }) => path)),
+    onInvalidOutput: ({ path, requestId, errorClass }) => {
+      engine.Action._recordIntegrityFailure({
+        kind: "invalid-output",
+        flow: requestId,
+        route: path,
+        errorClass,
+        at: Date.now(),
+      });
+    },
     refresh: () => engine.invalidateAllCaches(),
   });
 
@@ -393,6 +425,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     boundaryActions: instrumentedBoundary as unknown as RequestBoundaryActions,
     concepts: concepts as { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> },
     contracts,
+    validators,
     publicInterface,
     publicErrors,
     endpointOfReaction,

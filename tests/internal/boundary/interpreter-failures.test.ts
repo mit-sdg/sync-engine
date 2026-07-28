@@ -5,8 +5,10 @@ import {
   custom,
   Frames,
   MemoryStore,
+  reaction,
   view,
   vocabulary,
+  when,
   where,
 } from "@sync-engine/internal/reactions";
 import type { Empty, Vars } from "@sync-engine/internal/reactions";
@@ -25,7 +27,7 @@ class FailureSourceConcept {
     return [{ value: "one" }, { value: "two" }];
   }
 
-  passthrough(_: Empty): { value: string } {
+  passthrough(_: { kind?: string }): { value: string } {
     return { value: "ok" };
   }
 
@@ -151,18 +153,26 @@ function setup() {
       .then(respond({ value })),
   );
 
-  const ResultTransformFailure = endpoint("/fail/result-transform", ({ value }: Vars) => {
+  const StartResultTransformFailure = endpoint("/fail/result-transform", () =>
+    receive().then(FailureSource.passthrough({ kind: "result-transform" })),
+  );
+  const ResultTransformFailure = reaction(({ value }: Vars) => {
     const transformed = FailureSource.passthrough({}).responds({ value });
     transformed.transform = () => {
       throw new Error(privateSentinel);
     };
-    return receive().then(transformed).then(respond({ value }));
+    return when(FailureSource.passthrough({ kind: "result-transform" }).responds()).then(
+      transformed,
+    );
   });
 
-  const ConsequenceOutputFailure = endpoint("/fail/consequence-output", ({ value }: Vars) => {
+  const StartConsequenceOutputFailure = endpoint("/fail/consequence-output", () =>
+    receive().then(FailureSource.passthrough({ kind: "consequence-output" })),
+  );
+  const ConsequenceOutputFailure = reaction(({ value }: Vars) => {
     const hostile = FailureSource.hostileOutput({}).responds({ value });
     hostile.transform = (frames) => frames;
-    return receive().then(hostile).then(respond({ value }));
+    return when(FailureSource.passthrough({ kind: "consequence-output" }).responds()).then(hostile);
   });
   const TriggerFailure = endpoint("/fail/trigger", ({ value }: Vars) =>
     receive().then(FailureSource.hostileOutput({}).responds({ value })).then(respond({ value })),
@@ -176,13 +186,18 @@ function setup() {
       .then(respond({ unreachable: true })),
   );
   const HealthySibling = endpoint("/answer-wins", () => receive().then(respond({ answer: "ok" })));
-  const AnswerBeforeFailure = endpoint("/answer-before-failure", () => {
-    const answer = respond({ answer: "ok" });
-    answer.transform = () => {
-      throw new Error(privateSentinel);
-    };
-    return receive().then(answer);
-  });
+  const AnswerBeforeFailure = endpoint("/answer-before-failure", () =>
+    receive()
+      .then(respond({ answer: "ok" }))
+      .then(FailureSource.passthrough({ kind: "after-answer" })),
+  );
+  const FailureAfterAnswer = reaction(() =>
+    when(FailureSource.passthrough({ kind: "after-answer" }).responds())
+      .where(() => {
+        throw new Error(privateSentinel);
+      })
+      .then(FailureSource.passthrough({})),
+  );
   const Uncovered = endpoint("/uncovered", () =>
     receive()
       .where(() => new Frames())
@@ -201,11 +216,14 @@ function setup() {
       ConsequenceOutputFailure,
       CustomFailure,
       ForgedTriggerClosure,
+      FailureAfterAnswer,
       HealthySibling,
       InPlaceMalformedClosure,
       MalformedClosure,
       QueryFailure,
       ResultTransformFailure,
+      StartConsequenceOutputFailure,
+      StartResultTransformFailure,
       TriggerFailure,
       Uncovered,
       ViewFailure,
@@ -303,7 +321,7 @@ describe("interpreter failure settlement", () => {
       value: { answer: "ok" },
     });
     expect((app.engine.Action.store as MemoryStore).reactionFailures).toMatchObject([
-      { reaction: "AnswerBeforeFailure", stage: "result-transform" },
+      { reaction: "FailureAfterAnswer", stage: "where" },
     ]);
   });
 

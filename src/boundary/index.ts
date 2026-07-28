@@ -1,7 +1,12 @@
 /** Declare the public requests a composition can receive and answer. */
 export { endpoint, receive, respond } from "@engine/boundary/assembly/assemble";
-export type { EndpointDef } from "@engine/boundary/assembly/assemble";
+export type { EndpointDef, EndpointOptions } from "@engine/boundary/assembly/assemble";
 export type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
+export type {
+  EndpointValidator,
+  EndpointValidators,
+  ValidationResult,
+} from "@engine/boundary/protocol/validation";
 export { FrameworkErrorCode } from "@engine/boundary/protocol/errors";
 export type { EmittedFrameworkErrorCode, InvocationResult } from "@engine/boundary/protocol/errors";
 export type { Invoker, InvokeOptions } from "@engine/boundary/invocation/invoke";

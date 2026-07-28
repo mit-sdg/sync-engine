@@ -23,6 +23,7 @@ export { Logging } from "@engine/reactions/runtime/logging";
 export type { ActionRefusal } from "@engine/reactions/runtime/instrumenting";
 export type {
   FiringRecord,
+  IntegrityFailureRecord,
   LogEntry,
   LogStore,
   ReactionFailureRecord,
