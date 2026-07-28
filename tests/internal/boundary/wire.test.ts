@@ -292,4 +292,17 @@ describe("wire contracts", () => {
       ],
     });
   });
+
+  test("orders punctuation and non-ASCII field names by ordinal code unit", () => {
+    const fields = JSON.parse('{"é":1,"~":2,"a":3,"_":4,"A":5}');
+    const Ordered = endpoint("/ordered", () => receive().then(respond(fields)));
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: {}, computations: {} }),
+      composition: { Ordered },
+    });
+    const ordered = wireContracts(app.engine.exportReactions()).endpoints[0];
+    if (ordered.output.kind !== "object") throw new Error("expected object output");
+
+    expect(ordered.output.fields.map(({ key }) => key)).toEqual(["A", "_", "a", "~", "é"]);
+  });
 });

@@ -44,6 +44,7 @@ import type {
 } from "../types.ts";
 import { validateQueryContractMap } from "@engine/reads/query-contracts";
 import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
+import { setOwn } from "@engine/utils/own-property";
 import { brandActionRef, brandQueryRef, type ActionRef, type QueryRef } from "./references.ts";
 
 export { isActionRef, isQueryRef } from "./references.ts";
@@ -211,7 +212,7 @@ export interface VocabularyDeclaration<
 function specifiedContracts(spec: string): ConceptMetadata {
   const { purpose, principle, queries } = parseSpec(spec);
   const promises: Record<string, QueryPromise> = {};
-  for (const query of queries) promises[query.name] = query.promise;
+  for (const query of queries) setOwn(promises, query.name, query.promise);
   return { purpose, principle, queries: promises };
 }
 
@@ -341,23 +342,23 @@ export function vocabulary(
     if (typeof cls !== "function" || cls.prototype === undefined) {
       throw new Error(`Vocabulary: "${name}" must be a concept class.`);
     }
-    classes[name] = cls;
+    setOwn(classes, name, cls);
     let declaredMetadata: ConceptMetadata | undefined;
     if (descriptor !== undefined) {
       const { class: _class, spec, ...contracts } = descriptor;
       declaredMetadata =
         spec === undefined ? contracts : { ...specifiedContracts(spec), ...contracts };
       validateConceptMetadata(name, cls, declaredMetadata);
-      metadata[name] = declaredMetadata;
+      setOwn(metadata, name, declaredMetadata);
     }
-    refs[name] = conceptRefProxy(name, cls, declaredMetadata?.queries);
+    setOwn(refs, name, conceptRefProxy(name, cls, declaredMetadata?.queries));
   }
   Object.defineProperty(refs, VocabularyClasses, { value: { ...classes } });
 
   const definitions = (source.computations ?? {}) as Record<string, ComputationFn>;
   const computations: Record<string, ComputationRef> = {};
   for (const [name, fn] of Object.entries(definitions)) {
-    computations[name] = computationRef(name, fn, "vocabulary");
+    setOwn(computations, name, computationRef(name, fn, "vocabulary"));
   }
   const result = { concepts: refs, computations };
   Object.defineProperties(result, {

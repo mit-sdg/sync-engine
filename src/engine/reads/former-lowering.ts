@@ -5,6 +5,7 @@ import { withLive } from "./ir.ts";
 import type { ArrangedIR, FormerIR, FormerNodeIR, FormerSourceIR, FormerWhereOpIR } from "./ir.ts";
 import { encodePattern, encodeWhereOp, PatternVariables } from "./pattern-encoding.ts";
 import type { WhereOp } from "./where-ops.ts";
+import { setOwn } from "@engine/utils/own-property";
 
 function encodeArranged(ordering: Arranged, vars: PatternVariables): ArrangedIR {
   if ("by" in ordering) return { by: vars.nameOf(ordering.by), order: ordering.order };
@@ -25,7 +26,9 @@ function encodeFormerNode(node: FormerNode, vars: PatternVariables): FormerNodeI
       return { node: "leaf", var: vars.nameOf(node.var) };
     case "record": {
       const entries: Record<string, FormerNodeIR> = {};
-      for (const [key, child] of node.entries) entries[key] = encodeFormerNode(child, vars);
+      for (const [key, child] of node.entries) {
+        setOwn(entries, key, encodeFormerNode(child, vars));
+      }
       const splices = node.splices.map((use) =>
         withLive(
           {

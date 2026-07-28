@@ -14,7 +14,7 @@
 import type { Frame, Mapping } from "@engine/reactions/types";
 import { structurallyEqual } from "./value-equality.ts";
 import { hasMarkerKey, isVarIR } from "./ir.ts";
-import { setOwn } from "./brands.ts";
+import { setOwn } from "@engine/utils/own-property";
 
 /**
  * The frame key a variable leaf binds under: a symbol for authored

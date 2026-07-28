@@ -170,6 +170,25 @@ describe("createHttpHandler", () => {
     expect(body).toEqual({ echoed: "basepath-test" });
   });
 
+  test("treats the root base path as no prefix", async () => {
+    let invokedPath: string | undefined;
+    const handler = createHttpHandler({
+      invoker: {
+        async invoke(path) {
+          invokedPath = path;
+          return { ok: true, value: { ok: true } };
+        },
+      },
+      basePath: "/",
+    });
+    const response = await handler(
+      new Request("http://localhost/root", { method: "POST", body: "{}" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(invokedPath).toBe("/root");
+  });
+
   test("returns 404 when path is empty after basePath strip", async () => {
     const reaction = new Reacting();
     reaction.logging = Logging.OFF;

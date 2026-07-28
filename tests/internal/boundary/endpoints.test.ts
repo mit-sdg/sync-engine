@@ -217,7 +217,27 @@ describe("endpoint", () => {
     expect(declarationsOf(Echo.reaction({} as Vars))).toHaveLength(2);
   });
 
-  test("rejects a value that is not an absolute path", () => {
-    expect(() => endpoint("relative", () => receive().then(respond({})))).toThrow(/is not a path/);
+  test("supports the root and URL-stable percent-encoded path data", () => {
+    expect(endpoint("/", () => receive().then(respond({}))).path).toBe("/");
+    expect(endpoint("/caf%C3%A9/%23", () => receive().then(respond({}))).path).toBe(
+      "/caf%C3%A9/%23",
+    );
+  });
+
+  test.each([
+    ["relative path", "relative"],
+    ["query", "/items?limit=1"],
+    ["fragment", "/items#section"],
+    ["scheme-relative origin", "//other.test/items"],
+    ["space", "/has space"],
+    ["noncanonical Unicode", "/cafe\u0301"],
+    ["dot segment", "/a/../items"],
+    ["encoded dot segment", "/a/%2e%2e/items"],
+    ["malformed percent encoding", "/bad%escape"],
+    ["URL-normalized separator", "/a\\items"],
+  ])("rejects a nonportable %s", (_case, path) => {
+    expect(() => endpoint(path, () => receive().then(respond({})))).toThrow(
+      /endpoint\(\.\.\.\): path/,
+    );
   });
 });

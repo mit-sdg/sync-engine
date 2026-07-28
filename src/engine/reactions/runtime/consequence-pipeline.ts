@@ -1,7 +1,6 @@
 /** Form, ask, and settle each consequence in a matched reaction pipeline. */
 
 import { DESCEND, mapValueTree, mapValueTreeAsync, walkValueTree } from "@engine/reads/value-tree";
-import { setOwn } from "@engine/reads/brands";
 import { varKeyOf } from "@engine/reads/frames";
 import { Frames } from "@engine/reads/frames";
 import { hasMarkerKey, liveOf } from "@engine/reads/ir";
@@ -16,6 +15,7 @@ import type { ReadEnv } from "@engine/reads/env";
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
 import { uuid } from "@engine/utils/runtime";
+import { setOwn } from "@engine/utils/own-property";
 import { actionNameOf } from "../concepts/introspect.ts";
 import {
   actionId,
@@ -148,7 +148,7 @@ export class ConsequencePipeline {
     const bindings: Record<string, unknown> = {};
     for (const key of Object.keys(frame)) setOwn(bindings, key, frame[key]);
     for (const key of Object.getOwnPropertySymbols(frame)) {
-      if (!reserved.has(key)) bindings[key.description ?? String(key)] = frame[key];
+      if (!reserved.has(key)) setOwn(bindings, key.description ?? String(key), frame[key]);
     }
     return bindings;
   }
@@ -403,10 +403,14 @@ export class ConsequencePipeline {
     if (!hasFormer) return input;
 
     const result: ActionArguments = {};
-    for (const key of Object.getOwnPropertySymbols(input)) result[key] = input[key];
+    for (const key of Object.getOwnPropertySymbols(input)) setOwn(result, key, input[key]);
     for (const [key, value] of Object.entries(input)) {
-      result[key] = await mapValueTreeAsync(value, (node) =>
-        isFusedFormer(node) ? formTree(node as FusedFormer, this.definitions.readEnv()) : DESCEND,
+      setOwn(
+        result,
+        key,
+        await mapValueTreeAsync(value, (node) =>
+          isFusedFormer(node) ? formTree(node as FusedFormer, this.definitions.readEnv()) : DESCEND,
+        ),
       );
     }
     return result;

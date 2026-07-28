@@ -440,6 +440,15 @@ value in a response header. Invalid or faulting resolver results become a fresh
 UUID. Correlation follows gateway and application observation; it does not
 deduplicate work and is not an idempotency key.
 
+Endpoint paths and HTTP base paths are portable absolute URL pathnames. Their
+declared spelling must survive WHATWG URL pathname handling exactly: queries,
+fragments, scheme-relative paths, literal spaces or Unicode, dot-segment
+normalization (including encoded dot segments), malformed percent escapes, and
+other noncanonical spellings are rejected. Percent-encoded path data remains
+valid when URL handling preserves it. `/` is a valid endpoint path and means no
+prefix when used as a base path. A trailing base-path slash is accepted and
+removed before routing, so `/api/` and `/api` declare the same base.
+
 `productionHttpProfile(...)` declares a public origin and optional base path.
 The handler form carrying that profile and the assembly is the production
 credential-free policy. It accepts JSON `POST` requests, preserves ordinary
@@ -469,6 +478,8 @@ response. Successful clearing endpoints and an unauthorized protected request
 clear the cookie. Responses that issue or clear the cookie use `Cache-Control:
 no-store`. The floor is a same-origin boundary: it does not answer CORS
 preflights or emit CORS headers.
+The floor adds no implicit `/api` route alias; serving below `/api` requires an
+explicit `basePath: "/api"` declaration.
 
 **Runtime validation boundary.** Gateway admission and the assembled invoker
 validate the route and request's outer shape. The input must be a non-null,
@@ -708,6 +719,9 @@ exception messages, stacks, causes, and attached fields. `serializeError(...)`
 provides that opaque class-only representation. `describeError(...)` instead
 returns unredacted exception text and is suitable only for a caller-reviewed
 diagnostic channel, not an automatic public error envelope.
+Only the standalone `configureRedaction(...)` / `redact(...)` compatibility
+utility has mutable process-global policy; changing it does not alter an
+existing assembly's snapshot.
 
 Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
 most recent settled causal flows. Its `retention` option can select another

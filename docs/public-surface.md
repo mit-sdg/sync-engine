@@ -297,6 +297,11 @@ JSON, status, category, success-value, and correlation pipeline. The fixed
 request, cookie, projection, and deployment guarantees live in [Execution
 semantics](./semantics.md#boundary-gateway-and-client).
 
+Endpoint and base paths must be canonical portable URL pathnames. `/` remains a
+supported endpoint and no-prefix base, and trailing base-path slashes normalize
+away. `HttpFloor` has no implicit `/api` alias; declare `basePath: "/api"` when
+that prefix is part of the deployment URL.
+
 Every handler form accepts `correlation?: HttpCorrelationOptions`. Its resolver
 maps an inbound request to a non-empty, control-character-free identifier of at
 most 128 UTF-16 code units. A thrown or invalid result is replaced with a UUID.

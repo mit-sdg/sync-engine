@@ -22,6 +22,7 @@ import type {
 import { isMatcher, isPlainMapping } from "./matchers.ts";
 import { walkValueTree } from "./value-tree.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
+import { setOwn } from "@engine/utils/own-property";
 
 export class PatternVariables {
   private names = new Map<symbol, string>();
@@ -73,7 +74,9 @@ function encodeValue(value: unknown, vars: PatternVariables): ValueIR {
   if (Array.isArray(value)) return value.map((item) => encodeValue(item, vars));
   if (isPlainMapping(value)) {
     const encoded: Record<string, ValueIR> = {};
-    for (const [key, item] of Object.entries(value)) encoded[key] = encodeValue(item, vars);
+    for (const [key, item] of Object.entries(value)) {
+      setOwn(encoded, key, encodeValue(item, vars));
+    }
     if (Object.keys(encoded).some((key) => key.startsWith("$"))) return { $lit: encoded };
     return encoded;
   }
@@ -82,7 +85,9 @@ function encodeValue(value: unknown, vars: PatternVariables): ValueIR {
 
 export function encodePattern(mapping: Mapping | undefined, vars: PatternVariables): PatternIR {
   const encoded: PatternIR = {};
-  for (const [key, value] of Object.entries(mapping ?? {})) encoded[key] = encodeValue(value, vars);
+  for (const [key, value] of Object.entries(mapping ?? {})) {
+    setOwn(encoded, key, encodeValue(value, vars));
+  }
   return encoded;
 }
 

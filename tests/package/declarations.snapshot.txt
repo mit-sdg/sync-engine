@@ -765,11 +765,11 @@ export declare function floorReadBack(options: {
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import type { WireContractsIR } from "../wire/wire-contracts.ts";
 import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
+export { normalizeHttpBasePath } from "../protocol/http-path.ts";
 export interface ProductionHttpProfile {
     origin: string;
     basePath?: string;
 }
-export declare function normalizeHttpBasePath(basePath: string | undefined): string;
 export declare function normalizeProductionHttpProfile(declaration: ProductionHttpProfile, label?: string, productionReason?: string): ProductionHttpProfile;
 export declare function productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile;
 export declare function projectProductionHttpWire(wire: WireContractsIR, categories: Readonly<Record<string, PublicErrorCategory>>): WireContractsIR;
@@ -1063,6 +1063,12 @@ export declare function isEmittedFrameworkErrorCode(value: unknown): value is Em
 export declare function success<T>(value: T): InvocationResult<T, never>;
 export declare function domainError<E>(value: E): InvocationResult<never, E>;
 export declare function frameworkError(code: EmittedFrameworkErrorCode, detail?: string): InvocationResult<never, never>;
+
+=== dist/engine/boundary/protocol/http-path.d.ts ===
+/** Require a path whose spelling survives WHATWG URL pathname handling exactly. */
+export declare function assertPortableHttpPath(path: unknown, label: string): asserts path is string;
+/** Normalize the deliberately supported root and trailing-slash base-path forms. */
+export declare function normalizeHttpBasePath(basePath: string | undefined, label?: string): string;
 
 === dist/engine/boundary/protocol/public-errors.d.ts ===
 import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
@@ -3105,7 +3111,6 @@ export declare const ReactionPartitionBrand: unique symbol;
 export declare function brand<T extends object>(value: T, marker: symbol): T;
 export declare function hasBrand(value: unknown, marker: symbol): value is object;
 export declare function hasFuncBrand(value: unknown, marker: symbol): value is object;
-export declare function setOwn<T extends object>(obj: T, key: string | symbol, value: unknown): T;
 
 === dist/engine/reads/collection-contracts.d.ts ===
 /** A named dependency plus its optional definition-site live reference. */
@@ -4977,6 +4982,14 @@ export interface Logger {
     error(msg: string, meta?: Record<string, unknown>): void;
 }
 export declare const logger: Logger;
+
+=== dist/engine/utils/ordinal.d.ts ===
+/** Locale-independent UTF-16 ordering, matching JavaScript's relational comparison. */
+export declare function ordinal(left: string, right: string): number;
+
+=== dist/engine/utils/own-property.d.ts ===
+/** Define one enumerable own data property without invoking prototype setters. */
+export declare function setOwn<T extends object>(object: T, key: string | symbol, value: unknown): T;
 
 === dist/engine/utils/redaction.d.ts ===
 /**

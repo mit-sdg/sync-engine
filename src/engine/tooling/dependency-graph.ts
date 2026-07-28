@@ -2,6 +2,7 @@ import type { ConsequenceIR, TriggerIR, ViewOpIR, WhereOpIR } from "@engine/read
 import { analyzeLocalBehavior, type LocalBehaviorDefinition } from "@engine/reads/local-behavior";
 import { foldFormerNode, foldOps, foldReaction, foldView } from "@engine/reads/schema";
 import { canonicalDigest, canonicalValue } from "@engine/utils/canonical-json";
+import { setOwn } from "@engine/utils/own-property";
 import type { ApplicationManifestV2 } from "./manifest.ts";
 
 export type DependencyNodeKind =
@@ -209,7 +210,7 @@ export function applicationDependencyGraph(
   for (const edge of sortedEdges) {
     const dependents = reverse[edge.to] ?? [];
     dependents.push(edge.from);
-    reverse[edge.to] = dependents;
+    setOwn(reverse, edge.to, dependents);
   }
   for (const id of Object.keys(reverse)) reverse[id]?.sort(ordinal);
   return canonicalValue({

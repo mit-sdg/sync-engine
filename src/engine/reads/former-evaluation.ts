@@ -9,13 +9,14 @@ import { liveOf } from "./ir.ts";
 import type { ArrangedIR, FormerNodeIR, PatternIR, SpliceIR } from "./ir.ts";
 import type { ReadEnv } from "./env.ts";
 import type { Frame, Mapping } from "@engine/reactions/types";
+import { setOwn } from "@engine/utils/own-property";
 
 /** One selection's shared shape: source line and refinements. */
 type SelectionIR = Extract<FormerNodeIR, { from: object }>;
 
 /** Whether an input pattern reads through an unbound variable — absence propagates. */
 function inputUnbound(input: PatternIR, frame: Frame): boolean {
-  return varNamesInPattern(input).some((name) => !(name in frame));
+  return varNamesInPattern(input).some((name) => !Object.hasOwn(frame, name));
 }
 
 /** The selection's surviving row-frames, in order: rows unified, conditions applied. */
@@ -89,7 +90,7 @@ function resolveInput(input: PatternIR, frame: Frame): Mapping | typeof ABSENT {
   for (const [key, pattern] of Object.entries(input)) {
     const read = readPatternValue(pattern, frame);
     if (read.isVariable && !read.bound) return ABSENT;
-    resolved[key] = read.value;
+    setOwn(resolved, key, read.value);
   }
   return resolved;
 }
@@ -122,7 +123,7 @@ async function evaluateFormer(
   env: ReadEnv,
 ): Promise<unknown | typeof ABSENT> {
   const frame: Frame = {};
-  for (const inputName of ref.ins) frame[inputName] = input[inputName];
+  for (const inputName of ref.ins) setOwn(frame, inputName, input[inputName]);
   const result = await evalNode(ref.formerName, ref.body, frame, env);
   if (result !== DROP_ROW) return result;
   if (ref.promise === "optional") return ABSENT;
@@ -140,7 +141,7 @@ async function evalNode(
 ): Promise<unknown> {
   switch (node.node) {
     case "leaf": {
-      const value = node.var in frame ? frame[node.var] : null;
+      const value = Object.hasOwn(frame, node.var) ? frame[node.var] : null;
       return value === undefined ? null : value;
     }
     case "record": {
@@ -157,12 +158,12 @@ async function evalNode(
       for (const [key, child] of Object.entries(node.entries)) {
         const value = await evalNode(formerName, child, scope, env);
         if (value === DROP_ROW) return DROP_ROW;
-        result[key] = value;
+        setOwn(result, key, value);
       }
       for (const use of node.splices ?? []) {
         const sub = await evalSplice(use, formerName, scope, env);
         if (sub === DROP_ROW) return DROP_ROW;
-        Object.assign(result, sub);
+        for (const [key, value] of Object.entries(sub)) setOwn(result, key, value);
       }
       return result;
     }

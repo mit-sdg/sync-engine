@@ -1,6 +1,7 @@
 /** Own executable reactions, exported definitions, and their trigger indexes. */
 
 import type { ReactionIR, UnloweredIR } from "@engine/reads/ir";
+import { setOwn } from "@engine/utils/own-property";
 import type { ChannelPosture, ExecutableReaction, InstrumentedAction } from "../types.ts";
 
 export class ReactionCatalog {
@@ -20,8 +21,8 @@ export class ReactionCatalog {
 
   unregisterBase(base: string): void {
     for (const reactionName of this.namesByBase.get(base) ?? []) {
+      if (!Object.hasOwn(this.reactions, reactionName)) continue;
       const old = this.reactions[reactionName];
-      if (old === undefined) continue;
       for (const clause of old.when) {
         if ("channel" in clause) this.reactionsByChannel.get(clause.channel)?.delete(old);
         else this.reactionsByAction.get(clause.action)?.delete(old);
@@ -34,7 +35,7 @@ export class ReactionCatalog {
   }
 
   index(reaction: ExecutableReaction): void {
-    this.reactions[reaction.name] = reaction;
+    setOwn(this.reactions, reaction.name, reaction);
     for (const clause of reaction.when) {
       if ("channel" in clause) {
         let indexed = this.reactionsByChannel.get(clause.channel);

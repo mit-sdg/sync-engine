@@ -205,10 +205,12 @@ credential meaning and domain authorization.
 
 Assembly-scoped field-name redaction runs before occurrence entries reach
 stores, observers, or inspection, so separate applications cannot mix domain
-policies. Redaction matches field names; it does not search
-arbitrary string contents. The policy is mutable process-global state. During
-an active flow, the interpreter privately retains original values needed for
-matching and clears them when the outermost action settles.
+policies. Each assembly keeps an immutable snapshot of its own policy. Only the
+standalone `configureRedaction(...)` / `redact(...)` compatibility utility uses
+mutable process-global state. Redaction matches field names; it does not search
+arbitrary string contents. During an active flow, the interpreter privately
+retains original values needed for matching and clears them when the outermost
+action settles.
 
 Do not place secrets in unstructured strings and assume field-name redaction
 will find them. Stable operational events omit action values. Review custom

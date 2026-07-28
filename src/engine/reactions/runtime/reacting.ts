@@ -1,6 +1,6 @@
 /** Stable internal facade for reaction registration, instrumentation, and execution. */
 
-import { setOwn } from "@engine/reads/brands";
+import { setOwn } from "@engine/utils/own-property";
 import type { ComputationRef } from "@engine/reads/computations";
 import type { ReadEnv } from "@engine/reads/env";
 import { Frames, varKeyOf } from "@engine/reads/frames";

@@ -9,7 +9,7 @@ import {
   receive,
   respond,
 } from "@sync-engine/boundary";
-import { httpFloorReadBack } from "@sync-engine/tooling";
+import { floorReadBack, httpFloorReadBack } from "@sync-engine/tooling";
 import { projectAssemblyHttpWire } from "@sync-engine/internal/boundary/http/http-floor";
 import { assemblyBehind } from "@sync-engine/internal/boundary/assembly/assembly-registry";
 import { wireContracts } from "@sync-engine/internal/boundary/wire/wire";
@@ -117,6 +117,50 @@ function setup() {
   return { application, fetch, floor, gateway };
 }
 
+function poisonPublicCategories(application: ReturnType<typeof setup>["application"]): void {
+  const categories = assemblyBehind(application).publicErrors as Record<string, string>;
+  Object.setPrototypeOf(categories, { INHERITED_CATEGORY: "FORBIDDEN" });
+  Object.defineProperty(categories, "MALFORMED_CATEGORY", {
+    value: "toString",
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+async function expectOpaqueRuntimeCodes(
+  handlerFor: (gateway: {
+    invoke: () => Promise<unknown>;
+  }) => (request: Request) => Promise<Response>,
+  url: string,
+): Promise<void> {
+  let code = "";
+  const handler = handlerFor({
+    invoke: async () => ({
+      ok: false as const,
+      error: { kind: "domain" as const, value: code, detail: "private refusal detail" },
+    }),
+  });
+  for (const runtimeCode of [
+    "toString",
+    "constructor",
+    "__proto__",
+    "INHERITED_CATEGORY",
+    "MALFORMED_CATEGORY",
+  ]) {
+    code = runtimeCode;
+    const response = await handler(
+      new Request(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+    expect(response.status, runtimeCode).toBe(500);
+    expect(await response.json(), runtimeCode).toEqual({ error: "INTERNAL_ERROR" });
+  }
+}
+
 describe("HTTP floor", () => {
   test("binds a cookie from the concept-owned expiry and hides consumed fields", async () => {
     const { fetch } = setup();
@@ -188,6 +232,39 @@ describe("HTTP floor", () => {
         'A successful /login stores output "session" in the credential cookie and reads its expiry from "expiresAt".',
         "A successful /logout clears the credential cookie.",
       ].join("\n"),
+    );
+  });
+
+  test("has no implicit /api alias and requires an explicit base path", async () => {
+    const { application, fetch, floor, gateway } = setup();
+    const implicit = await fetch(
+      new Request("http://learning.test/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+    expect(implicit.status).toBe(404);
+    expect(await implicit.json()).toEqual({ error: "NOT_FOUND" });
+
+    const explicitFloor = httpFloor({ ...floor, basePath: "/api" });
+    const explicit = createHttpHandler({ application, gateway, floor: explicitFloor });
+    const accepted = await explicit(
+      new Request("http://learning.test/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+    expect(accepted.status).toBe(200);
+  });
+
+  test("fails closed for prototype, inherited, and malformed floor categories", async () => {
+    const { application, floor } = setup();
+    poisonPublicCategories(application);
+    await expectOpaqueRuntimeCodes(
+      (gateway) => createHttpHandler({ application, floor, gateway: gateway as never }),
+      "http://learning.test/me",
     );
   });
 
@@ -358,6 +435,94 @@ describe("production HTTP profile", () => {
     expect(await frameworkResponse.json()).toEqual({ error: "INTERNAL_ERROR" });
   });
 
+  test("fails closed for prototype, inherited, and malformed profile categories", async () => {
+    const { application } = setup();
+    poisonPublicCategories(application);
+    const profile = productionHttpProfile({ origin: "https://learning.test" });
+    await expectOpaqueRuntimeCodes(
+      (gateway) => createHttpHandler({ application, profile, gateway: gateway as never }),
+      "https://learning.test/me",
+    );
+  });
+
+  test("keeps route identity across direct, gateway, raw, profile, and floor calls", async () => {
+    const { application, floor, gateway } = setup();
+    const raw = createHttpHandler({ gateway, basePath: "/api/" });
+    const profile = createHttpHandler({
+      application,
+      gateway,
+      profile: productionHttpProfile({ origin: "https://learning.test", basePath: "/api/" }),
+    });
+    const basedFloor = httpFloor({ ...floor, basePath: "/api/" });
+    const floored = createHttpHandler({ application, gateway, floor: basedFloor });
+
+    const directResult = await application.invoker.invoke(
+      "/me" as never,
+      {
+        session: "secret-session",
+      } as never,
+    );
+    const gatewayResult = await gateway.invoke(
+      "/me" as never,
+      {
+        session: "secret-session",
+      } as never,
+    );
+    const request = (origin: string, cookie = false) =>
+      new Request(`${origin}/api/me`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(cookie ? { Cookie: "session=secret-session" } : {}),
+        },
+        body: cookie ? "{}" : '{"session":"secret-session"}',
+      });
+    const rawResponse = await raw(request("http://learning.test"));
+    const profileResponse = await profile(request("https://learning.test"));
+    const floorResponse = await floored(request("http://learning.test", true));
+
+    expect(directResult).toEqual({ ok: true, value: { user: "maya" } });
+    expect(gatewayResult).toEqual({ ok: true, value: { user: "maya" } });
+    for (const response of [rawResponse, profileResponse, floorResponse]) {
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ user: "maya" });
+    }
+    expect(basedFloor.basePath).toBe("/api");
+  });
+
+  test.each([
+    ["relative path", "api"],
+    ["query", "/api?version=1"],
+    ["fragment", "/api#v1"],
+    ["scheme-relative origin", "//other.test/api"],
+    ["space", "/bad path"],
+    ["noncanonical Unicode", "/cafe\u0301"],
+    ["dot segment", "/api/../v2"],
+    ["encoded dot segment", "/api/%2e%2e/v2"],
+    ["malformed percent encoding", "/api/%xx"],
+    ["URL-normalized separator", "/api\\v2"],
+  ])("rejects a nonportable %s base path on every HTTP policy", (_case, basePath) => {
+    const gateway = { invoke: async () => ({ ok: true as const, value: {} }) };
+    expect(() => createHttpHandler({ gateway: gateway as never, basePath })).toThrow(
+      /basePath: path/,
+    );
+    expect(() => productionHttpProfile({ origin: "https://learning.test", basePath })).toThrow(
+      /productionHttpProfile: basePath: path/,
+    );
+    expect(() =>
+      httpFloor({
+        origin: "https://learning.test",
+        basePath,
+        credential: {
+          name: "session",
+          input: "session",
+          issue: { path: "/login", output: "session", expires: "expiresAt" },
+          clear: ["/logout"],
+        },
+      }),
+    ).toThrow(/httpFloor: basePath: path/);
+  });
+
   test("rejects unsafe methods, media types, paths, and oversized bodies", async () => {
     const { application, gateway } = setup();
     const fetch = createHttpHandler({
@@ -397,5 +562,24 @@ describe("production HTTP profile", () => {
     expect(await body.json()).toEqual({ error: "INVALID_REQUEST" });
     expect(path.status).toBe(404);
     expect(await path.json()).toEqual({ error: "NOT_FOUND" });
+  });
+
+  test("uses ordinal implementation ordering for punctuation and non-ASCII names", () => {
+    const { application, floor } = setup();
+    const instances = Object.fromEntries(
+      ["é", "~", "a", "_", "A"].map((name) => [name, new Sessioning()]),
+    );
+    const readBack = floorReadBack({
+      application,
+      conceptFloor: { name: "ordered", instances, resources: [] },
+      httpFloor: floor,
+    });
+    expect(readBack.split("\n").slice(2, 7)).toEqual([
+      "  A: Sessioning",
+      "  _: Sessioning",
+      "  a: Sessioning",
+      "  ~: Sessioning",
+      "  é: Sessioning",
+    ]);
   });
 });

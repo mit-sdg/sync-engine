@@ -57,10 +57,12 @@ import type { LocalBehaviorContract, LocalBehaviorReview } from "@engine/reads/l
 import { logger } from "@engine/utils/logger";
 import { createRedactor } from "@engine/utils/redaction";
 import type { RedactionPolicy } from "@engine/utils/redaction";
+import { setOwn } from "@engine/utils/own-property";
 import { brand, hasBrand } from "@engine/reads/brands";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
+import { assertPortableHttpPath } from "../protocol/http-path.ts";
 import { assertEndpointValidators } from "../protocol/validation.ts";
 import type { EndpointValidators } from "../protocol/validation.ts";
 import { refusalFunnel } from "../invocation/funnel.ts";
@@ -145,9 +147,7 @@ export function endpoint(
   opts?: EndpointOptions,
 ): EndpointDef<ReactionPartition>;
 export function endpoint(path: string, reaction: Reaction, opts?: EndpointOptions): EndpointDef {
-  if (typeof path !== "string" || !path.startsWith("/")) {
-    throw new Error(`endpoint(...): "${path}" is not a path.`);
-  }
+  assertPortableHttpPath(path, "endpoint(...)");
   if (opts?.validators !== undefined) assertEndpointValidators(opts.validators, path);
   const def = {
     path,
@@ -304,35 +304,42 @@ export function assemble<T extends Record<string, ConceptClass>>(
   const classes = vocabularyClasses(options.vocabulary);
   for (const source of [options.instances, options.initialize]) {
     for (const name of Object.keys(source ?? {})) {
-      if (!(name in classes)) {
+      if (!Object.hasOwn(classes, name)) {
         throw new Error(`assemble: "${name}" is not a name in the vocabulary.`);
       }
     }
   }
   const concepts: Record<string, object> = {};
   const publicErrors: Record<string, PublicErrorCategory> = {};
+  const metadataByName = vocabularyMetadata(options.vocabulary);
   for (const [name, cls] of Object.entries(classes)) {
-    const provided = (options.instances as Record<string, object> | undefined)?.[name];
-    const metadata = vocabularyMetadata(options.vocabulary)[name];
+    const supplied = options.instances as Record<string, object> | undefined;
+    const provided =
+      supplied !== undefined && Object.hasOwn(supplied, name) ? supplied[name] : undefined;
+    const metadata = Object.hasOwn(metadataByName, name) ? metadataByName[name] : undefined;
     for (const [code, category] of Object.entries(metadata?.publicErrors ?? {})) {
-      const prior = publicErrors[code];
+      const prior = Object.hasOwn(publicErrors, code) ? publicErrors[code] : undefined;
       if (prior !== undefined && prior !== category) {
         throw new Error(
           `assemble: refusal "${code}" has conflicting public categories "${prior}" and "${category}".`,
         );
       }
-      publicErrors[code] = category;
+      setOwn(publicErrors, code, category);
     }
     if (provided !== undefined) {
       if (metadata !== undefined) attachConceptMetadata(provided, metadata);
-      concepts[name] = engine.instrumentConcept(provided, name);
+      setOwn(concepts, name, engine.instrumentConcept(provided, name));
       continue;
     }
-    const args = (options.initialize as Record<string, readonly unknown[]> | undefined)?.[name];
+    const initialization = options.initialize as Record<string, readonly unknown[]> | undefined;
+    const args =
+      initialization !== undefined && Object.hasOwn(initialization, name)
+        ? initialization[name]
+        : undefined;
     const Constructor = cls as new (...ctorArgs: unknown[]) => object;
     const instance = new Constructor(...(args ?? []));
     if (metadata !== undefined) attachConceptMetadata(instance, metadata);
-    concepts[name] = engine.instrumentConcept(instance, name);
+    setOwn(concepts, name, engine.instrumentConcept(instance, name));
   }
 
   // ── The composition: tagged exports register under their dotted path ─────
@@ -346,9 +353,9 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   const visit = (value: unknown, name: string): void => {
     if (isReaction(value)) {
-      if (reactions[name] !== undefined)
+      if (Object.hasOwn(reactions, name))
         throw new Error(`assemble: two reactions named "${name}".`);
-      reactions[name] = value;
+      setOwn(reactions, name, value);
       return;
     }
     if (isEndpointDef(value)) {
@@ -361,16 +368,16 @@ export function assemble<T extends Record<string, ConceptClass>>(
         return reactionName;
       });
       endpoints.push({ name, path: value.path, reactions: reactionNames });
-      if (reactions[name] !== undefined)
+      if (Object.hasOwn(reactions, name))
         throw new Error(`assemble: two reactions named "${name}".`);
-      reactions[name] = () => declared;
+      setOwn(reactions, name, () => declared);
       if (value.input !== undefined) {
-        if (contracts[value.path] !== undefined) {
+        if (Object.hasOwn(contracts, value.path)) {
           throw new Error(
             `assemble: duplicate input contract for ${value.path} — a path's contract is declared at most once.`,
           );
         }
-        contracts[value.path] = value.input;
+        setOwn(contracts, value.path, value.input);
       }
       if (value.validators !== undefined) {
         let existing = validators[value.path] ?? {};
@@ -383,7 +390,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
             );
           }
           existing = { ...existing, [kind]: validator };
-          validators[value.path] = existing;
+          setOwn(validators, value.path, existing);
         }
       }
       return;
@@ -408,7 +415,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   // Name order, deliberately: registration order carries no meaning.
   const ordered: Record<string, Reaction> = {};
-  for (const name of Object.keys(reactions).sort()) ordered[name] = reactions[name];
+  for (const name of Object.keys(reactions).sort()) setOwn(ordered, name, reactions[name]);
   engine.register(ordered);
   engine.declareViews(...views);
   engine.declareFormers(...formers);
@@ -423,7 +430,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   // Declared contracts take precedence; receive patterns fill missing entries.
   for (const [path, decl] of Object.entries(deriveInputContracts(app))) {
-    contracts[path] ??= decl;
+    if (!Object.hasOwn(contracts, path)) setOwn(contracts, path, decl);
   }
 
   engine.register(refusalFunnel(instrumentedBoundary as unknown as RequestBoundaryActions));

@@ -20,6 +20,7 @@ import { walkValueTree } from "./value-tree.ts";
 import type { ViewOp } from "./views.ts";
 import { conditionOp } from "./where-ops.ts";
 import type { Condition, CustomOp, WhereOp } from "./where-ops.ts";
+import { setOwn } from "@engine/utils/own-property";
 
 /** An op as evaluation accepts it: authored (live refs, symbols) or IR (names). */
 export type EvaluableOp = ViewOp | ViewOpIR;
@@ -93,7 +94,7 @@ async function viewRows(
   const filled = bindInputMapping(frame, input);
   const seed: Frame = {};
   for (const name of shape.ins) {
-    if (name in filled) seed[name] = filled[name];
+    if (Object.hasOwn(filled, name)) setOwn(seed, name, filled[name]);
   }
   const survivors: Frame[] = [];
   for (const block of shape.alternatives) {
@@ -104,7 +105,7 @@ async function viewRows(
   const rows: Record<string, unknown>[] = [];
   for (const survivor of survivors) {
     const row: Record<string, unknown> = {};
-    for (const out of shape.outs) row[out] = survivor[out];
+    for (const out of shape.outs) setOwn(row, out, survivor[out]);
     if (!rows.some((prior) => structurallyEqual(prior, row))) rows.push(row);
   }
   if (shape.promise === "one" && rows.length !== 1) {
@@ -252,8 +253,8 @@ async function applyOp(frames: Frames, op: EvaluableOp, env: ReadEnv | undefined
         const next: Frame = { ...frame };
         let unifies = true;
         op.out.forEach((variable, index) => {
-          if (variable in frame && frame[variable] !== values[index]) unifies = false;
-          else next[variable] = values[index];
+          if (Object.hasOwn(frame, variable) && frame[variable] !== values[index]) unifies = false;
+          else setOwn(next, variable, values[index]);
         });
         if (unifies) result.push(next);
         break;

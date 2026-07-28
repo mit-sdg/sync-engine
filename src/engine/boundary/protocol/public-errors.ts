@@ -9,11 +9,17 @@ export const PUBLIC_ERROR_CATEGORIES = {
   CONFLICT: "CONFLICT",
 } as const satisfies Record<PublicErrorCategory, PublicErrorCategory>;
 
+function isPublicErrorCategory(value: unknown): value is PublicErrorCategory {
+  return typeof value === "string" && Object.hasOwn(PUBLIC_ERROR_CATEGORIES, value);
+}
+
 export function registeredPublicCategoryOf(
   code: string,
   categories: Readonly<Record<string, PublicErrorCategory>>,
 ): PublicErrorCategory | "INTERNAL_ERROR" {
-  return categories[code] ?? "INTERNAL_ERROR";
+  if (!Object.hasOwn(categories, code)) return "INTERNAL_ERROR";
+  const category = categories[code];
+  return isPublicErrorCategory(category) ? category : "INTERNAL_ERROR";
 }
 
 export function publicFrameworkCategoryOf(code: string): PublicErrorCategory | "INTERNAL_ERROR" {
@@ -34,7 +40,9 @@ export function publicCategoryOf(
   code: string,
   categories: Readonly<Record<string, PublicErrorCategory>>,
 ): PublicErrorCategory | "INTERNAL_ERROR" {
-  return categories[code] ?? publicFrameworkCategoryOf(code);
+  return Object.hasOwn(categories, code)
+    ? registeredPublicCategoryOf(code, categories)
+    : publicFrameworkCategoryOf(code);
 }
 
 export function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number {
@@ -50,6 +58,8 @@ export function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERRO
     case "CONFLICT":
       return 409;
     case "INTERNAL_ERROR":
+      return 500;
+    default:
       return 500;
   }
 }

@@ -7,6 +7,8 @@ import type { WireType } from "../wire/wire-types.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
 import type { ProductionHttpProfile } from "./http-profile.ts";
 import { normalizeProductionHttpProfile, projectProductionHttpWire } from "./http-profile.ts";
+import { assertPortableHttpPath } from "../protocol/http-path.ts";
+import { ordinal } from "@engine/utils/ordinal";
 
 export interface HttpCredentialBinding {
   name: string;
@@ -37,7 +39,7 @@ export function httpFloor(declaration: HttpFloor): HttpFloor {
     if (!FIELD_NAME.test(value)) throw new Error(`httpFloor: ${seat} "${value}" is not a field.`);
   }
   for (const path of [credential.issue.path, ...credential.clear]) {
-    if (!path.startsWith("/")) throw new Error(`httpFloor: "${path}" is not an endpoint path.`);
+    assertPortableHttpPath(path, "httpFloor: credential endpoint");
   }
   if (new Set(credential.clear).size !== credential.clear.length) {
     throw new Error("httpFloor: credential clearing endpoints must be distinct.");
@@ -180,7 +182,7 @@ export function floorReadBack(options: {
   httpFloor: HttpFloor;
 }): string {
   const implementations = Object.entries(options.conceptFloor.instances)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => ordinal(left, right))
     .map(([name, instance]) => {
       const implementation = Object.getPrototypeOf(instance)?.constructor?.name ?? "Unknown";
       return `  ${name}: ${implementation}`;

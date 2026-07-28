@@ -3,16 +3,13 @@ import { assemblyBehind } from "../assembly/assembly-registry.ts";
 import { publicCategoryOf } from "../protocol/public-errors.ts";
 import type { WireContractsIR } from "../wire/wire-contracts.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
+import { normalizeHttpBasePath } from "../protocol/http-path.ts";
+
+export { normalizeHttpBasePath } from "../protocol/http-path.ts";
 
 export interface ProductionHttpProfile {
   origin: string;
   basePath?: string;
-}
-
-export function normalizeHttpBasePath(basePath: string | undefined): string {
-  if (basePath === undefined || basePath === "" || basePath === "/") return "";
-  if (!basePath.startsWith("/")) throw new TypeError("basePath must start with '/'.");
-  return basePath.replace(/\/+$/, "");
 }
 
 export function normalizeProductionHttpProfile(
@@ -35,7 +32,7 @@ export function normalizeProductionHttpProfile(
   if (process.env.NODE_ENV === "production" && origin.protocol !== "https:") {
     throw new Error(`${label}: production requires an HTTPS public origin${productionReason}.`);
   }
-  const basePath = normalizeHttpBasePath(declaration.basePath);
+  const basePath = normalizeHttpBasePath(declaration.basePath, `${label}: basePath`);
   return Object.freeze({
     origin: origin.origin,
     ...(basePath === "" ? {} : { basePath }),

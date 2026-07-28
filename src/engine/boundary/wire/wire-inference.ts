@@ -19,6 +19,7 @@ import {
   unionWireTypes,
 } from "./wire-types.ts";
 import type { WireType } from "./wire-types.ts";
+import { ordinal } from "@engine/utils/ordinal";
 
 /**
  * Declared `required` keys are required `Json`; declared `defaults` are
@@ -86,7 +87,7 @@ export function inferInputWireType(
     fields.push({ key, type: inferred(key) ?? JSON_TYPE, optional: true });
     done.add(key);
   }
-  fields.sort((left, right) => left.key.localeCompare(right.key));
+  fields.sort((left, right) => ordinal(left.key, right.key));
   return { kind: "object", fields };
 }
 
@@ -102,7 +103,7 @@ export function inferPatternWireType(
       key,
       type: inferValueWireType(value, formers, env, views, visiting),
     }))
-    .sort((left, right) => left.key.localeCompare(right.key));
+    .sort((left, right) => ordinal(left.key, right.key));
   return { kind: "object", fields };
 }
 
@@ -264,7 +265,7 @@ function inferFormerWireType(
           );
         }
       }
-      fields.sort((left, right) => left.key.localeCompare(right.key));
+      fields.sort((left, right) => ordinal(left.key, right.key));
       return { kind: "object", fields };
     }
   }

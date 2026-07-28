@@ -15,6 +15,7 @@ import { rolesOf } from "@engine/reactions/concepts/introspect";
 import type { ComputationFn } from "@engine/reads/computations";
 import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
 import { PUBLIC_ERROR_CATEGORIES } from "../protocol/public-errors.ts";
+import { setOwn } from "@engine/utils/own-property";
 
 export type PublicErrorCategory = MetadataPublicErrorCategory;
 
@@ -188,7 +189,7 @@ function checkRefusals(
     spec.actions.flatMap((action) => action.refusals.map(({ code }) => code)),
   );
 
-  const unsignalled = [...declared].filter((code) => signals[code] === undefined);
+  const unsignalled = [...declared].filter((code) => !Object.hasOwn(signals, code));
   if (unsignalled.length > 0) {
     fail(`the specification refuses with ${listed(unsignalled)}, which no Error class signals.`);
   }
@@ -314,26 +315,30 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
     const refusals: RefusalContracts = {};
     for (const action of actions) {
       if (action.refusals.length === 0) continue;
-      refusals[action.name] = action.refusals.map(({ code, message }) => ({
-        code,
-        message,
-        error: signals[code],
-      }));
+      setOwn(
+        refusals,
+        action.name,
+        action.refusals.map(({ code, message }) => ({
+          code,
+          message,
+          error: signals[code],
+        })),
+      );
     }
     const promises: Record<string, QueryPromise> = {};
-    for (const query of queries) promises[query.name] = query.promise;
+    for (const query of queries) setOwn(promises, query.name, query.promise);
 
     for (const [code, category] of Object.entries(registration.publicErrors ?? {})) {
-      const prior = publicErrors[code];
+      const prior = Object.hasOwn(publicErrors, code) ? publicErrors[code] : undefined;
       if (prior !== undefined && prior !== category) {
         throw new Error(
           `conceptSet: refusal "${code}" has conflicting public categories "${prior}" and "${category}".`,
         );
       }
-      publicErrors[code] = category;
+      setOwn(publicErrors, code, category);
     }
 
-    entries[conceptName] = {
+    setOwn(entries, conceptName, {
       class: registration.class,
       purpose,
       principle,
@@ -342,7 +347,7 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
       ...(registration.publicErrors === undefined
         ? {}
         : { publicErrors: { ...registration.publicErrors } }),
-    };
+    });
   }
   const declared = vocabulary({ concepts: entries, computations: {} });
 
@@ -364,13 +369,13 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
     const result: Record<string, object> = {};
     for (const [name, registration] of Object.entries(registrations)) {
       if (floor === undefined) {
-        result[name] = new (registration.class as new () => object)();
+        setOwn(result, name, new (registration.class as new () => object)());
       } else {
         const factory = registration.floors?.[floor];
         if (factory === undefined) {
           throw new Error(`conceptSet: floor "${floor}" disappeared during construction.`);
         }
-        result[name] = factory(context as never, name);
+        setOwn(result, name, factory(context as never, name));
       }
     }
     return result;

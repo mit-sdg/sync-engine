@@ -14,6 +14,8 @@ import { analyzeReactionProvenance } from "./wire-provenance.ts";
 import type { ProvenanceCell } from "./wire-provenance.ts";
 import { JSON_TYPE, unionWireTypes } from "./wire-types.ts";
 import type { WireType } from "./wire-types.ts";
+import { ordinal } from "@engine/utils/ordinal";
+import { setOwn } from "@engine/utils/own-property";
 
 export interface WireEndpoint {
   path: string;
@@ -181,7 +183,7 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
   }
 
   const endpoints: WireEndpoint[] = [...buckets.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => ordinal(left, right))
     .map(([path, bucket]) => ({
       path,
       input: inferInputWireType(
@@ -224,7 +226,7 @@ export function deriveInputContracts(
         required === undefined ? keys : new Set([...required].filter((key) => keys.has(key)));
     }
     if (required !== undefined && required.size > 0) {
-      out[path] = { required: [...required].sort() };
+      setOwn(out, path, { required: [...required].sort() });
     }
   }
   return out;
@@ -266,7 +268,7 @@ function splitRespond(input: PatternIR): { error?: ValueIR; body: PatternIR } {
   for (const [key, value] of Object.entries(input)) {
     if (key === "requestId") continue;
     if (key === "error") error = value;
-    else body[key] = value;
+    else setOwn(body, key, value);
   }
   return { error, body };
 }

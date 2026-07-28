@@ -24,13 +24,3 @@ export function hasBrand(value: unknown, marker: symbol): value is object {
 export function hasFuncBrand(value: unknown, marker: symbol): value is object {
   return typeof value === "function" && (value as never)[marker] === true;
 }
-
-export function setOwn<T extends object>(obj: T, key: string | symbol, value: unknown): T {
-  Object.defineProperty(obj, key, {
-    value,
-    enumerable: true,
-    configurable: true,
-    writable: true,
-  });
-  return obj;
-}

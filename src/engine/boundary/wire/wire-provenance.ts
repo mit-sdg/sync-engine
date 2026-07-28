@@ -13,6 +13,7 @@ import type {
   WhereOpIR,
 } from "@engine/reads/ir";
 import type { WireOrigin } from "./wire-types.ts";
+import { ordinal } from "@engine/utils/ordinal";
 
 export interface ProvenanceCell {
   alternatives: WireOrigin[][];
@@ -348,7 +349,7 @@ export function referenceOf(
   for (const alternative of target?.alternatives ?? []) {
     const byOrigin = new Map(alternative.map((origin) => [originKey(origin), origin]));
     const normalized = [...byOrigin.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => ordinal(left, right))
       .map(([, origin]) => origin);
     if (normalized.length > 0) {
       distinct.set(normalized.map(originKey).join("\u0000"), normalized);

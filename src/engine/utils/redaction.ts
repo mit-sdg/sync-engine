@@ -1,3 +1,5 @@
+import { setOwn } from "./own-property.ts";
+
 function stableErrorName(error: Error): string {
   try {
     const constructor = (
@@ -177,18 +179,17 @@ function redactValue(
     }
     for (const key of keys) {
       if (isSensitive(key)) {
-        result[key] = "[redacted]";
+        setOwn(result, key, "[redacted]");
         continue;
       }
       try {
-        result[key] = redactValue(
-          (value as Record<string, unknown>)[key],
-          depth + 1,
-          seen,
-          isSensitive,
+        setOwn(
+          result,
+          key,
+          redactValue((value as Record<string, unknown>)[key], depth + 1, seen, isSensitive),
         );
       } catch {
-        result[key] = "[unreadable]";
+        setOwn(result, key, "[unreadable]");
       }
     }
     return result;

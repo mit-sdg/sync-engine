@@ -76,6 +76,33 @@ describe("application manifest", () => {
     expect(forward).toMatch(/"defaults": \{\n\s+"a": 2,\n\s+"z": 1/);
   });
 
+  test("keeps prototype-named defaults in canonical endpoint and contract design data", () => {
+    const defaults = JSON.parse(
+      '{"__proto__":{"constructor":1,"prototype":2},"constructor":3,"prototype":4}',
+    );
+    const Special = endpoint("/special", () => receive().then(respond({ ok: true })), {
+      input: { defaults },
+    });
+    const app = assemble({ vocabulary: words, composition: { Special } });
+    const manifest = applicationManifest(app);
+    const contractDefaults = manifest.inputContracts["/special"].defaults as Record<
+      string,
+      unknown
+    >;
+    const endpointDefaults = manifest.endpoints[0].input.defaults as Record<string, unknown>;
+
+    for (const retained of [contractDefaults, endpointDefaults]) {
+      expect(Object.hasOwn(retained, "__proto__")).toBe(true);
+      expect(Object.hasOwn(retained, "constructor")).toBe(true);
+      expect(Object.hasOwn(retained, "prototype")).toBe(true);
+      expect(Object.getPrototypeOf(retained)).toBe(Object.prototype);
+    }
+    const rendered = renderApplicationManifest(manifest);
+    const roundTripped = JSON.parse(rendered);
+    expect(roundTripped.inputContracts["/special"].defaults).toEqual(defaults);
+    expect(roundTripped.endpoints[0].input.defaults).toEqual(defaults);
+  });
+
   test("excludes retained occurrence state", async () => {
     const app = application();
     const before = renderApplicationManifest(applicationManifest(app));

@@ -1,3 +1,6 @@
+import { ordinal } from "./ordinal.ts";
+import { setOwn } from "./own-property.ts";
+
 export type JsonValue =
   | null
   | boolean
@@ -5,10 +8,6 @@ export type JsonValue =
   | string
   | JsonValue[]
   | { [key: string]: JsonValue };
-
-function ordinal(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 /** Validate and copy a value into canonical key order without reordering arrays. */
 export function canonicalValue(value: unknown): JsonValue {
@@ -54,7 +53,7 @@ function canonicalize(
         `${path}.${key}`,
         false,
       );
-      if (entry !== undefined) projected[key] = entry;
+      if (entry !== undefined) setOwn(projected, key, entry);
     }
     return projected;
   } finally {

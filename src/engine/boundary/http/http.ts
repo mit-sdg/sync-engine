@@ -16,6 +16,7 @@ import {
   registeredPublicCategoryOf,
 } from "../protocol/public-errors.ts";
 import { isPlainObject } from "@engine/reads/matchers";
+import { setOwn } from "@engine/utils/own-property";
 
 // The body is the flat wire envelope; http adds only the status decoration —
 // 200 for success, 400 for a domain error, and the code's own status for a
@@ -344,7 +345,6 @@ function createPolicyHandler(
   options: PolicyHandlerOptions,
 ): (request: Request) => Promise<Response> {
   const assembled = assemblyBehind(options.application);
-  const routes = assembled.publicInterface.routes;
   const categories = assembled.publicErrors;
   const floor = "floor" in options ? options.floor : undefined;
   const declaration = "floor" in options ? options.floor : options.profile;
@@ -393,9 +393,6 @@ function createPolicyHandler(
         return reply(publicJson({ error: "NOT_FOUND" }, 404));
       }
       path = path.slice(base.length);
-    } else if (floor !== undefined && !(path in routes) && path.startsWith("/api/")) {
-      // Retain the floor's original zero-configuration /api compatibility.
-      path = path.slice("/api".length);
     }
     if (!path.startsWith("/") || path === "") {
       return reply(publicJson({ error: "NOT_FOUND" }, 404));
@@ -411,8 +408,11 @@ function createPolicyHandler(
     }
     if (credential !== undefined && protectedPaths.has(path)) {
       if (!isPlainObject(body)) return invalid();
-      (body as Record<string, unknown>)[credential.input] =
-        cookieValue(request.headers.get("Cookie"), cookieName) ?? null;
+      setOwn(
+        body,
+        credential.input,
+        cookieValue(request.headers.get("Cookie"), cookieName) ?? null,
+      );
     }
 
     let result: InvocationResult;
