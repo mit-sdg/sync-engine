@@ -159,7 +159,7 @@ export function matchArguments(
 function isExcepted(
   clause: ChannelPattern,
   recordConcept: object,
-  rawConceptsByInstrumented: WeakMap<object, object>,
+  rawConceptsByInstrumented: { get(candidate: object): object | undefined },
 ): boolean {
   for (const entry of clause.except) {
     const candidate =
@@ -176,7 +176,7 @@ export function matchChannel(
   clause: ChannelPattern,
   frame: Frame,
   recordBinding: symbol,
-  rawConceptsByInstrumented: WeakMap<object, object>,
+  rawConceptsByInstrumented: { get(candidate: object): object | undefined },
 ): Frame | undefined {
   let payloadKey: string;
   let payload: Mapping;

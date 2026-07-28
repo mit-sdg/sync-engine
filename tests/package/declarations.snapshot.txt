@@ -1946,9 +1946,11 @@ import type { InstrumentedQuery, Mapping } from "./types.ts";
 import type { ActionPattern, ActionPosture } from "./types.ts";
 /** Resolves vocabulary names against one assembly's installed referents. */
 export declare class NameResolver {
-    private readonly concepts;
-    private readonly computations;
-    constructor(concepts: Map<string, object>, computations: Map<string, ComputationRef>);
+    private readonly definitions;
+    constructor(definitions: Map<string, object> | {
+        conceptNamed(name: string): object | undefined;
+        computationNamed(name: string): ComputationRef | undefined;
+    }, computations?: Map<string, ComputationRef>);
     concept(name: string, site: string): object;
     action(conceptName: string, actionName: string, input: Mapping, output: Mapping | undefined, site: string, posture?: ActionPosture, by?: string): ActionPattern;
     query(conceptName: string, queryName: string, site: string): InstrumentedQuery;
@@ -2091,6 +2093,70 @@ export declare class ActionConcept {
     evictConsumedFlows(): number;
 }
 
+=== dist/engine/reactions/runtime/consequence-pipeline.d.ts ===
+/** Form, ask, and settle each consequence in a matched reaction pipeline. */
+import { Frames } from "../../reads/frames.ts";
+import { type FormerRef } from "../../reads/former-nodes.ts";
+import type { ReadEnv } from "../../reads/env.ts";
+import type { ActionPattern, ExecutableReaction, Frame } from "../types.ts";
+import { ActionConcept, type ActionRecord } from "./actions.ts";
+import { type FiringBook } from "./firing.ts";
+import type { InterpreterFailures } from "./interpreter-failures.ts";
+type ActionArguments = Record<string | symbol, unknown>;
+export interface CapturedTriggers {
+    flow: string;
+    triggerIds: string[];
+    frameTriggerIds: string[][];
+}
+export declare class ConsequencePipeline {
+    private readonly actions;
+    private readonly firingBook;
+    private readonly definitions;
+    private readonly failures;
+    private readonly react;
+    private readonly assertRows;
+    constructor(actions: ActionConcept, firingBook: FiringBook, definitions: {
+        formerNamed(name: string): FormerRef | undefined;
+        readEnv(): ReadEnv;
+    }, failures: InterpreterFailures, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void);
+    dispatch(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured: CapturedTriggers, triggerIdsByFrame: string[][]): Promise<void>;
+    matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
+    private bindingsOf;
+    private runPipelineForFrame;
+    private runStepNode;
+    private framesWithStepOutput;
+    private failStep;
+    private recordStepFailure;
+    private stopped;
+    private assertCausalFlow;
+    private landFormingFault;
+    private resolveFormerInputs;
+}
+export {};
+
+=== dist/engine/reactions/runtime/firing-pipeline.d.ts ===
+/** Match, filter, and hand one eligible reaction to consequence dispatch. */
+import { Frames } from "../../reads/frames.ts";
+import type { ExecutableReaction } from "../types.ts";
+import type { ActionRecord } from "./actions.ts";
+import type { CapturedTriggers, ConsequencePipeline } from "./consequence-pipeline.ts";
+import type { InterpreterFailures } from "./interpreter-failures.ts";
+import type { ReactionLogger } from "./logging.ts";
+import type { TriggerMatcher } from "./trigger-matching.ts";
+export declare class FiringPipeline {
+    private readonly matcher;
+    private readonly consequences;
+    private readonly failures;
+    private readonly reactionLogger;
+    private readonly assertRows;
+    constructor(matcher: TriggerMatcher, consequences: ConsequencePipeline, failures: InterpreterFailures, reactionLogger: ReactionLogger, assertRows: (flow: string, count: number) => void);
+    fire(record: ActionRecord, reaction: ExecutableReaction): Promise<void>;
+    addThen(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured?: CapturedTriggers, validatedTriggerIds?: string[][]): Promise<void>;
+    private capture;
+    private assertProvenance;
+    private triggerIdsOf;
+}
+
 === dist/engine/reactions/runtime/firing.d.ts ===
 import type { FiringRecord, LogStore } from "./log-store.ts";
 import type { Redactor } from "../../utils/redaction.ts";
@@ -2151,7 +2217,7 @@ export interface InstrumentationState {
     scheduler: ActionScheduling;
     rawConceptsByInstrumented: WeakMap<object, object>;
     concepts: Set<WeakRef<object>>;
-    conceptsByName: Map<string, object>;
+    registerConcept(name: string, instrumented: object): void;
     execution?: {
         action(flow: string): boolean;
     };
@@ -2164,6 +2230,41 @@ export declare function errorOutputFromThrown(error: unknown): Record<string, un
 export declare function instrumentConcept<T extends object>(state: InstrumentationState, concept: T, name?: string): T;
 export declare function instrument<T extends Record<string, object>>(state: InstrumentationState, concepts: T): T;
 export declare function instrument<T extends object>(state: InstrumentationState, concept: T): T;
+/** Owns the mutable proxy identities and query caches for one engine. */
+export declare class ConceptInstrumentation {
+    private readonly dependencies;
+    private readonly boundActionsByConcept;
+    private readonly queryCaches;
+    private readonly rawConceptsByInstrumented;
+    private readonly concepts;
+    constructor(dependencies: {
+        actions: ActionConcept;
+        scheduler: ActionScheduling;
+        execution?: {
+            action(flow: string): boolean;
+        };
+        react(record: ActionRecord, durationMs?: number): Promise<void>;
+        emit(record: ActionRecord, durationMs?: number): void;
+        registerConcept(name: string, instrumented: object): void;
+    });
+    instrumentConcept<T extends object>(concept: T, name?: string): T;
+    instrument<T extends Record<string, object>>(concepts: T): T;
+    instrument<T extends object>(concept: T): T;
+    invalidate(concept: object): void;
+    invalidateAll(): void;
+    rawConceptOf(instrumented: object): object;
+    private state;
+}
+
+=== dist/engine/reactions/runtime/interpreter-failures.d.ts ===
+/** Record sanitized failures produced between instrumented action asks. */
+import type { ActionConcept } from "./actions.ts";
+import type { ReactionFailureRecord } from "./log-store.ts";
+export declare class InterpreterFailures {
+    private readonly actions;
+    constructor(actions: Pick<ActionConcept, "_recordReactionFailure">);
+    record(reaction: string, flow: string, triggerIds: string[], stage: ReactionFailureRecord["stage"], error: unknown, consequence?: Pick<ReactionFailureRecord, "action" | "actionId">): void;
+}
 
 === dist/engine/reactions/runtime/log-store.d.ts ===
 /**
@@ -2407,7 +2508,9 @@ export declare function unifyOutputPattern(outcome: ActionOutcome, pattern: Mapp
 /** Match action identity, provenance, posture, input, and output for one trigger. */
 export declare function matchArguments(record: ActionRecord, pattern: ActionPattern, frame: Frame, recordBinding: symbol): Frame | undefined;
 /** Match one record against a posture channel, exclusions, provenance, and payload pattern. */
-export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: WeakMap<object, object>): Frame | undefined;
+export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: {
+    get(candidate: object): object | undefined;
+}): Frame | undefined;
 
 === dist/engine/reactions/runtime/observer.d.ts ===
 /**
@@ -2527,13 +2630,13 @@ import type { Registry } from "../../reads/registering.ts";
 import type { AppIR, ConceptInventoryIR, ReactionIR } from "../../reads/ir.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
 export declare function exportReactions(state: {
-    loweredReactions: Map<string, ReactionIR[]>;
-    unloweredReactions: Map<string, string>;
+    loweredReactions: Iterable<ReactionIR[]>;
+    unloweredReactions: Iterable<[string, string]>;
     registry: Registry;
 }): AppIR;
 export declare function exportConcepts(state: {
     registry: Registry;
-    rawConceptsByInstrumented: WeakMap<object, object>;
+    rawConceptOf(instrumented: object): object;
 }): ConceptInventoryIR[];
 export declare function readBack(state: {
     registry: Registry;
@@ -2541,7 +2644,7 @@ export declare function readBack(state: {
 }): string;
 export declare function renderApp(state: {
     registry: Registry;
-    rawConceptsByInstrumented: WeakMap<object, object>;
+    rawConceptOf(instrumented: object): object;
     exportReactions(): AppIR;
 }, title?: string): string;
 export declare function form(state: {
@@ -2549,42 +2652,18 @@ export declare function form(state: {
 }, fused: FusedFormer): Promise<unknown>;
 
 === dist/engine/reactions/runtime/reacting.d.ts ===
-/**
- * The reaction interpreter.
- *
- * Concepts are independent state machines; **reactions** compose them
- * declaratively. Each reaction has a `when` / `where` / `then` frame:
- *
- *  - **when**  — patterns matched against the action log. Matching binds
- *               logic variables and yields a set of {@link Frames}.
- *  - **where** — an optional pure transform over those frames (filter, query,
- *               aggregate, …) producing the final frames.
- *  - **then**  — actions to invoke, one per surviving frame, with their inputs
- *               resolved from the frame's bindings.
- *
- * Concepts are *instrumented* so that every (non-query) action invocation:
- *   1. appends a requested record under a **flow** token, reserves the action
- *      body's per-concept arrival position, and reacts to the request,
- *   2. runs the underlying action and records its return, refusal, or fault
- *      (a same-concept requested consequence can release the reserved body
- *      early so the causal chain does not deadlock),
- *   3. reacts again to that completed posture.
- *
- * A **flow** groups actions in one causal chain: actions produced by a reaction's
- * `then` inherit the triggering action's flow, and matching is restricted to a
- * single flow so independent invocations never cross-match.
- */
-import { ActionConcept, type ActionRecord } from "./actions.ts";
+/** Stable internal facade for reaction registration, instrumentation, and execution. */
 import type { ComputationRef } from "../../reads/computations.ts";
-import type { RelationView } from "../../reads/lines.ts";
-import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
-import { type FormerRef, type FusedFormer } from "../../reads/former-nodes.ts";
 import type { ReadEnv } from "../../reads/env.ts";
-import type { FiringRecord } from "./log-store.ts";
 import { Frames } from "../../reads/frames.ts";
-import type { EngineObserver } from "./observer.ts";
+import type { FormerRef, FusedFormer } from "../../reads/former-nodes.ts";
+import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
+import type { RelationView } from "../../reads/lines.ts";
+import type { ActionPattern, ChannelPattern, ChannelPosture, ExecutableReaction, Frame, InstrumentedAction, ReactionMap } from "../types.ts";
+import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { Logging } from "./logging.ts";
-import type { ActionPattern, ChannelPattern, ChannelPosture, Frame, InstrumentedAction, ReactionMap, ExecutableReaction } from "../types.ts";
+import type { FiringRecord } from "./log-store.ts";
+import type { EngineObserver } from "./observer.ts";
 type ActionArguments = Record<string | symbol, unknown>;
 interface FrameProvenance {
     flow: string;
@@ -2593,209 +2672,98 @@ interface FrameProvenance {
     triggerSignatures?: Set<string>;
 }
 export declare class Reacting {
-    /** Registered reactions, by name. */
-    reactions: Record<string, ExecutableReaction>;
-    /** Inverted index: which reactions care about each `when` action. */
-    reactionsByAction: Map<InstrumentedAction, Set<ExecutableReaction>>;
-    /** Inverted index: which reactions watch each posture channel. */
-    reactionsByChannel: Map<ChannelPosture, Set<ExecutableReaction>>;
-    /** The action log backing all matching. */
     Action: ActionConcept;
+    reactions: Record<string, ExecutableReaction>;
+    reactionsByAction: Map<InstrumentedAction, Set<ExecutableReaction>>;
+    reactionsByChannel: Map<ChannelPosture, Set<ExecutableReaction>>;
+    private readonly registry;
+    private readonly catalog;
     private readonly reactionLogger;
     private readonly firingBook;
-    private readonly registry;
-    /** Memoizes bound/instrumented wrappers per concept instance. */
-    private boundActionsByConcept;
-    /** Tracks query cache invalidators per concept instance. */
-    private queryCaches;
-    /** Owns per-concept action reservation and serial body execution. */
     private readonly actionScheduler;
-    /** Resolves public instrumented proxies back to their cache-owning instances. */
-    private rawConceptsByInstrumented;
-    /** All raw concept instances known to this engine, via WeakRef so they can be GC'd. */
-    private concepts;
-    /** Registered `ReactionIR` entries per base reaction name — the exported form. */
-    private loweredReactions;
-    /** Reactions that stayed pipelines, with the reason — visible, never silent. */
-    private unloweredReactions;
-    /** Every executable reaction name each base registration produced. */
-    private namesByBase;
+    private readonly instrumentation;
+    private readonly triggerMatcher;
+    private readonly consequencePipeline;
+    private readonly firingPipeline;
     private readonly execution?;
     constructor(actionConcept?: ActionConcept, execution?: {
         action(flow: string): boolean;
         firing(flow: string): boolean;
         rows(count: number): boolean;
     });
-    /** Register an engine observer. Returns a function to unregister it. */
-    addObserver(o: EngineObserver): () => void;
-    /** Remove all registered observers. */
+    addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     get logging(): Logging;
     set logging(level: Logging);
-    /** Install one assembly's vocabulary-owned calculations. */
     registerComputations(computations: Record<string, ComputationRef>): void;
-    /** Invalidate all query caches for a concept — useful after external DB mutations. */
     invalidateCaches(concept: object): void;
-    /** Invalidate query caches for every instrumented concept. */
     invalidateAllCaches(): void;
-    /**
-     * Register named reaction functions. Each is invoked with the {@link $vars}
-     * proxy to produce its declaration, checked (then inputs must be literals
-     * or variables), lowered to `ReactionIR` where the shape allows (see
-     * {@link lowerReaction}), and indexed by every action in each reaction's `when`.
-     * A reaction that stays a pipeline executes as one and is reported as
-     * unlowered by {@link exportReactions}.
-     */
     register(reactions: ReactionMap): void;
-    private ownerOf;
-    /** Remove every executable reaction a previous registration of `base` produced. */
-    private unregisterBase;
-    /** Add one executable reaction to the name and trigger indexes. */
-    private indexReaction;
-    /** Compile one bound `ReactionIR` entry into an executable reaction. */
-    private compileReaction;
-    /** The environment used to resolve registered names during reads. */
     readEnv(): ReadEnv;
-    /** Evaluate reaction ops: `earlier` reads the flow's record; the rest are where ops. */
-    private applyLoweredWhere;
-    /**
-     * A non-consuming read of the flow's record: extend each row once per
-     * record the pattern matches, exactly like `some` over concept state.
-     * Nothing is consumed — the double-fire guard belongs to the trigger.
-     */
-    private applyEarlier;
-    /**
-     * Evaluate a fused former against this engine's concepts — the read-side
-     * entry point for assembled apps. The former's names bind against this
-     * engine's registry (validated once per former), and the tree is read at
-     * the moment of asking.
-     */
     form(fused: FusedFormer): Promise<unknown>;
-    /** The engine states the quantities the author no longer writes: per reaction, */
     readBack(): string;
-    /** Everything this engine knows about its registered reactions, as data. */
     exportReactions(): AppIR;
-    /** Inventories of every instrumented concept, in instrumentation order. */
     exportConcepts(): import("../../reads/ir.ts").ConceptInventoryIR[];
-    /** Render the registered concepts, views, formers, and reactions. */
     renderApp(title?: string): string;
-    /**
-     * Register reactions from exported `ReactionIR` — the registered form
-     * itself. Concept, query, and computation references bind by name against
-     * this engine's instrumented concepts and the computation registry.
-     * Exporting and re-registering the same reaction IR is behavior-preserving.
-     */
     registerReactions(reactions: ReactionIR[]): void;
-    /**
-     * Register views from their exported IR, dependencies first. Concept and
-     * computation references resolve by name, a nested view by its sentence
-     * against the views already registered here — which is also what keeps a
-     * crafted cycle out: a view can only rest on views that already exist.
-     */
     registerViews(views: ViewIR[]): void;
-    /**
-     * Declare formers no reaction references — reads served at an edge or a
-     * CLI — so they export and render with the rest of the application.
-     */
     declareFormers(...refs: FormerRef[]): void;
-    /**
-     * Declare views no registered reaction consults so `exportReactions()`,
-     * `readBack()`, and `renderApp()` include them. Views referenced by a reaction
-     * register with that reaction.
-     */
     declareViews(...refs: RelationView[]): void;
-    /**
-     * Register formers from their exported IR. Concept and query references
-     * resolve by name. Every view named by a former, including each view's
-     * dependencies, must already be registered. Each `{ $var }` reference
-     * creates a new binding for that former.
-     */
     registerFormers(formers: FormerIR[]): void;
-    /**
-     * React to a just-completed action: log it, then fire every reaction indexed on
-     * that action whose `when` matches within the action's flow.
-     */
     react(record: ActionRecord, durationMs?: number): Promise<void>;
-    /**
-     * Match a reaction's `when` against the firing action's flow.
-     *
-     * Starts from a single seed frame carrying the flow token, then for each
-     * `when` clause joins in every log record (within the flow) that matches,
-     * binding logic variables along the way. Returns the resulting frames and the
-     * per-clause symbols under which each matched record's id was stored.
-     */
     matchWhen(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
-    /**
-     * Match one log record against a channel clause: the posture must be
-     * the channel's, the concept must not be excepted, and the clause's
-     * pattern is unified against the synthesized mapping (concept and action
-     * names, the whole input, and the posture's payload). On success the
-     * record's id is stored under `actionSymbol`, so consumption and firing
-     * records work exactly as for identity-matched clauses.
-     */
     matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, actionSymbol: symbol): Frame | undefined;
-    /** The channel-indexed reactions this record's posture makes eligible. */
-    private channelReactionsFor;
-    /** Run the declared pipeline once for every frame matched by `when`. */
     addThen(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured?: FrameProvenance, validatedTriggerIds?: string[][]): Promise<void>;
-    /** All recorded firings of a reaction — which reaction fired, why, and what came of it. */
-    _getFirings(reaction: string): FiringRecord[];
-    /** Extract a frame's user-variable bindings, keyed by variable name. */
-    private bindingsOf;
-    /** Snapshot engine-owned provenance before authored frame code can mutate it. */
-    private captureFrameProvenance;
-    private triggerIdsOf;
-    /** Keep snapshotted causal provenance intact across authored frame transforms. */
-    private assertFrameProvenance;
-    private runPipelineForFrame;
-    private stopped;
-    private failStep;
-    private recordStepFailure;
-    private runStepNode;
-    private framesWithStepOutput;
-    private appendReactionFailure;
-    /**
-     * Resolve a `then` clause into an action argument object: replace symbol
-     * inputs with their frame bindings (a missing binding is an error), then
-     * attach the flow token and a fresh action id.
-     */
     matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
-    /**
-     * When a former faults while forming consequence input, append the
-     * consequence ask with its former marker, record the fault, retain the
-     * firing's consumption and produced id, then evaluate fault-channel reactions.
-     */
-    private landFormingFault;
-    /** Replace every fused former in a resolved input with its evaluated tree. */
-    private resolveFormerInputs;
-    /**
-     * Wrap a concept in a `Proxy` that instruments its actions.
-     *
-     * Queries (methods whose name starts with `_`) are bound but left
-     * uninstrumented — they have no log side effects. Every other method is
-     * wrapped exactly once per concept instance so the instrumented identity is
-     * stable across accesses without aliasing sibling instances of the same class.
-     * The wrapper records the action in the log, runs it, records its output,
-     * and then drives {@link react}.
-     *
-     * An explicit `name` determines the concept name recorded in the log. A
-     * substituted implementation uses that name, and two instances of one class
-     * may use different names.
-     */
+    _getFirings(reaction: string): FiringRecord[];
     instrumentConcept<T extends object>(concept: T, name?: string): T;
-    /**
-     * Instrument every concept in a record, preserving keys. Keys are local
-     * handles, not concept names — an assembly that means its keys as names
-     * instruments each instance with {@link instrumentConcept}'s explicit name.
-     */
     instrument<T extends Record<string, object>>(concepts: T): T;
-    /** Instrument a single concept instance. */
     instrument<T extends object>(concept: T): T;
-    private instrumentationState;
+    private compileReaction;
+    private applyLoweredWhere;
+    private applyEarlier;
     private assertRows;
     private recordExecutionLimit;
 }
 export {};
+
+=== dist/engine/reactions/runtime/reaction-catalog.d.ts ===
+/** Own executable reactions, exported definitions, and their trigger indexes. */
+import type { ReactionIR } from "../../reads/ir.ts";
+import type { ChannelPosture, ExecutableReaction, InstrumentedAction } from "../types.ts";
+export declare class ReactionCatalog {
+    readonly reactions: Record<string, ExecutableReaction>;
+    readonly reactionsByAction: Map<InstrumentedAction, Set<ExecutableReaction>>;
+    readonly reactionsByChannel: Map<ChannelPosture, Set<ExecutableReaction>>;
+    private readonly loweredByBase;
+    private readonly unloweredByName;
+    private readonly namesByBase;
+    ownerOf(name: string): string | undefined;
+    unregisterBase(base: string): void;
+    index(reaction: ExecutableReaction): void;
+    finishBase(base: string, names: string[], lowered: ReactionIR[]): void;
+    markUnlowered(name: string, reason: string): void;
+    candidates(action: InstrumentedAction, posture: ChannelPosture | undefined): Set<ExecutableReaction> | undefined;
+    loweredGroups(): Iterable<ReactionIR[]>;
+    unloweredEntries(): Iterable<[string, string]>;
+}
+
+=== dist/engine/reactions/runtime/trigger-matching.d.ts ===
+/** Join one landed occurrence with an executable reaction's trigger clauses. */
+import { Frames } from "../../reads/frames.ts";
+import type { ActionConcept, ActionRecord } from "./actions.ts";
+import type { ChannelPattern, ChannelPosture, ExecutableReaction, Frame } from "../types.ts";
+export declare class TriggerMatcher {
+    private readonly records;
+    private readonly consumption;
+    private readonly rawConceptOf;
+    constructor(records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">, consumption: {
+        hasConsumed(recordId: string | undefined, reaction: string): boolean;
+    }, rawConceptOf: (instrumented: object) => object);
+    match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
+    posture(record: ActionRecord): ChannelPosture | undefined;
+    matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, actionSymbol: symbol): Frame | undefined;
+}
 
 === dist/engine/reactions/types.d.ts ===
 /** Core type vocabulary for declarative reactions. */
@@ -3069,6 +3037,29 @@ import type { AppIR, ReactionIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
 export declare function serializeApp(registered: Iterable<ReactionIR[]>, unlowered: Iterable<[string, string]>, formers?: Iterable<FormerRef>, viewOf?: (name: string) => RelationView | undefined): AppIR;
 
+=== dist/engine/reads/authored-reference-resolution.d.ts ===
+/** Resolve definition-site vocabulary references to one assembly's live members. */
+import type { NameResolver } from "../reactions/resolving.ts";
+import type { ReactionDeclaration } from "../reactions/types.ts";
+import type { ComputationRef } from "./computations.ts";
+import type { ReadEnv } from "./env.ts";
+/** Mutates only the fresh declaration passed to {@link resolveDeclaration}. */
+export declare class AuthoredReferenceResolver {
+    private readonly resolver;
+    private readonly definitions;
+    constructor(resolver: NameResolver, definitions: {
+        computationNamed(name: string): ComputationRef | undefined;
+        readEnv(): ReadEnv;
+    });
+    resolveDeclaration(name: string, declaration: ReactionDeclaration): void;
+    /** Vocabulary references must be the definitions installed in this assembly. */
+    resolveComputation(ref: ComputationRef, site: string): ComputationRef;
+    private resolveActionPattern;
+    private liveQuery;
+    private resolveWhereOp;
+    private resolveThenNodes;
+}
+
 === dist/engine/reads/brands.d.ts ===
 /** Import-leaf brands keep read-side predicates from creating value cycles. */
 export declare const WhereOpBrand: unique symbol;
@@ -3135,6 +3126,54 @@ export declare const is: {
 };
 /** Engine-provided computation refs installed into every engine instance. */
 export declare const standardComputations: readonly ComputationRef[];
+
+=== dist/engine/reads/definition-registry.d.ts ===
+/** Own the definitions and read environments installed in one engine. */
+import type { ReactionDeclaration } from "../reactions/types.ts";
+import type { ComputationRef } from "./computations.ts";
+import type { ReadEnv } from "./env.ts";
+import type { FormerRef } from "./former-nodes.ts";
+import type { FormerIR, ReactionIR, ViewIR } from "./ir.ts";
+import type { RelationView } from "./lines.ts";
+import type { ReadBackEnv } from "./read-back.ts";
+import { type BoundReaction } from "./imported-ir-binding.ts";
+export declare class DefinitionRegistry {
+    private readonly conceptsByName;
+    private readonly computationsByName;
+    private readonly viewsByName;
+    private readonly formersByName;
+    private readonly resolver;
+    private readonly authored;
+    private readonly validator;
+    private readonly binder;
+    private env;
+    constructor();
+    get concepts(): Map<string, object>;
+    registerConcept(name: string, instrumented: object): void;
+    registerComputations(computations: Record<string, ComputationRef>): void;
+    resolveDeclaration(name: string, declaration: ReactionDeclaration): void;
+    indexDeclarationReads(declaration: ReactionDeclaration): void;
+    declareViews(...refs: RelationView[]): void;
+    declareFormers(...refs: FormerRef[]): void;
+    registerViews(views: ViewIR[]): void;
+    registerFormers(formers: FormerIR[]): void;
+    bindReaction(reaction: ReactionIR): BoundReaction;
+    assertFormable(ref: FormerRef): void;
+    assertViewUsable(ref: RelationView): void;
+    formerRefs(): Iterable<FormerRef>;
+    formerNamed(name: string): FormerRef | undefined;
+    viewRefs(): Iterable<RelationView>;
+    viewNamed(name: string): RelationView | undefined;
+    readBackEnv(): ReadBackEnv;
+    readEnv(): ReadEnv;
+    private conceptNamed;
+    private computationNamed;
+    private indexView;
+    private indexFormer;
+    private registerUniqueView;
+    private registerUniqueFormer;
+    private registerUnique;
+}
 
 === dist/engine/reads/env.d.ts ===
 /**
@@ -3470,6 +3509,42 @@ export { structurallyEqual } from "./value-equality.ts";
 export declare function distinctFrames(frames: Frames): Frames;
 export declare class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
     constructor(...frames: TFrame[]);
+}
+
+=== dist/engine/reads/imported-ir-binding.d.ts ===
+/** Bind portable read and reaction IR to one engine's installed definitions. */
+import type { NameResolver } from "../reactions/resolving.ts";
+import type { StepNode, TriggerPattern, WhereFn } from "../reactions/types.ts";
+import type { FormerRef } from "./former-nodes.ts";
+import type { FormerIR, ReactionIR, ViewIR, WhereOpIR } from "./ir.ts";
+import type { RelationView } from "./lines.ts";
+import type { EarlierOp } from "./where-ops.ts";
+export type BoundWhereOp = Exclude<WhereOpIR, {
+    op: "earlier";
+}> | EarlierOp;
+export interface BoundReaction {
+    name: string;
+    when: TriggerPattern[];
+    whereOps?: BoundWhereOp[];
+    whereFn?: WhereFn;
+    step: StepNode;
+}
+export declare class ImportedIrBinder {
+    private readonly definitions;
+    constructor(definitions: {
+        resolver: NameResolver;
+        formerNamed(name: string): FormerRef | undefined;
+        assertPatternUsable(pattern: unknown, site: string, kind: "Former" | "View" | "Reaction"): void;
+        assertOpUsable(op: import("./ir.ts").ViewOpIR, site: string, kind: "Former" | "View" | "Reaction"): void;
+    });
+    bindReaction(reaction: ReactionIR): BoundReaction;
+    assertViewDag(views: ViewIR[]): void;
+    bindView(ir: ViewIR): RelationView;
+    bindFormer(ir: FormerIR): FormerRef;
+    private bindActionTrigger;
+    private bindTrigger;
+    private assertConsequenceUsable;
+    private assertBindingPartitions;
 }
 
 === dist/engine/reads/ir.d.ts ===
@@ -4015,191 +4090,37 @@ export declare function readBackFormer(former: FormerIR, env: ReadBackEnv): stri
 export declare function readBackApp(views: readonly ViewIR[], formers: readonly FormerIR[], reactions: readonly ReactionIR[], env: ReadBackEnv): string;
 
 === dist/engine/reads/registering.d.ts ===
-/**
- * Bind reaction, view, and former IR to one engine's concepts and computations.
- * Registration validates names, bindings, promises, and attached opaque
- * functions before evaluation. Authored computations must use the installed
- * reference; imported computations resolve by name. Imported opaque functions
- * are rejected because JSON does not carry their implementation.
- */
-import type { ReactionDeclaration, StepNode, TriggerPattern, WhereFn } from "../reactions/types.ts";
+/** Stable facade over engine-scoped definition registration and IR binding. */
+import type { ReactionDeclaration } from "../reactions/types.ts";
 import type { ComputationRef } from "./computations.ts";
-import type { FormerRef } from "./former-nodes.ts";
-import type { FormerIR, ReactionIR, ViewIR, WhereOpIR } from "./ir.ts";
 import type { ReadEnv } from "./env.ts";
-import type { ReadBackEnv } from "./read-back.ts";
+import type { FormerRef } from "./former-nodes.ts";
+import type { FormerIR, ReactionIR, ViewIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
-import type { EarlierOp } from "./where-ops.ts";
-/** A where op as a bound reaction executes it: the IR, plus bound `earlier` reads. */
-export type BoundWhereOp = Exclude<WhereOpIR, {
-    op: "earlier";
-}> | EarlierOp;
-/**
- * One reaction bound against a registry: the IR's names resolved to live
- * trigger and consequence actions, its where ops validated and ready for
- * leaf-agnostic evaluation, and a closure-based `where` recovered from the
- * reaction's {@link LIVE} channel.
- */
-export interface BoundReaction {
-    name: string;
-    when: TriggerPattern[];
-    whereOps?: BoundWhereOp[];
-    whereFn?: WhereFn;
-    step: StepNode;
-}
+import type { ReadBackEnv } from "./read-back.ts";
+export type { BoundReaction, BoundWhereOp } from "./imported-ir-binding.ts";
+import type { BoundReaction } from "./imported-ir-binding.ts";
 export declare class Registry {
-    /** Instrumented concepts by canonical name — instrumentation writes, resolution reads. */
+    private readonly definitions;
     readonly concepts: Map<string, object>;
-    /** Calculations available to this assembly, by vocabulary name. */
-    private readonly computations;
-    /**
-     * Views by name, indexed as reactions referencing them register. Views live
-     * in the application alongside the reactions — engine-scoped, not a module
-     * registry — because a view reads state through this engine's concepts.
-     */
-    private readonly views;
-    /**
-     * Formers by name, indexed as reactions referencing them register (or as
-     * the app declares them for edge/CLI reads). Engine-scoped for the same
-     * reason views are: a former reads state through this engine's concepts.
-     */
-    private readonly formers;
-    /** Formers this engine has validated against its vocabulary — names bind, escapes carried. */
-    private readonly formable;
-    /** Views this engine has validated against its vocabulary. */
-    private readonly usableViews;
-    private env;
-    private readonly resolver;
     constructor();
-    /** Install one assembly's vocabulary-owned calculations. */
+    registerConcept(name: string, instrumented: object): void;
     registerComputations(computations: Record<string, ComputationRef>): void;
-    /** Every former this registry holds, for export beside the reactions. */
-    formerRefs(): Iterable<FormerRef>;
-    /** Resolve every static ref in a freshly authored declaration, in place. */
-    resolveDeclaration(name: string, decl: ReactionDeclaration): void;
-    /** Index every view and former a resolved declaration references. */
-    indexDeclarationReads(decl: ReactionDeclaration): void;
-    /** Declare views no registered reaction consults. Their blocks are already IR. */
+    resolveDeclaration(name: string, declaration: ReactionDeclaration): void;
+    indexDeclarationReads(declaration: ReactionDeclaration): void;
     declareViews(...refs: RelationView[]): void;
-    /** Declare formers no reaction references. Their bodies are already IR. */
     declareFormers(...refs: FormerRef[]): void;
-    /** A registered view, by name — how exports resolve name-only channels. */
-    viewNamed(name: string): RelationView | undefined;
-    /** Every view this registry holds, in registration order. */
-    viewRefs(): Iterable<RelationView>;
-    /** The promise lookups the read-back printer states quantities from. */
-    readBackEnv(): ReadBackEnv;
-    /** The environment used to resolve registered names during evaluation. */
-    readEnv(): ReadEnv;
-    /**
-     * Validate one former against this engine's vocabulary, once: every query
-     * and computation name binds, every opaque escape carries its
-     * definition-site live value, every name-only view or fragment is already
-     * registered. Registration and direct evaluation both pass through here,
-     * so an evaluation-time miss is impossible rather than merely unlikely.
-     */
-    assertFormable(ref: FormerRef): void;
-    /** Validate a former's sequential scopes from its registered IR. */
-    private assertFormerBindings;
-    /**
-     * Validate one view against this engine's vocabulary, once — the same
-     * contract {@link assertFormable} keeps for formers: names bind, opaque
-     * escapes carry their definition-site live values, and the views it rests
-     * on are themselves usable (carried at definition, or already registered).
-     * Each block is scheduled (conjunction is orderless), and a relation's outs
-     * must be bound by every alternative. Declared cardinality is checked when
-     * the view is read.
-     */
-    assertViewUsable(ref: RelationView): void;
-    /** The declared promise of a query or view line. */
-    private lineRefPromise;
-    /**
-     * The unused-opened-name lint: a name a line opens and nothing reads —
-     * no later line, no consequence, no declared output — is an error; omit
-     * the key instead. `extra` lists the names the surrounding shape consumes
-     * (a reaction's consequence inputs, a view's declared outs).
-     */
-    private lintOpenedNames;
-    /** One IR op's names bind here, and its opaque escapes carry their live values. */
-    private assertOpUsable;
-    /** Every opaque `$is` marker in a pattern must carry its definition-site matcher. */
-    private assertPatternUsable;
-    /** Swap a pattern's static action ref for the live instrumented action. */
-    private resolveActionPatternRefs;
-    /** The live instrumented query a static query ref names (identity for live queries). */
-    private liveQueryOf;
-    /**
-     * Resolve one authored where op: a static query ref becomes the live
-     * instrumented query (the op rebuilt in place, brand kept), an authored
-     * computation must be the installed reference, an `earlier` read's action
-     * ref resolves in place. A view line is already data and passes through
-     * whole.
-     */
-    private resolveAuthoredOp;
-    /** Vocabulary refs must belong to this assembly. */
-    private resolveAuthoredComputation;
-    /** Resolve refs through a then pipeline: step actions and transforms. */
-    private resolveThenNodes;
-    /**
-     * The one idempotency guard behind view and former registration: a sentence
-     * names at most one definition. Returns `true` when the name is free and the
-     * caller should install `candidate`. Registering the same reference, or one
-     * that serializes identically, returns `false` — the existing registration
-     * remains registered and the caller does nothing. A different definition under
-     * a name already taken is the error two `${kind}`s may not license: they
-     * would disagree about what one sentence means (`elaborate` appends that
-     * clause, as the index sites spell it out and the IR sites do not).
-     */
-    private registerUnique;
-    /**
-     * Index every view a declaration references (through `keep`, in the reaction's
-     * own where or a step's), plus the views those rest on. Two views may share
-     * a sentence only when they mean the same thing — same serialized
-     * definition — so concept instances can be rebuilt without collisions while
-     * two genuinely different definitions of one sentence stay an error.
-     */
-    private indexDeclaredViews;
-    /** Index every former a declaration's then inputs reference. */
-    private indexDeclaredFormers;
-    private indexView;
-    private indexFormer;
-    private bindActionTrigger;
-    private bindTrigger;
-    /** A consequence input's `$former` references must be carried or registered. */
-    private assertConsequenceUsable;
-    /**
-     * Bind one reaction's IR against this registry: trigger and consequence
-     * actions resolve to their live instrumented members, where ops are
-     * validated (names bind; opaque escapes must carry their definition-site
-     * live values), and `earlier` reads bind their action patterns. The IR
-     * itself is what executes — binding adds liveness, never a second form.
-     */
-    bindReaction(reaction: ReactionIR): BoundReaction;
-    /** A registered former, by sentence — how consequence `$former` markers fuse. */
-    formerNamed(name: string): FormerRef | undefined;
-    /**
-     * Register views from their exported IR — which is the registered form
-     * itself, dependencies first. Concept and computation references are
-     * validated by name, a nested view by its sentence against the views
-     * already registered here — which is also what keeps a crafted cycle out:
-     * a view can only rest on views that already exist.
-     */
     registerViews(views: ViewIR[]): void;
-    /**
-     * Views form a DAG. The authored API prevents a direct cycle because a view
-     * can only use existing references; batch registration checks the named
-     * graph outright and prints any cycle it finds.
-     */
-    private assertViewDag;
-    /**
-     * Register formers from their exported IR — which is the registered form
-     * itself. Concept and query references are validated by name. Every view
-     * named inside a selection, including its dependencies, must already be
-     * registered; spliced fragments resolve against registered formers.
-     */
     registerFormers(formers: FormerIR[]): void;
-    /** Validate explicit binding partitions on imported relation IR. */
-    private assertBindingPartitions;
+    bindReaction(reaction: ReactionIR): BoundReaction;
+    assertFormable(ref: FormerRef): void;
+    assertViewUsable(ref: RelationView): void;
+    formerRefs(): Iterable<FormerRef>;
+    formerNamed(name: string): FormerRef | undefined;
+    viewRefs(): Iterable<RelationView>;
+    viewNamed(name: string): RelationView | undefined;
+    readBackEnv(): ReadBackEnv;
+    readEnv(): ReadEnv;
 }
 
 === dist/engine/reads/render.d.ts ===
@@ -4424,6 +4345,34 @@ export declare function viewChannelsOfView(ref: {
 }): FormerChannel<RelationView>[];
 /** Every view referenced by reactions and formers, transitively. */
 export declare function collectViews(reactions: Iterable<ReactionIR[]>, formers?: Iterable<FormerRef>, viewOf?: (name: string) => RelationView | undefined): RelationView[];
+
+=== dist/engine/reads/view-former-validation.d.ts ===
+/** Validate registered views and formers against one assembly's read vocabulary. */
+import type { NameResolver } from "../reactions/resolving.ts";
+import type { ComputationRef } from "./computations.ts";
+import type { FormerRef } from "./former-nodes.ts";
+import type { ViewOpIR } from "./ir.ts";
+import type { RelationView } from "./lines.ts";
+type DefinitionKind = "Former" | "View" | "Reaction";
+export declare class ViewFormerValidator {
+    private readonly definitions;
+    private readonly formable;
+    private readonly usableViews;
+    constructor(definitions: {
+        resolver: NameResolver;
+        viewNamed(name: string): RelationView | undefined;
+        formerNamed(name: string): FormerRef | undefined;
+        resolveAuthoredComputation(ref: ComputationRef, site: string): ComputationRef;
+    });
+    assertFormable(ref: FormerRef): void;
+    assertViewUsable(ref: RelationView): void;
+    assertOpUsable(op: ViewOpIR, site: string, kind: DefinitionKind): void;
+    assertPatternUsable(pattern: unknown, site: string, kind: DefinitionKind): void;
+    private assertFormerBindings;
+    private lineRefPromise;
+    private lintOpenedNames;
+}
+export {};
 
 === dist/engine/reads/view-lowering.d.ts ===
 /** Lower authored view blocks and serialize registered relation views. */

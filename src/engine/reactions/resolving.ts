@@ -9,13 +9,31 @@ function diagnosticSite(site: string): string {
 
 /** Resolves vocabulary names against one assembly's installed referents. */
 export class NameResolver {
+  private readonly definitions: {
+    conceptNamed(name: string): object | undefined;
+    computationNamed(name: string): ComputationRef | undefined;
+  };
+
   constructor(
-    private readonly concepts: Map<string, object>,
-    private readonly computations: Map<string, ComputationRef>,
-  ) {}
+    definitions:
+      | Map<string, object>
+      | {
+          conceptNamed(name: string): object | undefined;
+          computationNamed(name: string): ComputationRef | undefined;
+        },
+    computations?: Map<string, ComputationRef>,
+  ) {
+    this.definitions =
+      definitions instanceof Map
+        ? {
+            conceptNamed: (name) => definitions.get(name),
+            computationNamed: (name) => computations?.get(name),
+          }
+        : definitions;
+  }
 
   concept(name: string, site: string): object {
-    const concept = this.concepts.get(name);
+    const concept = this.definitions.conceptNamed(name);
     if (concept === undefined) {
       throw new Error(
         `${diagnosticSite(site)}: no instrumented concept is named "${name}" — instrument it before registering reactions.`,
@@ -58,7 +76,7 @@ export class NameResolver {
   }
 
   computation(name: string, site: string, vocabularyOnly = false): ComputationRef {
-    const computation = this.computations.get(name);
+    const computation = this.definitions.computationNamed(name);
     if (computation === undefined) {
       throw new Error(`${diagnosticSite(site)}: computation "${name}" is not registered.`);
     }

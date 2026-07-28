@@ -47,7 +47,7 @@ export interface InstrumentationState {
   scheduler: ActionScheduling;
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
-  conceptsByName: Map<string, object>;
+  registerConcept(name: string, instrumented: object): void;
   execution?: { action(flow: string): boolean };
   react(record: ActionRecord, durationMs?: number): Promise<void>;
   emit(record: ActionRecord, durationMs?: number): void;
@@ -303,16 +303,7 @@ export function instrumentConcept<T extends object>(
   });
 
   state.rawConceptsByInstrumented.set(instrumentedConcept, concept);
-  const conceptName = conceptNameOf(concept);
-  if (
-    state.conceptsByName.has(conceptName) &&
-    state.conceptsByName.get(conceptName) !== instrumentedConcept
-  ) {
-    logger.warn(
-      `Two concepts share the name "${conceptName}" — exported reactions naming it will resolve to the most recently instrumented one.`,
-    );
-  }
-  state.conceptsByName.set(conceptName, instrumentedConcept);
+  state.registerConcept(conceptNameOf(concept), instrumentedConcept);
   return instrumentedConcept;
 }
 
@@ -337,4 +328,68 @@ export function instrument(
     }
   }
   return instrumentConcept(state, concepts);
+}
+
+/** Owns the mutable proxy identities and query caches for one engine. */
+export class ConceptInstrumentation {
+  private readonly boundActionsByConcept = new WeakMap<
+    object,
+    Map<AnyAction, InstrumentedAction>
+  >();
+  private readonly queryCaches = new WeakMap<object, Array<{ invalidate: () => void }>>();
+  private readonly rawConceptsByInstrumented = new WeakMap<object, object>();
+  private readonly concepts = new Set<WeakRef<object>>();
+
+  constructor(
+    private readonly dependencies: {
+      actions: ActionConcept;
+      scheduler: ActionScheduling;
+      execution?: { action(flow: string): boolean };
+      react(record: ActionRecord, durationMs?: number): Promise<void>;
+      emit(record: ActionRecord, durationMs?: number): void;
+      registerConcept(name: string, instrumented: object): void;
+    },
+  ) {}
+
+  instrumentConcept<T extends object>(concept: T, name?: string): T {
+    return instrumentConcept(this.state(), concept, name);
+  }
+
+  instrument<T extends Record<string, object>>(concepts: T): T;
+  instrument<T extends object>(concept: T): T;
+  instrument(concepts: Record<string, object> | object): Record<string, object> | object {
+    return instrument(this.state(), concepts);
+  }
+
+  invalidate(concept: object): void {
+    const raw = this.rawConceptsByInstrumented.get(concept) ?? concept;
+    this.queryCaches.get(raw)?.forEach((cache) => cache.invalidate());
+  }
+
+  invalidateAll(): void {
+    for (const ref of this.concepts) {
+      const concept = ref.deref();
+      if (concept !== undefined) this.invalidate(concept);
+      else this.concepts.delete(ref);
+    }
+  }
+
+  rawConceptOf(instrumented: object): object {
+    return this.rawConceptsByInstrumented.get(instrumented) ?? instrumented;
+  }
+
+  private state(): InstrumentationState {
+    return {
+      actions: this.dependencies.actions,
+      boundActionsByConcept: this.boundActionsByConcept,
+      queryCaches: this.queryCaches,
+      scheduler: this.dependencies.scheduler,
+      rawConceptsByInstrumented: this.rawConceptsByInstrumented,
+      concepts: this.concepts,
+      execution: this.dependencies.execution,
+      react: this.dependencies.react,
+      emit: this.dependencies.emit,
+      registerConcept: this.dependencies.registerConcept,
+    };
+  }
 }

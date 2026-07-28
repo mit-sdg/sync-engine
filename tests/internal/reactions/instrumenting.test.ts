@@ -24,7 +24,7 @@ describe("concept instrumentation", () => {
       scheduler: new ActionScheduler(),
       rawConceptsByInstrumented: new WeakMap(),
       concepts: new Set(),
-      conceptsByName: new Map(),
+      registerConcept: () => {},
       react: async () => {},
       emit: () => {},
     };
@@ -48,7 +48,7 @@ describe("concept instrumentation", () => {
       scheduler: new ActionScheduler(),
       rawConceptsByInstrumented: new WeakMap(),
       concepts: new Set(),
-      conceptsByName: new Map(),
+      registerConcept: () => {},
       react: async () => {},
       emit: () => {},
     };

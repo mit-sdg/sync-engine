@@ -10,13 +10,13 @@ import { formTree } from "@engine/reads/former-evaluation";
 import { inventoryOf } from "../concepts/introspect.ts";
 
 export function exportReactions(state: {
-  loweredReactions: Map<string, ReactionIR[]>;
-  unloweredReactions: Map<string, string>;
+  loweredReactions: Iterable<ReactionIR[]>;
+  unloweredReactions: Iterable<[string, string]>;
   registry: Registry;
 }): AppIR {
   const app = serializeApp(
-    state.loweredReactions.values(),
-    state.unloweredReactions.entries(),
+    state.loweredReactions,
+    state.unloweredReactions,
     state.registry.formerRefs(),
     (name) => state.registry.viewNamed(name),
   );
@@ -28,11 +28,11 @@ export function exportReactions(state: {
 
 export function exportConcepts(state: {
   registry: Registry;
-  rawConceptsByInstrumented: WeakMap<object, object>;
+  rawConceptOf(instrumented: object): object;
 }): ConceptInventoryIR[] {
   const inventories: ConceptInventoryIR[] = [];
   for (const instrumented of state.registry.concepts.values()) {
-    const raw = state.rawConceptsByInstrumented.get(instrumented) ?? instrumented;
+    const raw = state.rawConceptOf(instrumented);
     inventories.push(inventoryOf(raw));
   }
   return inventories;
@@ -47,7 +47,7 @@ export function readBack(state: { registry: Registry; exportReactions(): AppIR }
 export function renderApp(
   state: {
     registry: Registry;
-    rawConceptsByInstrumented: WeakMap<object, object>;
+    rawConceptOf(instrumented: object): object;
     exportReactions(): AppIR;
   },
   title = "Application",

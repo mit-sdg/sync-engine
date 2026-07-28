@@ -73,4 +73,7 @@ if (result.failures.length > 0) {
   );
 }
 
-console.log(`architecture check passed for ${repository.length} repository files`);
+console.log(
+  `architecture check passed for ${repository.length} repository files; ` +
+    `${result.runtimeCycles.length} runtime import SCCs`,
+);
