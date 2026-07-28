@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { Logging, Reacting } from "@sync-engine/internal/reactions";
-import { configureRedaction, redact, UNIVERSAL_SENSITIVE_PATTERNS } from "@sync-engine/utils";
+import { Logging, Reacting, vocabulary } from "@sync-engine/internal/reactions";
+import type { Vars } from "@sync-engine/internal/reactions";
+import { assemble, endpoint, receive, respond } from "@sync-engine/internal/boundary";
+import {
+  configureRedaction,
+  createRedactor,
+  redact,
+  UNIVERSAL_SENSITIVE_PATTERNS,
+} from "@sync-engine/utils";
 
 // The framework owns only the universal credential patterns; domain fields
 // (PII, financials) are the app's policy and are tested app-side. Each test
@@ -42,6 +49,16 @@ describe("redact — universal credential patterns (no policy registered)", () =
 });
 
 describe("redact — injected redaction policy", () => {
+  test("an immutable redactor is independent of later process policy changes", () => {
+    const scoped = createRedactor({ fields: ["privateField"] });
+    configureRedaction({ fields: ["otherField"] });
+
+    expect(scoped.redact({ privateField: "a", otherField: "b" })).toEqual({
+      privateField: "[redacted]",
+      otherField: "b",
+    });
+  });
+
   test("redacts exact domain field names once registered", () => {
     configureRedaction({ fields: ["email", "amount", "fatherName"] });
     const result = redact({
@@ -83,6 +100,48 @@ describe("redact — injected redaction policy", () => {
     configureRedaction({ fields: ["searchname"] });
     const result = redact({ searchName: "Alisa" }) as Record<string, unknown>;
     expect(result.searchName).toBe("[redacted]");
+  });
+});
+
+describe("assembly-scoped redaction", () => {
+  test("simultaneous assemblies do not mix domain field policies", async () => {
+    class RecordingConcept {
+      write({ alpha, beta }: { alpha: string; beta: string }) {
+        return { alpha, beta };
+      }
+    }
+    const words = vocabulary({ concepts: { Recording: RecordingConcept }, computations: {} });
+    const { Recording } = words.concepts;
+    const Write = endpoint("/write", ({ alpha, beta }: Vars) =>
+      receive({ alpha, beta })
+        .then(Recording.write({ alpha, beta }).responds())
+        .then(respond({ ok: true })),
+    );
+    const alphaApp = assemble({
+      vocabulary: words,
+      composition: { Write },
+      redaction: { fields: ["alpha"] },
+      retention: "keepAll",
+    });
+    const betaApp = assemble({
+      vocabulary: words,
+      composition: { Write },
+      redaction: { fields: ["beta"] },
+      retention: "keepAll",
+    });
+
+    await Promise.all([
+      alphaApp.invoker.invoke("/write", { alpha: "a", beta: "b" }),
+      betaApp.invoker.invoke("/write", { alpha: "a", beta: "b" }),
+    ]);
+    const alphaRecord = [...alphaApp.engine.Action.actions.values()].find(
+      ({ input }) => input.alpha !== undefined,
+    );
+    const betaRecord = [...betaApp.engine.Action.actions.values()].find(
+      ({ input }) => input.beta !== undefined,
+    );
+    expect(alphaRecord?.input).toMatchObject({ alpha: "[redacted]", beta: "b" });
+    expect(betaRecord?.input).toMatchObject({ alpha: "a", beta: "[redacted]" });
   });
 });
 

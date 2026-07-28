@@ -377,6 +377,20 @@ overload or drain returns `UNAVAILABLE` and creates no root action occurrence.
 An accepted flow that exceeds an action, firing, or row budget records integrity
 evidence and follows interpreter-failure settlement as opaque `INTERNAL_ERROR`.
 
+Ordinary assembly and gateway options accept operational observers. The stable
+event union reports action settlement, interpreter and integrity failure,
+invocation settlement, execution-limit breach, and drain state. Applicable
+events carry action id, flow, route, asking reaction, correlation id, safe
+result class, wall-clock time, and monotonic duration. They never carry action
+input or output. Observer callbacks are synchronous bounded handoff: the engine
+catches throws and never awaits observer work, while queueing, exporting, and
+network I/O remain host responsibilities.
+
+HTTP handlers may resolve an inbound correlation id and project the effective
+value in a response header. Invalid or faulting resolver results become a fresh
+UUID. Correlation follows gateway and application observation; it does not
+deduplicate work and is not an idempotency key.
+
 An HTTP floor may bind one logical credential input to a cookie. The application
 declares the credential name and input, the endpoint that issues it and the
 returned token and expiry fields, the successful endpoints that clear it, and
@@ -587,8 +601,9 @@ its `LogStore`, which folds them into indexes for matching and inspection.
 Retention may evict indexed entries, so no assembly promises to retain every
 occurrence forever.
 
-The configured field-name redaction policy applies before entries reach a
-store, observer, or inspection summary. During an active causal flow, the
+Each ordinary assembly snapshots its own field-name redaction policy before
+entries reach a store, observer, or inspection summary. One assembly's domain
+fields cannot change another's policy. During an active causal flow, the
 interpreter privately retains original values for execution and matching, then
 clears them when the outermost action settles. Ordinary process logs omit
 exception messages, stacks, causes, and attached fields. `serializeError(...)`
@@ -598,12 +613,13 @@ diagnostic channel, not an automatic public error envelope.
 
 Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
 most recent settled causal flows. Its `retention` option can select another
-window, `"keepAll"`, or `"evictConsumed"`; the standard gateway has the same
-independent option and default. Automatic window enforcement does not evict an
+window, `"keepAll"`, or `"evictConsumed"`; `logStore` installs an
+application-owned store instead and is mutually exclusive with `retention`.
+The standard gateway has the same independent options and default. Automatic window enforcement does not evict an
 active flow, so active flows may temporarily exceed a window. Explicit
 `evictFlow` calls and custom stores are outside that protection. Advanced
-callers may pass a `FileStore`
-or custom `LogStore` to `createEngine(store?)`. `FileStore` appends JSONL;
+callers may also pass a `FileStore` or custom `LogStore` to
+`createEngine(store?)`. `FileStore` appends JSONL;
 retention trims its in-memory fold without rewriting that file.
 `PersistingConcept` manages an application-supplied store registry; it does not
 bind concept state or install an assembly log store.

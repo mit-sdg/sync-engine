@@ -1,6 +1,8 @@
 /** The standard gateway. */
 import type { LogStore, RetentionPolicy } from "@engine/reactions/runtime/log-store";
 import type { Logging } from "@engine/reactions/runtime/logging";
+import type { OperationalObserver } from "@engine/reactions/runtime/operational";
+import type { RedactionPolicy } from "@engine/utils/redaction";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Invoker } from "../invocation/invoke.ts";
@@ -29,6 +31,10 @@ export interface GatewayOptions {
   logStore?: LogStore;
   /** Opt-in limits for the gateway's own execution. */
   executionLimits?: ExecutionLimits;
+  /** Bounded synchronous handoff for the gateway's operational events. */
+  observers?: readonly OperationalObserver[];
+  /** Additional sensitive field names for the gateway only. */
+  redaction?: RedactionPolicy;
 }
 
 export interface Gateway<C extends ContractShape> extends Invoker<C> {
@@ -48,6 +54,8 @@ export function createGateway<C extends ContractShape = ContractShape>(
     ...(options.retention === undefined ? {} : { retention: options.retention }),
     ...(options.logStore === undefined ? {} : { logStore: options.logStore }),
     ...(options.executionLimits === undefined ? {} : { executionLimits: options.executionLimits }),
+    ...(options.observers === undefined ? {} : { observers: options.observers }),
+    ...(options.redaction === undefined ? {} : { redaction: options.redaction }),
   });
   return {
     invoke: gateway.invoke.bind(gateway),

@@ -37,19 +37,42 @@ export class RuntimeLifecycle {
   private readonly firingCounts = new Map<string, number>();
   private readonly idleWaiters = new Set<() => void>();
   private draining = false;
+  private drainIdleEmitted = false;
 
-  constructor(readonly limits?: ExecutionLimits) {
+  constructor(
+    readonly limits?: ExecutionLimits,
+    readonly events: OperationalEvents = new OperationalEvents(),
+  ) {
     if (limits !== undefined) assertExecutionLimits(limits);
   }
 
-  admit(flow: string): AdmissionRejection | undefined {
+  admit(flow: string, route: string, correlationId: string): AdmissionRejection | undefined {
     if (this.draining) return "draining";
     if (this.limits !== undefined && this.active.size >= this.limits.maxActiveRootFlows) {
+      this.events.emit({
+        type: "execution-limit-breached",
+        at: Date.now(),
+        flow,
+        route,
+        correlationId,
+        limit: "active-root-flows",
+        accepted: false,
+      });
       return "active-flow-limit";
     }
     if (this.limits !== undefined && this.pending.size >= this.limits.maxPendingRequests) {
+      this.events.emit({
+        type: "execution-limit-breached",
+        at: Date.now(),
+        flow,
+        route,
+        correlationId,
+        limit: "pending-requests",
+        accepted: false,
+      });
       return "pending-request-limit";
     }
+    this.events.setContext(flow, { route, correlationId });
     this.active.add(flow);
     this.pending.add(flow);
     return undefined;
@@ -57,11 +80,13 @@ export class RuntimeLifecycle {
 
   pendingSettled(flow: string): void {
     this.pending.delete(flow);
+    this.clearSettledContext(flow);
   }
 
   flowSettled(flow: string): void {
     this.clearFlowCounts(flow);
     if (!this.active.delete(flow)) return;
+    this.clearSettledContext(flow);
     this.resolveIdle();
   }
 
@@ -69,11 +94,16 @@ export class RuntimeLifecycle {
     this.pending.delete(flow);
     this.clearFlowCounts(flow);
     if (!this.active.delete(flow)) return;
+    this.events.clearContext(flow);
     this.resolveIdle();
   }
 
   beginDrain(): Promise<void> {
-    this.draining = true;
+    if (!this.draining) {
+      this.draining = true;
+      this.events.emit({ type: "drain-state", state: "draining", at: Date.now() });
+    }
+    if (this.active.size === 0) this.emitDrainIdle();
     return this.whenIdle();
   }
 
@@ -114,10 +144,22 @@ export class RuntimeLifecycle {
     if (this.active.size !== 0) return;
     for (const resolve of this.idleWaiters) resolve();
     this.idleWaiters.clear();
+    if (this.draining) this.emitDrainIdle();
   }
 
   private clearFlowCounts(flow: string): void {
     this.actionCounts.delete(flow);
     this.firingCounts.delete(flow);
   }
+
+  private clearSettledContext(flow: string): void {
+    if (!this.active.has(flow) && !this.pending.has(flow)) this.events.clearContext(flow);
+  }
+
+  private emitDrainIdle(): void {
+    if (this.drainIdleEmitted) return;
+    this.drainIdleEmitted = true;
+    this.events.emit({ type: "drain-state", state: "idle", at: Date.now() });
+  }
 }
+import { OperationalEvents } from "@engine/reactions/runtime/operational";

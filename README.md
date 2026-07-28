@@ -112,6 +112,7 @@ The ordinary assembly provides these guarantees:
   represent;
 - optional execution profiles bound admission and accepted causal work;
 - assemblies and gateways stop admission and report actual idle state;
+- stable operational events carry route and correlation without application values;
 - handled client and boundary failures resolve as typed result envelopes.
 
 The ordinary assembly does not provide transactions across actions, rollback,

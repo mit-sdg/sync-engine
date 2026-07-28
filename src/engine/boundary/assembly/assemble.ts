@@ -37,6 +37,8 @@ import {
 } from "@engine/reactions/runtime/log-store";
 import { Logging } from "@engine/reactions/runtime/logging";
 import type { EngineObserver } from "@engine/reactions/runtime/observer";
+import { OperationalEvents } from "@engine/reactions/runtime/operational";
+import type { OperationalObserver } from "@engine/reactions/runtime/operational";
 import { Reacting } from "@engine/reactions/runtime/reacting";
 import type {
   Mapping,
@@ -52,6 +54,8 @@ import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
 import { isRelationView } from "@engine/reads/lines";
 import type { RelationView } from "@engine/reads/lines";
 import { logger } from "@engine/utils/logger";
+import { createRedactor } from "@engine/utils/redaction";
+import type { RedactionPolicy } from "@engine/utils/redaction";
 import { brand, hasBrand } from "@engine/reads/brands";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
@@ -191,6 +195,10 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
   logStore?: LogStore;
   /** Opt-in production execution limits. */
   executionLimits?: ExecutionLimits;
+  /** Bounded synchronous handoff for stable operational events. */
+  observers?: readonly OperationalObserver[];
+  /** Additional sensitive field names for this assembly only. */
+  redaction?: RedactionPolicy;
 }
 
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
@@ -272,9 +280,11 @@ export function assemble<T extends Record<string, ConceptClass>>(
   if (options.logStore !== undefined && options.retention !== undefined) {
     throw new Error("assemble: logStore and retention cannot both be supplied.");
   }
-  const lifecycle = new RuntimeLifecycle(options.executionLimits);
+  const operational = new OperationalEvents(options.observers);
+  const lifecycle = new RuntimeLifecycle(options.executionLimits, operational);
   const store = options.logStore ?? new MemoryStore(options.retention ?? { window: 100 });
-  const engine = new Reacting(new ActionConcept(store), lifecycle);
+  const redactor = createRedactor(options.redaction);
+  const engine = new Reacting(new ActionConcept(store, operational, redactor), lifecycle);
   engine.logging = options.logging ?? Logging.OFF;
   engine.registerComputations(vocabularyComputations(options.vocabulary));
 

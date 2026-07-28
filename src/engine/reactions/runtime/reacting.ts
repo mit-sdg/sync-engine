@@ -55,7 +55,7 @@ import { varKeyOf } from "@engine/reads/frames";
 import { hasMarkerKey, liveOf } from "@engine/reads/ir";
 import type { FiringRecord, ReactionFailureRecord } from "./log-store.ts";
 import { Frames } from "@engine/reads/frames";
-import { actionNameOf } from "../concepts/introspect.ts";
+import { actionNameOf, conceptNameOf } from "../concepts/introspect.ts";
 import type { EngineObserver } from "./observer.ts";
 import { FiringBook, type FiringBranch, type FiringFill } from "./firing.ts";
 import {
@@ -156,12 +156,16 @@ export class Reacting {
   ) {
     this.Action = actionConcept;
     this.execution = execution;
-    this.reactionLogger = new ReactionLogger(actionConcept);
-    this.firingBook = new FiringBook(actionConcept.store, (flow) => {
-      if (this.execution?.firing(flow) !== false) return;
-      this.recordExecutionLimit(flow, "firings");
-      throw new Error("The flow exceeded its firing limit.");
-    });
+    this.reactionLogger = new ReactionLogger(actionConcept, actionConcept.redactor);
+    this.firingBook = new FiringBook(
+      actionConcept.store,
+      (flow) => {
+        if (this.execution?.firing(flow) !== false) return;
+        this.recordExecutionLimit(flow, "firings");
+        throw new Error("The flow exceeded its firing limit.");
+      },
+      actionConcept.redactor,
+    );
   }
 
   /** Register an engine observer. Returns a function to unregister it. */
@@ -561,6 +565,28 @@ export class Reacting {
    * that action whose `when` matches within the action's flow.
    */
   async react(record: ActionRecord, durationMs?: number): Promise<void> {
+    if (durationMs !== undefined && record.id !== undefined) {
+      const stored = this.Action._getById(record.id);
+      const result =
+        stored?.fault !== undefined
+          ? "fault"
+          : stored?.outcome?.kind === "error"
+            ? "refusal"
+            : "success";
+      this.Action.operational?.emit(
+        this.Action.operational.withContext(record.flow, {
+          type: "action-settled",
+          at: Date.now(),
+          flow: record.flow,
+          actionId: record.id,
+          concept: conceptNameOf(record.concept),
+          action: actionNameOf(record.action),
+          ...(record.by === undefined ? {} : { reaction: record.by }),
+          result,
+          durationMs,
+        }),
+      );
+    }
     this.reactionLogger.action(record, durationMs);
 
     const actionReactions = this.reactionsByAction.get(record.action as InstrumentedAction);

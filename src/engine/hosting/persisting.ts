@@ -25,7 +25,9 @@ import {
   type RetentionPolicy,
 } from "@engine/reactions/runtime/log-store";
 import type { ActionOutcome } from "@engine/reactions/types";
-import { redact } from "@engine/utils/redaction";
+import { createRedactor } from "@engine/utils/redaction";
+
+const fileRedactor = createRedactor();
 
 /** A long-lived resource that a host can stop during shutdown. */
 export interface Stoppable {
@@ -67,22 +69,32 @@ function persistedEntryOf(entry: LogEntry): PersistedEntry {
         flow: entry.record.flow,
         concept: conceptNameOf(entry.record.concept),
         action: actionNameOf(entry.record.action),
-        input: redact(entry.record.input),
+        input: fileRedactor.redact(entry.record.input),
       };
     case "outcome":
-      return { kind: "outcome", at: entry.at, id: entry.id, outcome: redact(entry.outcome) };
+      return {
+        kind: "outcome",
+        at: entry.at,
+        id: entry.id,
+        outcome: fileRedactor.redact(entry.outcome),
+      };
     case "firing":
       return {
         kind: "firing",
         at: entry.at,
-        firing: { ...entry.firing, bindings: redact(entry.firing.bindings) },
+        firing: { ...entry.firing, bindings: fileRedactor.redact(entry.firing.bindings) },
       };
     case "reaction-failure":
       return { kind: "reaction-failure", at: entry.at, failure: entry.failure };
     case "integrity-failure":
       return { kind: "integrity-failure", at: entry.at, failure: entry.failure };
     case "fault":
-      return { kind: "fault", at: entry.at, id: entry.id, fault: redact(entry.fault) };
+      return {
+        kind: "fault",
+        at: entry.at,
+        id: entry.id,
+        fault: fileRedactor.redact(entry.fault),
+      };
   }
 }
 

@@ -1,5 +1,6 @@
 import { logger } from "@engine/utils/logger";
 import { redact, serializeError } from "@engine/utils/redaction";
+import type { Redactor } from "@engine/utils/redaction";
 import { inspect } from "@engine/utils/runtime";
 import type { ActionRecord } from "./actions.ts";
 import type { ActionConcept } from "./actions.ts";
@@ -19,7 +20,10 @@ export class ReactionLogger {
   readonly observers = new Set<EngineObserver>();
   level = Logging.OFF;
 
-  constructor(private readonly actions: ActionConcept) {}
+  constructor(
+    private readonly actions: ActionConcept,
+    private readonly redactor: Redactor = { redact },
+  ) {}
 
   addObserver(observer: EngineObserver): () => void {
     this.observers.add(observer);
@@ -35,13 +39,18 @@ export class ReactionLogger {
     const stored = record.id === undefined ? undefined : this.actions._getById(record.id);
     const sourceOutcome = stored?.outcome ?? record.outcome;
     const outcome =
-      sourceOutcome === undefined ? undefined : (redact(sourceOutcome) as ActionOutcome);
+      sourceOutcome === undefined
+        ? undefined
+        : (this.redactor.redact(sourceOutcome) as ActionOutcome);
     const by = record.by ?? stored?.by;
     return {
       concept: conceptNameOf(record.concept),
       action: actionNameOf(record.action),
-      input: redact(stored?.input ?? record.input) as Record<string, unknown>,
-      output: redact(stored?.output ?? record.output ?? {}) as Record<string, unknown>,
+      input: this.redactor.redact(stored?.input ?? record.input) as Record<string, unknown>,
+      output: this.redactor.redact(stored?.output ?? record.output ?? {}) as Record<
+        string,
+        unknown
+      >,
       ...(outcome !== undefined ? { outcome } : {}),
       ...(by !== undefined ? { by } : {}),
       flow: record.flow,
@@ -72,9 +81,9 @@ export class ReactionLogger {
       const { concept, input, output, flow, id, outcome } = record;
       logger.debug("Reacting to action:", {
         concept: concept.constructor.name,
-        input: redact(input),
-        output: redact(output),
-        outcome: redact(outcome),
+        input: this.redactor.redact(input),
+        output: this.redactor.redact(output),
+        outcome: this.redactor.redact(outcome),
         flow,
         actionId: id,
       });
@@ -83,7 +92,7 @@ export class ReactionLogger {
     if (this.level === Logging.TRACE) {
       const { concept, action, input, output } = this.toEvent(record, durationMs ?? 0);
       logger.debug(
-        `\n${concept}.${action} ${inspect(redact(input))} => ${inspect(redact(output))}\n`,
+        `\n${concept}.${action} ${inspect(this.redactor.redact(input))} => ${inspect(this.redactor.redact(output))}\n`,
       );
     }
   }

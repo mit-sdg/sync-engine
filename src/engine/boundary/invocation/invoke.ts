@@ -245,11 +245,34 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
 
   return {
     async invoke(path, input, invokeOpts: InvokeOptions = {}) {
+      const startedAt = performance.now();
+      let requestId: string | undefined;
+      let correlationId = invokeOpts.correlationId;
+      const settle = <T extends InvocationResult>(result: T): T => {
+        const resultClass = result.ok
+          ? "success"
+          : result.error.kind === "domain"
+            ? "domain-error"
+            : "framework-error";
+        lifecycle?.events.emit({
+          type: "invocation-settled",
+          at: Date.now(),
+          ...(requestId === undefined ? {} : { flow: requestId }),
+          route: path,
+          ...(correlationId === undefined ? {} : { correlationId }),
+          result: resultClass,
+          ...(!result.ok && result.error.kind === "framework"
+            ? { frameworkCode: result.error.code }
+            : {}),
+          durationMs: performance.now() - startedAt,
+        });
+        return result;
+      };
       if (isAborted(invokeOpts.signal)) {
-        return frameworkError(FrameworkErrorCode.ABORTED);
+        return settle(frameworkError(FrameworkErrorCode.ABORTED));
       }
       if (routes !== undefined && !routes.has(path)) {
-        return frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`);
+        return settle(frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`));
       }
       refresh?.();
       // Validate the declared outer shape before recording an ask. Required
@@ -260,7 +283,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         if (contract !== undefined) {
           const admitted = admitInput(contract, path, input);
           if (!admitted.ok) {
-            return frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail);
+            return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail));
           }
           input = admitted.admitted as typeof input;
         }
@@ -268,28 +291,32 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         if (inputValidator !== undefined) {
           const validation = validateRuntimeValue(inputValidator, input);
           if (!validation.ok) {
-            return frameworkError(
-              FrameworkErrorCode.INVALID_INPUT,
-              validation.detail ?? `${path} failed runtime validation`,
+            return settle(
+              frameworkError(
+                FrameworkErrorCode.INVALID_INPUT,
+                validation.detail ?? `${path} failed runtime validation`,
+              ),
             );
           }
         }
       } catch {
-        return frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`);
+        return settle(
+          frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`),
+        );
       }
       const DEFAULT_TIMEOUT_MS = 30_000;
       const timeoutMs =
         invokeOpts.timeoutMs ?? lifecycle?.limits?.maxRequestDurationMs ?? DEFAULT_TIMEOUT_MS;
       const timeoutError = deadlinePolicy.validateTimeout(timeoutMs);
       if (timeoutError !== undefined) {
-        return frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError);
+        return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError));
       }
-      const requestId = crypto.randomUUID();
-      const rejection = lifecycle?.admit(requestId);
+      requestId = crypto.randomUUID();
+      correlationId ??= requestId;
+      const rejection = lifecycle?.admit(requestId, path, correlationId);
       if (rejection !== undefined) {
-        return frameworkError(FrameworkErrorCode.UNAVAILABLE);
+        return settle(frameworkError(FrameworkErrorCode.UNAVAILABLE));
       }
-      const correlationId = invokeOpts.correlationId ?? requestId;
 
       let reqFn: (args: Record<string | symbol, unknown>) => unknown;
       let request: Record<string | symbol, unknown>;
@@ -305,11 +332,11 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         };
       } catch {
         lifecycle?.abandon(requestId);
-        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
+        return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
       }
       if (isAborted(invokeOpts.signal)) {
         lifecycle?.abandon(requestId);
-        return frameworkError(FrameworkErrorCode.ABORTED);
+        return settle(frameworkError(FrameworkErrorCode.ABORTED));
       }
 
       let responsePromise: Promise<Record<string, unknown>>;
@@ -321,7 +348,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         });
       } catch {
         lifecycle?.abandon(requestId);
-        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
+        return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
       }
       const response = responsePromise.then(
         (value) => {
@@ -336,7 +363,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       if (isAborted(invokeOpts.signal)) {
         boundary.cancel(requestId);
         lifecycle?.abandon(requestId);
-        return frameworkError(FrameworkErrorCode.ABORTED);
+        return settle(frameworkError(FrameworkErrorCode.ABORTED));
       }
       const dispatch = Promise.resolve()
         .then(() => reqFn(request))
@@ -349,36 +376,41 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       if (first.kind === "dispatch-error") {
         boundary.cancel(requestId);
         lifecycle?.abandon(requestId);
-        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
+        return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
       }
 
       if (first.kind === "response") {
         // Let the causal cascade finish when it can, but an accepted answer is
         // authoritative and cannot wait beyond the caller's original deadline.
         await waitForDispatch(dispatch, deadline, invokeOpts.signal);
-        return fromEnvelope(
-          first.value,
-          frameworkResponses.has(first.value) ? "framework" : "authored",
+        return settle(
+          fromEnvelope(first.value, frameworkResponses.has(first.value) ? "framework" : "authored"),
         );
       }
       const settled = first.kind === "dispatched" ? await response : first;
       if (settled.kind === "response") {
-        return fromEnvelope(
-          settled.value,
-          frameworkResponses.has(settled.value) ? "framework" : "authored",
+        return settle(
+          fromEnvelope(
+            settled.value,
+            frameworkResponses.has(settled.value) ? "framework" : "authored",
+          ),
         );
       }
       try {
         throw settled.error;
       } catch (err) {
         if (err instanceof DOMException) {
-          if (err.name === "TimeoutError") return frameworkError(FrameworkErrorCode.TIMED_OUT);
-          if (err.name === "AbortError") return frameworkError(FrameworkErrorCode.ABORTED);
+          if (err.name === "TimeoutError") {
+            return settle(frameworkError(FrameworkErrorCode.TIMED_OUT));
+          }
+          if (err.name === "AbortError") {
+            return settle(frameworkError(FrameworkErrorCode.ABORTED));
+          }
         }
         if (isAborted(invokeOpts.signal)) {
-          return frameworkError(FrameworkErrorCode.ABORTED);
+          return settle(frameworkError(FrameworkErrorCode.ABORTED));
         }
-        return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
+        return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
       }
     },
   } as Invoker<C>;

@@ -67,6 +67,43 @@ function statusFor(code: unknown, fallback = 400): number {
 
 const MAX_BODY_BYTES = 1_048_576;
 
+export interface HttpCorrelationOptions {
+  resolve(request: Request): string | undefined;
+  responseHeader?: string;
+}
+
+function correlationIdFor(
+  request: Request,
+  options: HttpCorrelationOptions | undefined,
+): string | undefined {
+  if (options === undefined) return undefined;
+  let resolved: string | undefined;
+  try {
+    resolved = options.resolve(request);
+  } catch {
+    resolved = undefined;
+  }
+  if (typeof resolved !== "string" || resolved.length === 0 || resolved.length > 128) {
+    return crypto.randomUUID();
+  }
+  for (let index = 0; index < resolved.length; index++) {
+    const code = resolved.charCodeAt(index);
+    if (code < 32 || code === 127) return crypto.randomUUID();
+  }
+  return resolved;
+}
+
+function withCorrelation(
+  response: Response,
+  correlationId: string | undefined,
+  options: HttpCorrelationOptions | undefined,
+): Response {
+  if (correlationId !== undefined && options?.responseHeader !== undefined) {
+    response.headers.set(options.responseHeader, correlationId);
+  }
+  return response;
+}
+
 type RequestTextResult =
   | { ok: true; text: string }
   | { ok: false; reason: "too_large" | "unreadable" };
@@ -115,12 +152,21 @@ function normalizeBasePath(basePath: string | undefined): string {
 
 export function createHttpHandler(
   options:
-    | { gateway: Invoker<ContractShape>; basePath?: string }
-    | { invoker: Invoker<ContractShape>; basePath?: string }
+    | {
+        gateway: Invoker<ContractShape>;
+        basePath?: string;
+        correlation?: HttpCorrelationOptions;
+      }
+    | {
+        invoker: Invoker<ContractShape>;
+        basePath?: string;
+        correlation?: HttpCorrelationOptions;
+      }
     | {
         gateway: Invoker<ContractShape>;
         application: Assembly<Record<string, new (...args: never[]) => object>>;
         floor: HttpFloor;
+        correlation?: HttpCorrelationOptions;
       },
 ): (request: Request) => Promise<Response> {
   if ("floor" in options) return createFloorHandler(options);
@@ -128,22 +174,29 @@ export function createHttpHandler(
   const target = "gateway" in options ? options.gateway : options.invoker;
 
   return async (request) => {
+    const correlationId = correlationIdFor(request, options.correlation);
+    const reply = (response: Response) =>
+      withCorrelation(response, correlationId, options.correlation);
     if (request.method !== "POST") {
-      return new Response(
-        JSON.stringify({ error: FrameworkErrorCode.BAD_STATUS, detail: "Method not allowed" }),
-        { status: 405, headers: { "Content-Type": "application/json" } },
+      return reply(
+        new Response(
+          JSON.stringify({ error: FrameworkErrorCode.BAD_STATUS, detail: "Method not allowed" }),
+          { status: 405, headers: { "Content-Type": "application/json" } },
+        ),
       );
     }
 
     const url = new URL(request.url);
     let path = url.pathname;
     if (base !== "" && path !== base && !path.startsWith(`${base}/`)) {
-      return new Response(
-        JSON.stringify({
-          error: FrameworkErrorCode.NOT_FOUND,
-          detail: `Unknown endpoint: ${path}`,
-        }),
-        { status: 404, headers: { "Content-Type": "application/json" } },
+      return reply(
+        new Response(
+          JSON.stringify({
+            error: FrameworkErrorCode.NOT_FOUND,
+            detail: `Unknown endpoint: ${path}`,
+          }),
+          { status: 404, headers: { "Content-Type": "application/json" } },
+        ),
       );
     }
     if (base !== "") {
@@ -151,12 +204,14 @@ export function createHttpHandler(
     }
 
     if (!path.startsWith("/") || path === "") {
-      return new Response(
-        JSON.stringify({
-          error: FrameworkErrorCode.NOT_FOUND,
-          detail: `Unknown endpoint: ${path}`,
-        }),
-        { status: 404, headers: { "Content-Type": "application/json" } },
+      return reply(
+        new Response(
+          JSON.stringify({
+            error: FrameworkErrorCode.NOT_FOUND,
+            detail: `Unknown endpoint: ${path}`,
+          }),
+          { status: 404, headers: { "Content-Type": "application/json" } },
+        ),
       );
     }
 
@@ -164,25 +219,31 @@ export function createHttpHandler(
     const requestText = await readRequestText(request);
     if (!requestText.ok) {
       if (requestText.reason === "too_large") {
-        return new Response(
-          JSON.stringify({
-            error: FrameworkErrorCode.INVALID_INPUT,
-            detail: "Request body exceeds the 1 MiB limit",
-          }),
-          { status: 413, headers: { "Content-Type": "application/json" } },
+        return reply(
+          new Response(
+            JSON.stringify({
+              error: FrameworkErrorCode.INVALID_INPUT,
+              detail: "Request body exceeds the 1 MiB limit",
+            }),
+            { status: 413, headers: { "Content-Type": "application/json" } },
+          ),
         );
       }
-      return new Response(
-        JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+      return reply(
+        new Response(
+          JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        ),
       );
     }
     try {
       body = requestText.text === "" ? {} : JSON.parse(requestText.text);
     } catch {
-      return new Response(
-        JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+      return reply(
+        new Response(
+          JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        ),
       );
     }
 
@@ -190,12 +251,13 @@ export function createHttpHandler(
     try {
       result = await target.invoke(path, body as never, {
         signal: request.signal,
+        correlationId,
       });
     } catch {
-      return internalErrorResponse();
+      return reply(internalErrorResponse());
     }
 
-    return mapResultToResponse(result);
+    return reply(mapResultToResponse(result));
   };
 }
 
@@ -203,6 +265,7 @@ type FloorHandlerOptions = {
   gateway: Invoker<ContractShape>;
   application: Assembly<Record<string, new (...args: never[]) => object>>;
   floor: HttpFloor;
+  correlation?: HttpCorrelationOptions;
 };
 
 function publicFailure(
@@ -272,11 +335,14 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
     `Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0${secure ? "; Secure" : ""}`;
 
   return async (request) => {
-    const invalid = () => floorJson({ error: "INVALID_REQUEST" }, 400);
+    const correlationId = correlationIdFor(request, options.correlation);
+    const reply = (response: Response) =>
+      withCorrelation(response, correlationId, options.correlation);
+    const invalid = () => reply(floorJson({ error: "INVALID_REQUEST" }, 400));
     if (request.method !== "POST") return invalid();
     const origin = request.headers.get("Origin");
     if (origin !== null && origin !== options.floor.origin) {
-      return floorJson({ error: "FORBIDDEN" }, 403);
+      return reply(floorJson({ error: "FORBIDDEN" }, 403));
     }
     const contentType = request.headers.get("Content-Type");
     if (contentType !== null && !/^application\/json(?:\s*;|$)/i.test(contentType)) {
@@ -301,42 +367,47 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
 
     let result: InvocationResult;
     try {
-      result = await options.gateway.invoke(path, body as never, { signal: request.signal });
+      result = await options.gateway.invoke(path, body as never, {
+        signal: request.signal,
+        correlationId,
+      });
     } catch {
-      return internalErrorResponse();
+      return reply(internalErrorResponse());
     }
     if (!result.ok) {
       const failure = publicFailure(result, categories);
       const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";
-      return floorJson(
-        { error: failure.error },
-        failure.status,
-        clear ? { cookie: clearedCookie(), noStore: true } : {},
+      return reply(
+        floorJson(
+          { error: failure.error },
+          failure.status,
+          clear ? { cookie: clearedCookie(), noStore: true } : {},
+        ),
       );
     }
 
     const value = result.value;
     if (path === credential.issue.path) {
       if (!isPlainObject(value)) {
-        return floorJson({ error: "INTERNAL_ERROR" }, 500);
+        return reply(floorJson({ error: "INTERNAL_ERROR" }, 500));
       }
       const record = value as Record<string, unknown>;
       const token = record[credential.issue.output];
       const sourceExpiry = record[credential.issue.expires];
       const expires = sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
       if (typeof token !== "string" || Number.isNaN(expires.getTime())) {
-        return floorJson({ error: "INTERNAL_ERROR" }, 500);
+        return reply(floorJson({ error: "INTERNAL_ERROR" }, 500));
       }
       const publicValue = Object.fromEntries(
         Object.entries(record).filter(
           ([key]) => key !== credential.issue.output && key !== credential.issue.expires,
         ),
       );
-      return floorJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true });
+      return reply(floorJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true }));
     }
     if (credential.clear.includes(path)) {
-      return floorJson(value, 200, { cookie: clearedCookie(), noStore: true });
+      return reply(floorJson(value, 200, { cookie: clearedCookie(), noStore: true }));
     }
-    return floorJson(value, 200);
+    return reply(floorJson(value, 200));
   };
 }

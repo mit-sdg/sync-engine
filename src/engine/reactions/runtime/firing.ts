@@ -1,6 +1,7 @@
 import type { FiringRecord, LogStore } from "./log-store.ts";
 import { uuid } from "@engine/utils/runtime";
 import { redact } from "@engine/utils/redaction";
+import type { Redactor } from "@engine/utils/redaction";
 
 export interface FiringFill {
   reaction: string;
@@ -23,6 +24,7 @@ export class FiringBook {
   constructor(
     private readonly store: LogStore,
     private readonly admit?: (flow: string) => void,
+    private readonly redactor: Redactor = { redact },
   ) {}
 
   hasConsumed(recordId: string | undefined, reaction: string): boolean {
@@ -76,7 +78,7 @@ export class FiringBook {
           id: uuid(),
           reaction: fill.reaction,
           flow: fill.flow,
-          bindings: redact(fill.bindings) as Record<string, unknown>,
+          bindings: this.redactor.redact(fill.bindings) as Record<string, unknown>,
           consumed: fill.whenIds,
           produced: fill.produced,
           at: Date.now(),

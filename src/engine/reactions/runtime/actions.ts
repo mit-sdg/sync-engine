@@ -19,6 +19,7 @@
 import type { ActionOutcome } from "../types.ts";
 import { uuid } from "@engine/utils/runtime";
 import { redact, serializeError } from "@engine/utils/redaction";
+import type { Redactor } from "@engine/utils/redaction";
 import { logger } from "@engine/utils/logger";
 import {
   MemoryStore,
@@ -27,6 +28,7 @@ import {
   type LogStore,
   type ReactionFailureRecord,
 } from "./log-store.ts";
+import type { OperationalEvents } from "./operational.ts";
 
 export type { ActionRecord } from "./log-store.ts";
 
@@ -70,7 +72,11 @@ export class ActionConcept {
   private readonly activeFlowValues = new Map<string, ActiveFlowValues>();
   private readonly flowQuiescenceListeners = new Set<(event: FlowQuiescence) => void>();
 
-  constructor(public readonly store: LogStore = new MemoryStore()) {}
+  constructor(
+    public readonly store: LogStore = new MemoryStore(),
+    readonly operational?: OperationalEvents,
+    readonly redactor: Redactor = { redact },
+  ) {}
 
   /** Folded view: all retained records, keyed by their unique id. */
   get actions(): Map<string, ActionRecord> {
@@ -94,7 +100,7 @@ export class ActionConcept {
       record: {
         ...record,
         id,
-        input: redact(record.input) as Record<string, unknown>,
+        input: this.redactor.redact(record.input) as Record<string, unknown>,
       },
     });
     return { id };
@@ -155,6 +161,18 @@ export class ActionConcept {
     const active = this.activeFlowValues.get(failure.flow);
     if (active !== undefined) active.interpreterFailed = true;
     this.store.append({ kind: "reaction-failure", at: failure.at, failure });
+    this.operational?.emit(
+      this.operational.withContext(failure.flow, {
+        type: "interpreter-failed",
+        at: failure.at,
+        flow: failure.flow,
+        reaction: failure.reaction,
+        stage: failure.stage,
+        ...(failure.action === undefined ? {} : { action: failure.action }),
+        ...(failure.actionId === undefined ? {} : { actionId: failure.actionId }),
+        errorClass: failure.errorClass,
+      }),
+    );
   }
 
   /** Record a boundary integrity failure and make the active flow fail closed. */
@@ -162,6 +180,26 @@ export class ActionConcept {
     const active = this.activeFlowValues.get(failure.flow);
     if (active !== undefined) active.interpreterFailed = true;
     this.store.append({ kind: "integrity-failure", at: failure.at, failure });
+    this.operational?.emit(
+      this.operational.withContext(failure.flow, {
+        type: "integrity-failed",
+        at: failure.at,
+        flow: failure.flow,
+        kind: failure.kind,
+        errorClass: failure.errorClass,
+      }),
+    );
+    if (failure.kind === "execution-limit") {
+      this.operational?.emit(
+        this.operational.withContext(failure.flow, {
+          type: "execution-limit-breached",
+          at: failure.at,
+          flow: failure.flow,
+          limit: failure.limit,
+          accepted: true,
+        }),
+      );
+    }
   }
 
   /** Return a transient record with raw input, output, and outcome while its flow is active. */
@@ -202,8 +240,8 @@ export class ActionConcept {
       kind: "outcome",
       at: Date.now(),
       id,
-      output: redact(output) as Record<string, unknown>,
-      outcome: redact(resolvedOutcome) as ActionOutcome,
+      output: this.redactor.redact(output) as Record<string, unknown>,
+      outcome: this.redactor.redact(resolvedOutcome) as ActionOutcome,
     });
     return { id };
   }

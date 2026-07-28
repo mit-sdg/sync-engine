@@ -4,7 +4,6 @@ import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import type { AppIR, ConceptInventoryIR } from "@engine/reads/ir";
 import type { ActionOutcome } from "@engine/reactions/types";
-import { redact } from "@engine/utils/redaction";
 
 const INTERNAL_BOUNDARY_ACTIONS = new Set(["register", "cancel", "respondFramework"]);
 
@@ -38,6 +37,7 @@ export function inspectAssembly(
   readBack: string;
 } {
   const assembled = assemblyBehind(assembly);
+  const redactor = assembled.engine.Action.redactor;
   return {
     app: assembled.engine.exportReactions(),
     concepts: applicationConcepts(assembled.engine.exportConcepts()),
@@ -48,8 +48,10 @@ export function inspectAssembly(
         concept: conceptNameOf(concept),
         action: actionNameOf(action),
         ...(by === undefined ? {} : { by }),
-        ...(output === undefined ? {} : { output: redact(output) as Record<string, unknown> }),
-        ...(outcome === undefined ? {} : { outcome: redact(outcome) as ActionOutcome }),
+        ...(output === undefined
+          ? {}
+          : { output: redactor.redact(output) as Record<string, unknown> }),
+        ...(outcome === undefined ? {} : { outcome: redactor.redact(outcome) as ActionOutcome }),
       }),
     ),
   };

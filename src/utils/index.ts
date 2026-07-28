@@ -3,8 +3,10 @@ export type { Logger, LogLevel } from "@engine/utils/logger";
 export { serializeError } from "@engine/utils/logger";
 export {
   configureRedaction,
+  createRedactor,
   describeError,
   redact,
   UNIVERSAL_SENSITIVE_PATTERNS,
 } from "@engine/utils/redaction";
 export type { RedactionPolicy } from "@engine/utils/redaction";
+export type { Redactor } from "@engine/utils/redaction";

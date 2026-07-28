@@ -14,6 +14,7 @@ export { createHttpTransport, createHttpClient } from "./client/http-client.ts";
 export type { HeadersOption, HttpClientOptions } from "./client/http-client.ts";
 
 export { createHttpHandler } from "./http/http.ts";
+export type { HttpCorrelationOptions } from "./http/http.ts";
 
 export { renderInputContracts } from "./protocol/endpoints.ts";
 export type { InputContractDecl, Prettify, RequestBoundaryActions } from "./protocol/endpoints.ts";
@@ -36,6 +37,11 @@ export { createInvoker, Requesting } from "./invocation/invoke.ts";
 export { createLocalClient } from "./client/local-client.ts";
 export type { Invoker, InvokeOptions } from "./invocation/invoke.ts";
 export type { ExecutionLimits } from "./invocation/lifecycle.ts";
+export type {
+  OperationalEvent,
+  OperationalObserver,
+  OperationalResultClass,
+} from "@engine/reactions/runtime/operational";
 
 export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./invocation/funnel.ts";
 

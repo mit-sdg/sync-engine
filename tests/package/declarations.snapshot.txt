@@ -21,6 +21,7 @@ export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
 export { MemoryStore } from "../engine/reactions/runtime/log-store.ts";
 export { Logging } from "../engine/reactions/runtime/logging.ts";
 export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
+export type { OperationalEvent, OperationalObserver, OperationalResultClass, } from "../engine/reactions/runtime/operational.ts";
 export type { ActionRefusal } from "../engine/reactions/runtime/instrumenting.ts";
 export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogStore, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
 
@@ -34,10 +35,12 @@ export { FrameworkErrorCode } from "../engine/boundary/protocol/errors.ts";
 export type { EmittedFrameworkErrorCode, InvocationResult } from "../engine/boundary/protocol/errors.ts";
 export type { Invoker, InvokeOptions } from "../engine/boundary/invocation/invoke.ts";
 export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
+export type { OperationalEvent, OperationalObserver, OperationalResultClass, } from "../engine/reactions/runtime/operational.ts";
 export { createGateway } from "../engine/boundary/gateway/public-gateway.ts";
 export type { Gateway, GatewayClientError, GatewayOptions, GatewayTarget, } from "../engine/boundary/gateway/public-gateway.ts";
 export type { ApplicationInterface } from "../engine/boundary/protocol/application-interface.ts";
 export { createHttpHandler } from "../engine/boundary/http/http.ts";
+export type { HttpCorrelationOptions } from "../engine/boundary/http/http.ts";
 export { httpFloor } from "../engine/boundary/http/http-floor.ts";
 export type { HttpCredentialBinding, HttpFloor } from "../engine/boundary/http/http-floor.ts";
 export { command, createCliApp, fail, ok, parseArgs, parseFail, parseOk, } from "../engine/boundary/cli-app.ts";
@@ -99,10 +102,12 @@ import type { PublicErrorCategory } from "../../reactions/concepts/concept-metad
 import type { InstrumentedConcept } from "../../reactions/runtime/instrumenting.ts";
 import { type LogStore, type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import { Logging } from "../../reactions/runtime/logging.ts";
+import type { OperationalObserver } from "../../reactions/runtime/operational.ts";
 import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
+import type { RedactionPolicy } from "../../utils/redaction.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
@@ -165,6 +170,10 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
     logStore?: LogStore;
     /** Opt-in production execution limits. */
     executionLimits?: ExecutionLimits;
+    /** Bounded synchronous handoff for stable operational events. */
+    observers?: readonly OperationalObserver[];
+    /** Additional sensitive field names for this assembly only. */
+    redaction?: RedactionPolicy;
 }
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
     engine: Reacting;
@@ -558,7 +567,9 @@ export declare function createLocalClient<C extends ContractShape>(options: {
 import type { OutcomeContracts } from "../../reactions/concepts/outcomes.ts";
 import type { LogStore, RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import { Logging } from "../../reactions/runtime/logging.ts";
+import type { OperationalObserver } from "../../reactions/runtime/operational.ts";
 import type { Reacting } from "../../reactions/runtime/reacting.ts";
+import type { RedactionPolicy } from "../../utils/redaction.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { EmittedFrameworkErrorCode } from "../protocol/errors.ts";
@@ -654,6 +665,10 @@ export interface GatewayOptions {
     logStore?: LogStore;
     /** Opt-in limits for the gateway's own execution. */
     executionLimits?: ExecutionLimits;
+    /** Bounded synchronous handoff for the gateway's operational events. */
+    observers?: readonly OperationalObserver[];
+    /** Additional sensitive field names for the gateway only. */
+    redaction?: RedactionPolicy;
 }
 /** Build a separate gateway application in front of an assembled application. */
 export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
@@ -665,6 +680,8 @@ export {};
 /** The standard gateway. */
 import type { LogStore, RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import type { Logging } from "../../reactions/runtime/logging.ts";
+import type { OperationalObserver } from "../../reactions/runtime/operational.ts";
+import type { RedactionPolicy } from "../../utils/redaction.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Invoker } from "../invocation/invoke.ts";
@@ -688,6 +705,10 @@ export interface GatewayOptions {
     logStore?: LogStore;
     /** Opt-in limits for the gateway's own execution. */
     executionLimits?: ExecutionLimits;
+    /** Bounded synchronous handoff for the gateway's operational events. */
+    observers?: readonly OperationalObserver[];
+    /** Additional sensitive field names for the gateway only. */
+    redaction?: RedactionPolicy;
 }
 export interface Gateway<C extends ContractShape> extends Invoker<C> {
     beginDrain(): Promise<void>;
@@ -734,16 +755,23 @@ import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import type { HttpFloor } from "./http-floor.ts";
+export interface HttpCorrelationOptions {
+    resolve(request: Request): string | undefined;
+    responseHeader?: string;
+}
 export declare function createHttpHandler(options: {
     gateway: Invoker<ContractShape>;
     basePath?: string;
+    correlation?: HttpCorrelationOptions;
 } | {
     invoker: Invoker<ContractShape>;
     basePath?: string;
+    correlation?: HttpCorrelationOptions;
 } | {
     gateway: Invoker<ContractShape>;
     application: Assembly<Record<string, new (...args: never[]) => object>>;
     floor: HttpFloor;
+    correlation?: HttpCorrelationOptions;
 }): (request: Request) => Promise<Response>;
 
 === dist/engine/boundary/index.d.ts ===
@@ -752,6 +780,7 @@ export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientReque
 export { createHttpTransport, createHttpClient } from "./client/http-client.ts";
 export type { HeadersOption, HttpClientOptions } from "./client/http-client.ts";
 export { createHttpHandler } from "./http/http.ts";
+export type { HttpCorrelationOptions } from "./http/http.ts";
 export { renderInputContracts } from "./protocol/endpoints.ts";
 export type { InputContractDecl, Prettify, RequestBoundaryActions } from "./protocol/endpoints.ts";
 export type { EndpointValidator, EndpointValidators, ValidationResult, } from "./protocol/validation.ts";
@@ -760,6 +789,7 @@ export { createInvoker, Requesting } from "./invocation/invoke.ts";
 export { createLocalClient } from "./client/local-client.ts";
 export type { Invoker, InvokeOptions } from "./invocation/invoke.ts";
 export type { ExecutionLimits } from "./invocation/lifecycle.ts";
+export type { OperationalEvent, OperationalObserver, OperationalResultClass, } from "../reactions/runtime/operational.ts";
 export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./invocation/funnel.ts";
 export { assemble, endpoint, fail, isEndpointDef, receive, respond } from "./assembly/assemble.ts";
 export type { AssembledApp, AssembleOptions, EndpointDef, EndpointOptions, } from "./assembly/assemble.ts";
@@ -869,14 +899,16 @@ export declare function assertExecutionLimits(limits: ExecutionLimits): void;
 /** Owns admission and quiescence independently of caller waits and log retention. */
 export declare class RuntimeLifecycle {
     readonly limits?: ExecutionLimits | undefined;
+    readonly events: OperationalEvents;
     private readonly active;
     private readonly pending;
     private readonly actionCounts;
     private readonly firingCounts;
     private readonly idleWaiters;
     private draining;
-    constructor(limits?: ExecutionLimits | undefined);
-    admit(flow: string): AdmissionRejection | undefined;
+    private drainIdleEmitted;
+    constructor(limits?: ExecutionLimits | undefined, events?: OperationalEvents);
+    admit(flow: string, route: string, correlationId: string): AdmissionRejection | undefined;
     pendingSettled(flow: string): void;
     flowSettled(flow: string): void;
     abandon(flow: string): void;
@@ -888,7 +920,10 @@ export declare class RuntimeLifecycle {
     rows(count: number): boolean;
     private resolveIdle;
     private clearFlowCounts;
+    private clearSettledContext;
+    private emitDrainIdle;
 }
+import { OperationalEvents } from "../../reactions/runtime/operational.ts";
 
 === dist/engine/boundary/protocol/admit.d.ts ===
 /**
@@ -1986,7 +2021,9 @@ export declare class NameResolver {
  *    flow, which keeps independent invocations from cross-matching.
  */
 import type { ActionOutcome } from "../types.ts";
+import type { Redactor } from "../../utils/redaction.ts";
 import { type ActionRecord, type IntegrityFailureRecord, type LogStore, type ReactionFailureRecord } from "./log-store.ts";
+import type { OperationalEvents } from "./operational.ts";
 export type { ActionRecord } from "./log-store.ts";
 export interface FlowQuiescence {
     flow: string;
@@ -2006,10 +2043,12 @@ export declare function normalizeOutcome(output: unknown): ActionOutcome;
  */
 export declare class ActionConcept {
     readonly store: LogStore;
+    readonly operational?: OperationalEvents | undefined;
+    readonly redactor: Redactor;
     private readonly matchingValues;
     private readonly activeFlowValues;
     private readonly flowQuiescenceListeners;
-    constructor(store?: LogStore);
+    constructor(store?: LogStore, operational?: OperationalEvents | undefined, redactor?: Redactor);
     /** Folded view: all retained records, keyed by their unique id. */
     get actions(): Map<string, ActionRecord>;
     /** Folded view: retained records grouped by flow token, in invocation order. */
@@ -2077,6 +2116,7 @@ export declare class ActionConcept {
 
 === dist/engine/reactions/runtime/firing.d.ts ===
 import type { FiringRecord, LogStore } from "./log-store.ts";
+import type { Redactor } from "../../utils/redaction.ts";
 export interface FiringFill {
     reaction: string;
     flow: string;
@@ -2093,8 +2133,9 @@ export interface FiringBranch {
 export declare class FiringBook {
     private readonly store;
     private readonly admit?;
+    private readonly redactor;
     private readonly inFlightConsumed;
-    constructor(store: LogStore, admit?: ((flow: string) => void) | undefined);
+    constructor(store: LogStore, admit?: ((flow: string) => void) | undefined, redactor?: Redactor);
     hasConsumed(recordId: string | undefined, reaction: string): boolean;
     newBranch(fill: FiringFill): FiringBranch;
     mark(branch: FiringBranch): void;
@@ -2348,6 +2389,7 @@ export declare class MemoryStore implements LogStore {
 }
 
 === dist/engine/reactions/runtime/logging.d.ts ===
+import type { Redactor } from "../../utils/redaction.ts";
 import type { ActionRecord } from "./actions.ts";
 import type { ActionConcept } from "./actions.ts";
 import type { EngineObserver, LogEvent } from "./observer.ts";
@@ -2361,9 +2403,10 @@ export declare enum Logging {
 /** Builds action events, calls observers, and writes interpreter diagnostics. */
 export declare class ReactionLogger {
     private readonly actions;
+    private readonly redactor;
     readonly observers: Set<EngineObserver>;
     level: Logging;
-    constructor(actions: ActionConcept);
+    constructor(actions: ActionConcept, redactor?: Redactor);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     /** Build an observer event with field-name-redacted input, output, and outcome. */
@@ -2422,6 +2465,69 @@ export interface LogEvent {
 export interface EngineObserver {
     onAction(ev: LogEvent): void;
 }
+
+=== dist/engine/reactions/runtime/operational.d.ts ===
+import type { IntegrityFailureRecord, ReactionFailureRecord } from "./log-store.ts";
+export type OperationalResultClass = "success" | "domain-error" | "framework-error" | "refusal" | "fault";
+interface EventBase {
+    readonly type: string;
+    readonly at: number;
+    readonly flow?: string;
+    readonly route?: string;
+    readonly correlationId?: string;
+}
+export type OperationalEvent = (EventBase & {
+    type: "action-settled";
+    flow: string;
+    actionId: string;
+    concept: string;
+    action: string;
+    reaction?: string;
+    result: "success" | "refusal" | "fault";
+    durationMs: number;
+}) | (EventBase & {
+    type: "interpreter-failed";
+    flow: string;
+    reaction: string;
+    stage: ReactionFailureRecord["stage"];
+    action?: string;
+    actionId?: string;
+    errorClass: string;
+}) | (EventBase & {
+    type: "integrity-failed";
+    flow: string;
+    kind: IntegrityFailureRecord["kind"];
+    errorClass: string;
+}) | (EventBase & {
+    type: "invocation-settled";
+    result: "success" | "domain-error" | "framework-error";
+    frameworkCode?: string;
+    durationMs: number;
+}) | (EventBase & {
+    type: "execution-limit-breached";
+    limit: "active-root-flows" | "pending-requests" | "actions" | "firings" | "rows";
+    accepted: boolean;
+}) | (EventBase & {
+    type: "drain-state";
+    state: "draining" | "idle";
+});
+export type OperationalObserver = (event: OperationalEvent) => void;
+export interface FlowOperationalContext {
+    route: string;
+    correlationId: string;
+}
+/** Synchronous nonblocking handoff. Observers own any queueing or I/O. */
+export declare class OperationalEvents {
+    private readonly observers;
+    private readonly contexts;
+    constructor(observers?: readonly OperationalObserver[]);
+    context(flow: string): FlowOperationalContext | undefined;
+    setContext(flow: string, context: FlowOperationalContext): void;
+    clearContext(flow: string): void;
+    emit(event: OperationalEvent): void;
+    withContext<T extends EventBase>(flow: string, event: T): T;
+}
+export {};
 
 === dist/engine/reactions/runtime/query-cache.d.ts ===
 /**
@@ -4765,6 +4871,11 @@ export interface RedactionPolicy {
     /** Regular expressions matched against field names. */
     patterns?: readonly RegExp[];
 }
+export interface Redactor {
+    redact(value: unknown, depth?: number): unknown;
+}
+/** Create one immutable application-scoped field-name redactor. */
+export declare function createRedactor(policy?: RedactionPolicy): Redactor;
 /**
  * Replace the domain field-name policy used by subsequent {@link redact}
  * calls. The default field-name patterns remain active.
@@ -4809,5 +4920,6 @@ export type { WireContractsIR, WireEndpoint, WireOptions, WireRenderOptions, Wir
 export { logger } from "../engine/utils/logger.ts";
 export type { Logger, LogLevel } from "../engine/utils/logger.ts";
 export { serializeError } from "../engine/utils/logger.ts";
-export { configureRedaction, describeError, redact, UNIVERSAL_SENSITIVE_PATTERNS, } from "../engine/utils/redaction.ts";
+export { configureRedaction, createRedactor, describeError, redact, UNIVERSAL_SENSITIVE_PATTERNS, } from "../engine/utils/redaction.ts";
 export type { RedactionPolicy } from "../engine/utils/redaction.ts";
+export type { Redactor } from "../engine/utils/redaction.ts";

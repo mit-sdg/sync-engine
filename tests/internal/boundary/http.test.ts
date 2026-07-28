@@ -64,6 +64,56 @@ describe("createHttpHandler", () => {
     expect(body).toEqual({ echoed: "hello" });
   });
 
+  test("resolves and projects a safe HTTP correlation identifier", async () => {
+    let received: string | undefined;
+    const handler = createHttpHandler({
+      invoker: {
+        async invoke(_path, _input, options) {
+          received = options?.correlationId;
+          return { ok: true, value: { ok: true } };
+        },
+      },
+      correlation: {
+        resolve: (request) => request.headers.get("X-Request-Id") ?? undefined,
+        responseHeader: "X-Request-Id",
+      },
+    });
+    const response = await handler(
+      new Request("http://localhost/echo", {
+        method: "POST",
+        headers: { "X-Request-Id": "trace-42" },
+        body: "{}",
+      }),
+    );
+
+    expect(received).toBe("trace-42");
+    expect(response.headers.get("X-Request-Id")).toBe("trace-42");
+  });
+
+  test("replaces an unsafe or faulting HTTP correlation identifier", async () => {
+    let received: string | undefined;
+    const handler = createHttpHandler({
+      invoker: {
+        async invoke(_path, _input, options) {
+          received = options?.correlationId;
+          return { ok: true, value: {} };
+        },
+      },
+      correlation: {
+        resolve: () => {
+          throw new Error("untrusted resolver");
+        },
+        responseHeader: "X-Correlation-Id",
+      },
+    });
+    const response = await handler(
+      new Request("http://localhost/echo", { method: "POST", body: "{}" }),
+    );
+
+    expect(received).toMatch(/^[0-9a-f-]{36}$/);
+    expect(response.headers.get("X-Correlation-Id")).toBe(received);
+  });
+
   test("maps domain error to 400 JSON response", async () => {
     const { handler } = setup();
     const request = new Request("http://localhost/api/err", {

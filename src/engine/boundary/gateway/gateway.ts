@@ -3,8 +3,10 @@ import type { OutcomeContracts } from "@engine/reactions/concepts/outcomes";
 import { Refuse } from "@engine/reactions/concepts/refuse";
 import type { LogStore, RetentionPolicy } from "@engine/reactions/runtime/log-store";
 import { Logging } from "@engine/reactions/runtime/logging";
+import type { OperationalObserver } from "@engine/reactions/runtime/operational";
 import type { Reacting } from "@engine/reactions/runtime/reacting";
 import type { Vars } from "@engine/reactions/types";
+import type { RedactionPolicy } from "@engine/utils/redaction";
 import { admitInput } from "../protocol/admit.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
@@ -185,6 +187,10 @@ export interface GatewayOptions {
   logStore?: LogStore;
   /** Opt-in limits for the gateway's own execution. */
   executionLimits?: ExecutionLimits;
+  /** Bounded synchronous handoff for the gateway's operational events. */
+  observers?: readonly OperationalObserver[];
+  /** Additional sensitive field names for the gateway only. */
+  redaction?: RedactionPolicy;
 }
 
 /** Build a separate gateway application in front of an assembled application. */
@@ -206,6 +212,8 @@ export function createGateway<C extends ContractShape = ContractShape>(
     retention: options.retention,
     logStore: options.logStore,
     executionLimits: options.executionLimits,
+    observers: options.observers,
+    redaction: options.redaction,
   });
 
   return {

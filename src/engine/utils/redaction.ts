@@ -58,47 +58,73 @@ export interface RedactionPolicy {
   patterns?: readonly RegExp[];
 }
 
-// The current domain policy used by redact().
-let policyFields: ReadonlySet<string> = new Set();
-let policyPatterns: readonly RegExp[] = UNIVERSAL_SENSITIVE_PATTERNS;
+export interface Redactor {
+  redact(value: unknown, depth?: number): unknown;
+}
+
+function policyParts(policy: RedactionPolicy): {
+  fields: ReadonlySet<string>;
+  patterns: readonly RegExp[];
+} {
+  let fields: string[] = [];
+  try {
+    fields = Array.from(policy.fields ?? [], (field) => String(field).toLowerCase());
+  } catch {
+    // Non-iterable fields value - ignore.
+  }
+  return {
+    fields: new Set(fields),
+    patterns: [...UNIVERSAL_SENSITIVE_PATTERNS, ...(policy.patterns ?? [])],
+  };
+}
+
+/** Create one immutable application-scoped field-name redactor. */
+export function createRedactor(policy: RedactionPolicy = {}): Redactor {
+  const { fields, patterns } = policyParts(policy);
+  const isSensitive = (key: string): boolean => {
+    if (fields.has(key.toLowerCase())) return true;
+    return patterns.some((pattern) => {
+      const lastIndex = pattern.lastIndex;
+      try {
+        pattern.lastIndex = 0;
+        return pattern.test(key);
+      } finally {
+        pattern.lastIndex = lastIndex;
+      }
+    });
+  };
+  return {
+    redact(value, depth = 0) {
+      if (value === undefined) return undefined;
+      return redactValue(value, depth, new WeakSet(), isSensitive);
+    },
+  };
+}
+
+// The process policy used only by the standalone compatibility utility.
+let configuredRedactor = createRedactor();
 
 /**
  * Replace the domain field-name policy used by subsequent {@link redact}
  * calls. The default field-name patterns remain active.
  */
 export function configureRedaction(policy: RedactionPolicy): void {
-  let fields: string[] = [];
-  try {
-    fields = Array.from(policy.fields ?? [], (field) => String(field).toLowerCase());
-  } catch {
-    // Non-iterable fields value — ignore.
-  }
-  policyFields = new Set(fields);
-  policyPatterns = [...UNIVERSAL_SENSITIVE_PATTERNS, ...(policy.patterns ?? [])];
-}
-
-function isSensitive(key: string): boolean {
-  if (policyFields.has(key.toLowerCase())) return true;
-  return policyPatterns.some((pattern) => {
-    const lastIndex = pattern.lastIndex;
-    try {
-      pattern.lastIndex = 0;
-      return pattern.test(key);
-    } finally {
-      pattern.lastIndex = lastIndex;
-    }
-  });
+  configuredRedactor = createRedactor(policy);
 }
 
 export function redact(obj: unknown, depth = 0): unknown {
-  if (obj === undefined) return undefined;
-  return redactValue(obj, depth, new WeakSet());
+  return configuredRedactor.redact(obj, depth);
 }
 
 const MAX_REDACTION_DEPTH = 5;
 
 /** Project arbitrary diagnostic data to a redacted value that JSON can always encode. */
-function redactValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+function redactValue(
+  value: unknown,
+  depth: number,
+  seen: WeakSet<object>,
+  isSensitive: (key: string) => boolean,
+): unknown {
   if (depth > MAX_REDACTION_DEPTH) return "[max depth]";
   if (value === null) return null;
 
@@ -129,7 +155,7 @@ function redactValue(value: unknown, depth: number, seen: WeakSet<object>): unkn
       const result: unknown[] = [];
       for (let index = 0; index < value.length; index += 1) {
         try {
-          result.push(redactValue(value[index], depth + 1, seen));
+          result.push(redactValue(value[index], depth + 1, seen, isSensitive));
         } catch {
           result.push("[unreadable]");
         }
@@ -155,7 +181,12 @@ function redactValue(value: unknown, depth: number, seen: WeakSet<object>): unkn
         continue;
       }
       try {
-        result[key] = redactValue((value as Record<string, unknown>)[key], depth + 1, seen);
+        result[key] = redactValue(
+          (value as Record<string, unknown>)[key],
+          depth + 1,
+          seen,
+          isSensitive,
+        );
       } catch {
         result[key] = "[unreadable]";
       }

@@ -71,7 +71,7 @@ semantics](./semantics.md#reactions).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -91,6 +91,8 @@ assemble(options: AssemblyOptions): Assembly
 | `retention`             | no       | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"` |
 | `logStore`              | no       | New `MemoryStore`; application-owned store, mutually exclusive with `retention` |
 | `executionLimits`       | no       | Unbounded profile; validates and enforces every `ExecutionLimits` field         |
+| `observers`             | no       | No operational observers                                                        |
+| `redaction`             | no       | Universal sensitive-field patterns only                                         |
 
 A retention window must be a finite, non-negative integer. `{ window: 0 }`
 allows an active flow to complete before automatic eviction.
@@ -104,6 +106,13 @@ complete or partial implementation maps. Assembled non-query actions are
 asynchronous and conservatively resolve to their awaited result or an
 `ActionRefusal`; underscore-prefixed queries retain their implementation return
 shape.
+
+`OperationalEvent` is the stable discriminated union for action settlement,
+interpreter and integrity failure, invocation settlement, limit breach, and
+drain state. `OperationalObserver` callbacks are synchronous bounded handoff:
+the engine catches throws and never awaits returned work; exporters and network
+I/O belong behind a host-owned queue. Events carry no action input or output.
+`OperationalResultClass` names the safe result categories.
 
 ### Registration and floors
 
@@ -145,7 +154,7 @@ restart limits are normative in [Execution semantics](./semantics.md#logs-concep
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `ParseResult`, `ParsedArgs`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `receive`, `respond`
+`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ParseResult`, `ParsedArgs`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `receive`, `respond`
 
 <!-- register:boundary:end -->
 
@@ -199,6 +208,8 @@ invoker.invoke(path, input, options?: InvokeOptions): Promise<InvocationResult>
 | `retention`             | no       | `{ window: 100 }`; same accepted values as assembly retention |
 | `logStore`              | no       | New `MemoryStore`; mutually exclusive with `retention`        |
 | `executionLimits`       | no       | Unbounded gateway execution                                   |
+| `observers`             | no       | No gateway operational observers                              |
+| `redaction`             | no       | Universal sensitive-field patterns only                       |
 
 | `InvokeOptions` field | Default / effect                                                             |
 | --------------------- | ---------------------------------------------------------------------------- |
@@ -230,6 +241,11 @@ asks](./semantics.md#failures-between-action-asks) and
 `HttpFloor` and `HttpCredentialBinding` name the cookie-floor descriptor. The
 fixed request, cookie, projection, and deployment guarantees live in [Execution
 semantics](./semantics.md#boundary-gateway-and-client).
+
+Every handler form accepts `correlation?: HttpCorrelationOptions`. Its resolver
+maps an inbound request to a non-empty, control-character-free identifier of at
+most 128 UTF-16 code units. A thrown or invalid result is replaced with a UUID.
+`responseHeader` optionally projects the effective identifier on every response.
 
 ### CLI
 
@@ -425,7 +441,7 @@ asks](./semantics.md#failures-between-action-asks) and
 
 <!-- register:utils:start -->
 
-`LogLevel`, `Logger`, `RedactionPolicy`, `UNIVERSAL_SENSITIVE_PATTERNS`, `configureRedaction`, `describeError`, `logger`, `redact`, `serializeError`
+`LogLevel`, `Logger`, `RedactionPolicy`, `Redactor`, `UNIVERSAL_SENSITIVE_PATTERNS`, `configureRedaction`, `createRedactor`, `describeError`, `logger`, `redact`, `serializeError`
 
 <!-- register:utils:end -->
 
@@ -437,9 +453,10 @@ another thrown value. It does not sanitize or redact that text; use it only in
 a caller-reviewed diagnostic channel, never automatically in a public error
 envelope.
 
-`configureRedaction(policy)` replaces the application-specific portion of a
-process-global redaction policy; universal sensitive-name patterns remain.
-`redact(value)`
+`createRedactor(policy)` returns an immutable `Redactor` for one application.
+Ordinary assembly uses this scoped form. `configureRedaction(policy)` replaces
+the application-specific portion of the standalone process-global
+compatibility utility; universal sensitive-name patterns remain. `redact(value)`
 returns a copy that replaces values whose field names match `RedactionPolicy`
 or `UNIVERSAL_SENSITIVE_PATTERNS`. The exact storage and redaction guarantees
 live under [Logs, concept implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).

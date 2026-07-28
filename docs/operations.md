@@ -143,14 +143,16 @@ the `__Host-` prefix.
 
 ## Logs and sensitive values
 
-Configured field-name redaction runs before occurrence entries reach stores,
-observers, or inspection. Redaction matches field names; it does not search
+Assembly-scoped field-name redaction runs before occurrence entries reach
+stores, observers, or inspection, so separate applications cannot mix domain
+policies. Redaction matches field names; it does not search
 arbitrary string contents. The policy is mutable process-global state. During
 an active flow, the interpreter privately retains original values needed for
 matching and clears them when the outermost action settles.
 
 Do not place secrets in unstructured strings and assume field-name redaction
-will find them. Review custom stores and observers as sensitive-data sinks.
+will find them. Stable operational events omit action values. Review custom
+stores and legacy advanced observers as sensitive-data sinks.
 
 ## Operational checklist
 
