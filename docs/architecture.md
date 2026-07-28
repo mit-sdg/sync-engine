@@ -189,7 +189,7 @@ and composition that use them:
 | Assembly   | `src/engine/boundary/assembly/concept-set.ts`, `assemble.ts`, `assembly-facade.ts`, `assembly-registry.ts`                                               | Turn concept registrations and a composition into one instrumented engine, invoker, forms, contracts, and application facade.                                 |
 | Client     | `src/engine/boundary/client/client.ts`, `local-client.ts`, `http-client.ts`                                                                              | Expose the typed client independently of a transport, then adapt it to a local invoker or HTTP.                                                               |
 | Gateway    | `src/engine/boundary/gateway/gateway.ts`, `public-gateway.ts`                                                                                            | Route admitted outside requests through an isolated engine-backed forwarding boundary.                                                                        |
-| HTTP       | `src/engine/boundary/http/http.ts`, `http-floor.ts`                                                                                                      | Adapt invocation to HTTP and project credential and public-error policy onto the generated wire contract.                                                     |
+| HTTP       | `src/engine/boundary/http/http.ts`, `http-profile.ts`, `http-floor.ts`                                                                                   | Adapt invocation to raw or production HTTP, project registered public errors, and optionally bind cookie credentials.                                         |
 | Wire       | `src/engine/boundary/wire/wire.ts`, `wire-provenance.ts`                                                                                                 | Derive and render transport-safe contracts from endpoint IR and value provenance.                                                                             |
 
 Dependency edges point inward toward `protocol/`: invocation, wire, and client
@@ -211,6 +211,7 @@ its settlement.
 `src/engine/boundary/invocation/invoke.ts`,
 `src/engine/boundary/gateway/gateway.ts`,
 `src/engine/boundary/http/http.ts`,
+`src/engine/boundary/http/http-profile.ts`,
 `src/engine/boundary/http/http-floor.ts`, and
 `src/engine/boundary/cli-app.ts` route, serialize, or cancel a request, but they
 do not inspect concept state.
@@ -228,7 +229,8 @@ concept implementation.
 concept inventories, input contracts, retained occurrence summaries, and
 diagnostic read-back. `src/engine/tooling/generated-artifacts.ts` resolves a
 project descriptor, rejects unsupported endpoint lowering, derives logical and
-optional HTTP wire contracts, and checks or writes the two pinned files.
+optional production HTTP wire contracts, applies cookie-field projection when
+a floor is present, and checks or writes the two pinned files.
 
 The installed executable under `src/command/` is an adapter over those
 capabilities. `check.ts` parses supported TypeScript method signatures;

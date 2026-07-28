@@ -130,16 +130,30 @@ retention increases memory use. No hard retained-byte limit is provided.
 
 ## HTTP host responsibilities
 
-The generic HTTP adapter accepts JSON `POST` requests and limits each request
-body to 1,048,576 bytes. It is a Fetch handler, not a complete server. The host
-owns connection limits, request-rate limits, denial-of-service controls, TLS,
-HSTS, trusted-proxy handling, deployment health, and autoscaling.
+Use `productionHttpProfile(...)` for a public JSON boundary that does not need
+engine-managed credentials. It accepts only `POST`, limits each request body to
+1,048,576 bytes, preserves success values, and exposes only registered public
+error categories plus opaque protocol categories. Unknown or private refusals
+and all framework server failures become `INTERNAL_ERROR`. Use `httpFloor(...)`
+only when the application also needs the narrow same-origin cookie binding.
 
-The credential HTTP floor enforces its configured origin when an `Origin`
-header is present and does not implement CORS preflight. In production mode it
-requires an HTTPS public origin, but it does not terminate TLS. Cookies are
-`HttpOnly`, `SameSite=Strict`, and `Path=/`; HTTPS cookies are `Secure` and use
-the `__Host-` prefix.
+The gateway/invoker-only `createHttpHandler` forms are lower-level raw envelope
+adapters. They preserve logical domain codes and selected framework statuses;
+do not expose them directly unless a host-owned outer policy deliberately
+provides the public projection.
+
+Both production descriptors require an HTTPS public origin when
+`NODE_ENV=production`, but the Fetch handlers do not terminate TLS. The
+credential floor enforces its configured origin when an `Origin` header is
+present and does not implement CORS preflight. Its cookies are `HttpOnly`,
+`SameSite=Strict`, and `Path=/`; HTTPS cookies are `Secure` and use the
+`__Host-` prefix.
+
+Every handler is a Fetch adapter, not a complete server. The host owns CORS,
+connection and request-rate limits, denial-of-service controls, TLS termination,
+HSTS, trusted-proxy and reverse-proxy policy, deployment health, autoscaling,
+listener lifecycle, and authentication integration. Application concepts own
+credential meaning and domain authorization.
 
 ## Logs and sensitive values
 

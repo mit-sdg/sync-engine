@@ -154,7 +154,7 @@ restart limits are normative in [Execution semantics](./semantics.md#logs-concep
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ParseResult`, `ParsedArgs`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `receive`, `respond`
+`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ParseResult`, `ParsedArgs`, `ProductionHttpProfile`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `productionHttpProfile`, `receive`, `respond`
 
 <!-- register:boundary:end -->
 
@@ -233,13 +233,23 @@ asks](./semantics.md#failures-between-action-asks) and
 
 ### HTTP
 
-| API                 | Compact signature / options                                                                                                 |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `createHttpHandler` | `({ gateway, basePath? })`, `({ invoker, basePath? })`, or `({ gateway, application, floor })`; `basePath` defaults to `""` |
-| `httpFloor`         | `httpFloor({ origin, credential: { name, input, issue: { path, output, expires }, clear } })`                               |
+| API                     | Compact signature / options                                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `createHttpHandler`     | Raw `({ gateway \| invoker, basePath? })`; production `({ gateway, application, profile })`; cookie `({ gateway, application, floor })` |
+| `productionHttpProfile` | `productionHttpProfile({ origin, basePath? }): ProductionHttpProfile`                                                                   |
+| `httpFloor`             | `httpFloor({ origin, basePath?, credential: { name, input, issue: { path, output, expires }, clear } })`                                |
 
-`HttpFloor` and `HttpCredentialBinding` name the cookie-floor descriptor. The
-fixed request, cookie, projection, and deployment guarantees live in [Execution
+The raw gateway/invoker forms are low-level envelope adapters. They preserve
+logical domain codes and selected framework statuses and are not the
+recommended public deployment boundary.
+
+`ProductionHttpProfile` is the credential-free production policy. It requires
+an HTTP or HTTPS public origin, accepts an optional normalized base path, and
+uses the assembly's registered public-error categories. `HttpFloor` extends
+that shape with one `HttpCredentialBinding`; `httpFloor` is the narrow
+same-origin cookie preset. Both production forms use the same bounded request,
+JSON, status, category, success-value, and correlation pipeline. The fixed
+request, cookie, projection, and deployment guarantees live in [Execution
 semantics](./semantics.md#boundary-gateway-and-client).
 
 Every handler form accepts `correlation?: HttpCorrelationOptions`. Its resolver
@@ -271,20 +281,20 @@ absent and is required only by endpoint commands. `CliCommand`,
 `EmittedFrameworkErrorCode` is its value union. Controlled admission details
 may accompany an error, but exception text from an unknown failure is omitted.
 
-| Code                       | Ordinary source                                                | HTTP status when emitted by the server adapter |
-| -------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
-| `INVALID_INPUT`            | Gateway input admission or oversized request body              | 422 for admission; 413 for oversized body      |
-| `NOT_FOUND`                | Unknown route                                                  | 404                                            |
-| `UNAVAILABLE`              | Overload or draining admission                                 | 503                                            |
-| `TIMED_OUT`                | Invocation wait expired                                        | 504                                            |
-| `ABORTED`                  | Invocation signal aborted                                      | 499                                            |
-| `INTERNAL_ERROR`           | Application, framework, or interpreter fault                   | 500                                            |
-| `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure              | 500                                            |
-| `BAD_JSON`                 | HTTP request or response parsing                               | 400 for a bad request                          |
-| `BAD_STATUS`               | Unsupported request method or client-side status normalization | 405 for an unsupported method                  |
-| `NETWORK_ERROR`            | HTTP client could not complete `fetch`                         | No response                                    |
-| `HEADER_RESOLUTION_FAILED` | HTTP client header provider failed                             | No response                                    |
-| `UNKNOWN_ERROR`            | Unclassified framework envelope                                | 500                                            |
+| Code                       | Ordinary source                                                | HTTP status from the low-level raw adapter |
+| -------------------------- | -------------------------------------------------------------- | ------------------------------------------ |
+| `INVALID_INPUT`            | Gateway input admission or oversized request body              | 422 for admission; 413 for oversized body  |
+| `NOT_FOUND`                | Unknown route                                                  | 404                                        |
+| `UNAVAILABLE`              | Overload or draining admission                                 | 503                                        |
+| `TIMED_OUT`                | Invocation wait expired                                        | 504                                        |
+| `ABORTED`                  | Invocation signal aborted                                      | 499                                        |
+| `INTERNAL_ERROR`           | Application, framework, or interpreter fault                   | 500                                        |
+| `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure              | 500                                        |
+| `BAD_JSON`                 | HTTP request or response parsing                               | 400 for a bad request                      |
+| `BAD_STATUS`               | Unsupported request method or client-side status normalization | 405 for an unsupported method              |
+| `NETWORK_ERROR`            | HTTP client could not complete `fetch`                         | No response                                |
+| `HEADER_RESOLUTION_FAILED` | HTTP client header provider failed                             | No response                                |
+| `UNKNOWN_ERROR`            | Unclassified framework envelope                                | 500                                        |
 
 ## `client`
 
@@ -435,14 +445,17 @@ shape rather than an exported package type.
 | `wire`              | no       | `"wire.ts"`                                                           |
 | `wireName`          | no       | Pascal-cased title plus `Wire`                                        |
 | `wireBanner`        | no       | `// Generated by sync-engine from the <title> assembly. Do not edit.` |
-| `httpWireName`      | no       | `${wireName}Http` when `httpFloor` is present                         |
+| `httpWireName`      | no       | `${wireName}Http` when an HTTP profile or floor is present            |
 | `vocabulary.module` | no       | `new URL("./src/concept-set.ts", configUrl)`                          |
 | `vocabulary.export` | no       | `"vocabulary"`                                                        |
-| `httpFloor`         | no       | No HTTP projection                                                    |
+| `httpProfile`       | no       | No production HTTP projection                                         |
+| `httpFloor`         | no       | No cookie-bound production HTTP projection                            |
 
-Artifact generation always uses the vocabulary anchor with strict leaves. With
-an HTTP floor, the one wire module contains the logical contract and the
-projected HTTP contract. The [application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
+`httpProfile` and `httpFloor` are mutually exclusive. Artifact generation
+always uses the vocabulary anchor with strict leaves. With either descriptor,
+the one wire module contains the logical contract and the projected public HTTP
+contract. A floor additionally removes cookie-consumed credential fields. The
+[application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
 shows the application-owned command path; [Generated wire](./semantics.md#generated-wire)
 owns derivation guarantees.
 

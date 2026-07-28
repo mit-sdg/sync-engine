@@ -222,9 +222,11 @@ that value as a type, so it adds no server code to a frontend bundle. Use
 inspect one artifact on standard output, and `pin-spec` or `pin-wire` when only
 one artifact should be rewritten.
 
-An application with a cookie credential also supplies its `httpFloor` in this
+An application exposing the production public-error policy supplies either its
+credential-free `httpProfile` or its cookie-bound `httpFloor` in this
 descriptor, so the generated module carries both the logical application
-contract and its HTTP form. [Execution
+contract and its projected HTTP form. A floor projection also removes the
+credential input and consumed issue outputs. [Execution
 semantics](../semantics.md#boundary-gateway-and-client) owns the fixed cookie
 and HTTP behavior; the [public API](../public-surface.md#generated-descriptor)
 lists every descriptor field and default.
@@ -308,8 +310,8 @@ export function createOperationsRoomClient(options: HttpClientOptions = {}): Ope
 }
 ```
 
-The HTTP adapter uses the same `/api` prefix as the browser client and places
-the gateway behind a Fetch handler:
+The operations-room edge uses the low-level raw HTTP adapter with the same
+`/api` prefix as the browser client:
 
 _Source: [`examples/operations-room/src/edge.ts`](../../examples/operations-room/src/edge.ts)_
 
@@ -320,6 +322,38 @@ export function buildOperationsRoomHttp(instances: OperationsRoomOverrides = {})
   return { application, gateway, handler };
 }
 ```
+
+That gateway-only form deliberately preserves logical error envelopes and is
+not the recommended direct public deployment boundary. A public JSON host uses
+the production profile and supplies the assembly so registered category
+metadata is available:
+
+_Source: [`examples/production-http/src/edge.ts`](../../examples/production-http/src/edge.ts)_
+
+```ts
+export const productionHttpProfile = defineProductionHttpProfile({
+  origin: "https://production-http.test",
+  basePath: "/api",
+});
+```
+
+The profile handler also receives the assembly:
+
+_Source: [`examples/production-http/src/edge.ts`](../../examples/production-http/src/edge.ts)_
+
+```ts
+const profileHandler = createHttpHandler({
+  application,
+  gateway,
+  profile: productionHttpProfile,
+  correlation,
+});
+```
+
+Use `httpFloor(...)` instead only when the same production policy must also bind
+one logical credential to a same-origin cookie. The complete cookie path and
+generated projection are checked in the [Production HTTP
+example](../../examples/production-http/README.md).
 
 The client creates a browser-facing instance with that prefix and narrows the result before
 reading the dashboard:
@@ -366,7 +400,8 @@ assembly folder:
 | ------------------------------- | -------------------------------------------------------------------- |
 | `src/assembly/application.ts`   | The stable join of the concept set and explicit composition manifest |
 | `src/assembly/concept-floor.ts` | Complete named implementation sets, shared resources, and `close()`  |
-| `src/assembly/http-floor.ts`    | Credential binding and public origin for the fixed HTTP boundary     |
+| `src/assembly/http-profile.ts`  | Public origin, base path, and public-error transport policy          |
+| `src/assembly/http-floor.ts`    | Optional same-origin cookie binding                                  |
 | `src/assembly/process.ts`       | Process startup and shutdown ownership                               |
 | `src/assembly/README.md`        | Configuration router and the application's floor boundary            |
 
@@ -374,10 +409,12 @@ An implementation is one concrete concept object. An override replaces one
 implementation after selecting a complete floor and is suitable for test
 substitution, not as another production floor. A concept floor is a named,
 complete implementation map with its shared resources and asynchronous
-`close()`. An HTTP floor carries credentials, origin checks, parsing,
-serialization, cookies, and status decoration; domain authorization and
+`close()`. A production HTTP profile carries public error projection, bounded
+JSON parsing, correlation, and status decoration. An HTTP floor adds one cookie
+credential and same-origin check. Domain authentication, authorization, and
 concept meaning remain in the application. The process creates and owns the
-selected resources, starts the handler, and closes the floor during shutdown.
+selected resources, starts the handler, and closes the concept floor during
+shutdown.
 
 In the folder form, ordinary features change the concept set or composition
 manifest. Floor and process files change only with the runtime substrate or
@@ -385,11 +422,13 @@ deployment boundary. These are folder-depth choices, not different authoring
 conventions: source stays under `src/`, while generated artifacts remain
 visibly derived beside it.
 
-The current alpha does not expose a drain or idle API. `close()` is not called
-by assembly, and timeout or abort can leave accepted work running after the
-caller stops waiting. The folder layout identifies ownership; it does not make
-graceful shutdown automatic. [Operational limits](../operations.md) states the
-host responsibilities and unsupported deployment guarantees.
+Assembly and gateway expose `beginDrain()` and `whenIdle()`, but `close()` is
+not called by assembly and timeout or abort can leave accepted work running
+after the caller stops waiting. The host must stop the listener, begin drain,
+apply its hard deadline, and close resources in order. The folder layout
+identifies ownership; it does not make graceful shutdown automatic.
+[Operational limits](../operations.md) states the host responsibilities and
+unsupported deployment guarantees.
 
 The complete local scenario crosses the same gateway with a generated client
 contract in [`scenario.ts`](../../examples/operations-room/src/scenario.ts).

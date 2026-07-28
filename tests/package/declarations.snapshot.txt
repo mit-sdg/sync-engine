@@ -41,6 +41,8 @@ export type { Gateway, GatewayClientError, GatewayOptions, GatewayTarget, } from
 export type { ApplicationInterface } from "../engine/boundary/protocol/application-interface.ts";
 export { createHttpHandler } from "../engine/boundary/http/http.ts";
 export type { HttpCorrelationOptions } from "../engine/boundary/http/http.ts";
+export { productionHttpProfile } from "../engine/boundary/http/http-profile.ts";
+export type { ProductionHttpProfile } from "../engine/boundary/http/http-profile.ts";
 export { httpFloor } from "../engine/boundary/http/http-floor.ts";
 export type { HttpCredentialBinding, HttpFloor } from "../engine/boundary/http/http-floor.ts";
 export { command, createCliApp, fail, ok, parseArgs, parseFail, parseOk, } from "../engine/boundary/cli-app.ts";
@@ -724,6 +726,7 @@ import type { Assembly } from "../assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
 import type { WireContractsIR } from "../wire/wire-contracts.ts";
 import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
+import type { ProductionHttpProfile } from "./http-profile.ts";
 export interface HttpCredentialBinding {
     name: string;
     input: string;
@@ -734,8 +737,7 @@ export interface HttpCredentialBinding {
     };
     clear: readonly string[];
 }
-export interface HttpFloor {
-    origin: string;
+export interface HttpFloor extends ProductionHttpProfile {
     credential: HttpCredentialBinding;
 }
 export declare function httpFloor(declaration: HttpFloor): HttpFloor;
@@ -753,11 +755,26 @@ export declare function floorReadBack(options: {
     httpFloor: HttpFloor;
 }): string;
 
+=== dist/engine/boundary/http/http-profile.d.ts ===
+import type { Assembly } from "../assembly/assembly-facade.ts";
+import type { WireContractsIR } from "../wire/wire-contracts.ts";
+import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
+export interface ProductionHttpProfile {
+    origin: string;
+    basePath?: string;
+}
+export declare function normalizeHttpBasePath(basePath: string | undefined): string;
+export declare function normalizeProductionHttpProfile(declaration: ProductionHttpProfile, label?: string, productionReason?: string): ProductionHttpProfile;
+export declare function productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile;
+export declare function projectProductionHttpWire(wire: WireContractsIR, categories: Readonly<Record<string, PublicErrorCategory>>): WireContractsIR;
+export declare function projectAssemblyProductionHttpWire(application: Assembly<Record<string, new (...args: never[]) => object>>, wire: WireContractsIR): WireContractsIR;
+
 === dist/engine/boundary/http/http.d.ts ===
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import type { HttpFloor } from "./http-floor.ts";
+import type { ProductionHttpProfile } from "./http-profile.ts";
 export interface HttpCorrelationOptions {
     resolve(request: Request): string | undefined;
     responseHeader?: string;
@@ -769,6 +786,11 @@ export declare function createHttpHandler(options: {
 } | {
     invoker: Invoker<ContractShape>;
     basePath?: string;
+    correlation?: HttpCorrelationOptions;
+} | {
+    gateway: Invoker<ContractShape>;
+    application: Assembly<Record<string, new (...args: never[]) => object>>;
+    profile: ProductionHttpProfile;
     correlation?: HttpCorrelationOptions;
 } | {
     gateway: Invoker<ContractShape>;
@@ -1045,7 +1067,9 @@ export declare const PUBLIC_ERROR_CATEGORIES: {
     readonly NOT_FOUND: "NOT_FOUND";
     readonly CONFLICT: "CONFLICT";
 };
-/** Project a domain or framework error code onto the HTTP floor's public vocabulary. */
+export declare function registeredPublicCategoryOf(code: string, categories: Readonly<Record<string, PublicErrorCategory>>): PublicErrorCategory | "INTERNAL_ERROR";
+export declare function publicFrameworkCategoryOf(code: string): PublicErrorCategory | "INTERNAL_ERROR";
+/** Project a generated error code onto the production HTTP vocabulary. */
 export declare function publicCategoryOf(code: string, categories: Readonly<Record<string, PublicErrorCategory>>): PublicErrorCategory | "INTERNAL_ERROR";
 export declare function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number;
 
@@ -4700,6 +4724,7 @@ export declare function diagnosticsFail(diagnostics: readonly ApplicationDiagnos
 === dist/engine/tooling/generated-artifacts.d.ts ===
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { HttpFloor } from "../boundary/http/http-floor.ts";
+import type { ProductionHttpProfile } from "../boundary/http/http-profile.ts";
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 /**
  * What a project's `generated.config.ts` declares. Only `assemble` and `title`
@@ -4731,6 +4756,7 @@ export interface GeneratedApplication {
         module?: URL;
         export?: string;
     };
+    httpProfile?: ProductionHttpProfile;
     httpFloor?: HttpFloor;
 }
 type ResolvedApplication = GeneratedApplication & {

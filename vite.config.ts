@@ -32,7 +32,13 @@ export default defineConfig({
     ],
   },
   lint: {
-    ignorePatterns: ["src/command/scaffold/**", "tests/package/application/**"],
+    ignorePatterns: [
+      "src/command/scaffold/**",
+      "tests/package/application/**",
+      ...Object.values(applicationExamples).flatMap((example) =>
+        example.generated.map((path) => `examples/${example.directory}/${path}`),
+      ),
+    ],
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",

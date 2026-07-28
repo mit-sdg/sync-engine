@@ -44,8 +44,10 @@ authoritative contract when a guide omits an edge case.
   multi-concept application.
 - [Operations Room](../examples/operations-room/README.md) demonstrates
   selectable reaction packs, replaceable policy, and staged formers.
+- [Production HTTP](../examples/production-http/README.md) separates registered
+  public-error projection from optional same-origin cookie credentials.
 
-Both applications are independently installable. Their generated Markdown and
+All applications are independently installable. Their generated Markdown and
 TypeScript files are pinned outputs from their assemblies.
 
 ## Evaluate a deployment

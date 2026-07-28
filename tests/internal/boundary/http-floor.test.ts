@@ -5,6 +5,7 @@ import {
   createHttpHandler,
   endpoint,
   httpFloor,
+  productionHttpProfile,
   receive,
   respond,
 } from "@sync-engine/boundary";
@@ -113,7 +114,7 @@ function setup() {
     },
   });
   const fetch = createHttpHandler({ application, gateway, floor });
-  return { application, fetch, floor };
+  return { application, fetch, floor, gateway };
 }
 
 describe("HTTP floor", () => {
@@ -273,5 +274,128 @@ describe("HTTP floor", () => {
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
+  });
+});
+
+describe("production HTTP profile", () => {
+  test("preserves successes and projects registered categories behind a base path", async () => {
+    const { application, gateway } = setup();
+    const fetch = createHttpHandler({
+      application,
+      gateway,
+      profile: productionHttpProfile({
+        origin: "https://learning.test",
+        basePath: "/api",
+      }),
+      correlation: {
+        resolve: () => "profile-42",
+        responseHeader: "X-Request-Id",
+      },
+    });
+
+    const accepted = await fetch(
+      new Request("https://learning.test/api/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: "secret-session" }),
+      }),
+    );
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toEqual({ user: "maya" });
+    expect(accepted.headers.get("X-Request-Id")).toBe("profile-42");
+
+    const refused = await fetch(
+      new Request("https://learning.test/api/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: "private-session" }),
+      }),
+    );
+    expect(refused.status).toBe(401);
+    expect(await refused.json()).toEqual({ error: "UNAUTHORIZED" });
+    expect(refused.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  test("keeps private refusals and framework server failures opaque", async () => {
+    const { application } = setup();
+    const profile = productionHttpProfile({ origin: "https://learning.test" });
+    const privateFetch = createHttpHandler({
+      application,
+      profile,
+      gateway: {
+        invoke: async () => ({
+          ok: false as const,
+          error: { kind: "domain" as const, value: "PRIVATE_REFUSAL" },
+        }),
+      },
+    });
+    const frameworkFetch = createHttpHandler({
+      application,
+      profile,
+      gateway: {
+        invoke: async () => ({
+          ok: false as const,
+          error: {
+            kind: "framework" as const,
+            code: "UNAVAILABLE" as const,
+            detail: "private capacity detail",
+          },
+        }),
+      },
+    });
+    const request = () =>
+      new Request("https://learning.test/private", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+
+    const privateResponse = await privateFetch(request());
+    expect(privateResponse.status).toBe(500);
+    expect(await privateResponse.json()).toEqual({ error: "INTERNAL_ERROR" });
+    const frameworkResponse = await frameworkFetch(request());
+    expect(frameworkResponse.status).toBe(500);
+    expect(await frameworkResponse.json()).toEqual({ error: "INTERNAL_ERROR" });
+  });
+
+  test("rejects unsafe methods, media types, paths, and oversized bodies", async () => {
+    const { application, gateway } = setup();
+    const fetch = createHttpHandler({
+      application,
+      gateway,
+      profile: productionHttpProfile({
+        origin: "https://learning.test",
+        basePath: "/api",
+      }),
+    });
+    const method = await fetch(new Request("https://learning.test/api/me"));
+    const media = await fetch(
+      new Request("https://learning.test/api/me", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: "{}",
+      }),
+    );
+    const path = await fetch(
+      new Request("https://learning.test/outside/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+    const body = await fetch(
+      new Request("https://learning.test/api/me", {
+        method: "POST",
+        headers: { "Content-Length": "1048577" },
+        body: "{}",
+      }),
+    );
+
+    expect([method.status, media.status, body.status]).toEqual([400, 400, 400]);
+    expect(await method.json()).toEqual({ error: "INVALID_REQUEST" });
+    expect(await media.json()).toEqual({ error: "INVALID_REQUEST" });
+    expect(await body.json()).toEqual({ error: "INVALID_REQUEST" });
+    expect(path.status).toBe(404);
+    expect(await path.json()).toEqual({ error: "NOT_FOUND" });
   });
 });

@@ -7,8 +7,14 @@ import type { Assembly } from "../assembly/assembly-facade.ts";
 import { assemblyBehind } from "../assembly/assembly-registry.ts";
 import type { HttpFloor } from "./http-floor.ts";
 import { validateHttpFloor } from "./http-floor.ts";
+import type { ProductionHttpProfile } from "./http-profile.ts";
+import { normalizeHttpBasePath, normalizeProductionHttpProfile } from "./http-profile.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
-import { publicCategoryOf, publicErrorStatus } from "../protocol/public-errors.ts";
+import {
+  publicErrorStatus,
+  publicFrameworkCategoryOf,
+  registeredPublicCategoryOf,
+} from "../protocol/public-errors.ts";
 import { isPlainObject } from "@engine/reads/matchers";
 
 // The body is the flat wire envelope; http adds only the status decoration —
@@ -144,12 +150,6 @@ async function readRequestText(request: Request): Promise<RequestTextResult> {
   }
 }
 
-function normalizeBasePath(basePath: string | undefined): string {
-  if (basePath === undefined || basePath === "" || basePath === "/") return "";
-  if (!basePath.startsWith("/")) throw new TypeError("basePath must start with '/'.");
-  return basePath.replace(/\/+$/, "");
-}
-
 export function createHttpHandler(
   options:
     | {
@@ -165,12 +165,19 @@ export function createHttpHandler(
     | {
         gateway: Invoker<ContractShape>;
         application: Assembly<Record<string, new (...args: never[]) => object>>;
+        profile: ProductionHttpProfile;
+        correlation?: HttpCorrelationOptions;
+      }
+    | {
+        gateway: Invoker<ContractShape>;
+        application: Assembly<Record<string, new (...args: never[]) => object>>;
         floor: HttpFloor;
         correlation?: HttpCorrelationOptions;
       },
 ): (request: Request) => Promise<Response> {
   if ("floor" in options) return createFloorHandler(options);
-  const base = normalizeBasePath(options.basePath);
+  if ("profile" in options) return createProfileHandler(options);
+  const base = normalizeHttpBasePath(options.basePath);
   const target = "gateway" in options ? options.gateway : options.invoker;
 
   return async (request) => {
@@ -268,17 +275,26 @@ type FloorHandlerOptions = {
   correlation?: HttpCorrelationOptions;
 };
 
+type ProfileHandlerOptions = {
+  gateway: Invoker<ContractShape>;
+  application: Assembly<Record<string, new (...args: never[]) => object>>;
+  profile: ProductionHttpProfile;
+  correlation?: HttpCorrelationOptions;
+};
+
+type PolicyHandlerOptions = FloorHandlerOptions | ProfileHandlerOptions;
+
 function publicFailure(
   result: Exclude<InvocationResult, { ok: true }>,
   categories: Readonly<Record<string, PublicErrorCategory>>,
 ): { error: string; status: number } {
-  const code =
+  const category =
     result.error.kind === "framework"
-      ? result.error.code
-      : typeof result.error.value === "string"
-        ? result.error.value
-        : "";
-  const category = publicCategoryOf(code, categories);
+      ? publicFrameworkCategoryOf(result.error.code)
+      : registeredPublicCategoryOf(
+          typeof result.error.value === "string" ? result.error.value : "",
+          categories,
+        );
   return { error: category, status: publicErrorStatus(category) };
 }
 
@@ -296,7 +312,7 @@ function cookieValue(header: string | null, name: string): string | undefined {
   return undefined;
 }
 
-function floorJson(
+function publicJson(
   body: unknown,
   status: number,
   options: { cookie?: string; noStore?: boolean } = {},
@@ -315,16 +331,39 @@ function floorJson(
 
 function createFloorHandler(options: FloorHandlerOptions): (request: Request) => Promise<Response> {
   validateHttpFloor(options.application, options.floor);
+  return createPolicyHandler(options);
+}
+
+function createProfileHandler(
+  options: ProfileHandlerOptions,
+): (request: Request) => Promise<Response> {
+  return createPolicyHandler(options);
+}
+
+function createPolicyHandler(
+  options: PolicyHandlerOptions,
+): (request: Request) => Promise<Response> {
   const assembled = assemblyBehind(options.application);
   const routes = assembled.publicInterface.routes;
   const categories = assembled.publicErrors;
-  const credential = options.floor.credential;
-  const secure = new URL(options.floor.origin).protocol === "https:";
-  const cookieName = secure ? `__Host-${credential.name}` : credential.name;
+  const floor = "floor" in options ? options.floor : undefined;
+  const declaration = "floor" in options ? options.floor : options.profile;
+  const profile = normalizeProductionHttpProfile(
+    declaration,
+    floor === undefined ? "productionHttpProfile" : "httpFloor",
+    floor === undefined ? "" : " for secure cookies",
+  );
+  const base = normalizeHttpBasePath(profile.basePath);
+  const credential = floor?.credential;
+  const secure = new URL(profile.origin).protocol === "https:";
+  const cookieName =
+    credential === undefined ? "" : secure ? `__Host-${credential.name}` : credential.name;
   const protectedPaths = new Set(
-    Object.entries(assembled.contracts)
-      .filter(([, contract]) => contract.required?.includes(credential.input))
-      .map(([path]) => path),
+    credential === undefined
+      ? []
+      : Object.entries(assembled.contracts)
+          .filter(([, contract]) => contract.required?.includes(credential.input))
+          .map(([path]) => path),
   );
 
   const cookie = (value: string, expires: Date) =>
@@ -338,18 +377,29 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
     const correlationId = correlationIdFor(request, options.correlation);
     const reply = (response: Response) =>
       withCorrelation(response, correlationId, options.correlation);
-    const invalid = () => reply(floorJson({ error: "INVALID_REQUEST" }, 400));
+    const invalid = () => reply(publicJson({ error: "INVALID_REQUEST" }, 400));
     if (request.method !== "POST") return invalid();
     const origin = request.headers.get("Origin");
-    if (origin !== null && origin !== options.floor.origin) {
-      return reply(floorJson({ error: "FORBIDDEN" }, 403));
+    if (floor !== undefined && origin !== null && origin !== profile.origin) {
+      return reply(publicJson({ error: "FORBIDDEN" }, 403));
     }
     const contentType = request.headers.get("Content-Type");
     if (contentType !== null && !/^application\/json(?:\s*;|$)/i.test(contentType)) {
       return invalid();
     }
     let path = new URL(request.url).pathname;
-    if (!(path in routes) && path.startsWith("/api/")) path = path.slice("/api".length);
+    if (base !== "") {
+      if (path !== base && !path.startsWith(`${base}/`)) {
+        return reply(publicJson({ error: "NOT_FOUND" }, 404));
+      }
+      path = path.slice(base.length);
+    } else if (floor !== undefined && !(path in routes) && path.startsWith("/api/")) {
+      // Retain the floor's original zero-configuration /api compatibility.
+      path = path.slice("/api".length);
+    }
+    if (!path.startsWith("/") || path === "") {
+      return reply(publicJson({ error: "NOT_FOUND" }, 404));
+    }
 
     let body: unknown;
     const requestText = await readRequestText(request);
@@ -359,7 +409,7 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
     } catch {
       return invalid();
     }
-    if (protectedPaths.has(path)) {
+    if (credential !== undefined && protectedPaths.has(path)) {
       if (!isPlainObject(body)) return invalid();
       (body as Record<string, unknown>)[credential.input] =
         cookieValue(request.headers.get("Cookie"), cookieName) ?? null;
@@ -378,7 +428,7 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
       const failure = publicFailure(result, categories);
       const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";
       return reply(
-        floorJson(
+        publicJson(
           { error: failure.error },
           failure.status,
           clear ? { cookie: clearedCookie(), noStore: true } : {},
@@ -387,27 +437,28 @@ function createFloorHandler(options: FloorHandlerOptions): (request: Request) =>
     }
 
     const value = result.value;
+    if (credential === undefined) return reply(publicJson(value, 200));
     if (path === credential.issue.path) {
       if (!isPlainObject(value)) {
-        return reply(floorJson({ error: "INTERNAL_ERROR" }, 500));
+        return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
       }
       const record = value as Record<string, unknown>;
       const token = record[credential.issue.output];
       const sourceExpiry = record[credential.issue.expires];
       const expires = sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
       if (typeof token !== "string" || Number.isNaN(expires.getTime())) {
-        return reply(floorJson({ error: "INTERNAL_ERROR" }, 500));
+        return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
       }
       const publicValue = Object.fromEntries(
         Object.entries(record).filter(
           ([key]) => key !== credential.issue.output && key !== credential.issue.expires,
         ),
       );
-      return reply(floorJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true }));
+      return reply(publicJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true }));
     }
     if (credential.clear.includes(path)) {
-      return reply(floorJson(value, 200, { cookie: clearedCookie(), noStore: true }));
+      return reply(publicJson(value, 200, { cookie: clearedCookie(), noStore: true }));
     }
-    return reply(floorJson(value, 200));
+    return reply(publicJson(value, 200));
   };
 }

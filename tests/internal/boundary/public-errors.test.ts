@@ -24,6 +24,7 @@ describe("HTTP public error projection", () => {
     expect(publicCategoryOf(FrameworkErrorCode.INTERNAL_ERROR, {})).toBe("INTERNAL_ERROR");
     expect(publicCategoryOf(FrameworkErrorCode.TIMED_OUT, categories)).toBe("INTERNAL_ERROR");
     expect(publicCategoryOf("SESSION_EXPIRED", categories)).toBe("UNAUTHORIZED");
+    expect(publicCategoryOf("CONFLICT", categories)).toBe("INTERNAL_ERROR");
     expect(publicCategoryOf("PRIVATE", categories)).toBe("INTERNAL_ERROR");
   });
 });

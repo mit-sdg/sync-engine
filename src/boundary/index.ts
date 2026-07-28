@@ -26,6 +26,8 @@ export type {
 export type { ApplicationInterface } from "@engine/boundary/protocol/application-interface";
 export { createHttpHandler } from "@engine/boundary/http/http";
 export type { HttpCorrelationOptions } from "@engine/boundary/http/http";
+export { productionHttpProfile } from "@engine/boundary/http/http-profile";
+export type { ProductionHttpProfile } from "@engine/boundary/http/http-profile";
 export { httpFloor } from "@engine/boundary/http/http-floor";
 export type { HttpCredentialBinding, HttpFloor } from "@engine/boundary/http/http-floor";
 export {

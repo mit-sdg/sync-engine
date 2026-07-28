@@ -7,6 +7,8 @@ import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
 import { assertPortableEndpoints } from "@engine/boundary/assembly/endpoint-portability";
 import type { HttpFloor } from "@engine/boundary/http/http-floor";
 import { projectAssemblyHttpWire } from "@engine/boundary/http/http-floor";
+import type { ProductionHttpProfile } from "@engine/boundary/http/http-profile";
+import { projectAssemblyProductionHttpWire } from "@engine/boundary/http/http-profile";
 import { renderInputContracts } from "@engine/boundary/protocol/endpoints";
 import { wireContracts } from "@engine/boundary/wire/wire-contracts";
 import { renderWireTypes } from "@engine/boundary/wire/wire-renderer";
@@ -50,6 +52,7 @@ export interface GeneratedApplication {
    * `vocabulary`.
    */
   vocabulary?: { module?: URL; export?: string };
+  httpProfile?: ProductionHttpProfile;
   httpFloor?: HttpFloor;
 }
 
@@ -82,6 +85,9 @@ export function resolveApplication(
   }
   if (typeof application.assemble !== "function") {
     throw new Error("generated config: assemble must build the application.");
+  }
+  if (application.httpProfile !== undefined && application.httpFloor !== undefined) {
+    throw new Error("generated config: httpProfile and httpFloor are mutually exclusive.");
   }
   const directory = application.directory ?? new URL("./generated/", config);
   const module = application.vocabulary?.module ?? new URL("./src/concept-set.ts", config);
@@ -122,21 +128,24 @@ export function renderGenerated(application: ResolvedApplication) {
     vocabulary: application.vocabularyFrom,
     strictLeaves: true,
   });
+  const projectedContracts =
+    application.httpFloor !== undefined
+      ? projectAssemblyHttpWire(assembled, applicationContracts, application.httpFloor)
+      : application.httpProfile !== undefined
+        ? projectAssemblyProductionHttpWire(assembled, applicationContracts)
+        : undefined;
   const wire =
-    application.httpFloor === undefined
+    projectedContracts === undefined
       ? logicalWire
       : logicalWire +
         "\n" +
-        renderWireTypes(
-          projectAssemblyHttpWire(assembled, applicationContracts, application.httpFloor),
-          {
-            moduleName: application.httpWireName ?? `${wireName}Http`,
-            appWideErrorName: "HttpAppWideError",
-            vocabulary: application.vocabularyFrom,
-            strictLeaves: true,
-            preamble: false,
-          },
-        );
+        renderWireTypes(projectedContracts, {
+          moduleName: application.httpWireName ?? `${wireName}Http`,
+          appWideErrorName: "HttpAppWideError",
+          vocabulary: application.vocabularyFrom,
+          strictLeaves: true,
+          preamble: false,
+        });
   return {
     metrics: {
       reactions: design.app.reactions.length,

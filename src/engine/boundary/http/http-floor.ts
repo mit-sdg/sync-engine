@@ -1,11 +1,12 @@
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import { assemblyBehind } from "../assembly/assembly-registry.ts";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
-import { publicCategoryOf } from "../protocol/public-errors.ts";
 import { wireContracts } from "../wire/wire-contracts.ts";
 import type { WireContractsIR } from "../wire/wire-contracts.ts";
 import type { WireType } from "../wire/wire-types.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
+import type { ProductionHttpProfile } from "./http-profile.ts";
+import { normalizeProductionHttpProfile, projectProductionHttpWire } from "./http-profile.ts";
 
 export interface HttpCredentialBinding {
   name: string;
@@ -18,29 +19,14 @@ export interface HttpCredentialBinding {
   clear: readonly string[];
 }
 
-export interface HttpFloor {
-  origin: string;
+export interface HttpFloor extends ProductionHttpProfile {
   credential: HttpCredentialBinding;
 }
 
 const FIELD_NAME = /^[A-Za-z_$][\w$]*$/;
 
 export function httpFloor(declaration: HttpFloor): HttpFloor {
-  let origin: URL;
-  try {
-    origin = new URL(declaration.origin);
-  } catch {
-    throw new Error("httpFloor: origin must be an absolute HTTP or HTTPS origin.");
-  }
-  if (
-    !["http:", "https:"].includes(origin.protocol) ||
-    origin.origin !== declaration.origin.replace(/\/$/, "")
-  ) {
-    throw new Error("httpFloor: origin must contain only an HTTP or HTTPS origin.");
-  }
-  if (process.env.NODE_ENV === "production" && origin.protocol !== "https:") {
-    throw new Error("httpFloor: production requires an HTTPS public origin for secure cookies.");
-  }
+  const profile = normalizeProductionHttpProfile(declaration, "httpFloor", " for secure cookies");
   const credential = declaration.credential;
   for (const [seat, value] of [
     ["credential name", credential.name],
@@ -57,7 +43,7 @@ export function httpFloor(declaration: HttpFloor): HttpFloor {
     throw new Error("httpFloor: credential clearing endpoints must be distinct.");
   }
   return Object.freeze({
-    origin: origin.origin,
+    ...profile,
     credential: Object.freeze({
       ...credential,
       issue: Object.freeze({ ...credential.issue }),
@@ -127,13 +113,11 @@ export function projectHttpWire(
   floor: HttpFloor,
 ): WireContractsIR {
   const credential = floor.credential;
+  const projected = projectProductionHttpWire(wire, categories);
   return {
-    endpoints: wire.endpoints.map((endpoint) => {
+    endpoints: projected.endpoints.map((endpoint) => {
       const protectedRoute =
         contracts[endpoint.path]?.required?.includes(credential.input) ?? false;
-      const errors = [
-        ...new Set(endpoint.errors.map((code) => publicCategoryOf(code, categories))),
-      ].sort();
       return {
         ...endpoint,
         input: protectedRoute
@@ -146,11 +130,9 @@ export function projectHttpWire(
                 new Set([credential.issue.output, credential.issue.expires]),
               )
             : endpoint.output,
-        errors,
-        openError: false,
       };
     }),
-    appWide: [...new Set(wire.appWide.map((code) => publicCategoryOf(code, categories)))].sort(),
+    appWide: projected.appWide,
   };
 }
 

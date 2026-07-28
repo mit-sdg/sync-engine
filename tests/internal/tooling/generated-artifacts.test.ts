@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
 import { reaction, vocabulary, when } from "@sync-engine/language";
-import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { endpoint, productionHttpProfile, receive, respond } from "@sync-engine/boundary";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
 import { httpFloor } from "@sync-engine/boundary";
@@ -171,6 +171,29 @@ describe("generated application artifacts", () => {
     expect(rendered.wire).toContain("export type ApplicationWireHttp = {");
     const projected = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp"));
     expect(projected).not.toContain('"session":');
+  });
+
+  test("a production HTTP profile projects errors without consuming logical fields", () => {
+    const application = assemble({
+      vocabulary: vocabularyDeclaration,
+      composition: { Login, Current },
+    });
+    const rendered = renderGenerated(
+      resolveApplication(
+        {
+          assemble: () => application,
+          directory: new URL("./generated/", import.meta.url),
+          title: "Application",
+          vocabulary: { module: languageModule },
+          httpProfile: productionHttpProfile({ origin: "https://example.test" }),
+        },
+        configUrl,
+      ),
+    );
+
+    const projected = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp"));
+    expect(projected).toContain('"session":');
+    expect(projected).toContain('error: { error: HttpAppWideError | "INVALID_REQUEST" }');
   });
 
   test("ordinary assembly rejects an executable endpoint absent from portable IR", async () => {

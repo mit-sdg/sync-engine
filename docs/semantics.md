@@ -361,12 +361,11 @@ replacement gateway vocabulary or assembly.
 
 The local and HTTP clients resolve to the same simple shape: the endpoint's
 success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
-boundary answer keeps domain errors and framework errors distinct. The HTTP
-adapter also owns method, JSON parsing, a one-mebibyte request-body limit, and
-status mapping; framework failures mapped to 5xx responses omit diagnostic
-detail. Client, invocation, and CLI adapters also omit exception text when an
-unknown thrown value becomes a framework error. A top-level `error` field in an
-authored response denotes a domain failure, so a successful endpoint result
+boundary answer keeps domain errors and framework errors distinct. Every HTTP
+handler owns method checks, JSON parsing, a one-mebibyte request-body limit, and
+status mapping. Client, invocation, and CLI adapters omit exception text when
+an unknown thrown value becomes a framework error. A top-level `error` field in
+an authored response denotes a domain failure, so a successful endpoint result
 cannot use `error` as an ordinary top-level data field. See the exact
 [cancellation boundary](#cancellation).
 
@@ -391,22 +390,35 @@ value in a response header. Invalid or faulting resolver results become a fresh
 UUID. Correlation follows gateway and application observation; it does not
 deduplicate work and is not an idempotency key.
 
-An HTTP floor may bind one logical credential input to a cookie. The application
+`productionHttpProfile(...)` declares a public origin and optional base path.
+The handler form carrying that profile and the assembly is the production
+credential-free policy. It accepts JSON `POST` requests, preserves ordinary
+successful values, and projects domain refusals only through public categories
+registered by the assembly. A private, unknown, non-string, or dynamically open
+domain failure becomes `{ error: "INTERNAL_ERROR" }`. Framework input and route
+failures become `INVALID_REQUEST` and `NOT_FOUND`; every framework server
+failure becomes the same opaque internal response. Diagnostic detail never
+crosses this policy. The declared origin identifies public deployment and
+enforces the production HTTPS check; the credential-free profile does not use
+an inbound `Origin` header as an authorization or CORS decision.
+
+An HTTP floor may additionally bind one logical credential input to a cookie. The application
 declares the credential name and input, the endpoint that issues it and the
 returned token and expiry fields, the successful endpoints that clear it, and
 the public origin. Registration checks those names against the assembly. Any
 endpoint whose input contract requires that credential becomes protected
 without another floor edit.
 
-The fixed floor accepts JSON `POST` requests, enforces the declared origin when
+The fixed floor uses the production profile's request and public-error policy,
+enforces the declared origin when
 an `Origin` header is present, replaces a protected request's credential input
 with the cookie value, and never accepts that value from the body. It projects
-concept refusal codes through their registered public categories and keeps
-framework faults opaque. The issuing endpoint's token and expiry fields become
-the cookie and do not enter its HTTP response. Successful clearing endpoints
-and an unauthorized protected request clear the cookie. Responses that issue
-or clear the cookie use `Cache-Control: no-store`. The floor is a same-origin boundary: it does not
-answer CORS preflights or emit CORS headers.
+concept refusal codes through the same registered categories. The issuing
+endpoint's token and expiry fields become the cookie and do not enter its HTTP
+response. Successful clearing endpoints and an unauthorized protected request
+clear the cookie. Responses that issue or clear the cookie use `Cache-Control:
+no-store`. The floor is a same-origin boundary: it does not answer CORS
+preflights or emit CORS headers.
 
 **Runtime validation boundary.** Gateway admission and the assembled invoker
 validate the route and request's outer shape. The input must be a non-null,
@@ -432,10 +444,11 @@ every exported `receive(...)` pattern for that path. An executable-only endpoint
 has no derived contract. An explicit contract replaces a derived contract, and
 only one endpoint declaration may supply an explicit contract for a path.
 
-Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
+Production profiles and floors reject a non-HTTPS public origin when
+`NODE_ENV=production`. Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
 `Domain`. An HTTPS origin uses a `Secure` cookie whose name has the `__Host-`
-prefix; production rejects a non-HTTPS origin. Deployment responsibilities are
-listed under [Boundary operations](#boundary-operations).
+prefix. Deployment responsibilities are listed under [Boundary
+operations](#boundary-operations).
 
 For JSON-representable values, both clients expose the same projected data. The
 local client serializes and parses input and output before returning it. Dates
@@ -444,12 +457,15 @@ not have identical error codes: the local transport normally reports
 `TRANSPORT_ERROR`, while HTTP request serialization can report `NETWORK_ERROR`
 and server response serialization can report `INTERNAL_ERROR`.
 
-The generic HTTP adapter and credential HTTP floor are different protocol
-surfaces. The generic adapter exposes ordinary domain failures as HTTP 400 and
-maps selected framework codes to statuses. The credential floor projects
-private codes to public categories, makes malformed request failures opaque,
-and consumes or supplies credential fields through cookies. Do not infer one
-adapter's status or detail behavior from the other.
+The raw HTTP adapter, production profile, and credential floor are different
+protocol surfaces. The raw `{ gateway | invoker, basePath? }` form is a
+low-level logical-envelope adapter: it exposes ordinary domain failures as HTTP
+400 and maps selected framework codes to statuses. It is preserved for hosts
+that deliberately own an outer projection and is not the recommended direct
+public deployment profile. The production profile exposes only registered
+categories and opaque protocol failures. The floor adds cookie consumption and
+issuance to that production policy. Do not infer one surface's status, detail,
+or field behavior from another.
 
 ## Generated wire
 
@@ -470,14 +486,15 @@ gateway routing, HTTP, and generation therefore share the declaration-owned
 route set instead of silently omitting a local-only endpoint. Executable-only
 non-endpoint reactions remain listed in the generated read-back.
 
-When a generated application descriptor supplies an HTTP floor, one module
-contains both contracts. The contract named by `wireName` retains the logical
-application inputs, outputs, and refusal codes for a local client. A second
-contract, named by `httpWireName` or `${wireName}Http`, omits the cookie-bound
-input from protected routes and the consumed token and expiry fields from the
-issuing route's output. Its error union carries public categories rather than
-private refusal codes. Both contracts share the generated type helpers and
-vocabulary anchor.
+When a generated application descriptor supplies `httpProfile` or `httpFloor`,
+one module contains both contracts. The contract named by `wireName` retains the
+logical application inputs, outputs, and refusal codes for a local client. A
+second contract, named by `httpWireName` or `${wireName}Http`, carries public
+categories rather than private refusal codes. With `httpFloor`, that contract
+also omits the cookie-bound input from protected routes and the consumed token
+and expiry fields from the issuing route's output. Both contracts share the
+generated type helpers and vocabulary anchor. A descriptor cannot supply both
+HTTP fields.
 
 These are TypeScript guarantees. Input admission is stated under
 [Boundary, gateway, and client](#boundary-gateway-and-client); output validation
@@ -490,7 +507,7 @@ delivery, cancellation, persistence, restart, or boundary operation.
 
 ### Execution and resource bounds
 
-The HTTP adapter limits one request body to 1,048,576 bytes, automatic log
+Every HTTP handler limits one request body to 1,048,576 bytes, automatic log
 retention bounds settled-flow inspection, and `ExecutionLimits` provides the
 engine-owned production budget. Row limits are checked at reaction matching,
 where evaluation, and each consequence stage. They do not replace host limits
@@ -636,9 +653,10 @@ replay firings. JSONL occurrences are evidence, not restart recovery.
 
 ### Boundary operations
 
-When `NODE_ENV=production`, the HTTP floor rejects a public origin that is not
-HTTPS. A production host must set that environment value. The floor does not
-provide TLS termination, HSTS, or trusted-proxy handling; deployment must supply
-them. Generated wire contracts typecheck callers, but the gateway does not
-validate returned values against generated output types or derive a runtime
-validator from concept specifications.
+When `NODE_ENV=production`, production HTTP profiles and floors reject a public
+origin that is not HTTPS. A production host must set that environment value.
+The Fetch handler does not provide CORS policy, TLS termination, HSTS,
+trusted-proxy handling, reverse-proxy policy, or authentication; deployment and
+application code must supply them. Generated wire contracts typecheck callers,
+but the gateway does not validate returned values against generated output
+types or derive a runtime validator from concept specifications.

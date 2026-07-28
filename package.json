@@ -73,6 +73,7 @@
     "declarations:check": "bun run build && bun scripts/declarations.ts check",
     "declarations:pin": "bun run build && bun scripts/declarations.ts pin",
     "example": "bun run build && bun scripts/examples.ts scenario readingCircle",
+    "example:http": "bun run build && bun scripts/examples.ts scenario productionHttp",
     "example:operations": "bun run build && bun scripts/examples.ts scenario operationsRoom",
     "examples:check": "bun scripts/examples.ts check",
     "package:check": "bun scripts/verify-package.ts",

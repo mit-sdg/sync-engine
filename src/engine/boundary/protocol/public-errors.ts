@@ -9,14 +9,14 @@ export const PUBLIC_ERROR_CATEGORIES = {
   CONFLICT: "CONFLICT",
 } as const satisfies Record<PublicErrorCategory, PublicErrorCategory>;
 
-const publicCategories = new Set<string>(Object.values(PUBLIC_ERROR_CATEGORIES));
-
-/** Project a domain or framework error code onto the HTTP floor's public vocabulary. */
-export function publicCategoryOf(
+export function registeredPublicCategoryOf(
   code: string,
   categories: Readonly<Record<string, PublicErrorCategory>>,
 ): PublicErrorCategory | "INTERNAL_ERROR" {
-  if (publicCategories.has(code)) return code as PublicErrorCategory;
+  return categories[code] ?? "INTERNAL_ERROR";
+}
+
+export function publicFrameworkCategoryOf(code: string): PublicErrorCategory | "INTERNAL_ERROR" {
   switch (code) {
     case FrameworkErrorCode.INVALID_INPUT:
     case FrameworkErrorCode.BAD_JSON:
@@ -24,11 +24,17 @@ export function publicCategoryOf(
       return "INVALID_REQUEST";
     case FrameworkErrorCode.NOT_FOUND:
       return "NOT_FOUND";
-    case FrameworkErrorCode.INTERNAL_ERROR:
-      return "INTERNAL_ERROR";
     default:
-      return categories[code] ?? "INTERNAL_ERROR";
+      return "INTERNAL_ERROR";
   }
+}
+
+/** Project a generated error code onto the production HTTP vocabulary. */
+export function publicCategoryOf(
+  code: string,
+  categories: Readonly<Record<string, PublicErrorCategory>>,
+): PublicErrorCategory | "INTERNAL_ERROR" {
+  return categories[code] ?? publicFrameworkCategoryOf(code);
 }
 
 export function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number {

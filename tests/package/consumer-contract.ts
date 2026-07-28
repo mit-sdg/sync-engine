@@ -2,7 +2,13 @@ import { createClient, createHttpClient, createLocalClient } from "@mit-sdg/sync
 import type { ClientError } from "@mit-sdg/sync-engine/client";
 import { assemble, Logging } from "@mit-sdg/sync-engine/assembly";
 import type { ActionRefusal, AssemblyOptions } from "@mit-sdg/sync-engine/assembly";
-import type { GatewayOptions, InvocationResult, Invoker } from "@mit-sdg/sync-engine/boundary";
+import { productionHttpProfile } from "@mit-sdg/sync-engine/boundary";
+import type {
+  GatewayOptions,
+  InvocationResult,
+  Invoker,
+  ProductionHttpProfile,
+} from "@mit-sdg/sync-engine/boundary";
 import { vocabulary } from "@mit-sdg/sync-engine/language";
 
 class QueriedConcept {
@@ -44,7 +50,11 @@ const gatewayOptions: GatewayOptions = {
   application: directAssembly,
   logging: Logging.VERBOSE,
 };
-void [directAction, directQuery, gatewayOptions];
+const httpProfile: ProductionHttpProfile = productionHttpProfile({
+  origin: "https://example.test",
+  basePath: "/api",
+});
+void [directAction, directQuery, gatewayOptions, httpProfile];
 
 // @ts-expect-error A direct action caller must account for refusal mappings.
 const directSuccessOnly: Promise<{ value: string }> = directAssembly.concepts.Direct.act({
