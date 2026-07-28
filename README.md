@@ -21,7 +21,7 @@ bun add @mit-sdg/sync-engine@alpha
 ```
 
 All CLI commands and shipped TypeScript projects require Bun 1.3 or newer. The
-ESM-only library supports Node.js 20 or newer.
+ESM-only library supports Node.js 24 or newer.
 
 Start a project with the package-qualified CLI:
 
