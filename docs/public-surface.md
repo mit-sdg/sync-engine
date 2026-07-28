@@ -253,7 +253,7 @@ invoker.invoke(path, input, options?: InvokeOptions): Promise<InvocationResult>
 | `retention`             | no       | `{ window: 100 }`; same accepted values as assembly retention |
 | `logStore`              | no       | New `MemoryStore`; mutually exclusive with `retention`        |
 | `executionLimits`       | no       | Unbounded gateway execution                                   |
-| `observers`             | no       | No gateway operational observers                              |
+| `observers`             | no       | Internal gateway events and one final public-call settlement  |
 | `redaction`             | no       | Universal sensitive-field patterns only                       |
 
 | `InvokeOptions` field | Default / effect                                                             |
@@ -267,6 +267,14 @@ pending requests, actions and firings per flow, rows per evaluation, and the
 maximum caller deadline. Overload and drain return `UNAVAILABLE`. `Gateway`
 also exposes `beginDrain()` and `whenIdle()` and includes the target assembly's
 lifecycle when that target supplies it.
+
+Gateway action, interpreter, integrity, limit, and drain events describe its
+internal engine. Its `/gateway/receive` invocation settlement is hidden;
+observers instead receive exactly one `invocation-settled` event for each
+public `invoke` call after the final result is known. That event uses the
+requested application route and effective correlation id, includes the final
+result class and applicable framework code, covers full completion in its
+duration, and may omit `flow`.
 
 `Gateway`, `GatewayTarget`, `GatewayClientError`, `Invoker`, and
 `InvocationResult` name these contracts. Timeout and abort stop waiting but do

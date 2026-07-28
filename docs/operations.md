@@ -174,6 +174,22 @@ it. `"evictConsumed"` removes only a consumed suffix when `prune()` is called;
 settlement does not invoke that prune operation automatically. Increasing
 retention increases memory use. No hard retained-byte limit is provided.
 
+## Operational observation
+
+Use an assembly observer for application-engine telemetry and a gateway
+observer for gateway-boundary telemetry. Gateway action, interpreter,
+integrity, limit, and drain events identify the gateway's internal concepts and
+routes. For request-level counts and latency, use its single
+`invocation-settled` event: it is emitted after final downstream completion and
+identifies the caller-requested application route, effective correlation id,
+result class, and applicable framework code. The internal `/gateway/receive`
+settlement is deliberately hidden, and the public settlement may have no
+`flow` field.
+
+Observer handoff is synchronous but isolated: throws and rejected promises do
+not alter invocation behavior. Keep callbacks bounded and move queueing,
+export, retries, and network I/O into host-owned infrastructure.
+
 ## HTTP host responsibilities
 
 Use `productionHttpProfile(...)` for a public JSON boundary that does not need

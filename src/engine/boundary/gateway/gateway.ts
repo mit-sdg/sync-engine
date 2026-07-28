@@ -3,7 +3,7 @@ import type { OutcomeContracts } from "@engine/reactions/concepts/outcomes";
 import { Refuse } from "@engine/reactions/concepts/refuse";
 import type { LogStore, RetentionPolicy } from "@engine/reactions/runtime/log-store";
 import { Logging } from "@engine/reactions/runtime/logging";
-import type { OperationalObserver } from "@engine/reactions/runtime/operational";
+import { OperationalEvents, type OperationalObserver } from "@engine/reactions/runtime/operational";
 import type { Reacting } from "@engine/reactions/runtime/reacting";
 import type { Vars } from "@engine/reactions/types";
 import type { RedactionPolicy } from "@engine/utils/redaction";
@@ -187,7 +187,7 @@ export interface GatewayOptions {
   logStore?: LogStore;
   /** Opt-in limits for the gateway's own execution. */
   executionLimits?: ExecutionLimits;
-  /** Bounded synchronous handoff for the gateway's operational events. */
+  /** Internal gateway events plus one final public-call settlement; bounded synchronous handoff. */
   observers?: readonly OperationalObserver[];
   /** Additional sensitive field names for the gateway only. */
   redaction?: RedactionPolicy;
@@ -197,6 +197,7 @@ export interface GatewayOptions {
 export function createGateway<C extends ContractShape = ContractShape>(
   options: GatewayOptions,
 ): Gateway<C> {
+  const operational = new OperationalEvents(options.observers);
   const app = assemble({
     vocabulary: gatewayVocabulary,
     instances: {
@@ -212,7 +213,14 @@ export function createGateway<C extends ContractShape = ContractShape>(
     retention: options.retention,
     logStore: options.logStore,
     executionLimits: options.executionLimits,
-    observers: options.observers,
+    observers:
+      options.observers === undefined
+        ? undefined
+        : [
+            (event) => {
+              if (event.type !== "invocation-settled") operational.emit(event);
+            },
+          ],
     redaction: options.redaction,
   });
 
@@ -228,35 +236,56 @@ export function createGateway<C extends ContractShape = ContractShape>(
       await Promise.all([app.whenIdle(), downstream]);
     },
     async invoke(path, input, invokeOptions) {
+      const startedAt = performance.now();
+      const correlationId = invokeOptions?.correlationId ?? crypto.randomUUID();
+      const settle = <T extends InvocationResult>(settled: T): T => {
+        operational.emit({
+          type: "invocation-settled",
+          at: Date.now(),
+          route: path,
+          correlationId,
+          result: settled.ok
+            ? "success"
+            : settled.error.kind === "domain"
+              ? "domain-error"
+              : "framework-error",
+          ...(!settled.ok && settled.error.kind === "framework"
+            ? { frameworkCode: settled.error.code }
+            : {}),
+          durationMs: performance.now() - startedAt,
+        });
+        return settled;
+      };
+      const effectiveOptions = { ...invokeOptions, correlationId };
       const result = (await (app.invoker as Invoker<GatewayBoundaryContract>).invoke(
         GATEWAY_RECEIVE_PATH,
         {
           targetPath: path,
           input,
-          signal: invokeOptions?.signal,
-          timeoutMs: invokeOptions?.timeoutMs,
+          signal: effectiveOptions.signal,
+          timeoutMs: effectiveOptions.timeoutMs,
         },
-        invokeOptions,
+        effectiveOptions,
       )) as InvocationResult<{ reply: Promise<GatewayReply> }, string>;
 
       if (result.ok) {
         const reply = await result.value.reply;
-        if (reply.kind === "success") return { ok: true, value: reply.body } as never;
+        if (reply.kind === "success") return settle({ ok: true, value: reply.body } as never);
         if (reply.kind === "domain") {
-          return { ok: false, error: { kind: "domain", value: reply.value } } as never;
+          return settle({ ok: false, error: { kind: "domain", value: reply.value } } as never);
         }
-        return {
+        return settle({
           ok: false,
           error: {
             kind: "framework",
             code: reply.code,
             ...(reply.detail === undefined ? {} : { detail: reply.detail }),
           },
-        };
+        });
       }
       if (result.error.kind === "domain") {
         if (isEmittedFrameworkErrorCode(result.error.value)) {
-          return {
+          return settle({
             ok: false,
             error: {
               kind: "framework",
@@ -265,14 +294,19 @@ export function createGateway<C extends ContractShape = ContractShape>(
                 ? { detail: `Unknown endpoint: ${String(path)}` }
                 : {}),
             },
-          };
+          });
         }
-        return { ok: false, error: { kind: "domain", value: result.error.value } } as never;
+        return settle({
+          ok: false,
+          error: { kind: "domain", value: result.error.value },
+        } as never);
       }
-      return result as InvocationResult<
-        C[typeof path]["output"],
-        DomainErrorValue<C[typeof path]["error"]>
-      >;
+      return settle(
+        result as InvocationResult<
+          C[typeof path]["output"],
+          DomainErrorValue<C[typeof path]["error"]>
+        >,
+      );
     },
   } as Gateway<C>;
 }

@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -298,6 +298,72 @@ describe("generated application artifacts", () => {
     try {
       await expect(pinGenerated(application)).rejects.toThrow(/no endpoint override/);
       expect(existsSync(directory)).toBe(false);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  });
+
+  test("selectively pins atomic files and detects missing or changed output", async () => {
+    const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-"));
+    const generated = join(temporary, "generated");
+    const directory = pathToFileURL(`${generated}/`);
+    const application = resolveApplication(
+      {
+        assemble: () =>
+          assemble({ vocabulary: vocabularyDeclaration, composition: { Login, Current } }),
+        directory,
+        title: "Filesystem application",
+        vocabulary: { module: languageModule },
+      },
+      configUrl,
+    );
+    const specification = join(generated, "filesystem-application.md");
+    const wire = join(generated, "wire.ts");
+
+    try {
+      await pinGenerated(application, "specification");
+      expect(existsSync(specification)).toBe(true);
+      expect(existsSync(wire)).toBe(false);
+      await expect(checkGenerated(application)).rejects.toThrow(
+        "wire.ts differ from generated output",
+      );
+
+      await pinGenerated(application, "wire");
+      await expect(checkGenerated(application)).resolves.toBeUndefined();
+
+      await writeFile(specification, "stale generated output");
+      await expect(checkGenerated(application)).rejects.toThrow(
+        "filesystem-application.md differ from generated output",
+      );
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  });
+
+  test("reports generated artifact filesystem failures without partial writes", async () => {
+    const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-failure-"));
+    const generated = join(temporary, "generated");
+    const blocked = join(generated, "blocked.md");
+    await mkdir(blocked, { recursive: true });
+    const application = resolveApplication(
+      {
+        assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+        directory: pathToFileURL(`${generated}/`),
+        specification: "blocked.md",
+        title: "Blocked application",
+        vocabulary: { module: languageModule },
+      },
+      configUrl,
+    );
+
+    try {
+      await expect(checkGenerated(application)).rejects.toThrow(
+        "generated artifacts: failed to check blocked.md",
+      );
+      await expect(pinGenerated(application, "specification")).rejects.toThrow(
+        "generated artifacts: failed to apply blocked.md",
+      );
+      expect(existsSync(join(generated, "wire.ts"))).toBe(false);
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }

@@ -431,14 +431,28 @@ event union reports action settlement, interpreter and integrity failure,
 invocation settlement, execution-limit breach, and drain state. Applicable
 events carry action id, flow, route, asking reaction, correlation id, safe
 result class, wall-clock time, and monotonic duration. They never carry action
-input or output. Observer callbacks are synchronous bounded handoff: the engine
-catches throws and never awaits observer work, while queueing, exporting, and
-network I/O remain host responsibilities.
+input or output.
+
+A gateway observer receives the gateway engine's action, interpreter,
+integrity, limit, and drain events. Those action events describe internal
+gateway concepts and routes. The internal `/gateway/receive` invocation
+settlement is not exposed. Each public `gateway.invoke(...)` instead emits
+exactly one invocation settlement after its final downstream or gateway
+rejection result is known. That event uses the caller-requested application
+path, the effective gateway/application correlation id, the final result class
+and framework code when applicable, and a duration through final completion.
+It omits `flow` because the internal gateway root identity is not a stable
+public request identity.
+
+Observer callbacks are synchronous bounded handoff: the engine catches throws
+and never awaits observer work, while queueing, exporting, and network I/O
+remain host responsibilities.
 
 HTTP handlers may resolve an inbound correlation id and project the effective
 value in a response header. Invalid or faulting resolver results become a fresh
-UUID. Correlation follows gateway and application observation; it does not
-deduplicate work and is not an idempotency key.
+UUID. When direct callers omit one, the gateway establishes a fresh UUID once
+at public entry and carries it through gateway and application observation.
+Correlation does not deduplicate work and is not an idempotency key.
 
 Endpoint paths and HTTP base paths are portable absolute URL pathnames. Their
 declared spelling must survive WHATWG URL pathname handling exactly: queries,

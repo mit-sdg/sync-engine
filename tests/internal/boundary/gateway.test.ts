@@ -11,6 +11,7 @@ import {
   respond,
 } from "@sync-engine/boundary";
 import { createHttpClient, createLocalClient } from "@sync-engine/client";
+import type { OperationalEvent, OperationalObserver } from "@sync-engine/boundary";
 import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 import { createGateway } from "@sync-engine/internal/boundary/gateway/gateway";
 
@@ -114,13 +115,29 @@ type TestApi = {
   };
 };
 
-function setup() {
+function setup(
+  options: {
+    applicationObservers?: readonly OperationalObserver[];
+    gatewayObservers?: readonly OperationalObserver[];
+  } = {},
+) {
   const application = assemble({
     vocabulary: appVocabulary,
     composition: { Echo, Reject, Explode, Forge, Slow },
+    observers: options.applicationObservers,
   });
-  const gateway = createGateway<TestApi>({ application });
+  const gateway = createGateway<TestApi>({
+    application,
+    observers: options.gatewayObservers,
+  });
   return { application, gateway };
+}
+
+function invocationSettlements(events: readonly OperationalEvent[]) {
+  return events.filter(
+    (event): event is Extract<OperationalEvent, { type: "invocation-settled" }> =>
+      event.type === "invocation-settled",
+  );
 }
 
 describe("gateway application", () => {
@@ -152,6 +169,155 @@ describe("gateway application", () => {
     );
     expect(gatewayRoot?.input.correlationId).toBe("trace-1");
     expect(applicationRoot?.input.correlationId).toBe("trace-1");
+  });
+
+  test("emits one public success settlement after downstream completion", async () => {
+    let release = () => {};
+    let markStarted = () => {};
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const events: OperationalEvent[] = [];
+    const gateway = createGateway<TestApi>({
+      application: {
+        invoker: {
+          async invoke() {
+            markStarted();
+            await waiting;
+            return { ok: true as const, value: { message: "complete" } };
+          },
+        },
+        publicInterface: { routes: { "/echo": {} } },
+      },
+      observers: [(event) => events.push(event)],
+    });
+
+    const pending = gateway.invoke(
+      "/echo",
+      { message: "waiting" },
+      { correlationId: "public-success" },
+    );
+    await started;
+    expect(invocationSettlements(events)).toEqual([]);
+    release();
+
+    await expect(pending).resolves.toEqual({
+      ok: true,
+      value: { message: "complete" },
+    });
+    expect(invocationSettlements(events)).toEqual([
+      expect.objectContaining({
+        type: "invocation-settled",
+        route: "/echo",
+        correlationId: "public-success",
+        result: "success",
+        durationMs: expect.any(Number),
+      }),
+    ]);
+    expect(invocationSettlements(events)[0]).not.toHaveProperty("flow");
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "action-settled",
+        route: "/gateway/receive",
+        correlationId: "public-success",
+      }),
+    );
+  });
+
+  test("settles a downstream domain error against the public route", async () => {
+    const events: OperationalEvent[] = [];
+    const { gateway } = setup({ gatewayObservers: [(event) => events.push(event)] });
+
+    expect(await gateway.invoke("/reject", {}, { correlationId: "public-domain" })).toEqual({
+      ok: false,
+      error: { kind: "domain", value: FrameworkErrorCode.NOT_FOUND },
+    });
+    expect(invocationSettlements(events)).toEqual([
+      expect.objectContaining({
+        route: "/reject",
+        correlationId: "public-domain",
+        result: "domain-error",
+      }),
+    ]);
+  });
+
+  test("settles a downstream fault as a framework error", async () => {
+    const events: OperationalEvent[] = [];
+    const { gateway } = setup({ gatewayObservers: [(event) => events.push(event)] });
+
+    expect(await gateway.invoke("/explode", {}, { correlationId: "public-fault" })).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
+    });
+    expect(invocationSettlements(events)).toEqual([
+      expect.objectContaining({
+        route: "/explode",
+        correlationId: "public-fault",
+        result: "framework-error",
+        frameworkCode: FrameworkErrorCode.INTERNAL_ERROR,
+      }),
+    ]);
+  });
+
+  test("generates one correlation id for gateway and application observation", async () => {
+    const applicationEvents: OperationalEvent[] = [];
+    const gatewayEvents: OperationalEvent[] = [];
+    const { gateway } = setup({
+      applicationObservers: [(event) => applicationEvents.push(event)],
+      gatewayObservers: [(event) => gatewayEvents.push(event)],
+    });
+
+    expect(await gateway.invoke("/echo", { message: "generated" })).toEqual({
+      ok: true,
+      value: { message: "generated" },
+    });
+    const gatewaySettlements = invocationSettlements(gatewayEvents);
+    const applicationSettlements = invocationSettlements(applicationEvents);
+    expect(gatewaySettlements).toHaveLength(1);
+    expect(gatewaySettlements[0]).toEqual(
+      expect.objectContaining({
+        route: "/echo",
+        correlationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        result: "success",
+      }),
+    );
+    expect(applicationSettlements).toContainEqual(
+      expect.objectContaining({
+        route: "/echo",
+        correlationId: gatewaySettlements[0]?.correlationId,
+        result: "success",
+      }),
+    );
+    expect(gatewaySettlements).not.toContainEqual(
+      expect.objectContaining({ route: "/gateway/receive" }),
+    );
+  });
+
+  test("isolates throwing and rejecting gateway observers", async () => {
+    const events: OperationalEvent[] = [];
+    const { gateway } = setup({
+      gatewayObservers: [
+        () => {
+          throw new Error("synchronous exporter failure");
+        },
+        async () => {
+          throw new Error("asynchronous exporter failure");
+        },
+        (event) => events.push(event),
+      ],
+    });
+
+    await expect(gateway.invoke("/echo", { message: "observed" })).resolves.toEqual({
+      ok: true,
+      value: { message: "observed" },
+    });
+    await Promise.resolve();
+    expect(invocationSettlements(events)).toEqual([
+      expect.objectContaining({ route: "/echo", result: "success" }),
+    ]);
   });
 
   test("retains the declared public route and ignores a path field in its body", async () => {
@@ -210,6 +376,7 @@ describe("gateway application", () => {
   });
 
   test("maps a rejected application invoker to an opaque transport error", async () => {
+    const events: OperationalEvent[] = [];
     const gateway = createGateway<TestApi>({
       application: {
         invoker: {
@@ -219,16 +386,27 @@ describe("gateway application", () => {
         },
         publicInterface: { routes: { "/echo": {} } },
       },
+      observers: [(event) => events.push(event)],
     });
 
     await expect(gateway.invoke("/echo", { message: "hello" })).resolves.toEqual({
       ok: false,
       error: { kind: "framework", code: FrameworkErrorCode.TRANSPORT_ERROR },
     });
+    expect(invocationSettlements(events)).toEqual([
+      expect.objectContaining({
+        route: "/echo",
+        result: "framework-error",
+        frameworkCode: FrameworkErrorCode.TRANSPORT_ERROR,
+      }),
+    ]);
   });
 
   test("refuses an unknown path before the application sees it", async () => {
-    const { application, gateway } = setup();
+    const events: OperationalEvent[] = [];
+    const { application, gateway } = setup({
+      gatewayObservers: [(event) => events.push(event)],
+    });
 
     const result = await gateway.invoke("/missing" as never, {} as never);
 
@@ -250,6 +428,13 @@ describe("gateway application", () => {
         (record) => actionNameOf(record.action) === "resolve" && record.outcome?.kind === "error",
       ),
     ).toBe(true);
+    expect(invocationSettlements(events)).toEqual([
+      expect.objectContaining({
+        route: "/missing",
+        result: "framework-error",
+        frameworkCode: FrameworkErrorCode.NOT_FOUND,
+      }),
+    ]);
   });
 
   test("does not forward a request whose signal is already aborted", async () => {

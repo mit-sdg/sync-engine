@@ -31,7 +31,7 @@ export interface GatewayOptions {
   logStore?: LogStore;
   /** Opt-in limits for the gateway's own execution. */
   executionLimits?: ExecutionLimits;
-  /** Bounded synchronous handoff for the gateway's operational events. */
+  /** Internal gateway events plus one final public-call settlement; bounded synchronous handoff. */
   observers?: readonly OperationalObserver[];
   /** Additional sensitive field names for the gateway only. */
   redaction?: RedactionPolicy;
