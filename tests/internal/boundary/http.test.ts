@@ -1,17 +1,18 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Logging, Reacting, vocabulary } from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
+import { Requesting } from "@sync-engine/advanced";
+import { Logging, assemble } from "@sync-engine/assembly";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { createInvoker } from "@sync-engine/internal/boundary/invocation/invoke";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import {
-  assemble,
   createHttpHandler,
-  createInvoker,
   endpoint,
-  fail,
   FrameworkErrorCode,
   receive,
-  Requesting,
   respond,
-} from "@sync-engine/internal/boundary";
+} from "@sync-engine/boundary";
+import { fail } from "@sync-engine/internal/boundary/assembly/assemble";
 
 function setup() {
   const composition = {

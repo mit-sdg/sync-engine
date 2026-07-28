@@ -1,18 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
-import { actionNameOf, vocabulary } from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
-import {
-  assemble,
-  createInvoker,
-  createLocalClient,
-  endpoint,
-  fail,
-  FrameworkErrorCode,
-  receive,
-  Requesting,
-  respond,
-} from "@sync-engine/internal/boundary";
-import type { InvocationResult } from "@sync-engine/internal/boundary";
+import { Requesting } from "@sync-engine/advanced";
+import { createLocalClient } from "@sync-engine/client";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
+import { createInvoker } from "@sync-engine/internal/boundary/invocation/invoke";
+import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
+import type { InvocationResult } from "@sync-engine/boundary";
+import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 
 type TestApi = {
   "/echo": { input: { message: string }; output: { echoed: string } };

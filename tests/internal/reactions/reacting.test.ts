@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting.ts";
 import { createEngine } from "@sync-engine/internal/reactions/engine.ts";
 import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
-import { request, when } from "./historical-authoring.ts";
+import { vocabulary, when } from "@sync-engine/language";
 
 describe("Reacting interpreter loop", () => {
   test("fires a registered consequence exactly once", async () => {
@@ -18,12 +18,15 @@ describe("Reacting interpreter loop", () => {
         return {};
       }
     }
+    const { Source: SourceRef, Sink: SinkRef } = vocabulary({
+      concepts: { Source, Sink },
+    }).concepts;
     const reacting = new Reacting();
     const SourceConcept = reacting.instrumentConcept(new Source());
     const sink = new Sink();
-    const SinkConcept = reacting.instrumentConcept(sink);
+    reacting.instrumentConcept(sink);
     reacting.register({
-      Notify: () => when(SourceConcept.open, {}).then(request(SinkConcept.note, {})),
+      Notify: () => when(SourceRef.open({}).responds()).then(SinkRef.note({})),
     });
     await SourceConcept.open({});
     expect(sink.seen).toBe(1);
@@ -36,11 +39,12 @@ describe("Reacting interpreter loop", () => {
         return {};
       }
     }
+    const { Sink: SinkRef } = vocabulary({ concepts: { Sink } }).concepts;
     const reacting = new Reacting();
-    const SinkConcept = reacting.instrumentConcept(new Sink());
+    reacting.instrumentConcept(new Sink());
 
     for (const name of ["constructor", "toString", "__proto__"]) {
-      const consequence = request(SinkConcept.note, { value: { $var: name } });
+      const consequence = SinkRef.note({ value: { $var: name } });
       expect(() => reacting.matchThen(consequence.action, {})).toThrow("is not bound");
     }
   });

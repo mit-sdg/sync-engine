@@ -5,27 +5,26 @@ import { isQueryReadLine, lineOf } from "@sync-engine/internal/reads/lines";
  * and generated read-backs.
  */
 import { describe, expect, test } from "vite-plus/test";
+import { Logging } from "@sync-engine/assembly";
 import {
-  request,
-  $vars,
-  applyWhereOps,
   each,
+  form,
   former,
-  Frames,
   is,
-  isReadLine,
-  Logging,
   no,
   reaction,
-  Reacting,
-  form,
-  type Vars,
   view,
   vocabulary,
   when,
   where,
   whether,
-} from "@sync-engine/internal/reactions";
+} from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { Frames } from "@sync-engine/internal/reads/frames";
+import { isReadLine } from "@sync-engine/internal/reads/lines";
+import { applyWhereOps } from "@sync-engine/internal/reads/where-ops";
+import { $vars } from "@sync-engine/internal/reactions/authoring/vars";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 
 // ── Declared query promises ────────────────────────────────────────────────
 
@@ -334,9 +333,9 @@ describe("registration checks", () => {
       // The comparison is stated before the line that opens `at` — the
       // schedule, not the author, carries evaluation order.
       LockLate: reaction(({ post, at }: Vars) =>
-        when(Posting.lock, { post })
-          .where(is.lt(50, at), lineOf({ query: Timing._now }, {}).is({ at }))
-          .then(request(Recording.note, { tag: post })),
+        when(Posting.lock({ post }).responds())
+          .where(is.lt(50, at), Timing._now({}).is({ at }))
+          .then(Recording.note({ tag: post })),
       ),
     });
     await posting.create({ post: "p1", author: "priya" });
@@ -349,9 +348,9 @@ describe("registration checks", () => {
     expect(() =>
       engine.register({
         NewNameInsideNo: reaction(({ post, ghost }: Vars) =>
-          when(Posting.create, {}, { post })
-            .where(no(lineOf({ query: Posting._getPost }, { post }).is({ author: ghost })))
-            .then(request(Recording.note, { tag: post })),
+          when(Posting.create({}).responds({ post }))
+            .where(no(Posting._getPost({ post }).is({ author: ghost })))
+            .then(Recording.note({ tag: post })),
         ),
       }),
     ).toThrow("no(...) can only test names bound by an earlier plain line");
@@ -362,9 +361,9 @@ describe("registration checks", () => {
     expect(() =>
       engine.register({
         OpensUnused: reaction(({ post, author }: Vars) =>
-          when(Posting.create, {}, { post })
-            .where(lineOf({ query: Posting._getPost }, { post }).is({ author }))
-            .then(request(Recording.note, { tag: post })),
+          when(Posting.create({}).responds({ post }))
+            .where(Posting._getPost({ post }).is({ author }))
+            .then(Recording.note({ tag: post })),
         ),
       }),
     ).toThrow("opened and never used");
@@ -375,9 +374,9 @@ describe("registration checks", () => {
     expect(() =>
       engine.register({
         ShapeInWhere: reaction(({ post, author }: Vars) =>
-          when(Posting.create, {}, { post })
+          when(Posting.create({}).responds({ post }))
             .where(form({ author }) as never)
-            .then(request(Recording.note, { tag: author })),
+            .then(Recording.note({ tag: author })),
         ),
       }),
     ).toThrow("each condition is a line");
@@ -653,15 +652,15 @@ describe("the read-back", () => {
     const { engine } = build();
     engine.register({
       NoteGrade: reaction(({ post, author, score, at }: Vars) =>
-        when(Posting.create, {}, { post })
+        when(Posting.create({}).responds({ post }))
           .where(
-            lineOf({ query: Timing._now }, {}).is({ at }),
-            lineOf({ query: Posting._getPost }, { post }).is({ author }),
-            whether(lineOf({ query: Grading._gradeOf }, { submission: post }).is({ score })),
+            Timing._now({}).is({ at }),
+            Posting._getPost({ post }).is({ author }),
+            whether(Grading._gradeOf({ submission: post }).is({ score })),
             no(Posting._byAuthor({ author: "banned" })),
             is.lt(50, at),
           )
-          .then(request(Recording.note, { tag: author, grade: score })),
+          .then(Recording.note({ tag: author, grade: score } as never)),
       ),
     });
     expect(engine.readBack()).toBe(

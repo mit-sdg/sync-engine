@@ -5,7 +5,7 @@
  * contract can drift from the document that authored it.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { parseSpec } from "@sync-engine/internal/reactions";
+import { parseSpec } from "@sync-engine/internal/reactions/concepts/concept-spec";
 
 const SPEC = `# Inviting
 

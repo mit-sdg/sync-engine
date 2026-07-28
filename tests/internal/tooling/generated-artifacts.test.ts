@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
-import { Frames, reaction, request, vocabulary, when } from "@sync-engine/internal/reactions";
-import { endpoint, receive, respond } from "@sync-engine/internal/boundary";
+import { reaction, vocabulary, when } from "@sync-engine/language";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
 import { httpFloor } from "@sync-engine/boundary";
 import {
@@ -40,7 +41,7 @@ const Login = endpoint(
   "/login",
   ({ user, session, expiresAt }) =>
     receive({ user })
-      .then(request(Sessioning.start, { user }, { session, expiresAt }))
+      .then(Sessioning.start({ user }).responds({ session, expiresAt }))
       .then(respond({ session, expiresAt })),
   { input: { required: ["user"] } },
 );
@@ -49,7 +50,7 @@ const Current = endpoint(
   "/current",
   ({ session, user }) =>
     receive({ session })
-      .then(request(Sessioning.current, { session }, { user }))
+      .then(Sessioning.current({ session }).responds({ user }))
       .then(respond({ user })),
   { input: { required: ["session"] } },
 );
@@ -57,15 +58,15 @@ const Current = endpoint(
 const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
   receive({})
     .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
-    .then(request(Sessioning.current, { session: "fixed" }, { user }))
+    .then(Sessioning.current({ session: "fixed" }).responds({ user }))
     .then(respond({ hidden })),
 );
 
 const InternalClosure = reaction(({ hidden, user }) =>
-  when(Sessioning.start, { user }, {})
+  when(Sessioning.start({ user }).responds())
     .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
-    .then(request(Sessioning.current, { session: "fixed" }, {}))
-    .then(request(Sessioning.start, { user: hidden }, {})),
+    .then(Sessioning.current({ session: "fixed" }).responds())
+    .then(Sessioning.start({ user: hidden }).responds()),
 );
 
 describe("generated application artifacts", () => {

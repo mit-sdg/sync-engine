@@ -11,7 +11,7 @@ import type {
   ChannelPattern,
   InstrumentedAction,
 } from "@sync-engine/internal/reactions/types.ts";
-import { oneOf } from "@sync-engine/internal/reactions";
+import { oneOf } from "@sync-engine/internal/reads/matchers";
 import { withLive } from "@sync-engine/internal/reads/ir.ts";
 
 describe("reaction matching", () => {

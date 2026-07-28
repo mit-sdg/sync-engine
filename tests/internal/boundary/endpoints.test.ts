@@ -1,14 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  assemble,
-  endpoint,
-  fail,
-  isEndpointDef,
-  receive,
-  respond,
-} from "@sync-engine/internal/boundary";
-import { declarationsOf, vocabulary } from "@sync-engine/internal/reactions";
-import type { ActionPattern, Vars } from "@sync-engine/internal/reactions";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { assemble, fail, isEndpointDef } from "@sync-engine/internal/boundary/assembly/assemble";
+import { declarationsOf } from "@sync-engine/internal/reactions/authoring/partitions";
+import type { ActionPattern } from "@sync-engine/internal/reactions/types";
 
 const emptyVocabulary = vocabulary({ concepts: {}, computations: {} });
 

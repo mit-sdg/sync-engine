@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
+import { earlier, reaction, vocabulary, when } from "@sync-engine/language";
 
 import {
   ActionConcept,
@@ -17,6 +18,7 @@ import {
   type FiringRecord,
   type LogEntry,
 } from "@sync-engine/internal/reactions/runtime/log-store.ts";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 
 function record(overrides: Partial<ActionRecord> = {}): ActionRecord {
   return {
@@ -327,7 +329,6 @@ describe("log store: firing records", () => {
 
 describe("log store: firings are introspectable after a live run", () => {
   test("a fired reaction leaves a queryable firing with bindings, consumed, produced", async () => {
-    const { Reacting, request, reaction, when } = await import("@sync-engine/internal/reactions");
     const reacting = new Reacting();
 
     class Source {
@@ -342,15 +343,16 @@ describe("log store: firings are introspectable after a live run", () => {
         return {};
       }
     }
+    const refs = vocabulary({ concepts: { Source, Sink } }).concepts;
 
-    const { Source: Src, Sink: Snk } = reacting.instrument({
+    const { Source: Src } = reacting.instrument({
       Source: new Source(),
       Sink: new Sink(),
     });
 
     reacting.register({
       Forward: reaction(({ tag }) =>
-        when(Src.emit, { tag }, {}).then(request(Snk.receive, { tag })),
+        when(refs.Source.emit({ tag }).responds()).then(refs.Sink.receive({ tag })),
       ),
     });
 
@@ -368,8 +370,6 @@ describe("log store: firings are introspectable after a live run", () => {
   });
 
   test("redaction does not change action execution or reaction input matching", async () => {
-    const { earlier, Reacting, request, reaction, when } =
-      await import("@sync-engine/internal/reactions");
     const reacting = new Reacting();
     let sourceInput: unknown;
     let chainedInput: unknown;
@@ -399,16 +399,13 @@ describe("log store: firings are introspectable after a live run", () => {
         return {};
       }
     }
+    const refs = vocabulary({
+      concepts: { Source: CredentialSource, Sink: CredentialSink, EarlierSink },
+    }).concepts;
 
-    const {
-      Source,
-      Sink,
-      EarlierSink: Prior,
-    } = reacting.instrument({
-      Source: new CredentialSource(),
-      Sink: new CredentialSink(),
-      EarlierSink: new EarlierSink(),
-    });
+    const Source = reacting.instrumentConcept(new CredentialSource(), "Source");
+    reacting.instrumentConcept(new CredentialSink(), "Sink");
+    reacting.instrumentConcept(new EarlierSink(), "EarlierSink");
     reacting.addObserver({
       onAction(event) {
         events.push(event);
@@ -416,17 +413,17 @@ describe("log store: firings are introspectable after a live run", () => {
     });
     reacting.register({
       ForwardCredentials: reaction(({ password, oldPassword, newPassword, setupKey }) =>
-        when(Source.change, { password, oldPassword, newPassword, setupKey }, {}).then(
-          request(Sink.receive, {
+        when(refs.Source.change({ password, oldPassword, newPassword, setupKey }).responds()).then(
+          refs.Sink.receive({
             credentials: { password, oldPassword, newPassword, setupKey },
           }),
         ),
       ),
       ReadEarlierCredentials: reaction(({ password, oldPassword, newPassword, setupKey }) =>
-        when(Sink.receive, {}, {})
-          .where(earlier(Source.change, { password, oldPassword, newPassword, setupKey }))
+        when(refs.Sink.receive({}).responds())
+          .where(earlier(refs.Source.change, { password, oldPassword, newPassword, setupKey }))
           .then(
-            request(Prior.receive, {
+            refs.EarlierSink.receive({
               credentials: { password, oldPassword, newPassword, setupKey },
             }),
           ),
@@ -467,8 +464,6 @@ describe("log store: firings are introspectable after a live run", () => {
   });
 
   test("raw outputs serve direct returns, chain matching, and earlier matching only", async () => {
-    const { earlier, Reacting, request, reaction, when } =
-      await import("@sync-engine/internal/reactions");
     const reacting = new Reacting();
     const output = {
       sessionToken: "session-token-sentinel",
@@ -513,14 +508,11 @@ describe("log store: firings are introspectable after a live run", () => {
         return {};
       }
     }
+    const refs = vocabulary({
+      concepts: { Starting, Issuing, ChainSink, EarlierSink, MatchingSink },
+    }).concepts;
 
-    const {
-      Starting: Start,
-      Issuing: Issuer,
-      ChainSink: Chain,
-      EarlierSink: Prior,
-      MatchingSink: Matched,
-    } = reacting.instrument({
+    const { Starting: Start, Issuing: Issuer } = reacting.instrument({
       Starting: new Starting(),
       Issuing: new Issuing(),
       ChainSink: new ChainSink(),
@@ -530,18 +522,18 @@ describe("log store: firings are introspectable after a live run", () => {
     reacting.addObserver({ onAction: (event) => events.push(event) });
     reacting.register({
       ChainOutput: reaction(({ sessionToken, token, password, setupKey }) =>
-        when(Start.run, {})
-          .then(request(Issuer.issue, {}, { sessionToken, token, password, setupKey }))
-          .then(request(Chain.receive, { sessionToken, token, password, setupKey })),
+        when(refs.Starting.run({}).responds())
+          .then(refs.Issuing.issue({}).responds({ sessionToken, token, password, setupKey }))
+          .then(refs.ChainSink.receive({ sessionToken, token, password, setupKey })),
       ),
       ReadEarlierOutput: reaction(({ sessionToken, token, password, setupKey }) =>
-        when(Chain.receive, {}, {})
-          .where(earlier(Issuer.issue, {}, { sessionToken, token, password, setupKey }))
-          .then(request(Prior.receive, { sessionToken, token, password, setupKey })),
+        when(refs.ChainSink.receive({}).responds())
+          .where(earlier(refs.Issuing.issue, {}, { sessionToken, token, password, setupKey }))
+          .then(refs.EarlierSink.receive({ sessionToken, token, password, setupKey })),
       ),
       MatchOutput: reaction(({ sessionToken, token, password, setupKey }) =>
-        when(Issuer.issue, {}, { sessionToken, token, password, setupKey }).then(
-          request(Matched.receive, { sessionToken, token, password, setupKey }),
+        when(refs.Issuing.issue({}).responds({ sessionToken, token, password, setupKey })).then(
+          refs.MatchingSink.receive({ sessionToken, token, password, setupKey }),
         ),
       ),
     });
@@ -600,7 +592,6 @@ describe("log store: firings are introspectable after a live run", () => {
       }
     }
     const store = new CapturingStore();
-    const { Reacting } = await import("@sync-engine/internal/reactions");
     const reacting = new Reacting(new ActionConcept(store));
     const Issuer = reacting.instrumentConcept(new Issuing());
 

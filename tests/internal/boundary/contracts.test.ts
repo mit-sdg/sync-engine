@@ -6,16 +6,11 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { vocabulary } from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
-import {
-  assemble,
-  endpoint,
-  FrameworkErrorCode,
-  receive,
-  renderInputContracts,
-  respond,
-} from "@sync-engine/internal/boundary";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
+import { renderInputContracts } from "@sync-engine/internal/boundary/protocol/endpoints";
 
 function setup() {
   const composition = {

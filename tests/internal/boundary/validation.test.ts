@@ -1,17 +1,18 @@
 import { describe, expect, test } from "vite-plus/test";
-import { actionNameOf, MemoryStore, vocabulary } from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
+import { MemoryStore } from "@sync-engine/assembly";
+import { createLocalClient } from "@sync-engine/client";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import {
-  assemble,
   createGateway,
   createHttpHandler,
-  createLocalClient,
   endpoint,
-  fail,
   FrameworkErrorCode,
   receive,
   respond,
-} from "@sync-engine/internal/boundary";
+} from "@sync-engine/boundary";
+import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 
 type CheckedContract = {
   "/checked": {

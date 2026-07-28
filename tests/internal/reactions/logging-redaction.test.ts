@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { Logging, Reacting, vocabulary } from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
-import { assemble, endpoint, receive, respond } from "@sync-engine/internal/boundary";
+import { Logging } from "@sync-engine/assembly";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import {
   configureRedaction,
   createRedactor,

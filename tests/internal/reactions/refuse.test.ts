@@ -8,17 +8,13 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  isRefuse,
-  Logging,
-  Refuse,
-  refusalMapping,
-  Reacting,
-  type Empty,
-  type Vars,
-  when,
-} from "@sync-engine/internal/reactions";
+import { Refuse } from "@sync-engine/advanced";
+import { Logging } from "@sync-engine/assembly";
+import { reaction, vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { isRefuse, refusalMapping } from "@sync-engine/internal/reactions/concepts/refuse";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import type { Empty } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, RecorderConcept } from "./mocks.ts";
 
 class GateKeeperConcept {
@@ -33,6 +29,15 @@ class BrokenConcept {
     throw new TypeError("undefined is not a function");
   }
 }
+
+const refs = vocabulary({
+  concepts: {
+    Broken: BrokenConcept,
+    Button: ButtonConcept,
+    GateKeeper: GateKeeperConcept,
+    Recorder: RecorderConcept,
+  },
+}).concepts;
 
 function setup() {
   const reacting = new Reacting();
@@ -69,20 +74,22 @@ describe("the Refuse marker", () => {
   });
 
   test("a refusal triggers when patterns keyed on the refusal mapping", async () => {
-    const { reacting, Button, GateKeeper, Recorder } = setup();
+    const { reacting, Button, Recorder } = setup();
     reacting.register({
       // A refusal's outcome carries its whole mapping; a when output pattern
       // keyed on any of its keys unifies against it. `error` binds the code…
-      OnRefused: ({ error }: Vars) =>
-        when(GateKeeper.admit, {}, { error }).then(request(Recorder.record, { tag: error })),
-      Pipeline: (_: Vars) =>
-        when(Button.clicked, { kind: "admit" }).then(request(GateKeeper.admit, { name: "" })),
+      OnRefused: reaction(({ error }: Vars) =>
+        when(refs.GateKeeper.admit({}).refuses({ error })).then(
+          refs.Recorder.record({ tag: error }),
+        ),
+      ),
       // …and `detail` binds the message, pinned to the ask that raised it —
       // the chain's path for failures, without a per-step error callback.
-      Recover: ({ detail }: Vars) =>
-        when(GateKeeper.admit, {}, { detail }, { by: "Pipeline" }).then(
-          request(Recorder.record, { tag: detail }),
-        ),
+      Pipeline: reaction(({ detail }: Vars) =>
+        when(refs.Button.clicked({ kind: "admit" }).responds())
+          .then(refs.GateKeeper.admit({ name: "" }).refuses({ detail }))
+          .then(refs.Recorder.record({ tag: detail })),
+      ),
     });
 
     await Button.clicked({ kind: "admit" });
@@ -112,12 +119,13 @@ describe("faults during action instrumentation", () => {
   });
 
   test("a mid-pipeline fault keeps the firing and records an unanswered ask", async () => {
-    const { reacting, Button, Broken, Recorder } = setup();
+    const { reacting, Button, Recorder } = setup();
     reacting.register({
-      FaultyPipeline: (_: Vars) =>
-        when(Button.clicked, { kind: "go" })
-          .then(request(Broken.run, {}))
-          .then(request(Recorder.record, { tag: "after-fault" })),
+      FaultyPipeline: reaction((_vars: Vars) =>
+        when(refs.Button.clicked({ kind: "go" }).responds())
+          .then(refs.Broken.run({}))
+          .then(refs.Recorder.record({ tag: "after-fault" })),
+      ),
     });
 
     await Button.clicked({ kind: "go" });

@@ -1,24 +1,18 @@
 import { describe, expect, test } from "vite-plus/test";
+import { Refuse } from "@sync-engine/advanced";
+import { Logging, MemoryStore } from "@sync-engine/assembly";
+import { vocabulary } from "@sync-engine/language";
+import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import {
-  actionNameOf,
-  Logging,
-  request,
-  Refuse,
-  vocabulary,
-} from "@sync-engine/internal/reactions";
-import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
-import {
-  assemble,
-  createGateway,
-  createHttpClient,
   createHttpHandler,
-  createLocalClient,
   endpoint,
-  fail,
   FrameworkErrorCode,
   receive,
   respond,
-} from "@sync-engine/internal/boundary";
+} from "@sync-engine/boundary";
+import { createHttpClient, createLocalClient } from "@sync-engine/client";
+import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { createGateway } from "@sync-engine/internal/boundary/gateway/gateway";
 
 class InvalidMessage extends Error {}
 
@@ -66,25 +60,25 @@ const { Answering } = appVocabulary.concepts;
 
 const Echo = endpoint("/echo", ({ message }) =>
   receive({ message })
-    .then(request(Answering.echo, { message }, { message }))
+    .then(Answering.echo({ message }).responds({ message }))
     .then(respond({ message })),
 );
 
 const Reject = endpoint("/reject", () =>
   receive({})
-    .then(request(Answering.reject, {}))
+    .then(Answering.reject({}))
     .then(respond({ ok: true })),
 );
 
 const Slow = endpoint("/slow", ({ message }) =>
   receive({ message })
-    .then(request(Answering.slow, { message }, { message }))
+    .then(Answering.slow({ message }).responds({ message }))
     .then(respond({ message })),
 );
 
 const Explode = endpoint("/explode", () =>
   receive({})
-    .then(request(Answering.explode, {}))
+    .then(Answering.explode({}))
     .then(respond({ ok: true })),
 );
 

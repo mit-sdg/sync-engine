@@ -1,14 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
-import { vocabulary } from "@sync-engine/internal/reactions";
-import type { Empty, Vars } from "@sync-engine/internal/reactions";
-import {
-  assemble,
-  endpoint,
-  FrameworkErrorCode,
-  receive,
-  respond,
-} from "@sync-engine/internal/boundary";
-import type { ExecutionLimits, OperationalEvent } from "@sync-engine/internal/boundary";
+import { assemble } from "@sync-engine/assembly";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import type { Empty } from "@sync-engine/internal/reactions/types";
+import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
+import type { ExecutionLimits, OperationalEvent } from "@sync-engine/boundary";
 
 const limits: ExecutionLimits = {
   maxActiveRootFlows: 1,

@@ -1,18 +1,15 @@
 /** Truthful boundary settlement for interpreter failures between action asks. */
 
 import { describe, expect, test } from "vite-plus/test";
-import {
-  custom,
-  Frames,
-  MemoryStore,
-  reaction,
-  view,
-  vocabulary,
-  when,
-  where,
-} from "@sync-engine/internal/reactions";
-import type { Empty, Vars } from "@sync-engine/internal/reactions";
-import { assemble, endpoint, FAULT_REPLY, receive, respond } from "@sync-engine/internal/boundary";
+import { MemoryStore } from "@sync-engine/assembly";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { reaction, view, vocabulary, when, where } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { Frames } from "@sync-engine/internal/reads/frames";
+import { custom } from "@sync-engine/internal/reads/where-ops";
+import { FAULT_REPLY } from "@sync-engine/internal/boundary/invocation/funnel";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
+import type { Empty } from "@sync-engine/internal/reactions/types";
 
 const privateSentinel = "private-interpreter-failure";
 

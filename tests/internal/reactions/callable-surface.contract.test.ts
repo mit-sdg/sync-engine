@@ -1,6 +1,8 @@
 import { count, reaction, vocabulary, when, where } from "@sync-engine/language";
 import { describe, expect, test } from "vite-plus/test";
-import { Refuse, Reacting, type AppIR } from "@sync-engine/internal/reactions";
+import { Refuse } from "@sync-engine/advanced";
+import type { AppIR } from "@sync-engine/internal/reads/ir";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 
 class StartingConcept {
   started: string[] = [];

@@ -8,18 +8,11 @@
  * reaction's name — never a silent tiebreak.
  */
 import { describe, expect, test } from "vite-plus/test";
-import {
-  Frames,
-  MemoryStore,
-  Logging,
-  no,
-  request,
-  reaction,
-  vocabulary,
-  when,
-  where,
-} from "@sync-engine/internal/reactions";
-import { assemble, endpoint, fail, receive, respond } from "@sync-engine/internal/boundary";
+import { Logging, MemoryStore } from "@sync-engine/assembly";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { no, reaction, vocabulary, when, where } from "@sync-engine/language";
+import { Frames } from "@sync-engine/internal/reads/frames";
+import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 
 class CountingConcept {
   static readonly queries = { _current: "one", _named: "optional", _seen: "many" } as const;
@@ -57,9 +50,7 @@ const vocab = vocabulary({
 const { Counting, Echoing } = vocab.concepts;
 
 const Increment = endpoint("/counter/increment", ({ count }) =>
-  receive({})
-    .then(request(Counting.increment, {}, { count }))
-    .then(respond({ count })),
+  receive({}).then(Counting.increment({}).responds({ count })).then(respond({ count })),
 );
 
 describe("assemble", () => {
@@ -80,7 +71,7 @@ describe("assemble", () => {
 
   test("reactions register under their dotted composition path", async () => {
     const EchoIncrements = reaction(({ count }) =>
-      when(Counting.increment, {}, { count }).then(request(Echoing.hear, { text: "bump" })),
+      when(Counting.increment({}).responds({ count })).then(Echoing.hear({ text: "bump" })),
     );
     const app = assemble({
       vocabulary: vocab,
@@ -158,7 +149,7 @@ describe("assemble", () => {
     const ClosureEndpoint = endpoint("/closure", ({ count, hidden }) =>
       receive({})
         .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
-        .then(request(Counting.increment, {}, { count }))
+        .then(Counting.increment({}).responds({ count }))
         .then(respond({ hidden })),
     );
 

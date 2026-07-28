@@ -4,8 +4,11 @@
  * matching guarantee when a concept implementation is asynchronous. */
 
 import { describe, expect, test } from "vite-plus/test";
-import { request, Logging, Refuse, Reacting, when } from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
+import { Refuse } from "@sync-engine/advanced";
+import { Logging } from "@sync-engine/assembly";
+import { vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import type { Frames } from "@sync-engine/internal/reads/frames.ts";
 
 const tick = (ms = 1) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -45,6 +48,8 @@ class AuditConcept {
   }
 }
 
+const refs = vocabulary({ concepts: { Ledger: LedgerConcept, Audit: AuditConcept } }).concepts;
+
 function setup() {
   const reacting = new Reacting();
   reacting.logging = Logging.OFF;
@@ -53,7 +58,9 @@ function setup() {
     Audit: new AuditConcept(),
   });
   const AuditDeposits = ({ account, balance }: Vars) =>
-    when(Ledger.deposit, {}, { account, balance }).then(request(Audit.note, { account, balance }));
+    when(refs.Ledger.deposit({}).responds({ account, balance })).then(
+      refs.Audit.note({ account, balance }),
+    );
   reacting.register({ AuditDeposits });
   return { Ledger, Audit };
 }
@@ -118,22 +125,25 @@ describe("engine: async concept actions", () => {
         return {};
       }
     }
+    const orderedRefs = vocabulary({
+      concepts: { Ordered: OrderedConcept, Delay: DelayConcept },
+    }).concepts;
 
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;
     const raw = new OrderedConcept();
-    const { Ordered, Delay } = reacting.instrument({
+    const { Ordered } = reacting.instrument({
       Ordered: raw,
       Delay: new DelayConcept(),
     });
     reacting.register({
       DelaySlowRequest: () =>
-        when(request(Ordered.run, { label: "slow" }))
+        when(orderedRefs.Ordered.run({ label: "slow" }))
           .where(async (frames: Frames) => {
             await tick(20);
             return frames;
           })
-          .then(request(Delay.wait, {})),
+          .then(orderedRefs.Delay.wait({})),
     });
 
     await Promise.all([Ordered.run({ label: "slow" }), Ordered.run({ label: "fast" })]);
@@ -160,14 +170,17 @@ describe("engine: async concept actions", () => {
         return {};
       }
     }
+    const { Reentrant: ReentrantRef } = vocabulary({
+      concepts: { Reentrant: ReentrantConcept },
+    }).concepts;
 
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;
     const raw = new ReentrantConcept();
-    const Reentrant = reacting.instrument(raw);
+    const { Reentrant } = reacting.instrument({ Reentrant: raw });
     reacting.register({
-      ContinueRoot: () => when(request(Reentrant.root, {})).then(request(Reentrant.middle, {})),
-      ContinueMiddle: () => when(request(Reentrant.middle, {})).then(request(Reentrant.leaf, {})),
+      ContinueRoot: () => when(ReentrantRef.root({})).then(ReentrantRef.middle({})),
+      ContinueMiddle: () => when(ReentrantRef.middle({})).then(ReentrantRef.leaf({})),
     });
 
     await Reentrant.root({});

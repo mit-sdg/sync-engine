@@ -5,13 +5,11 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import {
-  contractOf,
-  Logging,
-  type OutcomeContracts,
-  Refuse,
-  Reacting,
-} from "@sync-engine/internal/reactions";
+import { Refuse } from "@sync-engine/advanced";
+import { Logging } from "@sync-engine/assembly";
+import { contractOf } from "@sync-engine/internal/reactions/concepts/outcomes";
+import type { OutcomeContracts } from "@sync-engine/internal/reactions/concepts/outcomes";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { attachConceptMetadata } from "@sync-engine/internal/reactions/concepts/concept-metadata.ts";
 
 class ContractedConcept {

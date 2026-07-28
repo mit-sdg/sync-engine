@@ -10,18 +10,14 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import {
-  faulted,
-  MemoryStore,
-  request,
-  reaction,
-  Reacting,
-  when,
-  type LogEvent,
-  type Vars,
-} from "@sync-engine/internal/reactions";
+import { faulted } from "@sync-engine/advanced";
+import { MemoryStore } from "@sync-engine/assembly";
+import type { LogEvent } from "@sync-engine/advanced";
+import { reaction, vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
-import { FrameworkErrorCode } from "@sync-engine/internal/boundary";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { FrameworkErrorCode } from "@sync-engine/boundary";
 import {
   AuditFeed,
   FileStore,
@@ -50,6 +46,10 @@ class SinkConcept {
   }
 }
 
+const refs = vocabulary({
+  concepts: { Source: SourceConcept, Sink: SinkConcept },
+}).concepts;
+
 function engineOn(store: FileStore) {
   const reacting = new Reacting(new ActionConcept(store));
   const { Source, Sink } = reacting.instrument({
@@ -58,7 +58,7 @@ function engineOn(store: FileStore) {
   });
   reacting.register({
     Forward: reaction(({ tag }: Vars) =>
-      when(Source.emit, { tag }, {}).then(request(Sink.receive, { tag })),
+      when(refs.Source.emit({ tag }).responds()).then(refs.Sink.receive({ tag })),
     ),
   });
   return { reacting, Source, Sink };
@@ -120,11 +120,11 @@ describe("FileStore: the log survives as JSONL", () => {
     const { reacting, Source } = engineOn(new FileStore(path));
     reacting.register({
       BadWhere: reaction(({ tag }: Vars) =>
-        when(Source.emit, { tag }, {})
+        when(refs.Source.emit({ tag }).responds())
           .where(() => {
             throw new TypeError("private diagnostic");
           })
-          .then(request(Source.emit, { tag })),
+          .then(refs.Source.emit({ tag })),
       ),
     });
 
@@ -333,12 +333,11 @@ describe("FileStore: the log survives as JSONL", () => {
         return {};
       }
     }
+    const faultRefs = vocabulary({
+      concepts: { Starting, Failing, FaultRecorder },
+    }).concepts;
 
-    const {
-      Starting: Start,
-      Failing: Fail,
-      FaultRecorder: Recorder,
-    } = reacting.instrument({
+    const { Starting: Start, Failing: Fail } = reacting.instrument({
       Starting: new Starting(),
       Failing: new Failing(),
       FaultRecorder: new FaultRecorder(),
@@ -349,9 +348,10 @@ describe("FileStore: the log survives as JSONL", () => {
       },
     });
     reacting.register({
-      FailAfterStart: () => when(Start.run, {}).then(request(Fail.run, { known: false })),
+      FailAfterStart: () =>
+        when(faultRefs.Starting.run({}).responds()).then(faultRefs.Failing.run({ known: false })),
       RecordFault: ({ fault }: Vars) =>
-        when(faulted({ fault })).then(request(Recorder.record, { fault })),
+        when(faulted({ fault })).then(faultRefs.FaultRecorder.record({ fault })),
     });
 
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

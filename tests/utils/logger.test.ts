@@ -61,7 +61,8 @@ describe("fault logging", () => {
     try {
       process.env.LOG_LEVEL = "error";
       vi.resetModules();
-      const { Reacting, request, when } = await import("@sync-engine/internal/reactions");
+      const { Reacting } = await import("@sync-engine/internal/reactions/runtime/reacting");
+      const { vocabulary, when } = await import("@sync-engine/language");
 
       class Starting {
         run(_: Record<PropertyKey, never>) {
@@ -82,14 +83,15 @@ describe("fault logging", () => {
           throw error;
         }
       }
+      const refs = vocabulary({ concepts: { Starting, Failing } }).concepts;
 
       const engine = new Reacting();
-      const { Starting: Start, Failing: Fail } = engine.instrument({
+      const { Starting: Start } = engine.instrument({
         Starting: new Starting(),
         Failing: new Failing(),
       });
       engine.register({
-        FailAfterStart: () => when(Start.run, {}).then(request(Fail.run, {})),
+        FailAfterStart: () => when(refs.Starting.run({}).responds()).then(refs.Failing.run({})),
       });
 
       await Start.run({});
@@ -127,7 +129,7 @@ describe("fault logging", () => {
     try {
       process.env.LOG_LEVEL = "error";
       vi.resetModules();
-      const { Reacting } = await import("@sync-engine/internal/reactions");
+      const { Reacting } = await import("@sync-engine/internal/reactions/runtime/reacting");
 
       class Failing {
         run(_: Record<PropertyKey, never>) {

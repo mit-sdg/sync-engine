@@ -5,24 +5,15 @@ import { lineOf } from "@sync-engine/internal/reads/lines";
  * absence, promise enforcement, and repeated bindings.
  */
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  $vars,
-  applyWhereOps,
-  compute,
-  custom,
-  Frames,
-  is,
-  no,
-  Logging,
-  reaction,
-  whether,
-  Reacting,
-  type Vars,
-  vocabulary,
-  vocabularyComputations,
-  when,
-} from "@sync-engine/internal/reactions";
+import { Logging } from "@sync-engine/assembly";
+import { is, no, reaction, whether, vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { Frames } from "@sync-engine/internal/reads/frames";
+import { applyWhereOps, compute, custom } from "@sync-engine/internal/reads/where-ops";
+import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
+import { $vars } from "@sync-engine/internal/reactions/authoring/vars";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import type { InstrumentedQuery } from "@sync-engine/internal/reactions/types";
 import { ListConcept, RecorderConcept } from "../reactions/mocks.ts";
 
 class ShelfConcept {
@@ -55,6 +46,15 @@ class PromisedConcept {
     return [{ value: 1 }];
   }
 }
+
+const refs = vocabulary({
+  concepts: {
+    List: ListConcept,
+    Promised: PromisedConcept,
+    Recorder: RecorderConcept,
+    Shelf: ShelfConcept,
+  },
+}).concepts;
 
 function setup() {
   const reacting = new Reacting();
@@ -153,15 +153,13 @@ describe("where ops: evaluation", () => {
 
   test("an unbound optional input preserves only another optional read", async () => {
     const calls: unknown[] = [];
-    const source = ((_: {
-      key: string;
-    }) => []) as unknown as import("@sync-engine/internal/reactions").InstrumentedQuery;
+    const source = ((_: { key: string }) => []) as unknown as InstrumentedQuery;
     source.concept = {};
     source.queryName = "_source";
     const next = ((input: { key: string }) => {
       calls.push(input);
       return [];
-    }) as unknown as import("@sync-engine/internal/reactions").InstrumentedQuery;
+    }) as unknown as InstrumentedQuery;
     next.concept = {};
     next.queryName = "_next";
     const { key, value } = $vars;
@@ -260,9 +258,9 @@ describe("where ops: inside a reaction", () => {
     });
     reacting.register({
       RecordsBlank: reaction(({ value }: Vars) =>
-        when(Promised.start, {})
-          .where(whether(lineOf({ query: Promised._maybe }, {}).is({ value })))
-          .then(request(Recorder.record, { tag: value })),
+        when(refs.Promised.start({}).responds())
+          .where(whether(refs.Promised._maybe({}).is({ value })))
+          .then(refs.Recorder.record({ tag: value })),
       ),
     });
 
@@ -279,9 +277,9 @@ describe("where ops: inside a reaction", () => {
     });
     reacting.register({
       ReadsPlainly: reaction(({ value }: Vars) =>
-        when(Promised.start, {})
-          .where(lineOf({ query: Promised._many }, {}).is({ value }))
-          .then(request(Recorder.record, { tag: value })),
+        when(refs.Promised.start({}).responds())
+          .where(refs.Promised._many({}).is({ value }))
+          .then(refs.Recorder.record({ tag: value })),
       ),
     });
     await (Promised as unknown as { start: (input: object) => Promise<unknown> }).start({});
@@ -289,22 +287,22 @@ describe("where ops: inside a reaction", () => {
   });
 
   test("registration rejects unavailable inputs and new names inside no", () => {
-    const { reacting, List, Shelf, Recorder } = setup();
+    const { reacting } = setup();
     expect(() =>
       reacting.register({
         Unbound: reaction(({ missing, id }: Vars) =>
-          when(List.add, {})
-            .where(lineOf({ query: Shelf._byOwner }, { owner: missing }).is({ id }))
-            .then(request(Recorder.record, { tag: id })),
+          when(refs.List.add({}).responds())
+            .where(refs.Shelf._byOwner({ owner: missing }).is({ id }))
+            .then(refs.Recorder.record({ tag: id })),
         ),
       }),
     ).toThrow("no line opens");
     expect(() =>
       reacting.register({
         BornInDenial: reaction(({ owner, local }: Vars) =>
-          when(Shelf.add, { owner })
-            .where(no(lineOf({ query: Shelf._byOwner }, { owner }).is({ id: local })))
-            .then(request(Recorder.record, { tag: owner })),
+          when(refs.Shelf.add({ owner }).responds())
+            .where(no(refs.Shelf._byOwner({ owner }).is({ id: local })))
+            .then(refs.Recorder.record({ tag: owner })),
         ),
       }),
     ).toThrow("no(...) can only test names bound by an earlier plain line");
@@ -316,9 +314,9 @@ describe("where ops: inside a reaction", () => {
 
     reacting.register({
       RecordBig: reaction(({ trigger, value }: Vars) =>
-        when(List.add, { value: trigger }, {})
-          .where(lineOf({ query: List._items }, {}).is({ value }), is.gt(value, 2))
-          .then(request(Recorder.record, { tag: value })),
+        when(refs.List.add({ value: trigger }).responds())
+          .where(refs.List._items({}).is({ value }), is.gt(value, 2))
+          .then(refs.Recorder.record({ tag: value })),
       ),
     });
 
@@ -333,9 +331,9 @@ describe("where ops: inside a reaction", () => {
     reacting.registerComputations(vocabularyComputations(words));
     reacting.register({
       Stamped: reaction(({ value, mark }: Vars) =>
-        when(List.add, { value }, {})
+        when(refs.List.add({ value }).responds())
           .where(compute(stamp, {}, mark))
-          .then(request(Recorder.record, { tag: mark })),
+          .then(refs.Recorder.record({ tag: mark })),
       ),
     });
 

@@ -4,7 +4,6 @@ import {
   earlier,
   when as rawWhen,
 } from "@sync-engine/internal/reactions/authoring/words.ts";
-import { request, when } from "./historical-authoring.ts";
 import { declarationsOf } from "@sync-engine/internal/reactions/authoring/partitions.ts";
 import { actionLine } from "@sync-engine/internal/reactions/authoring/nodes.ts";
 import { brand, CountOpBrand } from "@sync-engine/internal/reads/brands";
@@ -17,11 +16,13 @@ function action(name: string): InstrumentedAction {
 }
 
 describe("reaction words", () => {
-  test("when and request build one declarative sentence", () => {
+  test("when and actionLine build one declarative sentence", () => {
     const opened = action("opened");
     const notify = action("notify");
     const declaration = declarationsOf(
-      when(opened, { id: "a" }).then(request(notify, { id: "a" })),
+      rawWhen(actionLine(opened, { id: "a" }).responds()).then(
+        actionLine(notify, { id: "a" }) as never,
+      ),
     )[0];
     expect(declaration.when).toHaveLength(1);
     expect(declaration.then[0].action.action).toBe(notify);

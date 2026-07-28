@@ -1,4 +1,3 @@
-import { lineOf } from "@sync-engine/internal/reads/lines";
 /**
  * Generated wire contracts. Response mappings and formers provide output
  * shapes. Input contracts and request literals provide input types. Explicit
@@ -7,28 +6,13 @@ import { lineOf } from "@sync-engine/internal/reads/lines";
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  former,
-  inventoryOf,
-  each,
-  no,
-  view,
-  where,
-  whether,
-  vocabulary,
-  when,
-} from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
-import {
-  assemble,
-  endpoint,
-  fail,
-  receive,
-  renderWireTypes,
-  respond,
-  wireContracts,
-} from "@sync-engine/internal/boundary";
+import { Requesting } from "@sync-engine/advanced";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { each, former, no, view, vocabulary, when, where, whether } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { renderWireTypes, wireContracts } from "@sync-engine/tooling";
+import { inventoryOf } from "@sync-engine/internal/reactions/concepts/introspect";
+import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 
 class LedgerConcept {
   static readonly outcomes = {
@@ -54,26 +38,29 @@ function setup() {
   const ledger = new LedgerConcept();
   const words = vocabulary({ concepts: { Ledger: LedgerConcept }, computations: {} });
   const { Ledger } = words.concepts;
+  const { RequestBoundary } = vocabulary({
+    concepts: { RequestBoundary: Requesting },
+  }).concepts;
 
   const labelOf = view("the label of (item)", ({ item }, { label }, _bindings) =>
-    where(lineOf({ query: Ledger._labelOf }, { item }).is({ label })),
+    where(Ledger._labelOf({ item }).is({ label })),
   ).optional();
 
   const theRows = former("the ledger rows ()", (_inputs, { entry, item, amount, label }) =>
-    each(lineOf({ query: Ledger._rows }, {}).is({ entry, item, amount }))
+    each(Ledger._rows({}).is({ entry, item, amount }))
       .where(whether(labelOf({ item }).is({ label })))
       .form({ entry, item, amount, label }),
   );
 
   const theLatest = former("the latest entry ()", (_inputs, { entry }) =>
-    each(lineOf({ query: Ledger._rows }, {}).is({ entry })).first(entry),
+    each(Ledger._rows({}).is({ entry })).first(entry),
   );
   const composition = {
     LedgerAdd: endpoint(
       "/ledger/add",
       ({ session, item, amount, entry }: Vars) =>
         receive({ session, item, amount })
-          .then(request(Ledger.add, { item, amount }, { entry }))
+          .then(Ledger.add({ item, amount }).responds({ entry }))
           .then(respond({ entry })),
       { input: { required: ["session", "item", "amount"], defaults: { note: null } } },
     ),
@@ -126,11 +113,10 @@ function setup() {
 
   // This boundary reaction has no literal path, so its error applies to every
   // endpoint.
-  const boundary = assembled.boundaryActions;
   const guardReactions = {
     InvalidSession: ({ session, requestId }: Vars) =>
-      when(boundary.request, { session, requestId }).then(
-        request(boundary.respond, { error: "INVALID_SESSION", requestId }),
+      when(RequestBoundary.request({ session, requestId }).responds()).then(
+        RequestBoundary.respond({ error: "INVALID_SESSION", requestId }),
       ),
   };
   assembled.engine.register(guardReactions);

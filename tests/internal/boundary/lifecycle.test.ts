@@ -1,16 +1,18 @@
 import { describe, expect, test } from "vite-plus/test";
-import { MemoryStore, vocabulary } from "@sync-engine/internal/reactions";
-import type { Empty, Vars } from "@sync-engine/internal/reactions";
+import { MemoryStore } from "@sync-engine/assembly";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import type { Empty } from "@sync-engine/internal/reactions/types";
 import {
-  assemble,
   createGateway,
   createHttpHandler,
   endpoint,
   FrameworkErrorCode,
   receive,
   respond,
-} from "@sync-engine/internal/boundary";
-import type { ExecutionLimits } from "@sync-engine/internal/boundary";
+} from "@sync-engine/boundary";
+import type { ExecutionLimits } from "@sync-engine/boundary";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 
 const limits = (overrides: Partial<ExecutionLimits> = {}): ExecutionLimits => ({
   maxActiveRootFlows: 4,

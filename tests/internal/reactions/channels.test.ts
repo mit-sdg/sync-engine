@@ -7,18 +7,12 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  faulted,
-  Logging,
-  Refuse,
-  refused,
-  returned,
-  Reacting,
-  type Empty,
-  type Vars,
-  when,
-} from "@sync-engine/internal/reactions";
+import { faulted, Refuse } from "@sync-engine/advanced";
+import { Logging } from "@sync-engine/assembly";
+import { earlier, refused, returned, vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/language";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import type { Empty } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, RecorderConcept } from "./mocks.ts";
 
 class MixedConcept {
@@ -32,6 +26,10 @@ class MixedConcept {
     throw new Error("boom");
   }
 }
+
+const refs = vocabulary({
+  concepts: { Button: ButtonConcept, Mixed: MixedConcept, Recorder: RecorderConcept },
+}).concepts;
 
 function setup() {
   const reacting = new Reacting();
@@ -50,7 +48,7 @@ describe("channel triggers", () => {
     reacting.register({
       OnAnySuccess: ({ concept, action }: Vars) =>
         when(returned({ concept, action }, { except: [Recorder] })).then(
-          request(Recorder.record, { tag: action }),
+          refs.Recorder.record({ tag: action }),
         ),
     });
 
@@ -62,7 +60,7 @@ describe("channel triggers", () => {
     const { reacting, Mixed, Recorder } = setup();
     reacting.register({
       OnAnyRefusal: ({ refusal }: Vars) =>
-        when(refused({ refusal })).then(request(Recorder.record, { tag: refusal })),
+        when(refused({ refusal })).then(refs.Recorder.record({ tag: refusal })),
     });
 
     await Mixed.refuse({});
@@ -74,7 +72,7 @@ describe("channel triggers", () => {
     const { reacting, Mixed, Recorder } = setup();
     reacting.register({
       OnAnyFault: ({ concept, action }: Vars) =>
-        when(faulted({ concept, action })).then(request(Recorder.record, { tag: action })),
+        when(faulted({ concept, action })).then(refs.Recorder.record({ tag: action })),
     });
 
     await Mixed.refuse({});
@@ -87,7 +85,7 @@ describe("channel triggers", () => {
     reacting.register({
       OnMixedSuccess: ({ result }: Vars) =>
         when(returned({ concept: "Mixed", result }, { except: [Recorder] })).then(
-          request(Recorder.record, { tag: result }),
+          refs.Recorder.record({ tag: result }),
         ),
     });
 
@@ -101,7 +99,7 @@ describe("channel triggers", () => {
     reacting.register({
       OnOtherSuccess: ({ action }: Vars) =>
         when(returned({ action }, { except: [Button, Recorder] })).then(
-          request(Recorder.record, { tag: action }),
+          refs.Recorder.record({ tag: action }),
         ),
     });
 
@@ -113,11 +111,12 @@ describe("channel triggers", () => {
   test("a channel clause joins identity clauses within one flow", async () => {
     const { reacting, Button, Mixed, Recorder } = setup();
     reacting.register({
-      Pipeline: (_: Vars) => when(Button.clicked, { kind: "go" }).then(request(Mixed.refuse, {})),
+      Pipeline: (_: Vars) =>
+        when(refs.Button.clicked({ kind: "go" }).responds()).then(refs.Mixed.refuse({})),
       RefusalInFlow: ({ kind, refusal }: Vars) =>
-        when([[Button.clicked, { kind }], refused({ refusal }, { except: [Recorder] })]).then(
-          request(Recorder.record, { tag: kind }),
-        ),
+        when(refused({ refusal }, { except: [Recorder] }))
+          .where(earlier(refs.Button.clicked, { kind }))
+          .then(refs.Recorder.record({ tag: kind })),
     });
 
     // A lone refusal outside any clicked flow does not fire the joined reaction.
