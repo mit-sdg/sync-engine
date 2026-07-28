@@ -17,15 +17,6 @@ function encodeViewOp(op: ViewOp, vars: PatternVariables): ViewOpIR {
   return encodeWhereOp(op, vars) as ViewOpIR;
 }
 
-export function lowerViewAlternatives(
-  slotVars: readonly symbol[],
-  alternatives: readonly (readonly ViewOp[])[],
-): ViewOpIR[][] {
-  const vars = new PatternVariables();
-  for (const slotVar of slotVars) vars.nameOf(slotVar);
-  return alternatives.map((block) => block.map((op) => encodeViewOp(op, vars)));
-}
-
 export function lowerRelationBlocks(
   named: ReadonlyMap<symbol, string>,
   alternatives: readonly (readonly ViewOp[])[],

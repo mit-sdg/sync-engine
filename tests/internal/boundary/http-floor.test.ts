@@ -11,6 +11,7 @@ import {
 } from "@sync-engine/boundary";
 import { floorReadBack, httpFloorReadBack } from "@sync-engine/tooling";
 import { projectAssemblyHttpWire } from "@sync-engine/internal/boundary/http/http-floor";
+import { projectProductionHttpWire } from "@sync-engine/internal/boundary/http/http-profile";
 import { assemblyBehind } from "@sync-engine/internal/boundary/assembly/assembly-registry";
 import { wireContracts } from "@sync-engine/internal/boundary/wire/wire";
 
@@ -355,6 +356,59 @@ describe("HTTP floor", () => {
 });
 
 describe("production HTTP profile", () => {
+  test("projects unregistered and open domain errors exactly like runtime", () => {
+    const projected = projectProductionHttpWire(
+      {
+        endpoints: [
+          {
+            path: "/dynamic",
+            input: { kind: "json" },
+            output: { kind: "json" },
+            errors: ["INVALID_INPUT", "NOT_FOUND"],
+            openError: true,
+          },
+        ],
+        appWide: ["NOT_FOUND"],
+      },
+      {},
+    );
+
+    expect(projected).toMatchObject({
+      endpoints: [
+        {
+          errors: ["INTERNAL_ERROR", "INVALID_REQUEST"],
+          openError: false,
+        },
+      ],
+      appWide: ["INTERNAL_ERROR"],
+    });
+  });
+
+  test("keeps framework and registered domain INVALID_INPUT provenance distinct", () => {
+    const base = {
+      path: "/collision",
+      input: { kind: "json" as const },
+      output: { kind: "json" as const },
+      errors: ["INVALID_INPUT"],
+      openError: false,
+    };
+    const projected = projectProductionHttpWire(
+      {
+        endpoints: [
+          { ...base, inputAdmissionError: true },
+          { ...base, path: "/domain-only", inputAdmissionError: false },
+        ],
+        appWide: [],
+      },
+      { INVALID_INPUT: "CONFLICT" },
+    );
+
+    expect(projected.endpoints.map(({ errors }) => errors)).toEqual([
+      ["CONFLICT", "INVALID_REQUEST"],
+      ["CONFLICT"],
+    ]);
+  });
+
   test("preserves successes and projects registered categories behind a base path", async () => {
     const { application, gateway } = setup();
     const fetch = createHttpHandler({

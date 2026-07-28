@@ -2,7 +2,6 @@ export { logger } from "@engine/utils/logger";
 export type { Logger, LogLevel } from "@engine/utils/logger";
 export { serializeError } from "@engine/utils/logger";
 export {
-  configureRedaction,
   createRedactor,
   describeError,
   redact,

@@ -5,6 +5,8 @@ import type { AppIR, FormerIR, ReactionIR } from "@engine/reads/ir";
 import { analyzeLocalBehavior, localDefinitionKey } from "@engine/reads/local-behavior";
 import type { LocalBehaviorReview } from "@engine/reads/local-review";
 import { foldFormerNode } from "@engine/reads/schema";
+import { ordinal } from "@engine/utils/ordinal";
+import { reactionNameBelongsTo } from "@engine/utils/reaction-name";
 
 export type DiagnosticSeverity = "info" | "warning" | "error";
 
@@ -15,13 +17,10 @@ export type DiagnosticCode =
   | "OPAQUE_PATTERN"
   | "LOCAL_DEFINITION"
   | "UNRESOLVED_WIRE_LEAF"
-  | "DEPENDENCY_CYCLE"
   | "ENDPOINT_PATH_OVERLAP"
-  | "ENDPOINT_LITERAL_UNCOVERED"
   | "MULTIPLE_RESPOND_CONSEQUENCES"
   | "MISSING_ENDPOINT_FALLBACK"
-  | "ORDER_SENSITIVE_FORMER"
-  | "INVALID_VALIDATOR_ATTACHMENT";
+  | "ORDER_SENSITIVE_FORMER";
 
 export interface ApplicationDiagnostic {
   severity: DiagnosticSeverity;
@@ -31,17 +30,8 @@ export interface ApplicationDiagnostic {
   message: string;
 }
 
-function ordinal(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 function reactionBelongsTo(reaction: ReactionIR, endpoint: EndpointDeclaration): boolean {
-  return endpoint.reactions.some(
-    (name) =>
-      reaction.name === name ||
-      reaction.name.startsWith(`${name}#`) ||
-      reaction.name.startsWith(`${name}:`),
-  );
+  return reactionNameBelongsTo(reaction.name, endpoint.reactions);
 }
 
 function endpointDiagnostics(

@@ -436,10 +436,14 @@ concept, action, optional `by`, output, and outcome summary; it omits input,
 action id, flow, and timestamp. Inspection reports only evidence retained by
 the store and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
 `WireType` name derived wire data.
+`WireEndpoint.inputAdmissionError` preserves whether framework input admission
+contributed `INVALID_INPUT`, so production projection remains distinct from a
+registered domain refusal using the same code.
 
 `ApplicationManifestV2` has format `sync-engine.application-manifest`, version
-`2`, and is static canonical JSON-round-trippable application data. It contains
-the application IR, concept inventories, declaration-owned
+`2`, and is static canonical JSON-round-trippable application data. Its
+`generator` identifies the exact `@mit-sdg/sync-engine` package version. It
+contains the application IR, concept inventories, declaration-owned
 `ManifestEndpointV2` entries, input contracts, wire IR, validator-presence
 flags, structured diagnostics, `localBehavior`, and `digest`. `localBehavior`
 is `{ contract: LocalBehaviorContract | null, observed:
@@ -459,27 +463,34 @@ advisory.
 
 `applicationDependencyGraph(manifest)` returns
 `ApplicationDependencyGraphV2`, format
-`sync-engine.application-dependency-graph`, version `2`, with stable
-namespaced node ids, typed dependency edges, canonical node digests, and a
-reverse dependent index. Nodes cover endpoints, outputs, reaction stages,
-actions, queries, views, formers, named computations, the local review, and
-opaque behavior. Named vocabulary computations are portable. Every custom
+`sync-engine.application-dependency-graph`, version `2`, carries the manifest's
+exact generator identity with stable namespaced node ids, typed dependency
+edges, canonical node digests, and a reverse dependent index. Nodes cover the
+generator, concept design prose, endpoints, outputs,
+reaction stages, actions, queries, views, formers, named computations, the local
+review, and opaque behavior. Named vocabulary computations are portable. Every custom
 operation, `$is` occurrence, and unlowered definition has a distinct stable
 opaque node owned by its containing definition. Known action, query, view,
 former, and stage dependencies remain connected around an unlowered definition.
 Concept actions conservatively invalidate every query on that concept.
 `diffManifestNodes` identifies direct digest changes, `affectedNodes` follows
 the reverse index, and `applicationImpact` returns directly changed and affected
-nodes plus endpoint/output summaries. Any opaque node in either the before or
+nodes across both the before and after graphs plus endpoint/output summaries,
+including removed endpoints and outputs. Any opaque node in either the before or
 after graph forces whole-application impact when design data changes, including
 removal of the final opaque occurrence. A review-revision-only change alters the
-review node and manifest digest and therefore also takes that fallback.
+review node and manifest digest and therefore also takes that fallback. A
+generator-version change always forces whole-application impact.
 
 `planGenerated(manifest, options)` is a filesystem-free specification and wire
 planner. Every `ArtifactPlanEntry` has a normalized relative POSIX path,
 content, kind, and stable digest. `artifactPlan` plans caller-rendered entries,
 while `normalizeArtifactPath` rejects absolute, parent, empty-segment, and
-backslash paths.
+backslash paths, plus `%`, `?`, `#`, and `:` URL metacharacters that cannot be
+passed losslessly through the built-in file-URL adapter. Default generated Markdown and TypeScript banners include the
+exact package version. A custom wire banner retains a mandatory generator line.
+Planning rejects a manifest whose generator identity differs from the installed
+package.
 
 `checkArtifactPlan(plan, filesystem)` classifies entries as `missing`,
 `changed`, `unchanged`, or `failed`. `applyArtifactPlan` validates and reads the
@@ -574,7 +585,7 @@ asks](./semantics.md#failures-between-action-asks) and
 
 <!-- register:utils:start -->
 
-`LogLevel`, `Logger`, `RedactionPolicy`, `Redactor`, `UNIVERSAL_SENSITIVE_PATTERNS`, `configureRedaction`, `createRedactor`, `describeError`, `logger`, `redact`, `serializeError`
+`LogLevel`, `Logger`, `RedactionPolicy`, `Redactor`, `UNIVERSAL_SENSITIVE_PATTERNS`, `createRedactor`, `describeError`, `logger`, `redact`, `serializeError`
 
 <!-- register:utils:end -->
 
@@ -586,12 +597,10 @@ another thrown value. It does not sanitize or redact that text; use it only in
 a caller-reviewed diagnostic channel, never automatically in a public error
 envelope.
 
-`createRedactor(policy)` returns an immutable `Redactor` for one application.
-Ordinary assembly uses this scoped form. `configureRedaction(policy)` replaces
-the application-specific portion of the standalone process-global
-compatibility utility; universal sensitive-name patterns remain. `redact(value)`
-returns a copy that replaces values whose field names match `RedactionPolicy`
-or `UNIVERSAL_SENSITIVE_PATTERNS`. The exact storage and redaction guarantees
+`createRedactor(policy)` returns an immutable `Redactor` for one application or
+standalone owner. Ordinary assembly uses this scoped form. `redact(value)` is an
+immutable convenience that applies `UNIVERSAL_SENSITIVE_PATTERNS`; domain fields
+require an explicitly owned redactor. The exact storage and redaction guarantees
 live under [Logs, concept implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).
 
 Redaction matches field names rather than arbitrary string contents and stops

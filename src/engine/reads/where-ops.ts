@@ -16,7 +16,7 @@ import type { ComputationRef, FusedComputation } from "./computations.ts";
 import { isFusedComputation } from "./computations.ts";
 import type { ActionPattern, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import { brand, hasBrand, WhereOpBrand } from "./brands.ts";
-import { isReadLine, lineOf } from "./lines.ts";
+import { isReadLine } from "./lines.ts";
 import type { ReadLine, RelationView, ViewReadLine } from "./lines.ts";
 import { isFusedFormer, useFormer } from "./former-nodes.ts";
 import type { FormerUse, FusedFormer } from "./former-nodes.ts";
@@ -210,14 +210,4 @@ export function custom(
     in: [...input],
     out: [...output],
   });
-}
-
-/** Construct the line a called vocabulary query ref answers with. @internal */
-export function queryLine(query: InstrumentedQuery, input: Mapping): ReadLine {
-  return lineOf({ query }, input);
-}
-
-/** Construct the line a called relation view answers with. @internal */
-export function viewLine(view: RelationView, input: Mapping): ReadLine {
-  return lineOf({ view }, input);
 }

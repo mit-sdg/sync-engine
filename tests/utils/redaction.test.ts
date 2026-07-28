@@ -1,17 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { configureRedaction, describeError, redact } from "@sync-engine/utils";
-
-beforeEach(() => configureRedaction({ fields: [] }));
-afterEach(() => configureRedaction({ fields: [] }));
+import { describe, expect, test } from "vite-plus/test";
+import { createRedactor, describeError, redact } from "@sync-engine/utils";
 
 describe("configured redaction policy", () => {
   test("redacts configured field names and pattern-matched field names", () => {
-    configureRedaction({
+    const redactor = createRedactor({
       fields: ["email", "ssn"],
       patterns: [/credit_card/i],
     });
 
-    const result = redact({
+    const result = redactor.redact({
       email: "user@example.com",
       ssn: "123-45-6789",
       credit_card: "4111-1111-1111-1111",
@@ -24,20 +21,21 @@ describe("configured redaction policy", () => {
     expect(result.name).toBe("Alice");
   });
 
-  test("a later configuration replaces earlier domain fields", () => {
-    configureRedaction({ fields: ["email"] });
-    configureRedaction({ fields: ["phone"] });
-    const result = redact({ email: "visible@example.test", phone: "555-1234" }) as Record<
-      string,
-      unknown
-    >;
-    expect(result.email).toBe("visible@example.test");
-    expect(result.phone).toBe("[redacted]");
+  test("separate redactors do not replace each other's domain fields", () => {
+    const email = createRedactor({ fields: ["email"] });
+    const phone = createRedactor({ fields: ["phone"] });
+    expect(email.redact({ email: "e", phone: "p" })).toEqual({
+      email: "[redacted]",
+      phone: "p",
+    });
+    expect(phone.redact({ email: "e", phone: "p" })).toEqual({
+      email: "e",
+      phone: "[redacted]",
+    });
   });
 
   test("pattern policies match field names", () => {
-    configureRedaction({ patterns: [/health_record/i] });
-    const result = redact({
+    const result = createRedactor({ patterns: [/health_record/i] }).redact({
       health_record: "confidential",
     }) as Record<string, unknown>;
     expect(result.health_record).toBe("[redacted]");
@@ -102,8 +100,8 @@ describe("redact", () => {
     expect(() => JSON.stringify(result)).not.toThrow();
   });
 
-  test("configureRedaction with non-iterable fields does not throw", () => {
-    expect(() => configureRedaction({ fields: 123 as any })).not.toThrow();
+  test("createRedactor with non-iterable fields does not throw", () => {
+    expect(() => createRedactor({ fields: 123 as any })).not.toThrow();
   });
 });
 

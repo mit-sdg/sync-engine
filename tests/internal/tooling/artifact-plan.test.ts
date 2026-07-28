@@ -29,14 +29,27 @@ class MemoryFilesystem implements ArtifactFilesystem {
 }
 
 describe("artifact plans", () => {
-  test.each(["../escape.ts", "/absolute.ts", "nested/../../escape.ts", "a\\b.ts", "a//b.ts"])(
-    "rejects unsafe path %s",
-    (path) => {
-      expect(() => normalizeArtifactPath(path)).toThrow(
-        /relative POSIX|escapes or does not normalize/,
-      );
-    },
-  );
+  test.each([
+    "../escape.ts",
+    "/absolute.ts",
+    "nested/../../escape.ts",
+    "a\\b.ts",
+    "a//b.ts",
+    "%2e%2e/escape.ts",
+    ".%2e/escape.ts",
+    "%2e./escape.ts",
+    "nested%2fescape.ts",
+    "nested%5cescape.ts",
+    "bad-percent-%zz.ts",
+    "wire.ts?variant",
+    "wire.ts#variant",
+    "C:/wire.ts",
+    "foo:bar.md",
+  ])("rejects unsafe path %s", (path) => {
+    expect(() => normalizeArtifactPath(path)).toThrow(
+      /relative POSIX|escapes or does not normalize/,
+    );
+  });
 
   test("classifies entries and applies only missing or changed content", async () => {
     const plan = artifactPlan([
@@ -95,6 +108,22 @@ describe("artifact plans", () => {
     expect(plan.entries.every(({ digest }) => /^fnv1a64-[0-9a-f]{16}$/.test(digest))).toBe(true);
     expect(plan.entries.find(({ kind }) => kind === "specification")?.content).toContain(
       "# Ping service",
+    );
+    expect(plan.entries.every(({ content }) => content.includes("1.0.0-beta.0"))).toBe(true);
+  });
+
+  test("rejects a manifest produced by another generator version", () => {
+    const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: { Ping },
+      }),
+    );
+    manifest.generator.version = "9.9.9";
+
+    expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
+      /requires generator @mit-sdg\/sync-engine@1\.0\.0-beta\.0/,
     );
   });
 });

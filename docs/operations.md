@@ -227,10 +227,10 @@ application responsibilities to the engine.
 
 Assembly-scoped field-name redaction runs before occurrence entries reach
 stores, observers, or inspection, so separate applications cannot mix domain
-policies. Each assembly keeps an immutable snapshot of its own policy. Only the
-standalone `configureRedaction(...)` / `redact(...)` compatibility utility uses
-mutable process-global state. Redaction matches field names; it does not search
-arbitrary string contents. During an active flow, the interpreter privately
+policies. Each assembly keeps an immutable snapshot of its own policy.
+`createRedactor(...)` provides the same scoped ownership to standalone callers;
+`redact(...)` is an immutable universal-pattern convenience. Redaction matches
+field names; it does not search arbitrary string contents. During an active flow, the interpreter privately
 retains original values needed for matching and clears them when the outermost
 action settles.
 

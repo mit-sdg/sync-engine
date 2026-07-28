@@ -123,8 +123,12 @@ Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` executes npm's real `prepack` lifecycle, inspects the
 tarball and policy links, installs it with npm and Bun, exercises the generated
 scaffold and examples, compiles a separate generated client/backend topology,
-and runs a Node scenario. Wait for **CI required** on the final `main` commit,
-then repeat every external-setting check above.
+and runs a Node scenario. In the publish workflow it also exports that exact
+verified tarball; the unprivileged job records its digest and transfers both to
+the protected publication job. The package intentionally includes all three
+complete, independently runnable teaching examples; file-count, packed-size,
+and unpacked-size budgets prevent accidental growth. Wait for **CI required** on the final `main`
+commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
@@ -138,9 +142,10 @@ then repeat every external-setting check above.
 3. Approve the protected `npm` environment only after `verify` succeeds and an
    independent reviewer has repeated the source and external-setting checks.
    The `publish` job is the only job with the `npm` environment and
-   `id-token: write`; it checks out the same commit, rechecks tag/source
-   identity, ancestry, frozen installation, and release facts, then runs
-   `npm publish --provenance --tag beta --access public`.
+   `id-token: write`; it checks out the same commit, refetches and verifies the
+   live annotated tag and main ancestry, downloads the verified tarball, checks
+   its recorded digest, then publishes that tarball with provenance under the
+   `beta` tag. It does not install dependencies or rebuild the package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.
    After npm verification, manually create a GitHub prerelease from the same
@@ -148,8 +153,22 @@ then repeat every external-setting check above.
 
 ## Verify the registry
 
+- Retire the unsupported alpha without moving `latest`:
+
+  ```sh
+  npm deprecate @mit-sdg/sync-engine@1.0.0-alpha.0 "Unsupported; install @mit-sdg/sync-engine@$VERSION or use @beta."
+  ```
+
+  Review every older version that already has a deprecation message pointing to
+  `@alpha` and replace that message with the same exact beta guidance. Do not
+  deprecate a supported stable line or use a range until the expanded version
+  list has been reviewed.
+
 - Confirm `npm view @mit-sdg/sync-engine dist-tags versions` shows the new exact
   version under `beta` and that `latest` did not move.
+- Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` shows alpha
+  and every historical message pointing at the exact beta or `@beta`, never
+  `@alpha`.
 - Check the npm package page for GitHub Actions provenance and verify tarball
   integrity, repository, license, executable, policy files, and file metadata.
 - In clean directories, install the exact registry version with npm and Bun,

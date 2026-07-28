@@ -6,8 +6,7 @@
  * {@link PersistingConcept} keeps a subject registry for application-supplied
  * log stores. Its recorded policy is registry data; the concept delegates
  * pruning to the bound store. It does not install the engine's occurrence-log
- * store. {@link AuditFeed} queries entries retained in a log store's in-memory
- * indexes. Core reaction execution does not depend on this module.
+ * store. Core reaction execution does not depend on this module.
  */
 
 import { appendFileSync } from "node:fs";
@@ -18,13 +17,10 @@ import { Refuse } from "@engine/reactions/concepts/refuse";
 import {
   MemoryStore,
   assertRetentionPolicy,
-  type ActionRecord,
-  type FiringRecord,
   type LogEntry,
   type LogStore,
   type RetentionPolicy,
 } from "@engine/reactions/runtime/log-store";
-import type { ActionOutcome } from "@engine/reactions/types";
 import { createRedactor } from "@engine/utils/redaction";
 
 const fileRedactor = createRedactor();
@@ -194,77 +190,5 @@ export class PersistingConcept {
   _getBinding({ subject }: { subject: string }): PersistBinding[] {
     const binding = this.bindings.get(subject);
     return binding === undefined ? [] : [binding];
-  }
-}
-
-// ── The audit feed ──────────────────────────────────────────────────────────
-
-/** One action occurrence read from the retained log. */
-export interface AuditEntry {
-  id: string;
-  concept: string;
-  action: string;
-  input: Record<string, unknown>;
-  outcome?: ActionOutcome;
-  flow: string;
-  /** Names of the reactions that fired because of this record. */
-  firings: string[];
-}
-
-const MAX_CONTAINS_DEPTH = 10;
-
-/** Does `value` appear anywhere inside `haystack` (strict equality, deep)? */
-function containsValue(haystack: unknown, value: unknown, depth = 0): boolean {
-  if (haystack === value) return true;
-  if (depth > MAX_CONTAINS_DEPTH || haystack === null || typeof haystack !== "object") return false;
-  const children = Array.isArray(haystack) ? haystack : Object.values(haystack);
-  return children.some((child) => containsValue(child, value, depth + 1));
-}
-
-/** Query action occurrences and firings retained by a log store. */
-export class AuditFeed {
-  constructor(private readonly store: LogStore) {}
-
-  /** Every retained occurrence, in no particular order beyond insertion. */
-  all(): AuditEntry[] {
-    return [...this.store.actions.values()].map((record) => this.entryOf(record));
-  }
-
-  /** Occurrences whose input or output mentions the value anywhere. */
-  byEntity({ id }: { id: unknown }): AuditEntry[] {
-    return this.all().filter(
-      (entry) =>
-        containsValue(entry.input, id) ||
-        (entry.outcome?.kind === "result" && containsValue(entry.outcome.value, id)),
-    );
-  }
-
-  /** Occurrences of one concept, optionally one action. */
-  byConcept({ concept, action }: { concept: string; action?: string }): AuditEntry[] {
-    return this.all().filter(
-      (entry) => entry.concept === concept && (action === undefined || entry.action === action),
-    );
-  }
-
-  /** Occurrences within one causal chain, in order. */
-  byFlow({ flow }: { flow: string }): AuditEntry[] {
-    return (this.store.byFlow(flow) ?? []).map((record) => this.entryOf(record));
-  }
-
-  /** All recorded firings of a reaction. */
-  firingsOf({ reaction }: { reaction: string }): FiringRecord[] {
-    return this.store.firingsByReaction(reaction);
-  }
-
-  private entryOf(record: ActionRecord): AuditEntry {
-    return {
-      id: record.id ?? "",
-      concept: conceptNameOf(record.concept),
-      action: actionNameOf(record.action),
-      input: record.input,
-      outcome: record.outcome,
-      flow: record.flow,
-      firings: this.store.consumedBy(record.id ?? ""),
-    };
   }
 }

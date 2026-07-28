@@ -136,6 +136,53 @@ function localAssembly(localBehavior?: {
 }
 
 describe("reviewed non-boundary locality", () => {
+  test("causal sibling reactions receive isolated plain occurrence values", async () => {
+    class MutableConcept {
+      mutations = 0;
+      observed: boolean[] = [];
+
+      start() {
+        return { payload: { changed: false } };
+      }
+
+      mutate({ payload }: { payload: { changed: boolean } }) {
+        this.mutations += 1;
+        this.observed.push(payload.changed);
+        return {};
+      }
+    }
+    const mutableWords = vocabulary({ concepts: { Mutable: MutableConcept }, computations: {} });
+    const { Mutable } = mutableWords.concepts;
+    const Call = endpoint("/call", ({ payload }) =>
+      receive().then(Mutable.start({}).responds({ payload })).then(respond({ payload })),
+    );
+    const LocalMutation = reaction(({ payload }) =>
+      when(Mutable.start({}).responds({ payload }))
+        .where((frames: Frames) => {
+          for (const frame of frames) {
+            (frame[payload] as { changed: boolean }).changed = true;
+          }
+          return frames;
+        })
+        .then(Mutable.mutate({ payload })),
+    );
+    const app = assemble({
+      vocabulary: mutableWords,
+      composition: { LocalMutation, Call },
+      localBehavior: {
+        revision: "isolated-causal-values-r1",
+        definitions: [{ kind: "reaction", name: "LocalMutation" }],
+      },
+    });
+
+    expect(await app.invoker.invoke("/call", {})).toEqual({
+      ok: true,
+      value: { payload: { changed: false } },
+    });
+    expect(app.concepts.Mutable.mutations).toBe(1);
+    expect(app.concepts.Mutable.observed).toEqual([true]);
+  });
+
   test("executes with an exact reviewed inventory and survives canonical JSON read-back", async () => {
     const app = localAssembly({
       revision: "review-2026-07-28",

@@ -23,10 +23,10 @@ sync-engine new <directory>
 `new` writes the one-concept project used by [Getting
 started](guide/getting-started.md). The basename of `<directory>` determines
 the package name, generated application title, TypeScript identifiers, and
-specification filename. The command does not validate that the basename
-produces legal TypeScript identifiers. Use a name beginning with a letter and
-containing letters, digits, or hyphens; a numeric-only or punctuation-only name
-can be written successfully but fail typechecking.
+specification filename. It must begin with a lowercase letter and contain only
+lowercase letters, digits, and single hyphens. Windows device names such as
+`con`, `com1`, and `lpt1` are reserved on every platform. Invalid names are
+rejected before the destination directory is created.
 
 The command may create `<directory>` and missing subdirectories. Before writing,
 it checks every intended template path. If any intended file already exists,

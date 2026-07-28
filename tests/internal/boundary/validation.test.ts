@@ -172,6 +172,28 @@ describe("endpoint runtime validators", () => {
     );
   });
 
+  test("a store failure while recording invalid output cannot strand the caller", async () => {
+    class ThrowingIntegrityStore extends MemoryStore {
+      override append(entry: Parameters<MemoryStore["append"]>[0]): void {
+        if (entry.kind === "integrity-failure") throw new Error("store unavailable");
+        super.append(entry);
+      }
+    }
+    const Invalid = endpoint("/invalid", () => receive({}).then(respond({ count: "wrong" })), {
+      validators: { output: () => ({ ok: false }) },
+    });
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: {}, computations: {} }),
+      composition: { Invalid },
+      logStore: new ThrowingIntegrityStore("keepAll"),
+    });
+
+    await expect(app.invoker.invoke("/invalid", {}, { timeoutMs: 10 })).resolves.toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
+    });
+  });
+
   test("invalid and duplicate validator attachments are definition errors", () => {
     expect(() =>
       endpoint("/invalid", () => receive({}).then(respond({})), {

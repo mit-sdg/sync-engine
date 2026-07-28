@@ -12,6 +12,7 @@ const consumer = resolve(temporary, "consumer");
 const standalone = resolve(temporary, "application");
 const multiInstance = resolve(temporary, "multi-instance");
 const expectedAuthor = "Barish Namazov and Eagon Meng";
+const packageBudgets = { files: 420, packedBytes: 500_000, unpackedBytes: 1_500_000 } as const;
 
 function commandEnv(): NodeJS.ProcessEnv {
   return { ...process.env, BUN_INSTALL_CACHE_DIR: resolve(temporary, "cache"), TMPDIR: temporary };
@@ -118,6 +119,21 @@ try {
     version: string;
   };
   const packed = packWithNpm();
+  if (packed.files.length > packageBudgets.files) {
+    throw new Error(
+      `packed package has ${packed.files.length} files; budget is ${packageBudgets.files}`,
+    );
+  }
+  if (packed.size > packageBudgets.packedBytes) {
+    throw new Error(
+      `packed package is ${packed.size} bytes; budget is ${packageBudgets.packedBytes}`,
+    );
+  }
+  if (packed.unpackedSize > packageBudgets.unpackedBytes) {
+    throw new Error(
+      `unpacked package is ${packed.unpackedSize} bytes; budget is ${packageBudgets.unpackedBytes}`,
+    );
+  }
   const expectedFilename = `${packageJson.name.replace(/^@/, "").replaceAll("/", "-")}-${packageJson.version}.tgz`;
   if (packed.filename !== expectedFilename) {
     throw new Error(`npm packed ${packed.filename}; expected ${expectedFilename}`);
@@ -412,6 +428,12 @@ try {
     ],
     temporary,
   );
+  const verifiedTarball = process.env.SYNC_ENGINE_VERIFIED_TARBALL;
+  if (verifiedTarball !== undefined) {
+    const destination = resolve(root, verifiedTarball);
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(tarball, destination);
+  }
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

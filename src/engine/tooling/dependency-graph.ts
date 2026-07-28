@@ -2,10 +2,14 @@ import type { ConsequenceIR, TriggerIR, ViewOpIR, WhereOpIR } from "@engine/read
 import { analyzeLocalBehavior, type LocalBehaviorDefinition } from "@engine/reads/local-behavior";
 import { foldFormerNode, foldOps, foldReaction, foldView } from "@engine/reads/schema";
 import { canonicalDigest, canonicalValue } from "@engine/utils/canonical-json";
+import { ordinal } from "@engine/utils/ordinal";
 import { setOwn } from "@engine/utils/own-property";
+import { reactionNameBelongsTo } from "@engine/utils/reaction-name";
 import type { ApplicationManifestV2 } from "./manifest.ts";
 
 export type DependencyNodeKind =
+  | "concept"
+  | "generator"
   | "endpoint"
   | "output"
   | "reaction"
@@ -44,6 +48,7 @@ export interface DependencyEdge {
 export interface ApplicationDependencyGraphV2 {
   format: "sync-engine.application-dependency-graph";
   version: 2;
+  generator: ApplicationManifestV2["generator"];
   nodes: DependencyNode[];
   edges: DependencyEdge[];
   reverse: Record<string, string[]>;
@@ -56,8 +61,6 @@ export interface ApplicationImpact {
   outputs: string[];
   wholeApplication: boolean;
 }
-
-const ordinal = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
 function nodeId(kind: DependencyNodeKind, name: string): string {
   return `${kind}:${encodeURIComponent(name)}`;
@@ -94,7 +97,13 @@ export function applicationDependencyGraph(
     edges.set(`${from}\0${to}\0${kind}`, edge);
   };
 
+  addNode("generator", manifest.generator.name, manifest.generator);
   for (const concept of manifest.concepts) {
+    addNode("concept", concept.name, {
+      name: concept.name,
+      ...(concept.purpose === undefined ? {} : { purpose: concept.purpose }),
+      ...(concept.principle === undefined ? {} : { principle: concept.principle }),
+    });
     for (const action of concept.actions) {
       addNode("action", `${concept.name}.${action.name}`, action);
     }
@@ -185,12 +194,7 @@ export function applicationDependencyGraph(
       const matching = [
         ...manifest.application.reactions,
         ...manifest.application.unlowered,
-      ].filter(
-        ({ name }) =>
-          name === reactionName ||
-          name.startsWith(`${reactionName}#`) ||
-          name.startsWith(`${reactionName}:`),
-      );
+      ].filter(({ name }) => reactionNameBelongsTo(name, [reactionName]));
       for (const reaction of matching) {
         addEdge(endpointNode, nodeId("reaction", reaction.name), "implements");
       }
@@ -216,6 +220,7 @@ export function applicationDependencyGraph(
   return canonicalValue({
     format: "sync-engine.application-dependency-graph",
     version: 2,
+    generator: manifest.generator,
     nodes: sortedNodes,
     edges: sortedEdges,
     reverse,
@@ -266,11 +271,24 @@ export function applicationImpact(
   const afterGraph = applicationDependencyGraph(after);
   const directlyChanged = diffManifestNodes(before, after);
   const wholeApplication =
-    directlyChanged.length > 0 && (graphHasOpaque(beforeGraph) || graphHasOpaque(afterGraph));
-  const affected = wholeApplication
-    ? afterGraph.nodes.map(({ id }) => id).sort(ordinal)
-    : affectedNodes(afterGraph, directlyChanged);
-  const byId = new Map(afterGraph.nodes.map((node) => [node.id, node]));
+    directlyChanged.length > 0 &&
+    (directlyChanged.some((id) => id.startsWith("generator:")) ||
+      graphHasOpaque(beforeGraph) ||
+      graphHasOpaque(afterGraph));
+  const affected = [
+    ...new Set(
+      wholeApplication
+        ? [...beforeGraph.nodes, ...afterGraph.nodes].map(({ id }) => id)
+        : [
+            ...affectedNodes(beforeGraph, directlyChanged),
+            ...affectedNodes(afterGraph, directlyChanged),
+          ],
+    ),
+  ].sort(ordinal);
+  const byId = new Map([
+    ...beforeGraph.nodes.map((node) => [node.id, node] as const),
+    ...afterGraph.nodes.map((node) => [node.id, node] as const),
+  ]);
   return {
     directlyChanged,
     affected,

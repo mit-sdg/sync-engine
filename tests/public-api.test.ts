@@ -442,7 +442,6 @@ const register = {
     "RedactionPolicy",
     "Redactor",
     "UNIVERSAL_SENSITIVE_PATTERNS",
-    "configureRedaction",
     "createRedactor",
     "describeError",
     "logger",
@@ -489,7 +488,7 @@ function referenceSubpathBlock(subpath: keyof typeof register): string {
 function filesUnder(directory: string, suffix?: string): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if ([".git", "dist", "node_modules"].includes(entry.name)) continue;
+    if ([".git", "coverage", "dist", "node_modules"].includes(entry.name)) continue;
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) files.push(...filesUnder(path, suffix));
     else if (suffix === undefined || entry.name.endsWith(suffix)) files.push(path);

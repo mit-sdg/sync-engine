@@ -170,7 +170,8 @@ complete `Registry` facade.
 
 ## Reads and values
 
-`reads/where-ops.ts` evaluates query and view lines against `Frames`.
+`reads/where-ops.ts` defines the authored query/view operations, while
+`reads/where-evaluation.ts` evaluates them against `Frames`.
 `reads/schedule.ts` determines an order from bindings for reactions and
 formers. View registration currently validates that such an order exists but
 stores the authored block; view evaluation therefore still follows authored
@@ -196,7 +197,7 @@ and composition that use them:
 | Client     | `src/engine/boundary/client/client.ts`, `local-client.ts`, `http-client.ts`                                                                              | Expose the typed client independently of a transport, then adapt it to a local invoker or HTTP.                                                               |
 | Gateway    | `src/engine/boundary/gateway/gateway.ts`, `public-gateway.ts`                                                                                            | Route admitted outside requests through an isolated engine-backed forwarding boundary.                                                                        |
 | HTTP       | `src/engine/boundary/http/http.ts`, `http-profile.ts`, `http-floor.ts`                                                                                   | Adapt invocation to raw or production HTTP, project registered public errors, and optionally bind cookie credentials.                                         |
-| Wire       | `src/engine/boundary/wire/wire.ts`, `wire-provenance.ts`                                                                                                 | Derive and render transport-safe contracts from endpoint IR and value provenance.                                                                             |
+| Wire       | `src/engine/boundary/wire/wire-contracts.ts`, `wire-inference.ts`, `wire-provenance.ts`, `wire-renderer.ts`, `wire-types.ts`                             | Derive and render transport-safe contracts from endpoint IR and value provenance; `wire.ts` remains a small compatibility facade.                             |
 
 Dependency edges point inward toward `protocol/`: invocation, wire, and client
 adapters consume its transport-neutral shapes. `assembly/` composes protocol,

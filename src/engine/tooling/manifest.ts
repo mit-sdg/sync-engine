@@ -7,6 +7,8 @@ import type { AppIR, ConceptInventoryIR, FormerIR, ViewIR } from "@engine/reads/
 import type { LocalBehaviorReview } from "@engine/reads/local-review";
 import { foldFormerNode } from "@engine/reads/schema";
 import { canonicalDigest, canonicalJson, canonicalValue } from "@engine/utils/canonical-json";
+import { ordinal } from "@engine/utils/ordinal";
+import { GENERATOR_IDENTITY, type GeneratorIdentity } from "@engine/utils/package-version";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import { applicationDiagnostics } from "./diagnostics.ts";
 
@@ -21,6 +23,7 @@ export interface ManifestEndpointV2 {
 export interface ApplicationManifestV2 {
   format: "sync-engine.application-manifest";
   version: 2;
+  generator: GeneratorIdentity;
   digest: string;
   application: AppIR;
   concepts: ConceptInventoryIR[];
@@ -29,10 +32,6 @@ export interface ApplicationManifestV2 {
   wire: WireContractsIR;
   diagnostics: ApplicationDiagnostic[];
   localBehavior: LocalBehaviorReview;
-}
-
-function ordinal(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function sortByName<T extends { name: string }>(values: readonly T[]): T[] {
@@ -145,6 +144,7 @@ export function applicationManifest(
   const body: Omit<ApplicationManifestV2, "digest"> = {
     format: "sync-engine.application-manifest",
     version: 2,
+    generator: GENERATOR_IDENTITY,
     application,
     concepts,
     endpoints,

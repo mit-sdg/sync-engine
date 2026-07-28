@@ -15,11 +15,10 @@ import {
   type LocalBehaviorReview,
 } from "@engine/reads/local-review";
 import type { EndpointDeclaration } from "./endpoint-portability.ts";
+import { reactionNameBelongsTo } from "@engine/utils/reaction-name";
 
 function reactionBelongsToEndpoint(name: string, endpoint: EndpointDeclaration): boolean {
-  return endpoint.reactions.some(
-    (root) => name === root || name.startsWith(`${root}#`) || name.startsWith(`${root}:`),
-  );
+  return reactionNameBelongsTo(name, endpoint.reactions);
 }
 
 function renderLocal(definition: ObservedLocalDefinition): string {

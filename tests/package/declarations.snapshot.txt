@@ -913,6 +913,9 @@ export declare class RuntimeLifecycle {
     private drainIdleEmitted;
     constructor(limits?: ExecutionLimits | undefined, events?: OperationalEvents);
     admit(flow: string, route: string, correlationId: string): AdmissionRejection | undefined;
+    /** Admit a direct action root, which has active work but no boundary request wait. */
+    admitFlow(flow: string, route: string, correlationId: string): AdmissionRejection | undefined;
+    private admissionRejection;
     pendingSettled(flow: string): void;
     flowSettled(flow: string): void;
     abandon(flow: string): void;
@@ -1122,6 +1125,8 @@ export interface WireEndpoint {
     output: WireType;
     /** Refusal codes this path's own reactions and asked actions can answer. */
     errors: string[];
+    /** Whether boundary input admission can add framework `INVALID_INPUT`. */
+    inputAdmissionError?: boolean;
     /** True when some respond's error is not a literal (a code decided at run time). */
     openError: boolean;
 }
@@ -1292,12 +1297,10 @@ export type { WireType } from "./wire-types.ts";
  * {@link PersistingConcept} keeps a subject registry for application-supplied
  * log stores. Its recorded policy is registry data; the concept delegates
  * pruning to the bound store. It does not install the engine's occurrence-log
- * store. {@link AuditFeed} queries entries retained in a log store's in-memory
- * indexes. Core reaction execution does not depend on this module.
+ * store. Core reaction execution does not depend on this module.
  */
 import type { OutcomeContracts } from "../reactions/concepts/outcomes.ts";
-import { MemoryStore, type FiringRecord, type LogEntry, type LogStore, type RetentionPolicy } from "../reactions/runtime/log-store.ts";
-import type { ActionOutcome } from "../reactions/types.ts";
+import { MemoryStore, type LogEntry, type LogStore, type RetentionPolicy } from "../reactions/runtime/log-store.ts";
 /** A long-lived resource that a host can stop during shutdown. */
 export interface Stoppable {
     stop(): void | Promise<void>;
@@ -1395,42 +1398,6 @@ export declare class PersistingConcept {
     _getBinding({ subject }: {
         subject: string;
     }): PersistBinding[];
-}
-/** One action occurrence read from the retained log. */
-export interface AuditEntry {
-    id: string;
-    concept: string;
-    action: string;
-    input: Record<string, unknown>;
-    outcome?: ActionOutcome;
-    flow: string;
-    /** Names of the reactions that fired because of this record. */
-    firings: string[];
-}
-/** Query action occurrences and firings retained by a log store. */
-export declare class AuditFeed {
-    private readonly store;
-    constructor(store: LogStore);
-    /** Every retained occurrence, in no particular order beyond insertion. */
-    all(): AuditEntry[];
-    /** Occurrences whose input or output mentions the value anywhere. */
-    byEntity({ id }: {
-        id: unknown;
-    }): AuditEntry[];
-    /** Occurrences of one concept, optionally one action. */
-    byConcept({ concept, action }: {
-        concept: string;
-        action?: string;
-    }): AuditEntry[];
-    /** Occurrences within one causal chain, in order. */
-    byFlow({ flow }: {
-        flow: string;
-    }): AuditEntry[];
-    /** All recorded firings of a reaction. */
-    firingsOf({ reaction }: {
-        reaction: string;
-    }): FiringRecord[];
-    private entryOf;
 }
 
 === dist/engine/reactions/authoring/channels.d.ts ===
@@ -2258,6 +2225,8 @@ export interface InstrumentationState {
     registerConcept(name: string, instrumented: object): void;
     execution?: {
         action(flow: string): boolean;
+        admitFlow?(flow: string, route: string, correlationId: string): unknown;
+        abandon?(flow: string): void;
     };
     react(record: ActionRecord, durationMs?: number): Promise<void>;
     emit(record: ActionRecord, durationMs?: number): void;
@@ -2280,6 +2249,8 @@ export declare class ConceptInstrumentation {
         scheduler: ActionScheduling;
         execution?: {
             action(flow: string): boolean;
+            admitFlow?(flow: string, route: string, correlationId: string): unknown;
+            abandon?(flow: string): void;
         };
         react(record: ActionRecord, durationMs?: number): Promise<void>;
         emit(record: ActionRecord, durationMs?: number): void;
@@ -2728,6 +2699,8 @@ export declare class Reacting {
         action(flow: string): boolean;
         firing(flow: string): boolean;
         rows(count: number): boolean;
+        admitFlow?(flow: string, route: string, correlationId: string): unknown;
+        abandon?(flow: string): void;
     });
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
@@ -3102,7 +3075,6 @@ export declare class AuthoredReferenceResolver {
 /** Import-leaf brands keep read-side predicates from creating value cycles. */
 export declare const WhereOpBrand: unique symbol;
 export declare const CountOpBrand: unique symbol;
-export declare const ClaimBrand: unique symbol;
 export declare const ViewBlockBrand: unique symbol;
 export declare const LineBrand: unique symbol;
 export declare const RelationViewBrand: unique symbol;
@@ -4021,8 +3993,6 @@ export declare function compareLocalDefinitions(left: LocalBehaviorDefinition, r
 export declare function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis;
 /** Return local definitions reachable from one definition, including itself. */
 export declare function reachableLocalDefinitions(analysis: LocalBehaviorAnalysis, root: LocalBehaviorDefinition): ObservedLocalDefinition[];
-/** Count every distinct custom, identity-pattern, and unlowered occurrence. */
-export declare function opaqueCount(app: AppIR): number;
 
 === dist/engine/reads/local-review.d.ts ===
 /** Validate and render the explicit review contract for local application behavior. */
@@ -4479,7 +4449,6 @@ export {};
 import type { ViewIR, ViewOpIR, WhereOpIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
 import type { ViewOp } from "./views.ts";
-export declare function lowerViewAlternatives(slotVars: readonly symbol[], alternatives: readonly (readonly ViewOp[])[]): ViewOpIR[][];
 export declare function lowerRelationBlocks(named: ReadonlyMap<symbol, string>, alternatives: readonly (readonly ViewOp[])[]): ViewOpIR[][];
 /** Serialize one view: the registered alternatives already are IR. */
 export declare function serializeView(ref: RelationView): ViewIR;
@@ -4690,10 +4659,6 @@ export declare function compute(computation: ComputationRef, input: Mapping, out
  * per out variable; a single out binds the return value directly).
  */
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
-/** Construct the line a called vocabulary query ref answers with. @internal */
-export declare function queryLine(query: InstrumentedQuery, input: Mapping): ReadLine;
-/** Construct the line a called relation view answers with. @internal */
-export declare function viewLine(view: RelationView, input: Mapping): ReadLine;
 
 === dist/engine/tooling/artifact-plan.d.ts ===
 import type { ApplicationManifestV2 } from "./manifest.ts";
@@ -4742,7 +4707,7 @@ export declare function applyArtifactPlan(plan: ArtifactPlan, filesystem: Artifa
 
 === dist/engine/tooling/dependency-graph.d.ts ===
 import type { ApplicationManifestV2 } from "./manifest.ts";
-export type DependencyNodeKind = "endpoint" | "output" | "reaction" | "action" | "query" | "view" | "former" | "computation" | "review" | "opaque";
+export type DependencyNodeKind = "concept" | "generator" | "endpoint" | "output" | "reaction" | "action" | "query" | "view" | "former" | "computation" | "review" | "opaque";
 export interface DependencyNode {
     id: string;
     kind: DependencyNodeKind;
@@ -4759,6 +4724,7 @@ export interface DependencyEdge {
 export interface ApplicationDependencyGraphV2 {
     format: "sync-engine.application-dependency-graph";
     version: 2;
+    generator: ApplicationManifestV2["generator"];
     nodes: DependencyNode[];
     edges: DependencyEdge[];
     reverse: Record<string, string[]>;
@@ -4781,7 +4747,7 @@ import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { AppIR } from "../reads/ir.ts";
 import type { LocalBehaviorReview } from "../reads/local-review.ts";
 export type DiagnosticSeverity = "info" | "warning" | "error";
-export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "LOCAL_DEFINITION" | "UNRESOLVED_WIRE_LEAF" | "DEPENDENCY_CYCLE" | "ENDPOINT_PATH_OVERLAP" | "ENDPOINT_LITERAL_UNCOVERED" | "MULTIPLE_RESPOND_CONSEQUENCES" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER" | "INVALID_VALIDATOR_ATTACHMENT";
+export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "LOCAL_DEFINITION" | "UNRESOLVED_WIRE_LEAF" | "ENDPOINT_PATH_OVERLAP" | "MULTIPLE_RESPOND_CONSEQUENCES" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER";
 export interface ApplicationDiagnostic {
     severity: DiagnosticSeverity;
     code: DiagnosticCode;
@@ -4900,6 +4866,7 @@ import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
 import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
 import type { LocalBehaviorReview } from "../reads/local-review.ts";
+import { type GeneratorIdentity } from "../utils/package-version.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 export interface ManifestEndpointV2 {
     name: string;
@@ -4914,6 +4881,7 @@ export interface ManifestEndpointV2 {
 export interface ApplicationManifestV2 {
     format: "sync-engine.application-manifest";
     version: 2;
+    generator: GeneratorIdentity;
     digest: string;
     application: AppIR;
     concepts: ConceptInventoryIR[];
@@ -4991,6 +4959,20 @@ export declare function ordinal(left: string, right: string): number;
 /** Define one enumerable own data property without invoking prototype setters. */
 export declare function setOwn<T extends object>(object: T, key: string | symbol, value: unknown): T;
 
+=== dist/engine/utils/package-version.d.ts ===
+export declare const PACKAGE_NAME: string;
+export declare const PACKAGE_VERSION: string;
+export interface GeneratorIdentity {
+    name: typeof PACKAGE_NAME;
+    version: string;
+}
+export declare const GENERATOR_IDENTITY: GeneratorIdentity;
+export declare function assertCurrentGenerator(identity: unknown, owner: string): asserts identity is GeneratorIdentity;
+
+=== dist/engine/utils/reaction-name.d.ts ===
+/** Whether a lowered reaction name belongs to one of the named authored roots. */
+export declare function reactionNameBelongsTo(name: string, roots: readonly string[]): boolean;
+
 === dist/engine/utils/redaction.d.ts ===
 /**
  * Return human-readable text from a thrown value.
@@ -5020,11 +5002,6 @@ export interface Redactor {
 }
 /** Create one immutable application-scoped field-name redactor. */
 export declare function createRedactor(policy?: RedactionPolicy): Redactor;
-/**
- * Replace the domain field-name policy used by subsequent {@link redact}
- * calls. The default field-name patterns remain active.
- */
-export declare function configureRedaction(policy: RedactionPolicy): void;
 export declare function redact(obj: unknown, depth?: number): unknown;
 
 === dist/engine/utils/runtime.d.ts ===
@@ -5075,6 +5052,6 @@ export type { WireContractsIR, WireEndpoint, WireOptions, WireRenderOptions, Wir
 export { logger } from "../engine/utils/logger.ts";
 export type { Logger, LogLevel } from "../engine/utils/logger.ts";
 export { serializeError } from "../engine/utils/logger.ts";
-export { configureRedaction, createRedactor, describeError, redact, UNIVERSAL_SENSITIVE_PATTERNS, } from "../engine/utils/redaction.ts";
+export { createRedactor, describeError, redact, UNIVERSAL_SENSITIVE_PATTERNS, } from "../engine/utils/redaction.ts";
 export type { RedactionPolicy } from "../engine/utils/redaction.ts";
 export type { Redactor } from "../engine/utils/redaction.ts";

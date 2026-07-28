@@ -619,12 +619,21 @@ engine-owned production budget. Row limits are checked at reaction matching,
 where evaluation, and each consequence stage. They do not replace host limits
 for connections, request rate, DDoS protection, exporter queues, or autoscaling.
 
-`beginDrain()` on an assembly or gateway rejects new roots immediately and
-resolves when accepted causal flows become idle. `whenIdle()` observes the same
-actual-work state without changing admission. Caller timeout and abort remove a
-pending wait but never release active-flow accounting. The host still owns the
-listener, OS signals, hard shutdown deadline, floor and log-store closure, and
-process exit.
+`beginDrain()` on an assembly rejects its new roots immediately and resolves
+when accepted causal flows become idle. A gateway first rejects new public
+gateway roots, lets those accepted roots cross application admission, then
+drains the downstream assembly and waits for both layers. Do not expose the
+downstream invoker as a second public admission path while gateway shutdown is
+in progress. `whenIdle()` observes the same ordered gateway/application work
+without changing admission. Caller timeout and abort remove a pending wait but
+never release active-flow accounting. The host still owns the listener, OS
+signals, hard shutdown deadline, floor and log-store closure, and process exit.
+
+A direct call through `Assembly.concepts` is an assembly root: it participates
+in active-root limits, idle observation, and drain admission. A direct root
+rejected by overload or drain resolves to `{ error: "UNAVAILABLE" }` before an
+action occurrence is recorded. Pending-request limits apply only to boundary
+invocations because direct action calls do not create request waits.
 
 ### Ordering and state-read timing
 
@@ -733,9 +742,9 @@ exception messages, stacks, causes, and attached fields. `serializeError(...)`
 provides that opaque class-only representation. `describeError(...)` instead
 returns unredacted exception text and is suitable only for a caller-reviewed
 diagnostic channel, not an automatic public error envelope.
-Only the standalone `configureRedaction(...)` / `redact(...)` compatibility
-utility has mutable process-global policy; changing it does not alter an
-existing assembly's snapshot.
+Standalone callers use `createRedactor(...)` for an immutable domain policy.
+The `redact(...)` convenience applies only immutable universal patterns; there
+is no mutable process-global redaction policy.
 
 Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
 most recent settled causal flows. Its `retention` option can select another

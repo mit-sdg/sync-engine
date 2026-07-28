@@ -181,6 +181,28 @@ describe("createHttpClient", () => {
     expect(result).toEqual({ error: FrameworkErrorCode.ABORTED });
   });
 
+  test("an abort while reading the response body returns ABORTED", async () => {
+    const controller = new AbortController();
+    const fetch: typeof globalThis.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => {
+          controller.abort();
+          return Promise.reject(new DOMException("Aborted", "AbortError"));
+        },
+      } as Response),
+    ) as unknown as typeof fetch;
+    const client = makeClient(fetch);
+
+    const result = await client.auth.login(
+      { username: "a", password: "b" },
+      { signal: controller.signal },
+    );
+
+    expect(result).toEqual({ error: FrameworkErrorCode.ABORTED });
+  });
+
   test("a non-JSON success response returns BAD_JSON", async () => {
     const fetch = mockFetchText("plain text not json", 200, true);
     const client = makeClient(fetch);

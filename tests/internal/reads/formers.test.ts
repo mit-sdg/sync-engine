@@ -21,7 +21,7 @@ import {
 } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import { FormerFault } from "@sync-engine/internal/reads/former-nodes";
-import { opaqueCount } from "@sync-engine/internal/reads/local-behavior";
+import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
 import { renderFormer } from "@sync-engine/internal/reads/render";
 import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
@@ -664,7 +664,7 @@ describe("formers: IR round-trip", () => {
     expect(app.formers.map((f) => f.name)).toEqual(["summary (conversation)"]);
     const consequence = app.reactions[0].then[0];
     expect(JSON.stringify(consequence.input)).toContain('"$former"');
-    expect(opaqueCount(app)).toBe(0);
+    expect(analyzeLocalBehavior(app).occurrences).toHaveLength(0);
   });
 
   test("export ∘ register is a fixed point, and behavior carries over", async () => {

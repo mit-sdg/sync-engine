@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export const ownedDependencyManifests = [
   "examples/reading-circle/package.json",
   "examples/operations-room/package.json",
@@ -23,7 +25,9 @@ const typescriptManifests = nodeProjectManifests;
 
 export const releaseSourcePaths = [
   "package.json",
+  "README.md",
   "CHANGELOG.md",
+  "docs/releasing.md",
   "SUPPORT.md",
   "SECURITY.md",
   "src/command/scaffold/package.json",
@@ -36,9 +40,10 @@ export const releaseSourcePaths = [
 
 const expectedActions = new Map([
   ["actions/checkout", "3d3c42e5aac5ba805825da76410c181273ba90b1"],
+  ["actions/download-artifact", "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"],
   ["actions/setup-node", "820762786026740c76f36085b0efc47a31fe5020"],
+  ["actions/upload-artifact", "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"],
   ["oven-sh/setup-bun", "0c5077e51419868618aeaa5fe8019c62421857d6"],
-  ["voidzero-dev/setup-vp", "250f29ce396baf5e8f24498e17c0dfdebabc26eb"],
 ]);
 const requiredHeadings = [
   "Compatibility",
@@ -49,6 +54,13 @@ const requiredHeadings = [
 const expectedEngines = { bun: ">=1.3.14 <1.4", node: ">=24 <25" } as const;
 const expectedTypeScript = ">=5.9 <6";
 const expectedPackageManager = "bun@1.3.14";
+const releasedChangelogDigests = new Map([
+  ["1.0.0-alpha.0", "92e21d62558b5e7aa66a5c2c30c20633534f5dfc144506bd11e9643f8cd7dd21"],
+  ["0.3.0", "fb8d76294b0d86f67c00fdc92c0a7b27a7cad0afbe0b5f335f3764087919c309"],
+  ["0.2.0", "1310093297ca2e60f0fe99beb6e74ad86e864cbfc98d4feaf3b8b8858adfcd21"],
+  ["0.1.1", "8d14d20525ef8a9e501c58610c33b278ec6c5cc61335bf7eb9995d9c71e196f5"],
+  ["0.1.0", "9cd7baf8a9d9646e728dc3b23fc28500955a780c5a4e86b1f5321b4b380c96e8"],
+]);
 
 type JsonObject = Record<string, unknown>;
 
@@ -60,6 +72,52 @@ function object(value: unknown): JsonObject | undefined {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function activeWorkflowSource(source: string): string {
+  return source
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .map((line) => line.replace(/\s+#.*$/, ""))
+    .join("\n");
+}
+
+function workflowJob(source: string, name: string): string {
+  const active = activeWorkflowSource(source);
+  const marker = `\n  ${name}:`;
+  const start = active.indexOf(marker);
+  if (start < 0) return "";
+  const bodyStart = start + marker.length;
+  const next = /\n  [A-Za-z0-9_-]+:\s*(?:\n|$)/.exec(active.slice(bodyStart));
+  return next === null ? active.slice(start) : active.slice(start, bodyStart + next.index);
+}
+
+function hasWorkflowLine(source: string, expected: string): boolean {
+  return activeWorkflowSource(source)
+    .split("\n")
+    .some((line) => line.trim() === expected);
+}
+
+function runCommandPosition(job: string, command: string): number {
+  return job
+    .split("\n")
+    .findIndex((line) => line === `      - run: ${command}` || line === `        run: ${command}`);
+}
+
+function hasRunCommand(job: string, command: string): boolean {
+  return runCommandPosition(job, command) >= 0;
+}
+
+function changelogSection(changelog: string, version: string): string | undefined {
+  const start = changelog.indexOf(`## [${version}]`);
+  if (start < 0) return undefined;
+  const following = changelog.slice(start + 1);
+  const boundaries = [/\n## \[/.exec(following), /\n\[[^\]\n]+\]:\s/.exec(following)]
+    .flatMap((match) => (match === null ? [] : [match.index]))
+    .sort((left, right) => left - right);
+  return boundaries.length === 0
+    ? changelog.slice(start)
+    : changelog.slice(start, start + 1 + boundaries[0]);
 }
 
 export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
@@ -182,8 +240,30 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       }
     }
   }
-  if (!changelog.includes("## [1.0.0-alpha.0] - 2026-07-27")) {
-    failures.push("CHANGELOG.md: released 1.0.0-alpha.0 date must remain 2026-07-27");
+  for (const [released, expectedDigest] of releasedChangelogDigests) {
+    const section = changelogSection(changelog, released);
+    const digest =
+      section === undefined ? undefined : createHash("sha256").update(section).digest("hex");
+    if (digest !== expectedDigest) {
+      failures.push(`CHANGELOG.md: released ${released} entry must remain byte-faithful`);
+    }
+  }
+
+  const readme = sources.get("README.md") ?? "";
+  if (typeof version === "string" && !readme.includes(`\`@${version}\``)) {
+    failures.push(`README.md: exact evaluation version must be @${version}`);
+  }
+
+  const releasing = sources.get("docs/releasing.md") ?? "";
+  for (const fact of [
+    "npm deprecate @mit-sdg/sync-engine@1.0.0-alpha.0",
+    "install @mit-sdg/sync-engine@$VERSION or use @beta",
+    "versions deprecated --json",
+    "never\n  `@alpha`",
+  ]) {
+    if (!releasing.includes(fact)) {
+      failures.push(`docs/releasing.md: missing alpha retirement fact ${fact}`);
+    }
   }
 
   const support = sources.get("SUPPORT.md") ?? "";
@@ -236,7 +316,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
 
   const workflows = [".github/workflows/ci.yml", ".github/workflows/publish.yml"];
   for (const path of workflows) {
-    const source = sources.get(path) ?? "";
+    const source = activeWorkflowSource(sources.get(path) ?? "");
     const uses = [...source.matchAll(/\buses:\s*([^\s#]+)/g)].map((match) => match[1] ?? "");
     for (const use of uses) {
       if (use.startsWith("./")) continue;
@@ -259,7 +339,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     }
   }
 
-  const ci = sources.get(".github/workflows/ci.yml") ?? "";
+  const ci = activeWorkflowSource(sources.get(".github/workflows/ci.yml") ?? "");
   for (const fact of [
     "permissions:\n  contents: read",
     "name: Generated artifacts",
@@ -272,13 +352,21 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   if (ci.includes("id-token: write")) {
     failures.push(".github/workflows/ci.yml: CI must not receive id-token: write");
   }
+  for (const name of ["package", "test"]) {
+    const job = workflowJob(ci, name);
+    for (const fact of [
+      "- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+      'node-version: "24"',
+    ]) {
+      if (!hasWorkflowLine(job, fact)) {
+        failures.push(`.github/workflows/ci.yml: ${name} job is missing ${fact}`);
+      }
+    }
+  }
 
-  const publish = sources.get(".github/workflows/publish.yml") ?? "";
-  const verifyStart = publish.indexOf("\n  verify:");
-  const publishStart = publish.indexOf("\n  publish:");
-  const verify =
-    verifyStart >= 0 && publishStart > verifyStart ? publish.slice(verifyStart, publishStart) : "";
-  const publication = publishStart >= 0 ? publish.slice(publishStart) : "";
+  const publish = activeWorkflowSource(sources.get(".github/workflows/publish.yml") ?? "");
+  const verify = workflowJob(publish, "verify");
+  const publication = workflowJob(publish, "publish");
   for (const fact of [
     "name: Publish beta",
     '- "v1.0.0-beta.*"',
@@ -298,24 +386,68 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "bun run package:check",
     "bun audit",
   ]) {
-    if (!verify.includes(gate)) {
+    if (!hasRunCommand(verify, gate)) {
       failures.push(`.github/workflows/publish.yml: verify job must run ${gate}`);
     }
+  }
+  for (const fact of [
+    "- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+    'node-version: "24"',
+  ]) {
+    if (!hasWorkflowLine(verify, fact)) {
+      failures.push(`.github/workflows/publish.yml: verify job is missing ${fact}`);
+    }
+  }
+  const verifyOrder = [
+    "bun run release:check",
+    "bun run check",
+    "bun run test",
+    "bun run coverage",
+    "bun run build",
+    "bun run declarations:check",
+    "bun run examples:check",
+    "bun run scenario",
+    "bun run package:check",
+    "bun audit",
+  ].map((command) => runCommandPosition(verify, command));
+  if (
+    verifyOrder.some((position) => position < 0) ||
+    verifyOrder.some((position, index) => index > 0 && position <= verifyOrder[index - 1])
+  ) {
+    failures.push(".github/workflows/publish.yml: verify gates must remain in reviewed order");
   }
   if (verify.includes("environment:") || verify.includes("id-token: write")) {
     failures.push(".github/workflows/publish.yml: verify must be unprivileged");
   }
-  for (const fact of [
-    "needs: verify",
-    "id-token: write",
-    "name: npm",
-    "bun install --frozen-lockfile",
-    "bun run release:check",
-    "npm publish --provenance --tag beta --access public",
-  ]) {
-    if (!publication.includes(fact)) {
+  if (/^\s+(?:-\s+)?if:/m.test(verify)) {
+    failures.push(".github/workflows/publish.yml: verify steps must not be conditional");
+  }
+  if (/^\s+continue-on-error:/m.test(verify)) {
+    failures.push(".github/workflows/publish.yml: verify steps must not continue on error");
+  }
+  for (const fact of ["needs: verify", "id-token: write", "name: npm"]) {
+    if (!hasWorkflowLine(publication, fact)) {
       failures.push(`.github/workflows/publish.yml: publish job is missing ${fact}`);
     }
+  }
+  for (const command of [
+    "sha256sum --check release/package.tgz.sha256",
+    "npm publish release/package.tgz --provenance --tag beta --access public",
+  ]) {
+    if (!hasRunCommand(publication, command)) {
+      failures.push(`.github/workflows/publish.yml: publish job is missing ${command}`);
+    }
+  }
+  for (const forbidden of ["setup-bun@", "bun install", "bun run", "prepack"]) {
+    if (publication.includes(forbidden)) {
+      failures.push(`.github/workflows/publish.yml: publish job must not rebuild (${forbidden})`);
+    }
+  }
+  if (/^\s+(?:-\s+)?if:/m.test(publication)) {
+    failures.push(".github/workflows/publish.yml: publish steps must not be conditional");
+  }
+  if (/^\s+continue-on-error:/m.test(publication)) {
+    failures.push(".github/workflows/publish.yml: publish steps must not continue on error");
   }
   if ((publish.match(/id-token:\s*write/g) ?? []).length !== 1) {
     failures.push(".github/workflows/publish.yml: only publish may receive id-token: write");
@@ -325,6 +457,12 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     ["GITHUB_SHA", 'test "$(git rev-parse HEAD)" = "$GITHUB_SHA"'],
     ["origin/main", 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main'],
     ["origin main fetch", "git fetch --no-tags origin main"],
+    [
+      "live tag fetch",
+      'git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"',
+    ],
+    ["annotated tag", 'test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag'],
+    ["live tag commit", 'test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"'],
     ["[1-9]\\d*", "/^1\\.0\\.0-beta\\.(?:0|[1-9]\\d*)$/"],
   ] as const;
   for (const [fact, source] of sourceValidation) {
@@ -333,6 +471,15 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     }
     if (!publication.includes(source)) {
       failures.push(`.github/workflows/publish.yml: publish source validation is missing ${fact}`);
+    }
+  }
+  for (const fact of [
+    "SYNC_ENGINE_VERIFIED_TARBALL: release/package.tgz",
+    "sha256sum release/package.tgz > release/package.tgz.sha256",
+    "name: verified-npm-package",
+  ]) {
+    if (!publish.includes(fact)) {
+      failures.push(`.github/workflows/publish.yml: verified artifact flow is missing ${fact}`);
     }
   }
   if (/\bgh\s+release\b/.test(publish)) {

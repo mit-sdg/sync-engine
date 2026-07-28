@@ -103,19 +103,10 @@ export function createRedactor(policy: RedactionPolicy = {}): Redactor {
   };
 }
 
-// The process policy used only by the standalone compatibility utility.
-let configuredRedactor = createRedactor();
-
-/**
- * Replace the domain field-name policy used by subsequent {@link redact}
- * calls. The default field-name patterns remain active.
- */
-export function configureRedaction(policy: RedactionPolicy): void {
-  configuredRedactor = createRedactor(policy);
-}
+const standaloneRedactor = createRedactor();
 
 export function redact(obj: unknown, depth = 0): unknown {
-  return configuredRedactor.redact(obj, depth);
+  return standaloneRedactor.redact(obj, depth);
 }
 
 const MAX_REDACTION_DEPTH = 5;

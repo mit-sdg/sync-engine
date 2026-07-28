@@ -1,21 +1,11 @@
-import { afterEach, describe, expect, test } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
-import {
-  configureRedaction,
-  createRedactor,
-  redact,
-  UNIVERSAL_SENSITIVE_PATTERNS,
-} from "@sync-engine/utils";
-
-// The framework owns only the universal credential patterns; domain fields
-// (PII, financials) are the app's policy and are tested app-side. Each test
-// that registers a policy resets to the universal-only default afterward.
-afterEach(() => configureRedaction({ fields: [] }));
+import { createRedactor, redact, UNIVERSAL_SENSITIVE_PATTERNS } from "@sync-engine/utils";
 
 describe("redact — universal credential patterns (no policy registered)", () => {
   test("redacts credential-shaped keys regardless of domain", () => {
@@ -52,19 +42,23 @@ describe("redact — universal credential patterns (no policy registered)", () =
 });
 
 describe("redact — injected redaction policy", () => {
-  test("an immutable redactor is independent of later process policy changes", () => {
+  test("immutable redactors keep independent policies", () => {
     const scoped = createRedactor({ fields: ["privateField"] });
-    configureRedaction({ fields: ["otherField"] });
+    const other = createRedactor({ fields: ["otherField"] });
 
     expect(scoped.redact({ privateField: "a", otherField: "b" })).toEqual({
       privateField: "[redacted]",
       otherField: "b",
     });
+    expect(other.redact({ privateField: "a", otherField: "b" })).toEqual({
+      privateField: "a",
+      otherField: "[redacted]",
+    });
   });
 
   test("redacts exact domain field names once registered", () => {
-    configureRedaction({ fields: ["email", "amount", "fatherName"] });
-    const result = redact({
+    const redactor = createRedactor({ fields: ["email", "amount", "fatherName"] });
+    const result = redactor.redact({
       email: "user@example.com",
       amount: 5000,
       fatherName: "John Doe",
@@ -75,8 +69,8 @@ describe("redact — injected redaction policy", () => {
   });
 
   test("applies extra domain patterns on top of the universal set", () => {
-    configureRedaction({ patterns: [/ssn/i] });
-    const result = redact({ ssn: "111-22-3333", token: "t" }) as Record<string, unknown>;
+    const redactor = createRedactor({ patterns: [/ssn/i] });
+    const result = redactor.redact({ ssn: "111-22-3333", token: "t" }) as Record<string, unknown>;
     expect(result.ssn).toBe("[redacted]");
     // Universal patterns apply alongside the injected ones.
     expect(result.token).toBe("[redacted]");
@@ -87,9 +81,11 @@ describe("redact — injected redaction policy", () => {
     const sticky = /^internal/y;
     global.lastIndex = 3;
     sticky.lastIndex = 4;
-    configureRedaction({ patterns: [global, sticky] });
+    const redactor = createRedactor({ patterns: [global, sticky] });
 
-    expect(redact({ privateOne: 1, privateTwo: 2, internalOne: 3, internalTwo: 4 })).toEqual({
+    expect(
+      redactor.redact({ privateOne: 1, privateTwo: 2, internalOne: 3, internalTwo: 4 }),
+    ).toEqual({
       privateOne: "[redacted]",
       privateTwo: "[redacted]",
       internalOne: "[redacted]",
@@ -100,8 +96,9 @@ describe("redact — injected redaction policy", () => {
   });
 
   test("field matching is case-insensitive", () => {
-    configureRedaction({ fields: ["searchname"] });
-    const result = redact({ searchName: "Alisa" }) as Record<string, unknown>;
+    const result = createRedactor({ fields: ["searchname"] }).redact({
+      searchName: "Alisa",
+    }) as Record<string, unknown>;
     expect(result.searchName).toBe("[redacted]");
   });
 });

@@ -11,7 +11,7 @@ import { Logging } from "@sync-engine/assembly";
 import { count, earlier, is, reaction, view, vocabulary, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import { Frames } from "@sync-engine/internal/reads/frames";
-import { opaqueCount } from "@sync-engine/internal/reads/local-behavior";
+import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
 import type { AppIR } from "@sync-engine/internal/reads/ir";
 import { renderApp, renderReaction, renderView } from "@sync-engine/internal/reads/render";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
@@ -338,7 +338,7 @@ describe("views: IR and round trip", () => {
         out: {},
       },
     ]);
-    expect(opaqueCount(app)).toBe(0);
+    expect(analyzeLocalBehavior(app).occurrences).toHaveLength(0);
   });
 
   test("export → JSON → registerViews + registerReactions behaves identically", async () => {
@@ -414,7 +414,7 @@ describe("views: IR and round trip", () => {
           .then(refs.Recorder.record({ tag: id })),
       ),
     });
-    expect(opaqueCount(reacting.exportReactions())).toBe(1);
+    expect(analyzeLocalBehavior(reacting.exportReactions()).occurrences).toHaveLength(1);
   });
 });
 

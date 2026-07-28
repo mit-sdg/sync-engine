@@ -1,6 +1,10 @@
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import { assemblyBehind } from "../assembly/assembly-registry.ts";
-import { publicCategoryOf } from "../protocol/public-errors.ts";
+import {
+  publicFrameworkCategoryOf,
+  registeredPublicCategoryOf,
+} from "../protocol/public-errors.ts";
+import { FrameworkErrorCode } from "../protocol/errors.ts";
 import type { WireContractsIR } from "../wire/wire-contracts.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
 import { normalizeHttpBasePath } from "../protocol/http-path.ts";
@@ -48,14 +52,22 @@ export function projectProductionHttpWire(
   categories: Readonly<Record<string, PublicErrorCategory>>,
 ): WireContractsIR {
   return {
-    endpoints: wire.endpoints.map((endpoint) => ({
-      ...endpoint,
-      errors: [
-        ...new Set(endpoint.errors.map((code) => publicCategoryOf(code, categories))),
-      ].sort(),
-      openError: false,
-    })),
-    appWide: [...new Set(wire.appWide.map((code) => publicCategoryOf(code, categories)))].sort(),
+    endpoints: wire.endpoints.map((endpoint) => {
+      const errors = new Set<PublicErrorCategory | "INTERNAL_ERROR">();
+      for (const code of endpoint.errors) {
+        if (code === FrameworkErrorCode.INVALID_INPUT && endpoint.inputAdmissionError !== false) {
+          errors.add(publicFrameworkCategoryOf(code));
+        }
+        if (code !== FrameworkErrorCode.INVALID_INPUT || Object.hasOwn(categories, code)) {
+          errors.add(registeredPublicCategoryOf(code, categories));
+        }
+      }
+      if (endpoint.openError) errors.add("INTERNAL_ERROR");
+      return { ...endpoint, errors: [...errors].sort(), openError: false };
+    }),
+    appWide: [
+      ...new Set(wire.appWide.map((code) => registeredPublicCategoryOf(code, categories))),
+    ].sort(),
   };
 }
 

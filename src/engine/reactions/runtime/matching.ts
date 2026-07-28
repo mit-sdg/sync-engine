@@ -52,7 +52,7 @@ export function unifyPattern(
     const recordValue = recordValues[key];
     if (variable !== undefined) {
       if (!Object.hasOwn(next, variable)) next = { ...next, [variable]: recordValue };
-      else if (next[variable] !== recordValue) return undefined;
+      else if (!literalEquals(next[variable], recordValue)) return undefined;
       continue;
     }
     if (value instanceof RegExp) {

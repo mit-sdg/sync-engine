@@ -43,6 +43,7 @@ describe("application manifest", () => {
     expect(manifest).toMatchObject({
       format: "sync-engine.application-manifest",
       version: 2,
+      generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.0" },
       digest: expect.stringMatching(/^fnv1a64-[0-9a-f]{16}$/),
       localBehavior: { contract: null, observed: [] },
       endpoints: [
@@ -153,6 +154,7 @@ describe("application manifest", () => {
     expect(graph).toMatchObject({
       format: "sync-engine.application-dependency-graph",
       version: 2,
+      generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.0" },
     });
     expect(graph.nodes).toContainEqual(
       expect.objectContaining({ id: "action:RequestBoundary.request", kind: "action" }),
@@ -182,6 +184,38 @@ describe("application manifest", () => {
     expect(impact.directlyChanged).toContain("reaction:First");
     expect(impact.endpoints).toContain("/shared#First");
     expect(impact.outputs).toContain("/shared#First");
+  });
+
+  test("reports concept prose changes and removed endpoint summaries", () => {
+    const before = applicationManifest(application());
+    const proseOnly = structuredClone(before);
+    const boundary = proseOnly.concepts.find(({ name }) => name === "RequestBoundary");
+    expect(boundary).toBeDefined();
+    if (boundary !== undefined) boundary.purpose = "Changed design purpose";
+
+    expect(applicationImpact(before, proseOnly)).toMatchObject({
+      directlyChanged: ["concept:RequestBoundary"],
+      affected: ["concept:RequestBoundary"],
+      endpoints: [],
+      outputs: [],
+      wholeApplication: false,
+    });
+
+    const empty = assemble({ vocabulary: words, composition: {} });
+    const removed = applicationImpact(before, applicationManifest(empty));
+    expect(removed.endpoints).toEqual(["/shared#First", "/shared#Second"]);
+    expect(removed.outputs).toEqual(["/shared#First", "/shared#Second"]);
+  });
+
+  test("a generator-version change forces whole-application impact", () => {
+    const before = applicationManifest(application());
+    const after = structuredClone(before);
+    after.generator.version = "1.0.0-beta.1";
+    const impact = applicationImpact(before, after);
+
+    expect(impact.directlyChanged).toEqual(["generator:%40mit-sdg%2Fsync-engine"]);
+    expect(impact.wholeApplication).toBe(true);
+    expect(impact.endpoints).toEqual(["/shared#First", "/shared#Second"]);
   });
 });
 import { spawnSync } from "node:child_process";

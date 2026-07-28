@@ -92,10 +92,6 @@ describe("assembly execution lifecycle", () => {
       ok: false,
       error: { kind: "framework", code: FrameworkErrorCode.UNAVAILABLE },
     });
-    expect(await app.invoker.invoke("/work", {})).toEqual({
-      ok: false,
-      error: { kind: "framework", code: FrameworkErrorCode.UNAVAILABLE },
-    });
 
     controller.abort();
     expect(await accepted).toEqual({
@@ -108,6 +104,77 @@ describe("assembly execution lifecycle", () => {
     release();
     await draining;
     expect(idle).toBe(true);
+    expect(await app.invoker.invoke("/work", {})).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.UNAVAILABLE },
+    });
+  });
+
+  test("gateway drain preserves a root accepted immediately before draining", async () => {
+    const { app, didStart, release } = slowApplication();
+    const gateway = createGateway({ application: app });
+    const accepted = gateway.invoke("/work", {});
+    const draining = gateway.beginDrain();
+
+    await didStart;
+    expect(await gateway.invoke("/work", {})).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.UNAVAILABLE },
+    });
+    release();
+
+    await expect(accepted).resolves.toEqual({ ok: true, value: { value: "complete" } });
+    await expect(draining).resolves.toBeUndefined();
+  });
+
+  test("direct concept roots participate in limits, idle observation, and drain", async () => {
+    const { app, didStart, release } = slowApplication(limits({ maxActiveRootFlows: 1 }));
+    const accepted = app.concepts.Working.run({});
+    await didStart;
+
+    expect(await app.concepts.Working.run({})).toEqual({ error: FrameworkErrorCode.UNAVAILABLE });
+    let idle = false;
+    const observing = app.whenIdle().then(() => {
+      idle = true;
+    });
+    const draining = app.beginDrain();
+    await Promise.resolve();
+    expect(idle).toBe(false);
+    expect(await app.concepts.Working.run({})).toEqual({ error: FrameworkErrorCode.UNAVAILABLE });
+
+    release();
+    await expect(accepted).resolves.toEqual({ value: "complete" });
+    await observing;
+    await draining;
+    expect(idle).toBe(true);
+  });
+
+  test("a rejected direct root does not invalidate query caches", async () => {
+    class CachedConcept {
+      static readonly queries = { _value: "many" } as const;
+      reads = 0;
+
+      change(_: Empty) {
+        return {};
+      }
+
+      _value(_: Empty) {
+        this.reads += 1;
+        return [{ value: "same" }];
+      }
+    }
+    const words = vocabulary({ concepts: { Cached: CachedConcept }, computations: {} });
+    const app = assemble({ vocabulary: words, composition: {} });
+
+    expect(await app.concepts.Cached._value({})).toEqual([{ value: "same" }]);
+    expect(await app.concepts.Cached._value({})).toEqual([{ value: "same" }]);
+    expect(app.concepts.Cached.reads).toBe(1);
+    await app.beginDrain();
+    expect(await app.concepts.Cached.change({})).toEqual({
+      error: FrameworkErrorCode.UNAVAILABLE,
+    });
+    expect(await app.concepts.Cached._value({})).toEqual([{ value: "same" }]);
+    expect(app.concepts.Cached.reads).toBe(1);
   });
 
   test("pending-request limits remain in force after uncovered work becomes idle", async () => {

@@ -17,7 +17,7 @@ Operations Room after the basic concept, reaction, view, former, and endpoint
 roles are familiar. Use Production HTTP when selecting a public transport
 boundary.
 
-From either example directory:
+From any example directory:
 
 ```sh
 bun install

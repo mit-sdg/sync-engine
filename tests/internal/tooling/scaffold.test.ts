@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -72,4 +73,15 @@ describe("sync-engine new", () => {
     );
     expect(await readFile(join(project, "README.md"), "utf8")).toBe("mine");
   });
+
+  test.each(["123", "---", "Bad-Name", "bad_name", "bad--name", "bad-", "con", "com1", "lpt9"])(
+    "rejects invalid project name %s before creating it",
+    async (name) => {
+      const project = join(directory, name);
+      await expect(scaffoldProject(project)).rejects.toThrow(
+        /must begin with a lowercase letter.*single hyphens/,
+      );
+      expect(existsSync(project)).toBe(false);
+    },
+  );
 });

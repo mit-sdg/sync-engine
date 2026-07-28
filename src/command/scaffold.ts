@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 import { camel, heading, pascal, slug } from "@engine/utils/case";
 
 const reTemplate = /\{\{(\w+)\}\}/g;
+const PROJECT_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
 
 /** Walk `dir` recursively and yield every file path relative to it. */
 async function* relativeFiles(dir: string, base = dir): AsyncGenerator<string> {
@@ -63,7 +65,13 @@ async function projectFiles(name: string, templates: string): Promise<Record<str
 /** Write a new project into `directory`, refusing to overwrite existing files. */
 export async function scaffoldProject(directory: string): Promise<string[]> {
   const root = resolve(process.cwd(), directory);
-  const files = await projectFiles(basename(root), templatesDir());
+  const name = basename(root);
+  if (!PROJECT_NAME.test(name) || WINDOWS_DEVICE_NAME.test(name)) {
+    throw new Error(
+      `sync-engine new: project name "${name}" must begin with a lowercase letter, contain only lowercase letters, digits, and single hyphens, and not be a reserved Windows device name.`,
+    );
+  }
+  const files = await projectFiles(name, templatesDir());
   const existing = Object.keys(files).filter((path) => existsSync(resolve(root, path)));
   if (existing.length > 0) {
     throw new Error(

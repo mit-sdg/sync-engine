@@ -104,15 +104,33 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining("compare link"));
   });
 
-  test("protects the released alpha date", () => {
+  test.each([
+    ["1.0.0-alpha.0", "The first v1 alpha replaces, rather than extends, the 0.3 architecture."],
+    ["0.3.0", "Replaced the sequencing and branching DSL"],
+    ["0.2.0", "Removed the devtools package surface"],
+    ["0.1.1", "Reworked the endpoint DSL"],
+    ["0.1.0", "Initial public package"],
+  ])("protects the complete released %s entry", (_version, prose) => {
     const sources = fixture();
-    replaceSource(
-      sources,
+    replaceSource(sources, "CHANGELOG.md", prose, "Rewritten released history.");
+    expect(checkRelease(sources)).toContainEqual(expect.stringContaining("byte-faithful"));
+  });
+
+  test("does not treat the shared changelog link footer as part of 0.1.0", () => {
+    const sources = fixture();
+    sources.set(
       "CHANGELOG.md",
-      "1.0.0-alpha.0] - 2026-07-27",
-      "1.0.0-alpha.0] - 2026-07-28",
+      `${sources.get("CHANGELOG.md") ?? ""}\n[future]: https://example.test/future\n`,
     );
-    expect(checkRelease(sources)).toContainEqual(expect.stringContaining("alpha.0 date"));
+    expect(checkRelease(sources)).not.toContainEqual(expect.stringContaining("0.1.0 must remain"));
+  });
+
+  test("rejects a stale exact README evaluation version", () => {
+    const sources = fixture();
+    replaceSource(sources, "README.md", "`@1.0.0-beta.0`", "`@1.0.0-beta.1`");
+    expect(checkRelease(sources)).toContain(
+      "README.md: exact evaluation version must be @1.0.0-beta.0",
+    );
   });
 
   test.each([
@@ -265,7 +283,7 @@ describe("release source facts", () => {
     "needs: verify",
     "id-token: write",
     "name: npm",
-    "npm publish --provenance --tag beta --access public",
+    "npm publish release/package.tgz --provenance --tag beta --access public",
   ])("requires the publish-only fact %s", (fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-publish-fact");
@@ -282,4 +300,100 @@ describe("release source facts", () => {
       );
     },
   );
+
+  test("requires a freshly fetched annotated tag at the release commit", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      'test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag',
+      "test omitted-live-annotated-tag",
+    );
+    expect(checkRelease(sources)).toContainEqual(
+      expect.stringContaining("source validation is missing annotated tag"),
+    );
+  });
+
+  test("rejects release controls moved into comments or disabled steps", () => {
+    const commented = fixture();
+    replaceSource(
+      commented,
+      ".github/workflows/publish.yml",
+      "      - run: bun run coverage",
+      "      # - run: bun run coverage",
+    );
+    expect(checkRelease(commented)).toContain(
+      ".github/workflows/publish.yml: verify job must run bun run coverage",
+    );
+
+    const disabled = fixture();
+    replaceSource(
+      disabled,
+      ".github/workflows/publish.yml",
+      "      - run: bun run coverage",
+      "      - if: ${{ false }}\n        run: bun run coverage",
+    );
+    expect(checkRelease(disabled)).toContain(
+      ".github/workflows/publish.yml: verify steps must not be conditional",
+    );
+
+    const dependency = fixture();
+    replaceSource(
+      dependency,
+      ".github/workflows/publish.yml",
+      "    needs: verify",
+      "    # needs: verify",
+    );
+    expect(checkRelease(dependency)).toContain(
+      ".github/workflows/publish.yml: publish job is missing needs: verify",
+    );
+  });
+
+  test("requires enforcing run steps rather than inert command text", () => {
+    const environment = fixture();
+    replaceSource(
+      environment,
+      ".github/workflows/publish.yml",
+      "      - run: bun run coverage",
+      '      - run: "true"\n        env:\n          NOTE: bun run coverage',
+    );
+    expect(checkRelease(environment)).toContain(
+      ".github/workflows/publish.yml: verify job must run bun run coverage",
+    );
+
+    const continuing = fixture();
+    replaceSource(
+      continuing,
+      ".github/workflows/publish.yml",
+      "      - run: bun run coverage",
+      "      - run: bun run coverage\n        continue-on-error: true",
+    );
+    expect(checkRelease(continuing)).toContain(
+      ".github/workflows/publish.yml: verify steps must not continue on error",
+    );
+  });
+
+  test("requires Node 24 in package, test, and publication verification", () => {
+    const ci = fixture();
+    ci.set(
+      ".github/workflows/ci.yml",
+      (ci.get(".github/workflows/ci.yml") ?? "").replaceAll(
+        '          node-version: "24"',
+        '          node-version: "22"',
+      ),
+    );
+    expect(checkRelease(ci)).toContainEqual(expect.stringContaining("package job is missing"));
+    expect(checkRelease(ci)).toContainEqual(expect.stringContaining("test job is missing"));
+
+    const publish = fixture();
+    replaceSource(
+      publish,
+      ".github/workflows/publish.yml",
+      '          node-version: "24"',
+      '          node-version: "22"',
+    );
+    expect(checkRelease(publish)).toContainEqual(
+      expect.stringContaining("verify job is missing node-version"),
+    );
+  });
 });

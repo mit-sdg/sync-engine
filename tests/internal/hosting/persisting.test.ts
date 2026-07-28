@@ -19,7 +19,6 @@ import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.t
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
 import {
-  AuditFeed,
   FileStore,
   PersistingConcept,
   type PersistedEntry,
@@ -422,39 +421,5 @@ describe("Persisting: subjects bind once and must be bound before release or pru
     expect(store.calls).toBe(1);
     expect(Persisting._getBinding({ subject: "engine-log" })[0]?.policy).toBe("keepAll");
     expect(() => Persisting.prune({ subject: "other" })).toThrow('Subject "other" is not bound.');
-  });
-});
-
-describe("AuditFeed: the audit trail is a reading of the log", () => {
-  test("byEntity finds occurrences mentioning a value, with the reactions that fired", async () => {
-    const store = new FileStore(join(dir, "log.jsonl"));
-    const { Source } = engineOn(store);
-    const feed = new AuditFeed(store);
-
-    await Source.emit({ tag: "target" });
-    await Source.emit({ tag: "other" });
-
-    const entries = feed.byEntity({ id: "target" });
-    expect(entries.map((e) => `${e.concept}.${e.action}`)).toEqual(["Source.emit", "Sink.receive"]);
-    expect(entries[0]?.firings).toEqual(["Forward"]);
-    expect(entries[0]?.outcome).toEqual({ kind: "result", value: { tag: "target" } });
-  });
-
-  test("byConcept and byFlow slice the same record", async () => {
-    const store = new FileStore(join(dir, "log.jsonl"));
-    const { Source } = engineOn(store);
-    const feed = new AuditFeed(store);
-
-    await Source.emit({ tag: "a" });
-    await Source.emit({ tag: "b" });
-
-    expect(feed.byConcept({ concept: "Sink" }).length).toBe(2);
-    expect(feed.byConcept({ concept: "Source", action: "emit" }).length).toBe(2);
-
-    const flow = feed.byConcept({ concept: "Source" })[0]?.flow ?? "";
-    const chain = feed.byFlow({ flow });
-    expect(chain.map((e) => e.action)).toEqual(["emit", "receive"]);
-
-    expect(feed.firingsOf({ reaction: "Forward" }).length).toBe(2);
   });
 });

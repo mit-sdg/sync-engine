@@ -82,6 +82,8 @@ export class Reacting {
     action(flow: string): boolean;
     firing(flow: string): boolean;
     rows(count: number): boolean;
+    admitFlow?(flow: string, route: string, correlationId: string): unknown;
+    abandon?(flow: string): void;
   };
 
   constructor(
@@ -90,6 +92,8 @@ export class Reacting {
       action(flow: string): boolean;
       firing(flow: string): boolean;
       rows(count: number): boolean;
+      admitFlow?(flow: string, route: string, correlationId: string): unknown;
+      abandon?(flow: string): void;
     },
   ) {
     this.Action = actionConcept;

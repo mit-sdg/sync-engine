@@ -6,6 +6,65 @@ import { flow, landing } from "../context.ts";
 import type { ChannelPattern, ChannelPosture, ExecutableReaction, Frame } from "../types.ts";
 import { matchArguments, matchChannel, postureOfOutcome } from "./matching.ts";
 
+function cloneMatchValue(value: unknown, seen: WeakMap<object, object>): unknown {
+  if (value === null || typeof value !== "object") return value;
+  const prior = seen.get(value);
+  if (prior !== undefined) return prior;
+
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value;
+  const cloned: Record<PropertyKey, unknown> | unknown[] = Array.isArray(value)
+    ? []
+    : Object.create(prototype);
+  if (Array.isArray(cloned)) cloned.length = (value as unknown[]).length;
+  seen.set(value, cloned);
+  for (const key of Reflect.ownKeys(value)) {
+    if (key === "length") continue;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor?.enumerable !== true) continue;
+    Object.defineProperty(cloned, key, {
+      get() {
+        const source = "value" in descriptor ? descriptor.value : Reflect.get(value, key, value);
+        const result = cloneMatchValue(source, seen);
+        Object.defineProperty(cloned, key, {
+          value: result,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+        return result;
+      },
+      set(next) {
+        Object.defineProperty(cloned, key, {
+          value: next,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return cloned;
+}
+
+function snapshotRecord(record: ActionRecord, seen: WeakMap<object, object>): ActionRecord {
+  return {
+    ...record,
+    input: cloneMatchValue(record.input, seen) as Record<string, unknown>,
+    ...(record.output === undefined
+      ? {}
+      : { output: cloneMatchValue(record.output, seen) as Record<string, unknown> }),
+    ...(record.outcome === undefined
+      ? {}
+      : { outcome: cloneMatchValue(record.outcome, seen) as ActionRecord["outcome"] }),
+    ...(record.fault === undefined
+      ? {}
+      : { fault: cloneMatchValue(record.fault, seen) as Record<string, unknown> }),
+  };
+}
+
 export class TriggerMatcher {
   constructor(
     private readonly records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">,
@@ -16,8 +75,12 @@ export class TriggerMatcher {
   ) {}
 
   match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]] {
-    const landed = this.records._matchingRecord(
-      (record.id !== undefined ? this.records._getById(record.id) : undefined) ?? record,
+    const snapshots = new WeakMap<object, object>();
+    const landed = snapshotRecord(
+      this.records._matchingRecord(
+        (record.id !== undefined ? this.records._getById(record.id) : undefined) ?? record,
+      ),
+      snapshots,
     );
     const seed = { [flow]: record.flow, [landing]: record.id } as Frame;
 
@@ -47,7 +110,10 @@ export class TriggerMatcher {
         for (const candidate of flowActions) {
           if (this.consumption.hasConsumed(candidate.id, reaction.name)) continue;
           if (candidate.id !== undefined && parentConsumed.has(candidate.id)) continue;
-          const matchingCandidate = this.records._matchingRecord(candidate);
+          const matchingCandidate = snapshotRecord(
+            this.records._matchingRecord(candidate),
+            snapshots,
+          );
           const matched =
             "channel" in clause
               ? this.matchChannel(matchingCandidate, clause, frame, actionSymbol)
@@ -80,7 +146,7 @@ export class TriggerMatcher {
     frame: Frame,
     actionSymbol: symbol,
   ): Frame | undefined {
-    return matchChannel(this.records._matchingRecord(record), clause, frame, actionSymbol, {
+    return matchChannel(record, clause, frame, actionSymbol, {
       get: (candidate) => this.rawConceptOf(candidate),
     });
   }

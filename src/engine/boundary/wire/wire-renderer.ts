@@ -3,6 +3,7 @@
 import type { WireContractsIR } from "./wire-contracts.ts";
 import { JSON_TYPE } from "./wire-types.ts";
 import type { WireOrigin, WireType } from "./wire-types.ts";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
 export interface WireRenderOptions {
   moduleName?: string;
@@ -136,7 +137,7 @@ export function renderWireTypes(
   const lines: string[] = [];
   if (options.preamble !== false) {
     lines.push(
-      "// Generated wire contracts — do not edit.",
+      `// Generated wire contracts by ${PACKAGE_NAME}@${PACKAGE_VERSION} — do not edit.`,
       "// Regenerated from registered formers, action outcomes, and input contracts.",
       "",
     );

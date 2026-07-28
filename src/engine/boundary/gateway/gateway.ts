@@ -228,12 +228,12 @@ export function createGateway<C extends ContractShape = ContractShape>(
     engine: app.engine,
     publicInterface: options.application.publicInterface,
     async beginDrain() {
-      const downstream = options.application.beginDrain?.() ?? Promise.resolve();
-      await Promise.all([app.beginDrain(), downstream]);
+      await app.beginDrain();
+      await options.application.beginDrain?.();
     },
     async whenIdle() {
-      const downstream = options.application.whenIdle?.() ?? Promise.resolve();
-      await Promise.all([app.whenIdle(), downstream]);
+      await app.whenIdle();
+      await options.application.whenIdle?.();
     },
     async invoke(path, input, invokeOptions) {
       const startedAt = performance.now();

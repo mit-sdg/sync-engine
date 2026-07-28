@@ -23,6 +23,8 @@ export interface WireEndpoint {
   output: WireType;
   /** Refusal codes this path's own reactions and asked actions can answer. */
   errors: string[];
+  /** Whether boundary input admission can add framework `INVALID_INPUT`. */
+  inputAdmissionError?: boolean;
   /** True when some respond's error is not a literal (a code decided at run time). */
   openError: boolean;
 }
@@ -197,6 +199,7 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
         ...bucket.errors,
         ...(opts.contracts?.[path] !== undefined ? ["INVALID_INPUT"] : []),
       ].sort(),
+      inputAdmissionError: opts.contracts?.[path] !== undefined,
       openError: bucket.openError,
     }));
 

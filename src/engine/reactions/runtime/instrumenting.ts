@@ -48,7 +48,11 @@ export interface InstrumentationState {
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
   registerConcept(name: string, instrumented: object): void;
-  execution?: { action(flow: string): boolean };
+  execution?: {
+    action(flow: string): boolean;
+    admitFlow?(flow: string, route: string, correlationId: string): unknown;
+    abandon?(flow: string): void;
+  };
   react(record: ActionRecord, durationMs?: number): Promise<void>;
   emit(record: ActionRecord, durationMs?: number): void;
 }
@@ -152,7 +156,6 @@ export function instrumentConcept<T extends object>(
         const invalidate = () => {
           state.queryCaches.get(concept)?.forEach((cache) => cache.invalidate());
         };
-        invalidate();
         let {
           [flow]: flowToken,
           [actionId]: id,
@@ -164,6 +167,7 @@ export function instrumentConcept<T extends object>(
           typeof reportSettlement === "function"
             ? (reportSettlement as (settlement: ActionSettlement) => void)
             : undefined;
+        const directRoot = flowToken === undefined;
         if (flowToken === undefined) flowToken = uuid();
         if (typeof flowToken !== "string") {
           throw new Error(
@@ -176,16 +180,27 @@ export function instrumentConcept<T extends object>(
             `Action "${displayName}": expected actionId to be a string; received ${receivedKind(id)}.`,
           );
         }
+        if (
+          directRoot &&
+          state.execution?.admitFlow?.(flowToken, displayName, flowToken) !== undefined
+        ) {
+          return { error: FrameworkErrorCode.UNAVAILABLE };
+        }
         if (state.execution?.action(flowToken) === false) {
-          state.actions._recordIntegrityFailure({
-            kind: "execution-limit",
-            flow: flowToken,
-            limit: "actions",
-            errorClass: "ExecutionLimitExceeded",
-            at: Date.now(),
-          });
+          try {
+            state.actions._recordIntegrityFailure({
+              kind: "execution-limit",
+              flow: flowToken,
+              limit: "actions",
+              errorClass: "ExecutionLimitExceeded",
+              at: Date.now(),
+            });
+          } finally {
+            if (directRoot) state.execution?.abandon?.(flowToken);
+          }
           throw new Error("The flow exceeded its action limit.");
         }
+        invalidate();
 
         const record: ActionRecord = {
           id,
@@ -344,7 +359,11 @@ export class ConceptInstrumentation {
     private readonly dependencies: {
       actions: ActionConcept;
       scheduler: ActionScheduling;
-      execution?: { action(flow: string): boolean };
+      execution?: {
+        action(flow: string): boolean;
+        admitFlow?(flow: string, route: string, correlationId: string): unknown;
+        abandon?(flow: string): void;
+      };
       react(record: ActionRecord, durationMs?: number): Promise<void>;
       emit(record: ActionRecord, durationMs?: number): void;
       registerConcept(name: string, instrumented: object): void;

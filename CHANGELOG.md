@@ -62,6 +62,9 @@ and generated-contract coupling explicit.
   bounded operational observers. Use the final `invocation-settled` event for
   request metrics, and call drain methods before closing host-owned floors,
   stores, listeners, or process resources.
+- Replace process-global `configureRedaction(...)` calls with an explicitly
+  owned `createRedactor(policy)`; `redact(...)` now applies only immutable
+  universal sensitive-name patterns.
 - Keep a concept specification's optional State section as prose only. It is
   not checked against class fields or storage and does not enter manifests,
   read-back, wire types, input contracts, or runtime validators; prove state

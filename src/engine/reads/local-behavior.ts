@@ -15,6 +15,7 @@ import type {
   WhereOpIR,
 } from "./ir.ts";
 import { foldFormerNode, foldOps, foldReaction, foldView } from "./schema.ts";
+import { ordinal } from "@engine/utils/ordinal";
 
 export type LocalDefinitionKind = "reaction" | "view" | "former";
 
@@ -47,8 +48,6 @@ export interface LocalBehaviorAnalysis {
   dependencies: readonly DefinitionDependency[];
   boundaryReactions: readonly string[];
 }
-
-const ordinal = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
 export function localDefinitionKey(definition: LocalBehaviorDefinition): string {
   return `${definition.kind}\0${definition.name}`;
@@ -274,9 +273,4 @@ export function reachableLocalDefinitions(
   };
   visit(root);
   return [...found.values()].sort(compareLocalDefinitions);
-}
-
-/** Count every distinct custom, identity-pattern, and unlowered occurrence. */
-export function opaqueCount(app: AppIR): number {
-  return analyzeLocalBehavior(app).occurrences.length;
 }

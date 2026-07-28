@@ -21,6 +21,14 @@ describe("reaction matching", () => {
     expect(unifyPattern({ item: "b" }, { item }, { [item]: "a" })).toBeUndefined();
   });
 
+  test("tests repeated plain values structurally while preserving opaque identity", () => {
+    const value = Symbol("value");
+    expect(
+      unifyPattern({ value: { nested: ["same"] } }, { value }, { [value]: { nested: ["same"] } }),
+    ).toBeDefined();
+    expect(unifyPattern({ value: new Map() }, { value }, { [value]: new Map() })).toBeUndefined();
+  });
+
   test("does not match inherited record fields or inherited frame bindings", () => {
     for (const name of ["constructor", "toString", "__proto__"]) {
       const variable = Symbol(name);

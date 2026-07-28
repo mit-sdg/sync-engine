@@ -81,7 +81,11 @@ function settlePending(
   if (!framework && !("error" in output) && pending.outputValidator !== undefined) {
     const validation = validateRuntimeValue(pending.outputValidator, output);
     if (!validation.ok) {
-      pending.onInvalidOutput?.(validation.errorClass);
+      try {
+        pending.onInvalidOutput?.(validation.errorClass);
+      } catch {
+        // Integrity evidence is best-effort; it cannot take ownership of caller settlement.
+      }
       settledOutput = { error: FrameworkErrorCode.INTERNAL_ERROR };
       framework = true;
     }

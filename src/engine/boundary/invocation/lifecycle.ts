@@ -47,6 +47,29 @@ export class RuntimeLifecycle {
   }
 
   admit(flow: string, route: string, correlationId: string): AdmissionRejection | undefined {
+    const rejection = this.admissionRejection(flow, route, correlationId, true);
+    if (rejection !== undefined) return rejection;
+    this.events.setContext(flow, { route, correlationId });
+    this.active.add(flow);
+    this.pending.add(flow);
+    return undefined;
+  }
+
+  /** Admit a direct action root, which has active work but no boundary request wait. */
+  admitFlow(flow: string, route: string, correlationId: string): AdmissionRejection | undefined {
+    const rejection = this.admissionRejection(flow, route, correlationId, false);
+    if (rejection !== undefined) return rejection;
+    this.events.setContext(flow, { route, correlationId });
+    this.active.add(flow);
+    return undefined;
+  }
+
+  private admissionRejection(
+    flow: string,
+    route: string,
+    correlationId: string,
+    pending: boolean,
+  ): AdmissionRejection | undefined {
     if (this.draining) return "draining";
     if (this.limits !== undefined && this.active.size >= this.limits.maxActiveRootFlows) {
       this.events.emit({
@@ -60,7 +83,11 @@ export class RuntimeLifecycle {
       });
       return "active-flow-limit";
     }
-    if (this.limits !== undefined && this.pending.size >= this.limits.maxPendingRequests) {
+    if (
+      pending &&
+      this.limits !== undefined &&
+      this.pending.size >= this.limits.maxPendingRequests
+    ) {
       this.events.emit({
         type: "execution-limit-breached",
         at: Date.now(),
@@ -72,9 +99,6 @@ export class RuntimeLifecycle {
       });
       return "pending-request-limit";
     }
-    this.events.setContext(flow, { route, correlationId });
-    this.active.add(flow);
-    this.pending.add(flow);
     return undefined;
   }
 

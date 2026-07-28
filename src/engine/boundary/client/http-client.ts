@@ -109,6 +109,7 @@ async function httpRequest(
   try {
     text = await response.text();
   } catch {
+    if (signal?.aborted === true) return { error: FrameworkErrorCode.ABORTED };
     return {
       error: FrameworkErrorCode.BAD_JSON,
       detail: `Failed to read response body from ${path} (status ${response.status}).`,

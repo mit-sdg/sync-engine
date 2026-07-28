@@ -1,7 +1,6 @@
 /** Import-leaf brands keep read-side predicates from creating value cycles. */
 export const WhereOpBrand: unique symbol = Symbol("WhereOpBrand");
 export const CountOpBrand: unique symbol = Symbol("CountOpBrand");
-export const ClaimBrand: unique symbol = Symbol("ClaimBrand");
 export const ViewBlockBrand: unique symbol = Symbol("ViewBlockBrand");
 export const LineBrand: unique symbol = Symbol("LineBrand");
 export const RelationViewBrand: unique symbol = Symbol("RelationViewBrand");
