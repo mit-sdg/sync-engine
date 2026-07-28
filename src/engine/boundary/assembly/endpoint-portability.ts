@@ -5,6 +5,10 @@ export interface EndpointIdentity {
   readonly path: string;
 }
 
+export interface EndpointDeclaration extends EndpointIdentity {
+  readonly reactions: readonly string[];
+}
+
 export interface UnsupportedEndpoint extends EndpointIdentity {
   readonly reaction: string;
   readonly reason: string;

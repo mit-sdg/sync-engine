@@ -4,6 +4,9 @@ import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import type { AppIR, ConceptInventoryIR } from "@engine/reads/ir";
 import type { ActionOutcome } from "@engine/reactions/types";
+import { wireContracts } from "@engine/boundary/wire/wire";
+import { applicationDiagnostics } from "./diagnostics.ts";
+import type { ApplicationDiagnostic } from "./diagnostics.ts";
 
 const INTERNAL_BOUNDARY_ACTIONS = new Set(["register", "cancel", "respondFramework"]);
 
@@ -35,14 +38,19 @@ export function inspectAssembly(
   inputContracts: Record<string, InputContractDecl>;
   occurrences: ObservedOccurrence[];
   readBack: string;
+  diagnostics: ApplicationDiagnostic[];
 } {
   const assembled = assemblyBehind(assembly);
   const redactor = assembled.engine.Action.redactor;
+  const app = assembled.engine.exportReactions();
+  const concepts = applicationConcepts(assembled.engine.exportConcepts());
+  const wire = wireContracts(app, { contracts: assembled.contracts, inventories: concepts });
   return {
-    app: assembled.engine.exportReactions(),
-    concepts: applicationConcepts(assembled.engine.exportConcepts()),
+    app,
+    concepts,
     readBack: assembled.engine.readBack(),
     inputContracts: assembled.contracts,
+    diagnostics: applicationDiagnostics(app, assembled.endpoints, wire),
     occurrences: [...assembled.engine.Action.actions.values()].map(
       ({ concept, action, by, output, outcome }): ObservedOccurrence => ({
         concept: conceptNameOf(concept),

@@ -335,22 +335,26 @@ the client call.
 
 <!-- register:tooling:start -->
 
-`AppIR`, `ConceptInventoryIR`, `FormerIR`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `floorReadBack`, `httpFloorReadBack`, `inspectAssembly`, `renderApp`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
+`AppIR`, `ApplicationDependencyGraphV1`, `ApplicationDiagnostic`, `ApplicationImpact`, `ApplicationManifestV1`, `ArtifactFilesystem`, `ArtifactKind`, `ArtifactPlan`, `ArtifactPlanEntry`, `ArtifactStatus`, `ConceptInventoryIR`, `DependencyEdge`, `DependencyEdgeKind`, `DependencyNode`, `DependencyNodeKind`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedPlanOptions`, `ManifestEndpointV1`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `affectedNodes`, `applicationDependencyGraph`, `applicationDiagnostics`, `applicationImpact`, `applicationManifest`, `applyArtifactPlan`, `artifactPlan`, `checkArtifactPlan`, `diagnosticsFail`, `diffManifestNodes`, `floorReadBack`, `httpFloorReadBack`, `inspectAssembly`, `normalizeArtifactPath`, `planGenerated`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
 
 <!-- register:tooling:end -->
 
 ### Inspection and rendering
 
-| API                    | Compact signature                                                 |
-| ---------------------- | ----------------------------------------------------------------- |
-| `inspectAssembly`      | `inspectAssembly(assembly)`                                       |
-| `renderApp`            | `renderApp({ title, concepts, app }): string`                     |
-| `renderReaction`       | `renderReaction(reaction): string`                                |
-| `renderInputContracts` | `renderInputContracts(contracts): string`                         |
-| `wireContracts`        | `wireContracts(app, options?: WireOptions): WireContractsIR`      |
-| `renderWireTypes`      | `renderWireTypes(wire, moduleName? \| options?): string`          |
-| `httpFloorReadBack`    | `httpFloorReadBack(application, floor): string`                   |
-| `floorReadBack`        | `floorReadBack({ application, conceptFloor, httpFloor }): string` |
+| API                         | Compact signature                                                 |
+| --------------------------- | ----------------------------------------------------------------- |
+| `inspectAssembly`           | `inspectAssembly(assembly)`                                       |
+| `renderApp`                 | `renderApp({ title, concepts, app }): string`                     |
+| `renderReaction`            | `renderReaction(reaction): string`                                |
+| `renderInputContracts`      | `renderInputContracts(contracts): string`                         |
+| `wireContracts`             | `wireContracts(app, options?: WireOptions): WireContractsIR`      |
+| `renderWireTypes`           | `renderWireTypes(wire, moduleName? \| options?): string`          |
+| `httpFloorReadBack`         | `httpFloorReadBack(application, floor): string`                   |
+| `floorReadBack`             | `floorReadBack({ application, conceptFloor, httpFloor }): string` |
+| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV1`            |
+| `renderApplicationManifest` | `renderApplicationManifest(manifest): string`                     |
+| `applicationDiagnostics`    | `applicationDiagnostics(app, endpoints, wire)`                    |
+| `diagnosticsFail`           | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`           |
 
 `AppIR`, `ReactionIR`, `ViewIR`, `FormerIR`, `ConceptInventoryIR`, and
 `ObservedOccurrence` name inspected data. `ObservedOccurrence` contains the
@@ -358,6 +362,43 @@ concept, action, optional `by`, output, and outcome summary; it omits input,
 action id, flow, and timestamp. Inspection reports only evidence retained by
 the store and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
 `WireType` name derived wire data.
+
+`ApplicationManifestV1` is static, versioned, JSON-round-trippable application
+data: portable IR, concept inventories, declaration-owned endpoints, input
+contracts, wire IR, validator-presence flags, and structured diagnostics. It
+excludes occurrences, timestamps, and other runtime state.
+`renderApplicationManifest` emits canonical JSON with ordinal record-key order
+and a final newline. Named collections use stable order while authored reaction,
+view-alternative, and former-node sequences retain semantics.
+
+`ApplicationDiagnostic`, `DiagnosticCode`, and `DiagnosticSeverity` define the
+machine-readable advisory surface. `diagnosticsFail` treats error diagnostics as
+failures by default and can promote warnings; informational diagnostics remain
+advisory.
+
+`applicationDependencyGraph(manifest)` returns a versioned graph with stable
+namespaced node ids, typed dependency edges, canonical node digests, and a
+reverse dependent index. Nodes cover endpoints, outputs, reaction stages,
+actions, queries, views, formers, computations, and opaque behavior. Concept
+actions conservatively invalidate every query on that concept.
+`diffManifestNodes` identifies direct digest changes, `affectedNodes` follows
+the reverse index, and `applicationImpact` returns directly changed and affected
+nodes plus endpoint/output summaries. An application containing opaque or
+unlowered behavior uses whole-application impact when design data changes.
+
+`planGenerated(manifest, options)` is a filesystem-free specification and wire
+planner. Every `ArtifactPlanEntry` has a normalized relative POSIX path,
+content, kind, and stable digest. `artifactPlan` plans caller-rendered entries,
+while `normalizeArtifactPath` rejects absolute, parent, empty-segment, and
+backslash paths.
+
+`checkArtifactPlan(plan, filesystem)` classifies entries as `missing`,
+`changed`, `unchanged`, or `failed`. `applyArtifactPlan` validates and reads the
+complete plan before its first write, skips unchanged files, and leaves unknown
+files untouched. Its environment-independent `ArtifactFilesystem.writeAtomic`
+contract requires same-directory temporary-file replacement. The installed CLI
+implements that contract with write and rename; public tooling has no Node
+filesystem dependency.
 
 The structural argument consumed by `renderApp` has `title: string`,
 `concepts: ConceptInventoryIR[]`, and `app: AppIR`. The package does not export

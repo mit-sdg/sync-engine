@@ -73,7 +73,7 @@ import { RuntimeLifecycle } from "../invocation/lifecycle.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import { deriveInputContracts } from "../wire/wire.ts";
 import { assertPortableEndpoints } from "./endpoint-portability.ts";
-import type { EndpointIdentity } from "./endpoint-portability.ts";
+import type { EndpointDeclaration, EndpointIdentity } from "./endpoint-portability.ts";
 
 // Endpoints author against these request-boundary references.
 
@@ -220,7 +220,7 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   /** Endpoint identity retained even when a reaction has no portable IR. */
   endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
   /** Every authored endpoint declaration, independent of lowering. */
-  endpoints: readonly EndpointIdentity[];
+  endpoints: readonly EndpointDeclaration[];
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
   form(fused: FusedFormer): Promise<unknown>;
 }
@@ -335,7 +335,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   const contracts: Record<string, InputContractDecl> = {};
   const validators: Record<string, EndpointValidators> = {};
   const endpointOfReaction = new Map<string, EndpointIdentity>();
-  const endpoints: EndpointIdentity[] = [];
+  const endpoints: EndpointDeclaration[] = [];
   const views: RelationView[] = [];
   const formers: FormerRef[] = [];
 
@@ -347,14 +347,15 @@ export function assemble<T extends Record<string, ConceptClass>>(
       return;
     }
     if (isEndpointDef(value)) {
-      endpoints.push({ name, path: value.path });
       const declared = value.reaction($vars);
       const declarations = declarationsOf(declared);
       declarations.forEach((entry) => pinToPath(entry, value.path));
-      declarations.forEach((_, index) => {
+      const reactionNames = declarations.map((_, index) => {
         const reactionName = index === 0 ? name : `${name}:${index + 1}`;
         endpointOfReaction.set(reactionName, { name, path: value.path });
+        return reactionName;
       });
+      endpoints.push({ name, path: value.path, reactions: reactionNames });
       if (reactions[name] !== undefined)
         throw new Error(`assemble: two reactions named "${name}".`);
       reactions[name] = () => declared;

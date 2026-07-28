@@ -82,8 +82,10 @@ artifacts.
 
 ### `pin`
 
-Renders and writes both artifacts. The command creates the configured output
-directory when necessary and is silent on success.
+Renders and validates both artifacts before its first filesystem effect. The
+command creates configured parent directories, skips byte-identical files, and
+replaces changed files through a same-directory temporary file and rename. It
+does not delete unknown files and is silent on success.
 
 ### `pin-spec`
 
@@ -92,6 +94,13 @@ Renders both artifacts but writes only the assembled Markdown specification.
 ### `pin-wire`
 
 Renders both artifacts but writes only the TypeScript wire contract.
+
+### `manifest`
+
+Prints the versioned application manifest as canonical JSON. The manifest
+contains portable design, declaration-owned endpoints, input and wire contracts,
+validator-presence flags, and structured diagnostics. It excludes occurrences
+and other runtime state.
 
 ### `spec`
 
@@ -104,6 +113,11 @@ value counts operation occurrences, not distinct computation names.
 ### `wire`
 
 Prints the generated TypeScript wire contract.
+
+`sync-engine check --config generated.config.ts` prints the same structured
+application diagnostics after checking concept specifications. Diagnostics are
+advisory unless their severity is `error`; `--fail-on-warnings` promotes warning
+diagnostics to a failing repository gate.
 
 ## Artifact failure conditions
 

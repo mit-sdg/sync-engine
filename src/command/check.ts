@@ -1,8 +1,13 @@
 import { readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
+import { applicationManifest } from "@engine/tooling/manifest";
+import { diagnosticsFail } from "@engine/tooling/diagnostics";
+import { resolveApplication } from "@engine/tooling/generated-artifacts";
+import type { GeneratedApplication } from "@engine/tooling/generated-artifacts";
 
 async function filesBelow(
   directory: string,
@@ -240,16 +245,23 @@ export async function conceptDirectories(
     .sort();
 }
 
-const usage = `sync-engine check [--concepts <path...>]
-  Verify every concept specification against its class.
+const usage = `sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
+  Verify concept specifications and optionally inspect application diagnostics.
   Defaults to src/concepts.`;
 
 export async function checkCommand(args: readonly string[]): Promise<void> {
   const conceptsIndex = args.indexOf("--concepts");
   let conceptRoots = ["src/concepts"];
   if (conceptsIndex !== -1) {
-    conceptRoots = args.slice(conceptsIndex + 1);
+    const supplied = args.slice(conceptsIndex + 1);
+    const nextOption = supplied.findIndex((value) => value.startsWith("--"));
+    conceptRoots = nextOption === -1 ? supplied : supplied.slice(0, nextOption);
     if (conceptRoots.length === 0) throw new Error(usage);
+  }
+  const configIndex = args.indexOf("--config");
+  const configPath = configIndex === -1 ? undefined : args.at(configIndex + 1);
+  if (configIndex !== -1 && (configPath === undefined || configPath.startsWith("--"))) {
+    throw new Error(usage);
   }
 
   const root = process.cwd();
@@ -264,4 +276,22 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
     );
   }
   console.log(`Specification check passed for ${directories.length} concepts.`);
+
+  if (configPath !== undefined) {
+    const configUrl = pathToFileURL(resolve(root, configPath));
+    const module = (await import(configUrl.href)) as { default?: GeneratedApplication };
+    if (module.default === undefined) {
+      throw new Error(`${configPath} must default-export an application artifact configuration`);
+    }
+    const application = resolveApplication(module.default, configUrl);
+    const diagnostics = applicationManifest(application.assemble()).diagnostics;
+    for (const diagnostic of diagnostics) {
+      console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
+    }
+    const policy = args.includes("--fail-on-warnings") ? "warnings" : "errors";
+    if (diagnosticsFail(diagnostics, policy)) {
+      throw new Error(`Application diagnostic check failed with policy "${policy}".`);
+    }
+    console.log(`Application diagnostic check passed with ${diagnostics.length} advisories.`);
+  }
 }

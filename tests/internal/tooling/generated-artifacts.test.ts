@@ -109,11 +109,12 @@ describe("generated application artifacts", () => {
     pin        Regenerate the assembled read-back and wire contract.
     pin-spec   Regenerate only the assembled read-back.
     pin-wire   Regenerate only the wire contract.
+    manifest   Print the canonical application manifest as JSON.
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--concepts <path...>]
-    Verify every concept specification against its class.
+  sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
+    Verify concept specifications and optionally inspect application diagnostics.
     Defaults to src/concepts.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,

@@ -115,7 +115,7 @@ import type { EndpointValidators } from "../protocol/validation.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import { Requesting } from "../invocation/invoke.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
-import type { EndpointIdentity } from "./endpoint-portability.ts";
+import type { EndpointDeclaration, EndpointIdentity } from "./endpoint-portability.ts";
 export declare function receive(input?: Mapping): WhenBuilder;
 /** Answer the request this reaction was triggered by. */
 export declare function respond(body?: Mapping): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
@@ -196,7 +196,7 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     /** Endpoint identity retained even when a reaction has no portable IR. */
     endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
     /** Every authored endpoint declaration, independent of lowering. */
-    endpoints: readonly EndpointIdentity[];
+    endpoints: readonly EndpointDeclaration[];
     /** Evaluate a fused former against this app's concepts, at the moment of asking. */
     form(fused: FusedFormer): Promise<unknown>;
 }
@@ -319,6 +319,9 @@ import type { UnloweredIR } from "../../reads/ir.ts";
 export interface EndpointIdentity {
     readonly name: string;
     readonly path: string;
+}
+export interface EndpointDeclaration extends EndpointIdentity {
+    readonly reactions: readonly string[];
 }
 export interface UnsupportedEndpoint extends EndpointIdentity {
     readonly reaction: string;
@@ -4703,6 +4706,108 @@ export declare function queryLine(query: InstrumentedQuery, input: Mapping): Rea
 /** Construct the line a called relation view answers with. @internal */
 export declare function viewLine(view: RelationView, input: Mapping): ReadLine;
 
+=== dist/engine/tooling/artifact-plan.d.ts ===
+import type { ApplicationManifestV1 } from "./manifest.ts";
+export type ArtifactKind = "specification" | "wire" | "manifest";
+export interface ArtifactPlanEntry {
+    path: string;
+    content: string;
+    kind: ArtifactKind;
+    digest: string;
+}
+export interface ArtifactPlan {
+    entries: ArtifactPlanEntry[];
+}
+export interface GeneratedPlanOptions {
+    title: string;
+    specification?: string;
+    wire?: string;
+    wireName?: string;
+    wireBanner?: string;
+    vocabulary?: {
+        from: string;
+        export: string;
+    };
+    strictLeaves?: boolean;
+}
+export type ArtifactStatus = {
+    path: string;
+    kind: ArtifactKind;
+    status: "missing" | "changed" | "unchanged";
+} | {
+    path: string;
+    kind: ArtifactKind;
+    status: "failed";
+    errorClass: string;
+};
+export interface ArtifactFilesystem {
+    read(path: string): Promise<string | undefined>;
+    /** The adapter must write a same-directory temporary file and rename it. */
+    writeAtomic(path: string, content: string): Promise<void>;
+}
+export declare function normalizeArtifactPath(path: string): string;
+export declare function artifactPlan(entries: readonly Omit<ArtifactPlanEntry, "digest">[]): ArtifactPlan;
+export declare function planGenerated(manifest: ApplicationManifestV1, options: GeneratedPlanOptions): ArtifactPlan;
+export declare function checkArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
+export declare function applyArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
+
+=== dist/engine/tooling/dependency-graph.d.ts ===
+import type { ApplicationManifestV1 } from "./manifest.ts";
+export type DependencyNodeKind = "endpoint" | "output" | "reaction" | "action" | "query" | "view" | "former" | "computation" | "opaque";
+export interface DependencyNode {
+    id: string;
+    kind: DependencyNodeKind;
+    name: string;
+    digest: string;
+    opaque?: true;
+}
+export type DependencyEdgeKind = "implements" | "produces" | "triggers-on" | "requests" | "reads" | "uses" | "invalidated-by" | "opaque-dependency";
+export interface DependencyEdge {
+    from: string;
+    to: string;
+    kind: DependencyEdgeKind;
+}
+export interface ApplicationDependencyGraphV1 {
+    format: "sync-engine.application-dependency-graph";
+    version: 1;
+    nodes: DependencyNode[];
+    edges: DependencyEdge[];
+    reverse: Record<string, string[]>;
+}
+export interface ApplicationImpact {
+    directlyChanged: string[];
+    affected: string[];
+    endpoints: string[];
+    outputs: string[];
+    wholeApplication: boolean;
+}
+export declare function applicationDependencyGraph(manifest: ApplicationManifestV1): ApplicationDependencyGraphV1;
+export declare function diffManifestNodes(before: ApplicationManifestV1, after: ApplicationManifestV1): string[];
+export declare function affectedNodes(graph: ApplicationDependencyGraphV1, directlyChanged: readonly string[]): string[];
+export declare function applicationImpact(before: ApplicationManifestV1, after: ApplicationManifestV1): ApplicationImpact;
+
+=== dist/engine/tooling/diagnostics.d.ts ===
+import type { EndpointDeclaration } from "../boundary/assembly/endpoint-portability.ts";
+import type { WireContractsIR } from "../boundary/wire/wire.ts";
+import type { AppIR } from "../reads/ir.ts";
+export type DiagnosticSeverity = "info" | "warning" | "error";
+export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "UNRESOLVED_WIRE_LEAF" | "DEPENDENCY_CYCLE" | "ENDPOINT_PATH_OVERLAP" | "ENDPOINT_LITERAL_UNCOVERED" | "MULTIPLE_RESPOND_CONSEQUENCES" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER" | "INVALID_VALIDATOR_ATTACHMENT";
+export interface ApplicationDiagnostic {
+    severity: DiagnosticSeverity;
+    code: DiagnosticCode;
+    definition: {
+        kind: "application" | "endpoint" | "reaction" | "view" | "former";
+        name: string;
+    };
+    endpoint?: {
+        name: string;
+        path: string;
+    };
+    message: string;
+}
+export declare function applicationDiagnostics(app: AppIR, endpoints: readonly EndpointDeclaration[], wire: WireContractsIR): ApplicationDiagnostic[];
+export declare function diagnosticsFail(diagnostics: readonly ApplicationDiagnostic[], policy?: "errors" | "warnings"): boolean;
+
 === dist/engine/tooling/generated-artifacts.d.ts ===
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { HttpFloor } from "../boundary/http/http-floor.ts";
@@ -4774,6 +4879,14 @@ export {};
 === dist/engine/tooling/index.d.ts ===
 export { inspectAssembly } from "./inspection.ts";
 export type { ObservedOccurrence } from "./inspection.ts";
+export { applicationDiagnostics, diagnosticsFail } from "./diagnostics.ts";
+export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity } from "./diagnostics.ts";
+export { applicationManifest, renderApplicationManifest } from "./manifest.ts";
+export type { ApplicationManifestV1, ManifestEndpointV1 } from "./manifest.ts";
+export { affectedNodes, applicationDependencyGraph, applicationImpact, diffManifestNodes, } from "./dependency-graph.ts";
+export type { ApplicationDependencyGraphV1, ApplicationImpact, DependencyEdge, DependencyEdgeKind, DependencyNode, DependencyNodeKind, } from "./dependency-graph.ts";
+export { applyArtifactPlan, artifactPlan, checkArtifactPlan, normalizeArtifactPath, planGenerated, } from "./artifact-plan.ts";
+export type { ArtifactFilesystem, ArtifactKind, ArtifactPlan, ArtifactPlanEntry, ArtifactStatus, GeneratedPlanOptions, } from "./artifact-plan.ts";
 export { checkGenerated, pinGenerated, renderGenerated } from "./generated-artifacts.ts";
 export type { GeneratedApplication } from "./generated-artifacts.ts";
 
@@ -4782,6 +4895,7 @@ import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
 import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
 import type { ActionOutcome } from "../reactions/types.ts";
+import type { ApplicationDiagnostic } from "./diagnostics.ts";
 export interface ObservedOccurrence {
     concept: string;
     action: string;
@@ -4796,7 +4910,50 @@ export declare function inspectAssembly(assembly: Assembly<Record<string, new (.
     inputContracts: Record<string, InputContractDecl>;
     occurrences: ObservedOccurrence[];
     readBack: string;
+    diagnostics: ApplicationDiagnostic[];
 };
+
+=== dist/engine/tooling/manifest.d.ts ===
+import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
+import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
+import type { WireContractsIR } from "../boundary/wire/wire.ts";
+import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
+import type { ApplicationDiagnostic } from "./diagnostics.ts";
+export interface ManifestEndpointV1 {
+    name: string;
+    path: string;
+    reactions: string[];
+    input: InputContractDecl;
+    validators: {
+        input: boolean;
+        output: boolean;
+    };
+}
+export interface ApplicationManifestV1 {
+    format: "sync-engine.application-manifest";
+    version: 1;
+    application: AppIR;
+    concepts: ConceptInventoryIR[];
+    endpoints: ManifestEndpointV1[];
+    inputContracts: Record<string, InputContractDecl>;
+    wire: WireContractsIR;
+    diagnostics: ApplicationDiagnostic[];
+}
+/** Snapshot one assembly's portable static design; retained runtime state is excluded. */
+export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV1;
+export declare function renderApplicationManifest(manifest: ApplicationManifestV1): string;
+
+=== dist/engine/utils/canonical-json.d.ts ===
+export type JsonValue = null | boolean | number | string | JsonValue[] | {
+    [key: string]: JsonValue;
+};
+/** Validate and copy a value into canonical key order without reordering arrays. */
+export declare function canonicalValue(value: unknown): JsonValue;
+/** Canonical UTF-16 JSON with a final newline for files and standard output. */
+export declare function canonicalJson(value: unknown): string;
+export declare function canonicallyEqual(left: unknown, right: unknown): boolean;
+/** A deterministic content identifier for canonical design data. */
+export declare function canonicalDigest(value: unknown): string;
 
 === dist/engine/utils/case.d.ts ===
 /** `operations-room` → `OperationsRoom` */
@@ -4909,6 +5066,14 @@ export type { FreeBindings, InputBindings, OutputBindings } from "../engine/read
 /** Supported inspection, rendering, and generated-contract tools. */
 export { inspectAssembly } from "../engine/tooling/inspection.ts";
 export type { ObservedOccurrence } from "../engine/tooling/inspection.ts";
+export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagnostics.ts";
+export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
+export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
+export type { ApplicationManifestV1, ManifestEndpointV1 } from "../engine/tooling/manifest.ts";
+export { affectedNodes, applicationDependencyGraph, applicationImpact, diffManifestNodes, } from "../engine/tooling/dependency-graph.ts";
+export { applyArtifactPlan, artifactPlan, checkArtifactPlan, normalizeArtifactPath, planGenerated, } from "../engine/tooling/artifact-plan.ts";
+export type { ArtifactFilesystem, ArtifactKind, ArtifactPlan, ArtifactPlanEntry, ArtifactStatus, GeneratedPlanOptions, } from "../engine/tooling/artifact-plan.ts";
+export type { ApplicationDependencyGraphV1, ApplicationImpact, DependencyEdge, DependencyEdgeKind, DependencyNode, DependencyNodeKind, } from "../engine/tooling/dependency-graph.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { renderWireTypes, wireContracts } from "../engine/boundary/wire/wire.ts";
 export { renderInputContracts } from "../engine/boundary/protocol/endpoints.ts";

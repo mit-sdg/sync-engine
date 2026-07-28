@@ -7,6 +7,7 @@ import {
   resolveApplication,
   type GeneratedApplication,
 } from "@engine/tooling/generated-artifacts";
+import { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
 
 const HELP = new Set([undefined, "help", "--help", "-h"]);
 
@@ -15,6 +16,7 @@ const usage = `sync-engine artifacts <command> [--config path]
   pin        Regenerate the assembled read-back and wire contract.
   pin-spec   Regenerate only the assembled read-back.
   pin-wire   Regenerate only the wire contract.
+  manifest   Print the canonical application manifest as JSON.
   spec       Print assembly counts and the assembled read-back.
   wire       Print the wire contract.
 
@@ -49,6 +51,9 @@ export async function artifactsCommand(args: readonly string[]): Promise<void> {
       break;
     case "pin-wire":
       await pinGenerated(application, "wire");
+      break;
+    case "manifest":
+      process.stdout.write(renderApplicationManifest(applicationManifest(application.assemble())));
       break;
     case "spec": {
       const rendered = renderGenerated(application);

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { posix, relative } from "node:path";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { dirname, posix, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
 import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
@@ -12,6 +12,13 @@ import { renderWireTypes, wireContracts } from "@engine/boundary/wire/wire";
 import { renderApp } from "@engine/reads/render";
 import { pascal, slug } from "@engine/utils/case";
 import { inspectAssembly } from "./inspection.ts";
+import {
+  applyArtifactPlan,
+  artifactPlan,
+  checkArtifactPlan,
+  type ArtifactFilesystem,
+  type ArtifactPlan,
+} from "./artifact-plan.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 
@@ -149,34 +156,82 @@ export function renderGenerated(application: ResolvedApplication) {
   };
 }
 
+function generatedPlan(
+  application: ResolvedApplication,
+  artifact: "all" | "specification" | "wire" = "all",
+): ArtifactPlan {
+  const rendered = renderGenerated(application);
+  return artifactPlan([
+    ...(artifact === "wire"
+      ? []
+      : [
+          {
+            path: application.specification,
+            content: rendered.specification,
+            kind: "specification" as const,
+          },
+        ]),
+    ...(artifact === "specification"
+      ? []
+      : [{ path: application.wire, content: rendered.wire, kind: "wire" as const }]),
+  ]);
+}
+
+function nodeFilesystem(directory: URL): ArtifactFilesystem {
+  return {
+    async read(path) {
+      try {
+        return await readFile(new URL(path, directory), "utf8");
+      } catch (error) {
+        if ((error as { code?: unknown }).code === "ENOENT") return undefined;
+        throw error;
+      }
+    },
+    async writeAtomic(path, content) {
+      const target = fileURLToPath(new URL(path, directory));
+      await mkdir(dirname(target), { recursive: true });
+      const temporary = `${target}.${crypto.randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, content);
+        await rename(temporary, target);
+      } catch (error) {
+        await unlink(temporary).catch(() => undefined);
+        throw error;
+      }
+    },
+  };
+}
+
 export async function pinGenerated(
   application: ResolvedApplication,
   artifact: "all" | "specification" | "wire" = "all",
 ): Promise<void> {
-  const rendered = renderGenerated(application);
-  await mkdir(application.directory, { recursive: true });
-  const writes: Promise<void>[] = [];
-  if (artifact !== "wire") {
-    writes.push(
-      writeFile(new URL(application.specification, application.directory), rendered.specification),
+  const status = await applyArtifactPlan(
+    generatedPlan(application, artifact),
+    nodeFilesystem(application.directory),
+  );
+  const failed = status.filter(({ status: state }) => state === "failed");
+  if (failed.length > 0) {
+    throw new Error(
+      `generated artifacts: failed to apply ${failed.map(({ path }) => path).join(", ")}`,
     );
   }
-  if (artifact !== "specification") {
-    writes.push(writeFile(new URL(application.wire, application.directory), rendered.wire));
-  }
-  await Promise.all(writes);
 }
 
 export async function checkGenerated(application: ResolvedApplication): Promise<void> {
-  const rendered = renderGenerated(application);
-  const [specification, wire] = await Promise.all([
-    readFile(new URL(application.specification, application.directory), "utf8"),
-    readFile(new URL(application.wire, application.directory), "utf8"),
-  ]);
-  const mismatches = [
-    ...(rendered.specification === specification ? [] : [application.specification]),
-    ...(rendered.wire === wire ? [] : [application.wire]),
-  ];
+  const status = await checkArtifactPlan(
+    generatedPlan(application),
+    nodeFilesystem(application.directory),
+  );
+  const failed = status.filter(({ status: state }) => state === "failed");
+  if (failed.length > 0) {
+    throw new Error(
+      `generated artifacts: failed to check ${failed.map(({ path }) => path).join(", ")}`,
+    );
+  }
+  const mismatches = status
+    .filter(({ status: state }) => state !== "unchanged")
+    .map(({ path }) => path);
   if (mismatches.length > 0) {
     throw new Error(
       `${mismatches.join(" and ")} differ from generated output; inspect the changes and run the matching pin command`,
