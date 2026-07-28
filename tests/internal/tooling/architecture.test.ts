@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { checkArchitecture, type ArchitectureProject } from "../../../scripts/architecture.ts";
+import { checkArchitecture, type ArchitectureProject } from "@scripts/architecture";
 
 const manifest = {
   exports: {

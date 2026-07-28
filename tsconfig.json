@@ -14,8 +14,12 @@
     "resolveJsonModule": true,
     "types": ["node"],
     "paths": {
+      "@command/*": ["./src/command/*"],
       "@engine/*": ["./src/engine/*"],
+      "@examples/*": ["./examples/*"],
       "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
+      "@root/*": ["./*"],
+      "@scripts/*": ["./scripts/*"],
       "@sync-engine/*": ["./src/*/index.ts"],
       "@sync-engine/internal/reactions/*": ["./src/engine/reactions/*"],
       "@sync-engine/internal/reads/*": ["./src/engine/reads/*"],

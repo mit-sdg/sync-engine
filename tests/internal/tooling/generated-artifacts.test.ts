@@ -15,9 +15,9 @@ import {
   pinGenerated,
   renderGenerated,
   resolveApplication,
-} from "../../../src/engine/tooling/generated-artifacts.ts";
-import { inspectAssembly } from "../../../src/engine/tooling/inspection.ts";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../../src/engine/utils/package-version.ts";
+} from "@engine/tooling/generated-artifacts";
+import { inspectAssembly } from "@engine/tooling/inspection";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
 /**
  * A real config location — the packaged sample application — so the defaults

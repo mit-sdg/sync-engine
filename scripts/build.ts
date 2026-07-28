@@ -21,9 +21,8 @@ for (const path of await filesBelow(
   (name) => name.endsWith(".js") || name.endsWith(".d.ts"),
 )) {
   const source = await readFile(path, "utf8");
-  const rewritten = source.replace(
-    /(["'])@engine\/([^"']+)\1/g,
-    (_match, quote: string, target: string) => {
+  const rewritten = source
+    .replace(/(["'])@engine\/([^"']+)\1/g, (_match, quote: string, target: string) => {
       const emittedTarget = resolve(
         dist,
         "engine",
@@ -32,9 +31,13 @@ for (const path of await filesBelow(
       let specifier = relative(dirname(path), emittedTarget).split(sep).join("/");
       if (!specifier.startsWith(".")) specifier = `./${specifier}`;
       return `${quote}${specifier}${quote}`;
-    },
-  );
-  if (rewritten.includes("@engine/")) {
+    })
+    .replace(/(["'])@root\/([^"']+)\1/g, (_match, quote: string, target: string) => {
+      let specifier = relative(dirname(path), resolve(root, target)).split(sep).join("/");
+      if (!specifier.startsWith(".")) specifier = `./${specifier}`;
+      return `${quote}${specifier}${quote}`;
+    });
+  if (rewritten.includes("@engine/") || rewritten.includes("@root/")) {
     throw new Error(`build left an unresolved @engine alias in ${relative(root, path)}`);
   }
   if (rewritten !== source) await writeFile(path, rewritten);

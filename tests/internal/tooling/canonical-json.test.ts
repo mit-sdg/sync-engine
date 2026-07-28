@@ -4,7 +4,7 @@ import {
   canonicalJson,
   canonicalValue,
   canonicallyEqual,
-} from "../../../src/engine/utils/canonical-json.ts";
+} from "@engine/utils/canonical-json";
 
 describe("canonical JSON", () => {
   test("sorts record keys while preserving authored array order", () => {

@@ -21,7 +21,7 @@ import {
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { inspectAssembly } from "@mit-sdg/sync-engine/tooling";
-import { concepts, vocabulary as words } from "../../examples/reading-circle/src/concept-set.ts";
+import { concepts, vocabulary as words } from "@examples/reading-circle/src/concept-set";
 
 const { Discussing, Gathering, Selecting } = concepts;
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { identities as ids } from "../../identities.ts";
+import { identities as ids } from "@examples/reading-circle/src/identities";
 import { GatheringConcept, AlreadyJoined, GatheringNotFound, NotJoined } from "./gathering.ts";
 
 describe("Gathering", () => {

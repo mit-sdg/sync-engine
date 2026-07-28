@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { conceptDirectories, conceptFailures } from "../../../src/command/check.ts";
+import { conceptDirectories, conceptFailures } from "@command/check";
 
 let directory = "";
 

@@ -3,8 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { scaffoldProject } from "../../../src/command/scaffold.ts";
-import { conceptFailures } from "../../../src/command/check.ts";
+import { scaffoldProject } from "@command/scaffold";
+import { conceptFailures } from "@command/check";
 
 let directory = "";
 

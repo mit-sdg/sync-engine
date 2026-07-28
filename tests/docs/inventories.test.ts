@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
-import { applicationExamples } from "../../examples/register.ts";
-import { FrameworkErrorCode } from "../../src/boundary/index.ts";
+import { applicationExamples } from "@examples/register";
+import { FrameworkErrorCode } from "@sync-engine/boundary";
 
 const root = new URL("../../", import.meta.url);
 

@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { camel, heading, pascal, slug } from "../../src/engine/utils/case.ts";
+import { camel, heading, pascal, slug } from "@engine/utils/case";
 import { describe, expect, test } from "vite-plus/test";
 
 const guideDirectory = new URL("../../docs/guide/", import.meta.url);

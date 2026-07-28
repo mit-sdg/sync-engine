@@ -6,7 +6,7 @@ import {
   ownedDependencyManifests,
   projectReleaseManifests,
   releaseSourcePaths,
-} from "../../../scripts/release.ts";
+} from "@scripts/release";
 
 const root = resolve(import.meta.dirname, "../../..");
 const validSources = new Map(

@@ -7,7 +7,7 @@ import {
   diagnosticsFail,
   renderApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../../src/engine/utils/package-version.ts";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
 const words = vocabulary({ concepts: {}, computations: {} });
 const First = endpoint(
