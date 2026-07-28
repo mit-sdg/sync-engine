@@ -681,6 +681,9 @@ describe("the read-back", () => {
   test("a view prints the promise enforced when it is read", () => {
     const { engine } = build();
     engine.declareViews(authorOf);
+    expect(engine.exportReactions().views.map(({ name }) => name)).toEqual([
+      "the author of (post)",
+    ]);
     expect(engine.readBack()).toContain(
       "the author of (post) — inputs (post); outputs (author); bindings () — promises at most one (author); checked when read",
     );

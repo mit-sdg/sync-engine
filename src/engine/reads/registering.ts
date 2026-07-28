@@ -33,6 +33,7 @@ import type {
   ViewOpIR,
   WhereOpIR,
 } from "./ir.ts";
+import { canonicallyEqual } from "@engine/utils/canonical-json";
 import type { ReadEnv } from "./env.ts";
 import type { ReadBackEnv } from "./read-back.ts";
 import {
@@ -657,7 +658,7 @@ export class Registry {
     const existing = map.get(name);
     if (existing === undefined) return true;
     if (existing === candidate) return false;
-    if (JSON.stringify(serializeExisting(existing)) === JSON.stringify(candidateIR())) return false;
+    if (canonicallyEqual(serializeExisting(existing), candidateIR())) return false;
     const detail = elaborate
       ? ` — two ${kind.toLowerCase()}s may not disagree about what one sentence means.`
       : ".";

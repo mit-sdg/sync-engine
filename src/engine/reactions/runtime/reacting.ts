@@ -25,6 +25,7 @@
  */
 
 import { logger } from "@engine/utils/logger";
+import { canonicalJson } from "@engine/utils/canonical-json";
 import { serializeError } from "@engine/utils/redaction";
 import { ActionConcept, type ActionRecord, normalizeOutcome } from "./actions.ts";
 import { DESCEND, mapValueTree, mapValueTreeAsync, walkValueTree } from "@engine/reads/value-tree";
@@ -280,7 +281,7 @@ export class Reacting {
           const reactions = leaf.outcome.reactions.map((reaction) => serializeReaction(reaction));
           leaf.outcome.reactions.forEach((live, index) => {
             const reaction = reactions[index];
-            const serialized = JSON.stringify(reaction);
+            const serialized = canonicalJson(reaction);
             const previous = storedByName.get(reaction.name);
             if (previous !== undefined) {
               if (previous !== serialized) {

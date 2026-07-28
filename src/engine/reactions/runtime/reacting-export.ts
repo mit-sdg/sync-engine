@@ -13,12 +13,16 @@ export function exportReactions(state: {
   unloweredReactions: Map<string, string>;
   registry: Registry;
 }): AppIR {
-  return serializeApp(
+  const app = serializeApp(
     state.loweredReactions.values(),
     state.unloweredReactions.entries(),
     state.registry.formerRefs(),
     (name) => state.registry.viewNamed(name),
   );
+  return {
+    ...app,
+    views: [...state.registry.viewRefs()].map((ref) => serializeView(ref)),
+  };
 }
 
 export function exportConcepts(state: {
