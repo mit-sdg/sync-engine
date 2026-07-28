@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@examples/reading-circle": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   plugins: [
     {
       name: "markdown-as-text",

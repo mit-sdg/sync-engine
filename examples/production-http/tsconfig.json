@@ -14,7 +14,6 @@
     "types": ["node"],
     "paths": {
       "@engine/*": ["../../src/engine/*"],
-      "@examples/*": ["../../examples/*"],
       "@mit-sdg/sync-engine/*": ["../../src/*/index.ts"]
     }
   },

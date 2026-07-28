@@ -16,6 +16,8 @@
     "paths": {
       "@command/*": ["./src/command/*"],
       "@engine/*": ["./src/engine/*"],
+      "@examples/operations-room/*": ["./examples/operations-room/src/*"],
+      "@examples/reading-circle/*": ["./examples/reading-circle/src/*"],
       "@examples/*": ["./examples/*"],
       "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
       "@root/*": ["./*"],

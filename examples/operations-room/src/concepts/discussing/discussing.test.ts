@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { identities as ids } from "@examples/operations-room/src/identities";
+import { identities as ids } from "@examples/operations-room/identities";
 import { DiscussingConcept, DiscussionAlreadyOpen, DiscussionNotOpen } from "./discussing.ts";
 
 describe("Discussing", () => {
