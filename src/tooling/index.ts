@@ -1,6 +1,8 @@
 /** Supported inspection, rendering, and generated-contract tools. */
 export { inspectAssembly } from "@engine/tooling/inspection";
 export type { ObservedOccurrence } from "@engine/tooling/inspection";
+export type { ObservedLocalDefinition } from "@engine/reads/local-behavior";
+export type { LocalBehaviorReview } from "@engine/reads/local-review";
 export { applicationDiagnostics, diagnosticsFail } from "@engine/tooling/diagnostics";
 export type {
   ApplicationDiagnostic,
@@ -8,7 +10,7 @@ export type {
   DiagnosticSeverity,
 } from "@engine/tooling/diagnostics";
 export { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
-export type { ApplicationManifestV1, ManifestEndpointV1 } from "@engine/tooling/manifest";
+export type { ApplicationManifestV2, ManifestEndpointV2 } from "@engine/tooling/manifest";
 export {
   affectedNodes,
   applicationDependencyGraph,
@@ -31,7 +33,7 @@ export type {
   GeneratedPlanOptions,
 } from "@engine/tooling/artifact-plan";
 export type {
-  ApplicationDependencyGraphV1,
+  ApplicationDependencyGraphV2,
   ApplicationImpact,
   DependencyEdge,
   DependencyEdgeKind,

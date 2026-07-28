@@ -2,14 +2,14 @@
 
 import { serializeFormer } from "./former-lowering.ts";
 import type { FormerRef } from "./former-nodes.ts";
-import type { AppIR, ReactionIR } from "./ir.ts";
+import type { AppIR, ReactionIR, UnloweredIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
 import { collectViews } from "./view-collection.ts";
 import { serializeView } from "./view-lowering.ts";
 
 export function serializeApp(
   registered: Iterable<ReactionIR[]>,
-  unlowered: Iterable<[string, string]>,
+  unlowered: Iterable<UnloweredIR>,
   formers: Iterable<FormerRef> = [],
   viewOf: (name: string) => RelationView | undefined = () => undefined,
 ): AppIR {
@@ -19,6 +19,6 @@ export function serializeApp(
     reactions: groups.flat(),
     views: collectViews(groups, formerRefs, viewOf).map((ref) => serializeView(ref)),
     formers: formerRefs.map((ref) => serializeFormer(ref)),
-    unlowered: [...unlowered].map(([name, reason]) => ({ name, reason })),
+    unlowered: [...unlowered],
   };
 }

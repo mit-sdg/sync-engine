@@ -1,5 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
 import { reaction, vocabulary, when } from "@sync-engine/language";
 import { endpoint, productionHttpProfile, receive, respond } from "@sync-engine/boundary";
@@ -211,8 +215,8 @@ describe("generated application artifacts", () => {
       configUrl,
     );
     const message =
-      'endpoint "Api.ClosureEndpoint" at "/closure" (reaction "Api.ClosureEndpoint"): ' +
-      "step 2 needs a value bound by a closure where";
+      'endpoint "Api.ClosureEndpoint" at "/closure" reaches local reaction ' +
+      '"Api.ClosureEndpoint": unlowered reaction: step 2 needs a value bound by a closure where';
 
     expect(() => renderGenerated(application)).toThrow(message);
     await expect(checkGenerated(application)).rejects.toThrow(message);
@@ -231,20 +235,24 @@ describe("generated application artifacts", () => {
     expect(result.status).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain(
-      'endpoint "Api.ClosureEndpoint" at "/closure" (reaction "Api.ClosureEndpoint")',
+      'endpoint "Api.ClosureEndpoint" at "/closure" reaches local reaction "Api.ClosureEndpoint"',
     );
     expect(result.stderr).toContain("step 2 needs a value bound by a closure where");
   });
 
   test("an ordinary unlowered internal reaction remains visible in read-back", () => {
+    const internal = assemble({
+      vocabulary: vocabularyDeclaration,
+      composition: { InternalClosure },
+      localBehavior: {
+        revision: "internal-closure-r1",
+        definitions: [{ kind: "reaction", name: "InternalClosure" }],
+      },
+    });
     const rendered = renderGenerated(
       resolveApplication(
         {
-          assemble: () =>
-            assemble({
-              vocabulary: vocabularyDeclaration,
-              composition: { InternalClosure },
-            }),
+          assemble: () => internal,
           directory: new URL("./generated/", import.meta.url),
           title: "Internal application",
           vocabulary: { module: languageModule },
@@ -253,13 +261,46 @@ describe("generated application artifacts", () => {
       ),
     );
 
-    expect(rendered.metrics.unlowered).toEqual([
+    expect(rendered.metrics.unlowered).toMatchObject([
       { name: "InternalClosure", reason: "step 2 needs a value bound by a closure where" },
     ]);
+    expect(rendered.metrics.localBehavior).toMatchObject({
+      contract: { revision: "internal-closure-r1" },
+      observed: [{ kind: "reaction", name: "InternalClosure" }],
+    });
     expect(rendered.specification).toContain("## Reactions represented only by executable code");
     expect(rendered.specification).toContain(
       "`InternalClosure` — step 2 needs a value bound by a closure where",
     );
+    expect(rendered.specification).toContain("Review revision: `internal-closure-r1`");
+    expect(inspectAssembly(internal).readBack).toContain(
+      "InternalClosure\n  local executable reaction — not portable\n" +
+        "  reason — step 2 needs a value bound by a closure where",
+    );
+  });
+
+  test("assembly locality failure happens before any artifact path is created", async () => {
+    const temporary = await mkdtemp(join(tmpdir(), "sync-engine-locality-"));
+    const directory = pathToFileURL(`${join(temporary, "generated")}/`);
+    const application = resolveApplication(
+      {
+        assemble: () =>
+          assemble({
+            vocabulary: vocabularyDeclaration,
+            composition: { ClosureEndpoint },
+          }),
+        directory,
+        title: "Rejected local endpoint",
+        vocabulary: { module: languageModule },
+      },
+      configUrl,
+    );
+    try {
+      await expect(pinGenerated(application)).rejects.toThrow(/no endpoint override/);
+      expect(existsSync(directory)).toBe(false);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
   });
 });
 

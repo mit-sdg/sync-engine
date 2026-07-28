@@ -67,6 +67,13 @@ export async function artifactsCommand(args: readonly string[]): Promise<void> {
       for (const item of rendered.metrics.unlowered) {
         console.log(`  - ${item.name}: ${item.reason}`);
       }
+      console.log(`reviewed local definitions: ${rendered.metrics.localBehavior.observed.length}`);
+      if (rendered.metrics.localBehavior.contract !== null) {
+        console.log(`local behavior revision: ${rendered.metrics.localBehavior.contract.revision}`);
+      }
+      for (const item of rendered.metrics.localBehavior.observed) {
+        console.log(`  - ${item.kind} ${item.name}: ${item.reasons.join("; ")}`);
+      }
       console.log(`named computations used in conditions: ${rendered.metrics.compute}`);
       console.log("");
       console.log(rendered.specification);

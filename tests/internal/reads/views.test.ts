@@ -11,7 +11,7 @@ import { Logging } from "@sync-engine/assembly";
 import { count, earlier, is, reaction, view, vocabulary, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import { Frames } from "@sync-engine/internal/reads/frames";
-import { opaqueCount } from "@sync-engine/internal/reads/ir";
+import { opaqueCount } from "@sync-engine/internal/reads/local-behavior";
 import type { AppIR } from "@sync-engine/internal/reads/ir";
 import { renderApp, renderReaction, renderView } from "@sync-engine/internal/reads/render";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";

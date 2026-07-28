@@ -123,6 +123,37 @@ The public `when(...)` form accepts one trigger. Use `earlier` for directional
 correlation, views for standing policy, and concept guards for decisions that
 must run once. The package exports no public multi-occurrence join form.
 
+### Portable and reviewed local behavior
+
+A definition is **portable** only when its canonical JSON representation can be
+round-tripped and registered against the same named vocabulary. Named concept
+actions, queries, views, formers, and vocabulary computations satisfy that
+contract when their definitions contain only the portable IR vocabulary.
+Closures, explicit custom operations, `$is` object-identity patterns, raw result
+transforms, and whole reaction definitions that lowering cannot represent are
+local executable behavior. JSON markers for local behavior make it inspectable;
+they do not make its function or identity re-registerable.
+
+Ordinary assembly permits local behavior only outside the request boundary and
+only with an exact `localBehavior` review contract. The contract supplies a
+non-empty revision and the unique direct owners as `{ kind: "reaction" |
+"view" | "former", name }`, in canonical kind/name order. Its inventory must
+equal the observed inventory. A local view or former owns its occurrence once;
+reactions that reference it do not claim duplicate ownership. Missing, stale,
+extra, duplicate, malformed, unsorted, and unused contracts fail assembly.
+
+Local behavior is forbidden in every endpoint reaction, in every view or former
+reachable from an endpoint, and in a local ordinary reaction that triggers on or
+asks `RequestBoundary`. This check is transitive and runs before an invoker,
+route set, generated plan, or artifact write is exposed. Listing such a
+definition in `localBehavior` is not an override.
+
+Inspection and generated read-back label reviewed local definitions, the review
+revision, and every reason. A whole unlowered reaction remains in read-back with
+its reason and retains the action, query, view, former, pattern, and stage facts
+that can still be known from its declaration. The canonical manifest includes
+both the contract and observed inventory in its digest.
+
 ## Execution and concurrency
 
 For an instrumented action, the engine performs these steps in order:
@@ -442,9 +473,9 @@ schema is inferred from concept specifications.
 
 Absent an explicit endpoint input contract, assembly derives required keys from
 portable endpoint IR as the intersection of non-reserved keys mentioned by
-every exported `receive(...)` pattern for that path. An executable-only endpoint
-has no derived contract. An explicit contract replaces a derived contract, and
-only one endpoint declaration may supply an explicit contract for a path.
+every exported `receive(...)` pattern for that path. Local endpoint behavior is
+an assembly error. An explicit contract replaces a derived contract, and only
+one endpoint declaration may supply an explicit contract for a path.
 
 Production profiles and floors reject a non-HTTPS public origin when
 `NODE_ENV=production`. Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
@@ -481,12 +512,12 @@ including `Date` to `string`. Strict generation rejects any leaf that cannot be
 traced to a signature. Without an anchor, the renderer emits a structural
 contract and uses `Json` for leaves it cannot trace to a signature.
 
-Ordinary assembly and artifact rendering, checking, and pinning reject an
-executable endpoint that could not be lowered to portable reaction data. The
-error names the endpoint and unsupported construction. Direct invocation,
-gateway routing, HTTP, and generation therefore share the declaration-owned
-route set instead of silently omitting a local-only endpoint. Executable-only
-non-endpoint reactions remain listed in the generated read-back.
+Ordinary assembly rejects local behavior in an endpoint or any transitively
+referenced view or former. The error names the endpoint and local owner before a
+route or artifact plan is exposed. Direct invocation, gateway routing, HTTP, and
+generation therefore share the declaration-owned route set instead of silently
+omitting a local-only endpoint. Reviewed local non-endpoint definitions remain
+listed with reasons in inspection and generated read-back.
 
 When a generated application descriptor supplies `httpProfile` or `httpFloor`,
 one module contains both contracts. The contract named by `wireName` retains the

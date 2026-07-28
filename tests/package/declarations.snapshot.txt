@@ -14,7 +14,7 @@ export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/obser
 === dist/assembly/index.d.ts ===
 /** Install a vocabulary and its composition into one coherent running system. */
 export { assemble } from "../engine/boundary/assembly/assembly-facade.ts";
-export type { Assembly, AssemblyOptions } from "../engine/boundary/assembly/assembly-facade.ts";
+export type { Assembly, AssemblyOptions, LocalBehaviorContract, LocalBehaviorDefinition, } from "../engine/boundary/assembly/assembly-facade.ts";
 export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engine/boundary/assembly/concept-set.ts";
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
 export { FileStore, PersistingConcept } from "../engine/hosting/persisting.ts";
@@ -109,6 +109,7 @@ import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
+import type { LocalBehaviorContract, LocalBehaviorReview } from "../../reads/local-review.ts";
 import type { RedactionPolicy } from "../../utils/redaction.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
@@ -176,6 +177,8 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
     observers?: readonly OperationalObserver[];
     /** Additional sensitive field names for this assembly only. */
     redaction?: RedactionPolicy;
+    /** Exact review of every intentionally local non-boundary definition. */
+    localBehavior?: LocalBehaviorContract;
 }
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
     engine: Reacting;
@@ -199,6 +202,8 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
     /** Every authored endpoint declaration, independent of lowering. */
     endpoints: readonly EndpointDeclaration[];
+    /** Canonical reviewed-local contract and the observed definition inventory. */
+    localBehavior: LocalBehaviorReview;
     /** Evaluate a fused former against this app's concepts, at the moment of asking. */
     form(fused: FusedFormer): Promise<unknown>;
 }
@@ -217,6 +222,7 @@ export declare function assemble<TEntries extends Record<string, ConceptEntry>, 
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { AssembledApp, AssembleOptions } from "./assemble.ts";
+export type { LocalBehaviorContract, LocalBehaviorDefinition } from "../../reads/local-review.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
 export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
 export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary"> & {
@@ -317,7 +323,6 @@ export declare function conceptSet<const S extends Record<string, AnyRegistratio
 export {};
 
 === dist/engine/boundary/assembly/endpoint-portability.d.ts ===
-import type { UnloweredIR } from "../../reads/ir.ts";
 export interface EndpointIdentity {
     readonly name: string;
     readonly path: string;
@@ -325,12 +330,13 @@ export interface EndpointIdentity {
 export interface EndpointDeclaration extends EndpointIdentity {
     readonly reactions: readonly string[];
 }
-export interface UnsupportedEndpoint extends EndpointIdentity {
-    readonly reaction: string;
-    readonly reason: string;
-}
-export declare function unsupportedEndpoints(unlowered: readonly UnloweredIR[], endpointOfReaction: ReadonlyMap<string, EndpointIdentity>): UnsupportedEndpoint[];
-export declare function assertPortableEndpoints(owner: string, unlowered: readonly UnloweredIR[], endpointOfReaction: ReadonlyMap<string, EndpointIdentity>): void;
+
+=== dist/engine/boundary/assembly/locality-validation.d.ts ===
+/** Fail closed when local behavior reaches the request boundary, then validate its review. */
+import type { AppIR } from "../../reads/ir.ts";
+import { type LocalBehaviorContract, type LocalBehaviorReview } from "../../reads/local-review.ts";
+import type { EndpointDeclaration } from "./endpoint-portability.ts";
+export declare function assertApplicationLocality(owner: string, app: AppIR, endpoints: readonly EndpointDeclaration[], supplied: LocalBehaviorContract | undefined): LocalBehaviorReview;
 
 === dist/engine/boundary/cli-app.d.ts ===
 import type { Invoker } from "./invocation/invoke.ts";
@@ -2653,11 +2659,11 @@ export {};
 
 === dist/engine/reactions/runtime/reacting-export.d.ts ===
 import type { Registry } from "../../reads/registering.ts";
-import type { AppIR, ConceptInventoryIR, ReactionIR } from "../../reads/ir.ts";
+import type { AppIR, ConceptInventoryIR, ReactionIR, UnloweredIR } from "../../reads/ir.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
 export declare function exportReactions(state: {
     loweredReactions: Iterable<ReactionIR[]>;
-    unloweredReactions: Iterable<[string, string]>;
+    unloweredReactions: Iterable<UnloweredIR>;
     registry: Registry;
 }): AppIR;
 export declare function exportConcepts(state: {
@@ -2755,7 +2761,7 @@ export {};
 
 === dist/engine/reactions/runtime/reaction-catalog.d.ts ===
 /** Own executable reactions, exported definitions, and their trigger indexes. */
-import type { ReactionIR } from "../../reads/ir.ts";
+import type { ReactionIR, UnloweredIR } from "../../reads/ir.ts";
 import type { ChannelPosture, ExecutableReaction, InstrumentedAction } from "../types.ts";
 export declare class ReactionCatalog {
     readonly reactions: Record<string, ExecutableReaction>;
@@ -2768,10 +2774,10 @@ export declare class ReactionCatalog {
     unregisterBase(base: string): void;
     index(reaction: ExecutableReaction): void;
     finishBase(base: string, names: string[], lowered: ReactionIR[]): void;
-    markUnlowered(name: string, reason: string): void;
+    markUnlowered(definition: UnloweredIR): void;
     candidates(action: InstrumentedAction, posture: ChannelPosture | undefined): Set<ExecutableReaction> | undefined;
     loweredGroups(): Iterable<ReactionIR[]>;
-    unloweredEntries(): Iterable<[string, string]>;
+    unloweredEntries(): Iterable<UnloweredIR>;
 }
 
 === dist/engine/reactions/runtime/trigger-matching.d.ts ===
@@ -3059,9 +3065,9 @@ export {};
 === dist/engine/reads/application-lowering.d.ts ===
 /** Serialize one registered application's reactions, views, and formers. */
 import type { FormerRef } from "./former-nodes.ts";
-import type { AppIR, ReactionIR } from "./ir.ts";
+import type { AppIR, ReactionIR, UnloweredIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
-export declare function serializeApp(registered: Iterable<ReactionIR[]>, unlowered: Iterable<[string, string]>, formers?: Iterable<FormerRef>, viewOf?: (name: string) => RelationView | undefined): AppIR;
+export declare function serializeApp(registered: Iterable<ReactionIR[]>, unlowered: Iterable<UnloweredIR>, formers?: Iterable<FormerRef>, viewOf?: (name: string) => RelationView | undefined): AppIR;
 
 === dist/engine/reads/authored-reference-resolution.d.ts ===
 /** Resolve definition-site vocabulary references to one assembly's live members. */
@@ -3845,6 +3851,13 @@ export interface ReactionIR {
 export interface UnloweredIR {
     name: string;
     reason: string;
+    /** Inspectable facts retained even though the complete definition is local code. */
+    known: {
+        when: TriggerIR[];
+        where: WhereOpIR[];
+        then: ConsequenceIR[];
+        patterns: PatternIR[];
+    };
 }
 /** Everything the engine knows about its registered reactions, as data. */
 export interface AppIR {
@@ -3881,8 +3894,6 @@ export interface ConceptInventoryIR {
     actions: ActionInventoryIR[];
     queries: QueryInventoryIR[];
 }
-/** Count unlowered reactions and custom read operations in an exported app. */
-export declare function opaqueCount(app: AppIR): number;
 
 === dist/engine/reads/lines.d.ts ===
 /**
@@ -3967,6 +3978,63 @@ export declare function lineOf(source: {
     view: RelationView;
 }, input: Mapping): ViewReadLine;
 export {};
+
+=== dist/engine/reads/local-behavior.d.ts ===
+/** Discover local behavior, definition references, and boundary use from application IR. */
+import type { AppIR } from "./ir.ts";
+export type LocalDefinitionKind = "reaction" | "view" | "former";
+export interface LocalBehaviorDefinition {
+    kind: LocalDefinitionKind;
+    name: string;
+}
+export interface ObservedLocalDefinition extends LocalBehaviorDefinition {
+    reasons: readonly string[];
+}
+export type OpaqueOccurrenceKind = "custom" | "identity-pattern" | "unlowered";
+export interface OpaqueOccurrence {
+    definition: LocalBehaviorDefinition;
+    kind: OpaqueOccurrenceKind;
+    occurrence: number;
+    reason: string;
+}
+export interface DefinitionDependency {
+    from: LocalBehaviorDefinition;
+    to: LocalBehaviorDefinition;
+}
+export interface LocalBehaviorAnalysis {
+    localDefinitions: readonly ObservedLocalDefinition[];
+    occurrences: readonly OpaqueOccurrence[];
+    dependencies: readonly DefinitionDependency[];
+    boundaryReactions: readonly string[];
+}
+export declare function localDefinitionKey(definition: LocalBehaviorDefinition): string;
+export declare function compareLocalDefinitions(left: LocalBehaviorDefinition, right: LocalBehaviorDefinition): number;
+/**
+ * Walk each definition once. Local occurrences belong to the definition that
+ * contains them; references do not duplicate inventory ownership.
+ */
+export declare function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis;
+/** Return local definitions reachable from one definition, including itself. */
+export declare function reachableLocalDefinitions(analysis: LocalBehaviorAnalysis, root: LocalBehaviorDefinition): ObservedLocalDefinition[];
+/** Count every distinct custom, identity-pattern, and unlowered occurrence. */
+export declare function opaqueCount(app: AppIR): number;
+
+=== dist/engine/reads/local-review.d.ts ===
+/** Validate and render the explicit review contract for local application behavior. */
+import { type LocalBehaviorDefinition, type ObservedLocalDefinition } from "./local-behavior.ts";
+export type { LocalBehaviorDefinition } from "./local-behavior.ts";
+export interface LocalBehaviorContract {
+    readonly revision: string;
+    readonly definitions: readonly LocalBehaviorDefinition[];
+}
+export interface LocalBehaviorReview {
+    contract: LocalBehaviorContract | null;
+    observed: readonly ObservedLocalDefinition[];
+}
+/** Validate exact, unique, canonical review inventory and return an immutable data snapshot. */
+export declare function reviewLocalBehavior(owner: string, observed: readonly ObservedLocalDefinition[], supplied: LocalBehaviorContract | undefined): LocalBehaviorReview;
+export declare function renderLocalBehaviorReview(review: LocalBehaviorReview): string;
+export declare function renderLocalBehaviorMarkdown(review: LocalBehaviorReview): string;
 
 === dist/engine/reads/matchers.d.ts ===
 /**
@@ -4065,7 +4133,7 @@ export interface QueryMetadata {
 === dist/engine/reads/reaction-lowering.d.ts ===
 /** Lower fluent reaction declarations into one-consequence reaction IR entries. */
 import type { ReactionDeclaration, StepNode, TriggerPattern, WhereFn } from "../reactions/types.ts";
-import type { ReactionIR } from "./ir.ts";
+import type { ReactionIR, UnloweredIR } from "./ir.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
 export type LoweredWhereOp = AnyWhereOp;
 /** One lowered reaction with live references, ready to compile. */
@@ -4084,6 +4152,8 @@ export interface LowerOutcome {
 export declare function lowerReaction(name: string, decl: ReactionDeclaration): LowerOutcome;
 /** Serialize one lowered reaction to JSON-safe IR. */
 export declare function serializeReaction(reaction: LoweredReaction): ReactionIR;
+/** Keep every inspectable dependency fact from a reaction whose whole pipeline stays local. */
+export declare function serializeUnloweredReaction(name: string, reason: string, declaration: ReactionDeclaration): UnloweredIR;
 
 === dist/engine/reads/reaction-validation.d.ts ===
 import type { ReactionDeclaration, StepNode } from "../reactions/types.ts";
@@ -4100,7 +4170,7 @@ export declare function assertThenInputsAreData(reactionName: string, then: Step
  * returns the complete string, and registration also sends it to the logger.
  */
 import type { QueryPromise } from "./query-metadata.ts";
-import type { QueryRefIR, ReactionIR, FormerIR, ViewIR } from "./ir.ts";
+import type { QueryRefIR, ReactionIR, FormerIR, UnloweredIR, ViewIR } from "./ir.ts";
 /** What the read-back asks the registry: promises for queries and views. */
 export interface ReadBackEnv {
     queryPromise(ref: QueryRefIR): QueryPromise | undefined;
@@ -4112,7 +4182,7 @@ export declare function readBackReaction(reaction: ReactionIR, env: ReadBackEnv)
 export declare function readBackView(view: ViewIR, env: ReadBackEnv): string;
 export declare function readBackFormer(former: FormerIR, env: ReadBackEnv): string;
 /** The whole application's read-back: every view, then every reaction. */
-export declare function readBackApp(views: readonly ViewIR[], formers: readonly FormerIR[], reactions: readonly ReactionIR[], env: ReadBackEnv): string;
+export declare function readBackApp(views: readonly ViewIR[], formers: readonly FormerIR[], reactions: readonly ReactionIR[], unlowered: readonly UnloweredIR[], env: ReadBackEnv): string;
 
 === dist/engine/reads/registering.d.ts ===
 /** Stable facade over engine-scoped definition registration and IR binding. */
@@ -4621,7 +4691,7 @@ export declare function queryLine(query: InstrumentedQuery, input: Mapping): Rea
 export declare function viewLine(view: RelationView, input: Mapping): ReadLine;
 
 === dist/engine/tooling/artifact-plan.d.ts ===
-import type { ApplicationManifestV1 } from "./manifest.ts";
+import type { ApplicationManifestV2 } from "./manifest.ts";
 export type ArtifactKind = "specification" | "wire" | "manifest";
 export interface ArtifactPlanEntry {
     path: string;
@@ -4661,13 +4731,13 @@ export interface ArtifactFilesystem {
 }
 export declare function normalizeArtifactPath(path: string): string;
 export declare function artifactPlan(entries: readonly Omit<ArtifactPlanEntry, "digest">[]): ArtifactPlan;
-export declare function planGenerated(manifest: ApplicationManifestV1, options: GeneratedPlanOptions): ArtifactPlan;
+export declare function planGenerated(manifest: ApplicationManifestV2, options: GeneratedPlanOptions): ArtifactPlan;
 export declare function checkArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export declare function applyArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 
 === dist/engine/tooling/dependency-graph.d.ts ===
-import type { ApplicationManifestV1 } from "./manifest.ts";
-export type DependencyNodeKind = "endpoint" | "output" | "reaction" | "action" | "query" | "view" | "former" | "computation" | "opaque";
+import type { ApplicationManifestV2 } from "./manifest.ts";
+export type DependencyNodeKind = "endpoint" | "output" | "reaction" | "action" | "query" | "view" | "former" | "computation" | "review" | "opaque";
 export interface DependencyNode {
     id: string;
     kind: DependencyNodeKind;
@@ -4681,9 +4751,9 @@ export interface DependencyEdge {
     to: string;
     kind: DependencyEdgeKind;
 }
-export interface ApplicationDependencyGraphV1 {
+export interface ApplicationDependencyGraphV2 {
     format: "sync-engine.application-dependency-graph";
-    version: 1;
+    version: 2;
     nodes: DependencyNode[];
     edges: DependencyEdge[];
     reverse: Record<string, string[]>;
@@ -4695,17 +4765,18 @@ export interface ApplicationImpact {
     outputs: string[];
     wholeApplication: boolean;
 }
-export declare function applicationDependencyGraph(manifest: ApplicationManifestV1): ApplicationDependencyGraphV1;
-export declare function diffManifestNodes(before: ApplicationManifestV1, after: ApplicationManifestV1): string[];
-export declare function affectedNodes(graph: ApplicationDependencyGraphV1, directlyChanged: readonly string[]): string[];
-export declare function applicationImpact(before: ApplicationManifestV1, after: ApplicationManifestV1): ApplicationImpact;
+export declare function applicationDependencyGraph(manifest: ApplicationManifestV2): ApplicationDependencyGraphV2;
+export declare function diffManifestNodes(before: ApplicationManifestV2, after: ApplicationManifestV2): string[];
+export declare function affectedNodes(graph: ApplicationDependencyGraphV2, directlyChanged: readonly string[]): string[];
+export declare function applicationImpact(before: ApplicationManifestV2, after: ApplicationManifestV2): ApplicationImpact;
 
 === dist/engine/tooling/diagnostics.d.ts ===
 import type { EndpointDeclaration } from "../boundary/assembly/endpoint-portability.ts";
 import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { AppIR } from "../reads/ir.ts";
+import type { LocalBehaviorReview } from "../reads/local-review.ts";
 export type DiagnosticSeverity = "info" | "warning" | "error";
-export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "UNRESOLVED_WIRE_LEAF" | "DEPENDENCY_CYCLE" | "ENDPOINT_PATH_OVERLAP" | "ENDPOINT_LITERAL_UNCOVERED" | "MULTIPLE_RESPOND_CONSEQUENCES" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER" | "INVALID_VALIDATOR_ATTACHMENT";
+export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "LOCAL_DEFINITION" | "UNRESOLVED_WIRE_LEAF" | "DEPENDENCY_CYCLE" | "ENDPOINT_PATH_OVERLAP" | "ENDPOINT_LITERAL_UNCOVERED" | "MULTIPLE_RESPOND_CONSEQUENCES" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER" | "INVALID_VALIDATOR_ATTACHMENT";
 export interface ApplicationDiagnostic {
     severity: DiagnosticSeverity;
     code: DiagnosticCode;
@@ -4719,7 +4790,7 @@ export interface ApplicationDiagnostic {
     };
     message: string;
 }
-export declare function applicationDiagnostics(app: AppIR, endpoints: readonly EndpointDeclaration[], wire: WireContractsIR): ApplicationDiagnostic[];
+export declare function applicationDiagnostics(app: AppIR, endpoints: readonly EndpointDeclaration[], wire: WireContractsIR, localBehavior?: LocalBehaviorReview): ApplicationDiagnostic[];
 export declare function diagnosticsFail(diagnostics: readonly ApplicationDiagnostic[], policy?: "errors" | "warnings"): boolean;
 
 === dist/engine/tooling/generated-artifacts.d.ts ===
@@ -4783,6 +4854,7 @@ export declare function renderGenerated(application: ResolvedApplication): {
         views: number;
         formers: number;
         unlowered: import("../reads/ir.ts").UnloweredIR[];
+        localBehavior: import("../reads/local-review.ts").LocalBehaviorReview;
         compute: number;
     };
     specification: string;
@@ -4796,6 +4868,7 @@ export {};
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
 import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
+import { type LocalBehaviorReview } from "../reads/local-review.ts";
 import type { ActionOutcome } from "../reactions/types.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 export interface ObservedOccurrence {
@@ -4812,6 +4885,7 @@ export declare function inspectAssembly(assembly: Assembly<Record<string, new (.
     inputContracts: Record<string, InputContractDecl>;
     occurrences: ObservedOccurrence[];
     readBack: string;
+    localBehavior: LocalBehaviorReview;
     diagnostics: ApplicationDiagnostic[];
 };
 
@@ -4820,8 +4894,9 @@ import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
 import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
+import type { LocalBehaviorReview } from "../reads/local-review.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
-export interface ManifestEndpointV1 {
+export interface ManifestEndpointV2 {
     name: string;
     path: string;
     reactions: string[];
@@ -4831,22 +4906,24 @@ export interface ManifestEndpointV1 {
         output: boolean;
     };
 }
-export interface ApplicationManifestV1 {
+export interface ApplicationManifestV2 {
     format: "sync-engine.application-manifest";
-    version: 1;
+    version: 2;
+    digest: string;
     application: AppIR;
     concepts: ConceptInventoryIR[];
-    endpoints: ManifestEndpointV1[];
+    endpoints: ManifestEndpointV2[];
     inputContracts: Record<string, InputContractDecl>;
     wire: WireContractsIR;
     diagnostics: ApplicationDiagnostic[];
+    localBehavior: LocalBehaviorReview;
 }
 /**
- * Snapshot one assembly's portable static design. Retained runtime state and
+ * Snapshot one assembly's static design and explicit local review. Retained runtime state and
  * uninterpreted concept State sections are excluded.
  */
-export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV1;
-export declare function renderApplicationManifest(manifest: ApplicationManifestV1): string;
+export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV2;
+export declare function renderApplicationManifest(manifest: ApplicationManifestV2): string;
 
 === dist/engine/utils/canonical-json.d.ts ===
 export type JsonValue = null | boolean | number | string | JsonValue[] | {
@@ -4964,14 +5041,16 @@ export type { FreeBindings, InputBindings, OutputBindings } from "../engine/read
 /** Supported inspection, rendering, and generated-contract tools. */
 export { inspectAssembly } from "../engine/tooling/inspection.ts";
 export type { ObservedOccurrence } from "../engine/tooling/inspection.ts";
+export type { ObservedLocalDefinition } from "../engine/reads/local-behavior.ts";
+export type { LocalBehaviorReview } from "../engine/reads/local-review.ts";
 export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagnostics.ts";
 export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
 export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
-export type { ApplicationManifestV1, ManifestEndpointV1 } from "../engine/tooling/manifest.ts";
+export type { ApplicationManifestV2, ManifestEndpointV2 } from "../engine/tooling/manifest.ts";
 export { affectedNodes, applicationDependencyGraph, applicationImpact, diffManifestNodes, } from "../engine/tooling/dependency-graph.ts";
 export { applyArtifactPlan, artifactPlan, checkArtifactPlan, normalizeArtifactPath, planGenerated, } from "../engine/tooling/artifact-plan.ts";
 export type { ArtifactFilesystem, ArtifactKind, ArtifactPlan, ArtifactPlanEntry, ArtifactStatus, GeneratedPlanOptions, } from "../engine/tooling/artifact-plan.ts";
-export type { ApplicationDependencyGraphV1, ApplicationImpact, DependencyEdge, DependencyEdgeKind, DependencyNode, DependencyNodeKind, } from "../engine/tooling/dependency-graph.ts";
+export type { ApplicationDependencyGraphV2, ApplicationImpact, DependencyEdge, DependencyEdgeKind, DependencyNode, DependencyNodeKind, } from "../engine/tooling/dependency-graph.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { renderWireTypes, wireContracts } from "../engine/boundary/wire/wire.ts";
 export { renderInputContracts } from "../engine/boundary/protocol/endpoints.ts";

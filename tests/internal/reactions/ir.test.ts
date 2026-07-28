@@ -7,7 +7,7 @@ import { Logging } from "@sync-engine/assembly";
 import { reaction, vocabulary, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import type { Frames } from "@sync-engine/internal/reads/frames";
-import { opaqueCount } from "@sync-engine/internal/reads/ir";
+import { opaqueCount } from "@sync-engine/internal/reads/local-behavior";
 import type { ActionTriggerIR, AppIR } from "@sync-engine/internal/reads/ir";
 import { compute } from "@sync-engine/internal/reads/where-ops";
 import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
@@ -138,7 +138,7 @@ describe("lowering: chains become reactions", () => {
     });
     const app = reacting.exportReactions();
     expect(app.reactions).toEqual([]);
-    expect(app.unlowered).toEqual([
+    expect(app.unlowered).toMatchObject([
       { name: "Transformed", reason: "a step transform in the pipeline" },
     ]);
     expect(opaqueCount(app)).toBe(1);

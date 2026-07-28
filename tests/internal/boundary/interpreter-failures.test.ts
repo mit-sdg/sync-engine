@@ -28,6 +28,10 @@ class FailureSourceConcept {
     return { value: "ok" };
   }
 
+  consequenceInput({ value }: { value: string }): { value: string } {
+    return { value };
+  }
+
   hostileOutput(_: Empty): { value: string } {
     return Object.defineProperty({}, "value", {
       enumerable: true,
@@ -64,8 +68,11 @@ function setup() {
       .where(broken({}))
       .then(respond({ unreachable: true })),
   );
-  const CustomFailure = endpoint("/fail/custom", () =>
-    receive()
+  const StartCustomFailure = endpoint("/fail/custom", () =>
+    receive().then(FailureSource.passthrough({ kind: "custom" })),
+  );
+  const CustomFailure = reaction(() =>
+    when(FailureSource.passthrough({ kind: "custom" }).responds())
       .where(
         custom(
           () => {
@@ -75,32 +82,44 @@ function setup() {
           [],
         ),
       )
-      .then(respond({ unreachable: true })),
+      .then(FailureSource.passthrough({})),
   );
-  const ClosureFailure = endpoint("/fail/closure", () =>
-    receive()
+  const StartClosureFailure = endpoint("/fail/closure", () =>
+    receive().then(FailureSource.passthrough({ kind: "closure" })),
+  );
+  const ClosureFailure = reaction(() =>
+    when(FailureSource.passthrough({ kind: "closure" }).responds())
       .where(() => {
         throw new Error(privateSentinel);
       })
-      .then(respond({ unreachable: true })),
+      .then(FailureSource.passthrough({})),
   );
-  const MalformedClosure = endpoint("/fail/malformed-closure", () =>
-    receive()
+  const StartMalformedClosure = endpoint("/fail/malformed-closure", () =>
+    receive().then(FailureSource.passthrough({ kind: "malformed-closure" })),
+  );
+  const MalformedClosure = reaction(() =>
+    when(FailureSource.passthrough({ kind: "malformed-closure" }).responds())
       .where(() => new Frames({}))
-      .then(respond({ unreachable: true })),
+      .then(FailureSource.passthrough({})),
   );
-  const InPlaceMalformedClosure = endpoint("/fail/in-place-malformed-closure", () =>
-    receive()
+  const StartInPlaceMalformedClosure = endpoint("/fail/in-place-malformed-closure", () =>
+    receive().then(FailureSource.passthrough({ kind: "in-place-malformed-closure" })),
+  );
+  const InPlaceMalformedClosure = reaction(() =>
+    when(FailureSource.passthrough({ kind: "in-place-malformed-closure" }).responds())
       .where((frames) => {
         for (const frame of frames) {
           for (const symbol of Object.getOwnPropertySymbols(frame)) delete frame[symbol];
         }
         return frames;
       })
-      .then(respond({ unreachable: true })),
+      .then(FailureSource.passthrough({})),
   );
-  const ForgedTriggerClosure = endpoint("/fail/forged-trigger-closure", () =>
-    receive()
+  const StartForgedTriggerClosure = endpoint("/fail/forged-trigger-closure", () =>
+    receive().then(FailureSource.passthrough({ kind: "forged-trigger-closure" })),
+  );
+  const ForgedTriggerClosure = reaction(() =>
+    when(FailureSource.passthrough({ kind: "forged-trigger-closure" }).responds())
       .where((frames) => {
         for (const frame of frames) {
           for (const symbol of Object.getOwnPropertySymbols(frame)) {
@@ -109,10 +128,15 @@ function setup() {
         }
         return frames;
       })
-      .then(respond({ unreachable: true })),
+      .then(FailureSource.passthrough({})),
   );
-  const AccessorTriggerClosure = endpoint("/accessor-trigger", () =>
+  const StartAccessorTriggerClosure = endpoint("/accessor-trigger", () =>
     receive()
+      .then(FailureSource.passthrough({ kind: "accessor-trigger" }).responds())
+      .then(respond({ answer: "safe" })),
+  );
+  const AccessorTriggerClosure = reaction(() =>
+    when(FailureSource.passthrough({ kind: "accessor-trigger" }).responds())
       .where((frames) => {
         for (const frame of frames) {
           for (const symbol of Object.getOwnPropertySymbols(frame)) {
@@ -133,10 +157,13 @@ function setup() {
         }
         return frames;
       })
-      .then(respond({ answer: "safe" })),
+      .then(FailureSource.passthrough({ kind: "accessor-safe" })),
   );
-  const ConsequenceInputFailure = endpoint("/fail/consequence-input", ({ value }: Vars) =>
-    receive({ value })
+  const StartConsequenceInputFailure = endpoint("/fail/consequence-input", ({ value }: Vars) =>
+    receive({ value }).then(FailureSource.consequenceInput({ value }).responds({ value })),
+  );
+  const ConsequenceInputFailure = reaction(({ value }: Vars) =>
+    when(FailureSource.consequenceInput({}).responds({ value }))
       .where(
         (frames) =>
           new Frames(
@@ -147,7 +174,7 @@ function setup() {
             }),
           ),
       )
-      .then(respond({ value })),
+      .then(FailureSource.passthrough({ kind: value as unknown as string })),
   );
 
   const StartResultTransformFailure = endpoint("/fail/result-transform", () =>
@@ -175,12 +202,15 @@ function setup() {
     receive().then(FailureSource.hostileOutput({}).responds({ value })).then(respond({ value })),
   );
 
-  const BrokenSibling = endpoint("/answer-wins", () =>
-    receive()
+  const StartBrokenSibling = endpoint("/answer-wins", () =>
+    receive().then(FailureSource.passthrough({ kind: "answer-wins" })),
+  );
+  const BrokenSibling = reaction(() =>
+    when(FailureSource.passthrough({ kind: "answer-wins" }).responds())
       .where(() => {
         throw new Error(privateSentinel);
       })
-      .then(respond({ unreachable: true })),
+      .then(FailureSource.passthrough({})),
   );
   const HealthySibling = endpoint("/answer-wins", () => receive().then(respond({ answer: "ok" })));
   const AnswerBeforeFailure = endpoint("/answer-before-failure", () =>
@@ -196,9 +226,12 @@ function setup() {
       .then(FailureSource.passthrough({})),
   );
   const Uncovered = endpoint("/uncovered", () =>
-    receive()
+    receive().then(FailureSource.passthrough({ kind: "uncovered" })),
+  );
+  const UncoveredLocal = reaction(() =>
+    when(FailureSource.passthrough({ kind: "uncovered" }).responds())
       .where(() => new Frames())
-      .then(respond({ unreachable: true })),
+      .then(FailureSource.passthrough({})),
   );
 
   return assemble({
@@ -219,14 +252,40 @@ function setup() {
       MalformedClosure,
       QueryFailure,
       ResultTransformFailure,
+      StartAccessorTriggerClosure,
+      StartBrokenSibling,
+      StartClosureFailure,
+      StartConsequenceInputFailure,
       StartConsequenceOutputFailure,
+      StartCustomFailure,
+      StartForgedTriggerClosure,
+      StartInPlaceMalformedClosure,
+      StartMalformedClosure,
       StartResultTransformFailure,
       TriggerFailure,
       Uncovered,
+      UncoveredLocal,
       ViewFailure,
       onlyRow,
     },
     retention: "keepAll",
+    localBehavior: {
+      revision: "interpreter-failures-r1",
+      definitions: [
+        { kind: "reaction", name: "AccessorTriggerClosure" },
+        { kind: "reaction", name: "BrokenSibling" },
+        { kind: "reaction", name: "ClosureFailure" },
+        { kind: "reaction", name: "ConsequenceInputFailure" },
+        { kind: "reaction", name: "ConsequenceOutputFailure" },
+        { kind: "reaction", name: "CustomFailure" },
+        { kind: "reaction", name: "FailureAfterAnswer" },
+        { kind: "reaction", name: "ForgedTriggerClosure" },
+        { kind: "reaction", name: "InPlaceMalformedClosure" },
+        { kind: "reaction", name: "MalformedClosure" },
+        { kind: "reaction", name: "ResultTransformFailure" },
+        { kind: "reaction", name: "UncoveredLocal" },
+      ],
+    },
   });
 }
 
@@ -349,17 +408,33 @@ describe("interpreter failure settlement", () => {
         return {};
       }
     }
-    const words = vocabulary({ concepts: { Slow: SlowConcept }, computations: {} });
-    const { Slow } = words.concepts;
-    const Broken = endpoint("/quiescence", () =>
-      receive()
+    class TriggerConcept {
+      start(_: Empty): Empty {
+        return {};
+      }
+    }
+    const words = vocabulary({
+      concepts: { Slow: SlowConcept, Trigger: TriggerConcept },
+      computations: {},
+    });
+    const { Slow, Trigger } = words.concepts;
+    const StartBroken = endpoint("/quiescence", () => receive().then(Trigger.start({})));
+    const Broken = reaction(() =>
+      when(Trigger.start({}).responds())
         .where(() => {
           throw new Error(privateSentinel);
         })
-        .then(respond({ unreachable: true })),
+        .then(Trigger.start({})),
     );
     const SlowSibling = endpoint("/quiescence", () => receive().then(Slow.wait({})));
-    const app = assemble({ vocabulary: words, composition: { Broken, SlowSibling } });
+    const app = assemble({
+      vocabulary: words,
+      composition: { Broken, SlowSibling, StartBroken },
+      localBehavior: {
+        revision: "quiescence-failure-r1",
+        definitions: [{ kind: "reaction", name: "Broken" }],
+      },
+    });
     const invocation = app.invoker.invoke("/quiescence", {}, { timeoutMs: 1_000 });
 
     await entered;

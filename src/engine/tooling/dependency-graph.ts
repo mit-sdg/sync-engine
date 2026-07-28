@@ -1,14 +1,8 @@
-import type {
-  ConsequenceIR,
-  PatternIR,
-  TriggerIR,
-  ValueIR,
-  ViewOpIR,
-  WhereOpIR,
-} from "@engine/reads/ir";
-import { foldFormerNode, foldReaction, foldView } from "@engine/reads/schema";
+import type { ConsequenceIR, TriggerIR, ViewOpIR, WhereOpIR } from "@engine/reads/ir";
+import { analyzeLocalBehavior, type LocalBehaviorDefinition } from "@engine/reads/local-behavior";
+import { foldFormerNode, foldOps, foldReaction, foldView } from "@engine/reads/schema";
 import { canonicalDigest, canonicalValue } from "@engine/utils/canonical-json";
-import type { ApplicationManifestV1 } from "./manifest.ts";
+import type { ApplicationManifestV2 } from "./manifest.ts";
 
 export type DependencyNodeKind =
   | "endpoint"
@@ -19,6 +13,7 @@ export type DependencyNodeKind =
   | "view"
   | "former"
   | "computation"
+  | "review"
   | "opaque";
 
 export interface DependencyNode {
@@ -45,9 +40,9 @@ export interface DependencyEdge {
   kind: DependencyEdgeKind;
 }
 
-export interface ApplicationDependencyGraphV1 {
+export interface ApplicationDependencyGraphV2 {
   format: "sync-engine.application-dependency-graph";
-  version: 1;
+  version: 2;
   nodes: DependencyNode[];
   edges: DependencyEdge[];
   reverse: Record<string, string[]>;
@@ -61,41 +56,19 @@ export interface ApplicationImpact {
   wholeApplication: boolean;
 }
 
-function ordinal(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
+const ordinal = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
 function nodeId(kind: DependencyNodeKind, name: string): string {
   return `${kind}:${encodeURIComponent(name)}`;
 }
 
-function patternFormerNames(pattern: PatternIR): string[] {
-  const names = new Set<string>();
-  const visit = (value: ValueIR) => {
-    if (Array.isArray(value)) {
-      for (const entry of value) visit(entry);
-      return;
-    }
-    if (value === null || typeof value !== "object") return;
-    const former = (value as { $former?: unknown }).$former;
-    if (
-      typeof former === "object" &&
-      former !== null &&
-      typeof (former as { name?: unknown }).name === "string"
-    ) {
-      names.add((former as { name: string }).name);
-    }
-    for (const entry of Object.values(value)) {
-      if (typeof entry === "object" && entry !== null) visit(entry as ValueIR);
-    }
-  };
-  for (const value of Object.values(pattern)) visit(value);
-  return [...names];
+function definitionNode(definition: LocalBehaviorDefinition): string {
+  return nodeId(definition.kind, definition.name);
 }
 
 export function applicationDependencyGraph(
-  manifest: ApplicationManifestV1,
-): ApplicationDependencyGraphV1 {
+  manifest: ApplicationManifestV2,
+): ApplicationDependencyGraphV2 {
   const nodes = new Map<string, DependencyNode>();
   const edges = new Map<string, DependencyEdge>();
   const addNode = (
@@ -121,26 +94,23 @@ export function applicationDependencyGraph(
   };
 
   for (const concept of manifest.concepts) {
-    for (const action of concept.actions)
+    for (const action of concept.actions) {
       addNode("action", `${concept.name}.${action.name}`, action);
+    }
     for (const query of concept.queries) addNode("query", `${concept.name}.${query.name}`, query);
     for (const action of concept.actions) {
-      const actionNode = nodeId("action", `${concept.name}.${action.name}`);
       for (const query of concept.queries) {
-        const queryNode = nodeId("query", `${concept.name}.${query.name}`);
-        addEdge(queryNode, actionNode, "invalidated-by");
+        addEdge(
+          nodeId("query", `${concept.name}.${query.name}`),
+          nodeId("action", `${concept.name}.${action.name}`),
+          "invalidated-by",
+        );
       }
     }
   }
 
-  const opaqueApplication = addNode("opaque", "application", { opaque: true }, true);
-  let hasOpaque = false;
+  addNode("review", "local-behavior", manifest.localBehavior);
 
-  const connectPattern = (owner: string, pattern: PatternIR) => {
-    for (const name of patternFormerNames(pattern)) {
-      addEdge(owner, addNode("former", name), "uses");
-    }
-  };
   const connectOp = (owner: string, op: WhereOpIR | ViewOpIR) => {
     if ("query" in op && op.query !== undefined) {
       addEdge(owner, addNode("query", `${op.query.concept}.${op.query.query}`), "reads");
@@ -149,31 +119,18 @@ export function applicationDependencyGraph(
       addEdge(owner, addNode("view", op.view), "reads");
     }
     if ("computation" in op && typeof op.computation === "string") {
-      addEdge(
-        owner,
-        addNode("computation", op.computation, { name: op.computation }, true),
-        "uses",
-      );
-    }
-    if (op.op === "custom") {
-      hasOpaque = true;
-      const custom = addNode("opaque", `${owner}/custom`, op, true);
-      addEdge(owner, custom, "opaque-dependency");
-      addEdge(custom, opaqueApplication, "opaque-dependency");
+      addEdge(owner, addNode("computation", op.computation, { name: op.computation }), "uses");
     }
   };
   const connectTrigger = (owner: string, trigger: TriggerIR) => {
-    if (trigger.kind === "action") {
-      addEdge(owner, addNode("action", `${trigger.concept}.${trigger.action}`), "triggers-on");
-      connectPattern(owner, trigger.input);
-      connectPattern(owner, trigger.output);
-    } else {
-      connectPattern(owner, trigger.pattern);
+    if (trigger.kind !== "action") return;
+    addEdge(owner, addNode("action", `${trigger.concept}.${trigger.action}`), "triggers-on");
+    if (trigger.by !== undefined) {
+      addEdge(owner, addNode("reaction", trigger.by), "uses");
     }
   };
   const connectConsequence = (owner: string, consequence: ConsequenceIR) => {
     addEdge(owner, addNode("action", `${consequence.concept}.${consequence.action}`), "requests");
-    connectPattern(owner, consequence.input);
   };
 
   for (const reaction of manifest.application.reactions) {
@@ -182,31 +139,36 @@ export function applicationDependencyGraph(
       trigger: (trigger) => connectTrigger(owner, trigger),
       consequence: (consequence) => connectConsequence(owner, consequence),
       op: (op) => connectOp(owner, op),
-      pattern: (pattern) => connectPattern(owner, pattern),
     });
   }
   for (const reaction of manifest.application.unlowered) {
-    hasOpaque = true;
-    const owner = addNode("reaction", reaction.name, reaction, true);
-    addEdge(owner, opaqueApplication, "opaque-dependency");
+    const owner = addNode("reaction", reaction.name, reaction);
+    for (const trigger of reaction.known.when) connectTrigger(owner, trigger);
+    foldOps(reaction.known.where, { op: (op) => connectOp(owner, op) });
+    for (const consequence of reaction.known.then) connectConsequence(owner, consequence);
   }
   for (const view of manifest.application.views) {
     const owner = addNode("view", view.name, view);
-    foldView(view, {
-      op: (op) => connectOp(owner, op),
-      pattern: (pattern) => connectPattern(owner, pattern),
-    });
+    foldView(view, { op: (op) => connectOp(owner, op) });
   }
   for (const former of manifest.application.formers) {
     const owner = addNode("former", former.name, former);
-    foldFormerNode(former.body, {
-      op: (op) => connectOp(owner, op),
-      pattern: (pattern) => connectPattern(owner, pattern),
-      node: (node) => {
-        if (node.node === "former") addEdge(owner, addNode("former", node.former), "uses");
-      },
-      splice: ({ fragment }) => addEdge(owner, addNode("former", fragment), "uses"),
-    });
+    foldFormerNode(former.body, { op: (op) => connectOp(owner, op) });
+  }
+
+  const local = analyzeLocalBehavior(manifest.application);
+  for (const dependency of local.dependencies) {
+    const target = addNode(dependency.to.kind, dependency.to.name);
+    addEdge(
+      addNode(dependency.from.kind, dependency.from.name),
+      target,
+      dependency.to.kind === "view" ? "reads" : "uses",
+    );
+  }
+  for (const occurrence of local.occurrences) {
+    const name = `${occurrence.definition.kind}:${occurrence.definition.name}/${occurrence.kind}/${occurrence.occurrence}`;
+    const opaque = addNode("opaque", name, occurrence, true);
+    addEdge(definitionNode(occurrence.definition), opaque, "opaque-dependency");
   }
 
   for (const endpoint of manifest.endpoints) {
@@ -219,7 +181,10 @@ export function applicationDependencyGraph(
     );
     addEdge(outputNode, endpointNode, "produces");
     for (const reactionName of endpoint.reactions) {
-      const matching = manifest.application.reactions.filter(
+      const matching = [
+        ...manifest.application.reactions,
+        ...manifest.application.unlowered,
+      ].filter(
         ({ name }) =>
           name === reactionName ||
           name.startsWith(`${reactionName}#`) ||
@@ -229,10 +194,8 @@ export function applicationDependencyGraph(
         addEdge(endpointNode, nodeId("reaction", reaction.name), "implements");
       }
     }
-    if (hasOpaque) addEdge(endpointNode, opaqueApplication, "opaque-dependency");
   }
 
-  if (!hasOpaque) nodes.delete(opaqueApplication);
   const sortedNodes = [...nodes.values()].sort((left, right) => ordinal(left.id, right.id));
   const sortedEdges = [...edges.values()]
     .filter(({ from, to }) => nodes.has(from) && nodes.has(to))
@@ -251,16 +214,16 @@ export function applicationDependencyGraph(
   for (const id of Object.keys(reverse)) reverse[id]?.sort(ordinal);
   return canonicalValue({
     format: "sync-engine.application-dependency-graph",
-    version: 1,
+    version: 2,
     nodes: sortedNodes,
     edges: sortedEdges,
     reverse,
-  }) as unknown as ApplicationDependencyGraphV1;
+  }) as unknown as ApplicationDependencyGraphV2;
 }
 
 export function diffManifestNodes(
-  before: ApplicationManifestV1,
-  after: ApplicationManifestV1,
+  before: ApplicationManifestV2,
+  after: ApplicationManifestV2,
 ): string[] {
   const left = new Map(
     applicationDependencyGraph(before).nodes.map((node) => [node.id, node.digest]),
@@ -274,7 +237,7 @@ export function diffManifestNodes(
 }
 
 export function affectedNodes(
-  graph: ApplicationDependencyGraphV1,
+  graph: ApplicationDependencyGraphV2,
   directlyChanged: readonly string[],
 ): string[] {
   const affected = new Set(directlyChanged);
@@ -290,19 +253,23 @@ export function affectedNodes(
   return [...affected].sort(ordinal);
 }
 
+function graphHasOpaque(graph: ApplicationDependencyGraphV2): boolean {
+  return graph.nodes.some(({ kind, opaque }) => kind === "opaque" && opaque === true);
+}
+
 export function applicationImpact(
-  before: ApplicationManifestV1,
-  after: ApplicationManifestV1,
+  before: ApplicationManifestV2,
+  after: ApplicationManifestV2,
 ): ApplicationImpact {
-  const graph = applicationDependencyGraph(after);
+  const beforeGraph = applicationDependencyGraph(before);
+  const afterGraph = applicationDependencyGraph(after);
   const directlyChanged = diffManifestNodes(before, after);
   const wholeApplication =
-    directlyChanged.length > 0 &&
-    graph.nodes.some(({ kind, opaque }) => kind === "opaque" && opaque);
+    directlyChanged.length > 0 && (graphHasOpaque(beforeGraph) || graphHasOpaque(afterGraph));
   const affected = wholeApplication
-    ? graph.nodes.map(({ id }) => id).sort(ordinal)
-    : affectedNodes(graph, directlyChanged);
-  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+    ? afterGraph.nodes.map(({ id }) => id).sort(ordinal)
+    : affectedNodes(afterGraph, directlyChanged);
+  const byId = new Map(afterGraph.nodes.map((node) => [node.id, node]));
   return {
     directlyChanged,
     affected,

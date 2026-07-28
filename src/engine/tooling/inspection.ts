@@ -3,6 +3,7 @@ import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
 import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import type { AppIR, ConceptInventoryIR } from "@engine/reads/ir";
+import { renderLocalBehaviorReview, type LocalBehaviorReview } from "@engine/reads/local-review";
 import type { ActionOutcome } from "@engine/reactions/types";
 import { wireContracts } from "@engine/boundary/wire/wire-contracts";
 import { applicationDiagnostics } from "./diagnostics.ts";
@@ -38,6 +39,7 @@ export function inspectAssembly(
   inputContracts: Record<string, InputContractDecl>;
   occurrences: ObservedOccurrence[];
   readBack: string;
+  localBehavior: LocalBehaviorReview;
   diagnostics: ApplicationDiagnostic[];
 } {
   const assembled = assemblyBehind(assembly);
@@ -45,12 +47,15 @@ export function inspectAssembly(
   const app = assembled.engine.exportReactions();
   const concepts = applicationConcepts(assembled.engine.exportConcepts());
   const wire = wireContracts(app, { contracts: assembled.contracts, inventories: concepts });
+  const review = renderLocalBehaviorReview(assembled.localBehavior);
+  const readBack = assembled.engine.readBack();
   return {
     app,
     concepts,
-    readBack: assembled.engine.readBack(),
+    readBack: [readBack, review].filter((section) => section !== "").join("\n\n"),
+    localBehavior: assembled.localBehavior,
     inputContracts: assembled.contracts,
-    diagnostics: applicationDiagnostics(app, assembled.endpoints, wire),
+    diagnostics: applicationDiagnostics(app, assembled.endpoints, wire, assembled.localBehavior),
     occurrences: [...assembled.engine.Action.actions.values()].map(
       ({ concept, action, by, output, outcome }): ObservedOccurrence => ({
         concept: conceptNameOf(concept),

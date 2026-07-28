@@ -21,7 +21,7 @@ import {
 } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import { FormerFault } from "@sync-engine/internal/reads/former-nodes";
-import { opaqueCount } from "@sync-engine/internal/reads/ir";
+import { opaqueCount } from "@sync-engine/internal/reads/local-behavior";
 import { renderFormer } from "@sync-engine/internal/reads/render";
 import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";

@@ -12,6 +12,7 @@ import type {
   ReactionIR,
   FormerIR,
   TriggerIR,
+  UnloweredIR,
   ViewIR,
   ViewOpIR,
   WhereOpIR,
@@ -182,11 +183,17 @@ export function readBackApp(
   views: readonly ViewIR[],
   formers: readonly FormerIR[],
   reactions: readonly ReactionIR[],
+  unlowered: readonly UnloweredIR[],
   env: ReadBackEnv,
 ): string {
   const sections: string[] = [];
   for (const view of views) sections.push(readBackView(view, env));
   for (const former of formers) sections.push(readBackFormer(former, env));
   for (const reaction of reactions) sections.push(readBackReaction(reaction, env));
+  for (const reaction of unlowered) {
+    sections.push(
+      `${reaction.name}\n  local executable reaction — not portable\n  reason — ${reaction.reason}`,
+    );
+  }
   return sections.join("\n\n");
 }

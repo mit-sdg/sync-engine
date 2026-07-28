@@ -42,7 +42,9 @@ describe("application manifest", () => {
 
     expect(manifest).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 1,
+      version: 2,
+      digest: expect.stringMatching(/^fnv1a64-[0-9a-f]{16}$/),
+      localBehavior: { contract: null, observed: [] },
       endpoints: [
         {
           name: "First",
@@ -96,7 +98,7 @@ describe("application manifest", () => {
     expect(printed.status).toBe(0);
     expect(JSON.parse(printed.stdout)).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 1,
+      version: 2,
     });
     expect(printed.stdout.endsWith("\n")).toBe(true);
 
@@ -123,7 +125,7 @@ describe("application manifest", () => {
 
     expect(graph).toMatchObject({
       format: "sync-engine.application-dependency-graph",
-      version: 1,
+      version: 2,
     });
     expect(graph.nodes).toContainEqual(
       expect.objectContaining({ id: "action:RequestBoundary.request", kind: "action" }),

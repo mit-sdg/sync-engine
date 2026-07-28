@@ -1,7 +1,11 @@
 import { createClient, createHttpClient, createLocalClient } from "@mit-sdg/sync-engine/client";
 import type { ClientError } from "@mit-sdg/sync-engine/client";
 import { assemble, Logging } from "@mit-sdg/sync-engine/assembly";
-import type { ActionRefusal, AssemblyOptions } from "@mit-sdg/sync-engine/assembly";
+import type {
+  ActionRefusal,
+  AssemblyOptions,
+  LocalBehaviorContract,
+} from "@mit-sdg/sync-engine/assembly";
 import { productionHttpProfile } from "@mit-sdg/sync-engine/boundary";
 import type {
   GatewayOptions,
@@ -10,6 +14,22 @@ import type {
   ProductionHttpProfile,
 } from "@mit-sdg/sync-engine/boundary";
 import { vocabulary } from "@mit-sdg/sync-engine/language";
+import type {
+  ApplicationDependencyGraphV2,
+  ApplicationManifestV2,
+} from "@mit-sdg/sync-engine/tooling";
+
+const reviewedLocal: LocalBehaviorContract = {
+  revision: "review-r1",
+  definitions: [{ kind: "reaction", name: "Local" }],
+};
+void reviewedLocal;
+declare const manifestV2: ApplicationManifestV2;
+declare const graphV2: ApplicationDependencyGraphV2;
+const manifestVersion: 2 = manifestV2.version;
+const graphVersion: 2 = graphV2.version;
+void manifestVersion;
+void graphVersion;
 
 class QueriedConcept {
   _answer({ key }: { key: string }): { value: string }[] {

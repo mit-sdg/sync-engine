@@ -102,6 +102,15 @@ packs, or with a different contribution policy.
 Each call creates a new application. Changing an option and running again does
 not replace reactions inside an application that is already running.
 
+Assembly draws a hard portability line at this boundary. Endpoint reactions and
+every view or former they reference transitively must be canonical
+JSON-round-trippable definitions that can be registered against the same named
+vocabulary. Closures, `custom` operations, object-identity patterns, raw
+transforms, and whole unlowered reactions are local and cannot occur on that
+reachable surface. A `localBehavior` review contract can admit exact
+non-boundary local definitions, but it never overrides an endpoint rejection.
+Assembly validates this before returning the application's route set.
+
 ## Receive, ask, respond
 
 An **endpoint** specializes the reaction frame at the application boundary. It
@@ -185,11 +194,12 @@ or routing design.
 ## Generate the wire contract
 
 The tooling reads the assembled design and derives TypeScript contracts from
-portable reaction data. Generation is all-or-nothing: if an executable endpoint
-uses a construction that cannot be lowered to that data, render, check, and pin
-fail with the endpoint name and unsupported construction rather than omit its
-contract. Unlowered non-endpoint reactions remain visible in the assembled
-read-back. One application descriptor names the assembly and the application;
+portable reaction data. Generation is all-or-nothing: local endpoint behavior
+or a transitively local endpoint view/former fails assembly with the endpoint
+and local owner rather than omitting its contract. Reviewed non-boundary local
+definitions remain visible with reasons and revision in diagnostics and the
+assembled read-back; whole unlowered reactions are included rather than
+dropped. One application descriptor names the assembly and the application;
 the artifact paths and type names follow from the title and the config's own
 location, and each may be overridden:
 

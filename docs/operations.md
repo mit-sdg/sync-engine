@@ -122,9 +122,21 @@ concept State notation.
 
 ## Endpoint completeness
 
-Ordinary assembly and artifact generation reject executable endpoints that
-cannot be lowered to the portable representation. Direct invocation, gateways,
-HTTP, and generated clients therefore use the same complete public route set.
+Ordinary assembly and artifact generation reject local behavior in an endpoint,
+in a transitively referenced endpoint view or former, or in a local ordinary
+reaction that touches `RequestBoundary`. Closures, custom operations,
+object-identity patterns, raw transforms, and whole unlowered reactions are
+local. There is no endpoint override. Validation completes before a public route
+set or generated artifact plan is exposed, so direct invocation, gateways,
+HTTP, and generated clients use the same complete route set.
+
+Non-boundary local reactions, views, and formers require
+`AssemblyOptions.localBehavior`. Treat its non-empty revision as a reviewed
+application change identifier and its canonical `{ kind, name }` list as an
+exact allowlist, not a wildcard. Assembly rejects missing, stale, extra,
+duplicate, malformed, unsorted, and unused contracts. Review the manifest's
+observed reasons and bump the revision whenever local implementation behavior
+changes, including changes that leave the serialized marker unchanged.
 
 Endpoint branches have no priority or exclusivity. If more than one branch
 responds, one answer is accepted and the others receive `NOT_PENDING`; callers
@@ -212,6 +224,7 @@ Before serving an assembly outside a test environment:
 5. Add host limits for connections, request rate, concurrency, and shutdown.
 6. Verify that every endpoint is represented in generated artifacts and that
    every admitted case answers explicitly.
-7. Review log retention, redaction, and diagnostic access.
-8. Test process interruption and storage failure against the application's own
+7. Review every local-behavior owner and reason, and verify the contract revision.
+8. Review log retention, redaction, and diagnostic access.
+9. Test process interruption and storage failure against the application's own
    recovery design.

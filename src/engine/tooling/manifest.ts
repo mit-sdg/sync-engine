@@ -4,12 +4,13 @@ import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 import { wireContracts } from "@engine/boundary/wire/wire-contracts";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import type { AppIR, ConceptInventoryIR, FormerIR, ViewIR } from "@engine/reads/ir";
+import type { LocalBehaviorReview } from "@engine/reads/local-review";
 import { foldFormerNode } from "@engine/reads/schema";
-import { canonicalJson, canonicalValue } from "@engine/utils/canonical-json";
+import { canonicalDigest, canonicalJson, canonicalValue } from "@engine/utils/canonical-json";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import { applicationDiagnostics } from "./diagnostics.ts";
 
-export interface ManifestEndpointV1 {
+export interface ManifestEndpointV2 {
   name: string;
   path: string;
   reactions: string[];
@@ -17,15 +18,17 @@ export interface ManifestEndpointV1 {
   validators: { input: boolean; output: boolean };
 }
 
-export interface ApplicationManifestV1 {
+export interface ApplicationManifestV2 {
   format: "sync-engine.application-manifest";
-  version: 1;
+  version: 2;
+  digest: string;
   application: AppIR;
   concepts: ConceptInventoryIR[];
-  endpoints: ManifestEndpointV1[];
+  endpoints: ManifestEndpointV2[];
   inputContracts: Record<string, InputContractDecl>;
   wire: WireContractsIR;
   diagnostics: ApplicationDiagnostic[];
+  localBehavior: LocalBehaviorReview;
 }
 
 function ordinal(a: string, b: string): number {
@@ -114,12 +117,12 @@ function stableConcepts(concepts: readonly ConceptInventoryIR[]): ConceptInvento
 }
 
 /**
- * Snapshot one assembly's portable static design. Retained runtime state and
+ * Snapshot one assembly's static design and explicit local review. Retained runtime state and
  * uninterpreted concept State sections are excluded.
  */
 export function applicationManifest(
   assembly: Assembly<Record<string, new (...args: never[]) => object>>,
-): ApplicationManifestV1 {
+): ApplicationManifestV2 {
   const assembled = assemblyBehind(assembly);
   const application = stableApp(assembled.engine.exportReactions());
   const concepts = stableConcepts(assembled.engine.exportConcepts());
@@ -139,19 +142,26 @@ export function applicationManifest(
       },
     }))
     .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`));
-  const manifest: ApplicationManifestV1 = {
+  const body: Omit<ApplicationManifestV2, "digest"> = {
     format: "sync-engine.application-manifest",
-    version: 1,
+    version: 2,
     application,
     concepts,
     endpoints,
     inputContracts: assembled.contracts,
     wire,
-    diagnostics: applicationDiagnostics(application, assembled.endpoints, wire),
+    diagnostics: applicationDiagnostics(
+      application,
+      assembled.endpoints,
+      wire,
+      assembled.localBehavior,
+    ),
+    localBehavior: assembled.localBehavior,
   };
-  return canonicalValue(manifest) as unknown as ApplicationManifestV1;
+  const manifest: ApplicationManifestV2 = { ...body, digest: canonicalDigest(body) };
+  return canonicalValue(manifest) as unknown as ApplicationManifestV2;
 }
 
-export function renderApplicationManifest(manifest: ApplicationManifestV1): string {
+export function renderApplicationManifest(manifest: ApplicationManifestV2): string {
   return canonicalJson(manifest);
 }

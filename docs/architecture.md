@@ -126,30 +126,36 @@ vocabulary refs and language words
 The roles are deliberately separate even where the current implementation is
 co-located:
 
-| Area                  | Main files                                                                                                      | Responsibility                                                                                                |
-| --------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Vocabulary refs       | `src/engine/reactions/authoring/refs.ts`                                                                        | Name concept actions and queries before an assembly has instances.                                            |
-| Reaction construction | `src/engine/reactions/authoring/words.ts`, `nodes.ts`, `partitions.ts`                                          | Build Fluent declarations without executing actions.                                                          |
-| Read construction     | `src/engine/reads/lines.ts`, `where-ops.ts`, `views.ts`, `former-*.ts`                                          | Describe query, view, condition, and former reads.                                                            |
-| Registration          | `src/engine/reads/registering.ts`, `definition-registry.ts`, `src/engine/reactions/runtime/reaction-catalog.ts` | Register definitions and executable reactions atomically by base reaction behind stable facades.              |
-| Resolution            | `src/engine/reads/authored-reference-resolution.ts`, `imported-ir-binding.ts`                                   | Resolve authored vocabulary references and bind portable IR names to installed definitions.                   |
-| Validation            | `src/engine/reads/view-former-validation.ts`                                                                    | Validate view and former bindings, schedules, promises, dependencies, markers, and opaque values.             |
-| Lowering              | `src/engine/reads/reaction-lowering.ts`                                                                         | Turn supported declaration paths into portable `ReactionIR`; report why a local-only path remains executable. |
-| Runtime               | `src/engine/reactions/runtime/trigger-matching.ts`, `firing-pipeline.ts`, `consequence-pipeline.ts`             | Match one landed occurrence, evaluate reads, invoke consequences, and record firing provenance.               |
+| Area                  | Main files                                                                                                      | Responsibility                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Vocabulary refs       | `src/engine/reactions/authoring/refs.ts`                                                                        | Name concept actions and queries before an assembly has instances.                                                    |
+| Reaction construction | `src/engine/reactions/authoring/words.ts`, `nodes.ts`, `partitions.ts`                                          | Build Fluent declarations without executing actions.                                                                  |
+| Read construction     | `src/engine/reads/lines.ts`, `where-ops.ts`, `views.ts`, `former-*.ts`                                          | Describe query, view, condition, and former reads.                                                                    |
+| Registration          | `src/engine/reads/registering.ts`, `definition-registry.ts`, `src/engine/reactions/runtime/reaction-catalog.ts` | Register definitions and executable reactions atomically by base reaction behind stable facades.                      |
+| Resolution            | `src/engine/reads/authored-reference-resolution.ts`, `imported-ir-binding.ts`                                   | Resolve authored vocabulary references and bind portable IR names to installed definitions.                           |
+| Validation            | `src/engine/reads/view-former-validation.ts`                                                                    | Validate view and former bindings, schedules, promises, dependencies, markers, and opaque values.                     |
+| Lowering              | `src/engine/reads/reaction-lowering.ts`                                                                         | Turn supported declaration paths into portable `ReactionIR`; retain known dependencies when a whole path stays local. |
+| Local analysis        | `src/engine/reads/local-behavior.ts`, `local-review.ts`                                                         | Walk local/opaque occurrences once, own definition reachability, and validate exact review inventories.               |
+| Runtime               | `src/engine/reactions/runtime/trigger-matching.ts`, `firing-pipeline.ts`, `consequence-pipeline.ts`             | Match one landed occurrence, evaluate reads, invoke consequences, and record firing provenance.                       |
 
 `ReactionIR` in `reads/ir.ts` is the serialized design form consumed by
 inspection, read-back, wire generation, and imported-reaction registration.
 The runtime can still execute explicitly local constructs such as closure-based
-conditions, but tooling labels those paths as unlowered instead of presenting
-them as portable IR.
+conditions outside the application boundary. Custom operations and `$is`
+patterns remain in IR as opaque markers; whole unlowered reactions retain a
+JSON-safe shell of known triggers, reads, consequences, and patterns. None of
+those markers claims the local function or identity can be re-registered.
 
 `src/engine/reactions/authoring/partitions.ts` validates sibling labels,
 flattens authored branch trees, and forms the cross-product when later sibling
 groups extend earlier paths. `lowerReaction` then gives variables stable names
 and serializes each path's triggers, reads, and consequence asks.
-Definition-site closures remain live and executable in the local engine, but
-appear in the export's `unlowered` list rather than masquerading as portable
-data. See
+`local-behavior.ts` is the dependency-neutral owner for custom, identity-pattern,
+and unlowered occurrence discovery and for reaction/view/former references.
+Assembly reachability, diagnostics, read-back, and dependency graphs consume
+that result rather than maintaining partial opacity walkers. `local-review.ts`
+separately validates and snapshots the manual contract so the walker does not
+become a policy mega-module. See
 [Sibling paths and endpoint settlement](./semantics.md#sibling-paths-and-endpoint-settlement)
 for the resulting behavior.
 
@@ -186,7 +192,7 @@ and composition that use them:
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Protocol   | `src/engine/boundary/protocol/endpoints.ts`, `application-interface.ts`, `contract-shape.ts`, `admit.ts`, `envelope.ts`, `errors.ts`, `public-errors.ts` | Define endpoint inputs, application-facing route facts, admission, result envelopes, and public error categories without choosing a transport or engine host. |
 | Invocation | `src/engine/boundary/invocation/invoke.ts`, `funnel.ts`                                                                                                  | Correlate one request with one response, apply cancellation and timeout behavior, and turn reaction refusals into boundary replies.                           |
-| Assembly   | `src/engine/boundary/assembly/concept-set.ts`, `assemble.ts`, `assembly-facade.ts`, `assembly-registry.ts`                                               | Turn concept registrations and a composition into one instrumented engine, invoker, forms, contracts, and application facade.                                 |
+| Assembly   | `src/engine/boundary/assembly/concept-set.ts`, `assemble.ts`, `locality-validation.ts`, `assembly-facade.ts`, `assembly-registry.ts`                     | Turn composition into one engine, reject boundary-reachable locality, validate reviews, then expose the invoker and forms.                                    |
 | Client     | `src/engine/boundary/client/client.ts`, `local-client.ts`, `http-client.ts`                                                                              | Expose the typed client independently of a transport, then adapt it to a local invoker or HTTP.                                                               |
 | Gateway    | `src/engine/boundary/gateway/gateway.ts`, `public-gateway.ts`                                                                                            | Route admitted outside requests through an isolated engine-backed forwarding boundary.                                                                        |
 | HTTP       | `src/engine/boundary/http/http.ts`, `http-profile.ts`, `http-floor.ts`                                                                                   | Adapt invocation to raw or production HTTP, project registered public errors, and optionally bind cookie credentials.                                         |
@@ -225,12 +231,15 @@ or replay it. `PersistingConcept` stores application-supplied associations
 between subjects and stores; it does not install an engine log or persist a
 concept implementation.
 
-`src/engine/tooling/inspection.ts` projects one assembly into portable app IR,
-concept inventories, input contracts, retained occurrence summaries, and
-diagnostic read-back. `src/engine/tooling/generated-artifacts.ts` resolves a
-project descriptor, rejects unsupported endpoint lowering, derives logical and
+`src/engine/tooling/inspection.ts` projects one assembly into app IR, concept
+inventories, input contracts, retained occurrence summaries, the reviewed-local
+snapshot, and full diagnostic read-back. `manifest.ts` emits manifest V2 and its
+digest. `dependency-graph.ts` emits graph V2, gives each opaque occurrence a
+stable node, and applies the before-or-after whole-application fallback.
+`generated-artifacts.ts` resolves a project descriptor, derives logical and
 optional production HTTP wire contracts, applies cookie-field projection when
-a floor is present, and checks or writes the two pinned files.
+a floor is present, and checks or writes the two pinned files only after the
+complete render succeeds.
 
 The installed executable under `src/command/` is an adapter over those
 capabilities. `check.ts` parses supported TypeScript method signatures;

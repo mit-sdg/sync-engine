@@ -159,9 +159,10 @@ describe("assemble", () => {
         composition: { Api: { ClosureEndpoint } },
       }),
     ).toThrow(
-      "assemble: executable endpoints could not be lowered to complete wire contracts:\n" +
-        '- endpoint "Api.ClosureEndpoint" at "/closure" (reaction "Api.ClosureEndpoint"): ' +
-        "step 2 needs a value bound by a closure where",
+      "assemble: local behavior cannot participate in request-boundary behavior; " +
+        "localBehavior has no endpoint override:\n" +
+        '- endpoint "Api.ClosureEndpoint" at "/closure" reaches local reaction ' +
+        '"Api.ClosureEndpoint": unlowered reaction: step 2 needs a value bound by a closure where',
     );
   });
 

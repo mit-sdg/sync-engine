@@ -10,6 +10,7 @@ import {
   type LoweredReaction,
   lowerReaction,
   serializeReaction,
+  serializeUnloweredReaction,
 } from "@engine/reads/reaction-lowering";
 import { readBackReaction } from "@engine/reads/read-back";
 import {
@@ -245,7 +246,13 @@ export class Reacting {
           continue;
         }
 
-        this.catalog.markUnlowered(leaf.name, leaf.outcome.reason ?? "not lowerable");
+        this.catalog.markUnlowered(
+          serializeUnloweredReaction(
+            leaf.name,
+            leaf.outcome.reason ?? "not lowerable",
+            leaf.declaration,
+          ),
+        );
         executableNames.push(leaf.name);
         const ops = [
           ...(leaf.declaration.whereOps ?? []),

@@ -1,8 +1,10 @@
 import type { EndpointDeclaration } from "@engine/boundary/assembly/endpoint-portability";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import type { WireType } from "@engine/boundary/wire/wire-types";
-import type { AppIR, FormerIR, PatternIR, ReactionIR, ValueIR } from "@engine/reads/ir";
-import { foldFormerNode, foldReaction, foldView } from "@engine/reads/schema";
+import type { AppIR, FormerIR, ReactionIR } from "@engine/reads/ir";
+import { analyzeLocalBehavior, localDefinitionKey } from "@engine/reads/local-behavior";
+import type { LocalBehaviorReview } from "@engine/reads/local-review";
+import { foldFormerNode } from "@engine/reads/schema";
 
 export type DiagnosticSeverity = "info" | "warning" | "error";
 
@@ -11,6 +13,7 @@ export type DiagnosticCode =
   | "UNLOWERED_ENDPOINT"
   | "OPAQUE_READ_OPERATION"
   | "OPAQUE_PATTERN"
+  | "LOCAL_DEFINITION"
   | "UNRESOLVED_WIRE_LEAF"
   | "DEPENDENCY_CYCLE"
   | "ENDPOINT_PATH_OVERLAP"
@@ -30,64 +33,6 @@ export interface ApplicationDiagnostic {
 
 function ordinal(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function walkValue(value: ValueIR, visit: (value: ValueIR) => void): void {
-  visit(value);
-  if (Array.isArray(value)) {
-    for (const entry of value) walkValue(entry, visit);
-    return;
-  }
-  if (value === null || typeof value !== "object") return;
-  for (const entry of Object.values(value)) {
-    if (typeof entry === "object" && entry !== null) walkValue(entry as ValueIR, visit);
-  }
-}
-
-function opaqueDiagnostics(
-  definition: ApplicationDiagnostic["definition"],
-  fold: (callbacks: Parameters<typeof foldReaction>[1]) => void,
-): ApplicationDiagnostic[] {
-  const diagnostics: ApplicationDiagnostic[] = [];
-  let custom = 0;
-  let predicates = 0;
-  const pattern = (mapping: PatternIR) => {
-    for (const value of Object.values(mapping)) {
-      walkValue(value, (candidate) => {
-        if (
-          typeof candidate === "object" &&
-          candidate !== null &&
-          !Array.isArray(candidate) &&
-          "$is" in candidate
-        ) {
-          predicates++;
-        }
-      });
-    }
-  };
-  fold({
-    op: (op) => {
-      if (op.op === "custom") custom++;
-    },
-    pattern,
-  });
-  if (custom > 0) {
-    diagnostics.push({
-      severity: "warning",
-      code: "OPAQUE_READ_OPERATION",
-      definition,
-      message: `${definition.kind} "${definition.name}" contains ${custom} custom read operation${custom === 1 ? "" : "s"}; tooling treats the dependency as opaque.`,
-    });
-  }
-  if (predicates > 0) {
-    diagnostics.push({
-      severity: "warning",
-      code: "OPAQUE_PATTERN",
-      definition,
-      message: `${definition.kind} "${definition.name}" contains ${predicates} opaque predicate${predicates === 1 ? "" : "s"}; tooling cannot inspect its semantics.`,
-    });
-  }
-  return diagnostics;
 }
 
 function reactionBelongsTo(reaction: ReactionIR, endpoint: EndpointDeclaration): boolean {
@@ -222,47 +167,80 @@ export function applicationDiagnostics(
   app: AppIR,
   endpoints: readonly EndpointDeclaration[],
   wire: WireContractsIR,
+  localBehavior?: LocalBehaviorReview,
 ): ApplicationDiagnostic[] {
   const endpointByReaction = new Map(
     endpoints.flatMap((endpoint) =>
       endpoint.reactions.map((reaction) => [reaction, endpoint] as const),
     ),
   );
-  const diagnostics: ApplicationDiagnostic[] = app.unlowered.map(({ name, reason }) => {
+  const diagnostics: ApplicationDiagnostic[] = [];
+  const local = analyzeLocalBehavior(app);
+  const reviewed = new Set(
+    (localBehavior?.contract?.definitions ?? []).map((definition) =>
+      localDefinitionKey(definition),
+    ),
+  );
+  for (const observed of local.localDefinitions) {
+    const definition = { kind: observed.kind, name: observed.name } as const;
+    const revision = localBehavior?.contract?.revision;
+    diagnostics.push({
+      severity: "info",
+      code: "LOCAL_DEFINITION",
+      definition,
+      message:
+        reviewed.has(localDefinitionKey(observed)) && revision !== undefined
+          ? `${observed.kind} "${observed.name}" is reviewed local behavior under revision "${revision}": ${observed.reasons.join("; ")}.`
+          : `${observed.kind} "${observed.name}" is unreviewed local behavior: ${observed.reasons.join("; ")}.`,
+    });
+  }
+  for (const { name, reason } of app.unlowered) {
     const endpoint = endpointByReaction.get(name);
-    return endpoint === undefined
-      ? {
-          severity: "warning",
-          code: "UNLOWERED_REACTION",
-          definition: { kind: "reaction", name },
-          message: `Reaction "${name}" is executable only: ${reason}.`,
-        }
-      : {
-          severity: "error",
-          code: "UNLOWERED_ENDPOINT",
-          definition: { kind: "endpoint", name: endpoint.name },
-          endpoint: { name: endpoint.name, path: endpoint.path },
-          message: `Endpoint "${endpoint.name}" at "${endpoint.path}" is executable only: ${reason}.`,
-        };
-  });
-  for (const reaction of app.reactions) {
+    const status = reviewed.has(localDefinitionKey({ kind: "reaction", name }))
+      ? "reviewed local"
+      : "unreviewed local";
     diagnostics.push(
-      ...opaqueDiagnostics({ kind: "reaction", name: reaction.name }, (fold) =>
-        foldReaction(reaction, fold),
-      ),
+      endpoint === undefined
+        ? {
+            severity: "warning",
+            code: "UNLOWERED_REACTION",
+            definition: { kind: "reaction", name },
+            message: `Reaction "${name}" is ${status} executable behavior: ${reason}.`,
+          }
+        : {
+            severity: "error",
+            code: "UNLOWERED_ENDPOINT",
+            definition: { kind: "endpoint", name: endpoint.name },
+            endpoint: { name: endpoint.name, path: endpoint.path },
+            message: `Endpoint "${endpoint.name}" at "${endpoint.path}" contains forbidden local executable behavior: ${reason}.`,
+          },
     );
   }
-  for (const view of app.views) {
-    diagnostics.push(
-      ...opaqueDiagnostics({ kind: "view", name: view.name }, (fold) => foldView(view, fold)),
+  for (const observed of local.localDefinitions) {
+    const occurrences = local.occurrences.filter(
+      ({ definition }) => localDefinitionKey(definition) === localDefinitionKey(observed),
     );
+    const custom = occurrences.filter(({ kind }) => kind === "custom").length;
+    const predicates = occurrences.filter(({ kind }) => kind === "identity-pattern").length;
+    const definition = { kind: observed.kind, name: observed.name } as const;
+    if (custom > 0) {
+      diagnostics.push({
+        severity: "warning",
+        code: "OPAQUE_READ_OPERATION",
+        definition,
+        message: `${observed.kind} "${observed.name}" contains ${custom} local custom read operation${custom === 1 ? "" : "s"}; reasons: ${observed.reasons.join("; ")}.`,
+      });
+    }
+    if (predicates > 0) {
+      diagnostics.push({
+        severity: "warning",
+        code: "OPAQUE_PATTERN",
+        definition,
+        message: `${observed.kind} "${observed.name}" contains ${predicates} local object-identity pattern${predicates === 1 ? "" : "s"}; reasons: ${observed.reasons.join("; ")}.`,
+      });
+    }
   }
   for (const former of app.formers) {
-    diagnostics.push(
-      ...opaqueDiagnostics({ kind: "former", name: former.name }, (fold) =>
-        foldFormerNode(former.body, fold),
-      ),
-    );
     const order = formerOrderDiagnostic(former);
     if (order !== undefined) diagnostics.push(order);
   }

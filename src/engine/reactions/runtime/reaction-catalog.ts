@@ -1,6 +1,6 @@
 /** Own executable reactions, exported definitions, and their trigger indexes. */
 
-import type { ReactionIR } from "@engine/reads/ir";
+import type { ReactionIR, UnloweredIR } from "@engine/reads/ir";
 import type { ChannelPosture, ExecutableReaction, InstrumentedAction } from "../types.ts";
 
 export class ReactionCatalog {
@@ -8,7 +8,7 @@ export class ReactionCatalog {
   readonly reactionsByAction = new Map<InstrumentedAction, Set<ExecutableReaction>>();
   readonly reactionsByChannel = new Map<ChannelPosture, Set<ExecutableReaction>>();
   private readonly loweredByBase = new Map<string, ReactionIR[]>();
-  private readonly unloweredByName = new Map<string, string>();
+  private readonly unloweredByName = new Map<string, UnloweredIR>();
   private readonly namesByBase = new Map<string, string[]>();
 
   ownerOf(name: string): string | undefined {
@@ -59,8 +59,8 @@ export class ReactionCatalog {
     this.namesByBase.set(base, names);
   }
 
-  markUnlowered(name: string, reason: string): void {
-    this.unloweredByName.set(name, reason);
+  markUnlowered(definition: UnloweredIR): void {
+    this.unloweredByName.set(definition.name, definition);
   }
 
   candidates(
@@ -78,7 +78,7 @@ export class ReactionCatalog {
     return this.loweredByBase.values();
   }
 
-  unloweredEntries(): Iterable<[string, string]> {
-    return this.unloweredByName.entries();
+  unloweredEntries(): Iterable<UnloweredIR> {
+    return this.unloweredByName.values();
   }
 }

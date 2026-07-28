@@ -71,7 +71,7 @@ semantics](./semantics.md#reactions).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LocalBehaviorContract`, `LocalBehaviorDefinition`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -93,6 +93,7 @@ assemble(options: AssemblyOptions): Assembly
 | `executionLimits`       | no       | Unbounded profile; validates and enforces every `ExecutionLimits` field           |
 | `observers`             | no       | No operational observers                                                          |
 | `redaction`             | no       | Universal sensitive-field patterns only                                           |
+| `localBehavior`         | no       | Required exact review contract when non-boundary local definitions are present    |
 
 A retention window must be a finite, non-negative integer. `{ window: 0 }`
 allows an active flow to complete before automatic eviction.
@@ -106,6 +107,32 @@ complete or partial implementation maps. Assembled non-query actions are
 asynchronous and conservatively resolve to their awaited result or an
 `ActionRefusal`; underscore-prefixed queries retain their implementation return
 shape.
+
+`LocalBehaviorContract` has this exact shape:
+
+```ts
+localBehavior?: {
+  revision: string;
+  definitions: readonly {
+    kind: "reaction" | "view" | "former";
+    name: string;
+  }[];
+};
+```
+
+`revision` must be non-empty. `definitions` must contain plain `{ kind, name }`
+objects in ordinal kind/name order, without duplicates, and must equal the
+assembly's observed direct local-definition inventory exactly. Missing, stale,
+extra, malformed, duplicate, unsorted, or unused contracts fail assembly.
+Closures, explicit `custom` operations, `$is` object-identity patterns, raw
+transforms, and whole unlowered reactions are local. A definition owns the
+local occurrences in its own body; a portable caller does not duplicate a
+referenced view or former in the inventory.
+
+No contract overrides the application boundary. Assembly rejects local endpoint
+reactions, local views or formers reachable from an endpoint, and local ordinary
+reactions that use `RequestBoundary` receive/respond behavior. Validation runs
+before an invoker or public route set is returned.
 
 `OperationalEvent` is the stable discriminated union for action settlement,
 interpreter and integrity failure, invocation settlement, limit breach, and
@@ -360,7 +387,7 @@ the client call.
 
 <!-- register:tooling:start -->
 
-`AppIR`, `ApplicationDependencyGraphV1`, `ApplicationDiagnostic`, `ApplicationImpact`, `ApplicationManifestV1`, `ArtifactFilesystem`, `ArtifactKind`, `ArtifactPlan`, `ArtifactPlanEntry`, `ArtifactStatus`, `ConceptInventoryIR`, `DependencyEdge`, `DependencyEdgeKind`, `DependencyNode`, `DependencyNodeKind`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedPlanOptions`, `ManifestEndpointV1`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `affectedNodes`, `applicationDependencyGraph`, `applicationDiagnostics`, `applicationImpact`, `applicationManifest`, `applyArtifactPlan`, `artifactPlan`, `checkArtifactPlan`, `diagnosticsFail`, `diffManifestNodes`, `floorReadBack`, `httpFloorReadBack`, `inspectAssembly`, `normalizeArtifactPath`, `planGenerated`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
+`AppIR`, `ApplicationDependencyGraphV2`, `ApplicationDiagnostic`, `ApplicationImpact`, `ApplicationManifestV2`, `ArtifactFilesystem`, `ArtifactKind`, `ArtifactPlan`, `ArtifactPlanEntry`, `ArtifactStatus`, `ConceptInventoryIR`, `DependencyEdge`, `DependencyEdgeKind`, `DependencyNode`, `DependencyNodeKind`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedPlanOptions`, `LocalBehaviorReview`, `ManifestEndpointV2`, `ObservedLocalDefinition`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `affectedNodes`, `applicationDependencyGraph`, `applicationDiagnostics`, `applicationImpact`, `applicationManifest`, `applyArtifactPlan`, `artifactPlan`, `checkArtifactPlan`, `diagnosticsFail`, `diffManifestNodes`, `floorReadBack`, `httpFloorReadBack`, `inspectAssembly`, `normalizeArtifactPath`, `planGenerated`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
 
 <!-- register:tooling:end -->
 
@@ -376,7 +403,7 @@ the client call.
 | `renderWireTypes`           | `renderWireTypes(wire, moduleName? \| options?): string`          |
 | `httpFloorReadBack`         | `httpFloorReadBack(application, floor): string`                   |
 | `floorReadBack`             | `floorReadBack({ application, conceptFloor, httpFloor }): string` |
-| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV1`            |
+| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV2`            |
 | `renderApplicationManifest` | `renderApplicationManifest(manifest): string`                     |
 | `applicationDiagnostics`    | `applicationDiagnostics(app, endpoints, wire)`                    |
 | `diagnosticsFail`           | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`           |
@@ -388,12 +415,17 @@ action id, flow, and timestamp. Inspection reports only evidence retained by
 the store and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
 `WireType` name derived wire data.
 
-`ApplicationManifestV1` is static, versioned, JSON-round-trippable application
-data: portable IR, concept inventories, declaration-owned endpoints, input
-contracts, wire IR, validator-presence flags, and structured diagnostics. It
-excludes occurrences, timestamps, other runtime state, and uninterpreted
-concept State sections. State notation likewise contributes nothing to the
-assembled read-back or generated wire.
+`ApplicationManifestV2` has format `sync-engine.application-manifest`, version
+`2`, and is static canonical JSON-round-trippable application data. It contains
+the application IR, concept inventories, declaration-owned
+`ManifestEndpointV2` entries, input contracts, wire IR, validator-presence
+flags, structured diagnostics, `localBehavior`, and `digest`. `localBehavior`
+is `{ contract: LocalBehaviorContract | null, observed:
+ObservedLocalDefinition[] }`; each observed entry adds sorted `reasons`. The
+digest covers every other manifest field, including the review revision and
+observed inventory. It excludes occurrences, timestamps, other runtime state,
+and uninterpreted concept State sections. State notation likewise contributes
+nothing to the assembled read-back or generated wire.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
 view-alternative, and former-node sequences retain semantics.
@@ -403,15 +435,23 @@ machine-readable advisory surface. `diagnosticsFail` treats error diagnostics as
 failures by default and can promote warnings; informational diagnostics remain
 advisory.
 
-`applicationDependencyGraph(manifest)` returns a versioned graph with stable
+`applicationDependencyGraph(manifest)` returns
+`ApplicationDependencyGraphV2`, format
+`sync-engine.application-dependency-graph`, version `2`, with stable
 namespaced node ids, typed dependency edges, canonical node digests, and a
 reverse dependent index. Nodes cover endpoints, outputs, reaction stages,
-actions, queries, views, formers, computations, and opaque behavior. Concept
-actions conservatively invalidate every query on that concept.
+actions, queries, views, formers, named computations, the local review, and
+opaque behavior. Named vocabulary computations are portable. Every custom
+operation, `$is` occurrence, and unlowered definition has a distinct stable
+opaque node owned by its containing definition. Known action, query, view,
+former, and stage dependencies remain connected around an unlowered definition.
+Concept actions conservatively invalidate every query on that concept.
 `diffManifestNodes` identifies direct digest changes, `affectedNodes` follows
 the reverse index, and `applicationImpact` returns directly changed and affected
-nodes plus endpoint/output summaries. An application containing opaque or
-unlowered behavior uses whole-application impact when design data changes.
+nodes plus endpoint/output summaries. Any opaque node in either the before or
+after graph forces whole-application impact when design data changes, including
+removal of the final opaque occurrence. A review-revision-only change alters the
+review node and manifest digest and therefore also takes that fallback.
 
 `planGenerated(manifest, options)` is a filesystem-free specification and wire
 planner. Every `ArtifactPlanEntry` has a normalized relative POSIX path,

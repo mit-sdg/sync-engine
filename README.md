@@ -106,6 +106,14 @@ values at runtime; endpoint validator hooks provide that separate runtime
 contract when an application needs it. Validators are application-supplied;
 the engine does not infer them from concept specifications.
 
+Endpoint behavior must be portable: canonical JSON-round-trippable and
+re-registerable against the same named vocabulary. Closures, custom operations,
+object-identity patterns, raw transforms, and whole unlowered definitions are
+local and cannot occur in an endpoint or its transitive views/formers.
+Non-boundary local definitions require an exact reviewed `localBehavior`
+inventory and revision on `AssemblyOptions`; that contract has no endpoint
+override.
+
 ## Guarantees and non-guarantees
 
 The ordinary assembly provides these guarantees:
@@ -113,6 +121,8 @@ The ordinary assembly provides these guarantees:
 - one action body runs at a time per concept instance within one assembly;
 - each action ask and its return, refusal, or fault are recorded;
 - composition is checked before registered behavior executes;
+- local behavior is rejected before any public route is exposed unless it is
+  non-boundary and exactly reviewed;
 - generated artifacts fail rather than silently omit an endpoint they cannot
   represent;
 - optional execution profiles bound admission and accepted causal work;

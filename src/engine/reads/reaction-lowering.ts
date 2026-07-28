@@ -10,7 +10,7 @@ import type {
   WhereFn,
 } from "@engine/reactions/types";
 import { withLive } from "./ir.ts";
-import type { ConsequenceIR, ReactionIR, WhereOpIR } from "./ir.ts";
+import type { ConsequenceIR, ReactionIR, UnloweredIR, WhereOpIR } from "./ir.ts";
 import {
   encodePattern,
   encodeTrigger,
@@ -229,4 +229,24 @@ export function serializeReaction(reaction: LoweredReaction): ReactionIR {
   };
   if (reaction.whereFn !== undefined) withLive(ir, reaction.whereFn);
   return ir;
+}
+
+/** Keep every inspectable dependency fact from a reaction whose whole pipeline stays local. */
+export function serializeUnloweredReaction(
+  name: string,
+  reason: string,
+  declaration: ReactionDeclaration,
+): UnloweredIR {
+  const vars = new PatternVariables();
+  const when = declaration.when.map((clause) => encodeTrigger(clause, vars));
+  const where: WhereOpIR[] = (declaration.whereOps ?? []).map((op) => encodeWhereOp(op, vars));
+  const then: ConsequenceIR[] = [];
+  const patterns = [];
+  for (const step of declaration.then) {
+    for (const op of step.whereOps ?? []) where.push(encodeWhereOp(op, vars));
+    then.push(encodeConsequence(step, vars));
+    if (step.action.output !== undefined) patterns.push(encodePattern(step.action.output, vars));
+    for (const op of step.transformOps ?? []) where.push(encodeWhereOp(op, vars));
+  }
+  return { name, reason, known: { when, where, then, patterns } };
 }

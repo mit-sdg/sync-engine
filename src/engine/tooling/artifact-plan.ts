@@ -1,8 +1,10 @@
 import { renderInputContracts } from "@engine/boundary/protocol/endpoints";
+import { assertApplicationLocality } from "@engine/boundary/assembly/locality-validation";
 import { renderWireTypes } from "@engine/boundary/wire/wire-renderer";
 import { renderApp } from "@engine/reads/render";
-import { canonicalDigest } from "@engine/utils/canonical-json";
-import type { ApplicationManifestV1 } from "./manifest.ts";
+import { renderLocalBehaviorMarkdown } from "@engine/reads/local-review";
+import { canonicalDigest, canonicallyEqual } from "@engine/utils/canonical-json";
+import type { ApplicationManifestV2 } from "./manifest.ts";
 
 const ordinal = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
@@ -69,9 +71,20 @@ export function artifactPlan(entries: readonly Omit<ArtifactPlanEntry, "digest">
 }
 
 export function planGenerated(
-  manifest: ApplicationManifestV1,
+  manifest: ApplicationManifestV2,
   options: GeneratedPlanOptions,
 ): ArtifactPlan {
+  const localBehavior = assertApplicationLocality(
+    "generated artifacts",
+    manifest.application,
+    manifest.endpoints,
+    manifest.localBehavior.contract ?? undefined,
+  );
+  if (!canonicallyEqual(localBehavior, manifest.localBehavior)) {
+    throw new Error(
+      "generated artifacts: manifest localBehavior does not match its observed definitions.",
+    );
+  }
   const specification = options.specification ?? "application.md";
   const wire = options.wire ?? "wire.ts";
   const wireName = options.wireName ?? "ApplicationWire";
@@ -94,6 +107,9 @@ export function planGenerated(
           concepts: manifest.concepts,
           app: manifest.application,
         }) +
+        (manifest.localBehavior.observed.length === 0
+          ? ""
+          : `\n${renderLocalBehaviorMarkdown(manifest.localBehavior)}`) +
         "\n" +
         renderInputContracts(manifest.inputContracts),
     },
