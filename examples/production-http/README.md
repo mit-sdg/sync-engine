@@ -28,6 +28,8 @@ duplicate-name conflict, and ends the session.
   binding and removes its logical input/output fields from HTTP.
 - Unauthorized protected requests and successful session ending clear the
   cookie; issuance and clearing responses are not stored.
+- Sessioning stores each expiry, issues it thirty minutes from its injected
+  clock, and removes expired credentials before refusing them as unauthorized.
 - The explicit `/api` base path and correlation response header apply to both
   production handler forms.
 - Production configuration rejects an HTTP public origin.

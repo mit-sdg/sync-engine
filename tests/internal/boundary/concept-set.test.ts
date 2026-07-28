@@ -1,7 +1,14 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { conceptFloor, conceptSet, PublicError, registerConcept } from "@sync-engine/assembly";
+import {
+  assemble as assembleApplication,
+  conceptFloor,
+  conceptSet,
+  PublicError,
+  registerConcept,
+} from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
+import { applicationManifest, renderApp } from "@sync-engine/tooling";
 
 class MissingItem extends Error {}
 
@@ -133,7 +140,46 @@ describe("external concept registration", () => {
   });
 });
 
-describe("the specification and the class hold each other", () => {
+describe("parsed declarations and class methods", () => {
+  test("state notation is absent from registration and every generated design surface", () => {
+    const marker = "STATE_ONLY_SENTINEL";
+    const registration = registerConcept({
+      class: Cataloging,
+      spec: catalogingSpec.replace(
+        "## Actions",
+        `## State\n\n\`\`\`state\n${marker}\n` +
+          "there are no methods and the database has an incompatible field {]\n" +
+          "```\n\n## Actions",
+      ),
+      refusals: { ITEM_NOT_FOUND: MissingItem },
+    });
+
+    expect(registration.specification).toEqual(cataloging.specification);
+    expect(registration.specification).not.toHaveProperty("state");
+
+    const set = conceptSet({ Cataloging: registration });
+    const Find = endpoint("/find", () =>
+      receive({})
+        .then(set.concepts.Cataloging.find({}).responds())
+        .then(respond({ found: true })),
+    );
+    const application = assembleApplication({
+      vocabulary: set.vocabulary,
+      composition: { Find },
+      instances: set.implementations(),
+    });
+    const manifest = applicationManifest(application);
+    const readBack = renderApp({
+      title: "State boundary",
+      concepts: manifest.concepts,
+      app: manifest.application,
+    });
+
+    expect(JSON.stringify(manifest)).not.toContain(marker);
+    expect(readBack).not.toContain(marker);
+    expect(manifest.endpoints[0]?.validators).toEqual({ input: false, output: false });
+  });
+
   test("an action the class does not implement fails by name", () => {
     expect(() =>
       registerConcept({

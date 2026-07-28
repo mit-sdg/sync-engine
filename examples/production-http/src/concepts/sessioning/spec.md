@@ -6,8 +6,9 @@ Issue, verify, and end short-lived sessions without exposing transport policy.
 
 ## Principle
 
-Maya starts a session and can use it while it is active. An unknown or ended
-session is refused. Ending an active session makes it unknown.
+Maya starts a session with a bounded expiry and can use it before that time. At
+expiry it is removed and refused, just like an unknown or ended session. Ending
+an active session makes it unknown.
 
 ## State
 
@@ -27,18 +28,20 @@ start (user: Person) : return (session: Session, expiresAt: Time, user: Person)
     return session, expiresAt, and user
 
 current (session: Session) : return (user: Person)
-  where session not in sessions
+  where session is unknown, ended, or expired
   then
+    delete session if expired
     refuse UNKNOWN_SESSION "This session is not active."
-  where session in sessions
+  where session is active
   then
     return its user
 
 end (session: Session) : return (ended: Flag)
-  where session not in sessions
+  where session is unknown, ended, or expired
   then
+    delete session if expired
     refuse UNKNOWN_SESSION "This session is not active."
-  where session in sessions
+  where session is active
   then
     delete that session
     return ended true

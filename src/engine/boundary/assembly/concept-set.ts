@@ -88,7 +88,7 @@ export interface ConceptRegistration<
   F extends Record<string, FloorFactory> = Record<never, never>,
 > {
   class: C;
-  /** The concept's specification markdown — the source of its contract. */
+  /** Markdown containing the concept's parsed registration contract and human prose. */
   spec: string;
   /** The Error class that signals each refusal code the specification declares. */
   refusals?: Readonly<Record<string, ErrorConstructor>>;
@@ -104,7 +104,7 @@ export type RegisteredConcept<
   F extends Record<string, FloorFactory> = Record<never, never>,
 > = ConceptRegistration<C, F> & {
   readonly [RegistrationBrand]: true;
-  /** The contract read from the registration's specification. */
+  /** The machine-readable contract extracted from the registration's specification. */
   readonly specification: ConceptSpec;
 };
 
@@ -130,9 +130,8 @@ function listed(names: readonly string[]): string {
 }
 
 /**
- * Hold the specification and the class to each other: neither may describe a
- * member the other omits, and a declared signature must name the inputs the
- * implementation destructures.
+ * Compare parsed action and query declarations with class methods. State prose
+ * and implementation fields are outside this comparison.
  */
 function checkAgainstClass(cls: ConceptClass, spec: ConceptSpec): void {
   const fail = (what: string): never => {

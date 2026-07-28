@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 import { httpFloor, productionHttpProfile } from "@mit-sdg/sync-engine/boundary";
 import { buildProductionHttp } from "../src/edge.ts";
 import { runScenario } from "../src/scenario.ts";
+import { SessioningConcept } from "../src/concepts/sessioning/sessioning.ts";
 
 const originalNodeEnv = process.env.NODE_ENV;
 
@@ -25,7 +26,9 @@ function post(path: string, body: unknown, options: { cookie?: string; requestId
 
 describe("production HTTP application", () => {
   test("issues, binds, rejects, and clears the cookie credential", async () => {
-    const { floorHandler } = buildProductionHttp();
+    const { floorHandler } = buildProductionHttp({
+      Sessioning: new SessioningConcept(() => new Date("2026-07-20T12:00:00.000Z")),
+    });
     const started = await floorHandler(
       post("/sessions/start", { user: "Maya" }, { requestId: "request-42" }),
     );
@@ -36,7 +39,7 @@ describe("production HTTP application", () => {
     const setCookie = started.headers.get("Set-Cookie");
     expect(setCookie).toBe(
       "__Host-session=session-maya; HttpOnly; SameSite=Strict; Path=/; " +
-        "Expires=Tue, 01 Jan 2030 00:00:00 GMT; Secure",
+        "Expires=Mon, 20 Jul 2026 12:30:00 GMT; Secure",
     );
     const cookie = setCookie?.split(";", 1)[0];
     if (cookie === undefined) throw new Error("Expected the issued credential cookie.");
@@ -61,6 +64,29 @@ describe("production HTTP application", () => {
     expect(ended.headers.get("Set-Cookie")).toContain(
       "Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0",
     );
+  });
+
+  test("rejects, clears, and deletes an expired cookie credential", async () => {
+    let now = new Date("2026-07-20T12:00:00.000Z");
+    const { floorHandler } = buildProductionHttp({
+      Sessioning: new SessioningConcept(() => now),
+    });
+    const started = await floorHandler(post("/sessions/start", { user: "Maya" }));
+    const cookie = started.headers.get("Set-Cookie")?.split(";", 1)[0];
+    if (cookie === undefined) throw new Error("Expected the issued credential cookie.");
+
+    now = new Date("2026-07-20T12:30:00.000Z");
+    const expired = await floorHandler(post("/sessions/current", {}, { cookie }));
+    expect(expired.status).toBe(401);
+    expect(await expired.json()).toEqual({ error: "UNAUTHORIZED" });
+    expect(expired.headers.get("Set-Cookie")).toContain(
+      "Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0",
+    );
+
+    now = new Date("2026-07-20T12:29:00.000Z");
+    const deleted = await floorHandler(post("/sessions/current", {}, { cookie }));
+    expect(deleted.status).toBe(401);
+    expect(await deleted.json()).toEqual({ error: "UNAUTHORIZED" });
   });
 
   test("uses the credential-free profile and maps a registered conflict", async () => {

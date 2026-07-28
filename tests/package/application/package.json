@@ -5,7 +5,7 @@
   "scripts": {
     "generate": "sync-engine artifacts pin --config generated.config.ts",
     "typecheck": "tsc --noEmit",
-    "principle": "bun src/concepts/rooming/rooming.test.ts",
+    "principle": "bun src/concepts/rooming/rooming.test.ts && bun src/concepts/mitigating/mitigating.test.ts",
     "start": "bun src/scenario.ts"
   },
   "dependencies": {

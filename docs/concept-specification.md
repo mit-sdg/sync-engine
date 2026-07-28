@@ -1,9 +1,10 @@
 # Concept specification format
 
 A concept specification is a Markdown file passed to `registerConcept` as text.
-The parser extracts the `Purpose`, `Principle`, action signatures, query
-signatures, and refusal lines. Other prose remains part of the human contract
-but is not machine-checked.
+The parser extracts the `Purpose`, `Principle`, action names and inputs, query
+names, inputs and cardinalities, and refusal lines. The resulting `ConceptSpec`
+contains only those machine-readable parts. Other text remains in the authored
+file for readers and is not registration data.
 
 ## Required sections
 
@@ -92,12 +93,24 @@ check row fields against the output list in the specification.
 An omitted `actions` or `queries` fence declares no members of that kind. A
 present fence must be closed.
 
-## State declarations
+## State notation
 
-A `state` fence and any other prose are not parsed. Registration does not check
-state field types, uniqueness, output field names, invariants, or persistence.
-Use the principle test and implementation-specific tests to establish those
-properties.
+A `## State` section is optional. When present, all of its contents, including a
+`state` fence, are uninterpreted human notation. There is no accepted machine
+grammar for state: arbitrary, malformed, or contradictory state text is not a
+specification parse, registration, or source-check error.
+
+State notation is discarded by `parseSpec`, and `ConceptSpec` has no state
+member. Neither `registerConcept` nor `sync-engine check` compares it with class
+fields, floor implementations, database models, or storage layout. It
+contributes nothing to concept metadata, application manifests, assembled
+read-back, generated wire contracts, endpoint input contracts, or endpoint
+validators. No runtime schema is inferred from it.
+
+Establish state properties and invariants in principle tests, direct
+implementation tests, and backend constraint tests. Any future machine state
+conformance requires an explicit, separately designed, backend-neutral
+descriptor; prose in a State section will not be inferred as that descriptor.
 
 ## `registerConcept` checks
 
@@ -143,15 +156,17 @@ unspecified actions. Use ECMAScript `#private` methods or module-level functions
 for helpers so both checks observe the same members.
 
 Neither `registerConcept` nor `sync-engine check` validates action output
-fields, query row fields, state prose, or runtime endpoint values.
+fields, query row fields, state notation, class fields, storage layout, or
+runtime endpoint values.
 
 ## Caller obligations
 
 Import the Markdown file as text and pass that string to `registerConcept`.
 Keep `spec.md`, the class, refusal mappings, and the principle test in the same
 concept directory so the default CLI search can discover them. Run
-`sync-engine check` after changing a method signature or specification, and run
-the principle test after changing behavior.
+`sync-engine check` after changing a parsed action or query signature, and run
+the relevant principle, implementation, and backend constraint tests after
+changing behavior or state notation.
 
 See [Define one behavior](guide/concepts.md) for a worked example and [CLI
 reference](cli.md#sync-engine-check) for command behavior.

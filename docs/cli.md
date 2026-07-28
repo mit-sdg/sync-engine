@@ -1,9 +1,9 @@
 # Command-line reference
 
-The installed `sync-engine` executable scaffolds projects, checks concept
-specifications, and checks or generates assembly artifacts. Commands require
-Bun 1.3 or newer and run relative to the current working directory unless a
-path says otherwise.
+The installed `sync-engine` executable scaffolds projects, compares parsed
+concept action/query declarations with class source, and checks or generates
+assembly artifacts. Commands require Bun 1.3 or newer and run relative to the
+current working directory unless a path says otherwise.
 
 ```text
 sync-engine <topic> <command>
@@ -47,14 +47,15 @@ is `src/concepts`. Each discovered concept directory must contain `registry.ts`,
 and that registry must call `registerConcept` with a class imported by name.
 
 The command parses the specification and class source, then compares action and
-query names and supported input parameter forms. [Concept specification
-format](concept-specification.md) defines the accepted grammar and validation
-boundary.
+query names and supported input parameter forms. It does not read State notation
+as grammar or compare it with class fields or storage. [Concept specification
+format](concept-specification.md) defines the accepted machine grammar and
+uninterpreted boundary.
 
 Success prints:
 
 ```text
-Specification check passed for N concepts.
+Concept action/query source check passed for N concepts.
 ```
 
 The command fails when no concept directories are found or when any concept
@@ -115,9 +116,10 @@ value counts operation occurrences, not distinct computation names.
 Prints the generated TypeScript wire contract.
 
 `sync-engine check --config generated.config.ts` prints the same structured
-application diagnostics after checking concept specifications. Diagnostics are
-advisory unless their severity is `error`; `--fail-on-warnings` promotes warning
-diagnostics to a failing repository gate.
+application diagnostics after checking parsed concept action/query declarations
+against class source. Diagnostics are advisory unless their severity is
+`error`; `--fail-on-warnings` promotes warning diagnostics to a failing
+repository gate.
 
 ## Artifact failure conditions
 

@@ -115,7 +115,7 @@ describe("generated application artifacts", () => {
     wire       Print the wire contract.
 
   sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
-    Verify concept specifications and optionally inspect application diagnostics.
+    Check parsed action/query declarations against class source and optionally inspect application diagnostics.
     Defaults to src/concepts.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,

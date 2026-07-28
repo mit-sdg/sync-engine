@@ -33,8 +33,9 @@ Actions:
 
 **Purpose.** Issue, verify, and end short-lived sessions without exposing transport policy.
 
-**Principle.** Maya starts a session and can use it while it is active. An unknown or ended
-session is refused. Ending an active session makes it unknown.
+**Principle.** Maya starts a session with a bounded expiry and can use it before that time. At
+expiry it is removed and refused, just like an unknown or ended session. Ending
+an active session makes it unknown.
 
 Actions:
 

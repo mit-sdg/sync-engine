@@ -55,10 +55,10 @@ bun run start
 ```
 
 `generate` writes `generated/note-keeper.md` and `generated/wire.ts`. `check`
-compares the concept specification with its class, verifies that generated
-files match the assembly, and typechecks the project. A successful
-specification check reports one checked concept; artifact and type checks are
-silent on success.
+compares parsed action and query declarations with the class source, verifies
+that generated files match the assembly, and typechecks the project. A
+successful source check reports one checked concept; artifact and type checks
+are silent on success.
 
 `principle` runs the Noting class directly and prints `principle holds`.
 `start` calls the application through its gateway and prints JSON containing a
@@ -75,10 +75,12 @@ bunx sync-engine artifacts check
 
 ## Follow one request through the project
 
-`src/concepts/noting/spec.md` is the authored contract. It states the concept's
-purpose and principle, declares action signatures and refusal branches, and
-declares query cardinality. [Concept specification format](../concept-specification.md)
-defines exactly which parts are parsed and checked.
+`src/concepts/noting/spec.md` is the authored specification. It states the
+concept's purpose and principle, declares action signatures and refusal
+branches, and declares query cardinality. Its optional State section is
+uninterpreted human notation, not a schema or a class/storage conformance
+descriptor. [Concept specification format](../concept-specification.md) defines
+exactly which parts are parsed and checked.
 
 `src/concepts/noting/noting.ts` implements the contract as an ordinary class.
 Public methods are actions. Methods prefixed with `_` are queries. The class has

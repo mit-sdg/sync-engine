@@ -20,7 +20,7 @@ const usage = `Usage: sync-engine <topic> <command>
     wire       Print the wire contract.
 
   sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
-    Verify concept specifications and optionally inspect application diagnostics.
+    Check parsed action/query declarations against class source and optionally inspect application diagnostics.
     Defaults to src/concepts.`;
 
 const HELP = new Set([undefined, "help", "--help", "-h"]);

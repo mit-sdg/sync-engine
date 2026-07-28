@@ -137,6 +137,14 @@ fails at runtime. `conceptSet` also rejects conflicting public categories.
 descriptor. Assembly does not install, own, or call the floor's `close()`
 method. The host owns floor selection and lifecycle.
 
+`RegisteredConcept.specification` is the machine-readable `ConceptSpec`
+extracted from purpose, principle, action, query, and refusal declarations. An
+optional State section is uninterpreted human notation and produces no
+`ConceptSpec` field. Registration and source checking do not compare it with
+class fields, floor implementations, databases, or storage. State properties
+belong in principle, implementation, and backend constraint tests; future
+machine conformance requires a separately designed backend-neutral descriptor.
+
 ### Log stores
 
 `MemoryStore` and `FileStore` implement `LogStore`; `FileStore` appends JSONL.
@@ -179,6 +187,10 @@ owns settlement.
 Endpoint paths must begin with `/`. `receive(...)` cannot author the
 framework-owned `path` or `requestId` fields. `respond(...)` cannot author
 `requestId` or `errorKind`.
+
+Endpoint validators are supplied explicitly by the application. They are not
+derived from generated types or concept State notation, and the engine infers
+no runtime schema from a concept specification.
 
 | `InputContractDecl` field | Default / effect                                 |
 | ------------------------- | ------------------------------------------------ |
@@ -379,7 +391,9 @@ the store and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
 `ApplicationManifestV1` is static, versioned, JSON-round-trippable application
 data: portable IR, concept inventories, declaration-owned endpoints, input
 contracts, wire IR, validator-presence flags, and structured diagnostics. It
-excludes occurrences, timestamps, and other runtime state.
+excludes occurrences, timestamps, other runtime state, and uninterpreted
+concept State sections. State notation likewise contributes nothing to the
+assembled read-back or generated wire.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
 view-alternative, and former-node sequences retain semantics.

@@ -5,7 +5,7 @@ import {
   productionHttpProfile as defineProductionHttpProfile,
 } from "@mit-sdg/sync-engine/boundary";
 import type { ProductionHttpWire } from "../generated/wire.ts";
-import { assembleProductionHttp } from "./assembly.ts";
+import { assembleProductionHttp, type ProductionHttpOverrides } from "./assembly.ts";
 
 export const productionHttpProfile = defineProductionHttpProfile({
   origin: "https://production-http.test",
@@ -32,8 +32,8 @@ const correlation = {
   responseHeader: "X-Request-Id",
 };
 
-export function buildProductionHttp() {
-  const application = assembleProductionHttp();
+export function buildProductionHttp(instances: ProductionHttpOverrides = {}) {
+  const application = assembleProductionHttp(instances);
   const gateway = createGateway<ProductionHttpWire>({ application });
   const profileHandler = createHttpHandler({
     application,

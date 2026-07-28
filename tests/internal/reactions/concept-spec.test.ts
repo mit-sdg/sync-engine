@@ -1,8 +1,7 @@
 /**
- * A concept's spec document is the one source of its contract — its prose, its
- * actions and their refusal branches, and its queries and their promises.
- * Registration parses it, failing loudly and by line, so no part of the
- * contract can drift from the document that authored it.
+ * The parser extracts only the machine-readable registration contract: purpose,
+ * principle, actions and refusal branches, and query promises. State notation
+ * remains outside that value.
  */
 import { describe, expect, test } from "vite-plus/test";
 import { parseSpec } from "@sync-engine/internal/reactions/concepts/concept-spec";
@@ -81,6 +80,30 @@ describe("the specification's prose", () => {
 
   test("takes markdown text, not a path or nothing", () => {
     expect(() => parseSpec("")).toThrow("markdown text");
+  });
+
+  test("an optional State section is arbitrary notation and never enters ConceptSpec", () => {
+    const stateSection = `
+## State
+
+\`\`\`state
+a set of Invitations
+\`\`\`
+`;
+    const withoutState = SPEC.replace(stateSection, "");
+    const contradictoryState = SPEC.replace(
+      "a set of Invitations",
+      [
+        "this is not a machine grammar {]",
+        "there are no invitations and accept is not an action",
+        "the class has a field that must equal a PostgreSQL table",
+      ].join("\n"),
+    );
+
+    const parsed = parseSpec(contradictoryState);
+    expect(parsed).toEqual(parseSpec(withoutState));
+    expect(Object.keys(parsed)).toEqual(["purpose", "principle", "actions", "queries"]);
+    expect(parsed).not.toHaveProperty("state");
   });
 });
 

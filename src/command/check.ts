@@ -246,7 +246,7 @@ export async function conceptDirectories(
 }
 
 const usage = `sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
-  Verify concept specifications and optionally inspect application diagnostics.
+  Check parsed action/query declarations against class source and optionally inspect application diagnostics.
   Defaults to src/concepts.`;
 
 export async function checkCommand(args: readonly string[]): Promise<void> {
@@ -272,10 +272,10 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
   const failures = directories.flatMap((directory) => conceptFailures(directory, root));
   if (failures.length > 0) {
     throw new Error(
-      `Concept specification check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
+      `Concept action/query source check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
     );
   }
-  console.log(`Specification check passed for ${directories.length} concepts.`);
+  console.log(`Concept action/query source check passed for ${directories.length} concepts.`);
 
   if (configPath !== undefined) {
     const configUrl = pathToFileURL(resolve(root, configPath));

@@ -204,9 +204,9 @@ export interface VocabularyDeclaration<
 }
 
 /**
- * The contracts a specification supplies on its own. Refusal branches need the
- * Error class that signals each code, so a registration derives those; prose
- * and query promises the document already states in full.
+ * The machine-readable metadata a specification supplies on its own. State
+ * prose is not metadata. Refusal branches need the Error class that signals
+ * each code, so a registration derives those separately.
  */
 function specifiedContracts(spec: string): ConceptMetadata {
   const { purpose, principle, queries } = parseSpec(spec);

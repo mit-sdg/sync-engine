@@ -117,7 +117,8 @@ Applications may attach runtime input and successful-output validators to an
 endpoint without adopting a particular schema library. Input validation runs
 before application work. Invalid output is retained as integrity evidence and
 becomes opaque `INTERNAL_ERROR`. Validators are explicit application contracts;
-the engine does not infer them from generated types or concept state prose.
+the engine does not infer them from generated types or optional, uninterpreted
+concept State notation.
 
 ## Endpoint completeness
 

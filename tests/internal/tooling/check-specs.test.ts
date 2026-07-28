@@ -1,8 +1,8 @@
 /**
- * The build-time half of the concept contract. Registration compares a
- * specification with its class at startup, but TypeScript erases a parameter's
- * type on the way: `end(_: { session: string })` arrives as `end(_)`. These
- * cases are the ones only the source can settle.
+ * Build-time action/query conformance. Registration compares parsed declarations
+ * with class methods at startup, but TypeScript erases a parameter's type on the
+ * way: `end(_: { session: string })` arrives as `end(_)`. These cases are the
+ * ones only the source can settle.
  */
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -27,13 +27,14 @@ import spec from "./spec.md" with { type: "text" };
 export const sessioning = registerConcept({ class: SessioningConcept, spec });
 `;
 
-/** Write one concept directory: its specification body and its class body. */
-async function concept(actions: string, body: string, queries = ""): Promise<string> {
+/** Write one concept directory: its parsed declarations, optional state prose, and class body. */
+async function concept(actions: string, body: string, queries = "", state = ""): Promise<string> {
   const where = join(directory, "sessioning");
   await mkdir(where, { recursive: true });
   await writeFile(
     join(where, "spec.md"),
     `# Sessioning\n\n## Purpose\n\nIdentify a caller.\n\n## Principle\n\nA session expires.\n\n` +
+      (state === "" ? "" : `## State\n\n${state}\n\n`) +
       `## Actions\n\n\`\`\`actions\n${actions}\n\`\`\`\n` +
       (queries === "" ? "" : `\n## Queries\n\n\`\`\`queries\n${queries}\n\`\`\`\n`),
   );
@@ -111,6 +112,22 @@ describe("inputs the runtime cannot see", () => {
         "the action `end` uses unsupported parameter syntax, so its inputs cannot be checked",
       ),
     ]);
+  });
+});
+
+describe("uninterpreted state notation", () => {
+  test("arbitrary contradictions do not participate in source checking", async () => {
+    const where = await concept(
+      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
+      "",
+      "```state\n" +
+        "there is no session field and end is a query\n" +
+        "the class must use a differently shaped database table {]\n" +
+        "```",
+    );
+
+    expect(conceptFailures(where)).toEqual([]);
   });
 });
 

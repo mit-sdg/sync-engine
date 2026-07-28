@@ -266,7 +266,7 @@ export declare function conceptFloor<V extends DeclaredVocabulary<Record<string,
 type FloorFactory = (context: never, name: string) => object;
 export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory> = Record<never, never>> {
     class: C;
-    /** The concept's specification markdown — the source of its contract. */
+    /** Markdown containing the concept's parsed registration contract and human prose. */
     spec: string;
     /** The Error class that signals each refusal code the specification declares. */
     refusals?: Readonly<Record<string, ErrorConstructor>>;
@@ -277,7 +277,7 @@ export interface ConceptRegistration<C extends ConceptClass, F extends Record<st
 declare const RegistrationBrand: unique symbol;
 export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory> = Record<never, never>> = ConceptRegistration<C, F> & {
     readonly [RegistrationBrand]: true;
-    /** The contract read from the registration's specification. */
+    /** The machine-readable contract extracted from the registration's specification. */
     readonly specification: ConceptSpec;
 };
 export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory> = Record<never, never>>(registration: ConceptRegistration<C, F>): RegisteredConcept<C, F>;
@@ -1074,7 +1074,10 @@ export declare function publicCategoryOf(code: string, categories: Readonly<Reco
 export declare function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number;
 
 === dist/engine/boundary/protocol/validation.d.ts ===
-/** A schema-library-neutral runtime check. Validators inspect but do not transform values. */
+/**
+ * An application-supplied, schema-library-neutral runtime check. Validators are
+ * never inferred from concept specification prose and do not transform values.
+ */
 export type ValidationResult = {
     ok: true;
 } | {
@@ -1722,13 +1725,12 @@ export declare function refusalFor(concept: object, action: string, thrown: unkn
 
 === dist/engine/reactions/concepts/concept-spec.d.ts ===
 /**
- * **The concept specification, read as contract.**
+ * **The machine-readable parts of a concept specification.**
  *
- * A concept's `spec.md` is the single authored source for what the concept
- * promises: its purpose and principle in prose, its actions and their refusal
- * branches in an `actions` fence, and its queries and their cardinality in a
- * `queries` fence. Registration parses the document and derives the contract
- * from it, so the same facts are never restated in TypeScript.
+ * Registration extracts purpose and principle prose, action names, inputs and
+ * refusal branches from an `actions` fence, and query names, inputs and
+ * cardinality from a `queries` fence. An optional State section is
+ * uninterpreted human notation and is not represented by {@link ConceptSpec}.
  *
  * ````md
  * ## Actions
@@ -1770,7 +1772,7 @@ export interface SpecQuery {
     inputs: readonly string[];
     promise: QueryPromise;
 }
-/** A concept's complete authored contract. */
+/** The machine-readable registration contract extracted from a concept specification. */
 export interface ConceptSpec {
     purpose: string;
     principle: string;
@@ -1778,9 +1780,9 @@ export interface ConceptSpec {
     queries: readonly SpecQuery[];
 }
 /**
- * Read a concept's contract from its specification's markdown text (import the
- * document with `{ type: "text" }`). Throws, naming the section or line, when
- * the document is missing or malformed.
+ * Extract a concept's machine-readable registration contract from specification
+ * markdown (import the document with `{ type: "text" }`). Throws, naming the
+ * section or line, when a parsed part is missing or malformed.
  */
 export declare function parseSpec(markdown: string): ConceptSpec;
 
@@ -3869,9 +3871,8 @@ export interface QueryInventoryIR {
     returns?: "one" | "optional" | "many";
 }
 /**
- * Registered actions, queries, prose, and refusal codes for one concept.
- * Purpose and principle are carried only when the concept class authors them
- * (`static purpose` / `static principle`); the renderer marks the absence.
+ * Registered actions, queries, purpose, principle, and refusal codes for one
+ * concept. Uninterpreted State sections are not inventory data.
  */
 export interface ConceptInventoryIR {
     name: string;
@@ -4840,7 +4841,10 @@ export interface ApplicationManifestV1 {
     wire: WireContractsIR;
     diagnostics: ApplicationDiagnostic[];
 }
-/** Snapshot one assembly's portable static design; retained runtime state is excluded. */
+/**
+ * Snapshot one assembly's portable static design. Retained runtime state and
+ * uninterpreted concept State sections are excluded.
+ */
 export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV1;
 export declare function renderApplicationManifest(manifest: ApplicationManifestV1): string;
 

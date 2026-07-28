@@ -15,9 +15,14 @@ bun run start
 ```
 
 `generate` writes `generated/{{slug}}.md` and `generated/wire.ts`. `check`
-compares the concept specification with its class, checks both generated files,
-and typechecks the project. `principle` tests Noting without an assembly.
-`start` writes a note and reads it back through the standard gateway.
+compares parsed action and query declarations with the class source, checks both
+generated files, and typechecks the project. `principle` tests Noting without an
+assembly. `start` writes a note and reads it back through the standard gateway.
+
+A concept's State section is optional uninterpreted human notation. It is not a
+schema, is not compared with class fields or storage, and does not enter
+generated artifacts or endpoint validators. Establish its properties in
+principle, implementation, and backend constraint tests.
 
 Use these commands to isolate a failed check:
 

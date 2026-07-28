@@ -436,7 +436,9 @@ so explicit `null` and direct-invocation `undefined` pass required-key presence.
 JSON transport removes `undefined` object fields before admission. Validators
 inspect values but do not transform them, and thrown validator failures fail
 closed. The generated TypeScript contract remains a static caller check rather
-than runtime validation, and no schema is inferred from concept specifications.
+than runtime validation. Optional concept State sections are uninterpreted human
+notation; they do not contribute to endpoint contracts or validators, and no
+schema is inferred from concept specifications.
 
 Absent an explicit endpoint input contract, assembly derives required keys from
 portable endpoint IR as the intersection of non-reserved keys mentioned by

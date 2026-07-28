@@ -1,4 +1,7 @@
-/** A schema-library-neutral runtime check. Validators inspect but do not transform values. */
+/**
+ * An application-supplied, schema-library-neutral runtime check. Validators are
+ * never inferred from concept specification prose and do not transform values.
+ */
 export type ValidationResult = { ok: true } | { ok: false; detail?: string };
 
 export type EndpointValidator = (value: unknown) => ValidationResult;

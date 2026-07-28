@@ -103,7 +103,8 @@ binding. The gateway/invoker-only HTTP form is a low-level raw envelope adapter,
 not the recommended direct public boundary. Generated TypeScript
 describes accepted inputs and possible outputs. It does not validate hostile
 values at runtime; endpoint validator hooks provide that separate runtime
-contract when an application needs it.
+contract when an application needs it. Validators are application-supplied;
+the engine does not infer them from concept specifications.
 
 ## Guarantees and non-guarantees
 
@@ -122,10 +123,14 @@ The ordinary assembly provides these guarantees:
 The ordinary assembly does not provide transactions across actions, rollback,
 concept-state persistence, occurrence replay, restart recovery, distributed
 serialization, exactly-once execution, or runtime validation of generated
-types. Runtime validation is explicit per endpoint rather than inferred from
-those types. Timeout and abort stop waiting; they do not cancel accepted work. The
-default in-memory log retains a bounded inspection window rather than every
-occurrence forever.
+types. A specification's optional State section is uninterpreted human notation:
+it is not compared with class fields or storage and does not enter manifests,
+read-back, wire contracts, input contracts, or endpoint validators. State
+properties belong in principle, implementation, and backend constraint tests.
+Runtime validation is explicit per endpoint rather than inferred from generated
+types or State notation. Timeout and abort stop waiting; they do not cancel
+accepted work. The default in-memory log retains a bounded inspection window
+rather than every occurrence forever.
 
 See [Execution semantics](docs/semantics.md) for the precise contracts and
 [Operational limits](docs/operations.md) for selection and deployment guidance.

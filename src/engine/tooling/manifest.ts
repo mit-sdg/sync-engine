@@ -113,7 +113,10 @@ function stableConcepts(concepts: readonly ConceptInventoryIR[]): ConceptInvento
   }));
 }
 
-/** Snapshot one assembly's portable static design; retained runtime state is excluded. */
+/**
+ * Snapshot one assembly's portable static design. Retained runtime state and
+ * uninterpreted concept State sections are excluded.
+ */
 export function applicationManifest(
   assembly: Assembly<Record<string, new (...args: never[]) => object>>,
 ): ApplicationManifestV1 {

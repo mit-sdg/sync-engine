@@ -303,9 +303,8 @@ export interface QueryInventoryIR {
 }
 
 /**
- * Registered actions, queries, prose, and refusal codes for one concept.
- * Purpose and principle are carried only when the concept class authors them
- * (`static purpose` / `static principle`); the renderer marks the absence.
+ * Registered actions, queries, purpose, principle, and refusal codes for one
+ * concept. Uninterpreted State sections are not inventory data.
  */
 export interface ConceptInventoryIR {
   name: string;
