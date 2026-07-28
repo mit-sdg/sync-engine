@@ -6,8 +6,9 @@
  *    written is ever modified;
  *  - a **firing** entry, recording which reaction fired, with which
  *    bindings, consuming which records and producing which.
- *  - a **reaction failure** entry, recording a pre-firing evaluation failure
- *    without consuming its matched occurrences.
+ *  - a **reaction failure** entry, recording an interpreter-stage failure;
+ *    pre-firing failures consume nothing, while consequence-stage failures may
+ *    accompany a firing that already retained its consumption and effects.
  *
  * A store folds these entries into indexes by id, flow, and reaction. Matching
  * reads those indexes. Each store defines what `prune()` removes.
@@ -68,12 +69,21 @@ export interface FiringRecord {
   at: number;
 }
 
-/** A non-consuming failure while evaluating a matched reaction. */
+/** Opaque evidence of an interpreter failure while evaluating a matched reaction. */
 export interface ReactionFailureRecord {
   reaction: string;
   flow: string;
   triggerIds: string[];
-  stage: "where" | "trigger";
+  stage:
+    | "trigger"
+    | "where"
+    | "consequence-input"
+    | "consequence-dispatch"
+    | "consequence-output"
+    | "result-transform";
+  /** The consequence action being interpreted, for failures after matching. */
+  action?: string;
+  actionId?: string;
   errorClass: string;
   at: number;
 }
@@ -215,9 +225,7 @@ export class MemoryStore implements LogStore {
       this.dropRecords(records);
       this.flowIndex.delete(flow);
     }
-    for (let index = this.reactionFailures.length - 1; index >= 0; index--) {
-      if (this.reactionFailures[index]?.flow === flow) this.reactionFailures.splice(index, 1);
-    }
+    this.dropReactionFailures(flow);
     this.activeFlows.delete(flow);
     const position = this.settledFlowOrder.indexOf(flow);
     if (position >= 0) this.settledFlowOrder.splice(position, 1);
@@ -250,6 +258,7 @@ export class MemoryStore implements LogStore {
         evicted += toRemove.length;
         if (keepFrom === 0) {
           this.flowIndex.delete(flow);
+          this.dropReactionFailures(flow);
         }
       }
     }
@@ -274,6 +283,12 @@ export class MemoryStore implements LogStore {
   private isConsumed(record: ActionRecord | undefined): boolean {
     const id = record?.id;
     return id !== undefined && (this.consumedIndex.get(id)?.size ?? 0) > 0;
+  }
+
+  private dropReactionFailures(flow: string): void {
+    for (let index = this.reactionFailures.length - 1; index >= 0; index--) {
+      if (this.reactionFailures[index]?.flow === flow) this.reactionFailures.splice(index, 1);
+    }
   }
 
   /**

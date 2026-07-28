@@ -175,6 +175,36 @@ describe("log store: outcomes fold immutably", () => {
 });
 
 describe("log store: window retention", () => {
+  test("reports a failed flow only at quiescence and before retention", () => {
+    const store = new MemoryStore({ window: 0 });
+    const log = new ActionConcept(store);
+    const settled: Array<{ flow: string; interpreterFailed: boolean; retained: boolean }> = [];
+    log._onFlowQuiescent((event) => {
+      settled.push({ ...event, retained: store.flowIndex.has(event.flow) });
+    });
+
+    for (const id of ["root", "child"]) {
+      log._beginMatchingInput({ id, flow: "flow", input: {} });
+      log.invoke(record({ id, flow: "flow" }));
+    }
+    log._recordReactionFailure({
+      reaction: "Broken",
+      flow: "flow",
+      triggerIds: ["root"],
+      stage: "where",
+      errorClass: "Error",
+      at: Date.now(),
+    });
+
+    log._endMatchingInput("flow");
+    expect(settled).toEqual([]);
+    log._endMatchingInput("flow");
+
+    expect(settled).toEqual([{ flow: "flow", interpreterFailed: true, retained: true }]);
+    expect(store.flowIndex.has("flow")).toBe(false);
+    expect(store.reactionFailures).toEqual([]);
+  });
+
   test("retains only the newest settled flows", () => {
     const store = new MemoryStore({ window: 1 });
     const log = new ActionConcept(store);
@@ -203,6 +233,24 @@ describe("log store: window retention", () => {
     expect([...store.flowIndex.keys()]).toEqual(["second-flow"]);
     expect([...store.actions.values()].map((entry) => entry.input.name)).toEqual(["second"]);
     expect(store.reactionFailures.map((failure) => failure.flow)).toEqual(["second-flow"]);
+  });
+
+  test("evicts a flow's interpreter failures with its last consumed record", () => {
+    const store = new MemoryStore("evictConsumed");
+    const log = new ActionConcept(store);
+    const { id } = log.invoke(record());
+    log._recordReactionFailure({
+      reaction: "Broken",
+      flow: "flow-1",
+      triggerIds: [id],
+      stage: "where",
+      errorClass: "Error",
+      at: Date.now(),
+    });
+    appendFiring(store, "firing", "Consumer", [id]);
+
+    expect(store.prune()).toBe(1);
+    expect(store.reactionFailures).toEqual([]);
   });
 
   test("rejects invalid windows", () => {

@@ -54,7 +54,11 @@ import type { ApplicationInterface } from "../protocol/application-interface.ts"
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import { refusalFunnel } from "../invocation/funnel.ts";
 import type { Invoker } from "../invocation/invoke.ts";
-import { createInvoker, Requesting } from "../invocation/invoke.ts";
+import {
+  createInvoker,
+  Requesting,
+  settleRequestInterpreterFailure,
+} from "../invocation/invoke.ts";
 import { deriveInputContracts, wireContracts } from "../wire/wire.ts";
 
 // Endpoints author against these request-boundary references.
@@ -249,6 +253,9 @@ export function assemble<T extends Record<string, ConceptClass>>(
   engine.registerComputations(vocabularyComputations(options.vocabulary));
 
   const boundary = new Requesting();
+  engine.Action._onFlowQuiescent(({ flow, interpreterFailed }) => {
+    if (interpreterFailed) settleRequestInterpreterFailure(boundary, flow);
+  });
   const instrumentedBoundary = engine.instrumentConcept(boundary, "RequestBoundary");
 
   // ── Concepts: instances win, initialize supplies args, default is no-arg ──

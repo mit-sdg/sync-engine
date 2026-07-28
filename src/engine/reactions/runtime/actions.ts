@@ -18,8 +18,14 @@
 
 import type { ActionOutcome } from "../types.ts";
 import { uuid } from "@engine/utils/runtime";
-import { redact } from "@engine/utils/redaction";
-import { MemoryStore, type ActionRecord, type LogStore } from "./log-store.ts";
+import { redact, serializeError } from "@engine/utils/redaction";
+import { logger } from "@engine/utils/logger";
+import {
+  MemoryStore,
+  type ActionRecord,
+  type LogStore,
+  type ReactionFailureRecord,
+} from "./log-store.ts";
 
 export type { ActionRecord } from "./log-store.ts";
 
@@ -32,6 +38,12 @@ interface MatchingRecordValues {
 interface ActiveFlowValues {
   depth: number;
   ids: Set<string>;
+  interpreterFailed: boolean;
+}
+
+export interface FlowQuiescence {
+  flow: string;
+  interpreterFailed: boolean;
 }
 
 /**
@@ -55,6 +67,7 @@ export function normalizeOutcome(output: unknown): ActionOutcome {
 export class ActionConcept {
   private readonly matchingValues = new Map<string, MatchingRecordValues>();
   private readonly activeFlowValues = new Map<string, ActiveFlowValues>();
+  private readonly flowQuiescenceListeners = new Set<(event: FlowQuiescence) => void>();
 
   constructor(public readonly store: LogStore = new MemoryStore()) {}
 
@@ -96,14 +109,18 @@ export class ActionConcept {
     flow: string;
     input: Record<string, unknown>;
   }): void {
-    const active = this.activeFlowValues.get(flow) ?? { depth: 0, ids: new Set<string>() };
+    const active = this.activeFlowValues.get(flow) ?? {
+      depth: 0,
+      ids: new Set<string>(),
+      interpreterFailed: false,
+    };
     active.depth++;
     active.ids.add(id);
     this.activeFlowValues.set(flow, active);
     this.matchingValues.set(id, { input });
   }
 
-  /** Clear a flow's raw input, output, and outcome when its outermost call settles. */
+  /** Clear transient values and report quiescence when a flow's outermost call settles. */
   _endMatchingInput(flow: string): void {
     const active = this.activeFlowValues.get(flow);
     if (active === undefined) return;
@@ -111,7 +128,32 @@ export class ActionConcept {
     if (active.depth > 0) return;
     for (const id of active.ids) this.matchingValues.delete(id);
     this.activeFlowValues.delete(flow);
+    const event = { flow, interpreterFailed: active.interpreterFailed };
+    const listeners = Array.from(this.flowQuiescenceListeners);
+    for (const listener of listeners) {
+      try {
+        listener(event);
+      } catch (error) {
+        logger.error("Flow quiescence listener failed", {
+          flow,
+          error: serializeError(error),
+        });
+      }
+    }
     this.store.flowSettled?.(flow);
+  }
+
+  /** Observe fully settled causal flows before occurrence retention is applied. */
+  _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void {
+    this.flowQuiescenceListeners.add(listener);
+    return () => this.flowQuiescenceListeners.delete(listener);
+  }
+
+  /** Record durable interpreter evidence and mark its active flow as failed. */
+  _recordReactionFailure(failure: ReactionFailureRecord): void {
+    const active = this.activeFlowValues.get(failure.flow);
+    if (active !== undefined) active.interpreterFailed = true;
+    this.store.append({ kind: "reaction-failure", at: failure.at, failure });
   }
 
   /** Return a transient record with raw input, output, and outcome while its flow is active. */

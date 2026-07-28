@@ -159,7 +159,11 @@ invoker.invoke(path, input, options?: InvokeOptions): Promise<InvocationResult>
 
 `Gateway`, `GatewayTarget`, `GatewayClientError`, `Invoker`, and
 `InvocationResult` name these contracts. Timeout and abort stop waiting but do
-not cancel forwarded application work; see [Cancellation](./semantics.md#cancellation).
+not cancel forwarded application work. A fault-free unanswered endpoint reaches
+`TIMED_OUT`; an unanswered flow with a recorded interpreter failure settles
+promptly as opaque `INTERNAL_ERROR`. See [Failures between action
+asks](./semantics.md#failures-between-action-asks) and
+[Cancellation](./semantics.md#cancellation).
 
 ### HTTP
 
@@ -198,7 +202,7 @@ may accompany an error, but exception text from an unknown failure is omitted.
 | `NOT_FOUND`                | Unknown route                                                  | 404                                            |
 | `TIMED_OUT`                | Invocation wait expired                                        | 504                                            |
 | `ABORTED`                  | Invocation signal aborted                                      | 499                                            |
-| `INTERNAL_ERROR`           | Application/framework fault                                    | 500                                            |
+| `INTERNAL_ERROR`           | Application, framework, or interpreter fault                   | 500                                            |
 | `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure              | 500                                            |
 | `BAD_JSON`                 | HTTP request or response parsing                               | 400 for a bad request                          |
 | `BAD_STATUS`               | Unsupported request method or client-side status normalization | 405 for an unsupported method                  |
@@ -330,9 +334,11 @@ This subpath crosses the ordinary application boundary.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Requesting` is the low-level request/response concept;
-`Refuse` is the low-level refusal error. Fault delivery and unanswered asks are
-normative under [Failures between action asks](./semantics.md#failures-between-action-asks)
-and [Cancellation](./semantics.md#cancellation).
+`Refuse` is the low-level refusal error. The advanced pieces do not install the
+ordinary assembly's quiescent interpreter-failure settlement policy. Standard
+assembly behavior is normative under [Failures between action
+asks](./semantics.md#failures-between-action-asks) and
+[Cancellation](./semantics.md#cancellation).
 
 ## `utils`
 

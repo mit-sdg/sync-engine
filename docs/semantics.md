@@ -242,16 +242,18 @@ The endpoint's declared path is authoritative: `receive(...)` cannot author
 the boundary-owned `path`. Authored responses likewise cannot provide the
 boundary-owned `requestId` or `errorKind`; framework classification travels on
 a separate internal response channel and accepts only declared framework codes.
-An endpoint records at most one answer. An uncovered input, a dropped plain
-line, or a failed `where` can leave the request unanswered. Parallel endpoint
-declarations and sibling answers remain ordinary alternatives, so any matching
-path may answer; `NOT_PENDING` refuses another answer after settlement.
-An unanswered invocation waits 30 seconds by default and then returns the
-framework error `TIMED_OUT`. `InvokeOptions.timeoutMs` overrides that wait.
-Public endpoints should provide explicit coverage or fallback branches rather
-than use timeout as an authored outcome. [Cancellation](#cancellation) owns
-what timeout and abort do with a pending call. Disjointness and coverage belong
-to advisory analysis over exported IR.
+An endpoint records at most one answer. An uncovered input or a dropped plain
+line can leave a fault-free request unanswered. Parallel endpoint declarations
+and sibling answers remain ordinary alternatives, so any matching path may
+answer; `NOT_PENDING` refuses another answer after settlement. When the root
+flow becomes quiescent, an answer already delivered remains authoritative. If
+no answer exists and the interpreter failed between action asks, the invocation
+settles with opaque `INTERNAL_ERROR`. A fault-free unanswered invocation waits
+30 seconds by default and then returns `TIMED_OUT`; `InvokeOptions.timeoutMs`
+overrides that wait. Public endpoints should provide explicit coverage or
+fallback branches rather than use timeout as an authored outcome.
+[Cancellation](#cancellation) owns what timeout and abort do with a pending
+call. Disjointness and coverage belong to advisory analysis over exported IR.
 
 ## Boundary, gateway, and client
 
@@ -373,20 +375,33 @@ decisions in concept actions and treat all matching answer paths as live.
 
 ### Failures between action asks
 
-Action faults and faults while forming a consequence have an action ask to
-mark. The engine records the fault, and the standard boundary reaction can try
-to answer an unanswered root request with `INTERNAL_ERROR`. If the request
-already has an answer, the boundary refuses the second answer with
-`NOT_PENDING`; the client keeps the first answer.
+Action faults and former-evaluation faults while forming a consequence have an
+action ask to mark. The engine records the fault, and the standard boundary
+reaction can try to answer an unanswered root request with `INTERNAL_ERROR`.
+If the request already has an answer, the boundary refuses the second answer
+with `NOT_PENDING`; the client keeps the first answer.
 
-A query, view, computation, or other `where` operation can instead fail while
-the engine decides whether a reaction matches. The runtime appends a
-non-consuming `reaction-failure` entry with the reaction, flow, trigger ids,
-stage, and exception class, then drops that evaluation. It creates no fault
-occurrence and invokes no standard boundary reaction. Because the entry does
-not consume triggers, later records in a multi-trigger flow may make the
-reaction eligible again. If no alternative answers, a waiting invoker may time
-out. Concepts should represent expected rejection with registered refusals and
+The interpreter can instead fail between asks: while matching a trigger;
+evaluating a query, view, computation, custom operation, or closure; forming or
+dispatching consequence input; matching consequence output; or applying a
+result transform. The runtime appends a non-consuming `reaction-failure` entry
+with the reaction, flow, trigger ids, stage, validated exception class, and,
+for a consequence, its action and action id when available. The stages are
+`trigger`, `where`, `consequence-input`, `consequence-dispatch`,
+`consequence-output`, and `result-transform`. Exception messages, stacks,
+causes, and attached fields are not retained in that automatic evidence.
+
+The failed evaluation stops without creating a fault occurrence. A trigger or
+`where` failure happens before a firing and does not consume its triggers, so
+later records in a multi-trigger flow may make the reaction eligible again. A
+consequence-stage failure can happen after actions were already asked; its
+firing keeps that consumption and provenance, and earlier effects are not
+rolled back. Once the root flow becomes quiescent, the boundary keeps any answer
+already delivered. If the request is still pending, it settles immediately with
+opaque `INTERNAL_ERROR`. This decision uses transient active-flow state before
+retention is applied; it does not depend on a retained log window. A fault-free
+coverage hole still waits for its invocation deadline and returns `TIMED_OUT`.
+Concepts should represent expected rejection with registered refusals and
 explicit policy alternatives.
 
 ### Cancellation
@@ -398,14 +413,18 @@ forwarded work. The default timeout is 30 seconds; `InvokeOptions.timeoutMs`
 selects another duration, and expiry resolves with `TIMED_OUT`. Timeout and
 abort end the pending wait but record no
 `RequestBoundary.respond` occurrence, so recorded application work may remain
-unanswered.
+unanswered. If an answer was accepted first, it remains authoritative. The
+invoker allows its causal dispatch to finish only until the original deadline
+or a later abort, then returns that answer even if unrelated sibling work is
+still running.
 
 ### Logs, concept implementations, and restart
 
 Concept state is separate from the assembly's occurrence log. The engine sends
-append-only invocation, outcome, fault, and firing entries to its `LogStore`,
-which folds them into indexes for matching and inspection. Retention may evict
-indexed entries, so no assembly promises to retain every occurrence forever.
+append-only invocation, outcome, fault, firing, and reaction-failure entries to
+its `LogStore`, which folds them into indexes for matching and inspection.
+Retention may evict indexed entries, so no assembly promises to retain every
+occurrence forever.
 
 The configured field-name redaction policy applies before entries reach a
 store, observer, or inspection summary. During an active causal flow, the

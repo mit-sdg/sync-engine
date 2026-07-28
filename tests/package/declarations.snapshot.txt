@@ -751,15 +751,15 @@ import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { InvocationResult } from "../protocol/errors.ts";
 export declare class Requesting {
-    static readonly purpose = "Let the outside world ask for things and receive answers, so each answer belongs to one pending call and unanswered calls remain unanswered.";
-    static readonly principle = "A call arrives and becomes pending. When something answers, the reply travels back and a second answer is refused. If the caller times out or aborts first, waiting ends without recording an answer.";
+    static readonly purpose = "Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.";
+    static readonly principle = "A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.";
     /**
      * `request` accepts every ask. `respond` accepts one answer for each pending
      * request and refuses later answers with `NOT_PENDING`. Declared outcomes
      * keep a returned body containing an `error` key distinct from a refusal.
      */
     static readonly outcomes: OutcomeContracts;
-    private pending;
+    constructor();
     request(args: Record<string, unknown>): Record<string, unknown>;
     respond(args: Record<string, unknown>): Record<string, unknown>;
     /** Framework-only response channel; application authoring exposes only `respond`. */
@@ -767,6 +767,8 @@ export declare class Requesting {
     register(requestId: string, timeoutMs: number, signal?: AbortSignal): Promise<Record<string, unknown>>;
     cancel(requestId: string): void;
 }
+/** Settle an unanswered request after its root flow encountered an interpreter failure. */
+export declare function settleRequestInterpreterFailure(boundary: Requesting, requestId: string): boolean;
 export interface Invoker<C extends ContractShape> {
     invoke<P extends keyof C & string>(path: P, input: C[P]["input"], options?: InvokeOptions): Promise<InvocationResult<C[P]["output"], DomainErrorValue<C[P]["error"]>>>;
 }
@@ -1853,8 +1855,12 @@ export declare class NameResolver {
  *    flow, which keeps independent invocations from cross-matching.
  */
 import type { ActionOutcome } from "../types.ts";
-import { type ActionRecord, type LogStore } from "./log-store.ts";
+import { type ActionRecord, type LogStore, type ReactionFailureRecord } from "./log-store.ts";
 export type { ActionRecord } from "./log-store.ts";
+export interface FlowQuiescence {
+    flow: string;
+    interpreterFailed: boolean;
+}
 /**
  * Normalise a raw action output into a first-class {@link ActionOutcome}.
  *
@@ -1871,6 +1877,7 @@ export declare class ActionConcept {
     readonly store: LogStore;
     private readonly matchingValues;
     private readonly activeFlowValues;
+    private readonly flowQuiescenceListeners;
     constructor(store?: LogStore);
     /** Folded view: all retained records, keyed by their unique id. */
     get actions(): Map<string, ActionRecord>;
@@ -1889,8 +1896,12 @@ export declare class ActionConcept {
         flow: string;
         input: Record<string, unknown>;
     }): void;
-    /** Clear a flow's raw input, output, and outcome when its outermost call settles. */
+    /** Clear transient values and report quiescence when a flow's outermost call settles. */
     _endMatchingInput(flow: string): void;
+    /** Observe fully settled causal flows before occurrence retention is applied. */
+    _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void;
+    /** Record durable interpreter evidence and mark its active flow as failed. */
+    _recordReactionFailure(failure: ReactionFailureRecord): void;
     /** Return a transient record with raw input, output, and outcome while its flow is active. */
     _matchingRecord(record: ActionRecord): ActionRecord;
     /** Number of action records with raw input, output, or outcome retained for active flows. */
@@ -2015,8 +2026,9 @@ export declare function instrument<T extends object>(state: InstrumentationState
  *    written is ever modified;
  *  - a **firing** entry, recording which reaction fired, with which
  *    bindings, consuming which records and producing which.
- *  - a **reaction failure** entry, recording a pre-firing evaluation failure
- *    without consuming its matched occurrences.
+ *  - a **reaction failure** entry, recording an interpreter-stage failure;
+ *    pre-firing failures consume nothing, while consequence-stage failures may
+ *    accompany a firing that already retained its consumption and effects.
  *
  * A store folds these entries into indexes by id, flow, and reaction. Matching
  * reads those indexes. Each store defines what `prune()` removes.
@@ -2068,12 +2080,15 @@ export interface FiringRecord {
     produced: string[];
     at: number;
 }
-/** A non-consuming failure while evaluating a matched reaction. */
+/** Opaque evidence of an interpreter failure while evaluating a matched reaction. */
 export interface ReactionFailureRecord {
     reaction: string;
     flow: string;
     triggerIds: string[];
-    stage: "where" | "trigger";
+    stage: "trigger" | "where" | "consequence-input" | "consequence-dispatch" | "consequence-output" | "result-transform";
+    /** The consequence action being interpreted, for failures after matching. */
+    action?: string;
+    actionId?: string;
     errorClass: string;
     at: number;
 }
@@ -2163,6 +2178,7 @@ export declare class MemoryStore implements LogStore {
     prune(): number;
     private enforceWindow;
     private isConsumed;
+    private dropReactionFailures;
     /**
      * Replace one folded record in the id map and flow array. The previous
      * record object remains unchanged.
@@ -2337,6 +2353,12 @@ import type { EngineObserver } from "./observer.ts";
 import { Logging } from "./logging.ts";
 import type { ActionPattern, ChannelPattern, ChannelPosture, Frame, InstrumentedAction, ReactionMap, ExecutableReaction } from "../types.ts";
 type ActionArguments = Record<string | symbol, unknown>;
+interface FrameProvenance {
+    flow: string;
+    triggerIds: string[];
+    frameTriggerIds: string[][];
+    triggerSignatures?: Set<string>;
+}
 export declare class Reacting {
     /** Registered reactions, by name. */
     reactions: Record<string, ExecutableReaction>;
@@ -2479,27 +2501,29 @@ export declare class Reacting {
     /** The channel-indexed reactions this record's posture makes eligible. */
     private channelReactionsFor;
     /** Run the declared pipeline once for every frame matched by `when`. */
-    addThen(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[]): Promise<void>;
+    addThen(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured?: FrameProvenance, validatedTriggerIds?: string[][]): Promise<void>;
     /** All recorded firings of a reaction — which reaction fired, why, and what came of it. */
     _getFirings(reaction: string): FiringRecord[];
     /** Extract a frame's user-variable bindings, keyed by variable name. */
     private bindingsOf;
+    /** Snapshot engine-owned provenance before authored frame code can mutate it. */
+    private captureFrameProvenance;
+    private triggerIdsOf;
+    /** Keep snapshotted causal provenance intact across authored frame transforms. */
+    private assertFrameProvenance;
     private runPipelineForFrame;
     private stopped;
     private failStep;
+    private recordStepFailure;
     private runStepNode;
     private framesWithStepOutput;
-    /** Recover the immutable ids captured when this frame matched. */
-    private resolveWhenIds;
-    /** Persist pre-firing failures without changing trigger consumption. */
-    private recordReactionFailure;
     private appendReactionFailure;
     /**
      * Resolve a `then` clause into an action argument object: replace symbol
      * inputs with their frame bindings (a missing binding is an error), then
      * attach the flow token and a fresh action id.
      */
-    matchThen(then: ActionPattern, frame: Frame, by?: string): ActionArguments;
+    matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
     /**
      * When a former faults while forming consequence input, append the
      * consequence ask with its former marker, record the fault, retain the

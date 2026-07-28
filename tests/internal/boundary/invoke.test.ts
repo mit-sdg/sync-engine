@@ -187,6 +187,125 @@ describe("createInvoker", () => {
       expect(r2.value.echoed).toBe("second");
     }
   });
+
+  test("keeps an accepted answer when dispatch remains blocked", async () => {
+    const boundary = new Requesting();
+    const controller = new AbortController();
+    let answer = () => {};
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const invoker = createInvoker({
+      boundary,
+      instrumented: {
+        request: (async (args: Record<string, unknown>) => {
+          boundary.respond({ requestId: args.requestId, value: "accepted" });
+          answer();
+          await new Promise(() => {});
+        }) as never,
+        respond: (() => {}) as never,
+      },
+    });
+    const invocation = invoker.invoke("/blocked" as never, {} as never, {
+      signal: controller.signal,
+      timeoutMs: 5_000,
+    });
+
+    await answered;
+    controller.abort();
+
+    expect(await invocation).toEqual({ ok: true, value: { value: "accepted" } });
+  });
+
+  test("keeps an accepted answer when dispatch subsequently rejects", async () => {
+    const boundary = new Requesting();
+    const invoker = createInvoker({
+      boundary,
+      instrumented: {
+        request: ((args: Record<string, unknown>) => {
+          boundary.respond({ requestId: args.requestId, value: "accepted" });
+          throw new Error("late dispatch failure");
+        }) as never,
+        respond: (() => {}) as never,
+      },
+    });
+
+    expect(await invoker.invoke("/late-failure" as never, {} as never)).toEqual({
+      ok: true,
+      value: { value: "accepted" },
+    });
+  });
+
+  test("does not register or dispatch a request whose payload cannot be formed", async () => {
+    let registrations = 0;
+    let dispatches = 0;
+    const invoker = createInvoker({
+      boundary: {
+        register() {
+          registrations++;
+          return new Promise(() => {});
+        },
+        cancel() {},
+      } as unknown as Requesting,
+      instrumented: {
+        request: (() => {
+          dispatches++;
+        }) as never,
+        respond: (() => {}) as never,
+      },
+    });
+    const input = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error("cannot enumerate input");
+        },
+      },
+    );
+
+    expect(await invoker.invoke("/broken" as never, input as never)).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.TRANSPORT_ERROR, detail: undefined },
+    });
+    expect(registrations).toBe(0);
+    expect(dispatches).toBe(0);
+  });
+
+  test("does not forward work when payload formation aborts the signal", async () => {
+    const controller = new AbortController();
+    let registrations = 0;
+    let dispatches = 0;
+    const invoker = createInvoker({
+      boundary: {
+        register() {
+          registrations++;
+          return new Promise(() => {});
+        },
+        cancel() {},
+      } as unknown as Requesting,
+      instrumented: {
+        request: (() => {
+          dispatches++;
+        }) as never,
+        respond: (() => {}) as never,
+      },
+    });
+    const input = {
+      get value() {
+        controller.abort();
+        return "ignored";
+      },
+    };
+
+    expect(
+      await invoker.invoke("/aborted" as never, input as never, { signal: controller.signal }),
+    ).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.ABORTED, detail: undefined },
+    });
+    expect(registrations).toBe(0);
+    expect(dispatches).toBe(0);
+  });
 });
 
 describe("createLocalClient", () => {
@@ -250,6 +369,17 @@ describe("createInvoker non-DOMException with aborted signal", () => {
 });
 
 describe("Requesting", () => {
+  test("rejects a duplicate live request id without replacing the first waiter", async () => {
+    const boundary = new Requesting();
+    const first = boundary.register("same-id", 5_000);
+
+    expect(() => boundary.register("same-id", 5_000)).toThrow(
+      "Request same-id is already pending.",
+    );
+    boundary.respond({ requestId: "same-id", value: "first" });
+    expect(await first).toEqual({ value: "first" });
+  });
+
   test("register attaches an abort listener to a live signal", async () => {
     const boundary = new Requesting();
     const controller = new AbortController();

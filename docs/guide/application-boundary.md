@@ -150,10 +150,13 @@ specialization, and [Execution semantics](../semantics.md#sibling-paths-and-endp
 defines its lowering and settlement.
 
 Cover every admitted case on a public endpoint with an answer or an explicit
-fallback branch. If no branch responds, invocation waits 30 seconds by default
-and then returns `TIMED_OUT`. A direct `Invoker` caller can set
-`InvokeOptions.timeoutMs` or supply an abort `signal`; neither operation cancels
-work already forwarded into the application.
+fallback branch. If no branch responds and the flow is fault-free, invocation
+waits 30 seconds by default and then returns `TIMED_OUT`. If the interpreter
+fails while matching or advancing a path and no sibling answers, the flow
+settles promptly with opaque `INTERNAL_ERROR`; an answer already delivered
+still wins. A direct `Invoker` caller can set `InvokeOptions.timeoutMs` or supply
+an abort `signal`; neither operation cancels work already forwarded into the
+application.
 
 ## Put the standard gateway in front
 
