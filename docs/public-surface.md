@@ -9,15 +9,15 @@ Most backend files use `language`, `assembly`, and `boundary`; frontend files
 use `client`; generation scripts use `tooling`. `advanced` marks deliberate
 manual construction, while `utils` contains process-level support functions.
 
-| Package path                    | Role                                                          |
-| ------------------------------- | ------------------------------------------------------------- |
-| `@mit-sdg/sync-engine/language` | Concepts, reactions, views, formers, and their conditions     |
-| `@mit-sdg/sync-engine/assembly` | Concept registration, assemblies, and occurrence-log stores   |
-| `@mit-sdg/sync-engine/boundary` | Endpoints, gateways, HTTP, and CLI adapters                   |
-| `@mit-sdg/sync-engine/client`   | Local and HTTP clients over a generated contract              |
-| `@mit-sdg/sync-engine/tooling`  | Assembly inspection, read-back rendering, and wire generation |
-| `@mit-sdg/sync-engine/advanced` | Manual engine construction and explicit escape hatches        |
-| `@mit-sdg/sync-engine/utils`    | Logging, redaction, and opaque error serialization            |
+| Package path                                 | Role                                                          |
+| -------------------------------------------- | ------------------------------------------------------------- |
+| [`@mit-sdg/sync-engine/language`](#language) | Concepts, reactions, views, formers, and their conditions     |
+| [`@mit-sdg/sync-engine/assembly`](#assembly) | Concept registration, assemblies, and occurrence-log stores   |
+| [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, gateways, HTTP, and CLI adapters                   |
+| [`@mit-sdg/sync-engine/client`](#client)     | Local and HTTP clients over a generated contract              |
+| [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation |
+| [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches        |
+| [`@mit-sdg/sync-engine/utils`](#utils)       | Logging, redaction, and opaque error serialization            |
 
 The public API test compares each inventory below with the corresponding
 package barrel. An export change therefore requires an explicit reference
@@ -187,6 +187,9 @@ chosen implementation after drain.
 `IntegrityFailureRecord` name the corresponding contracts. `PersistingConcept` manages an
 application-supplied store registry. Persistence, eviction, redaction, and
 restart limits are normative in [Execution semantics](./semantics.md#logs-concept-implementations-and-restart).
+The [persistence and restart recipe](./advanced-recipes.md#persistence-restart-and-recovery)
+shows separate concept-state and occurrence files plus explicit derived-state
+recovery.
 
 ## `boundary`
 
@@ -303,7 +306,9 @@ most 128 UTF-16 code units. A thrown or invalid result is replaced with a UUID.
 
 The APIs in this section construct application-specific CLI programs. They are
 separate from the installed `sync-engine` executable, whose commands are
-defined in the [CLI reference](./cli.md).
+defined in the [CLI reference](./cli.md). The [inbound application CLI
+recipe](./advanced-recipes.md#an-inbound-application-cli) connects one to a real
+assembled endpoint and projects its result onto a process.
 
 | API                     | Compact signature                                        |
 | ----------------------- | -------------------------------------------------------- |

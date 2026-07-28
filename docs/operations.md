@@ -148,7 +148,9 @@ interpreter failure occurs, the request waits until its deadline.
 Concept state and occurrence evidence are separate. `MemoryStore` is
 process-local. `FileStore` appends JSONL synchronously but does not load the
 file, rebuild indexes, replay reactions, or restore concept state on startup.
-In-memory pruning does not rewrite the JSONL file.
+In-memory pruning does not rewrite the JSONL file. The [persistence and restart
+recipe](./advanced-recipes.md#persistence-restart-and-recovery) demonstrates
+those boundaries with separate state and evidence files.
 
 The engine does not restore pending requests, interrupted reaction paths, or
 prior firings after restart. Persist concept state in the concept

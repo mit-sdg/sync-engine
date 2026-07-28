@@ -10,8 +10,10 @@ const guideFiles = [
   "application-boundary.md",
   "views-and-formers.md",
 ];
+const advancedRecipes = new URL("../../docs/advanced-recipes.md", import.meta.url);
 const excerptDocs = [
   ...guideFiles.map((file) => new URL(file, guideDirectory)),
+  advancedRecipes,
   new URL("../../docs/book.md", import.meta.url),
 ];
 
@@ -20,6 +22,7 @@ const sourceBlock =
 const sourceLabel = /^(?:_Source|Source): \[[^\]]+\]\([^)]+\)_?$/gm;
 const typeScriptBlock = /^```ts\n([\s\S]*?)\n```$/gm;
 const repositoryOnlySources = new Map<string, URL[]>([
+  [advancedRecipes.pathname, [new URL("../docs/advanced-recipes.test.ts", import.meta.url)]],
   [
     new URL("getting-started.md", guideDirectory).pathname,
     [
@@ -193,6 +196,7 @@ describe("guided curriculum", () => {
       new URL("../../README.md", import.meta.url),
       new URL("../../CONTRIBUTING.md", import.meta.url),
       new URL("../../docs/index.md", import.meta.url),
+      advancedRecipes,
       new URL("../../docs/book.md", import.meta.url),
       new URL("../../docs/cli.md", import.meta.url),
       new URL("../../docs/concept-specification.md", import.meta.url),

@@ -22,6 +22,25 @@ record or an array and is treated as potentially many. `no`, `whether`, and
 folds, and the producer's declaration control the result shape. A `then(...)`
 group states independent siblings; later groups state temporal dependence.
 
+## Contract index
+
+| Contract need                               | Section                                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Action outcomes, refusals, and direct calls | [Actions, refusals, and faults](#actions-refusals-and-faults)                           |
+| Trigger matching and consequence paths      | [Reactions](#reactions)                                                                 |
+| Portable and reviewed local definitions     | [Portable and reviewed local behavior](#portable-and-reviewed-local-behavior)           |
+| In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                 |
+| Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                            |
+| Query promises, caching, and equality       | [Queries](#queries)                                                                     |
+| Views and formed results                    | [Views and formers](#views-and-formers)                                                 |
+| Sibling and endpoint settlement             | [Sibling paths and endpoint settlement](#sibling-paths-and-endpoint-settlement)         |
+| Gateway, client, validation, and HTTP       | [Boundary, gateway, and client](#boundary-gateway-and-client)                           |
+| Generated caller contracts                  | [Generated wire](#generated-wire)                                                       |
+| Deployment and resource limits              | [Operational limits](#operational-limits)                                               |
+| Interpreter failure delivery                | [Failures between action asks](#failures-between-action-asks)                           |
+| Timeout and abort                           | [Cancellation](#cancellation)                                                           |
+| Occurrence logs and restart                 | [Logs, concept implementations, and restart](#logs-concept-implementations-and-restart) |
+
 ## Actions, refusals, and faults
 
 An action occurrence begins when the engine records its ask, before the action

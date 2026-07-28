@@ -38,6 +38,8 @@ authoritative contract when a guide omits an edge case.
 
 ## Find an example
 
+- [Advanced recipes](advanced-recipes.md) demonstrates explicit restart
+  recovery and an inbound CLI over a real application endpoint.
 - [Example book](book.md) places small read constructions beside generated
   read-back and representative errors.
 - [Reading Circle](../examples/reading-circle/README.md) is the shortest complete

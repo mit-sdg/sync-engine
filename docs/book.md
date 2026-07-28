@@ -38,6 +38,15 @@ former-root errors fail when the former is installed for evaluation.
 | Author sibling endpoint paths            | [Endpoint siblings](#12--an-endpoint-uses-the-same-sibling-shape)         |
 | Preserve a record through optional reads | [Only `whether` lines](#13--a-body-of-only-whether-lines)                 |
 
+## Error index
+
+| Rejected attempt                        | Entry                                                         |
+| --------------------------------------- | ------------------------------------------------------------- |
+| Open a name that no later line uses     | [A plain line](#1--a-plain-line)                              |
+| Open a fresh name inside `no(...)`      | [`no`](#5--no--denial)                                        |
+| Fold a source promising at most one row | [An optional former](#8--a-former-that-may-decline--optional) |
+| Form one record from a many-row source  | [Selection folds](#9--folds-consume-a-captured-range)         |
+
 ## The scene
 
 Everything below reads against the

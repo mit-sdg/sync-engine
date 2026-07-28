@@ -79,6 +79,30 @@ describe("documented inventories", () => {
     expect(table(publicSurface, "| Consumer")).toContain("`.count()`");
   });
 
+  test("reference lookup indexes and package-role links stay available", async () => {
+    const book = await text("docs/book.md");
+    const semantics = await text("docs/semantics.md");
+    const publicSurface = await text("docs/public-surface.md");
+
+    expect(table(book, "| Rejected attempt")).toContain("#5--no--denial");
+    expect(table(semantics, "| Contract need")).toContain(
+      "#logs-concept-implementations-and-restart",
+    );
+    for (const subpath of [
+      "language",
+      "assembly",
+      "boundary",
+      "client",
+      "tooling",
+      "advanced",
+      "utils",
+    ]) {
+      expect(table(publicSurface, "| Package path")).toContain(
+        `[\`@mit-sdg/sync-engine/${subpath}\`](#${subpath})`,
+      );
+    }
+  });
+
   test("the public API tables are well formed and list every framework error", async () => {
     const publicSurface = await text("docs/public-surface.md");
     const tables = [...publicSurface.matchAll(/^(?:\|.*\|\n?){2,}/gm)].map((match) =>
