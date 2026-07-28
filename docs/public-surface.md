@@ -81,18 +81,18 @@ semantics](./semantics.md#reactions).
 assemble(options: AssemblyOptions): Assembly
 ```
 
-| `AssemblyOptions` field | Required | Default / effect                                                                |
-| ----------------------- | -------- | ------------------------------------------------------------------------------- |
-| `vocabulary`            | yes      | Declared application vocabulary                                                 |
-| `composition`           | yes      | Reactions, endpoints, views, and formers to register                            |
-| `initialize`            | no       | Constructor argument tuples by concept name; otherwise `[]`                     |
-| `instances`             | no       | Ready implementations by concept name; each overrides `initialize`              |
-| `logging`               | no       | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                           |
-| `retention`             | no       | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"` |
-| `logStore`              | no       | New `MemoryStore`; application-owned store, mutually exclusive with `retention` |
-| `executionLimits`       | no       | Unbounded profile; validates and enforces every `ExecutionLimits` field         |
-| `observers`             | no       | No operational observers                                                        |
-| `redaction`             | no       | Universal sensitive-field patterns only                                         |
+| `AssemblyOptions` field | Required | Default / effect                                                                  |
+| ----------------------- | -------- | --------------------------------------------------------------------------------- |
+| `vocabulary`            | yes      | Declared application vocabulary                                                   |
+| `composition`           | yes      | Reactions, endpoints, views, and formers to register                              |
+| `initialize`            | no       | Constructor argument tuples by concept name; otherwise `[]`                       |
+| `instances`             | no       | Ready implementations by concept name; each overrides `initialize`                |
+| `logging`               | no       | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                             |
+| `retention`             | no       | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"`   |
+| `logStore`              | no       | New `MemoryStore`; a supplied store remains caller-owned and excludes `retention` |
+| `executionLimits`       | no       | Unbounded profile; validates and enforces every `ExecutionLimits` field           |
+| `observers`             | no       | No operational observers                                                          |
+| `redaction`             | no       | Universal sensitive-field patterns only                                           |
 
 A retention window must be a finite, non-negative integer. `{ window: 0 }`
 allows an active flow to complete before automatic eviction.
@@ -145,6 +145,9 @@ instead supplies `{ window: 100 }`. `new FileStore(path)` defaults to
 `"keepAll"`; its synchronous append completes before the entry enters the
 in-memory fold, and `stop()` currently has no work to perform. Pruning does not
 rewrite its file.
+Assembly and gateway never close a supplied `LogStore`. `LogStore` itself has no
+close method; the host invokes any resource-specific method exposed by its
+chosen implementation after drain.
 `RetentionPolicy`, `LogEntry`, `FiringRecord`, `ReactionFailureRecord`, and
 `IntegrityFailureRecord` name the corresponding contracts. `PersistingConcept` manages an
 application-supplied store registry. Persistence, eviction, redaction, and

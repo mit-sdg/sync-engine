@@ -505,6 +505,35 @@ limits are stated under [Boundary operations](#boundary-operations).
 The following limits matter when an application depends on ordering, failure
 delivery, cancellation, persistence, restart, or boundary operation.
 
+### Supported multi-instance topology
+
+Several application instances may use the same durable domain state when each
+instance has its own assembly, concept objects, action scheduler, gateway, and
+occurrence stores, and host-supplied concept implementations connect them to a
+transactional store. The concept action that owns a state decision must perform
+its uniqueness, capacity, and durable domain-operation idempotency checks in one
+storage transaction. Storage constraints or equivalent storage coordination,
+not action queues or correlation ids, decide cross-instance conflicts.
+
+Reactions and occurrence matching remain local to the assembly that observed
+the action. Gateway and application logs are separate even within one instance.
+An idempotent concept action may therefore return one stable persisted result
+when retried while its surrounding reaction executes once for every successful
+action occurrence.
+
+This topology does not provide:
+
+- exactly-once action or reaction execution;
+- a distributed reaction scheduler;
+- occurrence replay or reaction resumption after restart;
+- rollback across actions in a reaction chain;
+- cross-process serialization without application storage coordination; or
+- deduplication by correlation id.
+
+Database drivers, transactions, constraints, locks, migrations, domain
+operation identifiers, and recovery policy remain application and host
+responsibilities.
+
 ### Execution and resource bounds
 
 Every HTTP handler limits one request body to 1,048,576 bytes, automatic log
@@ -632,6 +661,8 @@ Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
 most recent settled causal flows. Its `retention` option can select another
 window, `"keepAll"`, or `"evictConsumed"`; `logStore` installs an
 application-owned store instead and is mutually exclusive with `retention`.
+Assembly and gateway do not close a supplied store. The host must close any
+resources behind a custom store after drain, using the store's own API.
 The standard gateway has the same independent options and default. Automatic window enforcement does not evict an
 active flow, so active flows may temporarily exceed a window. Explicit
 `evictFlow` calls and custom stores are outside that protection. Advanced

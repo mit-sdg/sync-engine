@@ -24,5 +24,5 @@
     }
   },
   "include": ["examples", "scripts", "src", "tests"],
-  "exclude": ["src/command/scaffold", "tests/package/application"]
+  "exclude": ["src/command/scaffold", "tests/package/application", "tests/package/multi-instance"]
 }

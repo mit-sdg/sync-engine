@@ -57,6 +57,7 @@ const projectDirectories = new Set([
   ...Object.values(applicationExamples).map(({ directory }) => `examples/${directory}/`),
   "src/command/scaffold/",
   "tests/package/application/",
+  "tests/package/multi-instance/",
 ]);
 const result = checkArchitecture({
   files,

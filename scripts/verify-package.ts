@@ -10,17 +10,19 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
 const consumer = resolve(temporary, "consumer");
 const standalone = resolve(temporary, "application");
+const multiInstance = resolve(temporary, "multi-instance");
 const expectedAuthor = "Barish Namazov and Eagon Meng";
 
 function commandEnv(): NodeJS.ProcessEnv {
   return { ...process.env, BUN_INSTALL_CACHE_DIR: resolve(temporary, "cache"), TMPDIR: temporary };
 }
 
-function run(command: string, args: string[], cwd = root): void {
+function run(command: string, args: string[], cwd = root, timeout?: number): void {
   execFileSync(command, args, {
     cwd,
     env: commandEnv(),
     stdio: "inherit",
+    ...(timeout === undefined ? {} : { timeout }),
   });
 }
 
@@ -39,12 +41,12 @@ interface NpmPackResult {
   files: Array<{ path: string; mode: number }>;
 }
 
-function packWithNpm(): NpmPackResult {
+function packWithNpm(cwd = root, destination = temporary): NpmPackResult {
   const output = execFileSync(
     "bun",
-    ["run", "npm", "pack", "--json", "--loglevel=error", "--pack-destination", temporary],
+    ["run", "npm", "pack", "--json", "--loglevel=error", "--pack-destination", destination],
     {
-      cwd: root,
+      cwd,
       env: commandEnv(),
       encoding: "utf8",
       stdio: ["inherit", "pipe", "inherit"],
@@ -230,6 +232,102 @@ try {
   run("bun", ["run", "typecheck"], standalone);
   run("bun", ["run", "principle"], standalone);
   run("bun", ["run", "start"], standalone);
+
+  await cp(resolve(root, "tests/package/multi-instance"), multiInstance, { recursive: true });
+  const clientProject = resolve(multiInstance, "client");
+  const backendProject = resolve(multiInstance, "backend");
+  const clientManifestPath = resolve(clientProject, "package.json");
+  const clientManifest = JSON.parse(await readFile(clientManifestPath, "utf8")) as {
+    dependencies: Record<string, string>;
+    name: string;
+    version: string;
+  };
+  if (clientManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
+    throw new Error(`multi-instance client must depend on version ${packageJson.version}`);
+  }
+  clientManifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(clientProject, tarball);
+  await writeFile(clientManifestPath, `${JSON.stringify(clientManifest, null, 2)}\n`);
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], clientProject);
+
+  const installedForClient = resolve(clientProject, "node_modules/@mit-sdg/sync-engine");
+  run(
+    "bun",
+    [
+      resolve(installedForClient, packageJson.bin["sync-engine"]),
+      "artifacts",
+      "pin-wire",
+      "--config",
+      "generated.config.ts",
+    ],
+    clientProject,
+  );
+  run(
+    "node",
+    [resolve(clientProject, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.json"],
+    clientProject,
+  );
+
+  // The packed client names the published engine version. Its temporary
+  // installation used the just-built tarball only to generate and compile it.
+  clientManifest.dependencies["@mit-sdg/sync-engine"] = packageJson.version;
+  await writeFile(clientManifestPath, `${JSON.stringify(clientManifest, null, 2)}\n`);
+  const packedClient = packWithNpm(clientProject, multiInstance);
+  const expectedClientFilename = `${clientManifest.name
+    .replace(/^@/, "")
+    .replaceAll("/", "-")}-${clientManifest.version}.tgz`;
+  if (packedClient.filename !== expectedClientFilename) {
+    throw new Error(
+      `npm packed multi-instance client as ${packedClient.filename}; expected ${expectedClientFilename}`,
+    );
+  }
+  const clientEntries = new Set(packedClient.files.map(({ path }) => path));
+  for (const path of [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/generated/wire.js",
+    "dist/generated/wire.d.ts",
+  ]) {
+    if (!clientEntries.has(path)) throw new Error(`packed multi-instance client omits ${path}`);
+  }
+  const clientTarball = resolve(multiInstance, packedClient.filename);
+
+  for (const sourcePath of await filesBelow(resolve(backendProject, "src"), (name) =>
+    name.endsWith(".ts"),
+  )) {
+    const source = await readFile(sourcePath, "utf8");
+    if (/(?:\.\.\/)+client(?:\/|["'])/.test(source)) {
+      throw new Error(
+        `${relative(backendProject, sourcePath)} reaches into the generated client source tree`,
+      );
+    }
+  }
+
+  const backendManifestPath = resolve(backendProject, "package.json");
+  const backendManifest = JSON.parse(await readFile(backendManifestPath, "utf8")) as {
+    dependencies: Record<string, string>;
+  };
+  if (backendManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
+    throw new Error(`multi-instance backend must depend on version ${packageJson.version}`);
+  }
+  if (
+    backendManifest.dependencies["@sync-engine-fixture/multi-instance-client"] !==
+    clientManifest.version
+  ) {
+    throw new Error(`multi-instance backend must depend on client ${clientManifest.version}`);
+  }
+  backendManifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(backendProject, tarball);
+  backendManifest.dependencies["@sync-engine-fixture/multi-instance-client"] = tarballSpecifier(
+    backendProject,
+    clientTarball,
+  );
+  await writeFile(backendManifestPath, `${JSON.stringify(backendManifest, null, 2)}\n`);
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], backendProject);
+  run(
+    "node",
+    [resolve(backendProject, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.json"],
+    backendProject,
+  );
+  run("node", [resolve(backendProject, "dist/scenario.js")], backendProject, 30_000);
 
   await copyFile(
     resolve(root, "tests/package/node-runtime-scenario.ts"),

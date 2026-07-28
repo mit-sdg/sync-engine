@@ -7,11 +7,13 @@ runtime contract.
 
 ## Appropriate use
 
-Use sync-engine when one process can host independently implemented concepts
-and the application benefits from explicit, inspectable composition. The
-ordinary runtime is suitable for evaluation, prototypes, deterministic
-application tests, and hosts that provide their own storage, validation,
-outer traffic controls, and process lifecycle.
+Use sync-engine when independently implemented concepts benefit from explicit,
+inspectable composition. One process can host an ordinary application; several
+independent instances can share domain state only when their concept
+implementations and host-owned storage provide the required transactions and
+coordination. The ordinary runtime is suitable for evaluation, prototypes,
+deterministic application tests, and hosts that provide their own storage,
+validation, outer traffic controls, and process lifecycle.
 
 Do not use the current alpha as the sole production control plane for untrusted
 or unbounded traffic. Configure `ExecutionLimits` for engine-owned work and
@@ -50,6 +52,32 @@ invoke an action again after the original call completed or continued after a
 timeout. Concepts that receive retryable requests must define their own
 idempotency keys and durable deduplication where required.
 
+## Supported multi-instance topology
+
+A supported multi-instance deployment gives every instance a separate
+assembly, concept instance set, action scheduler, gateway, application log
+store, and gateway log store. Concept implementations may connect those
+instances to one transactional domain store. Every race-sensitive decision and
+domain idempotency check must occur atomically in the owning concept action,
+using storage constraints or equivalent storage coordination. Use a durable
+domain `operationId` for retry semantics; correlation ids are tracing tokens,
+not idempotency keys.
+
+The negative contract is explicit:
+
+- no exactly-once action or surrounding-reaction execution;
+- no distributed reaction scheduler;
+- no restart replay or resumption from occurrence logs;
+- no rollback of an earlier action when a later action refuses or faults;
+- no cross-process serialization without storage coordination; and
+- no correlation-id deduplication.
+
+An idempotent action can return the same committed result from two instances
+while both successful occurrences run their local surrounding reactions. A
+process starting against existing durable concept state does not replay prior
+domain operations. Database adapters, schema constraints, transactions, locks,
+migrations, and application recovery stay outside the engine.
+
 ## Timeouts, abort, and shutdown
 
 Without an execution profile, the default invocation timeout is 30 seconds. A
@@ -67,10 +95,13 @@ aborted calls remain active until their real work settles.
 
 `ConceptFloor.close()` is a descriptor operation supplied by the host. Assembly
 does not call it automatically. The host owns listener shutdown, process
-signals, hard deadlines, and resource close ordering.
+signals, hard deadlines, and resource close ordering. Assembly and gateway also
+do not close a supplied `logStore`; if a custom store owns resources, close them
+through its host-defined API after drain.
 
 The host sequence is: stop the listener, call `beginDrain()`, await it up to the
-host's hard deadline, close concept-floor and log-store resources, then exit.
+host's hard deadline, invoke each concept floor's `close()` exactly once, close
+host-owned log-store resources, then exit.
 
 ## Runtime validation
 
