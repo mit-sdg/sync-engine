@@ -96,10 +96,17 @@ describe("artifact plans", () => {
       vocabulary: vocabulary({ concepts: {}, computations: {} }),
       composition: { Ping },
     });
-    const plan = planGenerated(applicationManifest(app), {
+    const manifest = applicationManifest(app);
+    const plan = planGenerated(manifest, {
       title: "Ping service",
       specification: "ping.md",
+      specificationBanner: "<!-- Ping specification -->",
       wire: "wire.ts",
+      wireBanner: "// Ping wire",
+      vocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
+      strictLeaves: true,
+      httpWire: manifest.wire,
+      httpWireName: "PingHttpWire",
     });
 
     expect(plan.entries.map(({ path, kind }) => ({ path, kind }))).toEqual([
@@ -110,7 +117,34 @@ describe("artifact plans", () => {
     expect(plan.entries.find(({ kind }) => kind === "specification")?.content).toContain(
       "# Ping service",
     );
+    expect(
+      plan.entries
+        .find(({ kind }) => kind === "specification")
+        ?.content.startsWith(
+          `<!-- Ping specification -->\n<!-- Generator: ${PACKAGE_NAME}@${PACKAGE_VERSION}. -->`,
+        ),
+    ).toBe(true);
+    const wire = plan.entries.find(({ kind }) => kind === "wire")?.content ?? "";
+    expect(wire.startsWith(`// Ping wire\n// Generator: ${PACKAGE_NAME}@${PACKAGE_VERSION}.`)).toBe(
+      true,
+    );
+    expect(wire).toContain("export type PingHttpWire = {");
+    expect(wire.match(/export type Json =/g)).toHaveLength(1);
     expect(plan.entries.every(({ content }) => content.includes(PACKAGE_VERSION))).toBe(true);
+  });
+
+  test("strict wire planning requires a vocabulary anchor", () => {
+    const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: { Ping },
+      }),
+    );
+
+    expect(() => planGenerated(manifest, { title: "Ping", strictLeaves: true })).toThrow(
+      "strictLeaves requires a vocabulary type anchor",
+    );
   });
 
   test("rejects a manifest produced by another generator version", () => {
@@ -125,6 +159,24 @@ describe("artifact plans", () => {
 
     expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
       `requires generator ${PACKAGE_NAME}@${PACKAGE_VERSION}`,
+    );
+  });
+
+  test("rejects forged non-portable manifest data", () => {
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: {},
+      }),
+    );
+    manifest.application.unlowered.push({
+      name: "ForgedLocal",
+      reason: "cannot be registered from data",
+      known: { when: [], where: [], then: [], patterns: [] },
+    });
+
+    expect(() => planGenerated(manifest, { title: "Forged" })).toThrow(
+      /ordinary assembly accepts portable behavior only.*ForgedLocal/s,
     );
   });
 });

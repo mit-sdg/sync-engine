@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
-import { reaction, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/language";
 import { endpoint, productionHttpProfile, receive, respond } from "@sync-engine/boundary";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
@@ -67,22 +67,14 @@ const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
     .then(respond({ hidden })),
 );
 
-const InternalClosure = reaction(({ hidden, user }) =>
-  when(Sessioning.start({ user }).responds())
-    .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
-    .then(Sessioning.current({ session: "fixed" }).responds())
-    .then(Sessioning.start({ user: hidden }).responds()),
-);
-
 describe("generated application artifacts", () => {
   test("the request boundary inventory contains only author-facing actions", () => {
     const application = assemble({
       vocabulary: vocabularyDeclaration,
       composition: { Login },
     });
-    const boundary = inspectAssembly(application).concepts.find(
-      ({ name }) => name === "RequestBoundary",
-    );
+    const inspection = inspectAssembly(application);
+    const boundary = inspection.concepts.find(({ name }) => name === "RequestBoundary");
     const rendered = renderGenerated(
       resolveApplication(
         {
@@ -216,8 +208,8 @@ describe("generated application artifacts", () => {
       configUrl,
     );
     const message =
-      'endpoint "Api.ClosureEndpoint" at "/closure" reaches local reaction ' +
-      '"Api.ClosureEndpoint": unlowered reaction: step 2 needs a value bound by a closure where';
+      'local reaction "Api.ClosureEndpoint": unlowered reaction: ' +
+      "step 2 needs a value bound by a closure where";
 
     expect(() => renderGenerated(application)).toThrow(message);
     await expect(checkGenerated(application)).rejects.toThrow(message);
@@ -235,49 +227,8 @@ describe("generated application artifacts", () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain(
-      'endpoint "Api.ClosureEndpoint" at "/closure" reaches local reaction "Api.ClosureEndpoint"',
-    );
+    expect(result.stderr).toContain('local reaction "Api.ClosureEndpoint": unlowered reaction');
     expect(result.stderr).toContain("step 2 needs a value bound by a closure where");
-  });
-
-  test("an ordinary unlowered internal reaction remains visible in read-back", () => {
-    const internal = assemble({
-      vocabulary: vocabularyDeclaration,
-      composition: { InternalClosure },
-      localBehavior: {
-        revision: "internal-closure-r1",
-        definitions: [{ kind: "reaction", name: "InternalClosure" }],
-      },
-    });
-    const rendered = renderGenerated(
-      resolveApplication(
-        {
-          assemble: () => internal,
-          directory: new URL("./generated/", import.meta.url),
-          title: "Internal application",
-          vocabulary: { module: languageModule },
-        },
-        configUrl,
-      ),
-    );
-
-    expect(rendered.metrics.unlowered).toMatchObject([
-      { name: "InternalClosure", reason: "step 2 needs a value bound by a closure where" },
-    ]);
-    expect(rendered.metrics.localBehavior).toMatchObject({
-      contract: { revision: "internal-closure-r1" },
-      observed: [{ kind: "reaction", name: "InternalClosure" }],
-    });
-    expect(rendered.specification).toContain("## Reactions represented only by executable code");
-    expect(rendered.specification).toContain(
-      "`InternalClosure` — step 2 needs a value bound by a closure where",
-    );
-    expect(rendered.specification).toContain("Review revision: `internal-closure-r1`");
-    expect(inspectAssembly(internal).readBack).toContain(
-      "InternalClosure\n  local executable reaction — not portable\n" +
-        "  reason — step 2 needs a value bound by a closure where",
-    );
   });
 
   test("assembly locality failure happens before any artifact path is created", async () => {
@@ -297,7 +248,9 @@ describe("generated application artifacts", () => {
       configUrl,
     );
     try {
-      await expect(pinGenerated(application)).rejects.toThrow(/no endpoint override/);
+      await expect(pinGenerated(application)).rejects.toThrow(
+        /ordinary assembly accepts portable behavior only/,
+      );
       expect(existsSync(directory)).toBe(false);
     } finally {
       await rm(temporary, { recursive: true, force: true });
@@ -320,9 +273,11 @@ describe("generated application artifacts", () => {
     );
 
     try {
-      await expect(pinGenerated(application, "specification")).rejects.toThrow(
-        /relative POSIX|escapes or does not normalize/,
-      );
+      for (const artifact of ["specification", "wire"] as const) {
+        await expect(pinGenerated(application, artifact)).rejects.toThrow(
+          /relative POSIX|escapes or does not normalize/,
+        );
+      }
       expect(existsSync(escaped)).toBe(false);
       expect(existsSync(generated)).toBe(false);
     } finally {
@@ -418,25 +373,38 @@ describe("an artifact configuration's defaults", () => {
       specification: "reading-circle.md",
       wire: "wire.ts",
       wireName: "ReadingCircleWire",
-      wireBanner: `// Generated by ${PACKAGE_NAME}@${PACKAGE_VERSION} from the Reading circle assembly. Do not edit.`,
+      wireBanner: undefined,
       vocabularyFrom: { from: "../src/concept-set.ts", export: "vocabulary" },
     });
   });
 
-  test("an explicit name and path override the derived ones", () => {
+  test("explicit names, paths, and banners override the derived output", () => {
     const resolved = resolveApplication(
       {
         assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
         title: "Reading circle",
         specification: "book.md",
+        specificationBanner: "<!-- Project specification -->",
         wireName: "CircleContracts",
+        wireBanner: "// Project wire contract",
         vocabulary: { module: languageModule, export: "words" },
       },
       configUrl,
     );
+    const rendered = renderGenerated(resolved);
     expect(resolved.specification).toBe("book.md");
     expect(resolved.wireName).toBe("CircleContracts");
     expect(resolved.vocabularyFrom.export).toBe("words");
+    expect(
+      rendered.specification.startsWith(
+        `<!-- Project specification -->\n<!-- Generator: ${PACKAGE_NAME}@${PACKAGE_VERSION}. -->`,
+      ),
+    ).toBe(true);
+    expect(
+      rendered.wire.startsWith(
+        `// Project wire contract\n// Generator: ${PACKAGE_NAME}@${PACKAGE_VERSION}.`,
+      ),
+    ).toBe(true);
   });
 
   test("a vocabulary module that is not there fails by path", () => {

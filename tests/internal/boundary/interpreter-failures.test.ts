@@ -234,24 +234,13 @@ function setup() {
       .then(FailureSource.passthrough({})),
   );
 
-  return assemble({
+  const app = assemble({
     vocabulary: words,
     composition: {
-      AccessorTriggerClosure,
       AnswerBeforeFailure,
-      BrokenSibling,
-      ClosureFailure,
       ComputationFailure,
-      ConsequenceInputFailure,
-      ConsequenceOutputFailure,
-      CustomFailure,
-      ForgedTriggerClosure,
-      FailureAfterAnswer,
       HealthySibling,
-      InPlaceMalformedClosure,
-      MalformedClosure,
       QueryFailure,
-      ResultTransformFailure,
       StartAccessorTriggerClosure,
       StartBrokenSibling,
       StartClosureFailure,
@@ -264,29 +253,28 @@ function setup() {
       StartResultTransformFailure,
       TriggerFailure,
       Uncovered,
-      UncoveredLocal,
       ViewFailure,
       onlyRow,
     },
     retention: "keepAll",
-    localBehavior: {
-      revision: "interpreter-failures-r1",
-      definitions: [
-        { kind: "reaction", name: "AccessorTriggerClosure" },
-        { kind: "reaction", name: "BrokenSibling" },
-        { kind: "reaction", name: "ClosureFailure" },
-        { kind: "reaction", name: "ConsequenceInputFailure" },
-        { kind: "reaction", name: "ConsequenceOutputFailure" },
-        { kind: "reaction", name: "CustomFailure" },
-        { kind: "reaction", name: "FailureAfterAnswer" },
-        { kind: "reaction", name: "ForgedTriggerClosure" },
-        { kind: "reaction", name: "InPlaceMalformedClosure" },
-        { kind: "reaction", name: "MalformedClosure" },
-        { kind: "reaction", name: "ResultTransformFailure" },
-        { kind: "reaction", name: "UncoveredLocal" },
-      ],
-    },
   });
+  // Manual registration deliberately exercises the advanced local interpreter
+  // path without making opaque behavior part of ordinary assembly.
+  app.engine.register({
+    AccessorTriggerClosure,
+    BrokenSibling,
+    ClosureFailure,
+    ConsequenceInputFailure,
+    ConsequenceOutputFailure,
+    CustomFailure,
+    FailureAfterAnswer,
+    ForgedTriggerClosure,
+    InPlaceMalformedClosure,
+    MalformedClosure,
+    ResultTransformFailure,
+    UncoveredLocal,
+  });
+  return app;
 }
 
 describe("interpreter failure settlement", () => {
@@ -429,12 +417,9 @@ describe("interpreter failure settlement", () => {
     const SlowSibling = endpoint("/quiescence", () => receive().then(Slow.wait({})));
     const app = assemble({
       vocabulary: words,
-      composition: { Broken, SlowSibling, StartBroken },
-      localBehavior: {
-        revision: "quiescence-failure-r1",
-        definitions: [{ kind: "reaction", name: "Broken" }],
-      },
+      composition: { SlowSibling, StartBroken },
     });
+    app.engine.register({ Broken });
     const invocation = app.invoker.invoke("/quiescence", {}, { timeoutMs: 1_000 });
 
     await entered;

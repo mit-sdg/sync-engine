@@ -1,11 +1,7 @@
 import { createClient, createHttpClient, createLocalClient } from "@mit-sdg/sync-engine/client";
 import type { ClientError } from "@mit-sdg/sync-engine/client";
 import { assemble, Logging } from "@mit-sdg/sync-engine/assembly";
-import type {
-  ActionRefusal,
-  AssemblyOptions,
-  LocalBehaviorContract,
-} from "@mit-sdg/sync-engine/assembly";
+import type { ActionRefusal, AssemblyOptions } from "@mit-sdg/sync-engine/assembly";
 import { productionHttpProfile } from "@mit-sdg/sync-engine/boundary";
 import type {
   GatewayOptions,
@@ -14,22 +10,11 @@ import type {
   ProductionHttpProfile,
 } from "@mit-sdg/sync-engine/boundary";
 import { vocabulary } from "@mit-sdg/sync-engine/language";
-import type {
-  ApplicationDependencyGraphV2,
-  ApplicationManifestV2,
-} from "@mit-sdg/sync-engine/tooling";
+import type { ApplicationManifestV3 } from "@mit-sdg/sync-engine/tooling";
 
-const reviewedLocal: LocalBehaviorContract = {
-  revision: "review-r1",
-  definitions: [{ kind: "reaction", name: "Local" }],
-};
-void reviewedLocal;
-declare const manifestV2: ApplicationManifestV2;
-declare const graphV2: ApplicationDependencyGraphV2;
-const manifestVersion: 2 = manifestV2.version;
-const graphVersion: 2 = graphV2.version;
+declare const manifestV3: ApplicationManifestV3;
+const manifestVersion: 3 = manifestV3.version;
 void manifestVersion;
-void graphVersion;
 
 class QueriedConcept {
   _answer({ key }: { key: string }): { value: string }[] {
@@ -68,7 +53,6 @@ const directAction: Promise<{ value: string } | ActionRefusal> = directAssembly.
 const directQuery: { value: string }[] = directAssembly.concepts.Direct._read({});
 const gatewayOptions: GatewayOptions = {
   application: directAssembly,
-  logging: Logging.VERBOSE,
 };
 const httpProfile: ProductionHttpProfile = productionHttpProfile({
   origin: "https://example.test",

@@ -8,8 +8,6 @@ import { rememberAssembly } from "./assembly-registry.ts";
 import { assemble as assembleEngine } from "./assemble.ts";
 import type { AssembledApp, AssembleOptions } from "./assemble.ts";
 
-export type { LocalBehaviorContract, LocalBehaviorDefinition } from "@engine/reads/local-review";
-
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
 export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<
   AssembledApp<TConcepts>,

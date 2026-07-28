@@ -1,9 +1,8 @@
-/** Discover local behavior, definition references, and boundary use from application IR. */
+/** Discover executable behavior that cannot travel as portable application data. */
 
 import { asMarker } from "./ir.ts";
 import type {
   AppIR,
-  ConsequenceIR,
   FormerIR,
   PatternIR,
   ReactionIR,
@@ -37,36 +36,25 @@ export interface OpaqueOccurrence {
   reason: string;
 }
 
-export interface DefinitionDependency {
-  from: LocalBehaviorDefinition;
-  to: LocalBehaviorDefinition;
-}
-
 export interface LocalBehaviorAnalysis {
   localDefinitions: readonly ObservedLocalDefinition[];
   occurrences: readonly OpaqueOccurrence[];
-  dependencies: readonly DefinitionDependency[];
-  boundaryReactions: readonly string[];
 }
 
 export function localDefinitionKey(definition: LocalBehaviorDefinition): string {
   return `${definition.kind}\0${definition.name}`;
 }
 
-export function compareLocalDefinitions(
+function compareLocalDefinitions(
   left: LocalBehaviorDefinition,
   right: LocalBehaviorDefinition,
 ): number {
   return ordinal(localDefinitionKey(left), localDefinitionKey(right));
 }
 
-function walkValue(
-  value: ValueIR,
-  identity: (label: string) => void,
-  former: (name: string) => void,
-): void {
+function walkValue(value: ValueIR, identity: (label: string) => void): void {
   if (Array.isArray(value)) {
-    for (const entry of value) walkValue(entry, identity, former);
+    for (const entry of value) walkValue(entry, identity);
     return;
   }
   if (value === null || typeof value !== "object") return;
@@ -76,10 +64,9 @@ function walkValue(
     return;
   }
   if (marker?.tag === "$former") {
-    const payload = marker.payload as { name?: unknown; in?: unknown };
-    if (typeof payload.name === "string") former(payload.name);
+    const payload = marker.payload as { in?: unknown };
     if (typeof payload.in === "object" && payload.in !== null) {
-      walkPattern(payload.in as PatternIR, identity, former);
+      walkPattern(payload.in as PatternIR, identity);
     }
     return;
   }
@@ -89,17 +76,13 @@ function walkValue(
       : Object.values(value);
   for (const entry of entries) {
     if (typeof entry === "object" && entry !== null) {
-      walkValue(entry as ValueIR, identity, former);
+      walkValue(entry as ValueIR, identity);
     }
   }
 }
 
-function walkPattern(
-  pattern: PatternIR,
-  identity: (label: string) => void,
-  former: (name: string) => void,
-): void {
-  for (const value of Object.values(pattern)) walkValue(value, identity, former);
+function walkPattern(pattern: PatternIR, identity: (label: string) => void): void {
+  for (const value of Object.values(pattern)) walkValue(value, identity);
 }
 
 function triggerPatterns(trigger: TriggerIR): PatternIR[] {
@@ -112,8 +95,6 @@ function triggerPatterns(trigger: TriggerIR): PatternIR[] {
  */
 export function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis {
   const occurrences: OpaqueOccurrence[] = [];
-  const dependencies = new Map<string, DefinitionDependency>();
-  const boundaryReactions = new Set<string>();
   const counts = new Map<string, number>();
 
   const analyzeDefinition = (
@@ -122,14 +103,8 @@ export function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis {
       op(op: WhereOpIR | ViewOpIR): void;
       pattern(pattern: PatternIR): void;
       trigger(trigger: TriggerIR): void;
-      consequence(consequence: ConsequenceIR): void;
-      former(name: string): void;
     }) => void,
   ) => {
-    const addDependency = (to: LocalBehaviorDefinition) => {
-      const dependency = { from: definition, to };
-      dependencies.set(`${localDefinitionKey(definition)}\0${localDefinitionKey(to)}`, dependency);
-    };
     const addOccurrence = (kind: OpaqueOccurrenceKind, reason: string) => {
       const key = `${localDefinitionKey(definition)}\0${kind}`;
       const occurrence = (counts.get(key) ?? 0) + 1;
@@ -137,22 +112,11 @@ export function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis {
       occurrences.push({ definition, kind, occurrence, reason });
     };
     const pattern = (mapping: PatternIR) =>
-      walkPattern(
-        mapping,
-        (label) => addOccurrence("identity-pattern", `object-identity pattern "${label}"`),
-        (name) => addDependency({ kind: "former", name }),
+      walkPattern(mapping, (label) =>
+        addOccurrence("identity-pattern", `object-identity pattern "${label}"`),
       );
     const trigger = (clause: TriggerIR) => {
-      if (definition.kind === "reaction" && clause.kind === "action") {
-        if (clause.concept === "RequestBoundary") boundaryReactions.add(definition.name);
-        if (clause.by !== undefined) addDependency({ kind: "reaction", name: clause.by });
-      }
       for (const mapping of triggerPatterns(clause)) pattern(mapping);
-    };
-    const consequence = (entry: ConsequenceIR) => {
-      if (definition.kind === "reaction" && entry.concept === "RequestBoundary") {
-        boundaryReactions.add(definition.name);
-      }
     };
     walk({
       op(op) {
@@ -163,14 +127,9 @@ export function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis {
               : `custom read operation "${op.fnRef}"`;
           addOccurrence("custom", reason);
         }
-        if ("view" in op && typeof op.view === "string") {
-          addDependency({ kind: "view", name: op.view });
-        }
       },
       pattern,
       trigger,
-      consequence,
-      former: (name) => addDependency({ kind: "former", name }),
     });
   };
 
@@ -184,13 +143,7 @@ export function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis {
     });
   const analyzeFormer = (former: FormerIR) =>
     analyzeDefinition({ kind: "former", name: former.name }, (callbacks) => {
-      foldFormerNode(former.body, {
-        ...callbacks,
-        node: (node) => {
-          if (node.node === "former") callbacks.former(node.former);
-        },
-        splice: ({ fragment }) => callbacks.former(fragment),
-      });
+      foldFormerNode(former.body, callbacks);
     });
   const analyzeUnlowered = (reaction: UnloweredIR) =>
     analyzeDefinition({ kind: "reaction", name: reaction.name }, (callbacks) => {
@@ -203,7 +156,6 @@ export function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis {
       for (const trigger of reaction.known.when) callbacks.trigger(trigger);
       foldOps(reaction.known.where, callbacks);
       for (const consequence of reaction.known.then) {
-        callbacks.consequence(consequence);
         callbacks.pattern(consequence.input);
       }
       for (const pattern of reaction.known.patterns) callbacks.pattern(pattern);
@@ -236,41 +188,5 @@ export function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis {
         `${localDefinitionKey(right.definition)}\0${right.kind}\0${String(right.occurrence).padStart(8, "0")}`,
       ),
     ),
-    dependencies: [...dependencies.values()].sort((left, right) =>
-      ordinal(
-        `${localDefinitionKey(left.from)}\0${localDefinitionKey(left.to)}`,
-        `${localDefinitionKey(right.from)}\0${localDefinitionKey(right.to)}`,
-      ),
-    ),
-    boundaryReactions: [...boundaryReactions].sort(ordinal),
   };
-}
-
-/** Return local definitions reachable from one definition, including itself. */
-export function reachableLocalDefinitions(
-  analysis: LocalBehaviorAnalysis,
-  root: LocalBehaviorDefinition,
-): ObservedLocalDefinition[] {
-  const local = new Map(
-    analysis.localDefinitions.map((definition) => [localDefinitionKey(definition), definition]),
-  );
-  const dependencies = new Map<string, LocalBehaviorDefinition[]>();
-  for (const dependency of analysis.dependencies) {
-    const key = localDefinitionKey(dependency.from);
-    const targets = dependencies.get(key) ?? [];
-    targets.push(dependency.to);
-    dependencies.set(key, targets);
-  }
-  const found = new Map<string, ObservedLocalDefinition>();
-  const visited = new Set<string>();
-  const visit = (definition: LocalBehaviorDefinition) => {
-    const key = localDefinitionKey(definition);
-    if (visited.has(key)) return;
-    visited.add(key);
-    const observed = local.get(key);
-    if (observed !== undefined) found.set(key, observed);
-    for (const dependency of dependencies.get(key) ?? []) visit(dependency);
-  };
-  visit(root);
-  return [...found.values()].sort(compareLocalDefinitions);
 }

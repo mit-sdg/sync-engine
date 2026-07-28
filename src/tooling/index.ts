@@ -1,8 +1,6 @@
 /** Supported inspection, rendering, and generated-contract tools. */
 export { inspectAssembly } from "@engine/tooling/inspection";
 export type { ObservedOccurrence } from "@engine/tooling/inspection";
-export type { ObservedLocalDefinition } from "@engine/reads/local-behavior";
-export type { LocalBehaviorReview } from "@engine/reads/local-review";
 export { applicationDiagnostics, diagnosticsFail } from "@engine/tooling/diagnostics";
 export type {
   ApplicationDiagnostic,
@@ -10,13 +8,7 @@ export type {
   DiagnosticSeverity,
 } from "@engine/tooling/diagnostics";
 export { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
-export type { ApplicationManifestV2, ManifestEndpointV2 } from "@engine/tooling/manifest";
-export {
-  affectedNodes,
-  applicationDependencyGraph,
-  applicationImpact,
-  diffManifestNodes,
-} from "@engine/tooling/dependency-graph";
+export type { ApplicationManifestV3, ManifestEndpointV3 } from "@engine/tooling/manifest";
 export {
   applyArtifactPlan,
   artifactPlan,
@@ -32,23 +24,15 @@ export type {
   ArtifactStatus,
   GeneratedPlanOptions,
 } from "@engine/tooling/artifact-plan";
-export type {
-  ApplicationDependencyGraphV2,
-  ApplicationImpact,
-  DependencyEdge,
-  DependencyEdgeKind,
-  DependencyNode,
-  DependencyNodeKind,
-} from "@engine/tooling/dependency-graph";
 export { renderApp, renderReaction } from "@engine/reads/render";
-export { renderWireTypes, wireContracts } from "@engine/boundary/wire/wire";
+export { wireContracts } from "@engine/boundary/wire/wire-contracts";
+export { renderWireTypes } from "@engine/boundary/wire/wire-renderer";
 export { renderInputContracts } from "@engine/boundary/protocol/endpoints";
-export { floorReadBack, httpFloorReadBack } from "@engine/boundary/http/http-floor";
 export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
 export type {
   WireContractsIR,
   WireEndpoint,
   WireOptions,
-  WireRenderOptions,
-  WireType,
-} from "@engine/boundary/wire/wire";
+} from "@engine/boundary/wire/wire-contracts";
+export type { WireRenderOptions } from "@engine/boundary/wire/wire-renderer";
+export type { WireType } from "@engine/boundary/wire/wire-types";

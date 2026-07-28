@@ -4,9 +4,6 @@ import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import {
   applicationManifest,
-  affectedNodes,
-  applicationDependencyGraph,
-  applicationImpact,
   diagnosticsFail,
   renderApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
@@ -43,10 +40,9 @@ describe("application manifest", () => {
 
     expect(manifest).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 2,
+      version: 3,
       generator: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
       digest: expect.stringMatching(/^fnv1a64-[0-9a-f]{16}$/),
-      localBehavior: { contract: null, observed: [] },
       endpoints: [
         {
           name: "First",
@@ -127,7 +123,7 @@ describe("application manifest", () => {
     expect(printed.status).toBe(0);
     expect(JSON.parse(printed.stdout)).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 2,
+      version: 3,
     });
     expect(printed.stdout.endsWith("\n")).toBe(true);
 
@@ -145,78 +141,6 @@ describe("application manifest", () => {
     );
     expect(checked.status).toBe(0);
     expect(checked.stdout).toContain("Application diagnostic check passed");
-  });
-
-  test("derives stable dependency nodes, reverse impact, and changed outputs", () => {
-    const before = applicationManifest(application());
-    const graph = applicationDependencyGraph(before);
-    const affected = affectedNodes(graph, ["reaction:First"]);
-
-    expect(graph).toMatchObject({
-      format: "sync-engine.application-dependency-graph",
-      version: 2,
-      generator: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
-    });
-    expect(graph.nodes).toContainEqual(
-      expect.objectContaining({ id: "action:RequestBoundary.request", kind: "action" }),
-    );
-    expect(affected).toEqual(
-      expect.arrayContaining([
-        "reaction:First",
-        "endpoint:%2Fshared%23First",
-        "output:%2Fshared%23First",
-      ]),
-    );
-
-    const ChangedFirst = endpoint(
-      "/shared",
-      ({ value }) => receive({ value }).then(respond({ source: "changed", value })),
-      {
-        input: { required: ["value"], defaults: { a: 2, z: 1 } },
-        validators: { input: () => ({ ok: true }), output: () => ({ ok: true }) },
-      },
-    );
-    const changed = assemble({
-      vocabulary: words,
-      composition: { First: ChangedFirst, Second },
-    });
-    const impact = applicationImpact(before, applicationManifest(changed));
-    expect(impact.wholeApplication).toBe(false);
-    expect(impact.directlyChanged).toContain("reaction:First");
-    expect(impact.endpoints).toContain("/shared#First");
-    expect(impact.outputs).toContain("/shared#First");
-  });
-
-  test("reports concept prose changes and removed endpoint summaries", () => {
-    const before = applicationManifest(application());
-    const proseOnly = structuredClone(before);
-    const boundary = proseOnly.concepts.find(({ name }) => name === "RequestBoundary");
-    expect(boundary).toBeDefined();
-    if (boundary !== undefined) boundary.purpose = "Changed design purpose";
-
-    expect(applicationImpact(before, proseOnly)).toMatchObject({
-      directlyChanged: ["concept:RequestBoundary"],
-      affected: ["concept:RequestBoundary"],
-      endpoints: [],
-      outputs: [],
-      wholeApplication: false,
-    });
-
-    const empty = assemble({ vocabulary: words, composition: {} });
-    const removed = applicationImpact(before, applicationManifest(empty));
-    expect(removed.endpoints).toEqual(["/shared#First", "/shared#Second"]);
-    expect(removed.outputs).toEqual(["/shared#First", "/shared#Second"]);
-  });
-
-  test("a generator-version change forces whole-application impact", () => {
-    const before = applicationManifest(application());
-    const after = structuredClone(before);
-    after.generator.version = "1.0.0-beta.1";
-    const impact = applicationImpact(before, after);
-
-    expect(impact.directlyChanged).toEqual(["generator:%40mit-sdg%2Fsync-engine"]);
-    expect(impact.wholeApplication).toBe(true);
-    expect(impact.endpoints).toEqual(["/shared#First", "/shared#Second"]);
   });
 });
 import { spawnSync } from "node:child_process";

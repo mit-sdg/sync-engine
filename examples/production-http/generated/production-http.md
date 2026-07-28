@@ -7,17 +7,6 @@ _specifications and composition source, then regenerate this file._
 
 ## Concepts
 
-### RequestBoundary
-
-**Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
-
-**Principle.** A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.
-
-Actions:
-
-- `request (…)`
-- `respond (…)` — may refuse `NOT_PENDING`
-
 ### Naming
 
 **Purpose.** Claim distinct public names.
@@ -29,6 +18,17 @@ Actions:
 
 - `claim (name)` — may refuse `NAME_TAKEN`
 
+### RequestBoundary
+
+**Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
+
+**Principle.** A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.
+
+Actions:
+
+- `request (…)`
+- `respond (…)` — may refuse `NOT_PENDING`
+
 ### Sessioning
 
 **Purpose.** Issue, verify, and end short-lived sessions without exposing transport policy.
@@ -39,16 +39,16 @@ an active session makes it unknown.
 
 Actions:
 
-- `start (user)`
 - `current (session)` — may refuse `UNKNOWN_SESSION`
 - `end (session)` — may refuse `UNKNOWN_SESSION`
+- `start (user)`
 
 ## Reactions
 
 ### ClaimName
 
 ```reaction
-when RequestBoundary.request (name, requestId, path: "/names/claim")
+when RequestBoundary.request (name, path: "/names/claim", requestId)
 then
   Naming.claim (name)
 ```
@@ -58,7 +58,7 @@ then
 ```reaction
 when Naming.claim (name), asked by ClaimName
 where
-  earlier, RequestBoundary.request (name, requestId, path: "/names/claim")
+  earlier, RequestBoundary.request (name, path: "/names/claim", requestId)
 then
   RequestBoundary.respond (name, requestId)
 ```
@@ -66,7 +66,7 @@ then
 ### CurrentSession
 
 ```reaction
-when RequestBoundary.request (session, requestId, path: "/sessions/current")
+when RequestBoundary.request (path: "/sessions/current", requestId, session)
 then
   Sessioning.current (session)
 ```
@@ -76,55 +76,9 @@ then
 ```reaction
 when Sessioning.current (session, user), asked by CurrentSession
 where
-  earlier, RequestBoundary.request (session, requestId, path: "/sessions/current")
+  earlier, RequestBoundary.request (path: "/sessions/current", requestId, session)
 then
-  RequestBoundary.respond (user, requestId)
-```
-
-### EndSession
-
-```reaction
-when RequestBoundary.request (session, requestId, path: "/sessions/end")
-then
-  Sessioning.end (session)
-```
-
-### EndSession#2
-
-```reaction
-when Sessioning.end (session, ended), asked by EndSession
-where
-  earlier, RequestBoundary.request (session, requestId, path: "/sessions/end")
-then
-  RequestBoundary.respond (ended, requestId)
-```
-
-### StartSession
-
-```reaction
-when RequestBoundary.request (user, requestId, path: "/sessions/start")
-then
-  Sessioning.start (user)
-```
-
-### StartSession#2
-
-```reaction
-when Sessioning.start (user, session, expiresAt), asked by StartSession
-where
-  earlier, RequestBoundary.request (user, requestId, path: "/sessions/start")
-then
-  RequestBoundary.respond (session, expiresAt, user, requestId)
-```
-
-### DeliverRefusalToAsker
-
-```reaction
-when any action is refused (message), except RequestBoundary
-where
-  earlier, RequestBoundary.request (requestId)
-then
-  RequestBoundary.respond (requestId, error: message)
+  RequestBoundary.respond (requestId, user)
 ```
 
 ### DeliverFaultToAsker
@@ -134,7 +88,53 @@ when any action is faulted, not asked by DeliverFaultToAsker
 where
   earlier, RequestBoundary.request (requestId)
 then
-  RequestBoundary.respondFramework (requestId, error: "INTERNAL_ERROR")
+  RequestBoundary.respondFramework (error: "INTERNAL_ERROR", requestId)
+```
+
+### DeliverRefusalToAsker
+
+```reaction
+when any action is refused (message), except RequestBoundary
+where
+  earlier, RequestBoundary.request (requestId)
+then
+  RequestBoundary.respond (error: message, requestId)
+```
+
+### EndSession
+
+```reaction
+when RequestBoundary.request (path: "/sessions/end", requestId, session)
+then
+  Sessioning.end (session)
+```
+
+### EndSession#2
+
+```reaction
+when Sessioning.end (session, ended), asked by EndSession
+where
+  earlier, RequestBoundary.request (path: "/sessions/end", requestId, session)
+then
+  RequestBoundary.respond (ended, requestId)
+```
+
+### StartSession
+
+```reaction
+when RequestBoundary.request (path: "/sessions/start", requestId, user)
+then
+  Sessioning.start (user)
+```
+
+### StartSession#2
+
+```reaction
+when Sessioning.start (user, expiresAt, session), asked by StartSession
+where
+  earlier, RequestBoundary.request (path: "/sessions/start", requestId, user)
+then
+  RequestBoundary.respond (expiresAt, requestId, session, user)
 ```
 
 ## Endpoint input contracts

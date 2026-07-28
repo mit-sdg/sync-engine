@@ -10,8 +10,8 @@
  *    pre-firing failures consume nothing, while consequence-stage failures may
  *    accompany a firing that already retained its consumption and effects.
  *
- * A store folds these entries into indexes by id, flow, and reaction. Matching
- * reads those indexes. Each store defines what `prune()` removes.
+ * The runtime folds these entries into an occurrence index by id, flow, and
+ * reaction. Matching reads that index.
  */
 
 import type { ActionOutcome, InstrumentedAction } from "../types.ts";
@@ -124,12 +124,9 @@ export type LogEntry =
    */
   | { kind: "fault"; at: number; id: string; fault: Record<string, unknown> };
 
-/**
- * Storage interface for appended entries, retained action indexes, firing
- * indexes, consumption queries, and pruning.
- */
+/** The runtime occurrence index used for matching, consumption, and retention. */
 export interface LogStore {
-  /** Append one immutable entry, folding it into the indexed views. */
+  /** Fold one immutable occurrence entry into the indexed views. */
   append(entry: LogEntry): void;
   /** Look up a single action record by id. */
   byId(id: string): ActionRecord | undefined;
@@ -153,9 +150,7 @@ export interface LogStore {
   readonly flowIndex: Map<string, ActionRecord[]>;
 }
 
-/**
- * Fold entries into memory and retain them according to the configured policy.
- */
+/** The core in-memory occurrence index. */
 export class MemoryStore implements LogStore {
   readonly actions: Map<string, ActionRecord> = new Map();
   readonly flowIndex: Map<string, ActionRecord[]> = new Map();

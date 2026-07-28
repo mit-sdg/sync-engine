@@ -127,6 +127,27 @@ describe("assembly execution lifecycle", () => {
     await expect(draining).resolves.toBeUndefined();
   });
 
+  test("gateway admission limits are independent from the target", async () => {
+    const { app, didStart, release } = slowApplication();
+    const gateway = createGateway({
+      application: app,
+      executionLimits: limits({ maxActiveRootFlows: 1 }),
+    });
+    const accepted = gateway.invoke("/work", {});
+    await didStart;
+
+    expect(await gateway.invoke("/work", {})).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.UNAVAILABLE },
+    });
+    const direct = app.invoker.invoke("/work", {});
+    release();
+
+    await expect(accepted).resolves.toEqual({ ok: true, value: { value: "complete" } });
+    await expect(direct).resolves.toEqual({ ok: true, value: { value: "complete" } });
+    await gateway.whenIdle();
+  });
+
   test("direct concept roots participate in limits, idle observation, and drain", async () => {
     const { app, didStart, release } = slowApplication(limits({ maxActiveRootFlows: 1 }));
     const accepted = app.concepts.Working.run({});

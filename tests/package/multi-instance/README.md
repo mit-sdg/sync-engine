@@ -23,16 +23,16 @@ package's source tree.
 
 The scenario opens two `node:sqlite` `DatabaseSync` connections to one real
 temporary file. Two concept floors supply separate concept objects, controlled
-schedulers, application `MemoryStore`s, gateway `MemoryStore`s, observers, and
-resource descriptors to two independent assemblies and gateways.
+schedulers, application `MemoryStore`s, observers, and resource descriptors to
+two independent assemblies and gateway decorators.
 
 It deterministically asserts that:
 
 - held action bodies overlap across the two assemblies, while a SQLite unique
   constraint makes each same-name contest return one success and one registered
   public `CONFLICT`;
-- reactions, occurrence records, and gateway/application logs remain local to
-  the instance and store that executed them;
+- reactions and occurrence records remain local to the instance and store that
+  executed them, while gateway settlement events retain correlation;
 - a durable domain `operationId` returns one stable persisted result when a
   retry uses another instance and correlation id;
 - one correlation id with two operation ids creates two durable records;

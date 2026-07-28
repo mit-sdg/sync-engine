@@ -8,7 +8,6 @@ import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-met
 import type { ProductionHttpProfile } from "./http-profile.ts";
 import { normalizeProductionHttpProfile, projectProductionHttpWire } from "./http-profile.ts";
 import { assertPortableHttpPath } from "../protocol/http-path.ts";
-import { ordinal } from "@engine/utils/ordinal";
 
 export interface HttpCredentialBinding {
   name: string;
@@ -146,53 +145,4 @@ export function projectAssemblyHttpWire(
   validateHttpFloor(application, floor);
   const assembled = assemblyBehind(application);
   return projectHttpWire(wire, assembled.contracts, assembled.publicErrors, floor);
-}
-
-export function httpFloorReadBack(
-  application: Assembly<Record<string, new (...args: never[]) => object>>,
-  floor: HttpFloor,
-): string {
-  validateHttpFloor(application, floor);
-  const assembled = assemblyBehind(application);
-  const protectedPaths = Object.entries(assembled.contracts)
-    .filter(([, contract]) => contract.required?.includes(floor.credential.input))
-    .map(([path]) => path)
-    .sort();
-  const clearing =
-    floor.credential.clear.length === 0
-      ? "No endpoint clears the credential cookie after success."
-      : floor.credential.clear.length === 1
-        ? `A successful ${floor.credential.clear[0]} clears the credential cookie.`
-        : `Successful calls to ${floor.credential.clear.join(", ")} clear the credential cookie.`;
-  return [
-    `HTTP floor public origin: ${floor.origin}.`,
-    `Credential "${floor.credential.name}" binds cookie-only input "${floor.credential.input}" on ${protectedPaths.length} endpoints.`,
-    `A successful ${floor.credential.issue.path} stores output "${floor.credential.issue.output}" in the credential cookie and reads its expiry from "${floor.credential.issue.expires}".`,
-    clearing,
-  ].join("\n");
-}
-
-export function floorReadBack(options: {
-  application: Assembly<Record<string, new (...args: never[]) => object>>;
-  conceptFloor: {
-    name: string;
-    instances: Record<string, object>;
-    resources: readonly string[];
-  };
-  httpFloor: HttpFloor;
-}): string {
-  const implementations = Object.entries(options.conceptFloor.instances)
-    .sort(([left], [right]) => ordinal(left, right))
-    .map(([name, instance]) => {
-      const implementation = Object.getPrototypeOf(instance)?.constructor?.name ?? "Unknown";
-      return `  ${name}: ${implementation}`;
-    });
-  return [
-    `Concept floor "${options.conceptFloor.name}".`,
-    "Implementations:",
-    ...implementations,
-    `Resources: ${options.conceptFloor.resources.join(", ") || "none"}.`,
-    "",
-    httpFloorReadBack(options.application, options.httpFloor),
-  ].join("\n");
 }

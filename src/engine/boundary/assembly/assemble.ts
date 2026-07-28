@@ -53,7 +53,6 @@ import type { ComputationFn } from "@engine/reads/computations";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
 import { isRelationView } from "@engine/reads/lines";
 import type { RelationView } from "@engine/reads/lines";
-import type { LocalBehaviorContract, LocalBehaviorReview } from "@engine/reads/local-review";
 import { logger } from "@engine/utils/logger";
 import { createRedactor } from "@engine/utils/redaction";
 import type { RedactionPolicy } from "@engine/utils/redaction";
@@ -74,7 +73,7 @@ import {
 } from "../invocation/invoke.ts";
 import { RuntimeLifecycle } from "../invocation/lifecycle.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
-import { deriveInputContracts } from "../wire/wire.ts";
+import { deriveInputContracts } from "../wire/wire-contracts.ts";
 import type { EndpointDeclaration, EndpointIdentity } from "./endpoint-portability.ts";
 import { assertApplicationLocality } from "./locality-validation.ts";
 
@@ -200,8 +199,6 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
   observers?: readonly OperationalObserver[];
   /** Additional sensitive field names for this assembly only. */
   redaction?: RedactionPolicy;
-  /** Exact review of every intentionally local non-boundary definition. */
-  localBehavior?: LocalBehaviorContract;
 }
 
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
@@ -224,8 +221,6 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
   /** Every authored endpoint declaration, independent of lowering. */
   endpoints: readonly EndpointDeclaration[];
-  /** Canonical reviewed-local contract and the observed definition inventory. */
-  localBehavior: LocalBehaviorReview;
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
   form(fused: FusedFormer): Promise<unknown>;
 }
@@ -421,12 +416,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   engine.declareFormers(...formers);
 
   const app = engine.exportReactions();
-  const localBehavior = assertApplicationLocality(
-    "assemble",
-    app,
-    endpoints,
-    options.localBehavior,
-  );
+  assertApplicationLocality("assemble", app);
 
   // Declared contracts take precedence; receive patterns fill missing entries.
   for (const [path, decl] of Object.entries(deriveInputContracts(app))) {
@@ -477,7 +467,6 @@ export function assemble<T extends Record<string, ConceptClass>>(
     publicErrors,
     endpointOfReaction,
     endpoints,
-    localBehavior,
     form: (fused) => engine.form(fused),
   };
 }

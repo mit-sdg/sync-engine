@@ -1,7 +1,6 @@
 /**
- * The Persisting package: durable JSONL logs, retention policies as prune
- * behavior, the Persisting concept's subject registry, and the audit feed
- * as queries over the record.
+ * FileStore composes a live in-memory occurrence index with append-only JSONL
+ * auditing. The audit is intentionally not replayed into a new runtime index.
  */
 
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -10,23 +9,32 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { faulted } from "@sync-engine/advanced";
-import { MemoryStore } from "@sync-engine/assembly";
-import type { LogEvent } from "@sync-engine/advanced";
+import { faulted, type LogEvent } from "@sync-engine/advanced";
 import { reaction, vocabulary, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/language";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
-import {
-  FileStore,
-  PersistingConcept,
-  type PersistedEntry,
-} from "@sync-engine/internal/hosting/persisting.ts";
+import { FileStore } from "@sync-engine/internal/hosting/file-store.ts";
+
+type AuditEntry =
+  | {
+      kind: "invocation";
+      id: string;
+      flow: string;
+      concept: string;
+      action: string;
+      input: unknown;
+    }
+  | { kind: "outcome"; id: string; outcome: unknown }
+  | { kind: "firing"; firing: unknown }
+  | { kind: "reaction-failure"; failure: unknown }
+  | { kind: "integrity-failure"; failure: unknown }
+  | { kind: "fault"; id: string; fault: unknown };
 
 let dir: string;
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "persisting-"));
+  dir = mkdtempSync(join(tmpdir(), "file-store-"));
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -63,14 +71,44 @@ function engineOn(store: FileStore) {
   return { reacting, Source, Sink };
 }
 
-function readEntries(path: string): PersistedEntry[] {
+function readEntries(path: string): AuditEntry[] {
   return readFileSync(path, "utf8")
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line) as PersistedEntry);
+    .map((line) => JSON.parse(line) as AuditEntry);
 }
 
 describe("FileStore: the log survives as JSONL", () => {
+  test("indexes and audits the same entries", async () => {
+    const path = join(dir, "composed.jsonl");
+    const store = new FileStore(path);
+    const { Source } = engineOn(store);
+
+    await Source.emit({ tag: "indexed-and-audited" });
+
+    expect([...store.actions.values()].map((entry) => entry.input.tag)).toEqual([
+      "indexed-and-audited",
+      "indexed-and-audited",
+    ]);
+    expect(readEntries(path).filter((entry) => entry.kind === "invocation")).toHaveLength(2);
+  });
+
+  test("does not replay an existing audit into a new occurrence index", async () => {
+    const path = join(dir, "non-replayable.jsonl");
+    const first = new FileStore(path);
+    await engineOn(first).Source.emit({ tag: "first" });
+    const second = new FileStore(path);
+    expect(second.actions.size).toBe(0);
+    expect(second.flowIndex.size).toBe(0);
+
+    await engineOn(second).Source.emit({ tag: "second" });
+    expect([...second.actions.values()].map((entry) => entry.input.tag)).toEqual([
+      "second",
+      "second",
+    ]);
+    expect(readEntries(path).filter((entry) => entry.kind === "invocation")).toHaveLength(4);
+  });
+
   test("a live run appends invocation, outcome, and firing entries that cross-reference", async () => {
     const path = join(dir, "log.jsonl");
     const { Source } = engineOn(new FileStore(path));
@@ -383,43 +421,5 @@ describe("FileStore: the log survives as JSONL", () => {
     }
     expect(logged).toContain('"name":"Error"');
     expect(reacting.Action._getMatchingRecordCount()).toBe(0);
-  });
-});
-
-describe("Persisting: subjects bind once and must be bound before release or prune", () => {
-  test("bind refuses a duplicate subject; release refuses an unknown one", () => {
-    const Persisting = new PersistingConcept();
-    const store = new FileStore(join(dir, "log.jsonl"));
-
-    expect(Persisting.bind({ subject: "engine-log", store, policy: "keepAll" })).toEqual({
-      subject: "engine-log",
-    });
-    expect(() => Persisting.bind({ subject: "engine-log", store, policy: "keepAll" })).toThrow(
-      'Subject "engine-log" is already bound.',
-    );
-    expect(Persisting._getBinding({ subject: "engine-log" })[0]?.policy).toBe("keepAll");
-
-    expect(Persisting.release({ subject: "engine-log" })).toEqual({ subject: "engine-log" });
-    expect(() => Persisting.release({ subject: "engine-log" })).toThrow(
-      'Subject "engine-log" is not bound.',
-    );
-  });
-
-  test("prune delegates to the bound store without interpreting the recorded policy", () => {
-    class CountingStore extends MemoryStore {
-      calls = 0;
-      override prune(): number {
-        this.calls += 1;
-        return 3;
-      }
-    }
-    const Persisting = new PersistingConcept();
-    const store = new CountingStore();
-    Persisting.bind({ subject: "engine-log", store, policy: "keepAll" });
-
-    expect(Persisting.prune({ subject: "engine-log" })).toEqual({ evicted: 3 });
-    expect(store.calls).toBe(1);
-    expect(Persisting._getBinding({ subject: "engine-log" })[0]?.policy).toBe("keepAll");
-    expect(() => Persisting.prune({ subject: "other" })).toThrow('Subject "other" is not bound.');
   });
 });

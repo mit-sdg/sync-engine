@@ -9,11 +9,10 @@ import {
   receive,
   respond,
 } from "@sync-engine/boundary";
-import { floorReadBack, httpFloorReadBack } from "@sync-engine/tooling";
 import { projectAssemblyHttpWire } from "@sync-engine/internal/boundary/http/http-floor";
 import { projectProductionHttpWire } from "@sync-engine/internal/boundary/http/http-profile";
 import { assemblyBehind } from "@sync-engine/internal/boundary/assembly/assembly-registry";
-import { wireContracts } from "@sync-engine/internal/boundary/wire/wire";
+import { wireContracts } from "@sync-engine/internal/boundary/wire/wire-contracts";
 
 class UnknownSession extends Error {}
 
@@ -226,14 +225,6 @@ describe("HTTP floor", () => {
     const me = projected.endpoints.find(({ path }) => path === "/me");
     expect(JSON.stringify(login?.output)).not.toMatch(/session|expiresAt/);
     expect(JSON.stringify(me?.input)).not.toContain("session");
-    expect(httpFloorReadBack(application, floor)).toBe(
-      [
-        "HTTP floor public origin: http://learning.test.",
-        'Credential "session" binds cookie-only input "session" on 2 endpoints.',
-        'A successful /login stores output "session" in the credential cookie and reads its expiry from "expiresAt".',
-        "A successful /logout clears the credential cookie.",
-      ].join("\n"),
-    );
   });
 
   test("has no implicit /api alias and requires an explicit base path", async () => {
@@ -616,24 +607,5 @@ describe("production HTTP profile", () => {
     expect(await body.json()).toEqual({ error: "INVALID_REQUEST" });
     expect(path.status).toBe(404);
     expect(await path.json()).toEqual({ error: "NOT_FOUND" });
-  });
-
-  test("uses ordinal implementation ordering for punctuation and non-ASCII names", () => {
-    const { application, floor } = setup();
-    const instances = Object.fromEntries(
-      ["é", "~", "a", "_", "A"].map((name) => [name, new Sessioning()]),
-    );
-    const readBack = floorReadBack({
-      application,
-      conceptFloor: { name: "ordered", instances, resources: [] },
-      httpFloor: floor,
-    });
-    expect(readBack.split("\n").slice(2, 7)).toEqual([
-      "  A: Sessioning",
-      "  _: Sessioning",
-      "  a: Sessioning",
-      "  ~: Sessioning",
-      "  é: Sessioning",
-    ]);
   });
 });

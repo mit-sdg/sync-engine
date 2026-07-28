@@ -75,7 +75,7 @@ semantics](./semantics.md#reactions).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LocalBehaviorContract`, `LocalBehaviorDefinition`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -97,7 +97,6 @@ assemble(options: AssemblyOptions): Assembly
 | `executionLimits`       | no       | Unbounded profile; validates and enforces every `ExecutionLimits` field           |
 | `observers`             | no       | No operational observers                                                          |
 | `redaction`             | no       | Universal sensitive-field patterns only                                           |
-| `localBehavior`         | no       | Required exact review contract when non-boundary local definitions are present    |
 
 A retention window must be a finite, non-negative integer. `{ window: 0 }`
 allows an active flow to complete before automatic eviction.
@@ -112,31 +111,10 @@ asynchronous and conservatively resolve to their awaited result or an
 `ActionRefusal`; underscore-prefixed queries retain their implementation return
 shape.
 
-`LocalBehaviorContract` has this exact shape:
-
-```ts
-localBehavior?: {
-  revision: string;
-  definitions: readonly {
-    kind: "reaction" | "view" | "former";
-    name: string;
-  }[];
-};
-```
-
-`revision` must be non-empty. `definitions` must contain plain `{ kind, name }`
-objects in ordinal kind/name order, without duplicates, and must equal the
-assembly's observed direct local-definition inventory exactly. Missing, stale,
-extra, malformed, duplicate, unsorted, or unused contracts fail assembly.
 Closures, explicit `custom` operations, `$is` object-identity patterns, raw
-transforms, and whole unlowered reactions are local. A definition owns the
-local occurrences in its own body; a portable caller does not duplicate a
-referenced view or former in the inventory.
-
-No contract overrides the application boundary. Assembly rejects local endpoint
-reactions, local views or formers reachable from an endpoint, and local ordinary
-reactions that use `RequestBoundary` receive/respond behavior. Validation runs
-before an invoker or public route set is returned.
+transforms, and whole unlowered reactions are local. Ordinary assembly rejects
+every local reaction, view, and former before returning an invoker or public
+route set. Manual engines under `advanced` retain those explicit escape hatches.
 
 `OperationalEvent` is the stable discriminated union for action settlement,
 interpreter and integrity failure, invocation settlement, limit breach, and
@@ -178,19 +156,20 @@ machine conformance requires a separately designed backend-neutral descriptor.
 
 ### Log stores
 
-`MemoryStore` and `FileStore` implement `LogStore`; `FileStore` appends JSONL.
+`MemoryStore` and `FileStore` implement `LogStore`. `MemoryStore` is the runtime
+occurrence index. `FileStore` composes a fresh `MemoryStore` with a Node-specific
+append-only JSONL audit sink.
 `new MemoryStore()` defaults to `"evictConsumed"`. Ordinary `assemble(...)`
 instead supplies `{ window: 100 }`. `new FileStore(path)` defaults to
 `"keepAll"`; its synchronous append completes before the entry enters the
-in-memory fold, and `stop()` currently has no work to perform. Pruning does not
-rewrite its file.
-Assembly and gateway never close a supplied `LogStore`. `LogStore` itself has no
+in-memory fold. Pruning does not rewrite its file.
+Assembly never closes a supplied `LogStore`. `LogStore` itself has no
 close method; the host invokes any resource-specific method exposed by its
 chosen implementation after drain.
 `RetentionPolicy`, `LogEntry`, `FiringRecord`, `ReactionFailureRecord`, and
-`IntegrityFailureRecord` name the corresponding contracts. `PersistingConcept` manages an
-application-supplied store registry. Persistence, eviction, redaction, and
-restart limits are normative in [Execution semantics](./semantics.md#logs-concept-implementations-and-restart).
+`IntegrityFailureRecord` name the corresponding contracts. Persistence,
+eviction, redaction, and restart limits are normative in [Execution
+semantics](./semantics.md#logs-concept-implementations-and-restart).
 The [persistence and restart recipe](./advanced-recipes.md#persistence-restart-and-recovery)
 shows separate concept-state and occurrence files plus explicit derived-state
 recovery.
@@ -199,7 +178,7 @@ recovery.
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ParseResult`, `ParsedArgs`, `ProductionHttpProfile`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `productionHttpProfile`, `receive`, `respond`
+`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ParseResult`, `ParsedArgs`, `ProductionHttpProfile`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `productionHttpProfile`, `receive`, `respond`
 
 <!-- register:boundary:end -->
 
@@ -249,22 +228,17 @@ createGateway<Contract>(options: GatewayOptions): Gateway<Contract>
 invoker.invoke(path, input, options?: InvokeOptions): Promise<InvocationResult>
 ```
 
-| `GatewayOptions` field  | Required | Default / effect                                              |
-| ----------------------- | -------- | ------------------------------------------------------------- |
-| `application`           | yes      | `GatewayTarget` exposing `invoker` and `publicInterface`      |
-| `additionalComposition` | no       | No additional gateway declarations                            |
-| `logging`               | no       | `Logging.OFF` from the `assembly` subpath                     |
-| `retention`             | no       | `{ window: 100 }`; same accepted values as assembly retention |
-| `logStore`              | no       | New `MemoryStore`; mutually exclusive with `retention`        |
-| `executionLimits`       | no       | Unbounded gateway execution                                   |
-| `observers`             | no       | Internal gateway events and one final public-call settlement  |
-| `redaction`             | no       | Universal sensitive-field patterns only                       |
+| `GatewayOptions` field | Required | Default / effect                                         |
+| ---------------------- | -------- | -------------------------------------------------------- |
+| `application`          | yes      | `GatewayTarget` exposing `invoker` and `publicInterface` |
+| `executionLimits`      | no       | Unbounded gateway admission and caller deadline          |
+| `observers`            | no       | Drain, limit, and final public-call settlement events    |
 
-| `InvokeOptions` field | Default / effect                                                             |
-| --------------------- | ---------------------------------------------------------------------------- |
-| `signal`              | No signal; an abort ends the wait with `ABORTED`                             |
-| `timeoutMs`           | `30_000` without `executionLimits`; otherwise `maxRequestDurationMs`         |
-| `correlationId`       | The generated request id; supplied values cross gateway and application logs |
+| `InvokeOptions` field | Default / effect                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| `signal`              | No signal; an abort ends the wait with `ABORTED`                                    |
+| `timeoutMs`           | `30_000` without `executionLimits`; otherwise `maxRequestDurationMs`                |
+| `correlationId`       | The generated request id; supplied values cross gateway and application observation |
 
 `ExecutionLimits` requires positive finite integers for active root flows,
 pending requests, actions and firings per flow, rows per evaluation, and the
@@ -278,17 +252,16 @@ invalid value returns `INVALID_INPUT` before work is recorded. Gateway and
 application invokers apply the option as separate durations; it is not one
 absolute deadline shared by both layers.
 
-Gateway action, interpreter, integrity, limit, and drain events describe its
-internal engine. Its `/gateway/receive` invocation settlement is hidden;
-observers instead receive exactly one `invocation-settled` event for each
-public `invoke` call after the final result is known. That event uses the
+The gateway is an `Invoker` decorator, not a second reaction engine. Observers
+receive gateway limit and drain events plus exactly one `invocation-settled`
+event for each public `invoke` call after the final result is known. That event uses the
 requested application route and effective correlation id, includes the final
 result class and applicable framework code, measures through the final
 caller-visible result, and may omit `flow`. Accepted sibling work can continue
 afterward; use `whenIdle()` to observe flow quiescence.
 
-`Gateway`, `GatewayTarget`, `GatewayClientError`, `Invoker`, and
-`InvocationResult` name these contracts. Timeout and abort stop waiting but do
+`Gateway`, `GatewayTarget`, `Invoker`, and `InvocationResult` name these
+contracts. Timeout and abort stop waiting but do
 not cancel forwarded application work. A fault-free unanswered endpoint reaches
 `TIMED_OUT`; an unanswered flow with a recorded interpreter failure settles
 promptly as opaque `INTERNAL_ERROR`. See [Failures between action
@@ -424,26 +397,24 @@ the client call.
 
 <!-- register:tooling:start -->
 
-`AppIR`, `ApplicationDependencyGraphV2`, `ApplicationDiagnostic`, `ApplicationImpact`, `ApplicationManifestV2`, `ArtifactFilesystem`, `ArtifactKind`, `ArtifactPlan`, `ArtifactPlanEntry`, `ArtifactStatus`, `ConceptInventoryIR`, `DependencyEdge`, `DependencyEdgeKind`, `DependencyNode`, `DependencyNodeKind`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedPlanOptions`, `LocalBehaviorReview`, `ManifestEndpointV2`, `ObservedLocalDefinition`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `affectedNodes`, `applicationDependencyGraph`, `applicationDiagnostics`, `applicationImpact`, `applicationManifest`, `applyArtifactPlan`, `artifactPlan`, `checkArtifactPlan`, `diagnosticsFail`, `diffManifestNodes`, `floorReadBack`, `httpFloorReadBack`, `inspectAssembly`, `normalizeArtifactPath`, `planGenerated`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
+`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV3`, `ArtifactFilesystem`, `ArtifactKind`, `ArtifactPlan`, `ArtifactPlanEntry`, `ArtifactStatus`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedPlanOptions`, `ManifestEndpointV3`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `applyArtifactPlan`, `artifactPlan`, `checkArtifactPlan`, `diagnosticsFail`, `inspectAssembly`, `normalizeArtifactPath`, `planGenerated`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
 
 <!-- register:tooling:end -->
 
 ### Inspection and rendering
 
-| API                         | Compact signature                                                 |
-| --------------------------- | ----------------------------------------------------------------- |
-| `inspectAssembly`           | `inspectAssembly(assembly)`                                       |
-| `renderApp`                 | `renderApp({ title, concepts, app }): string`                     |
-| `renderReaction`            | `renderReaction(reaction): string`                                |
-| `renderInputContracts`      | `renderInputContracts(contracts): string`                         |
-| `wireContracts`             | `wireContracts(app, options?: WireOptions): WireContractsIR`      |
-| `renderWireTypes`           | `renderWireTypes(wire, moduleName? \| options?): string`          |
-| `httpFloorReadBack`         | `httpFloorReadBack(application, floor): string`                   |
-| `floorReadBack`             | `floorReadBack({ application, conceptFloor, httpFloor }): string` |
-| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV2`            |
-| `renderApplicationManifest` | `renderApplicationManifest(manifest): string`                     |
-| `applicationDiagnostics`    | `applicationDiagnostics(app, endpoints, wire)`                    |
-| `diagnosticsFail`           | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`           |
+| API                         | Compact signature                                            |
+| --------------------------- | ------------------------------------------------------------ |
+| `inspectAssembly`           | `inspectAssembly(assembly)`                                  |
+| `renderApp`                 | `renderApp({ title, concepts, app }): string`                |
+| `renderReaction`            | `renderReaction(reaction): string`                           |
+| `renderInputContracts`      | `renderInputContracts(contracts): string`                    |
+| `wireContracts`             | `wireContracts(app, options?: WireOptions): WireContractsIR` |
+| `renderWireTypes`           | `renderWireTypes(wire, moduleName? \| options?): string`     |
+| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV3`       |
+| `renderApplicationManifest` | `renderApplicationManifest(manifest): string`                |
+| `applicationDiagnostics`    | `applicationDiagnostics(app, endpoints, wire)`               |
+| `diagnosticsFail`           | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`      |
 
 `AppIR`, `ReactionIR`, `ViewIR`, `FormerIR`, `ConceptInventoryIR`, and
 `ObservedOccurrence` name inspected data. `ObservedOccurrence` contains the
@@ -455,17 +426,14 @@ the store and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
 contributed `INVALID_INPUT`, so production projection remains distinct from a
 registered domain refusal using the same code.
 
-`ApplicationManifestV2` has format `sync-engine.application-manifest`, version
-`2`, and is static canonical JSON-round-trippable application data. Its
+`ApplicationManifestV3` has format `sync-engine.application-manifest`, version
+`3`, and is static canonical JSON-round-trippable application data. Its
 `generator` identifies the exact `@mit-sdg/sync-engine` package version. It
 contains the application IR, concept inventories, declaration-owned
-`ManifestEndpointV2` entries, input contracts, wire IR, validator-presence
-flags, structured diagnostics, `localBehavior`, and `digest`. `localBehavior`
-is `{ contract: LocalBehaviorContract | null, observed:
-ObservedLocalDefinition[] }`; each observed entry adds sorted `reasons`. The
-digest covers every other manifest field, including the review revision and
-observed inventory. It excludes occurrences, timestamps, other runtime state,
-and uninterpreted concept State sections. State notation likewise contributes
+`ManifestEndpointV3` entries, input contracts, wire IR, validator-presence
+flags, structured diagnostics, and `digest`. The digest covers every other
+manifest field. It excludes occurrences, timestamps, other runtime state, and
+uninterpreted concept State sections. State notation likewise contributes
 nothing to the assembled read-back or generated wire.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
@@ -476,36 +444,18 @@ machine-readable advisory surface. `diagnosticsFail` treats error diagnostics as
 failures by default and can promote warnings; informational diagnostics remain
 advisory.
 
-`applicationDependencyGraph(manifest)` returns
-`ApplicationDependencyGraphV2`, format
-`sync-engine.application-dependency-graph`, version `2`, carries the manifest's
-exact generator identity with stable namespaced node ids, typed dependency
-edges, canonical node digests, and a reverse dependent index. Nodes cover the
-generator, concept design prose, endpoints, outputs,
-reaction stages, actions, queries, views, formers, named computations, the local
-review, and opaque behavior. Named vocabulary computations are portable. Every custom
-operation, `$is` occurrence, and unlowered definition has a distinct stable
-opaque node owned by its containing definition. Known action, query, view,
-former, and stage dependencies remain connected around an unlowered definition.
-Concept actions conservatively invalidate every query on that concept.
-`diffManifestNodes` identifies direct digest changes, `affectedNodes` follows
-the reverse index, and `applicationImpact` returns directly changed and affected
-nodes across both the before and after graphs plus endpoint/output summaries,
-including removed endpoints and outputs. Any opaque node in either the before or
-after graph forces whole-application impact when design data changes, including
-removal of the final opaque occurrence. A review-revision-only change alters the
-review node and manifest digest and therefore also takes that fallback. A
-generator-version change always forces whole-application impact.
-
 `planGenerated(manifest, options)` is a filesystem-free specification and wire
 planner. Every `ArtifactPlanEntry` has a normalized relative POSIX path,
 content, kind, and stable digest. `artifactPlan` plans caller-rendered entries,
 while `normalizeArtifactPath` rejects absolute, parent, empty-segment, and
 backslash paths, plus `%`, `?`, `#`, and `:` URL metacharacters that cannot be
 passed losslessly through the built-in file-URL adapter. Default generated Markdown and TypeScript banners include the
-exact package version. A custom wire banner retains a mandatory generator line.
-Planning rejects a manifest whose generator identity differs from the installed
-package.
+exact package version. Custom specification and wire banners retain a mandatory
+generator line. Planning rejects a manifest whose version or generator identity
+differs from the installed package and rejects forged non-portable application
+IR. `httpWire` may append one already-projected HTTP contract to the logical wire
+module under `httpWireName`; both contracts share the vocabulary anchor,
+strict-leaf policy, and generated preamble.
 
 `checkArtifactPlan(plan, filesystem)` classifies entries as `missing`,
 `changed`, `unchanged`, or `failed`. `applyArtifactPlan` validates and reads the

@@ -104,21 +104,17 @@ Renders both artifacts but writes only the TypeScript wire contract.
 
 ### `manifest`
 
-Prints `sync-engine.application-manifest` version `2` as canonical JSON. The
+Prints `sync-engine.application-manifest` version `3` as canonical JSON. The
 manifest contains application design, declaration-owned endpoints, input and
-wire contracts, validator-presence flags, structured diagnostics, the reviewed
-local-behavior contract and observed inventory, and a digest over those fields.
-It excludes occurrences and other runtime state.
+wire contracts, validator-presence flags, structured diagnostics, and a digest
+over those fields. It excludes occurrences and other runtime state.
 
 ### `spec`
 
-For a valid assembly, prints assembly counts, the reviewed-local revision and
-definition inventory when present, and the assembled read-back. The counts
-cover registered reactions, views, formers, unlowered executable reactions,
-reviewed local definitions, and serialized `compute` operations in the exported
-IR. The last value counts operation occurrences, not distinct computation
-names. Read-back includes whole unlowered definitions and reasons as well as
-lowered definitions.
+For a valid assembly, prints assembly counts and the assembled read-back. The
+counts cover registered reactions, views, formers, and serialized `compute`
+operations in the exported IR. The last value counts operation occurrences, not
+distinct computation names.
 
 ### `wire`
 
@@ -136,13 +132,10 @@ Every artifact command imports and assembles the configured application.
 Assembly, import, configuration, or rendering failures therefore fail the
 command before comparison or writing.
 
-Assembly rejects every endpoint-local definition and every local view or former
-reachable from an endpoint. It also rejects local ordinary reactions that touch
-`RequestBoundary`; `AssemblyOptions.localBehavior` has no boundary override.
-This rejection applies before every artifact subcommand, including `spec`, can
-expose a route or write a path. Non-boundary local definitions require an exact
-review contract and remain executable; diagnostics and read-back label their
-owners and reasons.
+Assembly rejects every local reaction, view, or former. This rejection applies
+before every artifact subcommand, including `spec`, can expose a route or write
+a path. Local executable behavior remains available only through manual engines
+under the `advanced` subpath.
 
 Strict wire generation also rejects a leaf that cannot be traced to the
 configured vocabulary type anchor. Generation never emits a successful partial

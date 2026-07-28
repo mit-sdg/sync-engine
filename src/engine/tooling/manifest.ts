@@ -4,7 +4,6 @@ import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 import { wireContracts } from "@engine/boundary/wire/wire-contracts";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import type { AppIR, ConceptInventoryIR, FormerIR, ViewIR } from "@engine/reads/ir";
-import type { LocalBehaviorReview } from "@engine/reads/local-review";
 import { foldFormerNode } from "@engine/reads/schema";
 import { canonicalDigest, canonicalJson, canonicalValue } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
@@ -12,7 +11,7 @@ import { GENERATOR_IDENTITY, type GeneratorIdentity } from "@engine/utils/packag
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import { applicationDiagnostics } from "./diagnostics.ts";
 
-export interface ManifestEndpointV2 {
+export interface ManifestEndpointV3 {
   name: string;
   path: string;
   reactions: string[];
@@ -20,19 +19,20 @@ export interface ManifestEndpointV2 {
   validators: { input: boolean; output: boolean };
 }
 
-export interface ApplicationManifestV2 {
+export interface ApplicationManifestV3 {
   format: "sync-engine.application-manifest";
-  version: 2;
+  version: 3;
   generator: GeneratorIdentity;
   digest: string;
   application: AppIR;
   concepts: ConceptInventoryIR[];
-  endpoints: ManifestEndpointV2[];
+  endpoints: ManifestEndpointV3[];
   inputContracts: Record<string, InputContractDecl>;
   wire: WireContractsIR;
   diagnostics: ApplicationDiagnostic[];
-  localBehavior: LocalBehaviorReview;
 }
+
+const INTERNAL_BOUNDARY_ACTIONS = new Set(["register", "cancel", "respondFramework"]);
 
 function sortByName<T extends { name: string }>(values: readonly T[]): T[] {
   return [...values].sort((left, right) => ordinal(left.name, right.name));
@@ -103,11 +103,15 @@ function stableApp(app: AppIR): AppIR {
 function stableConcepts(concepts: readonly ConceptInventoryIR[]): ConceptInventoryIR[] {
   return sortByName(concepts).map((concept) => ({
     ...concept,
-    actions: sortByName(concept.actions).map((action) => ({
-      ...action,
-      ...(action.roles === undefined ? {} : { roles: [...action.roles].sort(ordinal) }),
-      ...(action.refusals === undefined ? {} : { refusals: [...action.refusals].sort(ordinal) }),
-    })),
+    actions: sortByName(concept.actions)
+      .filter(
+        ({ name }) => concept.name !== "RequestBoundary" || !INTERNAL_BOUNDARY_ACTIONS.has(name),
+      )
+      .map((action) => ({
+        ...action,
+        ...(action.roles === undefined ? {} : { roles: [...action.roles].sort(ordinal) }),
+        ...(action.refusals === undefined ? {} : { refusals: [...action.refusals].sort(ordinal) }),
+      })),
     queries: sortByName(concept.queries).map((query) => ({
       ...query,
       ...(query.roles === undefined ? {} : { roles: [...query.roles].sort(ordinal) }),
@@ -116,12 +120,12 @@ function stableConcepts(concepts: readonly ConceptInventoryIR[]): ConceptInvento
 }
 
 /**
- * Snapshot one assembly's static design and explicit local review. Retained runtime state and
- * uninterpreted concept State sections are excluded.
+ * Snapshot one assembly's static design. Retained runtime state and uninterpreted concept State
+ * sections are excluded.
  */
 export function applicationManifest(
   assembly: Assembly<Record<string, new (...args: never[]) => object>>,
-): ApplicationManifestV2 {
+): ApplicationManifestV3 {
   const assembled = assemblyBehind(assembly);
   const application = stableApp(assembled.engine.exportReactions());
   const concepts = stableConcepts(assembled.engine.exportConcepts());
@@ -141,27 +145,21 @@ export function applicationManifest(
       },
     }))
     .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`));
-  const body: Omit<ApplicationManifestV2, "digest"> = {
+  const body: Omit<ApplicationManifestV3, "digest"> = {
     format: "sync-engine.application-manifest",
-    version: 2,
+    version: 3,
     generator: GENERATOR_IDENTITY,
     application,
     concepts,
     endpoints,
     inputContracts: assembled.contracts,
     wire,
-    diagnostics: applicationDiagnostics(
-      application,
-      assembled.endpoints,
-      wire,
-      assembled.localBehavior,
-    ),
-    localBehavior: assembled.localBehavior,
+    diagnostics: applicationDiagnostics(application, assembled.endpoints, wire),
   };
-  const manifest: ApplicationManifestV2 = { ...body, digest: canonicalDigest(body) };
-  return canonicalValue(manifest) as unknown as ApplicationManifestV2;
+  const manifest: ApplicationManifestV3 = { ...body, digest: canonicalDigest(body) };
+  return canonicalValue(manifest) as unknown as ApplicationManifestV3;
 }
 
-export function renderApplicationManifest(manifest: ApplicationManifestV2): string {
+export function renderApplicationManifest(manifest: ApplicationManifestV3): string {
   return canonicalJson(manifest);
 }

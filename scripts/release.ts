@@ -409,8 +409,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const support = sources.get("SUPPORT.md") ?? "";
   const supportFacts = [
     "Only the newest beta is supported.",
-    "sync-engine.application-manifest` version 2",
-    "sync-engine.application-dependency-graph` version 2",
+    "sync-engine.application-manifest` version 3",
   ];
   if (facts.node !== undefined) supportFacts.push(`Node.js \`${facts.node}\``);
   if (facts.bun !== undefined) supportFacts.push(`Bun \`${facts.bun}\``);

@@ -110,10 +110,8 @@ the engine does not infer them from concept specifications.
 Endpoint behavior must be portable: canonical JSON-round-trippable and
 re-registerable against the same named vocabulary. Closures, custom operations,
 object-identity patterns, raw transforms, and whole unlowered definitions are
-local and cannot occur in an endpoint or its transitive views/formers.
-Non-boundary local definitions require an exact reviewed `localBehavior`
-inventory and revision on `AssemblyOptions`; that contract has no endpoint
-override.
+local and cannot occur in an ordinary assembly. Manual engines under
+`@mit-sdg/sync-engine/advanced` retain those explicit local escape hatches.
 
 ## Guarantees and non-guarantees
 
@@ -122,8 +120,7 @@ The ordinary assembly provides these guarantees:
 - one action body runs at a time per concept instance within one assembly;
 - each action ask and its return, refusal, or fault are recorded;
 - composition is checked before registered behavior executes;
-- local behavior is rejected before any public route is exposed unless it is
-  non-boundary and exactly reviewed;
+- local behavior is rejected before any public route is exposed;
 - generated artifacts fail rather than silently omit an endpoint they cannot
   represent;
 - optional execution profiles bound admission and accepted causal work;

@@ -34,7 +34,7 @@ registered read operations. `bun run check` enforces the actual import graph.
 | Reactions | `src/engine/reactions/` | Concept references, reaction declarations, instrumentation, matching, firing, and occurrence storage |
 | Reads     | `src/engine/reads/`     | Query contracts, views, formers, scheduling, evaluation, IR, and rendering                           |
 | Boundary  | `src/engine/boundary/`  | Assembly, invocation, routing, clients, HTTP, endpoint protocol, and wire derivation                 |
-| Hosting   | `src/engine/hosting/`   | File-backed occurrence append and store-binding concepts                                             |
+| Hosting   | `src/engine/hosting/`   | File-backed occurrence auditing                                                                      |
 | Tooling   | `src/engine/tooling/`   | Assembly inspection and pinned generated artifacts                                                   |
 | Utilities | `src/engine/utils/`     | Runtime helpers, case conversion, logging, redaction, and framework-code definitions                 |
 
@@ -135,7 +135,7 @@ co-located:
 | Resolution            | `src/engine/reads/authored-reference-resolution.ts`, `imported-ir-binding.ts`                                   | Resolve authored vocabulary references and bind portable IR names to installed definitions.                           |
 | Validation            | `src/engine/reads/view-former-validation.ts`                                                                    | Validate view and former bindings, schedules, promises, dependencies, markers, and opaque values.                     |
 | Lowering              | `src/engine/reads/reaction-lowering.ts`                                                                         | Turn supported declaration paths into portable `ReactionIR`; retain known dependencies when a whole path stays local. |
-| Local analysis        | `src/engine/reads/local-behavior.ts`, `local-review.ts`                                                         | Walk local/opaque occurrences once, own definition reachability, and validate exact review inventories.               |
+| Portability analysis  | `src/engine/reads/local-behavior.ts`                                                                            | Walk local and opaque occurrences once so ordinary assembly can reject executable-only definitions.                   |
 | Runtime               | `src/engine/reactions/runtime/trigger-matching.ts`, `firing-pipeline.ts`, `consequence-pipeline.ts`             | Match one landed occurrence, evaluate reads, invoke consequences, and record firing provenance.                       |
 
 `ReactionIR` in `reads/ir.ts` is the serialized design form consumed by
@@ -150,12 +150,10 @@ those markers claims the local function or identity can be re-registered.
 flattens authored branch trees, and forms the cross-product when later sibling
 groups extend earlier paths. `lowerReaction` then gives variables stable names
 and serializes each path's triggers, reads, and consequence asks.
-`local-behavior.ts` is the dependency-neutral owner for custom, identity-pattern,
-and unlowered occurrence discovery and for reaction/view/former references.
-Assembly reachability, diagnostics, read-back, and dependency graphs consume
-that result rather than maintaining partial opacity walkers. `local-review.ts`
-separately validates and snapshots the manual contract so the walker does not
-become a policy mega-module. See
+`local-behavior.ts` is the dependency-neutral owner for custom,
+identity-pattern, and unlowered occurrence discovery. Ordinary assembly rejects
+every owner reported by that analysis, while manual advanced engines retain the
+underlying executable constructs. See
 [Sibling paths and endpoint settlement](./semantics.md#sibling-paths-and-endpoint-settlement)
 for the resulting behavior.
 
@@ -193,11 +191,11 @@ and composition that use them:
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Protocol   | `src/engine/boundary/protocol/endpoints.ts`, `application-interface.ts`, `contract-shape.ts`, `admit.ts`, `envelope.ts`, `errors.ts`, `public-errors.ts` | Define endpoint inputs, application-facing route facts, admission, result envelopes, and public error categories without choosing a transport or engine host. |
 | Invocation | `src/engine/boundary/invocation/invoke.ts`, `funnel.ts`                                                                                                  | Correlate one request with one response, apply cancellation and timeout behavior, and turn reaction refusals into boundary replies.                           |
-| Assembly   | `src/engine/boundary/assembly/concept-set.ts`, `assemble.ts`, `locality-validation.ts`, `assembly-facade.ts`, `assembly-registry.ts`                     | Turn composition into one engine, reject boundary-reachable locality, validate reviews, then expose the invoker and forms.                                    |
+| Assembly   | `src/engine/boundary/assembly/concept-set.ts`, `assemble.ts`, `locality-validation.ts`, `assembly-facade.ts`, `assembly-registry.ts`                     | Turn portable composition into one engine, reject executable-only definitions, then expose the invoker and forms.                                             |
 | Client     | `src/engine/boundary/client/client.ts`, `local-client.ts`, `http-client.ts`                                                                              | Expose the typed client independently of a transport, then adapt it to a local invoker or HTTP.                                                               |
-| Gateway    | `src/engine/boundary/gateway/gateway.ts`, `public-gateway.ts`                                                                                            | Route admitted outside requests through an isolated engine-backed forwarding boundary.                                                                        |
+| Gateway    | `src/engine/boundary/gateway/gateway.ts`                                                                                                                 | Decorate an invoker with route admission, forwarding, limits, observation, and ordered drain.                                                                 |
 | HTTP       | `src/engine/boundary/http/http.ts`, `http-profile.ts`, `http-floor.ts`                                                                                   | Adapt invocation to raw or production HTTP, project registered public errors, and optionally bind cookie credentials.                                         |
-| Wire       | `src/engine/boundary/wire/wire-contracts.ts`, `wire-inference.ts`, `wire-provenance.ts`, `wire-renderer.ts`, `wire-types.ts`                             | Derive and render transport-safe contracts from endpoint IR and value provenance; `wire.ts` remains a small compatibility facade.                             |
+| Wire       | `src/engine/boundary/wire/wire-contracts.ts`, `wire-inference.ts`, `wire-provenance.ts`, `wire-renderer.ts`, `wire-types.ts`                             | Derive and render transport-safe contracts from endpoint IR and value provenance.                                                                             |
 
 Dependency edges point inward toward `protocol/`: invocation, wire, and client
 adapters consume its transport-neutral shapes. `assembly/` composes protocol,
@@ -227,22 +225,17 @@ do not inspect concept state.
 
 ## Hosting and generated artifacts
 
-`src/engine/hosting/persisting.ts` provides `FileStore` and
-`PersistingConcept`. `FileStore` appends occurrence entries to JSONL and folds
-new entries into inherited in-memory indexes. It does not load an existing file
-or replay it. `PersistingConcept` stores application-supplied associations
-between subjects and stores; it does not install an engine log or persist a
-concept implementation.
+`src/engine/hosting/file-store.ts` provides `FileStore`. It composes a fresh
+in-memory occurrence index with a Node-specific append-only JSONL audit sink. It
+does not load an existing file or replay it.
 
 `src/engine/tooling/inspection.ts` projects one assembly into app IR, concept
-inventories, input contracts, retained occurrence summaries, the reviewed-local
-snapshot, and full diagnostic read-back. `manifest.ts` emits manifest V2 and its
-digest. `dependency-graph.ts` emits graph V2, gives each opaque occurrence a
-stable node, and applies the before-or-after whole-application fallback.
-`generated-artifacts.ts` resolves a project descriptor, derives logical and
-optional production HTTP wire contracts, applies cookie-field projection when
-a floor is present, and checks or writes the two pinned files only after the
-complete render succeeds.
+inventories, input contracts, retained occurrence summaries, and diagnostic
+read-back. `manifest.ts` emits manifest V3 and its digest. `artifact-plan.ts` is
+the single specification and wire renderer. `generated-artifacts.ts` resolves a
+project descriptor, derives an optional production HTTP projection while the
+assembly is available, delegates rendering to the planner, and checks or writes
+the two pinned files only after the complete plan succeeds.
 
 The installed executable under `src/command/` is an adapter over those
 capabilities. `check.ts` parses supported TypeScript method signatures;

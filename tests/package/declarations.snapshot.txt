@@ -14,10 +14,10 @@ export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/obser
 === dist/assembly/index.d.ts ===
 /** Install a vocabulary and its composition into one coherent running system. */
 export { assemble } from "../engine/boundary/assembly/assembly-facade.ts";
-export type { Assembly, AssemblyOptions, LocalBehaviorContract, LocalBehaviorDefinition, } from "../engine/boundary/assembly/assembly-facade.ts";
+export type { Assembly, AssemblyOptions } from "../engine/boundary/assembly/assembly-facade.ts";
 export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engine/boundary/assembly/concept-set.ts";
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
-export { FileStore, PersistingConcept } from "../engine/hosting/persisting.ts";
+export { FileStore } from "../engine/hosting/file-store.ts";
 export { MemoryStore } from "../engine/reactions/runtime/log-store.ts";
 export { Logging } from "../engine/reactions/runtime/logging.ts";
 export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
@@ -36,8 +36,8 @@ export type { EmittedFrameworkErrorCode, InvocationResult } from "../engine/boun
 export type { Invoker, InvokeOptions } from "../engine/boundary/invocation/invoke.ts";
 export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
 export type { OperationalEvent, OperationalObserver, OperationalResultClass, } from "../engine/reactions/runtime/operational.ts";
-export { createGateway } from "../engine/boundary/gateway/public-gateway.ts";
-export type { Gateway, GatewayClientError, GatewayOptions, GatewayTarget, } from "../engine/boundary/gateway/public-gateway.ts";
+export { createGateway } from "../engine/boundary/gateway/gateway.ts";
+export type { Gateway, GatewayOptions, GatewayTarget } from "../engine/boundary/gateway/gateway.ts";
 export type { ApplicationInterface } from "../engine/boundary/protocol/application-interface.ts";
 export { createHttpHandler } from "../engine/boundary/http/http.ts";
 export type { HttpCorrelationOptions } from "../engine/boundary/http/http.ts";
@@ -109,7 +109,6 @@ import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
-import type { LocalBehaviorContract, LocalBehaviorReview } from "../../reads/local-review.ts";
 import type { RedactionPolicy } from "../../utils/redaction.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
@@ -177,8 +176,6 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
     observers?: readonly OperationalObserver[];
     /** Additional sensitive field names for this assembly only. */
     redaction?: RedactionPolicy;
-    /** Exact review of every intentionally local non-boundary definition. */
-    localBehavior?: LocalBehaviorContract;
 }
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
     engine: Reacting;
@@ -202,8 +199,6 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
     /** Every authored endpoint declaration, independent of lowering. */
     endpoints: readonly EndpointDeclaration[];
-    /** Canonical reviewed-local contract and the observed definition inventory. */
-    localBehavior: LocalBehaviorReview;
     /** Evaluate a fused former against this app's concepts, at the moment of asking. */
     form(fused: FusedFormer): Promise<unknown>;
 }
@@ -222,7 +217,6 @@ export declare function assemble<TEntries extends Record<string, ConceptEntry>, 
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { AssembledApp, AssembleOptions } from "./assemble.ts";
-export type { LocalBehaviorContract, LocalBehaviorDefinition } from "../../reads/local-review.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
 export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
 export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary"> & {
@@ -332,11 +326,9 @@ export interface EndpointDeclaration extends EndpointIdentity {
 }
 
 === dist/engine/boundary/assembly/locality-validation.d.ts ===
-/** Fail closed when local behavior reaches the request boundary, then validate its review. */
+/** Fail closed when ordinary assembly contains behavior that cannot travel as data. */
 import type { AppIR } from "../../reads/ir.ts";
-import { type LocalBehaviorContract, type LocalBehaviorReview } from "../../reads/local-review.ts";
-import type { EndpointDeclaration } from "./endpoint-portability.ts";
-export declare function assertApplicationLocality(owner: string, app: AppIR, endpoints: readonly EndpointDeclaration[], supplied: LocalBehaviorContract | undefined): LocalBehaviorReview;
+export declare function assertApplicationLocality(owner: string, app: AppIR): void;
 
 === dist/engine/boundary/cli-app.d.ts ===
 import type { Invoker } from "./invocation/invoke.ts";
@@ -575,129 +567,11 @@ export declare function createLocalClient<C extends ContractShape>(options: {
 }): Client<C>;
 
 === dist/engine/boundary/gateway/gateway.d.ts ===
-import type { OutcomeContracts } from "../../reactions/concepts/outcomes.ts";
-import type { LogStore, RetentionPolicy } from "../../reactions/runtime/log-store.ts";
-import { Logging } from "../../reactions/runtime/logging.ts";
 import { type OperationalObserver } from "../../reactions/runtime/operational.ts";
-import type { Reacting } from "../../reactions/runtime/reacting.ts";
-import type { RedactionPolicy } from "../../utils/redaction.ts";
-import type { ApplicationInterface } from "../protocol/application-interface.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
-import type { EmittedFrameworkErrorCode } from "../protocol/errors.ts";
-import type { ClientError } from "../client/client.ts";
-import type { Invoker } from "../invocation/invoke.ts";
-import type { ExecutionLimits } from "../invocation/lifecycle.ts";
-type GatewayReply = {
-    kind: "success";
-    body: unknown;
-} | {
-    kind: "domain";
-    value: unknown;
-} | {
-    kind: "framework";
-    code: EmittedFrameworkErrorCode;
-    detail?: string;
-};
-/** Resolving decides whether an outside path belongs to the application. */
-export declare class GatewayRoutingConcept {
-    private readonly application;
-    static readonly purpose = "Resolve an outside path against an application's public routes so only known requests cross into it.";
-    static readonly principle = "A request for a declared path resolves to that path. A request for any other path is refused before the application receives it.";
-    static readonly outcomes: OutcomeContracts;
-    constructor(application: ApplicationInterface);
-    resolve({ path }: {
-        path: string;
-    }): {
-        path: string;
-    };
-}
-/** Admitting checks and normalizes the outer request shape promised to the application. */
-export declare class GatewayAdmittingConcept {
-    private readonly application;
-    static readonly purpose = "Admit only object-shaped inputs carrying their route's required keys, filling declared defaults before forwarding.";
-    static readonly principle = "A body with every required key is admitted with its defaults filled. A scalar body or a body missing a required key is refused.";
-    static readonly outcomes: OutcomeContracts;
-    constructor(application: ApplicationInterface);
-    admit({ path, input }: {
-        path: string;
-        input: unknown;
-    }): {
-        admitted: Record<string, unknown>;
-    };
-}
-/** Forwarding invokes an admitted application request once. */
-export declare class GatewayForwardingConcept {
-    private readonly application;
-    static readonly purpose = "Forward an admitted request to the application and carry its answer back across the gateway boundary.";
-    static readonly principle = "An admitted request is invoked once, and the gateway returns its public answer unchanged.";
-    constructor(application: Invoker<ContractShape>);
-    forward({ path, admitted, correlationId, signal, timeoutMs, }: {
-        path: string;
-        admitted: Record<string, unknown>;
-        correlationId: string;
-        signal?: AbortSignal;
-        timeoutMs?: number;
-    }): {
-        reply: Promise<GatewayReply>;
-    };
-}
-export declare const gatewayVocabulary: import("../../reactions/authoring/refs.ts").DeclaredVocabulary<{
-    GatewayRouting: typeof GatewayRoutingConcept;
-    GatewayAdmitting: typeof GatewayAdmittingConcept;
-    GatewayForwarding: typeof GatewayForwardingConcept;
-}, {}>;
-/**
- * The standard gateway lifecycle, authored as an ordinary endpoint chain.
- * The outer transport calls this one stable endpoint with the requested
- * application path carried as data.
- */
-export declare const ReceiveApplicationRequest: import("../assembly/assemble.ts").EndpointDef<import("../../reactions/types.ts").ReactionPartition>;
-export interface Gateway<C extends ContractShape> extends Invoker<C> {
-    /** The gateway's own engine and log, separate from the application. */
-    readonly engine: Reacting;
-    readonly publicInterface: ApplicationInterface;
-    beginDrain(): Promise<void>;
-    whenIdle(): Promise<void>;
-}
-export interface GatewayOptions {
-    application: {
-        invoker: Invoker<ContractShape>;
-        publicInterface: ApplicationInterface;
-        beginDrain?: () => Promise<void>;
-        whenIdle?: () => Promise<void>;
-    };
-    /** Additional gateway reactions, views, and formers. */
-    composition?: Record<string, unknown>;
-    /** Gateway interpreter diagnostics; defaults to `Logging.OFF`. */
-    logging?: Logging;
-    /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
-    retention?: RetentionPolicy;
-    /** Application-owned gateway occurrence store. It cannot be combined with `retention`. */
-    logStore?: LogStore;
-    /** Opt-in limits for the gateway's own execution. */
-    executionLimits?: ExecutionLimits;
-    /** Internal gateway events plus one final public-call settlement; bounded synchronous handoff. */
-    observers?: readonly OperationalObserver[];
-    /** Additional sensitive field names for the gateway only. */
-    redaction?: RedactionPolicy;
-}
-/** Build a separate gateway application in front of an assembled application. */
-export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
-/** The raw result shape a client sees after a gateway invocation. */
-export type GatewayClientError = ClientError;
-export {};
-
-=== dist/engine/boundary/gateway/public-gateway.d.ts ===
-/** The standard gateway. */
-import type { LogStore, RetentionPolicy } from "../../reactions/runtime/log-store.ts";
-import type { Logging } from "../../reactions/runtime/logging.ts";
-import type { OperationalObserver } from "../../reactions/runtime/operational.ts";
-import type { RedactionPolicy } from "../../utils/redaction.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Invoker } from "../invocation/invoke.ts";
-import type { ExecutionLimits } from "../invocation/lifecycle.ts";
-export type { GatewayClientError } from "./gateway.ts";
+import { type ExecutionLimits } from "../invocation/lifecycle.ts";
 export interface GatewayTarget {
     invoker: Invoker<ContractShape>;
     publicInterface: ApplicationInterface;
@@ -706,25 +580,16 @@ export interface GatewayTarget {
 }
 export interface GatewayOptions {
     application: GatewayTarget;
-    /** Declarations added beside the standard gateway composition. */
-    additionalComposition?: Record<string, unknown>;
-    /** Gateway interpreter diagnostics; defaults to `Logging.OFF`. */
-    logging?: Logging;
-    /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
-    retention?: RetentionPolicy;
-    /** Application-owned gateway occurrence store. It cannot be combined with `retention`. */
-    logStore?: LogStore;
     /** Opt-in limits for the gateway's own execution. */
     executionLimits?: ExecutionLimits;
-    /** Internal gateway events plus one final public-call settlement; bounded synchronous handoff. */
+    /** Gateway admission, drain, and final invocation settlement events. */
     observers?: readonly OperationalObserver[];
-    /** Additional sensitive field names for the gateway only. */
-    redaction?: RedactionPolicy;
 }
 export interface Gateway<C extends ContractShape> extends Invoker<C> {
     beginDrain(): Promise<void>;
     whenIdle(): Promise<void>;
 }
+/** Decorate an application invoker with transport-neutral gateway policy and lifecycle. */
 export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
 
 === dist/engine/boundary/http/http-floor.d.ts ===
@@ -750,16 +615,6 @@ export declare function httpFloor(declaration: HttpFloor): HttpFloor;
 export declare function validateHttpFloor(application: Assembly<Record<string, new (...args: never[]) => object>>, floor: HttpFloor): void;
 export declare function projectHttpWire(wire: WireContractsIR, contracts: Readonly<Record<string, InputContractDecl>>, categories: Readonly<Record<string, PublicErrorCategory>>, floor: HttpFloor): WireContractsIR;
 export declare function projectAssemblyHttpWire(application: Assembly<Record<string, new (...args: never[]) => object>>, wire: WireContractsIR, floor: HttpFloor): WireContractsIR;
-export declare function httpFloorReadBack(application: Assembly<Record<string, new (...args: never[]) => object>>, floor: HttpFloor): string;
-export declare function floorReadBack(options: {
-    application: Assembly<Record<string, new (...args: never[]) => object>>;
-    conceptFloor: {
-        name: string;
-        instances: Record<string, object>;
-        resources: readonly string[];
-    };
-    httpFloor: HttpFloor;
-}): string;
 
 === dist/engine/boundary/http/http-profile.d.ts ===
 import type { Assembly } from "../assembly/assembly-facade.ts";
@@ -1280,124 +1135,42 @@ export declare function referenceWireType(reference: {
 }): WireType;
 export declare function nullableWireLeaves(type: WireType): WireType;
 
-=== dist/engine/boundary/wire/wire.d.ts ===
-/** Stable facade for public wire derivation and TypeScript rendering tools. */
-export { deriveInputContracts, wireContracts } from "./wire-contracts.ts";
-export type { WireContractsIR, WireEndpoint, WireOptions } from "./wire-contracts.ts";
-export { renderWireTypes } from "./wire-renderer.ts";
-export type { WireRenderOptions } from "./wire-renderer.ts";
-export type { WireType } from "./wire-types.ts";
-
-=== dist/engine/hosting/persisting.d.ts ===
+=== dist/engine/hosting/file-store.d.ts ===
 /**
- * Log storage, retention, and retained-log queries.
+ * Node-specific JSONL auditing composed with the runtime occurrence index.
  *
- * {@link FileStore} keeps the active indexes in memory and appends every log
- * entry to JSONL. The engine does not load that file on restart.
- * {@link PersistingConcept} keeps a subject registry for application-supplied
- * log stores. Its recorded policy is registry data; the concept delegates
- * pruning to the bound store. It does not install the engine's occurrence-log
- * store. Core reaction execution does not depend on this module.
+ * {@link FileStore} delegates matching, consumption, and retention to a fresh
+ * in-memory index and independently appends every entry to JSONL. The engine
+ * does not load or replay that file on restart.
  */
-import type { OutcomeContracts } from "../reactions/concepts/outcomes.ts";
-import { MemoryStore, type LogEntry, type LogStore, type RetentionPolicy } from "../reactions/runtime/log-store.ts";
-/** A long-lived resource that a host can stop during shutdown. */
-export interface Stoppable {
-    stop(): void | Promise<void>;
-}
+import { type ActionRecord, type FiringRecord, type IntegrityFailureRecord, type LogEntry, type LogStore, type ReactionFailureRecord, type RetentionPolicy } from "../reactions/runtime/log-store.ts";
 /**
- * The serialized projection of a {@link LogEntry}, one JSON line per entry.
- * Concept instances and instrumented functions are represented by name. Each
- * input, outcome, fault, and firing-binding mapping passes through redaction,
- * which replaces values whose field names match the current policy. String
- * values under other field names are not inspected.
+ * A {@link LogStore} with an in-memory occurrence index and append-only JSONL
+ * audit sink. Pruning changes only the index; constructing a new store never
+ * replays the file.
  */
-export type PersistedEntry = {
-    kind: "invocation";
-    at: number;
-    id: string;
-    flow: string;
-    concept: string;
-    action: string;
-    input: unknown;
-} | {
-    kind: "outcome";
-    at: number;
-    id: string;
-    outcome: unknown;
-} | {
-    kind: "firing";
-    at: number;
-    firing: unknown;
-} | {
-    kind: "reaction-failure";
-    at: number;
-    failure: unknown;
-} | {
-    kind: "integrity-failure";
-    at: number;
-    failure: unknown;
-} | {
-    kind: "fault";
-    at: number;
-    id: string;
-    fault: unknown;
-};
-/**
- * A {@link LogStore} that folds each entry into memory and appends its
- * serialized projection to a JSONL file. Pruning changes the in-memory indexes
- * and does not rewrite the file.
- */
-export declare class FileStore extends MemoryStore implements Stoppable {
+export declare class FileStore implements LogStore {
     readonly path: string;
+    readonly policy: RetentionPolicy;
+    private readonly index;
+    private readonly audit;
     constructor(path: string, policy?: RetentionPolicy);
+    get actions(): Map<string, ActionRecord>;
+    get flowIndex(): Map<string, ActionRecord[]>;
+    get firings(): Map<string, FiringRecord[]>;
+    get reactionFailures(): ReactionFailureRecord[];
+    get integrityFailures(): IntegrityFailureRecord[];
     append(entry: LogEntry): void;
-    /** File writes are synchronous; this hook lets a host manage the store as a resource. */
-    stop(): void;
+    byId(id: string): ActionRecord | undefined;
+    byFlow(flow: string): ActionRecord[] | undefined;
+    firingsByReaction(reaction: string): FiringRecord[];
+    hasConsumed(recordId: string, reaction: string): boolean;
+    consumedBy(recordId: string): string[];
+    prune(): number;
+    flowSettled(flow: string): void;
+    evictFlow(flow: string): void;
     /** Reject entries the in-memory fold would reject before they reach disk. */
     private assertAppendable;
-}
-/** One registry entry: a subject, its application-supplied store, and recorded policy. */
-export interface PersistBinding {
-    subject: string;
-    store: LogStore;
-    policy: RetentionPolicy;
-}
-/**
- * Keep one application-supplied log-store binding per subject. `bind`,
- * `release`, and `_getBinding` manage or read the registry. `prune` delegates
- * to the bound store; it does not interpret the recorded policy. Registry
- * entries neither bind concept state nor configure an assembly's occurrence
- * log.
- */
-export declare class PersistingConcept {
-    static readonly outcomes: OutcomeContracts;
-    /** All current bindings, by subject. */
-    bindings: Map<string, PersistBinding>;
-    /** Bind a subject to a store under a policy; refuses if already bound. */
-    bind({ subject, store, policy }: {
-        subject: string;
-        store: LogStore;
-        policy: RetentionPolicy;
-    }): {
-        subject: string;
-    };
-    /** Release a subject's binding; refuses if none exists. */
-    release({ subject }: {
-        subject: string;
-    }): {
-        subject: string;
-    };
-    /** Delegate pruning to the bound store and return how many records it drops. */
-    prune({ subject }: {
-        subject: string;
-    }): {
-        evicted: number;
-    };
-    /** Look up a binding. */
-    _getBinding({ subject }: {
-        subject: string;
-    }): PersistBinding[];
 }
 
 === dist/engine/reactions/authoring/channels.d.ts ===
@@ -2288,8 +2061,8 @@ export declare class InterpreterFailures {
  *    pre-firing failures consume nothing, while consequence-stage failures may
  *    accompany a firing that already retained its consumption and effects.
  *
- * A store folds these entries into indexes by id, flow, and reaction. Matching
- * reads those indexes. Each store defines what `prune()` removes.
+ * The runtime folds these entries into an occurrence index by id, flow, and
+ * reaction. Matching reads that index.
  */
 import type { ActionOutcome, InstrumentedAction } from "../types.ts";
 /** How long a store's in-memory fold retains occurrence records. */
@@ -2397,12 +2170,9 @@ export type LogEntry = {
     id: string;
     fault: Record<string, unknown>;
 };
-/**
- * Storage interface for appended entries, retained action indexes, firing
- * indexes, consumption queries, and pruning.
- */
+/** The runtime occurrence index used for matching, consumption, and retention. */
 export interface LogStore {
-    /** Append one immutable entry, folding it into the indexed views. */
+    /** Fold one immutable occurrence entry into the indexed views. */
     append(entry: LogEntry): void;
     /** Look up a single action record by id. */
     byId(id: string): ActionRecord | undefined;
@@ -2425,9 +2195,7 @@ export interface LogStore {
     /** Folded view: retained action records grouped by flow token, in invocation order. */
     readonly flowIndex: Map<string, ActionRecord[]>;
 }
-/**
- * Fold entries into memory and retain them according to the configured policy.
- */
+/** The core in-memory occurrence index. */
 export declare class MemoryStore implements LogStore {
     readonly policy: RetentionPolicy;
     readonly actions: Map<string, ActionRecord>;
@@ -3957,7 +3725,7 @@ export declare function lineOf(source: {
 export {};
 
 === dist/engine/reads/local-behavior.d.ts ===
-/** Discover local behavior, definition references, and boundary use from application IR. */
+/** Discover executable behavior that cannot travel as portable application data. */
 import type { AppIR } from "./ir.ts";
 export type LocalDefinitionKind = "reaction" | "view" | "former";
 export interface LocalBehaviorDefinition {
@@ -3974,42 +3742,16 @@ export interface OpaqueOccurrence {
     occurrence: number;
     reason: string;
 }
-export interface DefinitionDependency {
-    from: LocalBehaviorDefinition;
-    to: LocalBehaviorDefinition;
-}
 export interface LocalBehaviorAnalysis {
     localDefinitions: readonly ObservedLocalDefinition[];
     occurrences: readonly OpaqueOccurrence[];
-    dependencies: readonly DefinitionDependency[];
-    boundaryReactions: readonly string[];
 }
 export declare function localDefinitionKey(definition: LocalBehaviorDefinition): string;
-export declare function compareLocalDefinitions(left: LocalBehaviorDefinition, right: LocalBehaviorDefinition): number;
 /**
  * Walk each definition once. Local occurrences belong to the definition that
  * contains them; references do not duplicate inventory ownership.
  */
 export declare function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis;
-/** Return local definitions reachable from one definition, including itself. */
-export declare function reachableLocalDefinitions(analysis: LocalBehaviorAnalysis, root: LocalBehaviorDefinition): ObservedLocalDefinition[];
-
-=== dist/engine/reads/local-review.d.ts ===
-/** Validate and render the explicit review contract for local application behavior. */
-import { type LocalBehaviorDefinition, type ObservedLocalDefinition } from "./local-behavior.ts";
-export type { LocalBehaviorDefinition } from "./local-behavior.ts";
-export interface LocalBehaviorContract {
-    readonly revision: string;
-    readonly definitions: readonly LocalBehaviorDefinition[];
-}
-export interface LocalBehaviorReview {
-    contract: LocalBehaviorContract | null;
-    observed: readonly ObservedLocalDefinition[];
-}
-/** Validate exact, unique, canonical review inventory and return an immutable data snapshot. */
-export declare function reviewLocalBehavior(owner: string, observed: readonly ObservedLocalDefinition[], supplied: LocalBehaviorContract | undefined): LocalBehaviorReview;
-export declare function renderLocalBehaviorReview(review: LocalBehaviorReview): string;
-export declare function renderLocalBehaviorMarkdown(review: LocalBehaviorReview): string;
 
 === dist/engine/reads/matchers.d.ts ===
 /**
@@ -4661,7 +4403,8 @@ export declare function compute(computation: ComputationRef, input: Mapping, out
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
 
 === dist/engine/tooling/artifact-plan.d.ts ===
-import type { ApplicationManifestV2 } from "./manifest.ts";
+import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
+import type { ApplicationManifestV3 } from "./manifest.ts";
 export type ArtifactKind = "specification" | "wire" | "manifest";
 export interface ArtifactPlanEntry {
     path: string;
@@ -4675,6 +4418,7 @@ export interface ArtifactPlan {
 export interface GeneratedPlanOptions {
     title: string;
     specification?: string;
+    specificationBanner?: string;
     wire?: string;
     wireName?: string;
     wireBanner?: string;
@@ -4683,6 +4427,9 @@ export interface GeneratedPlanOptions {
         export: string;
     };
     strictLeaves?: boolean;
+    /** An HTTP contract already projected by the owning boundary policy. */
+    httpWire?: WireContractsIR;
+    httpWireName?: string;
 }
 export type ArtifactStatus = {
     path: string;
@@ -4701,53 +4448,16 @@ export interface ArtifactFilesystem {
 }
 export declare function normalizeArtifactPath(path: string): string;
 export declare function artifactPlan(entries: readonly Omit<ArtifactPlanEntry, "digest">[]): ArtifactPlan;
-export declare function planGenerated(manifest: ApplicationManifestV2, options: GeneratedPlanOptions): ArtifactPlan;
+export declare function planGenerated(manifest: ApplicationManifestV3, options: GeneratedPlanOptions): ArtifactPlan;
 export declare function checkArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export declare function applyArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
-
-=== dist/engine/tooling/dependency-graph.d.ts ===
-import type { ApplicationManifestV2 } from "./manifest.ts";
-export type DependencyNodeKind = "concept" | "generator" | "endpoint" | "output" | "reaction" | "action" | "query" | "view" | "former" | "computation" | "review" | "opaque";
-export interface DependencyNode {
-    id: string;
-    kind: DependencyNodeKind;
-    name: string;
-    digest: string;
-    opaque?: true;
-}
-export type DependencyEdgeKind = "implements" | "produces" | "triggers-on" | "requests" | "reads" | "uses" | "invalidated-by" | "opaque-dependency";
-export interface DependencyEdge {
-    from: string;
-    to: string;
-    kind: DependencyEdgeKind;
-}
-export interface ApplicationDependencyGraphV2 {
-    format: "sync-engine.application-dependency-graph";
-    version: 2;
-    generator: ApplicationManifestV2["generator"];
-    nodes: DependencyNode[];
-    edges: DependencyEdge[];
-    reverse: Record<string, string[]>;
-}
-export interface ApplicationImpact {
-    directlyChanged: string[];
-    affected: string[];
-    endpoints: string[];
-    outputs: string[];
-    wholeApplication: boolean;
-}
-export declare function applicationDependencyGraph(manifest: ApplicationManifestV2): ApplicationDependencyGraphV2;
-export declare function diffManifestNodes(before: ApplicationManifestV2, after: ApplicationManifestV2): string[];
-export declare function affectedNodes(graph: ApplicationDependencyGraphV2, directlyChanged: readonly string[]): string[];
-export declare function applicationImpact(before: ApplicationManifestV2, after: ApplicationManifestV2): ApplicationImpact;
 
 === dist/engine/tooling/diagnostics.d.ts ===
 import type { EndpointDeclaration } from "../boundary/assembly/endpoint-portability.ts";
 import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { AppIR } from "../reads/ir.ts";
-import type { LocalBehaviorReview } from "../reads/local-review.ts";
 export type DiagnosticSeverity = "info" | "warning" | "error";
-export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "LOCAL_DEFINITION" | "UNRESOLVED_WIRE_LEAF" | "ENDPOINT_PATH_OVERLAP" | "MULTIPLE_RESPOND_CONSEQUENCES" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER";
+export type DiagnosticCode = "UNLOWERED_REACTION" | "UNLOWERED_ENDPOINT" | "OPAQUE_READ_OPERATION" | "OPAQUE_PATTERN" | "UNRESOLVED_WIRE_LEAF" | "ENDPOINT_PATH_OVERLAP" | "MULTIPLE_RESPOND_CONSEQUENCES" | "MISSING_ENDPOINT_FALLBACK" | "ORDER_SENSITIVE_FORMER";
 export interface ApplicationDiagnostic {
     severity: DiagnosticSeverity;
     code: DiagnosticCode;
@@ -4761,7 +4471,7 @@ export interface ApplicationDiagnostic {
     };
     message: string;
 }
-export declare function applicationDiagnostics(app: AppIR, endpoints: readonly EndpointDeclaration[], wire: WireContractsIR, localBehavior?: LocalBehaviorReview): ApplicationDiagnostic[];
+export declare function applicationDiagnostics(app: AppIR, endpoints: readonly EndpointDeclaration[], wire: WireContractsIR): ApplicationDiagnostic[];
 export declare function diagnosticsFail(diagnostics: readonly ApplicationDiagnostic[], policy?: "errors" | "warnings"): boolean;
 
 === dist/engine/tooling/generated-artifacts.d.ts ===
@@ -4782,6 +4492,8 @@ export interface GeneratedApplication {
     directory?: URL;
     /** The read-back's filename; defaults to the title, slugged, with `.md`. */
     specification?: string;
+    /** The read-back's banner; defaults to one naming the assembly. */
+    specificationBanner?: string;
     /** The wire contract's filename; defaults to `wire.ts`. */
     wire?: string;
     /** The wire contract's type name; defaults to the title in Pascal case, with `Wire`. */
@@ -4807,7 +4519,6 @@ type ResolvedApplication = GeneratedApplication & {
     specification: string;
     wire: string;
     wireName: string;
-    wireBanner: string;
     /** The specifier the generated wire imports its type anchor from. */
     vocabularyFrom: {
         from: string;
@@ -4824,8 +4535,6 @@ export declare function renderGenerated(application: ResolvedApplication): {
         reactions: number;
         views: number;
         formers: number;
-        unlowered: import("../reads/ir.ts").UnloweredIR[];
-        localBehavior: import("../reads/local-review.ts").LocalBehaviorReview;
         compute: number;
     };
     specification: string;
@@ -4839,7 +4548,6 @@ export {};
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
 import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
-import { type LocalBehaviorReview } from "../reads/local-review.ts";
 import type { ActionOutcome } from "../reactions/types.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 export interface ObservedOccurrence {
@@ -4856,7 +4564,6 @@ export declare function inspectAssembly(assembly: Assembly<Record<string, new (.
     inputContracts: Record<string, InputContractDecl>;
     occurrences: ObservedOccurrence[];
     readBack: string;
-    localBehavior: LocalBehaviorReview;
     diagnostics: ApplicationDiagnostic[];
 };
 
@@ -4865,10 +4572,9 @@ import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
 import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
-import type { LocalBehaviorReview } from "../reads/local-review.ts";
 import { type GeneratorIdentity } from "../utils/package-version.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
-export interface ManifestEndpointV2 {
+export interface ManifestEndpointV3 {
     name: string;
     path: string;
     reactions: string[];
@@ -4878,25 +4584,24 @@ export interface ManifestEndpointV2 {
         output: boolean;
     };
 }
-export interface ApplicationManifestV2 {
+export interface ApplicationManifestV3 {
     format: "sync-engine.application-manifest";
-    version: 2;
+    version: 3;
     generator: GeneratorIdentity;
     digest: string;
     application: AppIR;
     concepts: ConceptInventoryIR[];
-    endpoints: ManifestEndpointV2[];
+    endpoints: ManifestEndpointV3[];
     inputContracts: Record<string, InputContractDecl>;
     wire: WireContractsIR;
     diagnostics: ApplicationDiagnostic[];
-    localBehavior: LocalBehaviorReview;
 }
 /**
- * Snapshot one assembly's static design and explicit local review. Retained runtime state and
- * uninterpreted concept State sections are excluded.
+ * Snapshot one assembly's static design. Retained runtime state and uninterpreted concept State
+ * sections are excluded.
  */
-export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV2;
-export declare function renderApplicationManifest(manifest: ApplicationManifestV2): string;
+export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV3;
+export declare function renderApplicationManifest(manifest: ApplicationManifestV3): string;
 
 === dist/engine/utils/canonical-json.d.ts ===
 export type JsonValue = null | boolean | number | string | JsonValue[] | {
@@ -5031,22 +4736,20 @@ export type { FreeBindings, InputBindings, OutputBindings } from "../engine/read
 /** Supported inspection, rendering, and generated-contract tools. */
 export { inspectAssembly } from "../engine/tooling/inspection.ts";
 export type { ObservedOccurrence } from "../engine/tooling/inspection.ts";
-export type { ObservedLocalDefinition } from "../engine/reads/local-behavior.ts";
-export type { LocalBehaviorReview } from "../engine/reads/local-review.ts";
 export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagnostics.ts";
 export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
 export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
-export type { ApplicationManifestV2, ManifestEndpointV2 } from "../engine/tooling/manifest.ts";
-export { affectedNodes, applicationDependencyGraph, applicationImpact, diffManifestNodes, } from "../engine/tooling/dependency-graph.ts";
+export type { ApplicationManifestV3, ManifestEndpointV3 } from "../engine/tooling/manifest.ts";
 export { applyArtifactPlan, artifactPlan, checkArtifactPlan, normalizeArtifactPath, planGenerated, } from "../engine/tooling/artifact-plan.ts";
 export type { ArtifactFilesystem, ArtifactKind, ArtifactPlan, ArtifactPlanEntry, ArtifactStatus, GeneratedPlanOptions, } from "../engine/tooling/artifact-plan.ts";
-export type { ApplicationDependencyGraphV2, ApplicationImpact, DependencyEdge, DependencyEdgeKind, DependencyNode, DependencyNodeKind, } from "../engine/tooling/dependency-graph.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
-export { renderWireTypes, wireContracts } from "../engine/boundary/wire/wire.ts";
+export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
+export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";
 export { renderInputContracts } from "../engine/boundary/protocol/endpoints.ts";
-export { floorReadBack, httpFloorReadBack } from "../engine/boundary/http/http-floor.ts";
 export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "../engine/reads/ir.ts";
-export type { WireContractsIR, WireEndpoint, WireOptions, WireRenderOptions, WireType, } from "../engine/boundary/wire/wire.ts";
+export type { WireContractsIR, WireEndpoint, WireOptions, } from "../engine/boundary/wire/wire-contracts.ts";
+export type { WireRenderOptions } from "../engine/boundary/wire/wire-renderer.ts";
+export type { WireType } from "../engine/boundary/wire/wire-types.ts";
 
 === dist/utils/index.d.ts ===
 export { logger } from "../engine/utils/logger.ts";

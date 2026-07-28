@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
-import { Logging, MemoryStore } from "@sync-engine/assembly";
 import { vocabulary } from "@sync-engine/language";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import {
@@ -140,16 +139,8 @@ function invocationSettlements(events: readonly OperationalEvent[]) {
   );
 }
 
-describe("gateway application", () => {
-  test("uses bounded occurrence retention and disabled logging by default", () => {
-    const { application, gateway } = setup();
-    const traced = createGateway<TestApi>({ application, logging: Logging.TRACE });
-    expect((gateway.engine.Action.store as MemoryStore).policy).toEqual({ window: 100 });
-    expect(gateway.engine.logging).toBe(Logging.OFF);
-    expect(traced.engine.logging).toBe(Logging.TRACE);
-  });
-
-  test("forwards an admitted request and keeps a separate log", async () => {
+describe("gateway decorator", () => {
+  test("forwards an admitted request with the caller correlation", async () => {
     const { application, gateway } = setup();
 
     const result = await gateway.invoke(
@@ -159,15 +150,9 @@ describe("gateway application", () => {
     );
 
     expect(result).toEqual({ ok: true, value: { message: "hello" } });
-    expect(gateway.engine).not.toBe(application.engine);
-
-    const gatewayRoot = [...gateway.engine.Action.actions.values()].find(
-      (record) => record.input?.path === "/gateway/receive",
-    );
     const applicationRoot = [...application.engine.Action.actions.values()].find(
       (record) => record.input?.path === "/echo",
     );
-    expect(gatewayRoot?.input.correlationId).toBe("trace-1");
     expect(applicationRoot?.input.correlationId).toBe("trace-1");
   });
 
@@ -218,13 +203,7 @@ describe("gateway application", () => {
       }),
     ]);
     expect(invocationSettlements(events)[0]).not.toHaveProperty("flow");
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: "action-settled",
-        route: "/gateway/receive",
-        correlationId: "public-success",
-      }),
-    );
+    expect(events).toHaveLength(1);
   });
 
   test("settles a downstream domain error against the public route", async () => {
@@ -290,9 +269,6 @@ describe("gateway application", () => {
         correlationId: gatewaySettlements[0]?.correlationId,
         result: "success",
       }),
-    );
-    expect(gatewaySettlements).not.toContainEqual(
-      expect.objectContaining({ route: "/gateway/receive" }),
     );
   });
 
@@ -423,11 +399,6 @@ describe("gateway application", () => {
         (record) => record.input?.path === "/missing",
       ),
     ).toBe(false);
-    expect(
-      [...gateway.engine.Action.actions.values()].some(
-        (record) => actionNameOf(record.action) === "resolve" && record.outcome?.kind === "error",
-      ),
-    ).toBe(true);
     expect(invocationSettlements(events)).toEqual([
       expect.objectContaining({
         route: "/missing",
@@ -472,6 +443,46 @@ describe("gateway application", () => {
     expect(application.concepts.Answering.completed).toEqual([]);
     await new Promise((resolve) => setTimeout(resolve, 25));
     expect(application.concepts.Answering.completed).toEqual(["committed"]);
+  });
+
+  test("enforces its deadline when a target ignores options and tracks the underlying work", async () => {
+    let release = () => {};
+    let markStarted = () => {};
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const gateway = createGateway<TestApi>({
+      application: {
+        invoker: {
+          async invoke() {
+            markStarted();
+            await waiting;
+            return { ok: true as const, value: { message: "late" } };
+          },
+        },
+        publicInterface: { routes: { "/echo": {} } },
+      },
+    });
+
+    const pending = gateway.invoke("/echo", { message: "waiting" }, { timeoutMs: 10 });
+    await started;
+    await expect(pending).resolves.toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.TIMED_OUT },
+    });
+
+    let idle = false;
+    const observing = gateway.whenIdle().then(() => {
+      idle = true;
+    });
+    await Promise.resolve();
+    expect(idle).toBe(false);
+    release();
+    await observing;
+    expect(idle).toBe(true);
   });
 
   test("admits only object inputs carrying every required key", async () => {

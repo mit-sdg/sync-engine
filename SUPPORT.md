@@ -41,13 +41,12 @@ version change. A generated client, server assembly, and generation tool must
 use the same exact package version; cross-version generated contracts are not
 supported, even when their shapes happen to match.
 
-`sync-engine.application-manifest` version 2 and
-`sync-engine.application-dependency-graph` version 2 are versioned data formats.
-An incompatible structural or semantic format change requires a new integer
-format version and new public type names. A package release does not bump a
-format version when the existing format and meaning remain compatible. Format
-version equality alone does not override the exact-package-version policy for
-generated Markdown, wire contracts, manifests, or dependency graphs.
+`sync-engine.application-manifest` version 3 is a versioned data format. An
+incompatible structural or semantic format change requires a new integer format
+version and new public type names. A package release does not bump a format
+version when the existing format and meaning remain compatible. Format version
+equality alone does not override the exact-package-version policy for generated
+Markdown, wire contracts, or manifests.
 
 ## Runtime and toolchain
 

@@ -28,7 +28,6 @@
     "SUPPORT.md",
     "dist",
     "docs",
-    "!docs/tmp-*",
     "examples",
     "NOTICE"
   ],

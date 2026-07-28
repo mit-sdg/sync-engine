@@ -96,9 +96,9 @@ workflow source facts.
 
 Regenerate declarations with `bun run declarations:pin` and example outputs
 with `bun scripts/examples.ts pin`. Review every generated diff as a public
-contract change. Generated Markdown, wire, manifests, and dependency graphs are
-coupled to the exact generator version; do not assume cross-version
-compatibility from an unchanged format number.
+contract change. Generated Markdown, wire, and manifests are coupled to the
+exact generator version; do not assume cross-version compatibility from an
+unchanged format number.
 
 ## Final gates
 

@@ -29,7 +29,7 @@ or automatic restart recovery.
 Public subpaths, behavior, and generated formats may change incompatibly between
 beta versions. Pin an exact package version, review the changelog, regenerate
 both artifacts, and typecheck a packed consumer before upgrading. Generated
-Markdown, IR, manifests, dependency graphs, and wire output are exact-version
+Markdown, IR, manifests, and wire output are exact-version
 contracts rather than cross-version interchange formats. The [support
 policy](../SUPPORT.md) defines the version and format rules.
 
@@ -64,7 +64,7 @@ idempotency keys and durable deduplication where required.
 
 A supported multi-instance deployment gives every instance a separate
 assembly, concept instance set, action scheduler, gateway, application log
-store, and gateway log store. Concept implementations may connect those
+store, and gateway observer stream. Concept implementations may connect those
 instances to one transactional domain store. Every race-sensitive decision and
 domain idempotency check must occur atomically in the owning concept action,
 using storage constraints or equivalent storage coordination. Use a durable
@@ -106,9 +106,9 @@ public admission path during this interval.
 
 `ConceptFloor.close()` is a descriptor operation supplied by the host. Assembly
 does not call it automatically. The host owns listener shutdown, process
-signals, hard deadlines, and resource close ordering. Assembly and gateway also
-do not close a supplied `logStore`; if a custom store owns resources, close them
-through its host-defined API after drain.
+signals, hard deadlines, and resource close ordering. Assembly does not close a
+supplied `logStore`; if a custom store owns resources, close it through its
+host-defined API after drain.
 
 The host sequence is: stop the listener, call `beginDrain()`, await it up to the
 host's hard deadline, invoke each concept floor's `close()` exactly once, close
@@ -135,21 +135,13 @@ concept State notation.
 
 ## Endpoint completeness
 
-Ordinary assembly and artifact generation reject local behavior in an endpoint,
-in a transitively referenced endpoint view or former, or in a local ordinary
-reaction that touches `RequestBoundary`. Closures, custom operations,
-object-identity patterns, raw transforms, and whole unlowered reactions are
-local. There is no endpoint override. Validation completes before a public route
-set or generated artifact plan is exposed, so direct invocation, gateways,
-HTTP, and generated clients use the same complete route set.
-
-Non-boundary local reactions, views, and formers require
-`AssemblyOptions.localBehavior`. Treat its non-empty revision as a reviewed
-application change identifier and its canonical `{ kind, name }` list as an
-exact allowlist, not a wildcard. Assembly rejects missing, stale, extra,
-duplicate, malformed, unsorted, and unused contracts. Review the manifest's
-observed reasons and bump the revision whenever local implementation behavior
-changes, including changes that leave the serialized marker unchanged.
+Ordinary assembly and artifact generation reject every local reaction, view, or
+former. Closures, custom operations, object-identity patterns, raw transforms,
+and whole unlowered reactions are local. Validation completes before a public
+route set or generated artifact plan is exposed, so direct invocation,
+gateways, HTTP, and generated clients use the same complete portable design.
+Manual engines under the `advanced` subpath retain explicit local constructs
+without acquiring an application boundary override.
 
 Endpoint branches have no priority or exclusivity. If more than one branch
 responds, one answer is accepted and the others receive `NOT_PENDING`; callers
@@ -176,11 +168,10 @@ documented concurrency and durability behavior when those properties matter.
 
 ## Retention and memory
 
-Ordinary assembly and the standard gateway each use a separate `MemoryStore`
-with a default window of the 100 most recent settled flows. Automatic window
-enforcement does not evict an active flow, so active work may exceed the
-configured window. Explicit `evictFlow` and custom stores are outside that
-protection.
+Ordinary assembly uses a `MemoryStore` with a default window of the 100 most
+recent settled flows. Automatic window enforcement does not evict an active
+flow, so active work may exceed the configured window. Explicit `evictFlow` and
+custom stores are outside that protection.
 
 `"keepAll"` retains all indexed evidence until the process or store releases
 it. `"evictConsumed"` removes only a consumed suffix when `prune()` is called;
@@ -190,16 +181,13 @@ retention increases memory use. No hard retained-byte limit is provided.
 ## Operational observation
 
 Use an assembly observer for application-engine telemetry and a gateway
-observer for gateway-boundary telemetry. Gateway action, interpreter,
-integrity, limit, and drain events identify the gateway's internal concepts and
-routes. For request-level counts and latency, use its single
-`invocation-settled` event: it is emitted after the final result visible to the
-caller and identifies the caller-requested application route, effective
-correlation id, result class, and applicable framework code. The internal
-`/gateway/receive` settlement is deliberately hidden, and the public settlement
-may have no `flow` field. The event does not imply causal quiescence. Accepted
-sibling work can continue afterward; use `whenIdle()` or a completed drain to
-observe quiescence.
+observer for gateway admission, limits, drain, and final settlement. The
+gateway emits one `invocation-settled` event after the final result visible to
+the caller. It identifies the requested application route, effective
+correlation id, result class, and applicable framework code, and may omit
+`flow`. The event does not imply causal quiescence. Accepted sibling work can
+continue afterward; use `whenIdle()` or a completed drain to observe
+quiescence.
 
 Observer handoff is synchronous but isolated: throws and rejected promises do
 not alter invocation behavior. Keep callbacks bounded and move queueing,
@@ -250,7 +238,7 @@ action settles.
 
 Do not place secrets in unstructured strings and assume field-name redaction
 will find them. Stable operational events omit action values. Review custom
-stores and legacy advanced observers as sensitive-data sinks.
+stores and manual-engine observers as sensitive-data sinks.
 
 ## Operational checklist
 
@@ -264,7 +252,7 @@ Before serving an assembly outside a test environment:
 5. Add host limits for connections, request rate, concurrency, and shutdown.
 6. Verify that every endpoint is represented in generated artifacts and that
    every admitted case answers explicitly.
-7. Review every local-behavior owner and reason, and verify the contract revision.
+7. Verify that the assembly contains portable behavior only.
 8. Review log retention, redaction, and diagnostic access.
 9. Test process interruption and storage failure against the application's own
    recovery design.

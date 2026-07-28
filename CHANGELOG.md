@@ -24,23 +24,21 @@ and generated-contract coupling explicit.
 - Only the newest beta is supported. Alpha releases are unsupported at beta.0,
   and the newest beta support window ends 30 days after stable 1.0.0 unless a
   later policy extends it. Published versions remain immutable.
-- Endpoint declarations now provide the authoritative route set. Endpoint and
-  HTTP base paths must use canonical portable URL pathnames; the cookie floor no
-  longer supplies an implicit `/api` route.
+- Endpoint declarations provide the authoritative route set. Endpoint and HTTP
+  base paths use canonical portable URL pathnames, and deployment prefixes are
+  explicit.
 
 ### Migration
 
 - Move runtime deployments to Node.js 24 and keep Node below 25. Run the CLI,
   examples, and source scripts with Bun 1.3.14 through the 1.3 line, and use
   TypeScript 6 through the 6.x line.
-- Inventory every local reaction, view, and former. Non-boundary local behavior
-  now requires an exact, sorted `AssemblyOptions.localBehavior` contract and a
-  reviewed non-empty revision. Local behavior is forbidden in endpoints,
-  transitively reached endpoint reads, and ordinary reactions that touch the
-  request boundary; there is no endpoint override.
-- Treat each endpoint's declared path as authoritative, remove attempts to bind
-  framework-owned `path` or `requestId` fields in `receive(...)`, canonicalize
-  endpoint/base paths, and declare `basePath: "/api"` explicitly when needed.
+- Use manual engines under `/advanced` for closures, custom operations,
+  object-identity patterns, raw transforms, and whole unlowered definitions.
+  Ordinary `assemble(...)` accepts portable reactions, views, and formers.
+- Treat each endpoint's declared path as authoritative, leave framework-owned
+  `path` and `requestId` fields to `receive(...)`, canonicalize endpoint/base
+  paths, and declare `basePath: "/api"` explicitly when needed.
 - Add `UNAVAILABLE` handling for overload and drain results and make switches
   over framework error codes exhaustive. Admission rejected for overload or
   drain creates no root action occurrence.
@@ -51,20 +49,26 @@ and generated-contract coupling explicit.
   `Gateway.beginDrain()` / `Gateway.whenIdle()` into host shutdown. Draining
   stops new roots but waits for accepted causal work, including work outliving a
   caller timeout or abort.
+- Configure the standard gateway as an `Invoker` decorator. Use its observer for
+  limit, drain, and final settlement events and the application store for
+  occurrence evidence.
 - Consumers of inspected IR must handle `UnloweredIR.known`, which retains the
   triggers, reads, consequences, and patterns that remain knowable around an
   opaque whole definition.
-- Replace directly exposed raw HTTP adapters with `productionHttpProfile(...)`
-  for public error projection. Add `httpFloor(...)` only when the application
-  needs its narrow same-origin cookie binding; credential meaning and domain
-  authorization remain application responsibilities.
+- Use `productionHttpProfile(...)` for public error projection. Add
+  `httpFloor(...)` only when the application needs its narrow same-origin cookie
+  binding; credential meaning and domain authorization remain application
+  responsibilities.
 - Configure execution limits, retention, redaction, endpoint validators, and
   bounded operational observers. Use the final `invocation-settled` event for
   request metrics, and call drain methods before closing host-owned floors,
   stores, listeners, or process resources.
-- Replace process-global `configureRedaction(...)` calls with an explicitly
-  owned `createRedactor(policy)`; `redact(...)` now applies only immutable
-  universal sensitive-name patterns.
+- `FileStore` composes a live in-memory occurrence index with an append-only
+  JSONL audit sink.
+- Artifact commands and `planGenerated(...)` share one manifest-driven
+  rendering pipeline.
+- Own application redaction through `createRedactor(policy)`; `redact(...)`
+  applies immutable universal sensitive-name patterns.
 - Keep a concept specification's optional State section as prose only. It is
   not checked against class fields or storage and does not enter manifests,
   read-back, wire types, input contracts, or runtime validators; prove state
@@ -75,15 +79,13 @@ and generated-contract coupling explicit.
 - Regenerate and review generated Markdown and wire TypeScript after upgrading.
   Generated clients, server assemblies, and generation tooling must use the
   same exact package version; cross-version generated contracts are unsupported.
-- `sync-engine.application-manifest` V2 and
-  `sync-engine.application-dependency-graph` V2 are the current versioned
-  formats. Incompatible format semantics require a new integer version and new
-  public type name. Format-version equality does not relax exact package-version
-  coupling.
+- `sync-engine.application-manifest` V3 is the current versioned format. It
+  carries static application design, endpoint contracts, diagnostics, and its
+  digest. Format-version equality does not relax exact package-version coupling.
 - Regenerate declarations and all pinned example artifacts before cutting the
-  beta. Whole unlowered definitions, local-behavior review data, endpoint input
-  contracts, validator presence, diagnostics, and state-prose exclusion are
-  reflected in the current generated surfaces as documented.
+  beta. Endpoint input contracts, validator presence, diagnostics, and
+  state-prose exclusion are reflected in the current generated surfaces as
+  documented.
 
 ### Runtime and security support
 

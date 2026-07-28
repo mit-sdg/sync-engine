@@ -184,7 +184,6 @@ describe("advanced persistence recipe", () => {
     expect(invocationNames).toEqual(["Notes.save", "SearchIndex.index"]);
 
     await first.application.beginDrain();
-    first.occurrenceStore.stop();
 
     const restarted = assembleNotebook(statePath, occurrencePath);
     expect(restarted.occurrenceStore.actions.size).toBe(0);

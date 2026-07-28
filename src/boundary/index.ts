@@ -16,13 +16,8 @@ export type {
   OperationalObserver,
   OperationalResultClass,
 } from "@engine/reactions/runtime/operational";
-export { createGateway } from "@engine/boundary/gateway/public-gateway";
-export type {
-  Gateway,
-  GatewayClientError,
-  GatewayOptions,
-  GatewayTarget,
-} from "@engine/boundary/gateway/public-gateway";
+export { createGateway } from "@engine/boundary/gateway/gateway";
+export type { Gateway, GatewayOptions, GatewayTarget } from "@engine/boundary/gateway/gateway";
 export type { ApplicationInterface } from "@engine/boundary/protocol/application-interface";
 export { createHttpHandler } from "@engine/boundary/http/http";
 export type { HttpCorrelationOptions } from "@engine/boundary/http/http";

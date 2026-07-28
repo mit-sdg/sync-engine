@@ -261,7 +261,6 @@ interface Runtime {
   entries: SqliteEntries;
   effects: LocalEffects;
   applicationStore: MemoryStore;
-  gatewayStore: MemoryStore;
   applicationEvents: OperationalEvent[];
   gatewayEvents: OperationalEvent[];
   databaseCloseCalls: number;
@@ -296,7 +295,6 @@ function createRuntime(
     },
   });
   const applicationStore = new MemoryStore({ window: RETENTION_WINDOW });
-  const gatewayStore = new MemoryStore({ window: RETENTION_WINDOW });
   const applicationEvents: OperationalEvent[] = [];
   const gatewayEvents: OperationalEvent[] = [];
   const application = assemble({
@@ -308,7 +306,6 @@ function createRuntime(
   });
   const gateway = createGateway<MultiInstanceWire>({
     application,
-    logStore: gatewayStore,
     observers: [(event) => gatewayEvents.push(event)],
   });
   const handler = createHttpHandler({
@@ -330,7 +327,6 @@ function createRuntime(
     entries,
     effects,
     applicationStore,
-    gatewayStore,
     applicationEvents,
     gatewayEvents,
     get databaseCloseCalls() {
@@ -404,7 +400,6 @@ async function runScenario(): Promise<void> {
     assert.notStrictEqual(first.floor.instances.Entries, second.floor.instances.Entries);
     assert.notStrictEqual(first.scheduler, second.scheduler);
     assert.notStrictEqual(first.applicationStore, second.applicationStore);
-    assert.notStrictEqual(first.gatewayStore, second.gatewayStore);
     assert.notDeepEqual(first.floor.resources, second.floor.resources);
     assert((await stat(databasePath)).isFile(), "the transactional store is not file-backed");
 
@@ -413,8 +408,6 @@ async function runScenario(): Promise<void> {
     assert.equal(second.effects.observations.length, 0);
     assert.equal(first.applicationStore.actions.size, 0);
     assert.equal(second.applicationStore.actions.size, 0);
-    assert.equal(first.gatewayStore.actions.size, 0);
-    assert.equal(second.gatewayStore.actions.size, 0);
 
     for (let round = 1; round <= CONTEST_ROUNDS; round += 1) {
       const name = `contested-${round}`;
@@ -478,22 +471,20 @@ async function runScenario(): Promise<void> {
         assert(!hasCorrelation(first.applicationStore, secondCorrelation));
         assert(hasCorrelation(second.applicationStore, secondCorrelation));
         assert(!hasCorrelation(second.applicationStore, firstCorrelation));
-        assert(hasCorrelation(first.gatewayStore, firstCorrelation));
-        assert(!hasCorrelation(first.gatewayStore, secondCorrelation));
-        assertDisjoint(
-          ids(first.applicationStore),
-          ids(first.gatewayStore),
-          "application/gateway logs",
+        assert(
+          first.gatewayEvents.some(
+            (event) => "correlationId" in event && event.correlationId === firstCorrelation,
+          ),
+        );
+        assert(
+          !first.gatewayEvents.some(
+            (event) => "correlationId" in event && event.correlationId === secondCorrelation,
+          ),
         );
         assertDisjoint(ids(first.applicationStore), ids(second.applicationStore), "instance logs");
         assert(
           [...first.applicationStore.actions.values()].some(
             (record) => record.concept === first.floor.instances.Entries,
-          ),
-        );
-        assert(
-          [...first.gatewayStore.actions.values()].every(
-            (record) => record.concept !== first.floor.instances.Entries,
           ),
         );
       }

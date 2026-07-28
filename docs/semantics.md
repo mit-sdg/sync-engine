@@ -28,7 +28,7 @@ group states independent siblings; later groups state temporal dependence.
 | ------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Action outcomes, refusals, and direct calls | [Actions, refusals, and faults](#actions-refusals-and-faults)                           |
 | Trigger matching and consequence paths      | [Reactions](#reactions)                                                                 |
-| Portable and reviewed local definitions     | [Portable and reviewed local behavior](#portable-and-reviewed-local-behavior)           |
+| Portable and local definitions              | [Portable and local behavior](#portable-and-local-behavior)                             |
 | In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                 |
 | Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                            |
 | Query promises, caching, and equality       | [Queries](#queries)                                                                     |
@@ -142,7 +142,7 @@ The public `when(...)` form accepts one trigger. Use `earlier` for directional
 correlation, views for standing policy, and concept guards for decisions that
 must run once. The package exports no public multi-occurrence join form.
 
-### Portable and reviewed local behavior
+### Portable and local behavior
 
 A definition is **portable** only when its canonical JSON representation can be
 round-tripped and registered against the same named vocabulary. Named concept
@@ -153,25 +153,11 @@ transforms, and whole reaction definitions that lowering cannot represent are
 local executable behavior. JSON markers for local behavior make it inspectable;
 they do not make its function or identity re-registerable.
 
-Ordinary assembly permits local behavior only outside the request boundary and
-only with an exact `localBehavior` review contract. The contract supplies a
-non-empty revision and the unique direct owners as `{ kind: "reaction" |
-"view" | "former", name }`, in canonical kind/name order. Its inventory must
-equal the observed inventory. A local view or former owns its occurrence once;
-reactions that reference it do not claim duplicate ownership. Missing, stale,
-extra, duplicate, malformed, unsorted, and unused contracts fail assembly.
-
-Local behavior is forbidden in every endpoint reaction, in every view or former
-reachable from an endpoint, and in a local ordinary reaction that triggers on or
-asks `RequestBoundary`. This check is transitive and runs before an invoker,
-route set, generated plan, or artifact write is exposed. Listing such a
-definition in `localBehavior` is not an override.
-
-Inspection and generated read-back label reviewed local definitions, the review
-revision, and every reason. A whole unlowered reaction remains in read-back with
-its reason and retains the action, query, view, former, pattern, and stage facts
-that can still be known from its declaration. The canonical manifest includes
-both the contract and observed inventory in its digest.
+Ordinary assembly accepts portable behavior only. It rejects every local
+reaction, view, or former before an invoker, route set, generated plan, or
+artifact write is exposed. Manual engines under the `advanced` subpath may
+execute local constructs, but they do not gain ordinary assembly's application
+boundary or portability guarantees.
 
 ## Execution and concurrency
 
@@ -409,11 +395,10 @@ The [application-boundary guide](./guide/application-boundary.md) owns the
 authoring path from assembly through the fixed gateway and generated client.
 Semantically, `assemble` gives an application its own boundary and occurrence
 log. The log records what happened in that assembly; it is not concept state.
-`createGateway` builds a second, fixed standard application in front of it,
-with separate routing, admission, forwarding, boundary, and log. The gateway
-and application share a correlation id, not a log. The public gateway factory
-accepts an application and additive composition; it does not expose a general
-replacement gateway vocabulary or assembly.
+`createGateway` decorates the application's `Invoker` with route admission,
+forwarding, caller timeout and abort handling, limits, observation, and ordered
+drain. It does not create a second reaction engine or occurrence log. Gateway
+and application observation share the effective correlation id.
 
 The local and HTTP clients resolve to the same simple shape: the endpoint's
 success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
@@ -439,12 +424,10 @@ events carry action id, flow, route, asking reaction, correlation id, safe
 result class, wall-clock time, and monotonic duration. They never carry action
 input or output.
 
-A gateway observer receives the gateway engine's action, interpreter,
-integrity, limit, and drain events. Those action events describe internal
-gateway concepts and routes. The internal `/gateway/receive` invocation
-settlement is not exposed. Each public `gateway.invoke(...)` instead emits
-exactly one invocation settlement after its final downstream or gateway
-rejection result is known. That event uses the caller-requested application
+Each public `gateway.invoke(...)` emits exactly one invocation settlement after
+its final downstream or gateway rejection result is known. Gateway observers
+also receive its limit and drain events, but there are no internal gateway
+concept-action events. The settlement uses the caller-requested application
 path, the effective gateway/application correlation id, the final result class
 and framework code when applicable, and a duration through final completion.
 It omits `flow` because the internal gateway root identity is not a stable
@@ -568,12 +551,10 @@ including `Date` to `string`. Strict generation rejects any leaf that cannot be
 traced to a signature. Without an anchor, the renderer emits a structural
 contract and uses `Json` for leaves it cannot trace to a signature.
 
-Ordinary assembly rejects local behavior in an endpoint or any transitively
-referenced view or former. The error names the endpoint and local owner before a
-route or artifact plan is exposed. Direct invocation, gateway routing, HTTP, and
-generation therefore share the declaration-owned route set instead of silently
-omitting a local-only endpoint. Reviewed local non-endpoint definitions remain
-listed with reasons in inspection and generated read-back.
+Ordinary assembly rejects every local reaction, view, or former. The error names
+each local owner before a route or artifact plan is exposed. Direct invocation,
+gateway routing, HTTP, and generation therefore share one complete portable
+design instead of silently omitting executable-only behavior.
 
 When a generated application descriptor supplies `httpProfile` or `httpFloor`,
 one module contains both contracts. The contract named by `wireName` retains the
@@ -598,15 +579,15 @@ delivery, cancellation, persistence, restart, or boundary operation.
 
 Several application instances may use the same durable domain state when each
 instance has its own assembly, concept objects, action scheduler, gateway, and
-occurrence stores, and host-supplied concept implementations connect them to a
+occurrence store, and host-supplied concept implementations connect them to a
 transactional store. The concept action that owns a state decision must perform
 its uniqueness, capacity, and durable domain-operation idempotency checks in one
 storage transaction. Storage constraints or equivalent storage coordination,
 not action queues or correlation ids, decide cross-instance conflicts.
 
 Reactions and occurrence matching remain local to the assembly that observed
-the action. Gateway and application logs are separate even within one instance.
-An idempotent concept action may therefore return one stable persisted result
+the action. The gateway emits operational events without owning another log. An
+idempotent concept action may therefore return one stable persisted result
 when retried while its surrounding reaction executes once for every successful
 action occurrence.
 
@@ -770,16 +751,15 @@ Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
 most recent settled causal flows. Its `retention` option can select another
 window, `"keepAll"`, or `"evictConsumed"`; `logStore` installs an
 application-owned store instead and is mutually exclusive with `retention`.
-Assembly and gateway do not close a supplied store. The host must close any
+Assembly does not close a supplied store. The host must close any
 resources behind a custom store after drain, using the store's own API.
-The standard gateway has the same independent options and default. Automatic window enforcement does not evict an
-active flow, so active flows may temporarily exceed a window. Explicit
+Automatic window enforcement does not evict an active flow, so active flows may
+temporarily exceed a window. Explicit
 `evictFlow` calls and custom stores are outside that protection. Advanced
 callers may also pass a `FileStore` or custom `LogStore` to
-`createEngine(store?)`. `FileStore` appends JSONL;
-retention trims its in-memory fold without rewriting that file.
-`PersistingConcept` manages an application-supplied store registry; it does not
-bind concept state or install an assembly log store.
+`createEngine(store?)`. `FileStore` composes an in-memory occurrence index with
+an append-only JSONL audit sink; retention trims the index without rewriting
+that file.
 
 `"keepAll"` never prunes indexed evidence. `"evictConsumed"` removes only a
 consumed suffix when `prune()` is called; flow settlement does not call that

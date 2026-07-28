@@ -121,15 +121,11 @@ describe("canonical public API", () => {
       detail: "This title is already in the catalog.",
     });
 
-    const gateway = createGateway({
-      application: system,
-      additionalComposition: { Standard: { cannotReplaceTheStandardRoute: true } },
-    });
+    const gateway = createGateway({ application: system });
     expect(await gateway.invoke("/catalog/add", { raw: "Other" })).toEqual({
       ok: true,
       value: { title: "other" },
     });
-    expect("engine" in gateway).toBe(false);
     expect("engine" in system).toBe(false);
     const inspected = inspectAssembly(system);
     expect(inspected.app.reactions.some((reaction) => reaction.name === "Add")).toBe(true);
@@ -286,8 +282,6 @@ const register = {
     "ImplementationOverrides",
     "Implementations",
     "IntegrityFailureRecord",
-    "LocalBehaviorContract",
-    "LocalBehaviorDefinition",
     "LogEntry",
     "LogStore",
     "Logging",
@@ -295,7 +289,6 @@ const register = {
     "OperationalEvent",
     "OperationalObserver",
     "OperationalResultClass",
-    "PersistingConcept",
     "PublicError",
     "PublicErrorCategory",
     "ReactionFailureRecord",
@@ -323,7 +316,6 @@ const register = {
     "ExecutionLimits",
     "FrameworkErrorCode",
     "Gateway",
-    "GatewayClientError",
     "GatewayOptions",
     "GatewayTarget",
     "HttpCredentialBinding",
@@ -373,27 +365,19 @@ const register = {
   ],
   tooling: [
     "AppIR",
-    "ApplicationDependencyGraphV2",
     "ApplicationDiagnostic",
-    "ApplicationImpact",
-    "ApplicationManifestV2",
+    "ApplicationManifestV3",
     "ArtifactFilesystem",
     "ArtifactKind",
     "ArtifactPlan",
     "ArtifactPlanEntry",
     "ArtifactStatus",
     "ConceptInventoryIR",
-    "DependencyEdge",
-    "DependencyEdgeKind",
-    "DependencyNode",
-    "DependencyNodeKind",
     "DiagnosticCode",
     "DiagnosticSeverity",
     "FormerIR",
     "GeneratedPlanOptions",
-    "LocalBehaviorReview",
-    "ManifestEndpointV2",
-    "ObservedLocalDefinition",
+    "ManifestEndpointV3",
     "ObservedOccurrence",
     "ReactionIR",
     "ViewIR",
@@ -402,18 +386,12 @@ const register = {
     "WireOptions",
     "WireRenderOptions",
     "WireType",
-    "affectedNodes",
-    "applicationDependencyGraph",
     "applicationDiagnostics",
-    "applicationImpact",
     "applicationManifest",
     "applyArtifactPlan",
     "artifactPlan",
     "checkArtifactPlan",
     "diagnosticsFail",
-    "diffManifestNodes",
-    "floorReadBack",
-    "httpFloorReadBack",
     "inspectAssembly",
     "normalizeArtifactPath",
     "planGenerated",
@@ -470,8 +448,6 @@ const frameworkErrorCodes = [
   "UNKNOWN_ERROR",
 ] as const;
 
-const allowedPackageName = "sync-engine";
-
 function referenceSubpathBlock(subpath: keyof typeof register): string {
   const exports = register[subpath].map((name) => `\`${name}\``).join(", ");
   return [
@@ -495,22 +471,6 @@ function filesUnder(directory: string, suffix?: string): string[] {
   }
   return files;
 }
-
-function unsupportedIdentifier(name: string): boolean {
-  return (
-    /^sync/i.test(name) ||
-    /Syncs?$/.test(name) ||
-    /journal/i.test(name) ||
-    name === "act" ||
-    name === "ActChain" ||
-    name === "RequestBoundaryConcept" ||
-    name === "createEndpointDsl" ||
-    name === "sanitize"
-  );
-}
-
-const unsupportedProse =
-  /\b(?:act|journal(?:s|ed|ing)?|sdk|sync|syncs|synced|synchronization|synchronizations)\b/gi;
 
 describe("public API register", () => {
   test("the registered public entrypoints have their exact exports and contain only exports", () => {
@@ -558,18 +518,6 @@ describe("public API register", () => {
         symbols.set(target, exposed.name);
       }
     }
-    const unsupportedExports: string[] = [];
-    for (const source of program.getSourceFiles()) {
-      if (!source.fileName.includes("/src/engine/")) continue;
-      const internalModule = checker.getSymbolAtLocation(source);
-      if (internalModule === undefined) continue;
-      for (const exposed of checker.getExportsOfModule(internalModule)) {
-        if (unsupportedIdentifier(exposed.name)) {
-          unsupportedExports.push(`${source.fileName.slice(root.length + 1)}:${exposed.name}`);
-        }
-      }
-    }
-    expect(unsupportedExports).toEqual([]);
   }, 15_000);
 
   test("the package exposes exactly the registered public subpaths", () => {
@@ -619,64 +567,5 @@ describe("public API register", () => {
     expect([...reference.matchAll(/^## `([^`]+)`$/gm)].map((match) => match[1])).toEqual(
       Object.keys(register),
     );
-  });
-
-  test("unsupported register words are absent from filenames and shipped prose", () => {
-    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const files = filesUnder(root).filter(
-      (file) => !file.slice(root.length + 1).startsWith("docs/tmp-"),
-    );
-    const unsupportedFilenames = files
-      .map((file) => file.slice(root.length + 1))
-      .filter((file) =>
-        file
-          .split(/[./_-]/)
-          .some((part) =>
-            /^(?:act|journal|journals|legacy|sanitize|sync|syncs|synchronize)$/i.test(part),
-          ),
-      );
-    expect(unsupportedFilenames).toEqual([]);
-
-    const proseFiles = files.filter(
-      (file) => file.endsWith(".md") && !file.includes("/tests/package/declarations.snapshot.txt"),
-    );
-    const findings: string[] = [];
-    for (const file of proseFiles) {
-      const prose = readFileSync(file, "utf8").replaceAll(allowedPackageName, "");
-      for (const match of prose.matchAll(unsupportedProse)) {
-        findings.push(`${file.slice(root.length + 1)}:${match[0]}`);
-      }
-    }
-    const packageJson = readFileSync(resolve(root, "package.json"), "utf8").replaceAll(
-      allowedPackageName,
-      "",
-    );
-    for (const match of packageJson.matchAll(unsupportedProse)) {
-      findings.push(`package.json:${match[0]}`);
-    }
-    expect(findings).toEqual([]);
-  });
-
-  test("persisted firing fields use the public register", () => {
-    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const file = resolve(root, "src/engine/reactions/runtime/log-store.ts");
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(file, "utf8"),
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const unsupportedFields: string[] = [];
-    for (const statement of source.statements) {
-      if (!ts.isInterfaceDeclaration(statement) || statement.name.text !== "FiringRecord") continue;
-      for (const member of statement.members) {
-        if (ts.isPropertySignature(member) && unsupportedIdentifier(member.name.getText(source))) {
-          unsupportedFields.push(
-            `src/engine/reactions/runtime/log-store.ts:FiringRecord.${member.name.getText(source)}`,
-          );
-        }
-      }
-    }
-    expect(unsupportedFields).toEqual([]);
   });
 });

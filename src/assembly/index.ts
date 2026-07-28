@@ -1,11 +1,6 @@
 /** Install a vocabulary and its composition into one coherent running system. */
 export { assemble } from "@engine/boundary/assembly/assembly-facade";
-export type {
-  Assembly,
-  AssemblyOptions,
-  LocalBehaviorContract,
-  LocalBehaviorDefinition,
-} from "@engine/boundary/assembly/assembly-facade";
+export type { Assembly, AssemblyOptions } from "@engine/boundary/assembly/assembly-facade";
 export {
   conceptFloor,
   conceptSet,
@@ -22,7 +17,7 @@ export type {
   RegisteredConcept,
   RegisteredConceptSet,
 } from "@engine/boundary/assembly/concept-set";
-export { FileStore, PersistingConcept } from "@engine/hosting/persisting";
+export { FileStore } from "@engine/hosting/file-store";
 export { MemoryStore } from "@engine/reactions/runtime/log-store";
 export { Logging } from "@engine/reactions/runtime/logging";
 export type { ExecutionLimits } from "@engine/boundary/invocation/lifecycle";

@@ -3,7 +3,6 @@ import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import type { WireType } from "@engine/boundary/wire/wire-types";
 import type { AppIR, FormerIR, ReactionIR } from "@engine/reads/ir";
 import { analyzeLocalBehavior, localDefinitionKey } from "@engine/reads/local-behavior";
-import type { LocalBehaviorReview } from "@engine/reads/local-review";
 import { foldFormerNode } from "@engine/reads/schema";
 import { ordinal } from "@engine/utils/ordinal";
 import { reactionNameBelongsTo } from "@engine/utils/reaction-name";
@@ -15,7 +14,6 @@ export type DiagnosticCode =
   | "UNLOWERED_ENDPOINT"
   | "OPAQUE_READ_OPERATION"
   | "OPAQUE_PATTERN"
-  | "LOCAL_DEFINITION"
   | "UNRESOLVED_WIRE_LEAF"
   | "ENDPOINT_PATH_OVERLAP"
   | "MULTIPLE_RESPOND_CONSEQUENCES"
@@ -157,7 +155,6 @@ export function applicationDiagnostics(
   app: AppIR,
   endpoints: readonly EndpointDeclaration[],
   wire: WireContractsIR,
-  localBehavior?: LocalBehaviorReview,
 ): ApplicationDiagnostic[] {
   const endpointByReaction = new Map(
     endpoints.flatMap((endpoint) =>
@@ -166,36 +163,15 @@ export function applicationDiagnostics(
   );
   const diagnostics: ApplicationDiagnostic[] = [];
   const local = analyzeLocalBehavior(app);
-  const reviewed = new Set(
-    (localBehavior?.contract?.definitions ?? []).map((definition) =>
-      localDefinitionKey(definition),
-    ),
-  );
-  for (const observed of local.localDefinitions) {
-    const definition = { kind: observed.kind, name: observed.name } as const;
-    const revision = localBehavior?.contract?.revision;
-    diagnostics.push({
-      severity: "info",
-      code: "LOCAL_DEFINITION",
-      definition,
-      message:
-        reviewed.has(localDefinitionKey(observed)) && revision !== undefined
-          ? `${observed.kind} "${observed.name}" is reviewed local behavior under revision "${revision}": ${observed.reasons.join("; ")}.`
-          : `${observed.kind} "${observed.name}" is unreviewed local behavior: ${observed.reasons.join("; ")}.`,
-    });
-  }
   for (const { name, reason } of app.unlowered) {
     const endpoint = endpointByReaction.get(name);
-    const status = reviewed.has(localDefinitionKey({ kind: "reaction", name }))
-      ? "reviewed local"
-      : "unreviewed local";
     diagnostics.push(
       endpoint === undefined
         ? {
             severity: "warning",
             code: "UNLOWERED_REACTION",
             definition: { kind: "reaction", name },
-            message: `Reaction "${name}" is ${status} executable behavior: ${reason}.`,
+            message: `Reaction "${name}" is local executable behavior: ${reason}.`,
           }
         : {
             severity: "error",
