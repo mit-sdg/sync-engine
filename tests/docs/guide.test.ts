@@ -99,7 +99,7 @@ describe("guided curriculum", () => {
   test("the getting-started guide describes the scaffold output", async () => {
     const guide = await readFile(new URL("getting-started.md", guideDirectory), "utf8");
 
-    expect(guide).toContain("sync-engine new operations-room");
+    expect(guide).toContain("sync-engine new note-keeper");
     expect(guide).toContain("Noting");
     expect(guide).toContain("src/concepts/noting/spec.md");
     expect(guide).toContain("src/concepts/noting/noting.ts");
@@ -147,7 +147,7 @@ describe("guided curriculum", () => {
         const text = await readFile(sourceUrl, "utf8");
         sources.push(text);
         if (text.includes("{{")) {
-          sources.push(applyTemplate(text, "operations-room"));
+          sources.push(applyTemplate(text, "note-keeper"));
         }
       }
 
@@ -183,11 +183,24 @@ describe("guided curriculum", () => {
   });
 
   test("local links and anchors resolve and guides avoid unsupported entrypoints", async () => {
+    const manifest = JSON.parse(
+      await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as { name: string; exports: Record<string, unknown> };
+    const entrypoints = new Set(
+      Object.keys(manifest.exports).map((path) => `${manifest.name}/${path.replace(/^\.\//, "")}`),
+    );
     const docs = [
       new URL("../../README.md", import.meta.url),
+      new URL("../../CONTRIBUTING.md", import.meta.url),
+      new URL("../../docs/index.md", import.meta.url),
       new URL("../../docs/book.md", import.meta.url),
+      new URL("../../docs/cli.md", import.meta.url),
+      new URL("../../docs/concept-specification.md", import.meta.url),
+      new URL("../../docs/glossary.md", import.meta.url),
+      new URL("../../docs/operations.md", import.meta.url),
       new URL("../../docs/public-surface.md", import.meta.url),
       new URL("../../docs/architecture.md", import.meta.url),
+      new URL("../../docs/releasing.md", import.meta.url),
       new URL("../../docs/semantics.md", import.meta.url),
       new URL("../../examples/README.md", import.meta.url),
       new URL("../../examples/operations-room/README.md", import.meta.url),
@@ -196,7 +209,9 @@ describe("guided curriculum", () => {
     ];
     for (const docUrl of docs) {
       const markdown = await readFile(docUrl, "utf8");
-      expect(markdown).not.toMatch(/from\s+["']@mit-sdg\/sync-engine["']/);
+      for (const match of markdown.matchAll(/from\s+["'](@mit-sdg\/sync-engine[^"']*)["']/g)) {
+        expect(entrypoints, `${docUrl.pathname}: ${match[1]}`).toContain(match[1]);
+      }
       if (
         !docUrl.pathname.endsWith("/public-surface.md") &&
         !docUrl.pathname.endsWith("/architecture.md")

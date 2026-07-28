@@ -1,9 +1,10 @@
 # The example book
 
-Use this book to look up a reading construction and see it in a small working
-example. The [root documentation map](../README.md#examples-and-documentation) points to the right guide or
-reference for each task, and the [guided walkthrough](./guide/getting-started.md)
-builds a complete application.
+Use this book to look up a representative reading construction and compare it
+with a close variant. The book is not a complete language register. The [Public
+API](./public-surface.md#language) lists the exported forms, and [Execution
+semantics](./semantics.md#reading-declarations-govern) defines matching and
+cardinality.
 
 For your own assembly, `inspectAssembly(assemble(...)).readBack` returns the
 same kind of read-back shown here.
@@ -15,7 +16,27 @@ Each entry describes four parts of the construction:
 3. What happens on **none**, and on **many**?
 4. Which names did the line **open**?
 
-Entries marked ☒ show an invalid construction beside its registration error.
+Entries labelled **Invalid construction** show a rejected form beside the exact
+error from the phase that rejects it. Most fail during assembly registration;
+former-root errors fail when the former is installed for evaluation.
+
+## Construction index
+
+| Need                                     | Entry                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| Require one relation row                 | [A plain line](#1--a-plain-line)                                          |
+| Depend on declared cardinality           | [The promise decides](#2--the-promise-decides-not-the-words)              |
+| Test a literal                           | [A literal in the pattern tests](#3--a-literal-in-the-pattern-tests)      |
+| Reuse a bound name and fan out           | [A bound name tests](#4--a-bound-name-tests-and-a-many-relation-fans-out) |
+| Require absence                          | [`no`](#5--no--denial)                                                    |
+| Preserve a case on absence               | [`whether`](#6--whether--bind-or-blank)                                   |
+| Read an output view                      | [A view with outputs](#7--a-view-with-outputs)                            |
+| Make a formed record optional            | [An optional former](#8--a-former-that-may-decline--optional)             |
+| Reduce selected rows                     | [Selection folds](#9--folds-consume-a-captured-range)                     |
+| Read an endpoint end to end              | [A whole endpoint](#10--a-whole-endpoint-read-end-to-end)                 |
+| Author sibling reaction paths            | [Ordinary siblings](#11--siblings-on-an-ordinary-reaction)                |
+| Author sibling endpoint paths            | [Endpoint siblings](#12--an-endpoint-uses-the-same-sibling-shape)         |
+| Preserve a record through optional reads | [Only `whether` lines](#13--a-body-of-only-whether-lines)                 |
 
 ## The scene
 
@@ -65,7 +86,7 @@ book.ClearedReadingClosesDiscussion
   then Discussing.close (discussion)
 ```
 
-**☒ Caught mistake — the row grabbed out of habit.** A later reaction pulled
+**Invalid construction — the row grabbed out of habit.** A later reaction pulled
 both outputs of `_current` and used only one:
 
 ```ts
@@ -195,7 +216,8 @@ const OpenDiscussionOnce = reaction(({ selection }) =>
 - **Runs**: the same read as entry 1, expecting emptiness.
 - **None / many**: none passes; any row drops the case. `no` has exactly one
   reading — no such row exists at all — never "a row exists that differs."
-- **Opens**: nothing. `no` can only test names bound by an earlier plain line.
+- **Opens**: nothing. `no` can only test names already bound by the trigger or
+  another available line.
 
 ```
 book.OpenDiscussionOnce
@@ -204,7 +226,7 @@ book.OpenDiscussionOnce
   then Discussing.open (subject: selection)
 ```
 
-**☒ Caught mistake — asking the denial to hand something back.** An author
+**Invalid construction — asking the denial to hand something back.** An author
 wanted "the discussion that is no longer open" and reached for `no` as if it
 selected the missing row:
 
@@ -307,7 +329,7 @@ a host that writes `whether(theCurrentReadingOf({ circle }))` keeps the row and
 takes blank leaves. Absence is declared once, here — every reader then chooses
 how to handle it.
 
-**☒ Caught mistake — folding what is already single.** The first draft reached
+**Invalid construction — folding what is already single.** The first draft reached
 for a fold to say "the first one":
 
 ```ts
@@ -346,7 +368,7 @@ const theResponseCountOf = former(
 the response count of (discussion) — inputs (discussion); bindings (response); promises exactly one; checked when formed
 ```
 
-**☒ Caught mistake — a record over a crowd.** Without `each`, a formed record
+**Invalid construction — a record over a crowd.** Without `each`, a formed record
 was pointed at the many-promise relation directly:
 
 ```ts
@@ -559,8 +581,7 @@ const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
 ```
 
 This version covers found and missing circles because those are the conditions
-the author wrote. Coverage is still not a registration claim; advisory
-analysis over exported IR may report it.
+the author wrote. Coverage is not analyzed or enforced by the current package.
 
 ```
 book.GetCircleName:found
@@ -643,15 +664,9 @@ return `null`. When both queries return a row, `_responses` receives the
 the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; checked when formed
 ```
 
-## Summary
+## Related references
 
-Authors write plain lines and explicit result shapes. Relation declarations
-supply cardinality, and the generated read-back reports opens, tests, fan-out,
-dropped cases, sibling paths, and temporal stages. Registration rejects
-unbound names, malformed branch labels, and incompatible declarations. The
-examples above show accepted forms beside representative rejections and one
-intentional overlap.
-
-Continue with [Execution semantics](./semantics.md) for the complete rules
-behind these examples, or use the [guided walkthrough](./guide/getting-started.md)
-to build and run an application.
+Use [Execution semantics](./semantics.md) for rules not established by these
+examples, including cache freshness, equality, failure delivery, concurrency,
+retention, and cancellation. Use [Getting started](./guide/getting-started.md)
+to build and run a complete application.

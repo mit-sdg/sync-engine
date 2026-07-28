@@ -1,5 +1,13 @@
 # Connect independent behaviors
 
+This guide uses the complete concept set from the [Operations Room
+example](../../examples/operations-room/README.md), including Gathering,
+Selecting, Discussing, and the Alerting concept developed in [Define one
+behavior](concepts.md). It introduces the ordinary public reaction surface: one
+trigger, current-state reads, independent siblings, and temporal chains. The [Example book](../book.md)
+contains close construction variants; [Execution semantics](../semantics.md#reactions)
+defines matching, ordering, and failure behavior.
+
 Selecting knows how to keep one current item within a scope. Discussing knows
 how to open a discussion about a subject. Neither concept decides that choosing
 an operations-room mitigation should open a discussion. The application owns
@@ -116,37 +124,24 @@ named branch cannot be extended.
 
 ## Condition on an action's outcome
 
-The output pattern in `when` can test a returned value as well as bind one.
-`Approved` accepts any returned `Decision.decide` occurrence whose route is the
-literal `"approved"`. This action-specific trigger has no provenance pin, so a
-direct call to the same action can also match it.
+The output pattern in `when` can test a returned value as well as bind one. A
+literal tests the output; a fresh symbol binds it. An action-specific
+`.responds(...)` trigger has no provenance constraint unless the declaration
+uses a cross-action channel with a `by` option, so any matching call to that
+concept action can trigger it.
 
-```text
-      Approved: reaction((_: Vars) =>
-        when(Decision.decide({}).responds({ route: "approved" })).then(
-          Recorder.record({ tag: "approved" }),
-        ),
-      ),
-```
+`returned(...)` and `refused(...)` are cross-action posture channels. Their
+patterns can bind `concept`, `action`, and `input`; returned payloads use
+`result`, while refused payloads use `refusal` and may expose `message`. The
+optional `by` field pins the channel to the reaction that asked the action.
+Use the action-specific `.responds(...)` and `.refuses(...)` forms when the
+concept and action are already known. A runtime fault is a separate advanced
+channel and never matches `refused(...)`.
 
-Declared refusals travel on a posture channel. The pattern can bind the whole
-`refusal` payload or its `message`; this example binds `message` and pins the
-channel to the ask made by `Try`.
-
-```text
-      Recover: reaction(({ message }: Vars) =>
-        when(refused({ action: "fail", message }, { by: "Try" })).then(
-          Recorder.record({ tag: message }),
-        ),
-      ),
-```
-
-`returned(...)` and `refused(...)` match channels across actions. Their
-patterns can also bind `concept`, `action`, and `input`; returned payloads use
-the `result` key and refused payloads use `refusal`. The `by` option is the
-provenance pin that makes a channel continuation belong to one asking
-reaction. A runtime fault is a separate advanced channel and never matches
-`refused(...)`.
+Expected domain rejection belongs on the refusal posture. Do not return an
+`{ error: ... }` object from a concept action and expect the engine to treat it
+as a refusal; an ordinary returned object remains a successful result even when
+it has an `error` key.
 
 ## Keep the reaction in the composition
 

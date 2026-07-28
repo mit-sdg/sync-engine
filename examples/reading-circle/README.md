@@ -1,54 +1,67 @@
 # Reading Circle
 
-A book club app where members join reading circles, choose books, and
-discuss them. Policy views admit members to discussions and block non-members
-with a clear `NOT_A_MEMBER` error response.
+Reading Circle is the shortest complete multi-concept example. Members create
+and join circles, select a reading, and discuss it. The application keeps its
+reactions, policy views, formers, and endpoints in one composition module so
+the whole design can be read in one place. It requires Bun 1.3 or newer.
 
-Install and run from this directory:
+## Run the example
+
+Run these commands from this directory:
 
 ```sh
 bun install
-bun start
+bun run check
+bun run start
 ```
 
-The scenario creates a circle, adds members, chooses a book, records
-responses, and prints the full circle page, a duplicate-membership refusal,
-and the policy error response.
+The deterministic scenario creates the `after-dinner` circle for Mara, joins
+Lin, chooses _The Dispossessed_, records a response, and reads the complete
+circle page. It also returns the `ALREADY_JOINED` concept refusal and the
+`NOT_A_MEMBER` authored policy response.
 
-**What it demonstrates:**
+## What the example establishes
 
-- Local concept registration for Gathering, Selecting, and Discussing
-- Reaction-based composition — choosing a book opens its discussion
-  automatically
-- Policy views (`memberMayRespond`, `nonmemberMayNotRespond`) — access
-  control as declarative conditions
-- Boundary declarations (`endpoint`, `receive`, `respond`) — typed
-  request/response contracts
-- A gateway that admits calls through a generated wire contract
-- A typed client created from the wire contract
-- A whole-page former that stitches the circle state, reading, and
-  discussion into one view
+- Gathering, Selecting, and Discussing remain independently registered.
+- Choosing a reading opens its discussion through a reaction.
+- `memberMayRespond` and `nonmemberMayNotRespond` express opposite policy cases
+  without changing a concept implementation.
+- A former joins circle, selection, discussion, and response state into one
+  page value.
+- Endpoints expose the application through the standard gateway, local client,
+  generic HTTP adapter, and generated wire contract.
+- Principle tests exercise each concept directly; application tests exercise
+  the assembled and HTTP boundaries.
 
-## Files
+## Source map
 
-- `src/concepts/*/`: concept implementations, principle tests, and specs
-- `src/concept-set.ts`, `src/identities.ts`: concept registration and deterministic identity support
-- `src/composition/reading-circle.ts`: reactions, views, formers, and boundaries
-- `src/assembly.ts`, `src/edge.ts`, `src/client.ts`: assembly and boundary wiring
-- `src/scenario.ts`: complete local-gateway story
-- `tests/application.test.ts`: full application and boundary tests
-- `generated.config.ts`: artifact command configuration
-- [`generated/reading-circle.md`](generated/reading-circle.md): pinned assembled read-back
-- [`generated/wire.ts`](generated/wire.ts): pinned TypeScript wire contract
+| Path                                                         | Role                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `src/concepts/*/`                                            | Concept specifications, implementations, registries, and principle tests |
+| `src/concept-set.ts`                                         | Named registrations, vocabulary, and implementations                     |
+| `src/composition/reading-circle.ts`                          | Reactions, views, former, and endpoints                                  |
+| `src/assembly.ts`                                            | Application assembly                                                     |
+| `src/edge.ts`                                                | Standard gateway and HTTP handler                                        |
+| `src/client.ts`                                              | Generated-contract client factories                                      |
+| `src/scenario.ts`                                            | Complete local-gateway scenario                                          |
+| `tests/application.test.ts`                                  | Assembled behavior, HTTP, and deterministic snapshot tests               |
+| `generated.config.ts`                                        | Artifact command configuration                                           |
+| [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                                               |
+| [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                                          |
 
-## Commands
+## Individual checks
+
+Use these commands to isolate a failed aggregate check:
 
 ```sh
-bun start
-bun test
+bun run test
 bun run typecheck
 bun run artifacts:check
-bun run check
 ```
 
-Use `bun run artifacts:pin` to intentionally regenerate the pinned files.
+`artifacts:check` is silent on success. To update both generated files after an
+intentional source change, run `bun run artifacts:pin` and review the diff.
+
+Continue with the [Example book](../../docs/book.md) for small reading
+constructions or [Execution semantics](../../docs/semantics.md) for the runtime
+contract.

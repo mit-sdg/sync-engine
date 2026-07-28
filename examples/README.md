@@ -1,21 +1,38 @@
-# Examples
+# Example applications
 
-Each application is a complete, independently installable TypeScript project.
-Its directory contains its concepts, specifications, support code, tests,
-configuration, generated contracts, and package scripts. Copy either directory
-without the rest of this repository and it remains runnable.
+Each example is a complete private TypeScript package with its own concepts,
+specifications, composition, tests, generated contracts, and package scripts.
+The directories are independently installable; neither example imports source
+from the other. They require Bun 1.3 or newer.
 
-- [Reading Circle](reading-circle/README.md) keeps reactions, policy views,
-  formers, and endpoints together for the shortest complete example.
-- [Operations Room](operations-room/README.md) separates composition into
-  selectable reaction packs, swappable policy, endpoints, and staged formers.
+| Example                                      | Use it to study                                                                                                                              |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Reading Circle](reading-circle/README.md)   | The shortest complete multi-concept application: one composition module, policy views, one page former, endpoints, gateway, HTTP, and client |
+| [Operations Room](operations-room/README.md) | A modular composition: selectable reaction packs, replaceable policy, implementation overrides, staged formers, and a nested dashboard       |
 
-From an example directory, `bun install && bun run check` verifies formatting,
-types, tests, and pinned artifacts; `bun start` runs its scenario. From the
-repository root:
+Start with Reading Circle when learning the complete request lifecycle. Use
+Operations Room after the basic concept, reaction, view, former, and endpoint
+roles are familiar.
+
+From either example directory:
 
 ```sh
-bun run example               # reading circle
-bun run example:operations    # operations room
-bun run scenario              # both
+bun install
+bun run check
+bun run start
 ```
+
+`check` verifies formatting, types, tests, and pinned artifacts. `start` prints
+the deterministic scenario result. Run `bun run artifacts:pin` only when an
+intentional composition or contract change requires updated generated files.
+
+From the repository root:
+
+```sh
+bun install
+bun run example
+bun run example:operations
+bun run scenario
+```
+
+The first two commands run one scenario. `scenario` runs both.

@@ -14,9 +14,9 @@ assembly, generated wire contracts, local and HTTP clients, occurrence logging,
 and the package-qualified `sync-engine` CLI. The package ships built ESM
 JavaScript and declarations through seven explicit public subpaths.
 
-The [guides](docs/guide/getting-started.md) and [public API
-register](docs/public-surface.md) describe the architecture and supported
-surface.
+The [documentation index](docs/index.md), [guided
+curriculum](docs/guide/getting-started.md), and [Public API
+register](docs/public-surface.md) describe the supported surface.
 
 ### Alpha stability
 

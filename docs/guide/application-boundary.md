@@ -5,17 +5,21 @@ gives an outside caller a stable path into the operations room, with an input
 contract, correlation, and a response from the authored design.
 
 This page assembles the room, declares one endpoint, places the gateway in front
-of it, and calls the result through a generated TypeScript contract.
+of it, and calls the result through a generated TypeScript contract. It assumes
+the concepts, reactions, views, and formers from the preceding guides.
 
 ## Run the shipped path
 
 The Operations Room scenario already crosses an assembled application, the
-standard gateway, and a local client typed by its generated contract. From this
-repository's root, run:
+standard gateway, and a local client typed by its generated contract. Run this
+from the source-checkout root after installing its dependencies:
 
 ```sh
 bun run example:operations
 ```
+
+From an independently copied `examples/operations-room/` directory, use
+`bun install` followed by `bun run start` instead.
 
 The scenario source is
 [`examples/operations-room/src/scenario.ts`](../../examples/operations-room/src/scenario.ts).
@@ -323,7 +327,7 @@ read. The [public API](../public-surface.md#client) names the client options;
 [execution semantics](../semantics.md#boundary-gateway-and-client) owns the
 result, transport, and framework-error guarantees.
 
-## Scale the deployment
+## Organize host-owned deployment code
 
 The shipped examples keep the assembly in one file. Their application-owned
 source and generated outputs follow this layout:
@@ -366,14 +370,14 @@ deployment boundary. These are folder-depth choices, not different authoring
 conventions: source stays under `src/`, while generated artifacts remain
 visibly derived beside it.
 
+The current alpha does not expose a drain or idle API. `close()` is not called
+by assembly, and timeout or abort can leave accepted work running after the
+caller stops waiting. The folder layout identifies ownership; it does not make
+graceful shutdown automatic. [Operational limits](../operations.md) states the
+host responsibilities and unsupported deployment guarantees.
+
 The complete local scenario crosses the same gateway with a generated client
 contract in [`scenario.ts`](../../examples/operations-room/src/scenario.ts).
-
-One authored boundary connects outside JSON to concept actions and back. The
-generated wire contract carries that boundary to frontend code, while the
-concepts and composition remain on the server side.
-
-Continue to [Views and formers](views-and-formers.md) to change who may
-contribute and to build the dashboard shape returned by `/rooms/get`. For the
-gateway's exact admission and failure behavior, see
-[Execution semantics](../semantics.md#boundary-gateway-and-client).
+For exact admission, settlement, error, and JSON behavior, use [Execution
+semantics](../semantics.md#boundary-gateway-and-client). For every exported
+constructor and option, use the [Public API](../public-surface.md).

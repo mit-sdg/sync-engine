@@ -117,10 +117,10 @@ describe("executable documentation examples", () => {
       "--package",
       `${manifest.name}@${manifest.publishConfig?.tag}`,
     ]);
-    expect(words.slice(executable + 1)).toEqual(["new", "operations-room"]);
+    expect(words.slice(executable + 1)).toEqual(["new", "note-keeper"]);
 
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-docs-"));
-    const project = join(temporary, "operations-room");
+    const project = join(temporary, "note-keeper");
     try {
       const result = spawnSync(
         "bun",
@@ -132,7 +132,7 @@ describe("executable documentation examples", () => {
         stderr: "",
       });
       await expect(readFile(join(project, "generated.config.ts"), "utf8")).resolves.toContain(
-        'title: "Operations room"',
+        'title: "Note keeper"',
       );
     } finally {
       await rm(temporary, { recursive: true, force: true });

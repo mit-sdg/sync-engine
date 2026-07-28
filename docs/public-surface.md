@@ -1,9 +1,13 @@
 # Public API
 
-The package has the public package subpaths listed below. Most backend files use `language`,
-`assembly`, and `boundary`; frontend files use `client`; generation scripts use
-`tooling`. `advanced` marks deliberate manual construction, while `utils`
-contains general support functions.
+This reference lists every supported package subpath and export in the current
+alpha. There is no root export and no supported deep import. The export
+registers are exact; compact signatures and tables summarize the principal
+call shapes and do not replace the generated TypeScript declarations.
+
+Most backend files use `language`, `assembly`, and `boundary`; frontend files
+use `client`; generation scripts use `tooling`. `advanced` marks deliberate
+manual construction, while `utils` contains process-level support functions.
 
 | Package path                    | Role                                                          |
 | ------------------------------- | ------------------------------------------------------------- |
@@ -32,9 +36,9 @@ call shapes:
 
 | API                    | Compact signature                                                            |
 | ---------------------- | ---------------------------------------------------------------------------- |
-| `vocabulary`           | `vocabulary({ concepts, computations })`                                     |
+| `vocabulary`           | `vocabulary({ concepts, computations? })`                                    |
 | `reaction`             | `reaction(vars => when(trigger).where(...conditions).then(...consequences))` |
-| `returned` / `refused` | `(pattern, { by?, except?, exceptBy? }?)`                                    |
+| `returned` / `refused` | `(pattern?, { by?, except?, exceptBy? }?)`                                   |
 | `where`                | `where(...conditions)`                                                       |
 | `no` / `whether`       | `(readLine)`                                                                 |
 | `earlier`              | `earlier(action, input, output?)`                                            |
@@ -45,12 +49,12 @@ call shapes:
 | `each`                 | `each(readLine).where(...).arranged(...).form(...)` or a fold                |
 | `is`                   | `is.lt`, `is.le`, `is.gt`, `is.ge`, and `is.among` comparisons               |
 
-| Consumer           | Result                            | Empty selection |
-| ------------------ | --------------------------------- | --------------- |
-| `.form({ ... })`   | One record per row                | `[]`            |
-| `.count()`         | Number of rows                    | `0`             |
-| `.first(value)`    | Value from the first arranged row | `null`          |
-| `.distinct(value)` | First-seen distinct values        | `[]`            |
+| Consumer           | Result                                                       | Empty selection |
+| ------------------ | ------------------------------------------------------------ | --------------- |
+| `.form({ ... })`   | One record per row                                           | `[]`            |
+| `.count()`         | Number of rows                                               | `0`             |
+| `.first(value)`    | Value from the first selected row after optional arrangement | `null`          |
+| `.distinct(value)` | First-seen distinct values                                   | `[]`            |
 
 Concept entries accepted by `vocabulary` are either a concept class or
 `{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals?,
@@ -86,10 +90,16 @@ assemble(options: AssemblyOptions): Assembly
 | `logging`               | no       | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                           |
 | `retention`             | no       | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"` |
 
+A retention window must be a finite, non-negative integer. `{ window: 0 }`
+allows an active flow to complete before automatic eviction.
+
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, and
 `form(fusedFormer)`. `ActionRefusal` is the direct-action refusal result.
 `ConceptImplementation`, `Implementations`, and `ImplementationOverrides` name
-complete or partial implementation maps.
+complete or partial implementation maps. Assembled non-query actions are
+asynchronous and conservatively resolve to their awaited result or an
+`ActionRefusal`; underscore-prefixed queries retain their implementation return
+shape.
 
 ### Registration and floors
 
@@ -103,9 +113,25 @@ complete or partial implementation maps.
 `ConceptFloor` name those descriptors. `PublicError` contains the public HTTP
 categories and `PublicErrorCategory` names their union.
 
+`publicErrors` may categorize only refusal codes declared by the concept
+specification. Floor names must be non-empty, and each supplied floor value
+must be a factory function. A floor name is available through the typed
+`implementations(...)` overload only when every concept supplies it. If an
+incomplete floor is selected by bypassing that type restriction, selection
+fails at runtime. `conceptSet` also rejects conflicting public categories.
+
+`conceptFloor` validates a complete implementation map and returns the supplied
+descriptor. Assembly does not install, own, or call the floor's `close()`
+method. The host owns floor selection and lifecycle.
+
 ### Log stores
 
 `MemoryStore` and `FileStore` implement `LogStore`; `FileStore` appends JSONL.
+`new MemoryStore()` defaults to `"evictConsumed"`. Ordinary `assemble(...)`
+instead supplies `{ window: 100 }`. `new FileStore(path)` defaults to
+`"keepAll"`; its synchronous append completes before the entry enters the
+in-memory fold, and `stop()` currently has no work to perform. Pruning does not
+rewrite its file.
 `RetentionPolicy`, `LogEntry`, `FiringRecord`, and `ReactionFailureRecord` name
 the corresponding contracts. `PersistingConcept` manages an
 application-supplied store registry. Persistence, eviction, redaction, and
@@ -132,10 +158,22 @@ outer-shape contract. The [application-boundary guide](./guide/application-bound
 shows the authoring path; [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
 owns settlement.
 
+Endpoint paths must begin with `/`. `receive(...)` cannot author the
+framework-owned `path` or `requestId` fields. `respond(...)` cannot author
+`requestId` or `errorKind`.
+
 | `InputContractDecl` field | Default / effect                                 |
 | ------------------------- | ------------------------------------------------ |
 | `required`                | `[]`; missing listed keys return `INVALID_INPUT` |
 | `defaults`                | `{}`; fills listed keys only when absent         |
+
+Without an explicit contract, assembly derives required keys from portable
+endpoint IR: it intersects the non-reserved keys mentioned by every exported
+`receive(...)` pattern for the path. A key outside that intersection cannot be
+required because at least one path alternative does not mention it. An
+executable-only endpoint has no derived contract. An explicit contract is
+authoritative and replaces the derived contract; it does not merge with it. At
+most one endpoint declaration may supply an explicit contract for a given path.
 
 ### Gateway and invocation
 
@@ -178,6 +216,10 @@ semantics](./semantics.md#boundary-gateway-and-client).
 
 ### CLI
 
+The APIs in this section construct application-specific CLI programs. They are
+separate from the installed `sync-engine` executable, whose commands are
+defined in the [CLI reference](./cli.md).
+
 | API                     | Compact signature                                        |
 | ----------------------- | -------------------------------------------------------- |
 | `command`               | `command({ path }, { description?, parse, format })`     |
@@ -198,7 +240,7 @@ may accompany an error, but exception text from an unknown failure is omitted.
 
 | Code                       | Ordinary source                                                | HTTP status when emitted by the server adapter |
 | -------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
-| `INVALID_INPUT`            | Gateway input admission                                        | 422                                            |
+| `INVALID_INPUT`            | Gateway input admission or oversized request body              | 422 for admission; 413 for oversized body      |
 | `NOT_FOUND`                | Unknown route                                                  | 404                                            |
 | `TIMED_OUT`                | Invocation wait expired                                        | 504                                            |
 | `ABORTED`                  | Invocation signal aborted                                      | 499                                            |
@@ -247,6 +289,12 @@ Calls resolve to success or error envelopes rather than throwing for handled
 transport failures. JSON projection and error delivery are normative in
 [Execution semantics](./semantics.md#boundary-gateway-and-client).
 
+`createClient` replaces a nullish input with `{}`. A transport throw or rejected
+promise resolves as `{ error: "TRANSPORT_ERROR" }`. `createHttpTransport`
+resolves header-provider, network, response-JSON, and unexpected-status failures
+to the corresponding framework codes. Handled transport failures do not reject
+the client call.
+
 ## `tooling`
 
 <!-- register:tooling:start -->
@@ -260,7 +308,7 @@ transport failures. JSON projection and error delivery are normative in
 | API                    | Compact signature                                                 |
 | ---------------------- | ----------------------------------------------------------------- |
 | `inspectAssembly`      | `inspectAssembly(assembly)`                                       |
-| `renderApp`            | `renderApp(ir): string`                                           |
+| `renderApp`            | `renderApp({ title, concepts, app }): string`                     |
 | `renderReaction`       | `renderReaction(reaction): string`                                |
 | `renderInputContracts` | `renderInputContracts(contracts): string`                         |
 | `wireContracts`        | `wireContracts(app, options?: WireOptions): WireContractsIR`      |
@@ -269,8 +317,15 @@ transport failures. JSON projection and error delivery are normative in
 | `floorReadBack`        | `floorReadBack({ application, conceptFloor, httpFloor }): string` |
 
 `AppIR`, `ReactionIR`, `ViewIR`, `FormerIR`, `ConceptInventoryIR`, and
-`ObservedOccurrence` name inspected data. `WireContractsIR`, `WireEndpoint`,
-and `WireType` name derived wire data.
+`ObservedOccurrence` name inspected data. `ObservedOccurrence` contains the
+concept, action, optional `by`, output, and outcome summary; it omits input,
+action id, flow, and timestamp. Inspection reports only evidence retained by
+the store and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
+`WireType` name derived wire data.
+
+The structural argument consumed by `renderApp` has `title: string`,
+`concepts: ConceptInventoryIR[]`, and `app: AppIR`. The package does not export
+a separate public name for that aggregate argument type.
 
 | `WireOptions` field | Default                     |
 | ------------------- | --------------------------- |
@@ -322,7 +377,9 @@ owns derivation guarantees.
 
 <!-- register:advanced:end -->
 
-This subpath crosses the ordinary application boundary.
+This subpath crosses the ordinary application boundary. Prefer the ordinary
+assembly APIs unless the host needs manual engine construction or an explicit
+escape hatch.
 
 | API             | Compact signature / role                         |
 | --------------- | ------------------------------------------------ |
@@ -334,7 +391,11 @@ This subpath crosses the ordinary application boundary.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Requesting` is the low-level request/response concept;
-`Refuse` is the low-level refusal error. The advanced pieces do not install the
+`Refuse` is the low-level refusal marker. Its `message` becomes the refusal's
+`error` field and takes precedence over an `error` field in its optional data.
+An undeclared code remains a refusal. The current implementation warns only
+when the action has an explicit refusal contract that omits the code. The
+advanced pieces do not install the
 ordinary assembly's quiescent interpreter-failure settlement policy. Standard
 assembly behavior is normative under [Failures between action
 asks](./semantics.md#failures-between-action-asks) and
@@ -356,7 +417,15 @@ another thrown value. It does not sanitize or redact that text; use it only in
 a caller-reviewed diagnostic channel, never automatically in a public error
 envelope.
 
-`configureRedaction(policy)` sets the process redaction policy. `redact(value)`
+`configureRedaction(policy)` replaces the application-specific portion of a
+process-global redaction policy; universal sensitive-name patterns remain.
+`redact(value)`
 returns a copy that replaces values whose field names match `RedactionPolicy`
 or `UNIVERSAL_SENSITIVE_PATTERNS`. The exact storage and redaction guarantees
 live under [Logs, concept implementations, and restart](./semantics.md#logs-concept-implementations-and-restart).
+
+Redaction matches field names rather than arbitrary string contents and stops
+traversal after five levels. Nested cycles, unreadable values, functions,
+symbols, non-finite numbers, `undefined`, and values beyond the depth limit are
+replaced rather than preserved. A top-level `undefined` remains `undefined`;
+other ordinary results are JSON-safe projections.

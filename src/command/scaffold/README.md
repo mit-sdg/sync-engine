@@ -1,17 +1,44 @@
 # {{heading}}
 
+This project contains one complete sync-engine application: the Noting concept,
+two endpoints, an assembly, a local-gateway scenario, and generated contracts.
+It requires Bun 1.3 or newer.
+
+## Install and run
+
 ```sh
 bun install
-bun run generate    # write generated/{{slug}}.md and generated/wire.ts
-bun run check       # check the spec, generated artifacts, and types
-bun run principle   # the concept's story, with no application around it
-bun run start       # the scenario, through the gateway
+bun run generate
+bun run check
+bun run principle
+bun run start
 ```
 
-Use `bun run typecheck`, `bunx sync-engine check`, or
-`bunx sync-engine artifacts check` to isolate a failed aggregate check.
+`generate` writes `generated/{{slug}}.md` and `generated/wire.ts`. `check`
+compares the concept specification with its class, checks both generated files,
+and typechecks the project. `principle` tests Noting without an assembly.
+`start` writes a note and reads it back through the standard gateway.
 
-Add a behavior by writing `src/concepts/<name>/spec.md`, the class beside it,
-and a `registry.ts` that names the Error class for each refusal the
-specification declares. Register it in `src/concept-set.ts`, connect it in
-`src/composition.ts`, then run `bun run generate && bun run check`.
+Use these commands to isolate a failed check:
+
+```sh
+bun run typecheck
+bunx sync-engine check
+bunx sync-engine artifacts check
+```
+
+## Add a behavior
+
+1. Add `src/concepts/<name>/spec.md`, its class, a principle test, and a
+   `registry.ts` mapping every declared refusal code to an `Error` class.
+2. Add the registration to `src/concept-set.ts`.
+3. Connect the concept in `src/composition.ts` with reactions, views, formers,
+   or endpoints.
+4. Run `bun run generate`, review both generated files, and run
+   `bun run check`.
+
+Generated files are derived from `generated.config.ts`; do not edit them by
+hand. Documentation matching the installed package is under
+`node_modules/@mit-sdg/sync-engine/docs/`. The [online documentation
+index](https://github.com/mit-sdg/sync-engine/blob/main/docs/index.md) tracks the
+current development branch and may differ from this installed alpha.

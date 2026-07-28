@@ -345,6 +345,7 @@ const allowedRootFiles = new Set([
   ".gitignore",
   "AGENTS.md",
   "CHANGELOG.md",
+  "CONTRIBUTING.md",
   "LICENSE",
   "NOTICE",
   "README.md",

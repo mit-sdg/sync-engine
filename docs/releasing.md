@@ -1,8 +1,9 @@
 # Contributor release procedure
 
-This checklist owns repository release mechanics. It does not redefine public
+This how-to is for maintainers publishing an approved release. It assumes the
+release changes are already reviewed and merged. It does not define public
 behavior; use the [changelog](../CHANGELOG.md) for compatibility notes and
-[execution semantics](./semantics.md) for operational guarantees and limits.
+[Execution semantics](./semantics.md) for runtime guarantees.
 
 ## One-time repository settings
 
@@ -17,9 +18,10 @@ workflow cannot create or enforce them.
   tags, add required reviewers, and prevent self-review where the plan allows.
 - Configure npm trusted publishing for package `@mit-sdg/sync-engine`, GitHub
   organization `mit-sdg`, repository `sync-engine`, workflow
-  `.github/workflows/publish.yml`, and environment `npm`. While only prereleases
-  are supported, leave `latest` unset and publish alphas through the `alpha`
-  dist-tag. The first stable release establishes `latest`.
+  `.github/workflows/publish.yml`, and environment `npm`. Publish alpha releases
+  through the `alpha` dist-tag. An alpha publication must not create or move
+  `latest`; manage any historical `latest` tag under an explicit separate
+  policy until the first stable release.
 
 Recheck branch, tag, environment, npm trusted-publisher, and repository security
 settings before each release. They are external state and are not established
@@ -52,6 +54,9 @@ version disagreement in the examples, fixture, and generated scaffold.
 5. Regenerate declarations with `bun run declarations:pin` and example outputs
    with `bun scripts/examples.ts pin`. Review every generated diff, then run
    `bun run declarations:check` and `bun run examples:check`.
+6. Compare the supported Bun and Node versions in the root manifest, README,
+   examples, packed fixture, and packed tarball. A published manifest cannot be
+   corrected in place; fix metadata before assigning the version tag.
 
 ## Final gates
 
@@ -94,9 +99,9 @@ packing machinery.
 ## Verify the registry
 
 - Confirm `npm view @mit-sdg/sync-engine dist-tags versions` shows the new exact
-  version under `alpha`. While the project has no stable release, confirm
-  `latest` is absent; after the first stable release, confirm it remains on the
-  intended stable version.
+  version under `alpha`. Confirm that the alpha publication did not create or
+  move `latest`. After the first stable release, confirm that `latest` remains
+  on the intended stable version.
 - Check the npm package page for the GitHub Actions provenance attestation and
   verify the tarball integrity and repository, license, executable, and file
   metadata.

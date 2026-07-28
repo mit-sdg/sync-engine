@@ -1,61 +1,77 @@
 # Operations Room
 
-An independently installable incident-response example with selectable alert
-and discussion packs, swappable contribution policy, and a composed dashboard.
+Operations Room is a modular incident-response example. It combines Gathering,
+Selecting, Discussing, and Alerting while keeping reaction packs, contribution
+policy, and concept implementation overrides selectable at assembly time. Its
+formers build a nested dashboard. It requires Bun 1.3 or newer.
 
-The scenario creates an incident room, joins a responder, observes a duplicate
-join refusal, selects a rollback, contributes an update, and reads the composed
-dashboard. With the defaults, selecting the rollback also opens a discussion
-and alerts the responders.
+## Run the example
 
-## Assembly Options
-
-`assembleOperationsRoom` accepts:
-
-| Option          | Default        | Selects                                                     |
-| --------------- | -------------- | ----------------------------------------------------------- |
-| `alerts`        | `true`         | The responder-alert reaction pack                           |
-| `discussion`    | `true`         | The mitigation-discussion reaction pack                     |
-| `contributions` | `"responders"` | Responder or host-only contribution policy                  |
-| `instances`     | `{}`           | Concept implementation overrides, useful for tests or hosts |
-
-Follow the relevant guide instead of reading the example as reference prose:
-
-- Reaction packs: [Keep the reaction in the
-  composition](../../docs/guide/reactions.md#keep-the-reaction-in-the-composition)
-- Swappable policy: [Change the answer, not the
-  concepts](../../docs/guide/views-and-formers.md#change-the-answer-not-the-concepts)
-- Staged formers: [Build the read in
-  stages](../../docs/guide/views-and-formers.md#build-the-read-in-stages)
-- Generated artifacts: [Generate the wire
-  contract](../../docs/guide/application-boundary.md#generate-the-wire-contract)
-
-## Commands
-
-Run every command from this directory:
+Run these commands from this directory:
 
 ```sh
 bun install
 bun run check
-bun start
+bun run start
 ```
 
-Use `bun run artifacts:pin` only when intentionally regenerating the pinned
-read-back and wire contract. Use `bun test`, `bun run typecheck`, or
-`bun run artifacts:check` to isolate a failed aggregate check.
+The deterministic scenario creates the `checkout-latency` room for Mara, joins
+Lin, observes an `ALREADY_JOINED` refusal, selects
+`rollback-build-842`, contributes one update, and reads the dashboard. With the
+default composition, selecting the mitigation opens `discussion-1` and raises
+one alert for each responder.
 
-## Source Map
+## Assembly options
 
-| Path                                                           | Role                                                                                                  |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `src/concepts/`                                                | Vendored Alerting, Discussing, Gathering, and Selecting concepts, specifications, and principle tests |
-| `src/concept-set.ts`, `src/identities.ts`                      | Concept registration, deterministic floor construction, and identities                                |
-| `src/composition/`                                             | Room formers, endpoints, optional reaction packs, and contribution policies                           |
-| `src/assembly.ts`                                              | Application assembly and selectable options                                                           |
-| `src/edge.ts`                                                  | Gateway and HTTP wiring                                                                               |
-| `src/client.ts`                                                | Typed client factories                                                                                |
-| `src/scenario.ts`                                              | Runnable end-to-end scenario                                                                          |
-| `tests/application.test.ts`                                    | Full application and HTTP coverage                                                                    |
-| `generated.config.ts`                                          | Artifact command configuration                                                                        |
-| [`generated/operations-room.md`](generated/operations-room.md) | Pinned assembled read-back                                                                            |
-| [`generated/wire.ts`](generated/wire.ts)                       | Pinned TypeScript wire contract                                                                       |
+`assembleOperationsRoom(options?)` creates a new application for each call.
+Changing an option does not reconfigure an existing assembly.
+
+| Option          | Default        | Effect                                                                              |
+| --------------- | -------------- | ----------------------------------------------------------------------------------- |
+| `alerts`        | `true`         | Include `SelectedMitigationAlertsResponders`                                        |
+| `discussion`    | `true`         | Include `SelectedMitigationOpensDiscussion`                                         |
+| `contributions` | `"responders"` | Select responder or host-only contribution views and denial response                |
+| `instances`     | `{}`           | Replace selected concept instances by name, primarily for tests or host integration |
+
+The application tests compare these options. Disabling packs changes the
+resulting alerts or discussion without changing concept classes. Selecting the
+host-only policy rejects Lin's contribution with `HOST_ONLY` while leaving the
+endpoint declaration unchanged.
+
+## Source map
+
+| Path                                                           | Role                                                                                                            |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `src/concepts/`                                                | Alerting, Discussing, Gathering, and Selecting specifications, implementations, registries, and principle tests |
+| `src/concept-set.ts`                                           | Named registrations, vocabulary, default implementations, and the deterministic floor                           |
+| `src/composition/packs.ts`                                     | Optional discussion and alert reaction packs                                                                    |
+| `src/composition/responders-may-contribute.ts`                 | Default contribution policy                                                                                     |
+| `src/composition/host-may-contribute.ts`                       | Replacement host-only policy                                                                                    |
+| `src/composition/room.ts`                                      | Room endpoints and staged formers                                                                               |
+| `src/composition/contributions.ts`                             | Policy-parameterized contribution endpoints                                                                     |
+| `src/assembly.ts`                                              | Composition and implementation selection                                                                        |
+| `src/edge.ts`                                                  | Standard gateway and generic HTTP handler                                                                       |
+| `src/client.ts`                                                | Generated-contract HTTP client                                                                                  |
+| `src/scenario.ts`                                              | End-to-end local scenario                                                                                       |
+| `tests/application.test.ts`                                    | Default, pack, policy, client, and HTTP behavior                                                                |
+| `generated.config.ts`                                          | Artifact command configuration                                                                                  |
+| [`generated/operations-room.md`](generated/operations-room.md) | Pinned assembled read-back                                                                                      |
+| [`generated/wire.ts`](generated/wire.ts)                       | Pinned TypeScript wire contract                                                                                 |
+
+## Individual checks
+
+Use these commands to isolate a failed aggregate check:
+
+```sh
+bun run test
+bun run typecheck
+bun run artifacts:check
+```
+
+Run `bun run artifacts:pin` only after an intentional composition or contract
+change. Review both generated diffs.
+
+The progressive authoring path is [Connect independent
+behaviors](../../docs/guide/reactions.md), [Views and
+formers](../../docs/guide/views-and-formers.md), then [Application
+boundary](../../docs/guide/application-boundary.md).

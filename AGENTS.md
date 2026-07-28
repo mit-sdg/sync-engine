@@ -4,7 +4,7 @@ This file is the working guide for coding agents in this repository: the
 toolchain to use and where the source lives. If you are a person exploring
 `sync-engine`, you are welcome here too — start with the
 [project README](README.md) for the pitch and install, and the
-[documentation section](README.md#examples-and-documentation) for the path that fits your work; the sections below are
+[documentation section](README.md#documentation) for the path that fits your work; the sections below are
 the day-to-day mechanics.
 
 ## Toolchain
@@ -32,14 +32,16 @@ include them.
 
 ## Docs
 
-Agent readers start with two pages: the example book (`docs/book.md`) —
-worked examples of reads with the engine's read-back beside
-each, including the mistakes registration catches — and the complete register
-(`docs/public-surface.md`). The rest:
+Start with `docs/index.md`. The document owners are:
 
-- Documentation routes and guided curriculum: `README.md` and `docs/guide/`
+- Progressive application authoring: `docs/guide/`
+- Small tested read constructions: `docs/book.md`
+- Exact package exports and API summaries: `docs/public-surface.md`
+- Concept file grammar: `docs/concept-specification.md`
+- Installed command behavior: `docs/cli.md`
 - Execution guarantees: `docs/semantics.md`
-- Ordering, failure, cancellation, persistence, and restart limits: `docs/semantics.md`
+- Deployment selection and limits: `docs/operations.md`
+- Contributor implementation map: `docs/architecture.md`
 - Vite+ docs: `node_modules/vite-plus/docs/` or https://viteplus.dev/guide/
 
 ### Contributing to the example book

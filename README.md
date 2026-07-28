@@ -1,93 +1,59 @@
 # sync-engine
 
-Build TypeScript applications from independent behaviors, then describe how
-those behaviors work together without coupling their implementations.
+sync-engine is a TypeScript library for composing independently implemented
+application behaviors. Each behavior, called a **concept**, owns its state,
+actions, queries, and expected refusals. Application composition connects
+concepts without adding peer imports to their implementations.
 
-sync-engine calls each independent behavior a **concept**. A concept owns its
-state, actions, queries, and errors. An application combines concepts with:
+Composition has four main parts:
 
-- **reactions**, which connect one action to another;
-- **views**, which name shared questions and policy decisions;
-- **formers**, which assemble query results into typed values;
-- **endpoints**, which expose selected behavior to clients.
+- **reactions** ask for consequences after action outcomes;
+- **views** name shared relations and policy decisions;
+- **formers** build typed result trees from current state;
+- **endpoints** connect outside requests to composed behavior.
 
-The engine validates this composition, executes it, and can generate a readable
-description and TypeScript wire contract from the assembled application.
+The engine validates an assembled composition, executes it, records action
+occurrences, and can generate an assembled read-back and TypeScript wire
+contract.
 
-## Install
+## Status and requirements
+
+Version 1 is alpha. It is not recommended for production. Public APIs,
+execution behavior, and generated files may change incompatibly between alpha
+releases. Pin an exact version for evaluation and read the [operational
+limits](docs/operations.md) before choosing a deployment.
+
+The package is ESM-only. Shipped TypeScript projects and CLI commands require
+Bun 1.3 or newer. Built library modules support Node.js 24 or newer.
+
+## Install in an existing project
 
 ```sh
 bun add @mit-sdg/sync-engine@alpha
 ```
 
-All CLI commands and shipped TypeScript projects require Bun 1.3 or newer. The
-ESM-only library supports Node.js 24 or newer.
-
-Start a project with the package-qualified CLI:
+## Create an application
 
 ```sh
-bunx --package @mit-sdg/sync-engine@alpha sync-engine new operations-room
+bunx --package @mit-sdg/sync-engine@alpha sync-engine new note-keeper
+cd note-keeper
+bun install
 ```
 
-## Alpha Status
+For a reproducible evaluation, replace `@alpha` with an exact version such as
+`@1.0.0-alpha.0`.
 
-sync-engine v1 is alpha and is not recommended for production. Public APIs and
-generated files may change incompatibly. For serious evaluation, pin an exact
-version such as `@mit-sdg/sync-engine@1.0.0-alpha.0` instead of the moving
-`@alpha` tag. See the [operational limits](docs/semantics.md#operational-limits).
+The generated project declares its own package dependency and contains one
+complete behavior: a specification, plain TypeScript class, principle test,
+registry, concept set, composition, assembly, gateway scenario, and
+generated-artifact configuration. Continue with [Getting
+started](docs/guide/getting-started.md#run-the-complete-lifecycle) to run and
+inspect it.
 
-### Upgrading Alpha Versions
+## Composition example
 
-Alpha releases carry no migration guarantee. Before changing a pinned version,
-read the [changelog](CHANGELOG.md) and matching [GitHub
-release](https://github.com/mit-sdg/sync-engine/releases); release-specific
-migration guidance is published there when available.
-
-## Three Tiers
-
-The examples below build the same operations-room application one layer at a
-time. They use package subpaths so each import states which part of the library
-it needs.
-
-### Tier 1: One Independent Behavior
-
-Start with a normal TypeScript class. `SelectingConcept` knows how to keep one
-current mitigation for each room, but knows nothing about discussions, alerts,
-HTTP, or the rest of the application.
-
-```ts
-type Selection = { selection: string; scope: string; item: string };
-
-class SelectingConcept {
-  private readonly selections = new Map<string, Selection>();
-  private readonly current = new Map<string, string>();
-
-  choose({ scope, item }: { scope: string; item: string }) {
-    const selection = crypto.randomUUID();
-    this.selections.set(selection, { selection, scope, item });
-    this.current.set(scope, selection);
-    return { selection };
-  }
-
-  _current({ scope }: { scope: string }) {
-    const selection = this.current.get(scope);
-    const found = selection === undefined ? undefined : this.selections.get(selection);
-    return found === undefined ? [] : [found];
-  }
-}
-```
-
-Public methods are recorded **actions**. Methods prefixed with `_` are
-**queries**: standing questions over current concept state. A registration pairs
-the class with its specification and makes both available to assembly. See the
-[concept authoring guide](docs/guide/concepts.md) for the complete class,
-specification, errors, registry, and principle test.
-
-### Tier 2: Compose Independent Behaviors
-
-The Selecting concept should not import a discussion concept merely because
-this application opens a discussion after choosing a mitigation. That decision
-belongs in the composition:
+This reaction belongs to the application, not to either concept. It opens a
+discussion whenever Selecting returns a new selection:
 
 ```ts
 import { reaction, when } from "@mit-sdg/sync-engine/language";
@@ -95,39 +61,24 @@ import { concepts } from "./concept-set.ts";
 
 const { Discussing, Selecting } = concepts;
 
-export const SelectedMitigationOpensDiscussion = reaction(({ room, selection }) =>
-  when(Selecting.choose({ scope: room }).responds({ selection })).then(
-    Discussing.open({ subject: selection }),
-  ),
+export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
+  when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
 ```
 
-Calling a vocabulary ref produces data, not a runtime action. Here,
-`{ scope: room }` reads the `scope` argument from the triggering call and binds
-it as `room`. `.responds({ selection })` tells the engine to match after the
-action returns and bind `selection` from that return value. Under `then`, the
-bare `Discussing.open(...)` is the consequence ask.
+Calling `Selecting.choose(...)` in this declaration creates authoring data; it
+does not invoke the concept. At runtime, the reaction watches a returned
+`Selecting.choose` occurrence, binds `selection` from its result, and asks
+`Discussing.open`. Selecting and Discussing remain independently implemented.
 
-Neither concept names the other, so either remains reusable and the
-application-level decision remains visible. The engine can read the reaction
-back in plain text — a checkable description it generates from the composition,
-not syntax you author:
+See [Connect independent behaviors](docs/guide/reactions.md) for the authoring
+rules and [Execution semantics](docs/semantics.md) for ordering and failure
+behavior.
 
-```reaction
-when Selecting.choose — opens (room, selection)
-then
-  Discussing.open (subject: selection)
-```
+## Contract boundary
 
-Reactions can also query state, branch, sequence actions, and match refusals.
-The [reaction guide](docs/guide/reactions.md) introduces those forms in order;
-the [example book](docs/book.md) places close variations beside their exact
-read-backs and registration errors.
-
-### Tier 3: Expose a Complete Application
-
-An endpoint is a reaction at the application boundary. This one receives a
-request, asks Selecting to choose the mitigation, and returns a typed result:
+An endpoint uses the same reaction model to receive an outside request and
+produce one answer:
 
 ```ts
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
@@ -144,64 +95,64 @@ export const ChooseMitigation = endpoint(
 );
 ```
 
-Assembly selects concept implementations and composition modules. From that
-single value, sync-engine can provide a local gateway, an HTTP handler, a
-generated wire contract, and a client whose paths and payloads are inferred:
+An assembly can expose the endpoint through a direct invoker, the standard
+gateway, a local JSON-parity client, or the HTTP adapter. Generated TypeScript
+describes accepted inputs and possible outputs. It does not validate hostile
+values at runtime.
 
-```ts
-const chooseMitigation = operations.rooms["choose-mitigation"];
-const result = await chooseMitigation({
-  room: "checkout-latency",
-  mitigation: "rollback-build-842",
-});
-```
+## Guarantees and non-guarantees
 
-The [getting-started walkthrough](docs/guide/getting-started.md) explains what
-the scaffold generated and how to grow it. The full [Operations Room
-example](examples/operations-room/README.md) extends the same shape with formers,
-generated artifacts, selectable reaction packs, and swappable policy.
+The ordinary assembly provides these guarantees:
 
-## What The Engine Guarantees
+- one action body runs at a time per concept instance within one assembly;
+- each action ask and its return, refusal, or fault are recorded;
+- composition is checked before registered behavior executes;
+- generated artifacts fail rather than silently omit an endpoint they cannot
+  represent;
+- handled client and boundary failures resolve as typed result envelopes.
 
-- Concepts remain independently implemented and registered.
-- Composition is validated before execution and can be read back as text.
-- Calls are typed from concept action signatures through generated clients.
-- Every action occurrence is recorded in an append-only occurrence log.
+The ordinary assembly does not provide transactions across actions, rollback,
+concept-state persistence, occurrence replay, restart recovery, distributed
+serialization, exactly-once execution, or runtime validation of generated
+types. Timeout and abort stop waiting; they do not cancel accepted work. The
+default in-memory log retains a bounded inspection window rather than every
+occurrence forever.
 
-The occurrence log is execution evidence and observability infrastructure. It
-does not automatically persist concept state, replay an application, or provide
-restart recovery. See [execution semantics](docs/semantics.md) for the precise
-guarantees and operational limits.
+See [Execution semantics](docs/semantics.md) for the precise contracts and
+[Operational limits](docs/operations.md) for selection and deployment guidance.
 
-## Examples And Documentation
+## Documentation
 
-From a source checkout, run both independently runnable examples with:
+The [documentation index](docs/index.md) separates the material by task.
+
+- [Getting started](docs/guide/getting-started.md) — scaffold and run the
+  smallest complete application.
+- [Authoring guide](docs/guide/concepts.md) — concepts, reactions, views,
+  formers, and endpoints in dependency order.
+- [Example book](docs/book.md) — small, tested reading constructions and exact
+  registration failures.
+- [Public API](docs/public-surface.md) — package subpaths, exports, signatures,
+  defaults, and error codes.
+- [Concept specification format](docs/concept-specification.md) and [CLI
+  reference](docs/cli.md) — authoritative file and command contracts.
+- [Examples](examples/README.md) — independently installable Reading Circle
+  and Operations Room applications.
+- [Engine architecture](docs/architecture.md) and [contributing
+  guide](CONTRIBUTING.md) — implementation and repository work.
+
+From a source checkout, install dependencies and run both example scenarios:
 
 ```sh
 bun install
 bun run scenario
 ```
 
-Choose a path based on what you need next:
+## Upgrading alpha versions
 
-- [Getting started](docs/guide/getting-started.md): scaffold a project, then
-  walk through its concept, composition, and boundary.
-- Authoring curriculum: [Concepts](docs/guide/concepts.md),
-  [Reactions](docs/guide/reactions.md), [Views and
-  formers](docs/guide/views-and-formers.md), [Application
-  boundary](docs/guide/application-boundary.md), then [Execution
-  semantics](docs/semantics.md).
-- [Examples map](examples/README.md): compare the compact Reading Circle with
-  the modular Operations Room.
-- [Public API](docs/public-surface.md): find package subpaths, exports, and
-  signatures.
-- [Release status](#alpha-status), [migration guidance](#upgrading-alpha-versions),
-  and [changelog](CHANGELOG.md):
-  evaluate or upgrade an alpha version.
-- [Engine architecture](docs/architecture.md): navigate the implementation as
-  a contributor.
-- [Contributor release procedure](docs/releasing.md): prepare, publish, verify,
-  or respond to a release.
+Alpha releases carry no migration guarantee. Before changing a pinned version,
+read the [changelog](CHANGELOG.md) and the corresponding [GitHub
+release](https://github.com/mit-sdg/sync-engine/releases). Regenerate and review
+all pinned artifacts after the upgrade.
 
 ## License
 

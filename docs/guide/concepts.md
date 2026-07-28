@@ -1,8 +1,11 @@
 # Define one behavior
 
-A concept starts as a specification, then becomes a plain TypeScript class and
-a test of the same story. This order keeps the behavior clear before the
-application gives it a public name or connects it to anything else.
+This guide uses the larger [Operations Room
+example](../../examples/operations-room/README.md), not the Note Keeper
+scaffold from [Getting started](getting-started.md). It shows how one of that
+application's concepts becomes independently testable: specification, plain
+TypeScript class, principle test, and registration. The authoritative grammar
+is in [Concept specification format](../concept-specification.md).
 
 The operations room needs alerts that remain open until someone acknowledges
 them. Start with the Purpose and Principle from Alerting's specification:
@@ -80,9 +83,12 @@ defines these outcomes and keeps authored boundary error responses distinct.
 
 ## Implement the concept in ordinary TypeScript
 
-The class has no engine base class and imports no application code. Its public
-methods implement the actions, while the underscore-prefixed method only reads
-current state.
+The class has no engine base class and imports no application code. Its
+non-underscore methods implement the specified actions, while the
+underscore-prefixed method only reads current state. Do not use TypeScript
+`private` or `protected` prototype methods as implementation helpers: those
+methods remain visible to runtime registration. Use ECMAScript `#private`
+methods or module-level functions instead.
 
 _Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../examples/operations-room/src/concepts/alerting/alerting.ts)_
 
@@ -136,11 +142,12 @@ _Source: [`examples/operations-room/src/concepts/gathering/gathering.ts`](../../
 ```
 
 Gathering's specification promises `_members` as `many` and `_membership` as
-`one`. The engine checks both the returned shape and each read's cardinality. A
-reaction cannot range with `each(...)` over `_membership`, and the
-implementation cannot answer `_membership` with an array. Registration also
-holds the two documents to each other: a query the class implements but the
-specification omits — or the reverse — fails by name before anything runs.
+`one`. Registration records those promises. The engine checks a query's result
+container and cardinality when a reaction, view, or former reads it. A reaction
+cannot range with `each(...)` over `_membership`, and `_membership` cannot
+answer with an array. Registration also holds the documents to each other: a
+query the class implements but the specification omits—or the reverse—fails by
+name before composed behavior runs.
 
 ## Test the principle directly
 
@@ -171,7 +178,7 @@ test("its principle: keep each recipient's alerts in order until acknowledged", 
 });
 ```
 
-## Give the concept its public name
+## Register the concept
 
 The registry beside the concept connects the plain class to its specification.
 It declares only what the specification cannot: which `Error` class signals
@@ -206,30 +213,28 @@ export const alerting = registerConcept({
 });
 ```
 
-At runtime, `registerConcept` compares action and query names and checks that
-every specified refusal has one distinct registered `Error` class, with no
-extra refusal mappings. It compares input names only when reflection recovers
-a non-empty, top-level destructured parameter. Placeholder, plain, absent,
-empty, or nested parameters therefore skip that runtime input comparison.
+Validation occurs at several distinct times:
 
-`sync-engine check`, run by `bun run check`, reads the TypeScript source to
-cover erased inputs. It supports no parameter; one untyped object-destructured
-parameter with identifier keys and no rest; or one parameter typed by an
-inline object type, `Record<..., never>`, or a direct same-file alias to either.
-All other forms fail closed as unsupported, including interfaces, imported or
-qualified types, alias chains, intersections, unions, mapped and other utility
-types, multiple parameters, plain untyped parameters, untyped object
-destructuring with rest or nested bindings, and non-property members.
+| Time                | Checks                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `registerConcept`   | Action/query names, declared refusal mappings, and input names recoverable by runtime reflection     |
+| `sync-engine check` | Action/query names and input names recoverable from supported TypeScript source forms                |
+| Assembly            | Composition names, binding availability, declaration compatibility, and supported registration forms |
+| Query read          | Query result container and declared cardinality                                                      |
+| Action execution    | The implementation's own value and domain checks                                                     |
 
-Neither comparison validates state declarations, field types, returned field
-names, uniqueness, or invariants. Query result shape and cardinality are
-runtime read guarantees described in [Execution semantics](../semantics.md#queries),
-not registration checks.
+Neither registration path validates state declarations, field types, returned
+field names, uniqueness, or invariants. Query result checks do not validate row
+fields against the prose output list. [Concept specification
+format](../concept-specification.md) records the accepted source forms and
+unchecked fields; [Execution semantics](../semantics.md#queries) defines read
+failures.
 
 The operations room includes that registry once in its explicit concept set.
-The set derives its vocabulary, public references, ordinary implementations,
-and complete named floors. Each composition file destructures only the
-references it uses from the set's `concepts` object.
+The key `Alerting` in that set gives the concept its application name. The set
+derives its vocabulary, public references, ordinary implementations, and
+complete named floors. Each composition file destructures only the references
+it uses from the set's `concepts` object.
 
 Alerting never names Gathering, Selecting, Discussing, an operations room, or
 a reading circle. It owns one lifecycle and refers only to the roles inside
@@ -237,5 +242,6 @@ that lifecycle. With Alerting in the concept set, the application can connect a
 selection on a returned occurrence without changing this specification, class,
 or test.
 
-Continue to [Reactions](reactions.md) to connect the plain concepts in the
-application composition.
+Continue to [Connect independent behaviors](reactions.md). For exact
+`registerConcept`, `conceptSet`, and floor signatures, use the [assembly API
+reference](../public-surface.md#assembly).

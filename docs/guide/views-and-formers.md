@@ -1,5 +1,10 @@
 # Views and formers
 
+This guide assumes the reaction model from [Connect independent
+behaviors](reactions.md). A sync-engine **view** is a named relation, not a user
+interface. A **former** constructs a current result value; it does not store a
+read model.
+
 Independent membership, selection, discussion, and alert behavior leave two
 questions for the operations room:
 
@@ -94,7 +99,7 @@ export const responderRoster = former("the responder roster of (room)", ({ room 
 
 The input bag makes `room` the callable former's one named input.
 `responders` uses `each(Gathering._members(...)).form(...)` to return every
-member row in the query's declared order. An empty room still has one roster,
+member row in the order returned by the query. An empty room still has one roster,
 with an empty `responders` array.
 
 The next former asks for one current mitigation. Its record-root form promises
@@ -150,7 +155,7 @@ cardinality and absence rules.
 
 A former can fold a captured selection instead of carrying its rows. This
 operations-room former uses all three folds. `count()` counts responses,
-`first(response)` reads the first response in the query's declared order, and
+`first(response)` reads the first response in source order, and
 `distinct(responder)` keeps each responder once in first-seen order.
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
@@ -288,5 +293,6 @@ the former instead of a second response model. The [application boundary
 chapter](application-boundary.md#generate-the-wire-contract) shows how that
 formed answer reaches the wire.
 
-For exact absence and read-failure behavior after authoring, continue to
-[Execution semantics](../semantics.md#views-and-formers).
+Continue to [Application boundary](application-boundary.md) to expose the
+formed result through a generated contract. For exact absence and read-failure
+behavior, use [Execution semantics](../semantics.md#views-and-formers).

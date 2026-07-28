@@ -1,8 +1,42 @@
 # Engine architecture
 
-This note maps the implementation for contributors. It does not define public
-authoring syntax; use the [root documentation map](../README.md#examples-and-documentation), [execution
-semantics](./semantics.md), and [public API](./public-surface.md) for that.
+This explanation maps the implementation for contributors. It describes the
+current source tree, not a stable public module contract. Use the [documentation
+index](./index.md), [Execution semantics](./semantics.md), and [Public
+API](./public-surface.md) for supported behavior.
+
+## Concern map
+
+Engine dependencies point from hosting and adapters toward transport-neutral
+contracts and from runtime execution toward authoring definitions. Public
+entrypoints export selected capabilities but are never imported by engine code.
+
+```text
+public barrels and command
+          |
+          v
+boundary / tooling / hosting
+          |
+          v
+   reactions <-> reads
+          |
+          v
+         utils
+```
+
+The bidirectional conceptual connection between reactions and reads is split by
+module-level dependency rules: reaction contracts are shared at the concern
+root, read authoring builds declarations, and runtime reaction modules evaluate
+registered read operations. `bun run check` enforces the actual import graph.
+
+| Concern   | Directory               | Responsibility                                                                                       |
+| --------- | ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| Reactions | `src/engine/reactions/` | Concept references, reaction declarations, instrumentation, matching, firing, and occurrence storage |
+| Reads     | `src/engine/reads/`     | Query contracts, views, formers, scheduling, evaluation, IR, and rendering                           |
+| Boundary  | `src/engine/boundary/`  | Assembly, invocation, routing, clients, HTTP, endpoint protocol, and wire derivation                 |
+| Hosting   | `src/engine/hosting/`   | File-backed occurrence append and store-binding concepts                                             |
+| Tooling   | `src/engine/tooling/`   | Assembly inspection and pinned generated artifacts                                                   |
+| Utilities | `src/engine/utils/`     | Runtime helpers, case conversion, logging, redaction, and framework-code definitions                 |
 
 ## One occurrence through the engine
 
@@ -91,8 +125,10 @@ for the resulting behavior.
 ## Reads and values
 
 `reads/where-ops.ts` evaluates query and view lines against `Frames`.
-`reads/schedule.ts` determines an order from bindings rather than trusting the
-order in which an author happened to write conditions. `reads/frames.ts`
+`reads/schedule.ts` determines an order from bindings for reactions and
+formers. View registration currently validates that such an order exists but
+stores the authored block; view evaluation therefore still follows authored
+order. `reads/frames.ts`
 extends and deduplicates bindings. `reads/value-equality.ts` is the one
 structural equality rule shared by reads and action-pattern matching: arrays,
 plain records, and dates compare by value; other objects compare by identity.
@@ -139,6 +175,35 @@ its settlement.
 `src/engine/boundary/http/http-floor.ts`, and
 `src/engine/boundary/cli-app.ts` route, serialize, or cancel a request, but they
 do not inspect concept state.
+
+## Hosting and generated artifacts
+
+`src/engine/hosting/persisting.ts` provides `FileStore` and
+`PersistingConcept`. `FileStore` appends occurrence entries to JSONL and folds
+new entries into inherited in-memory indexes. It does not load an existing file
+or replay it. `PersistingConcept` stores application-supplied associations
+between subjects and stores; it does not install an engine log or persist a
+concept implementation.
+
+`src/engine/tooling/inspection.ts` projects one assembly into portable app IR,
+concept inventories, input contracts, retained occurrence summaries, and
+diagnostic read-back. `src/engine/tooling/generated-artifacts.ts` resolves a
+project descriptor, rejects unsupported endpoint lowering, derives logical and
+optional HTTP wire contracts, and checks or writes the two pinned files.
+
+The installed executable under `src/command/` is an adapter over those
+capabilities. `check.ts` parses supported TypeScript method signatures;
+`artifacts.ts` imports an application descriptor; `scaffold.ts` renders the
+project template. Command code may import engine concerns through `@engine`,
+but engine concerns do not import the command.
+
+## Public package boundary
+
+Each supported subpath has one export-only file under `src/<subpath>/index.ts`.
+`package.json` exposes exactly those seven subpaths and no root barrel. The
+public API test checks exact symbol identity, nested constants, unsupported
+historical names, and package-path reachability. The declaration snapshot and
+packed-consumer fixture separately check the emitted type graph.
 
 ## Dependency rules
 

@@ -1,78 +1,113 @@
 # Getting started
 
-This walkthrough requires Bun 1.3 or newer.
+This introductory walkthrough creates and runs the smallest complete
+sync-engine application. It assumes TypeScript and requires Bun 1.3 or newer.
+The walkthrough does not cover every authoring form; use the [Public
+API](../public-surface.md) and [Execution semantics](../semantics.md) as the
+authoritative references.
+
+## Create the project
 
 ```sh
-bunx --package @mit-sdg/sync-engine@alpha sync-engine new operations-room
-cd operations-room
+bunx --package @mit-sdg/sync-engine@alpha sync-engine new note-keeper
+cd note-keeper
 bun install
 ```
 
-That writes a runnable project. It has one concept (Noting), two endpoints,
-and everything needed to generate a wire contract and run a scenario. The rest
-of this page walks through what was written and how to add a second behavior.
+The command writes a project only when none of its template files would be
+overwritten. The generated application has one Noting concept, two endpoints,
+an assembly, a local-gateway scenario, and generated-artifact configuration.
 
-## What sync-engine new wrote
+## Generated files
 
-```
-operations-room/
-├── package.json
-├── tsconfig.json
-├── text.d.ts
+```text
+note-keeper/
 ├── README.md
 ├── generated.config.ts
+├── package.json
+├── text.d.ts
+├── tsconfig.json
 └── src/
-    ├── scenario.ts
-    ├── edge.ts
     ├── assembly.ts
     ├── composition.ts
     ├── concept-set.ts
+    ├── edge.ts
+    ├── scenario.ts
     └── concepts/
         └── noting/
-            ├── spec.md
+            ├── noting.test.ts
             ├── noting.ts
             ├── registry.ts
-            └── noting.test.ts
+            └── spec.md
 ```
 
-## The concept: spec to class to test
+The files form one lifecycle: specify and implement a behavior, register it,
+compose it, assemble it, generate its public contract, and invoke it through a
+boundary.
 
-`src/concepts/noting/spec.md` owns the contract. The `## Purpose` says why it
-matters; `## Principle` tells a concrete story. The `actions` fence names
-every method the concept exposes and every branch it refuses. The `queries`
-fence names its read-only questions and the number of rows each promises.
+## Run the complete lifecycle
 
-`src/concepts/noting/noting.ts` implements it as a plain TypeScript class.
-Public methods are **actions** — the engine records, invokes, and reacts to
-them. Methods prefixed with `_` are **queries** — standing reads the engine
-answers without recording.
+```sh
+bun run generate
+bun run check
+bun run principle
+bun run start
+```
 
-`src/concepts/noting/registry.ts` connects the class to its specification and
-names the Error class that signals each refusal code. `registerConcept` reads
-the spec and checks it against the class at registration time.
+`generate` writes `generated/note-keeper.md` and `generated/wire.ts`. `check`
+compares the concept specification with its class, verifies that generated
+files match the assembly, and typechecks the project. A successful
+specification check reports one checked concept; artifact and type checks are
+silent on success.
 
-`src/concepts/noting/noting.test.ts` drives the Principle directly against
-the class, with no engine or assembly — the concept is independently testable.
+`principle` runs the Noting class directly and prints `principle holds`.
+`start` calls the application through its gateway and prints JSON containing a
+generated note identifier and the text `buy milk`. The identifier changes
+between runs.
 
-Add another concept by writing a `spec.md`, a class, a `registry.ts`, and a
-principle test under `src/concepts/<name>/`, then register it in the concept set.
+If the aggregate check fails, isolate its stages with:
 
-## The concept set
+```sh
+bun run typecheck
+bunx sync-engine check
+bunx sync-engine artifacts check
+```
 
-`src/concept-set.ts` lists every concept in the application:
+## Follow one request through the project
+
+`src/concepts/noting/spec.md` is the authored contract. It states the concept's
+purpose and principle, declares action signatures and refusal branches, and
+declares query cardinality. [Concept specification format](../concept-specification.md)
+defines exactly which parts are parsed and checked.
+
+`src/concepts/noting/noting.ts` implements the contract as an ordinary class.
+Public methods are actions. Methods prefixed with `_` are queries. The class has
+no engine base class and no peer concept imports.
+
+`src/concepts/noting/noting.test.ts` drives the principle directly against the
+class. This test establishes the concept's behavior independently of any
+application composition.
+
+`src/concepts/noting/registry.ts` joins the specification and class. It also
+maps each declared refusal code to the `Error` class that signals that refusal.
+
+## Name the concept
+
+`src/concept-set.ts` gives the registration its application name and derives
+the vocabulary and implementation set:
 
 ```ts
-export const operationsRoomConcepts = conceptSet({ Noting: noting });
-export const { concepts, vocabulary } = operationsRoomConcepts;
+export const noteKeeperConcepts = conceptSet({ Noting: noting });
+export const { concepts, vocabulary } = noteKeeperConcepts;
 ```
 
-`vocabulary` binds each name to its class — used by assembly and tooling.
-`concepts` gives each composition file typed refs for authoring reactions,
-views, and formers.
+`concepts` contains typed, inert references used while authoring composition.
+`vocabulary` contains the corresponding names and metadata used by assembly and
+tooling.
 
-## The composition
+## Declare the application boundary
 
-`src/composition.ts` holds a former and two endpoints:
+`src/composition.ts` defines a former and two endpoints:
 
 ```ts
 const { Noting } = concepts;
@@ -90,53 +125,43 @@ export const GetNote = endpoint("/notes/get", ({ note }) =>
 );
 ```
 
-`notePage` reads the note and forms a `{ note, text }` result. `WriteNote`
-receives `text`, asks Noting to write it, and returns the note. `GetNote`
-receives a `note` id and returns the formed page.
+`WriteNote` receives `text`, asks `Noting.write`, waits for its returned
+occurrence, and responds with the new identifier. `GetNote` forms a page from
+the current query result. These declarations do not execute while the module is
+loaded.
 
-## The assembly
+## Assemble and invoke
 
-`src/assembly.ts` joins the concept set and composition into one engine:
+`src/assembly.ts` installs one vocabulary, implementation set, and composition:
 
 ```ts
-export function assembleOperationsRoom() {
+export function assembleNoteKeeper() {
   return assemble({
     vocabulary,
-    instances: operationsRoomConcepts.implementations(),
+    instances: noteKeeperConcepts.implementations(),
     composition,
   });
 }
 ```
 
-## Generate, validate, and run
+`src/edge.ts` places the standard gateway in front of the assembly.
+`src/scenario.ts` creates a local client, calls `/notes/write`, then calls
+`/notes/get`. The local client applies the same JSON serialization boundary as
+the HTTP client; it does not expose richer in-process values.
 
-```sh
-bun run generate    # writes generated/operations-room.md and generated/wire.ts
-bun run check       # checks the spec, generated artifacts, and types
-bun run principle   # the concept's story, with no application around it
-bun run start       # the scenario, through the gateway
-```
+## Generated artifacts
 
-The generated read-back and wire contract live under `generated/`. Pin them
-with `bun run generate`; use `bun run typecheck`, `bunx sync-engine check`, or
-`bunx sync-engine artifacts check` when isolating a failed aggregate check. The
-wire contract typechecks every caller against the concept signatures the
-assembly exposes.
+`generated/note-keeper.md` is the assembled design read-back.
+`generated/wire.ts` maps each endpoint path to its TypeScript input, output, and
+error contract. Both files are derived and should remain in source control.
+Change the source declaration, run `bun run generate`, and review the resulting
+diff; do not edit generated files directly.
 
-## Add a second concept
+Generated TypeScript checks typed callers. Gateway admission only checks the
+route, an outer object, and required-key presence. It does not validate
+primitive or nested values at runtime.
 
-The complete slice works with one concept. To grow it:
-
-1. Write `src/concepts/<name>/spec.md` — the contract.
-2. Implement the class beside it.
-3. Write a `registry.ts` that registers it with `registerConcept`.
-4. Add the registration to the list in `src/concept-set.ts`.
-5. Connect the new concept to existing ones in `src/composition.ts` with
-   reactions, views, and formers.
-6. Run `bun run generate`, then `bun run check`, to refresh and validate the
-   wire contract.
-
-Continue through one curriculum: [Concepts](concepts.md),
-[Reactions](reactions.md), [Views and formers](views-and-formers.md),
-[Application boundary](application-boundary.md), then [Execution
-semantics](../semantics.md).
+Continue to [Define one behavior](concepts.md). The remaining guide sequence is
+[Connect independent behaviors](reactions.md), [Views and
+formers](views-and-formers.md), and [Application
+boundary](application-boundary.md).
