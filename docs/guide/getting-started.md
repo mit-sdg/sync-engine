@@ -1,7 +1,8 @@
 # Getting started
 
 This introductory walkthrough creates and runs the smallest complete
-sync-engine application. It assumes TypeScript and requires Bun 1.3 or newer.
+sync-engine application. It assumes TypeScript `>=5.9 <6` and supports Bun
+`>=1.3.14 <1.4`.
 The walkthrough does not cover every authoring form; use the [Public
 API](../public-surface.md) and [Execution semantics](../semantics.md) as the
 authoritative references.
@@ -9,7 +10,7 @@ authoritative references.
 ## Create the project
 
 ```sh
-bunx --package @mit-sdg/sync-engine@alpha sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@1.0.0-beta.0 sync-engine new note-keeper
 cd note-keeper
 bun install
 ```

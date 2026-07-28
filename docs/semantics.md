@@ -1,7 +1,7 @@
 # Execution semantics
 
 This page defines the observable execution contract for actions, reactions,
-reads, formed results, and application boundaries in the current 1.0 alpha.
+reads, formed results, and application boundaries in the current 1.0 beta.
 The [documentation index](./index.md) points to the authoring guides, the
 [example book](./book.md) demonstrates representative constructions, and the
 [Public API](./public-surface.md) lists the exports.

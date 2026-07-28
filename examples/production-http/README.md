@@ -4,7 +4,8 @@ Production HTTP is a complete application showing the production public-error
 profile separately from same-origin cookie credentials. `Sessioning` owns
 credential meaning and expiry; `Naming` contributes a non-authentication
 `CONFLICT` category. The transport owns JSON safety, public projection,
-correlation, and the cookie binding. It requires Bun 1.3 or newer.
+correlation, and the cookie binding. It supports Bun `>=1.3.14 <1.4`, Node.js
+`>=24 <25`, and TypeScript `>=5.9 <6`.
 
 ## Run the example
 

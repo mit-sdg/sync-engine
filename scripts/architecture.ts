@@ -98,6 +98,8 @@ const allowedRootFiles = new Set([
   "LICENSE",
   "NOTICE",
   "README.md",
+  "SECURITY.md",
+  "SUPPORT.md",
   "bun.lock",
   "package.json",
   "tsconfig.build.json",
@@ -562,7 +564,10 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
 
     const known =
       (parts.length === 1 && allowedRootFiles.has(path)) ||
-      (head === ".github" && parts[1] === "workflows" && parts.length === 3) ||
+      (head === ".github" &&
+        ((parts[1] === "workflows" && parts.length === 3) ||
+          path === ".github/CODEOWNERS" ||
+          path === ".github/dependabot.yml")) ||
       (head === "src" &&
         ((parts[1] === "command" &&
           ((parts.length === 3 && path.endsWith(".ts")) ||
@@ -578,6 +583,21 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
           (parts.length >= 3 && allowedTestDirectories.has(parts[1] ?? ""))));
     if (!known)
       failures.push(`${path}: file is outside the supported top-level and test directories`);
+  }
+
+  for (const path of repository.filter((candidate) =>
+    /^\.github\/workflows\/[^/]+\.ya?ml$/.test(candidate),
+  )) {
+    const source = files.get(path) ?? "";
+    for (const match of source.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/gm)) {
+      const action = match[1] ?? "";
+      if (action.startsWith("./")) continue;
+      const separator = action.lastIndexOf("@");
+      const reference = separator < 0 ? "" : action.slice(separator + 1);
+      if (!/^[0-9a-fA-F]{40}$/.test(reference)) {
+        failures.push(`${path}: external action ${action} must use an exact 40-hex SHA`);
+      }
+    }
   }
 
   for (const path of repository.filter((candidate) => candidate.includes("/generated/"))) {

@@ -2,8 +2,9 @@
 
 The installed `sync-engine` executable scaffolds projects, compares parsed
 concept action/query declarations with class source, and checks or generates
-assembly artifacts. Commands require Bun 1.3 or newer and run relative to the
-current working directory unless a path says otherwise.
+assembly artifacts. Commands support Bun `>=1.3.14 <1.4` and run relative to
+the current working directory unless a path says otherwise. Generated
+TypeScript supports TypeScript `>=5.9 <6`.
 
 ```text
 sync-engine <topic> <command>

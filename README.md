@@ -18,30 +18,32 @@ contract.
 
 ## Status and requirements
 
-Version 1 is alpha. It is not recommended for production. Public APIs,
-execution behavior, and generated files may change incompatibly between alpha
-releases. Pin an exact version for evaluation and read the [operational
+Version 1 is beta. It is not recommended as a sole production control plane.
+Public APIs, execution behavior, and generated formats may change incompatibly
+between beta releases. Only the newest beta is supported; pin an exact version,
+read the [support policy](SUPPORT.md), and review the [operational
 limits](docs/operations.md) before choosing a deployment.
 
-The package is ESM-only. Shipped TypeScript projects and CLI commands require
-Bun 1.3 or newer. Built library modules support Node.js 24 or newer.
+The package is ESM-only. Shipped TypeScript projects and CLI commands support
+Bun `>=1.3.14 <1.4`; built library modules support Node.js `>=24 <25`; package
+types and generated TypeScript support TypeScript `>=5.9 <6`.
 
 ## Install in an existing project
 
 ```sh
-bun add @mit-sdg/sync-engine@alpha
+bun add @mit-sdg/sync-engine@beta
 ```
 
 ## Create an application
 
 ```sh
-bunx --package @mit-sdg/sync-engine@alpha sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
 cd note-keeper
 bun install
 ```
 
-For a reproducible evaluation, replace `@alpha` with an exact version such as
-`@1.0.0-alpha.0`.
+For a reproducible evaluation, replace `@beta` with the exact version
+`@1.0.0-beta.0`.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
@@ -161,6 +163,8 @@ The [documentation index](docs/index.md) separates the material by task.
   reference](docs/cli.md) — authoritative file and command contracts.
 - [Examples](examples/README.md) — independently installable Reading Circle,
   Operations Room, and Production HTTP applications.
+- [Support policy](SUPPORT.md) and [security policy](SECURITY.md) — beta
+  compatibility, generated contracts, support windows, and private reporting.
 - [Engine architecture](docs/architecture.md) and [contributing
   guide](CONTRIBUTING.md) — implementation and repository work.
 
@@ -171,12 +175,13 @@ bun install
 bun run scenario
 ```
 
-## Upgrading alpha versions
+## Upgrading beta versions
 
-Alpha releases carry no migration guarantee. Before changing a pinned version,
-read the [changelog](CHANGELOG.md) and the corresponding [GitHub
-release](https://github.com/mit-sdg/sync-engine/releases). Regenerate and review
-all pinned artifacts after the upgrade.
+Beta releases may make incompatible changes with explicit migration notes.
+Before changing a pinned version, read the [changelog](CHANGELOG.md) and the
+corresponding [GitHub release](https://github.com/mit-sdg/sync-engine/releases).
+Regenerate and review all pinned artifacts; generated clients, servers, and
+tooling must use the same exact package version.
 
 ## License
 

@@ -143,7 +143,9 @@ try {
   if (packageJson.author !== expectedAuthor) {
     throw new Error(`package author is ${packageJson.author}; expected ${expectedAuthor}`);
   }
-  for (const path of ["LICENSE", "README.md", "package.json"]) requireEntry(entries, path);
+  for (const path of ["LICENSE", "README.md", "SECURITY.md", "SUPPORT.md", "package.json"]) {
+    requireEntry(entries, path);
+  }
   if (packageJson.bin["sync-engine"] !== "./dist/command/main.js") {
     throw new Error("package must expose the sync-engine command as ./dist/command/main.js");
   }

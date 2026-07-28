@@ -1,0 +1,10 @@
+/.github/workflows/ @BarishNamazov @eagonmeng
+/.github/dependabot.yml @BarishNamazov @eagonmeng
+/.github/CODEOWNERS @BarishNamazov @eagonmeng
+/package.json @BarishNamazov @eagonmeng
+/CHANGELOG.md @BarishNamazov @eagonmeng
+/SUPPORT.md @BarishNamazov @eagonmeng
+/SECURITY.md @BarishNamazov @eagonmeng
+/docs/releasing.md @BarishNamazov @eagonmeng
+/scripts/release.ts @BarishNamazov @eagonmeng
+/scripts/check-release.ts @BarishNamazov @eagonmeng

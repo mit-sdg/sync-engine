@@ -1,9 +1,13 @@
 # Public API
 
 This reference lists every supported package subpath and export in the current
-alpha. There is no root export and no supported deep import. The export
+beta. There is no root export and no supported deep import. The export
 registers are exact; compact signatures and tables summarize the principal
 call shapes and do not replace the generated TypeScript declarations.
+
+The [support policy](../SUPPORT.md) defines beta compatibility, `/advanced`
+churn, exact-version generated contracts, and format-version rules. The
+[security policy](../SECURITY.md) defines the supported security-fix window.
 
 Most backend files use `language`, `assembly`, and `boundary`; frontend files
 use `client`; generation scripts use `tooling`. `advanced` marks deliberate

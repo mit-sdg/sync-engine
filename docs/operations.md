@@ -1,7 +1,7 @@
 # Operational limits
 
 This page states the deployment properties that should determine whether
-sync-engine is suitable for an application. It applies to the current alpha
+sync-engine is suitable for an application. It applies to the current beta
 implementation. [Execution semantics](semantics.md) defines the lower-level
 runtime contract.
 
@@ -15,7 +15,7 @@ coordination. The ordinary runtime is suitable for evaluation, prototypes,
 deterministic application tests, and hosts that provide their own storage,
 validation, outer traffic controls, and process lifecycle.
 
-Do not use the current alpha as the sole production control plane for untrusted
+Do not use the current beta as the sole production control plane for untrusted
 or unbounded traffic. Configure `ExecutionLimits` for engine-owned work and
 retain host limits for connections, rates, DDoS protection, and exporter queues.
 
@@ -24,12 +24,14 @@ requires a transaction across concepts, synchronous cancellation of accepted
 work, distributed serialization, occurrence replay, exactly-once processing,
 or automatic restart recovery.
 
-## Alpha compatibility
+## Beta compatibility
 
-Public subpaths and generated files may change incompatibly between alpha
-versions. Pin an exact package version, review the changelog, regenerate both
-artifacts, and typecheck a packed consumer before upgrading. Generated
-Markdown, IR, and wire output are not stable interchange formats during alpha.
+Public subpaths, behavior, and generated formats may change incompatibly between
+beta versions. Pin an exact package version, review the changelog, regenerate
+both artifacts, and typecheck a packed consumer before upgrading. Generated
+Markdown, IR, manifests, dependency graphs, and wire output are exact-version
+contracts rather than cross-version interchange formats. The [support
+policy](../SUPPORT.md) defines the version and format rules.
 
 ## Concurrency and atomicity
 
@@ -217,6 +219,10 @@ HSTS, trusted-proxy and reverse-proxy policy, deployment health, autoscaling,
 listener lifecycle, and authentication integration. Application concepts own
 credential meaning and domain authorization.
 
+The [security policy](../SECURITY.md) defines private vulnerability reporting
+and the supported security-fix window. It does not transfer these host and
+application responsibilities to the engine.
+
 ## Logs and sensitive values
 
 Assembly-scoped field-name redaction runs before occurrence entries reach
@@ -236,7 +242,7 @@ stores and legacy advanced observers as sensitive-data sinks.
 
 Before serving an assembly outside a test environment:
 
-1. Pin an exact alpha version and review its changelog.
+1. Pin an exact beta version and review its changelog and support window.
 2. Run the concept, type, test, and generated-artifact checks.
 3. Validate untrusted inputs outside or inside the receiving concept.
 4. Define concept-state persistence, transaction, retry, and deduplication

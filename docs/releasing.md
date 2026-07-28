@@ -1,72 +1,117 @@
 # Contributor release procedure
 
-This how-to is for maintainers publishing an approved release. It assumes the
-release changes are already reviewed and merged. It does not define public
-behavior; use the [changelog](../CHANGELOG.md) for compatibility notes and
-[Execution semantics](./semantics.md) for runtime guarantees.
+This procedure is for maintainers publishing an approved beta after its source
+changes are reviewed and merged. It does not define public behavior; use the
+[changelog](../CHANGELOG.md), [support policy](../SUPPORT.md), [security
+policy](../SECURITY.md), and [Execution semantics](./semantics.md) for those
+contracts. Published versions, tags, and tarballs are immutable.
 
-## One-time repository settings
+## External settings
 
-Maintainers must configure these outside the repository before publishing. The
-workflow cannot create or enforce them.
+Every item in this section is external repository, GitHub organization, GitHub
+environment, or npm state. Source changes and workflows do not establish or
+prove these settings. Maintainers must configure them manually and recheck them
+before every tag:
 
-- Make `main` the default and approved release branch, and require pull-request
-  review and the final CI checks before changes reach it.
-- Protect the `v*` tag namespace with a GitHub ruleset so only release
-  maintainers can create tags and tags cannot be moved or deleted casually.
-- Create a GitHub environment named `npm`. Restrict it to protected release
-  tags, add required reviewers, and prevent self-review where the plan allows.
+- Enable GitHub private vulnerability reporting. Security reports must follow
+  `SECURITY.md`, not public issues.
+- Require full-SHA pinning for third-party GitHub Actions. Dependabot may propose
+  GitHub Actions pin updates, but both code owners must review the resolved SHA
+  and upstream release before merge.
+- Protect `main` with pull-request review and only the stable **CI required**
+  status context. Do not require individual or matrix job names as branch
+  protection contexts.
+- Require CODEOWNERS review for workflow, release, support, and security-policy
+  files. Apply the rule to administrators and require review of any bypass;
+  disable unreviewed administrator or ruleset bypass where the plan permits.
+- Protect the `v1.0.0-beta.*` tag namespace against movement, deletion, and
+  creation by unapproved actors.
+- Keep the GitHub environment identity `npm`. Restrict it to the
+  `v1.0.0-beta.*` tag policy, require an independent reviewer, and verify
+  `prevent_self_review=true` and `can_admins_bypass=false`.
 - Configure npm trusted publishing for package `@mit-sdg/sync-engine`, GitHub
   organization `mit-sdg`, repository `sync-engine`, workflow
-  `.github/workflows/publish.yml`, and environment `npm`. Publish alpha releases
-  through the `alpha` dist-tag. An alpha publication must not create or move
-  `latest`; manage any historical `latest` tag under an explicit separate
-  policy until the first stable release.
+  `.github/workflows/publish.yml`, and environment `npm`. Verify the publisher
+  identity before every release.
+- Verify npm package and organization ownership, require 2FA for owners and
+  maintainers, remove stale owners, and confirm recovery access is controlled.
+  Beta publications use the `beta` dist-tag and must not create or move
+  `latest`.
 
-Recheck branch, tag, environment, npm trusted-publisher, and repository security
-settings before each release. They are external state and are not established
-by a reviewed workflow change.
+Record the independent checks in the release review. A green workflow does not
+replace this external-setting verification.
 
 ## Prepare the release
 
-1. Work from a clean checkout of `origin/main` after the intended release
-   changes are merged. Fetch tags and verify the release commit is on
-   `origin/main`; do not publish from a disconnected release history.
-2. Confirm the version is unused on npm and select the intended dist-tag. Alpha
-   versions have the form `1.0.0-alpha.N` and use `alpha`.
-3. Treat the root `package.json` version as canonical. Copy that exact version
-   into the package dependency in each other owned location:
+### Source checkout
 
-| Location                                 | Ownership                                         |
-| ---------------------------------------- | ------------------------------------------------- |
-| `package.json`                           | Published package version and `publishConfig.tag` |
-| `examples/reading-circle/package.json`   | Shipped example dependency                        |
-| `examples/operations-room/package.json`  | Shipped example dependency                        |
-| `tests/package/application/package.json` | Standalone package fixture dependency             |
+Work from a clean checkout of `origin/main` after all intended changes are
+merged. Fetch tags, verify the release commit is on `origin/main`, and do not
+publish from disconnected history.
 
-The scaffold reads the root manifest at generation time, so its template keeps
-`{{version}}` and is not edited for a release. `bun run package:check` rejects
-version disagreement in the examples, fixture, and generated scaffold.
+### Registry version
 
-4. Add the dated changelog entry, migration notes where needed, and release and
-   compare links. Keep release-specific public semantics in the changelog or
-   semantics document rather than copying them here.
-5. Regenerate declarations with `bun run declarations:pin` and example outputs
-   with `bun scripts/examples.ts pin`. Review every generated diff, then run
-   `bun run declarations:check` and `bun run examples:check`.
-6. Compare the supported Bun and Node versions in the root manifest, README,
-   examples, packed fixture, and packed tarball. A published manifest cannot be
-   corrected in place; fix metadata before assigning the version tag.
+Confirm the exact version is unused with the npm registry and confirm the
+intended dist-tag. Beta versions have the form `1.0.0-beta.N`, with no leading
+zero in `N`, and use `beta`. Never reuse an npm version or move an existing
+release tag.
+
+### Version surfaces
+
+Treat the root `package.json` version as canonical. Copy the exact version to
+every owned package dependency location:
+
+| Location                                            | Owned version fact                        |
+| --------------------------------------------------- | ----------------------------------------- |
+| `package.json`                                      | Published version and `publishConfig.tag` |
+| `examples/reading-circle/package.json`              | Shipped example dependency                |
+| `examples/operations-room/package.json`             | Shipped example dependency                |
+| `examples/production-http/package.json`             | Shipped example dependency                |
+| `tests/package/application/package.json`            | Standalone packed-application dependency  |
+| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency        |
+| `tests/package/multi-instance/backend/package.json` | Independent backend dependency            |
+
+The scaffold keeps `{{version}}`; generation reads the canonical root
+version. Verify supported Node, Bun, TypeScript, and `packageManager` facts in
+the root, examples, scaffold, fixtures, README, workflows, and packed
+manifest.
+
+### Changelog
+
+Add a dated changelog entry. Every release entry must contain the exact headings
+`Compatibility`, `Migration`, `Generated formats`, and `Runtime and security
+support`, writing `None` when a section has no items. Include an exact release
+link for `v{{version}}` and an exact compare link from the immediately previous
+version. Never edit a released entry except to restore it byte-faithfully from
+its immutable tag.
+
+### Source enforcement
+
+Run `bun run release:check`. It validates beta syntax and tag policy, every
+owned version location, mandatory changelog sections and links, runtime and
+toolchain ranges, shipped policies, reviewed workflow pins, and publication
+workflow source facts.
+
+### Generated artifacts
+
+Regenerate declarations with `bun run declarations:pin` and example outputs
+with `bun scripts/examples.ts pin`. Review every generated diff as a public
+contract change. Generated Markdown, wire, manifests, and dependency graphs are
+coupled to the exact generator version; do not assume cross-version
+compatibility from an unchanged format number.
 
 ## Final gates
 
-Run the same gates the publish workflow runs, against the final release commit:
+Run the same verification as the publish workflow against the final release
+commit:
 
 ```sh
 bun install --frozen-lockfile
 bun run check
+bun run release:check
 bun run test
 bun run coverage
+bun run build
 bun run declarations:check
 bun run examples:check
 bun run scenario
@@ -74,52 +119,58 @@ bun run package:check
 bun audit
 ```
 
-Confirm regeneration leaves no unexplained diff. Wait for every required CI job
-on the final `main` commit. `package:check` runs npm's real `prepack` lifecycle,
-inspects that tarball, installs it with npm and Bun, and exercises the generated
-scaffold and a compiled Node scenario. Review its npm pack listing before
-approving the release; `npm publish` recreates the artifact through the same npm
-packing machinery.
+Confirm regeneration leaves no unexplained diff and review the npm pack file
+listing. `package:check` executes npm's real `prepack` lifecycle, inspects the
+tarball and policy links, installs it with npm and Bun, exercises the generated
+scaffold and examples, compiles a separate generated client/backend topology,
+and runs a Node scenario. Wait for **CI required** on the final `main` commit,
+then repeat every external-setting check above.
 
 ## Tag and publish
 
-1. Set `VERSION` to the exact manifest version. Verify `HEAD` is an ancestor of
-   `origin/main`, create annotated tag `v$VERSION` on that commit, and push only
-   the tag. Never move or reuse a release tag.
-2. Review the triggered **Publish alpha** run. The job checks the tag/version,
-   full-history ancestry against `origin/main`, and all final gates. An
-   authorized reviewer must approve its protected `npm` environment before npm
-   receives an OIDC token.
-3. The workflow publishes with public access, the `alpha` dist-tag, and npm
-   provenance. Do not publish the same version manually after a workflow
-   failure; determine whether npm accepted it first.
-4. Publish a GitHub prerelease from the same tag with the changelog migration
-   notes and links to the exact npm version and comparison.
+1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
+   of `origin/main`, create one annotated `v$VERSION` tag on that commit, and
+   push only that tag. Never move or reuse a release tag.
+2. Review the triggered **Publish beta** workflow. Its unprivileged `verify` job
+   checks exact tag equality, no-leading-zero beta syntax, `origin/main`
+   ancestry, release facts, all gates, and the audit. It has no environment and
+   no OIDC permission.
+3. Approve the protected `npm` environment only after `verify` succeeds and an
+   independent reviewer has repeated the source and external-setting checks.
+   The `publish` job is the only job with the `npm` environment and
+   `id-token: write`; it checks out the same commit, rechecks tag/source
+   identity, ancestry, frozen installation, and release facts, then runs
+   `npm publish --provenance --tag beta --access public`.
+4. Do not publish manually after a workflow failure until npm confirms the
+   version was not accepted. The workflow does not create a GitHub release.
+   After npm verification, manually create a GitHub prerelease from the same
+   immutable tag using the changelog entry and exact comparison.
 
 ## Verify the registry
 
 - Confirm `npm view @mit-sdg/sync-engine dist-tags versions` shows the new exact
-  version under `alpha`. Confirm that the alpha publication did not create or
-  move `latest`. After the first stable release, confirm that `latest` remains
-  on the intended stable version.
-- Check the npm package page for the GitHub Actions provenance attestation and
-  verify the tarball integrity and repository, license, executable, and file
-  metadata.
+  version under `beta` and that `latest` did not move.
+- Check the npm package page for GitHub Actions provenance and verify tarball
+  integrity, repository, license, executable, policy files, and file metadata.
 - In clean directories, install the exact registry version with npm and Bun,
-  import every public subpath on supported Node versions, and run the documented
-  `bunx --package @mit-sdg/sync-engine@$VERSION sync-engine --help` command.
-- Scaffold a project from that exact registry version and run its check,
-  generation, principle, and scenario commands. Verify an artifact check from a
-  copied, application-owned example rather than writing into `node_modules`.
+  import every public subpath under Node 24, and typecheck with TypeScript 5.9.
+- Run `bunx --package @mit-sdg/sync-engine@$VERSION sync-engine --help` and
+  scaffold a project from that exact version. Run its generation, check,
+  principle, and scenario commands. Check artifacts from an application-owned
+  copy rather than writing inside `node_modules`.
+- Reconfirm the npm trusted publisher identity, ownership/2FA, GitHub
+  environment controls, protected tag, and private vulnerability reporting
+  after publication.
 
 ## Bad release response
 
 Stop or reject the environment deployment if publication has not happened. If
-npm already has the version, do not retag or overwrite it: mark the GitHub
-prerelease and npm version as affected, deprecate the exact version with a clear
-message, move `alpha` back to the last known-good version when appropriate, and
-publish a new incremented alpha containing the fix. Use npm unpublish only when
-the package owners agree it meets npm policy; prefer deprecation because users
-may already depend on the tarball. If credentials or publishing provenance may
-be compromised, disable the trusted publisher/environment and involve the
-repository and npm organization owners before restoring release access.
+npm accepted the version, do not retag, overwrite, or recreate it. Mark the
+GitHub prerelease and npm version as affected, deprecate the exact version with
+a clear message, move `beta` back to the last known-good beta when appropriate,
+and publish a new incremented beta containing the fix and migration notes. Use
+npm unpublish only when package owners agree it meets npm policy; prefer
+deprecation because consumers may already depend on the immutable tarball. If
+credentials or provenance may be compromised, disable the trusted publisher
+and environment and involve repository and npm organization owners before
+restoring release access.

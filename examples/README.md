@@ -3,7 +3,8 @@
 Each example is a complete private TypeScript package with its own concepts,
 specifications, composition, tests, generated contracts, and package scripts.
 The directories are independently installable; no example imports source from
-another. They require Bun 1.3 or newer.
+another. They support Bun `>=1.3.14 <1.4`, Node.js `>=24 <25`, and TypeScript
+`>=5.9 <6`.
 
 | Example                                      | Use it to study                                                                                                                              |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

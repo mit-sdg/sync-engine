@@ -2,7 +2,8 @@
 
 This project contains one complete sync-engine application: the Noting concept,
 two endpoints, an assembly, a local-gateway scenario, and generated contracts.
-It requires Bun 1.3 or newer.
+It supports Bun `>=1.3.14 <1.4`, Node.js `>=24 <25`, and TypeScript
+`>=5.9 <6`.
 
 ## Install and run
 
@@ -46,4 +47,4 @@ Generated files are derived from `generated.config.ts`; do not edit them by
 hand. Documentation matching the installed package is under
 `node_modules/@mit-sdg/sync-engine/docs/`. The [online documentation
 index](https://github.com/mit-sdg/sync-engine/blob/main/docs/index.md) tracks the
-current development branch and may differ from this installed alpha.
+current development branch and may differ from this installed beta.

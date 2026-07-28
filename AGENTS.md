@@ -18,6 +18,7 @@ the formatter, linter, typechecker, and test runner beneath those scripts.
 | --------------------------------- | ---------------------------- |
 | Install dependencies              | `bun install`                |
 | Architecture, specs, lint, types  | `bun run check`              |
+| Check release-owned source facts  | `bun run release:check`      |
 | Run the full test suite           | `bun run test`               |
 | Build JavaScript and declarations | `bun run build`              |
 | Check declaration snapshot        | `bun run declarations:check` |

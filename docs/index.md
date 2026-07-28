@@ -57,6 +57,10 @@ TypeScript files are pinned outputs from their assemblies.
 - [Operational limits](operations.md) states suitable and unsuitable uses,
   concurrency boundaries, resource limits, persistence limits, and host
   responsibilities.
+- [Support policy](../SUPPORT.md) defines beta compatibility, exact-version
+  generated contracts, runtime/toolchain ranges, and the support window.
+- [Security policy](../SECURITY.md) defines private vulnerability reporting,
+  security-fix eligibility, response targets, and the host/application boundary.
 - [Execution semantics](semantics.md#boundary-gateway-and-client) defines the
   transport-neutral boundary and client result model.
 - [Changelog](../CHANGELOG.md) records release-specific compatibility changes.

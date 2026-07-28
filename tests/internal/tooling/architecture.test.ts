@@ -171,6 +171,26 @@ describe("architecture rule fixtures", () => {
       expect.stringContaining("package export must map types"),
     );
   });
+
+  test.each(["actions/checkout@v7", "actions/checkout@3d3c42e5"])(
+    "rejects external workflow action reference %s",
+    (action) => {
+      expect(
+        failures({
+          ".github/workflows/fixture.yml": `jobs:\n  check:\n    steps:\n      - uses: ${action}\n`,
+        }),
+      ).toContainEqual(expect.stringContaining("must use an exact 40-hex SHA"));
+    },
+  );
+
+  test("allows repository-local workflow actions", () => {
+    expect(
+      failures({
+        ".github/workflows/fixture.yml":
+          "jobs:\n  check:\n    steps:\n      - uses: ./.github/actions/check\n",
+      }),
+    ).not.toContainEqual(expect.stringContaining("must use an exact 40-hex SHA"));
+  });
 });
 
 describe("runtime import SCC fixtures", () => {
