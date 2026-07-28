@@ -9,6 +9,7 @@
  */
 import { describe, expect, test } from "vite-plus/test";
 import {
+  Frames,
   MemoryStore,
   Logging,
   no,
@@ -149,6 +150,39 @@ describe("assemble", () => {
       routes: {
         "/counter/increment": {},
         "/notes/create": { required: ["text", "author"] },
+      },
+    });
+  });
+
+  test("rejects an executable endpoint that cannot join the public route set", () => {
+    const ClosureEndpoint = endpoint("/closure", ({ count, hidden }) =>
+      receive({})
+        .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
+        .then(request(Counting.increment, {}, { count }))
+        .then(respond({ hidden })),
+    );
+
+    expect(() =>
+      assemble({
+        vocabulary: vocab,
+        composition: { Api: { ClosureEndpoint } },
+      }),
+    ).toThrow(
+      "assemble: executable endpoints could not be lowered to complete wire contracts:\n" +
+        '- endpoint "Api.ClosureEndpoint" at "/closure" (reaction "Api.ClosureEndpoint"): ' +
+        "step 2 needs a value bound by a closure where",
+    );
+  });
+
+  test("the assembled invoker rejects paths outside the declared endpoint catalog", async () => {
+    const app = assemble({ vocabulary: vocab, composition: { Increment } });
+
+    await expect(app.invoker.invoke("/missing", {})).resolves.toEqual({
+      ok: false,
+      error: {
+        kind: "framework",
+        code: "NOT_FOUND",
+        detail: "Unknown endpoint: /missing",
       },
     });
   });

@@ -59,7 +59,9 @@ import {
   Requesting,
   settleRequestInterpreterFailure,
 } from "../invocation/invoke.ts";
-import { deriveInputContracts, wireContracts } from "../wire/wire.ts";
+import { deriveInputContracts } from "../wire/wire.ts";
+import { assertPortableEndpoints } from "./endpoint-portability.ts";
+import type { EndpointIdentity } from "./endpoint-portability.ts";
 
 // Endpoints author against these request-boundary references.
 
@@ -189,7 +191,9 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   /** Public boundary categories declared beside concept refusals. */
   publicErrors: Readonly<Record<string, PublicErrorCategory>>;
   /** Endpoint identity retained even when a reaction has no portable IR. */
-  endpointOfReaction: ReadonlyMap<string, { name: string; path: string }>;
+  endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
+  /** Every authored endpoint declaration, independent of lowering. */
+  endpoints: readonly EndpointIdentity[];
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
   form(fused: FusedFormer): Promise<unknown>;
 }
@@ -296,7 +300,8 @@ export function assemble<T extends Record<string, ConceptClass>>(
   // ── The composition: tagged exports register under their dotted path ─────
   const reactions: Record<string, Reaction> = {};
   const contracts: Record<string, InputContractDecl> = {};
-  const endpointOfReaction = new Map<string, { name: string; path: string }>();
+  const endpointOfReaction = new Map<string, EndpointIdentity>();
+  const endpoints: EndpointIdentity[] = [];
   const views: RelationView[] = [];
   const formers: FormerRef[] = [];
 
@@ -308,6 +313,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
       return;
     }
     if (isEndpointDef(value)) {
+      endpoints.push({ name, path: value.path });
       const declared = value.reaction($vars);
       const declarations = declarationsOf(declared);
       declarations.forEach((entry) => pinToPath(entry, value.path));
@@ -353,8 +359,11 @@ export function assemble<T extends Record<string, ConceptClass>>(
   engine.declareViews(...views);
   engine.declareFormers(...formers);
 
+  const app = engine.exportReactions();
+  assertPortableEndpoints("assemble", app.unlowered, endpointOfReaction);
+
   // Declared contracts take precedence; receive patterns fill missing entries.
-  for (const [path, decl] of Object.entries(deriveInputContracts(engine.exportReactions()))) {
+  for (const [path, decl] of Object.entries(deriveInputContracts(app))) {
     contracts[path] ??= decl;
   }
 
@@ -365,15 +374,15 @@ export function assemble<T extends Record<string, ConceptClass>>(
     boundary,
     instrumented: instrumentedBoundary as unknown as RequestBoundaryActions,
     contracts,
+    routes: new Set(endpoints.map(({ path }) => path)),
     refresh: () => engine.invalidateAllCaches(),
   });
 
   const publicInterface: ApplicationInterface = {
     routes: Object.fromEntries(
-      wireContracts(engine.exportReactions(), { contracts }).endpoints.map(({ path }) => [
-        path,
-        contracts[path] ?? {},
-      ]),
+      [...new Set(endpoints.map(({ path }) => path))]
+        .sort()
+        .map((path) => [path, contracts[path] ?? {}]),
     ),
   };
 
@@ -387,6 +396,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     publicInterface,
     publicErrors,
     endpointOfReaction,
+    endpoints,
     form: (fused) => engine.form(fused),
   };
 }

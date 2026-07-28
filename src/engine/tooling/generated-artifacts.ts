@@ -4,6 +4,7 @@ import { posix, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
 import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
+import { assertPortableEndpoints } from "@engine/boundary/assembly/endpoint-portability";
 import type { HttpFloor } from "@engine/boundary/http/http-floor";
 import { projectAssemblyHttpWire } from "@engine/boundary/http/http-floor";
 import { renderInputContracts } from "@engine/boundary/protocol/endpoints";
@@ -102,21 +103,7 @@ export function renderGenerated(application: ResolvedApplication) {
   const assembled = application.assemble();
   const design = inspectAssembly(assembled);
   const endpointOfReaction = assemblyBehind(assembled).endpointOfReaction;
-  const unsupported = design.app.unlowered.flatMap(({ name: reaction, reason }) => {
-    const endpoint = endpointOfReaction.get(reaction);
-    return endpoint === undefined ? [] : [{ ...endpoint, reaction, reason }];
-  });
-  if (unsupported.length > 0) {
-    const details = unsupported
-      .map(
-        ({ name, path, reaction, reason }) =>
-          `- endpoint "${name}" at "${path}" (reaction "${reaction}"): ${reason}`,
-      )
-      .join("\n");
-    throw new Error(
-      `generated artifacts: executable endpoints could not be lowered to complete wire contracts:\n${details}`,
-    );
-  }
+  assertPortableEndpoints("generated artifacts", design.app.unlowered, endpointOfReaction);
   const applicationContracts = wireContracts(design.app, {
     contracts: design.inputContracts,
     inventories: design.concepts,

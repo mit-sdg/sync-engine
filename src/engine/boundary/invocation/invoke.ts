@@ -190,15 +190,20 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
   instrumented: RequestBoundaryActions;
   /** Declared input contracts by path; undeclared paths are unchecked. */
   contracts?: Record<string, InputContractDecl>;
+  /** When supplied, reject paths outside the assembled public route set. */
+  routes?: ReadonlySet<string>;
   /** Refresh standing reads before a new application-interface ask. */
   refresh?: () => void;
 }): Invoker<C> {
-  const { boundary, instrumented, contracts, refresh } = opts;
+  const { boundary, instrumented, contracts, routes, refresh } = opts;
 
   return {
     async invoke(path, input, invokeOpts: InvokeOptions = {}) {
       if (isAborted(invokeOpts.signal)) {
         return frameworkError(FrameworkErrorCode.ABORTED);
+      }
+      if (routes !== undefined && !routes.has(path)) {
+        return frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`);
       }
       refresh?.();
 

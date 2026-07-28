@@ -171,7 +171,7 @@ describe("generated application artifacts", () => {
     expect(projected).not.toContain('"session":');
   });
 
-  test("render, check, and pin reject an executable endpoint absent from portable IR", async () => {
+  test("ordinary assembly rejects an executable endpoint absent from portable IR", async () => {
     const application = resolveApplication(
       {
         assemble: () =>
