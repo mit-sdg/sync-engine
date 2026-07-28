@@ -35,11 +35,24 @@ describe("sync-engine new", () => {
 
     const generatedManifest = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+      engines: Record<string, string>;
+      packageManager: string;
     };
     const packageManifest = JSON.parse(
       await readFile(new URL("../../../package.json", import.meta.url), "utf8"),
-    ) as { version: string };
+    ) as {
+      version: string;
+      dependencies: Record<string, string>;
+      engines: Record<string, string>;
+      packageManager: string;
+    };
     expect(generatedManifest.dependencies["@mit-sdg/sync-engine"]).toBe(packageManifest.version);
+    expect(generatedManifest.devDependencies.typescript).toBe(
+      packageManifest.dependencies.typescript,
+    );
+    expect(generatedManifest.engines).toEqual(packageManifest.engines);
+    expect(generatedManifest.packageManager).toBe(packageManifest.packageManager);
   });
 
   test("the written concept registry names only what the specification cannot", async () => {

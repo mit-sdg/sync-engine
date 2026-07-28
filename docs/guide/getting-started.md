@@ -1,8 +1,8 @@
 # Getting started
 
 This introductory walkthrough creates and runs the smallest complete
-sync-engine application. It assumes TypeScript `>=6 <7` and supports Bun
-`>=1.3.14 <1.4`.
+sync-engine application. Use the versions in the [runtime and toolchain support
+policy](../../SUPPORT.md).
 The walkthrough does not cover every authoring form; use the [Public
 API](../public-surface.md) and [Execution semantics](../semantics.md) as the
 authoritative references.
@@ -10,7 +10,7 @@ authoritative references.
 ## Create the project
 
 ```sh
-bunx --package @mit-sdg/sync-engine@1.0.0-beta.0 sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
 cd note-keeper
 bun install
 ```
@@ -18,6 +18,7 @@ bun install
 The command writes a project only when none of its template files would be
 overwritten. The generated application has one Noting concept, two endpoints,
 an assembly, a local-gateway scenario, and generated-artifact configuration.
+Pin an exact package version when reproducing an evaluation or deployment.
 
 ## Generated files
 

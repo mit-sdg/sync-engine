@@ -24,9 +24,8 @@ between beta releases. Only the newest beta is supported; pin an exact version,
 read the [support policy](SUPPORT.md), and review the [operational
 limits](docs/operations.md) before choosing a deployment.
 
-The package is ESM-only. Shipped TypeScript projects and CLI commands support
-Bun `>=1.3.14 <1.4`; built library modules support Node.js `>=24 <25`; package
-types and generated TypeScript support TypeScript `>=6 <7`.
+The package is ESM-only. See the [support policy](SUPPORT.md) for current runtime
+and toolchain requirements.
 
 ## Install in an existing project
 

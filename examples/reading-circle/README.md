@@ -3,8 +3,8 @@
 Reading Circle is the shortest complete multi-concept example. Members create
 and join circles, select a reading, and discuss it. The application keeps its
 reactions, policy views, formers, and endpoints in one composition module so
-the whole design can be read in one place. It supports Bun `>=1.3.14 <1.4`,
-Node.js `>=24 <25`, and TypeScript `>=6 <7`.
+the whole design can be read in one place. Runtime and toolchain requirements
+are declared in `package.json` and the repository [support policy](../../SUPPORT.md).
 
 ## Run the example
 

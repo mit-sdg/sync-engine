@@ -4,6 +4,7 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   checkRelease,
   ownedDependencyManifests,
+  projectReleaseManifests,
   releaseSourcePaths,
 } from "../../../scripts/release.ts";
 
@@ -11,6 +12,18 @@ const root = resolve(import.meta.dirname, "../../..");
 const validSources = new Map(
   releaseSourcePaths.map((path) => [path, readFileSync(resolve(root, path), "utf8")]),
 );
+const packageManifest = JSON.parse(validSources.get("package.json") ?? "") as {
+  version: string;
+  engines: { bun: string; node: string };
+  packageManager: string;
+};
+const currentVersion = packageManifest.version;
+const currentChangelog = validSources.get("CHANGELOG.md") ?? "";
+const changelogVersions = [...currentChangelog.matchAll(/^## \[([^\]]+)\]/gm)].map(
+  (match) => match[1] ?? "",
+);
+const previousVersion = changelogVersions[changelogVersions.indexOf(currentVersion) + 1];
+if (previousVersion === undefined) throw new Error("current changelog entry has no predecessor");
 
 function fixture(): Map<string, string> {
   return new Map(validSources);
@@ -40,6 +53,33 @@ function editManifest(
 describe("release source facts", () => {
   test("accepts the beta cutover sources", () => {
     expect(checkRelease(fixture())).toEqual([]);
+  });
+
+  test("projects root facts into owned manifests", () => {
+    const sources = fixture();
+    editManifest(sources, ownedDependencyManifests[0], (manifest) => {
+      manifest.dependencies["@mit-sdg/sync-engine"] = "stale";
+      delete manifest.devDependencies["@types/node"];
+      manifest.devDependencies.typescript = "stale";
+      manifest.devDependencies.vite = "stale";
+      manifest.devDependencies["vite-plus"] = "stale";
+      delete manifest.overrides;
+      manifest.engines.bun = "stale";
+      manifest.engines.node = "stale";
+      manifest.packageManager = "stale";
+    });
+
+    const projected = projectReleaseManifests(sources);
+    sources.set(ownedDependencyManifests[0], projected.get(ownedDependencyManifests[0]) ?? "");
+    expect(checkRelease(sources)).toEqual([]);
+  });
+
+  test("refuses to project an invalid canonical version", () => {
+    const sources = fixture();
+    editManifest(sources, "package.json", (manifest) => {
+      manifest.version = "invalid";
+    });
+    expect(() => projectReleaseManifests(sources)).toThrow(/invalid release version/);
   });
 
   test.each(["1.0.0-alpha.1", "1.0.0-beta.01", "1.0.1-beta.0"])(
@@ -77,7 +117,7 @@ describe("release source facts", () => {
       const sources = fixture();
       replaceSource(sources, "CHANGELOG.md", `### ${heading}`, `### Missing ${heading}`);
       expect(checkRelease(sources)).toContain(
-        `CHANGELOG.md: 1.0.0-beta.0 is missing the ${heading} heading`,
+        `CHANGELOG.md: ${currentVersion} is missing the ${heading} heading`,
       );
     },
   );
@@ -87,8 +127,8 @@ describe("release source facts", () => {
     replaceSource(
       sources,
       "CHANGELOG.md",
-      "releases/tag/v1.0.0-beta.0",
-      "releases/tag/v1.0.0-beta.1",
+      `releases/tag/v${currentVersion}`,
+      "releases/tag/v1.0.0-beta.999",
     );
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining("release link"));
   });
@@ -98,8 +138,8 @@ describe("release source facts", () => {
     replaceSource(
       sources,
       "CHANGELOG.md",
-      "compare/v1.0.0-alpha.0...v1.0.0-beta.0",
-      "compare/v0.3.0...v1.0.0-beta.0",
+      `compare/v${previousVersion}...v${currentVersion}`,
+      `compare/v0.3.0...v${currentVersion}`,
     );
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining("compare link"));
   });
@@ -127,9 +167,9 @@ describe("release source facts", () => {
 
   test("rejects a stale exact README evaluation version", () => {
     const sources = fixture();
-    replaceSource(sources, "README.md", "`@1.0.0-beta.0`", "`@1.0.0-beta.1`");
+    replaceSource(sources, "README.md", `\`@${currentVersion}\``, "`@1.0.0-beta.999`");
     expect(checkRelease(sources)).toContain(
-      "README.md: exact evaluation version must be @1.0.0-beta.0",
+      `README.md: exact evaluation version must be @${currentVersion}`,
     );
   });
 
@@ -140,6 +180,7 @@ describe("release source facts", () => {
       (manifest: Record<string, any>): void => {
         manifest.engines.node = ">=24";
       },
+      "engines.node must support exactly one major",
     ],
     [
       "bun engine",
@@ -147,6 +188,7 @@ describe("release source facts", () => {
       (manifest: Record<string, any>): void => {
         manifest.engines.bun = ">=1.3.14";
       },
+      "engines.bun must support exactly one minor",
     ],
     [
       "TypeScript range",
@@ -154,6 +196,7 @@ describe("release source facts", () => {
       (manifest: Record<string, any>): void => {
         manifest.dependencies.typescript = "^5.9.0";
       },
+      "dependencies.typescript must support exactly one major",
     ],
     [
       "package manager",
@@ -161,11 +204,12 @@ describe("release source facts", () => {
       (manifest: Record<string, any>): void => {
         manifest.packageManager = "bun@1.3.15";
       },
+      "packageManager must pin the minimum supported Bun version",
     ],
-  ] as const)("rejects a stale %s policy", (_name, path, edit) => {
+  ] as const)("rejects a stale %s policy", (_name, path, edit, expected) => {
     const sources = fixture();
     editManifest(sources, path, edit);
-    expect(checkRelease(sources)).not.toEqual([]);
+    expect(checkRelease(sources)).toContainEqual(expect.stringContaining(expected));
   });
 
   test.each(["SUPPORT.md", "SECURITY.md"])(
@@ -185,7 +229,7 @@ describe("release source facts", () => {
 
   test.each([
     ["SUPPORT.md", "Only the newest beta is supported."],
-    ["SUPPORT.md", "Node.js `>=24 <25`"],
+    ["SUPPORT.md", `Node.js \`${packageManifest.engines.node}\``],
     ["SECURITY.md", "security/advisories/new"],
     ["SECURITY.md", "acknowledgement within three business days"],
   ])("requires the policy fact %s: %s", (path, fact) => {
@@ -233,13 +277,16 @@ describe("release source facts", () => {
 
   test("rejects an unpinned CI Bun version", () => {
     const sources = fixture();
+    const bunVersion = packageManifest.packageManager.slice("bun@".length);
     replaceSource(
       sources,
       ".github/workflows/ci.yml",
-      'bun-version: "1.3.14"',
-      'bun-version: "1.3.15"',
+      `bun-version: "${bunVersion}"`,
+      'bun-version: "0.0.0"',
     );
-    expect(checkRelease(sources)).toContainEqual(expect.stringContaining("bun-version 1.3.14"));
+    expect(checkRelease(sources)).toContainEqual(
+      expect.stringContaining(`bun-version ${bunVersion}`),
+    );
   });
 
   test.each([
@@ -373,12 +420,14 @@ describe("release source facts", () => {
     );
   });
 
-  test("requires Node 24 in package, test, and publication verification", () => {
+  test("requires the supported Node major in CI and publication", () => {
+    const nodeMajor = /^>=(\d+)/.exec(packageManifest.engines.node)?.[1];
+    if (nodeMajor === undefined) throw new Error("root Node range has no minimum major");
     const ci = fixture();
     ci.set(
       ".github/workflows/ci.yml",
       (ci.get(".github/workflows/ci.yml") ?? "").replaceAll(
-        '          node-version: "24"',
+        `          node-version: "${nodeMajor}"`,
         '          node-version: "22"',
       ),
     );
@@ -389,7 +438,7 @@ describe("release source facts", () => {
     replaceSource(
       publish,
       ".github/workflows/publish.yml",
-      '          node-version: "24"',
+      `          node-version: "${nodeMajor}"`,
       '          node-version: "22"',
     );
     expect(checkRelease(publish)).toContainEqual(

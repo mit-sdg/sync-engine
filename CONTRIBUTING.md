@@ -80,6 +80,8 @@ reference only when implementation and contract tests establish the behavior.
 ## Release work
 
 Do not commit, tag, or publish a release as part of an ordinary contribution.
+After changing version or toolchain facts in the root manifest, run
+`bun run release:update` and review the concrete standalone-manifest changes.
 Release maintainers use the [Contributor release
 procedure](docs/releasing.md) after all intended changes reach `main`. Released
 versions are immutable; compatibility, migration, generated-format, and

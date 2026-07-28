@@ -10,6 +10,7 @@ import {
   diagnosticsFail,
   renderApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "../../../src/engine/utils/package-version.ts";
 
 const words = vocabulary({ concepts: {}, computations: {} });
 const First = endpoint(
@@ -43,7 +44,7 @@ describe("application manifest", () => {
     expect(manifest).toMatchObject({
       format: "sync-engine.application-manifest",
       version: 2,
-      generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.0" },
+      generator: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
       digest: expect.stringMatching(/^fnv1a64-[0-9a-f]{16}$/),
       localBehavior: { contract: null, observed: [] },
       endpoints: [
@@ -154,7 +155,7 @@ describe("application manifest", () => {
     expect(graph).toMatchObject({
       format: "sync-engine.application-dependency-graph",
       version: 2,
-      generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.0" },
+      generator: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
     });
     expect(graph.nodes).toContainEqual(
       expect.objectContaining({ id: "action:RequestBoundary.request", kind: "action" }),

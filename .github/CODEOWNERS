@@ -8,3 +8,4 @@
 /docs/releasing.md @BarishNamazov @eagonmeng
 /scripts/release.ts @BarishNamazov @eagonmeng
 /scripts/check-release.ts @BarishNamazov @eagonmeng
+/scripts/update-release-manifests.ts @BarishNamazov @eagonmeng

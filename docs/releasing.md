@@ -58,8 +58,9 @@ release tag.
 
 ### Version surfaces
 
-Treat the root `package.json` version as canonical. Copy the exact version to
-every owned package dependency location:
+Treat the root `package.json` version, engines, TypeScript dependency, and
+`packageManager` as canonical. Run `bun run release:update` to project those facts
+into every owned package dependency location:
 
 | Location                                            | Owned version fact                        |
 | --------------------------------------------------- | ----------------------------------------- |
@@ -71,10 +72,9 @@ every owned package dependency location:
 | `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency        |
 | `tests/package/multi-instance/backend/package.json` | Independent backend dependency            |
 
-The scaffold keeps `{{version}}`; generation reads the canonical root
-version. Verify supported Node, Bun, TypeScript, and `packageManager` facts in
-the root, examples, scaffold, fixtures, README, workflows, and packed
-manifest.
+The scaffold keeps placeholders and generation reads the canonical root facts.
+`bun run release:check` rejects stale projections; review and commit every
+updated manifest rather than rewriting package metadata during publication.
 
 ### Changelog
 
@@ -172,7 +172,8 @@ commit, then repeat every external-setting check above.
 - Check the npm package page for GitHub Actions provenance and verify tarball
   integrity, repository, license, executable, policy files, and file metadata.
 - In clean directories, install the exact registry version with npm and Bun,
-  import every public subpath under Node 24, and typecheck with TypeScript 6.
+  import every public subpath under the supported Node major, and typecheck with
+  the supported TypeScript major.
 - Run `bunx --package @mit-sdg/sync-engine@$VERSION sync-engine --help` and
   scaffold a project from that exact version. Run its generation, check,
   principle, and scenario commands. Check artifacts from an application-owned

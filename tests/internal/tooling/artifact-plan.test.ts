@@ -11,6 +11,7 @@ import {
   planGenerated,
 } from "@mit-sdg/sync-engine/tooling";
 import type { ArtifactFilesystem } from "@mit-sdg/sync-engine/tooling";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "../../../src/engine/utils/package-version.ts";
 
 class MemoryFilesystem implements ArtifactFilesystem {
   readonly files = new Map<string, string>();
@@ -109,7 +110,7 @@ describe("artifact plans", () => {
     expect(plan.entries.find(({ kind }) => kind === "specification")?.content).toContain(
       "# Ping service",
     );
-    expect(plan.entries.every(({ content }) => content.includes("1.0.0-beta.0"))).toBe(true);
+    expect(plan.entries.every(({ content }) => content.includes(PACKAGE_VERSION))).toBe(true);
   });
 
   test("rejects a manifest produced by another generator version", () => {
@@ -123,7 +124,7 @@ describe("artifact plans", () => {
     manifest.generator.version = "9.9.9";
 
     expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
-      /requires generator @mit-sdg\/sync-engine@1\.0\.0-beta\.0/,
+      `requires generator ${PACKAGE_NAME}@${PACKAGE_VERSION}`,
     );
   });
 });

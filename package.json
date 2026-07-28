@@ -81,6 +81,7 @@
     "package:check": "bun scripts/verify-package.ts",
     "prepack": "bun run build",
     "release:check": "bun scripts/check-release.ts",
+    "release:update": "bun scripts/update-release-manifests.ts",
     "scenario": "bun run build && bun scripts/examples.ts scenario",
     "test": "LOG_LEVEL=error vp test",
     "typecheck": "tsc --noEmit"

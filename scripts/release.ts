@@ -1,27 +1,29 @@
 import { createHash } from "node:crypto";
 
-export const ownedDependencyManifests = [
+const exampleManifests = [
   "examples/reading-circle/package.json",
   "examples/operations-room/package.json",
   "examples/production-http/package.json",
-  "tests/package/application/package.json",
+] as const;
+const bunFixtureManifests = ["tests/package/application/package.json"] as const;
+const nodeFixtureManifests = [
   "tests/package/multi-instance/client/package.json",
   "tests/package/multi-instance/backend/package.json",
 ] as const;
-
-const exampleManifests = ownedDependencyManifests.slice(0, 3);
-const bunProjectManifests = [
-  "package.json",
+export const ownedDependencyManifests = [
   ...exampleManifests,
-  "tests/package/application/package.json",
-  "src/command/scaffold/package.json",
+  ...bunFixtureManifests,
+  ...nodeFixtureManifests,
 ] as const;
-const nodeProjectManifests = [
-  ...bunProjectManifests,
-  "tests/package/multi-instance/client/package.json",
-  "tests/package/multi-instance/backend/package.json",
-] as const;
+const bunProjectManifests = [...exampleManifests, ...bunFixtureManifests] as const;
+const nodeProjectManifests = [...bunProjectManifests, ...nodeFixtureManifests] as const;
 const typescriptManifests = nodeProjectManifests;
+const scaffoldManifest = "src/command/scaffold/package.json";
+const sharedDevelopmentDependencies = [
+  ["@types/node", [...exampleManifests, "tests/package/multi-instance/backend/package.json"]],
+  ["vite", exampleManifests],
+  ["vite-plus", exampleManifests],
+] as const;
 
 export const releaseSourcePaths = [
   "package.json",
@@ -30,12 +32,13 @@ export const releaseSourcePaths = [
   "docs/releasing.md",
   "SUPPORT.md",
   "SECURITY.md",
-  "src/command/scaffold/package.json",
+  scaffoldManifest,
   ...ownedDependencyManifests,
   ".github/workflows/ci.yml",
   ".github/workflows/publish.yml",
   ".github/CODEOWNERS",
   ".github/dependabot.yml",
+  "scripts/update-release-manifests.ts",
 ] as const;
 
 const expectedActions = new Map([
@@ -51,9 +54,6 @@ const requiredHeadings = [
   "Generated formats",
   "Runtime and security support",
 ] as const;
-const expectedEngines = { bun: ">=1.3.14 <1.4", node: ">=24 <25" } as const;
-const expectedTypeScript = ">=6 <7";
-const expectedPackageManager = "bun@1.3.14";
 const releasedChangelogDigests = new Map([
   ["1.0.0-alpha.0", "92e21d62558b5e7aa66a5c2c30c20633534f5dfc144506bd11e9643f8cd7dd21"],
   ["0.3.0", "fb8d76294b0d86f67c00fdc92c0a7b27a7cad0afbe0b5f335f3764087919c309"],
@@ -64,10 +64,102 @@ const releasedChangelogDigests = new Map([
 
 type JsonObject = Record<string, unknown>;
 
+interface ReleaseFacts {
+  version?: string;
+  node?: string;
+  bun?: string;
+  typescript?: string;
+  packageManager?: string;
+}
+
 function object(value: unknown): JsonObject | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as JsonObject)
     : undefined;
+}
+
+function releaseFacts(root: JsonObject | undefined): ReleaseFacts {
+  const engines = object(root?.engines);
+  const dependencies = object(root?.dependencies);
+  return {
+    version: typeof root?.version === "string" ? root.version : undefined,
+    node: typeof engines?.node === "string" ? engines.node : undefined,
+    bun: typeof engines?.bun === "string" ? engines.bun : undefined,
+    typescript: typeof dependencies?.typescript === "string" ? dependencies.typescript : undefined,
+    packageManager: typeof root?.packageManager === "string" ? root.packageManager : undefined,
+  };
+}
+
+function majorRange(value: string | undefined): number | undefined {
+  const match = /^>=(\d+) <(\d+)$/.exec(value ?? "");
+  if (match === null) return undefined;
+  const minimum = Number(match[1]);
+  return Number(match[2]) === minimum + 1 ? minimum : undefined;
+}
+
+function bunRange(value: string | undefined): string | undefined {
+  const match = /^>=(\d+)\.(\d+)\.(\d+) <(\d+)\.(\d+)$/.exec(value ?? "");
+  if (match === null) return undefined;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  if (Number(match[4]) !== major || Number(match[5]) !== minor + 1) return undefined;
+  return `${match[1]}.${match[2]}.${match[3]}`;
+}
+
+export function projectReleaseManifests(sources: ReadonlyMap<string, string>): Map<string, string> {
+  const root = object(JSON.parse(sources.get("package.json") ?? ""));
+  if (root === undefined) throw new Error("package.json must contain an object");
+  const facts = releaseFacts(root);
+  if (Object.values(facts).some((value) => value === undefined)) {
+    throw new Error("package.json is missing a release fact");
+  }
+  if (!/^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(facts.version ?? "")) {
+    throw new Error("package.json contains an invalid release version");
+  }
+  const minimumBun = bunRange(facts.bun);
+  if (
+    majorRange(facts.node) === undefined ||
+    majorRange(facts.typescript) === undefined ||
+    minimumBun === undefined ||
+    facts.packageManager !== `bun@${minimumBun}`
+  ) {
+    throw new Error("package.json contains an invalid release fact");
+  }
+  const rootDevelopment = object(root.devDependencies) ?? {};
+  const projected = new Map<string, string>();
+
+  for (const path of ownedDependencyManifests) {
+    const manifest = object(JSON.parse(sources.get(path) ?? ""));
+    if (manifest === undefined) throw new Error(`${path} must contain an object`);
+    const dependencies = object(manifest.dependencies);
+    const development = object(manifest.devDependencies);
+    const engines = object(manifest.engines);
+    if (dependencies === undefined || development === undefined || engines === undefined) {
+      throw new Error(`${path} is missing dependencies, devDependencies, or engines`);
+    }
+
+    dependencies["@mit-sdg/sync-engine"] = facts.version;
+    development.typescript = facts.typescript;
+    engines.node = facts.node;
+    if ((bunProjectManifests as readonly string[]).includes(path)) {
+      engines.bun = facts.bun;
+      manifest.packageManager = facts.packageManager;
+    }
+    for (const [dependency, paths] of sharedDevelopmentDependencies) {
+      if (!(paths as readonly string[]).includes(path)) continue;
+      if (typeof rootDevelopment[dependency] !== "string") {
+        throw new Error(`package.json is missing devDependencies.${dependency}`);
+      }
+      development[dependency] = rootDevelopment[dependency];
+    }
+    if ((exampleManifests as readonly string[]).includes(path)) {
+      const overrides = object(manifest.overrides) ?? {};
+      manifest.overrides = overrides;
+      overrides.vite = rootDevelopment.vite;
+    }
+    projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+  return projected;
 }
 
 function escapeRegExp(value: string): string {
@@ -147,9 +239,27 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
 
   const root = manifest("package.json");
-  const version = root?.version;
+  const facts = releaseFacts(root);
+  const version = facts.version;
   if (typeof version !== "string" || !/^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(version)) {
     failures.push("package.json: version must match 1.0.0-beta.N without leading zeroes");
+  }
+  const nodeMajor = majorRange(facts.node);
+  if (nodeMajor === undefined) {
+    failures.push("package.json: engines.node must support exactly one major as >=N <N+1");
+  }
+  const bunVersion = bunRange(facts.bun);
+  if (bunVersion === undefined) {
+    failures.push("package.json: engines.bun must support exactly one minor as >=X.Y.Z <X.Y+1");
+  }
+  const typescriptMajor = majorRange(facts.typescript);
+  if (typescriptMajor === undefined) {
+    failures.push(
+      "package.json: dependencies.typescript must support exactly one major as >=N <N+1",
+    );
+  }
+  if (bunVersion === undefined || facts.packageManager !== `bun@${bunVersion}`) {
+    failures.push("package.json: packageManager must pin the minimum supported Bun version");
   }
 
   const publishTag = object(root?.publishConfig)?.tag;
@@ -164,6 +274,9 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   if (object(root?.scripts)?.["release:check"] !== "bun scripts/check-release.ts") {
     failures.push("package.json: release:check must run bun scripts/check-release.ts");
   }
+  if (object(root?.scripts)?.["release:update"] !== "bun scripts/update-release-manifests.ts") {
+    failures.push("package.json: release:update must run bun scripts/update-release-manifests.ts");
+  }
 
   if (typeof version === "string") {
     for (const path of ownedDependencyManifests) {
@@ -176,27 +289,54 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
 
   for (const path of nodeProjectManifests) {
     const value = object(manifest(path)?.engines)?.node;
-    if (value !== expectedEngines.node) {
-      failures.push(`${path}: engines.node must be ${expectedEngines.node}`);
+    if (value !== facts.node) {
+      failures.push(`${path}: engines.node must be ${facts.node}`);
     }
   }
   for (const path of bunProjectManifests) {
     const project = manifest(path);
     const value = object(project?.engines)?.bun;
-    if (value !== expectedEngines.bun) {
-      failures.push(`${path}: engines.bun must be ${expectedEngines.bun}`);
+    if (value !== facts.bun) {
+      failures.push(`${path}: engines.bun must be ${facts.bun}`);
     }
-    if (project?.packageManager !== expectedPackageManager) {
-      failures.push(`${path}: packageManager must be ${expectedPackageManager}`);
+    if (project?.packageManager !== facts.packageManager) {
+      failures.push(`${path}: packageManager must be ${facts.packageManager}`);
     }
   }
   for (const path of typescriptManifests) {
     const project = manifest(path);
     const value =
       object(project?.dependencies)?.typescript ?? object(project?.devDependencies)?.typescript;
-    if (value !== expectedTypeScript) {
-      failures.push(`${path}: TypeScript range must be ${expectedTypeScript}`);
+    if (value !== facts.typescript) {
+      failures.push(`${path}: TypeScript range must be ${facts.typescript}`);
     }
+  }
+  const rootDevelopment = object(root?.devDependencies);
+  for (const [dependency, paths] of sharedDevelopmentDependencies) {
+    for (const path of paths) {
+      const development = object(manifest(path)?.devDependencies);
+      if (development?.[dependency] !== rootDevelopment?.[dependency]) {
+        failures.push(`${path}: ${dependency} must match package.json`);
+      }
+    }
+  }
+  for (const path of exampleManifests) {
+    const project = manifest(path);
+    if (object(project?.overrides)?.vite !== rootDevelopment?.vite) {
+      failures.push(`${path}: overrides.vite must match package.json devDependencies.vite`);
+    }
+  }
+
+  const scaffold = manifest(scaffoldManifest);
+  const scaffoldDevelopment = object(scaffold?.devDependencies);
+  const scaffoldEngines = object(scaffold?.engines);
+  for (const [owner, actual, expected] of [
+    ["TypeScript range", scaffoldDevelopment?.typescript, "{{typescript}}"],
+    ["engines.node", scaffoldEngines?.node, "{{node}}"],
+    ["engines.bun", scaffoldEngines?.bun, "{{bun}}"],
+    ["packageManager", scaffold?.packageManager, "{{packageManager}}"],
+  ] as const) {
+    if (actual !== expected) failures.push(`${scaffoldManifest}: ${owner} must be ${expected}`);
   }
 
   const changelog = sources.get("CHANGELOG.md") ?? "";
@@ -267,14 +407,15 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
 
   const support = sources.get("SUPPORT.md") ?? "";
-  for (const fact of [
+  const supportFacts = [
     "Only the newest beta is supported.",
-    "Node.js `>=24 <25`",
-    "Bun `>=1.3.14 <1.4`",
-    "TypeScript `>=6 <7`",
     "sync-engine.application-manifest` version 2",
     "sync-engine.application-dependency-graph` version 2",
-  ]) {
+  ];
+  if (facts.node !== undefined) supportFacts.push(`Node.js \`${facts.node}\``);
+  if (facts.bun !== undefined) supportFacts.push(`Bun \`${facts.bun}\``);
+  if (facts.typescript !== undefined) supportFacts.push(`TypeScript \`${facts.typescript}\``);
+  for (const fact of supportFacts) {
     if (!support.includes(fact)) failures.push(`SUPPORT.md: missing supported policy fact ${fact}`);
   }
 
@@ -300,6 +441,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "/docs/releasing.md",
     "/scripts/release.ts",
     "/scripts/check-release.ts",
+    "/scripts/update-release-manifests.ts",
   ]) {
     const line = codeowners.split(/\r?\n/).find((candidate) => candidate.startsWith(`${path} `));
     if (line === undefined || !line.includes("@BarishNamazov") || !line.includes("@eagonmeng")) {
@@ -334,8 +476,11 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     const bunVersions = [...source.matchAll(/bun-version:\s*["']?([^\s"']+)/g)].map(
       (match) => match[1],
     );
-    if (bunVersions.length !== bunSetups || bunVersions.some((value) => value !== "1.3.14")) {
-      failures.push(`${path}: every setup-bun step must pin bun-version 1.3.14`);
+    if (
+      bunVersion !== undefined &&
+      (bunVersions.length !== bunSetups || bunVersions.some((value) => value !== bunVersion))
+    ) {
+      failures.push(`${path}: every setup-bun step must pin bun-version ${bunVersion}`);
     }
   }
 
@@ -352,14 +497,16 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   if (ci.includes("id-token: write")) {
     failures.push(".github/workflows/ci.yml: CI must not receive id-token: write");
   }
-  for (const name of ["package", "test"]) {
-    const job = workflowJob(ci, name);
-    for (const fact of [
-      "- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
-      'node-version: "24"',
-    ]) {
-      if (!hasWorkflowLine(job, fact)) {
-        failures.push(`.github/workflows/ci.yml: ${name} job is missing ${fact}`);
+  if (nodeMajor !== undefined) {
+    for (const name of ["package", "test"]) {
+      const job = workflowJob(ci, name);
+      for (const fact of [
+        "- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+        `node-version: "${nodeMajor}"`,
+      ]) {
+        if (!hasWorkflowLine(job, fact)) {
+          failures.push(`.github/workflows/ci.yml: ${name} job is missing ${fact}`);
+        }
       }
     }
   }
@@ -390,12 +537,19 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       failures.push(`.github/workflows/publish.yml: verify job must run ${gate}`);
     }
   }
-  for (const fact of [
-    "- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
-    'node-version: "24"',
-  ]) {
-    if (!hasWorkflowLine(verify, fact)) {
-      failures.push(`.github/workflows/publish.yml: verify job is missing ${fact}`);
+  if (nodeMajor !== undefined) {
+    for (const [name, job] of [
+      ["verify", verify],
+      ["publish", publication],
+    ] as const) {
+      for (const fact of [
+        "- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+        `node-version: "${nodeMajor}"`,
+      ]) {
+        if (!hasWorkflowLine(job, fact)) {
+          failures.push(`.github/workflows/publish.yml: ${name} job is missing ${fact}`);
+        }
+      }
     }
   }
   const verifyOrder = [

@@ -42,12 +42,21 @@ function templatesDir(): string {
 async function projectFiles(name: string, templates: string): Promise<Record<string, string>> {
   const packageManifest = JSON.parse(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
-  ) as { version: string };
+  ) as {
+    version: string;
+    dependencies: { typescript: string };
+    engines: { bun: string; node: string };
+    packageManager: string;
+  };
   const replacements: Record<string, string> = {
     App: pascal(name),
     app: camel(name),
+    bun: packageManifest.engines.bun,
     heading: heading(name),
     name,
+    node: packageManifest.engines.node,
+    packageManager: packageManifest.packageManager,
+    typescript: packageManifest.dependencies.typescript,
     version: packageManifest.version,
   };
   replacements.slug = slug(replacements.heading);
