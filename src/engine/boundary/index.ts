@@ -1,6 +1,7 @@
 export { createClient } from "./client/client.ts";
 export type {
   Client,
+  ClientCallOptions,
   ClientError,
   ClientOptions,
   ClientRequest,
@@ -34,6 +35,7 @@ export {
 export { createInvoker, Requesting } from "./invocation/invoke.ts";
 export { createLocalClient } from "./client/local-client.ts";
 export type { Invoker, InvokeOptions } from "./invocation/invoke.ts";
+export type { ExecutionLimits } from "./invocation/lifecycle.ts";
 
 export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./invocation/funnel.ts";
 

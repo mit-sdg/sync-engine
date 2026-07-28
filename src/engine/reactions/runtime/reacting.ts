@@ -140,11 +140,28 @@ export class Reacting {
   private unloweredReactions: Map<string, string> = new Map();
   /** Every executable reaction name each base registration produced. */
   private namesByBase: Map<string, string[]> = new Map();
+  private readonly execution?: {
+    action(flow: string): boolean;
+    firing(flow: string): boolean;
+    rows(count: number): boolean;
+  };
 
-  constructor(actionConcept: ActionConcept = new ActionConcept()) {
+  constructor(
+    actionConcept: ActionConcept = new ActionConcept(),
+    execution?: {
+      action(flow: string): boolean;
+      firing(flow: string): boolean;
+      rows(count: number): boolean;
+    },
+  ) {
     this.Action = actionConcept;
+    this.execution = execution;
     this.reactionLogger = new ReactionLogger(actionConcept);
-    this.firingBook = new FiringBook(actionConcept.store);
+    this.firingBook = new FiringBook(actionConcept.store, (flow) => {
+      if (this.execution?.firing(flow) !== false) return;
+      this.recordExecutionLimit(flow, "firings");
+      throw new Error("The flow exceeded its firing limit.");
+    });
   }
 
   /** Register an engine observer. Returns a function to unregister it. */
@@ -565,6 +582,7 @@ export class Reacting {
       let actionSymbols: symbol[];
       try {
         [matched, actionSymbols] = this.matchWhen(record, reaction);
+        this.assertRows(record.flow, matched.length);
       } catch (err) {
         logger.error(`Reaction "${reaction.name}": trigger matching failed`, {
           error: serializeError(err),
@@ -592,6 +610,7 @@ export class Reacting {
           if (!(frames instanceof Frames)) {
             throw new TypeError("A reaction where function must return Frames.");
           }
+          this.assertRows(provenance.flow, frames.length);
           frameTriggerIds = this.assertFrameProvenance(frames, provenance, actionSymbols);
         } catch (err) {
           logger.error(`Reaction "${reaction.name}": where condition evaluation failed`, {
@@ -871,6 +890,7 @@ export class Reacting {
         if (!result.stop) next.push(...result.frames);
       }
       current = new Frames(...next);
+      this.assertRows(branch.fill.flow, current.length);
       if (current.length === 0) break;
     }
     return current;
@@ -1250,8 +1270,25 @@ export class Reacting {
       rawConceptsByInstrumented: this.rawConceptsByInstrumented,
       concepts: this.concepts,
       conceptsByName: this.registry.concepts,
+      execution: this.execution,
       react: this.react.bind(this),
       emit: this.reactionLogger.emit.bind(this.reactionLogger),
     };
+  }
+
+  private assertRows(flow: string, count: number): void {
+    if (this.execution?.rows(count) !== false) return;
+    this.recordExecutionLimit(flow, "rows");
+    throw new Error("The evaluation exceeded its row limit.");
+  }
+
+  private recordExecutionLimit(flow: string, limit: "firings" | "rows"): void {
+    this.Action._recordIntegrityFailure({
+      kind: "execution-limit",
+      flow,
+      limit,
+      errorClass: "ExecutionLimitExceeded",
+      at: Date.now(),
+    });
   }
 }

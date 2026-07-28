@@ -107,6 +107,15 @@ describe("createHttpClient", () => {
     expect(fetch).toHaveBeenCalledWith("http://localhost/auth/login", expect.any(Object));
   });
 
+  test("an explicit root baseUrl does not fall back to /api", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const client = createHttpClient<TestApi>({ baseUrl: "/", fetch });
+
+    await client.auth.login({ username: "a", password: "b" });
+
+    expect(fetch).toHaveBeenCalledWith("/auth/login", expect.any(Object));
+  });
+
   test("an omitted baseUrl sends requests beneath /api", async () => {
     const fetch = mockFetch({ token: "x" });
     const client = createHttpClient<TestApi>({ fetch });
@@ -153,6 +162,23 @@ describe("createHttpClient", () => {
     const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({ error: FrameworkErrorCode.NETWORK_ERROR });
+  });
+
+  test("an aborted call passes its signal to fetch and returns ABORTED", async () => {
+    const controller = new AbortController();
+    const fetch: typeof globalThis.fetch = vi.fn((_input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      controller.abort();
+      return Promise.reject(new DOMException("Aborted", "AbortError"));
+    }) as unknown as typeof fetch;
+    const client = makeClient(fetch);
+
+    const result = await client.auth.login(
+      { username: "a", password: "b" },
+      { signal: controller.signal },
+    );
+
+    expect(result).toEqual({ error: FrameworkErrorCode.ABORTED });
   });
 
   test("a non-JSON success response returns BAD_JSON", async () => {

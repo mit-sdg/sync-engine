@@ -11,13 +11,11 @@ Use sync-engine when one process can host independently implemented concepts
 and the application benefits from explicit, inspectable composition. The
 ordinary runtime is suitable for evaluation, prototypes, deterministic
 application tests, and hosts that provide their own storage, validation,
-resource controls, and process lifecycle.
+outer traffic controls, and process lifecycle.
 
 Do not use the current alpha as the sole production control plane for untrusted
-or unbounded traffic. The runtime has no unified limits for active flows,
-pending requests, per-concept queues, actions or firings per flow, evaluation
-frames, or query fan-out. The one-mebibyte HTTP request limit and bounded
-settled-log retention do not bound accepted application work.
+or unbounded traffic. Configure `ExecutionLimits` for engine-owned work and
+retain host limits for connections, rates, DDoS protection, and exporter queues.
 
 Use a different architecture, or add host-level coordination, when correctness
 requires a transaction across concepts, synchronous cancellation of accepted
@@ -54,21 +52,25 @@ idempotency keys and durable deduplication where required.
 
 ## Timeouts, abort, and shutdown
 
-The default invocation timeout is 30 seconds. Timeout and `AbortSignal` stop the
-caller's wait. Neither mechanism forwards cancellation into accepted concept
-work or rolls back completed actions. A timed-out flow can continue consuming
-queue, query, reaction, and storage resources.
+Without an execution profile, the default invocation timeout is 30 seconds. A
+profile uses its maximum request duration as the default and rejects longer
+deadlines. Timeout and `AbortSignal` stop the caller's wait. Neither mechanism
+forwards cancellation into accepted concept work or rolls back completed
+actions. A timed-out flow can continue consuming queue, query, reaction, and
+storage resources within its flow budgets.
 
-The public assembly and gateway expose no admission-drain or idle-wait API.
 Tracking HTTP promises is insufficient because a timed-out request can outlive
 its transport wait. A host can stop accepting new requests and apply a hard
-shutdown deadline, but the available interfaces do not establish that every
-accepted flow has settled before resources close. Treat graceful draining as
-unsupported in the current alpha.
+shutdown deadline. Call `beginDrain()` to stop root admission and await its
+promise (or `whenIdle()`) until accepted causal flows settle. Timed-out and
+aborted calls remain active until their real work settles.
 
 `ConceptFloor.close()` is a descriptor operation supplied by the host. Assembly
 does not call it automatically. The host owns listener shutdown, process
 signals, hard deadlines, and resource close ordering.
+
+The host sequence is: stop the listener, call `beginDrain()`, await it up to the
+host's hard deadline, close concept-floor and log-store resources, then exit.
 
 ## Runtime validation
 

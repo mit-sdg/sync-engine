@@ -280,6 +280,7 @@ const register = {
     "ConceptFloor",
     "ConceptImplementation",
     "ConceptRegistration",
+    "ExecutionLimits",
     "FileStore",
     "FiringRecord",
     "ImplementationOverrides",
@@ -314,6 +315,7 @@ const register = {
     "EndpointOptions",
     "EndpointValidator",
     "EndpointValidators",
+    "ExecutionLimits",
     "FrameworkErrorCode",
     "Gateway",
     "GatewayClientError",
@@ -344,6 +346,7 @@ const register = {
   ],
   client: [
     "Client",
+    "ClientCallOptions",
     "ClientError",
     "ClientOptions",
     "ClientRequest",
@@ -419,6 +422,7 @@ const frameworkErrorCodes = [
   "NOT_FOUND",
   "TIMED_OUT",
   "TRANSPORT_ERROR",
+  "UNAVAILABLE",
   "UNKNOWN_ERROR",
 ] as const;
 

@@ -20,6 +20,7 @@ export type { ConceptImplementation, ConceptFloor, ConceptRegistration, Implemen
 export { FileStore, PersistingConcept } from "../engine/hosting/index.ts";
 export { MemoryStore } from "../engine/reactions/runtime/log-store.ts";
 export { Logging } from "../engine/reactions/runtime/logging.ts";
+export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
 export type { ActionRefusal } from "../engine/reactions/runtime/instrumenting.ts";
 export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogStore, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
 
@@ -32,6 +33,7 @@ export type { EndpointValidator, EndpointValidators, ValidationResult, } from ".
 export { FrameworkErrorCode } from "../engine/boundary/protocol/errors.ts";
 export type { EmittedFrameworkErrorCode, InvocationResult } from "../engine/boundary/protocol/errors.ts";
 export type { Invoker, InvokeOptions } from "../engine/boundary/invocation/invoke.ts";
+export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
 export { createGateway } from "../engine/boundary/gateway/public-gateway.ts";
 export type { Gateway, GatewayClientError, GatewayOptions, GatewayTarget, } from "../engine/boundary/gateway/public-gateway.ts";
 export type { ApplicationInterface } from "../engine/boundary/protocol/application-interface.ts";
@@ -46,7 +48,7 @@ export type { CliApp, CliAppOptions, CliCommand, CliResult, CommandInput, Endpoi
 export { createClient } from "../engine/boundary/client/client.ts";
 export { createHttpClient, createHttpTransport } from "../engine/boundary/client/http-client.ts";
 export { createLocalClient } from "../engine/boundary/client/local-client.ts";
-export type { Client, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client/client.ts";
+export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client/client.ts";
 export type { HeadersOption, HttpClientOptions } from "../engine/boundary/client/http-client.ts";
 
 === dist/command/artifacts.d.ts ===
@@ -95,7 +97,7 @@ declare module "*.md" {
 import type { ConceptClass, ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
 import type { InstrumentedConcept } from "../../reactions/runtime/instrumenting.ts";
-import { type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
+import { type LogStore, type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import { Logging } from "../../reactions/runtime/logging.ts";
 import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
@@ -107,6 +109,7 @@ import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { EndpointValidators } from "../protocol/validation.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import { Requesting } from "../invocation/invoke.ts";
+import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import type { EndpointIdentity } from "./endpoint-portability.ts";
 export declare function receive(input?: Mapping): WhenBuilder;
 /** Answer the request this reaction was triggered by. */
@@ -158,6 +161,10 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
     logging?: Logging;
     /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
     retention?: RetentionPolicy;
+    /** Application-owned occurrence store. It cannot be combined with `retention`. */
+    logStore?: LogStore;
+    /** Opt-in production execution limits. */
+    executionLimits?: ExecutionLimits;
 }
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
     engine: Reacting;
@@ -171,6 +178,8 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     };
     contracts: Record<string, InputContractDecl>;
     validators: Readonly<Record<string, EndpointValidators>>;
+    beginDrain(): Promise<void>;
+    whenIdle(): Promise<void>;
     /** The public route and admission facts a separate gateway may consume. */
     publicInterface: ApplicationInterface;
     /** Public boundary categories declared beside concept refusals. */
@@ -198,7 +207,7 @@ import type { ComputationFn } from "../../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { AssembledApp, AssembleOptions } from "./assemble.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
-export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "form">;
+export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
 export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary"> & {
     vocabulary: DeclaredVocabulary<TEntries, TComputations>;
 };
@@ -404,10 +413,15 @@ export type ClientError = {
     error: EmittedFrameworkErrorCode;
     detail?: string;
 };
+export interface ClientCallOptions {
+    /** Cancels transport and waiting; accepted server work is not rolled back. */
+    signal?: AbortSignal;
+}
 /** A transport-agnostic request descriptor passed to {@link ClientTransport}. */
 export interface ClientRequest {
     path: string;
     input: unknown;
+    signal?: AbortSignal;
 }
 /** A transport function that executes a {@link ClientRequest} and resolves to its result. */
 export type ClientTransport<TError = ClientError> = (request: ClientRequest) => Promise<unknown | TError>;
@@ -427,7 +441,7 @@ type EndpointResult<C extends ContractShape, P extends keyof C, TError> = C[P]["
  */
 export type Endpoint<C extends ContractShape, P extends keyof C, TError = ClientError> = [
     C[P]["input"]
-] extends [Record<string, never>] ? (input?: C[P]["input"]) => Promise<EndpointResult<C, P, TError>> : (input: C[P]["input"]) => Promise<EndpointResult<C, P, TError>>;
+] extends [Record<string, never>] ? (input?: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>> : (input: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>>;
 /** The indexed surface: `client["/auth/login"](input)`. */
 export type IndexedClient<C extends ContractShape, TError = ClientError> = {
     [P in keyof C & string]: Endpoint<C, P, TError>;
@@ -542,7 +556,7 @@ export declare function createLocalClient<C extends ContractShape>(options: {
 
 === dist/engine/boundary/gateway/gateway.d.ts ===
 import type { OutcomeContracts } from "../../reactions/concepts/outcomes.ts";
-import type { RetentionPolicy } from "../../reactions/runtime/log-store.ts";
+import type { LogStore, RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import { Logging } from "../../reactions/runtime/logging.ts";
 import type { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
@@ -550,6 +564,7 @@ import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { EmittedFrameworkErrorCode } from "../protocol/errors.ts";
 import type { ClientError } from "../client/client.ts";
 import type { Invoker } from "../invocation/invoke.ts";
+import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 type GatewayReply = {
     kind: "success";
     body: unknown;
@@ -619,11 +634,15 @@ export interface Gateway<C extends ContractShape> extends Invoker<C> {
     /** The gateway's own engine and log, separate from the application. */
     readonly engine: Reacting;
     readonly publicInterface: ApplicationInterface;
+    beginDrain(): Promise<void>;
+    whenIdle(): Promise<void>;
 }
 export interface GatewayOptions {
     application: {
         invoker: Invoker<ContractShape>;
         publicInterface: ApplicationInterface;
+        beginDrain?: () => Promise<void>;
+        whenIdle?: () => Promise<void>;
     };
     /** Additional gateway reactions, views, and formers. */
     composition?: Record<string, unknown>;
@@ -631,6 +650,10 @@ export interface GatewayOptions {
     logging?: Logging;
     /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
     retention?: RetentionPolicy;
+    /** Application-owned gateway occurrence store. It cannot be combined with `retention`. */
+    logStore?: LogStore;
+    /** Opt-in limits for the gateway's own execution. */
+    executionLimits?: ExecutionLimits;
 }
 /** Build a separate gateway application in front of an assembled application. */
 export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
@@ -640,15 +663,18 @@ export {};
 
 === dist/engine/boundary/gateway/public-gateway.d.ts ===
 /** The standard gateway. */
-import type { RetentionPolicy } from "../../reactions/runtime/log-store.ts";
+import type { LogStore, RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import type { Logging } from "../../reactions/runtime/logging.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Invoker } from "../invocation/invoke.ts";
+import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 export type { GatewayClientError } from "./gateway.ts";
 export interface GatewayTarget {
     invoker: Invoker<ContractShape>;
     publicInterface: ApplicationInterface;
+    beginDrain?: () => Promise<void>;
+    whenIdle?: () => Promise<void>;
 }
 export interface GatewayOptions {
     application: GatewayTarget;
@@ -658,8 +684,14 @@ export interface GatewayOptions {
     logging?: Logging;
     /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
     retention?: RetentionPolicy;
+    /** Application-owned gateway occurrence store. It cannot be combined with `retention`. */
+    logStore?: LogStore;
+    /** Opt-in limits for the gateway's own execution. */
+    executionLimits?: ExecutionLimits;
 }
 export interface Gateway<C extends ContractShape> extends Invoker<C> {
+    beginDrain(): Promise<void>;
+    whenIdle(): Promise<void>;
 }
 export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
 
@@ -716,7 +748,7 @@ export declare function createHttpHandler(options: {
 
 === dist/engine/boundary/index.d.ts ===
 export { createClient } from "./client/client.ts";
-export type { Client, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "./client/client.ts";
+export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "./client/client.ts";
 export { createHttpTransport, createHttpClient } from "./client/http-client.ts";
 export type { HeadersOption, HttpClientOptions } from "./client/http-client.ts";
 export { createHttpHandler } from "./http/http.ts";
@@ -727,6 +759,7 @@ export { FrameworkErrorCode, type EmittedFrameworkErrorCode, type InvocationResu
 export { createInvoker, Requesting } from "./invocation/invoke.ts";
 export { createLocalClient } from "./client/local-client.ts";
 export type { Invoker, InvokeOptions } from "./invocation/invoke.ts";
+export type { ExecutionLimits } from "./invocation/lifecycle.ts";
 export { FAULT_REPLY, FAULT_REACTION, refusalFunnel } from "./invocation/funnel.ts";
 export { assemble, endpoint, fail, isEndpointDef, receive, respond } from "./assembly/assemble.ts";
 export type { AssembledApp, AssembleOptions, EndpointDef, EndpointOptions, } from "./assembly/assemble.ts";
@@ -769,6 +802,7 @@ import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { InvocationResult } from "../protocol/errors.ts";
 import type { EndpointValidator, EndpointValidators } from "../protocol/validation.ts";
+import { RuntimeLifecycle } from "./lifecycle.ts";
 export declare class Requesting {
     static readonly purpose = "Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.";
     static readonly principle = "A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.";
@@ -815,9 +849,46 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
         requestId: string;
         errorClass: "ValidationFailure" | "ValidatorFault";
     }) => void;
+    /** Root admission, pending waits, drain state, and actual-flow quiescence. */
+    lifecycle?: RuntimeLifecycle;
     /** Refresh standing reads before a new application-interface ask. */
     refresh?: () => void;
 }): Invoker<C>;
+
+=== dist/engine/boundary/invocation/lifecycle.d.ts ===
+export interface ExecutionLimits {
+    maxActiveRootFlows: number;
+    maxPendingRequests: number;
+    maxActionsPerFlow: number;
+    maxFiringsPerFlow: number;
+    maxRowsPerEvaluation: number;
+    maxRequestDurationMs: number;
+}
+export type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
+export declare function assertExecutionLimits(limits: ExecutionLimits): void;
+/** Owns admission and quiescence independently of caller waits and log retention. */
+export declare class RuntimeLifecycle {
+    readonly limits?: ExecutionLimits | undefined;
+    private readonly active;
+    private readonly pending;
+    private readonly actionCounts;
+    private readonly firingCounts;
+    private readonly idleWaiters;
+    private draining;
+    constructor(limits?: ExecutionLimits | undefined);
+    admit(flow: string): AdmissionRejection | undefined;
+    pendingSettled(flow: string): void;
+    flowSettled(flow: string): void;
+    abandon(flow: string): void;
+    beginDrain(): Promise<void>;
+    whenIdle(): Promise<void>;
+    validateTimeout(timeoutMs: number): string | undefined;
+    action(flow: string): boolean;
+    firing(flow: string): boolean;
+    rows(count: number): boolean;
+    private resolveIdle;
+    private clearFlowCounts;
+}
 
 === dist/engine/boundary/protocol/admit.d.ts ===
 /**
@@ -938,6 +1009,7 @@ export declare const FrameworkErrorCode: {
     readonly INVALID_INPUT: "INVALID_INPUT";
     readonly INTERNAL_ERROR: "INTERNAL_ERROR";
     readonly NOT_FOUND: "NOT_FOUND";
+    readonly UNAVAILABLE: "UNAVAILABLE";
     readonly TIMED_OUT: "TIMED_OUT";
     readonly ABORTED: "ABORTED";
     readonly TRANSPORT_ERROR: "TRANSPORT_ERROR";
@@ -2020,8 +2092,9 @@ export interface FiringBranch {
 /** Owns the durable and in-flight halves of the double-fire guard. */
 export declare class FiringBook {
     private readonly store;
+    private readonly admit?;
     private readonly inFlightConsumed;
-    constructor(store: LogStore);
+    constructor(store: LogStore, admit?: ((flow: string) => void) | undefined);
     hasConsumed(recordId: string | undefined, reaction: string): boolean;
     newBranch(fill: FiringFill): FiringBranch;
     mark(branch: FiringBranch): void;
@@ -2068,6 +2141,9 @@ export interface InstrumentationState {
     rawConceptsByInstrumented: WeakMap<object, object>;
     concepts: Set<WeakRef<object>>;
     conceptsByName: Map<string, object>;
+    execution?: {
+        action(flow: string): boolean;
+    };
     react(record: ActionRecord, durationMs?: number): Promise<void>;
     emit(record: ActionRecord, durationMs?: number): void;
 }
@@ -2154,13 +2230,18 @@ export interface ReactionFailureRecord {
     at: number;
 }
 /** Opaque evidence that a successful endpoint value violated its reviewed runtime contract. */
-export interface IntegrityFailureRecord {
-    kind: "invalid-output";
+export type IntegrityFailureRecord = {
     flow: string;
+    at: number;
+} & ({
+    kind: "invalid-output";
     route: string;
     errorClass: "ValidationFailure" | "ValidatorFault";
-    at: number;
-}
+} | {
+    kind: "execution-limit";
+    limit: "actions" | "firings" | "rows";
+    errorClass: "ExecutionLimitExceeded";
+});
 /** An entry appended to the log. Engine-created mappings are field-name redacted. */
 export type LogEntry = {
     kind: "invocation";
@@ -2465,7 +2546,12 @@ export declare class Reacting {
     private unloweredReactions;
     /** Every executable reaction name each base registration produced. */
     private namesByBase;
-    constructor(actionConcept?: ActionConcept);
+    private readonly execution?;
+    constructor(actionConcept?: ActionConcept, execution?: {
+        action(flow: string): boolean;
+        firing(flow: string): boolean;
+        rows(count: number): boolean;
+    });
     /** Register an engine observer. Returns a function to unregister it. */
     addObserver(o: EngineObserver): () => void;
     /** Remove all registered observers. */
@@ -2632,6 +2718,8 @@ export declare class Reacting {
     /** Instrument a single concept instance. */
     instrument<T extends object>(concept: T): T;
     private instrumentationState;
+    private assertRows;
+    private recordExecutionLimit;
 }
 export {};
 
@@ -4620,6 +4708,7 @@ export declare const FrameworkErrorCode: {
     readonly INVALID_INPUT: "INVALID_INPUT";
     readonly INTERNAL_ERROR: "INTERNAL_ERROR";
     readonly NOT_FOUND: "NOT_FOUND";
+    readonly UNAVAILABLE: "UNAVAILABLE";
     readonly TIMED_OUT: "TIMED_OUT";
     readonly ABORTED: "ABORTED";
     readonly TRANSPORT_ERROR: "TRANSPORT_ERROR";

@@ -9,6 +9,7 @@ import { FrameworkErrorCode, frameworkError } from "../protocol/errors.ts";
 import type { InvocationResult } from "../protocol/errors.ts";
 import { validateRuntimeValue } from "../protocol/validation.ts";
 import type { EndpointValidator, EndpointValidators } from "../protocol/validation.ts";
+import { RuntimeLifecycle } from "./lifecycle.ts";
 
 interface PendingRequest {
   resolve: (value: Record<string, unknown>) => void;
@@ -225,10 +226,22 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
     requestId: string;
     errorClass: "ValidationFailure" | "ValidatorFault";
   }) => void;
+  /** Root admission, pending waits, drain state, and actual-flow quiescence. */
+  lifecycle?: RuntimeLifecycle;
   /** Refresh standing reads before a new application-interface ask. */
   refresh?: () => void;
 }): Invoker<C> {
-  const { boundary, instrumented, contracts, validators, routes, onInvalidOutput, refresh } = opts;
+  const {
+    boundary,
+    instrumented,
+    contracts,
+    validators,
+    routes,
+    onInvalidOutput,
+    lifecycle,
+    refresh,
+  } = opts;
+  const deadlinePolicy = lifecycle ?? new RuntimeLifecycle();
 
   return {
     async invoke(path, input, invokeOpts: InvokeOptions = {}) {
@@ -264,10 +277,19 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       } catch {
         return frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`);
       }
-      const requestId = crypto.randomUUID();
-      const correlationId = invokeOpts.correlationId ?? requestId;
       const DEFAULT_TIMEOUT_MS = 30_000;
-      const timeoutMs = invokeOpts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      const timeoutMs =
+        invokeOpts.timeoutMs ?? lifecycle?.limits?.maxRequestDurationMs ?? DEFAULT_TIMEOUT_MS;
+      const timeoutError = deadlinePolicy.validateTimeout(timeoutMs);
+      if (timeoutError !== undefined) {
+        return frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError);
+      }
+      const requestId = crypto.randomUUID();
+      const rejection = lifecycle?.admit(requestId);
+      if (rejection !== undefined) {
+        return frameworkError(FrameworkErrorCode.UNAVAILABLE);
+      }
+      const correlationId = invokeOpts.correlationId ?? requestId;
 
       let reqFn: (args: Record<string | symbol, unknown>) => unknown;
       let request: Record<string | symbol, unknown>;
@@ -282,9 +304,11 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
           [flow]: requestId,
         };
       } catch {
+        lifecycle?.abandon(requestId);
         return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
       }
       if (isAborted(invokeOpts.signal)) {
+        lifecycle?.abandon(requestId);
         return frameworkError(FrameworkErrorCode.ABORTED);
       }
 
@@ -296,14 +320,22 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
           onInvalid: (errorClass) => onInvalidOutput?.({ path, requestId, errorClass }),
         });
       } catch {
+        lifecycle?.abandon(requestId);
         return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
       }
       const response = responsePromise.then(
-        (value) => ({ kind: "response", value }) as const,
-        (error: unknown) => ({ kind: "response-error", error }) as const,
+        (value) => {
+          lifecycle?.pendingSettled(requestId);
+          return { kind: "response", value } as const;
+        },
+        (error: unknown) => {
+          lifecycle?.pendingSettled(requestId);
+          return { kind: "response-error", error } as const;
+        },
       );
       if (isAborted(invokeOpts.signal)) {
         boundary.cancel(requestId);
+        lifecycle?.abandon(requestId);
         return frameworkError(FrameworkErrorCode.ABORTED);
       }
       const dispatch = Promise.resolve()
@@ -316,6 +348,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
 
       if (first.kind === "dispatch-error") {
         boundary.cancel(requestId);
+        lifecycle?.abandon(requestId);
         return frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
       }
 

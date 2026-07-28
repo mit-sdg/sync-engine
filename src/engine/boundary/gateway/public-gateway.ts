@@ -1,9 +1,10 @@
 /** The standard gateway. */
-import type { RetentionPolicy } from "@engine/reactions/runtime/log-store";
+import type { LogStore, RetentionPolicy } from "@engine/reactions/runtime/log-store";
 import type { Logging } from "@engine/reactions/runtime/logging";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Invoker } from "../invocation/invoke.ts";
+import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import { createGateway as createGatewayEngine } from "./gateway.ts";
 
 // One home for the client's error envelope: re-export the gateway engine's.
@@ -12,6 +13,8 @@ export type { GatewayClientError } from "./gateway.ts";
 export interface GatewayTarget {
   invoker: Invoker<ContractShape>;
   publicInterface: ApplicationInterface;
+  beginDrain?: () => Promise<void>;
+  whenIdle?: () => Promise<void>;
 }
 
 export interface GatewayOptions {
@@ -22,9 +25,16 @@ export interface GatewayOptions {
   logging?: Logging;
   /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
   retention?: RetentionPolicy;
+  /** Application-owned gateway occurrence store. It cannot be combined with `retention`. */
+  logStore?: LogStore;
+  /** Opt-in limits for the gateway's own execution. */
+  executionLimits?: ExecutionLimits;
 }
 
-export interface Gateway<C extends ContractShape> extends Invoker<C> {}
+export interface Gateway<C extends ContractShape> extends Invoker<C> {
+  beginDrain(): Promise<void>;
+  whenIdle(): Promise<void>;
+}
 
 export function createGateway<C extends ContractShape = ContractShape>(
   options: GatewayOptions,
@@ -36,6 +46,12 @@ export function createGateway<C extends ContractShape = ContractShape>(
       : { composition: { Additional: options.additionalComposition } }),
     ...(options.logging === undefined ? {} : { logging: options.logging }),
     ...(options.retention === undefined ? {} : { retention: options.retention }),
+    ...(options.logStore === undefined ? {} : { logStore: options.logStore }),
+    ...(options.executionLimits === undefined ? {} : { executionLimits: options.executionLimits }),
   });
-  return { invoke: gateway.invoke.bind(gateway) };
+  return {
+    invoke: gateway.invoke.bind(gateway),
+    beginDrain: gateway.beginDrain.bind(gateway),
+    whenIdle: gateway.whenIdle.bind(gateway),
+  };
 }

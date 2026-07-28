@@ -370,6 +370,13 @@ authored response denotes a domain failure, so a successful endpoint result
 cannot use `error` as an ordinary top-level data field. See the exact
 [cancellation boundary](#cancellation).
 
+An opt-in `ExecutionLimits` profile bounds active root flows, pending requests,
+actions and firings per flow, evaluation rows, and caller deadlines. Profile
+values and explicit deadlines are positive finite integers. Work rejected for
+overload or drain returns `UNAVAILABLE` and creates no root action occurrence.
+An accepted flow that exceeds an action, firing, or row budget records integrity
+evidence and follows interpreter-failure settlement as opaque `INTERNAL_ERROR`.
+
 An HTTP floor may bind one logical credential input to a cookie. The application
 declares the credential name and input, the endpoint that issues it and the
 returned token and expiry fields, the successful endpoints that clear it, and
@@ -469,17 +476,18 @@ delivery, cancellation, persistence, restart, or boundary operation.
 
 ### Execution and resource bounds
 
-The HTTP adapter limits one request body to 1,048,576 bytes, and automatic log
-retention bounds settled-flow inspection. The runtime has no unified limit for
-active root flows, pending boundary requests, per-concept action queues,
-actions or firings per flow, evaluation frames, or query-result fan-out. Active
-and timed-out work can therefore consume memory or queue capacity beyond the
-settled-log window.
+The HTTP adapter limits one request body to 1,048,576 bytes, automatic log
+retention bounds settled-flow inspection, and `ExecutionLimits` provides the
+engine-owned production budget. Row limits are checked at reaction matching,
+where evaluation, and each consequence stage. They do not replace host limits
+for connections, request rate, DDoS protection, exporter queues, or autoscaling.
 
-The host must bound admission, connections, request rate, concurrency, and
-shutdown. The current alpha exposes no assembly or gateway drain operation and
-no promise that resolves when all accepted causal flows are idle. See
-[Operational limits](operations.md) for deployment selection guidance.
+`beginDrain()` on an assembly or gateway rejects new roots immediately and
+resolves when accepted causal flows become idle. `whenIdle()` observes the same
+actual-work state without changing admission. Caller timeout and abort remove a
+pending wait but never release active-flow accounting. The host still owns the
+listener, OS signals, hard shutdown deadline, floor and log-store closure, and
+process exit.
 
 ### Ordering and state-read timing
 
@@ -552,8 +560,10 @@ An invocation already aborted when it begins does not reach the gateway. While
 a request is pending, aborting marks it to resolve with `ABORTED`. The standard
 gateway forwards the signal to the application invoker, where it also ends the
 wait; the signal does not cancel, prevent, or roll back accepted concept work.
-The default timeout is 30 seconds; `InvokeOptions.timeoutMs`
-selects another duration, and expiry resolves with `TIMED_OUT`. Timeout and
+Local and HTTP client calls accept the same signal as their optional second
+argument. The default timeout is 30 seconds without a profile and the profile's
+maximum request duration with one; `InvokeOptions.timeoutMs` selects a validated
+duration no greater than that maximum, and expiry resolves with `TIMED_OUT`. Timeout and
 abort end the pending wait but do not themselves record a
 `RequestBoundary.respond` occurrence, so recorded application work may remain
 unanswered. Continued work can later ask `respond`; after pending state is gone,
@@ -572,7 +582,7 @@ duration.
 ### Logs, concept implementations, and restart
 
 Concept state is separate from the assembly's occurrence log. The engine sends
-append-only invocation, outcome, fault, firing, and reaction-failure entries to
+append-only invocation, outcome, fault, firing, reaction-failure, and integrity-failure entries to
 its `LogStore`, which folds them into indexes for matching and inspection.
 Retention may evict indexed entries, so no assembly promises to retain every
 occurrence forever.

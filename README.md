@@ -110,6 +110,8 @@ The ordinary assembly provides these guarantees:
 - composition is checked before registered behavior executes;
 - generated artifacts fail rather than silently omit an endpoint they cannot
   represent;
+- optional execution profiles bound admission and accepted causal work;
+- assemblies and gateways stop admission and report actual idle state;
 - handled client and boundary failures resolve as typed result envelopes.
 
 The ordinary assembly does not provide transactions across actions, rollback,

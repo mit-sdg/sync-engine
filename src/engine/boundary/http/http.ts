@@ -50,6 +50,8 @@ function statusFor(code: unknown, fallback = 400): number {
   switch (code) {
     case FrameworkErrorCode.NOT_FOUND:
       return 404;
+    case FrameworkErrorCode.UNAVAILABLE:
+      return 503;
     case FrameworkErrorCode.INVALID_INPUT:
       return 422;
     case FrameworkErrorCode.TIMED_OUT:

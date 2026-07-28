@@ -89,13 +89,21 @@ export interface ReactionFailureRecord {
 }
 
 /** Opaque evidence that a successful endpoint value violated its reviewed runtime contract. */
-export interface IntegrityFailureRecord {
-  kind: "invalid-output";
+export type IntegrityFailureRecord = {
   flow: string;
-  route: string;
-  errorClass: "ValidationFailure" | "ValidatorFault";
   at: number;
-}
+} & (
+  | {
+      kind: "invalid-output";
+      route: string;
+      errorClass: "ValidationFailure" | "ValidatorFault";
+    }
+  | {
+      kind: "execution-limit";
+      limit: "actions" | "firings" | "rows";
+      errorClass: "ExecutionLimitExceeded";
+    }
+);
 
 /** An entry appended to the log. Engine-created mappings are field-name redacted. */
 export type LogEntry =

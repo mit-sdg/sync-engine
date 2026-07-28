@@ -48,8 +48,10 @@ export interface HttpClientOptions {
 const FALLBACK_BASE_URL = "/api";
 
 function cleanBaseUrl(value: string | undefined): string | undefined {
-  const trimmed = value?.trim().replace(/\/$/, "");
-  return trimmed === "" ? undefined : trimmed;
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed === "") return undefined;
+  if (trimmed === "/") return "";
+  return trimmed.replace(/\/+$/, "");
 }
 
 function configuredBaseUrl(): string | undefined {
@@ -61,7 +63,9 @@ function configuredBaseUrl(): string | undefined {
 }
 
 function resolveBaseUrl(baseUrl: string | undefined): string {
-  return cleanBaseUrl(baseUrl) ?? configuredBaseUrl() ?? FALLBACK_BASE_URL;
+  return baseUrl === undefined
+    ? (configuredBaseUrl() ?? FALLBACK_BASE_URL)
+    : (cleanBaseUrl(baseUrl) ?? FALLBACK_BASE_URL);
 }
 
 /**
@@ -75,6 +79,7 @@ async function httpRequest(
   credentials: "include" | "omit" | "same-origin" | undefined,
   path: string,
   body: unknown,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   let extraHeaders: Record<string, string> = {};
   try {
@@ -91,9 +96,13 @@ async function httpRequest(
       headers: { "Content-Type": "application/json", ...extraHeaders },
       body: JSON.stringify(body ?? {}),
       credentials: credentials ?? "include",
+      signal,
     });
   } catch {
-    return { error: FrameworkErrorCode.NETWORK_ERROR };
+    return {
+      error:
+        signal?.aborted === true ? FrameworkErrorCode.ABORTED : FrameworkErrorCode.NETWORK_ERROR,
+    };
   }
 
   let text: string;
@@ -136,7 +145,15 @@ export function createHttpTransport(options: HttpClientOptions = {}): ClientTran
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const credentials = options.credentials;
   return (request) =>
-    httpRequest(fetchImpl, baseUrl, options.headers, credentials, request.path, request.input);
+    httpRequest(
+      fetchImpl,
+      baseUrl,
+      options.headers,
+      credentials,
+      request.path,
+      request.input,
+      request.signal,
+    );
 }
 
 /**

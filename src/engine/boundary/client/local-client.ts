@@ -14,6 +14,7 @@ export function createLocalClient<C extends ContractShape>(options: {
         await options.invoker.invoke(
           request.path as keyof C & string,
           toJsonValue(request.input) as never,
+          { signal: request.signal },
         ),
       ),
   });

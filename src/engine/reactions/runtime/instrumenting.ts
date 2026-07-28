@@ -53,6 +53,7 @@ export interface InstrumentationState {
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
   conceptsByName: Map<string, object>;
+  execution?: { action(flow: string): boolean };
   react(record: ActionRecord, durationMs?: number): Promise<void>;
   emit(record: ActionRecord, durationMs?: number): void;
 }
@@ -179,6 +180,16 @@ export function instrumentConcept<T extends object>(
           throw new Error(
             `Action "${displayName}": expected actionId to be a string; received ${receivedKind(id)}.`,
           );
+        }
+        if (state.execution?.action(flowToken) === false) {
+          state.actions._recordIntegrityFailure({
+            kind: "execution-limit",
+            flow: flowToken,
+            limit: "actions",
+            errorClass: "ExecutionLimitExceeded",
+            at: Date.now(),
+          });
+          throw new Error("The flow exceeded its action limit.");
         }
 
         const record: ActionRecord = {

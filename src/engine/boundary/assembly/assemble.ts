@@ -30,7 +30,11 @@ import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metada
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
 import type { InstrumentedConcept } from "@engine/reactions/runtime/instrumenting";
-import { MemoryStore, type RetentionPolicy } from "@engine/reactions/runtime/log-store";
+import {
+  MemoryStore,
+  type LogStore,
+  type RetentionPolicy,
+} from "@engine/reactions/runtime/log-store";
 import { Logging } from "@engine/reactions/runtime/logging";
 import type { EngineObserver } from "@engine/reactions/runtime/observer";
 import { Reacting } from "@engine/reactions/runtime/reacting";
@@ -61,6 +65,8 @@ import {
   Requesting,
   settleRequestInterpreterFailure,
 } from "../invocation/invoke.ts";
+import { RuntimeLifecycle } from "../invocation/lifecycle.ts";
+import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import { deriveInputContracts } from "../wire/wire.ts";
 import { assertPortableEndpoints } from "./endpoint-portability.ts";
 import type { EndpointIdentity } from "./endpoint-portability.ts";
@@ -181,6 +187,10 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
   logging?: Logging;
   /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
   retention?: RetentionPolicy;
+  /** Application-owned occurrence store. It cannot be combined with `retention`. */
+  logStore?: LogStore;
+  /** Opt-in production execution limits. */
+  executionLimits?: ExecutionLimits;
 }
 
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
@@ -193,6 +203,8 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   concepts: { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> };
   contracts: Record<string, InputContractDecl>;
   validators: Readonly<Record<string, EndpointValidators>>;
+  beginDrain(): Promise<void>;
+  whenIdle(): Promise<void>;
   /** The public route and admission facts a separate gateway may consume. */
   publicInterface: ApplicationInterface;
   /** Public boundary categories declared beside concept refusals. */
@@ -257,15 +269,19 @@ export function assemble<
 export function assemble<T extends Record<string, ConceptClass>>(
   options: AssembleOptions<T>,
 ): AssembledApp<T> {
-  const engine = new Reacting(
-    new ActionConcept(new MemoryStore(options.retention ?? { window: 100 })),
-  );
+  if (options.logStore !== undefined && options.retention !== undefined) {
+    throw new Error("assemble: logStore and retention cannot both be supplied.");
+  }
+  const lifecycle = new RuntimeLifecycle(options.executionLimits);
+  const store = options.logStore ?? new MemoryStore(options.retention ?? { window: 100 });
+  const engine = new Reacting(new ActionConcept(store), lifecycle);
   engine.logging = options.logging ?? Logging.OFF;
   engine.registerComputations(vocabularyComputations(options.vocabulary));
 
   const boundary = new Requesting();
   engine.Action._onFlowQuiescent(({ flow, interpreterFailed }) => {
     if (interpreterFailed) settleRequestInterpreterFailure(boundary, flow);
+    lifecycle.flowSettled(flow);
   });
   const instrumentedBoundary = engine.instrumentConcept(boundary, "RequestBoundary");
 
@@ -398,6 +414,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     contracts,
     validators,
     routes: new Set(endpoints.map(({ path }) => path)),
+    lifecycle,
     onInvalidOutput: ({ path, requestId, errorClass }) => {
       engine.Action._recordIntegrityFailure({
         kind: "invalid-output",
@@ -426,6 +443,8 @@ export function assemble<T extends Record<string, ConceptClass>>(
     concepts: concepts as { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> },
     contracts,
     validators,
+    beginDrain: () => lifecycle.beginDrain(),
+    whenIdle: () => lifecycle.whenIdle(),
     publicInterface,
     publicErrors,
     endpointOfReaction,

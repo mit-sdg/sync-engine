@@ -1,7 +1,7 @@
 import { vocabulary } from "@engine/reactions/authoring/refs";
 import type { OutcomeContracts } from "@engine/reactions/concepts/outcomes";
 import { Refuse } from "@engine/reactions/concepts/refuse";
-import type { RetentionPolicy } from "@engine/reactions/runtime/log-store";
+import type { LogStore, RetentionPolicy } from "@engine/reactions/runtime/log-store";
 import { Logging } from "@engine/reactions/runtime/logging";
 import type { Reacting } from "@engine/reactions/runtime/reacting";
 import type { Vars } from "@engine/reactions/types";
@@ -14,6 +14,7 @@ import type { EmittedFrameworkErrorCode, InvocationResult } from "../protocol/er
 import { assemble, endpoint, receive, respond } from "../assembly/assemble.ts";
 import type { ClientError } from "../client/client.ts";
 import type { Invoker } from "../invocation/invoke.ts";
+import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 
 const GATEWAY_RECEIVE_PATH = "/gateway/receive";
 
@@ -163,12 +164,16 @@ export interface Gateway<C extends ContractShape> extends Invoker<C> {
   /** The gateway's own engine and log, separate from the application. */
   readonly engine: Reacting;
   readonly publicInterface: ApplicationInterface;
+  beginDrain(): Promise<void>;
+  whenIdle(): Promise<void>;
 }
 
 export interface GatewayOptions {
   application: {
     invoker: Invoker<ContractShape>;
     publicInterface: ApplicationInterface;
+    beginDrain?: () => Promise<void>;
+    whenIdle?: () => Promise<void>;
   };
   /** Additional gateway reactions, views, and formers. */
   composition?: Record<string, unknown>;
@@ -176,6 +181,10 @@ export interface GatewayOptions {
   logging?: Logging;
   /** In-memory gateway occurrence retention; defaults to 100 settled flows. */
   retention?: RetentionPolicy;
+  /** Application-owned gateway occurrence store. It cannot be combined with `retention`. */
+  logStore?: LogStore;
+  /** Opt-in limits for the gateway's own execution. */
+  executionLimits?: ExecutionLimits;
 }
 
 /** Build a separate gateway application in front of an assembled application. */
@@ -195,11 +204,21 @@ export function createGateway<C extends ContractShape = ContractShape>(
     },
     logging: options.logging,
     retention: options.retention,
+    logStore: options.logStore,
+    executionLimits: options.executionLimits,
   });
 
   return {
     engine: app.engine,
     publicInterface: options.application.publicInterface,
+    async beginDrain() {
+      const downstream = options.application.beginDrain?.() ?? Promise.resolve();
+      await Promise.all([app.beginDrain(), downstream]);
+    },
+    async whenIdle() {
+      const downstream = options.application.whenIdle?.() ?? Promise.resolve();
+      await Promise.all([app.whenIdle(), downstream]);
+    },
     async invoke(path, input, invokeOptions) {
       const result = (await (app.invoker as Invoker<GatewayBoundaryContract>).invoke(
         GATEWAY_RECEIVE_PATH,

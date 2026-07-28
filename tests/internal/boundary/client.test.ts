@@ -42,6 +42,23 @@ describe("createClient (transport-agnostic)", () => {
     });
   });
 
+  test("passes a per-call abort signal to the transport", async () => {
+    const transport = fakeTransport({ token: "abc123" });
+    const client = createClient<TestApi>({ transport });
+    const controller = new AbortController();
+
+    await client.auth.login(
+      { username: "alice", password: "secret" },
+      { signal: controller.signal },
+    );
+
+    expect(transport).toHaveBeenCalledWith({
+      path: "/auth/login",
+      input: { username: "alice", password: "secret" },
+      signal: controller.signal,
+    });
+  });
+
   test("empty endpoint input becomes {}", async () => {
     const transport = fakeTransport({ ok: true });
     const client = createClient<TestApi>({ transport });

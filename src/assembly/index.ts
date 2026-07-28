@@ -20,6 +20,7 @@ export type {
 export { FileStore, PersistingConcept } from "@engine/hosting/index";
 export { MemoryStore } from "@engine/reactions/runtime/log-store";
 export { Logging } from "@engine/reactions/runtime/logging";
+export type { ExecutionLimits } from "@engine/boundary/invocation/lifecycle";
 export type { ActionRefusal } from "@engine/reactions/runtime/instrumenting";
 export type {
   FiringRecord,

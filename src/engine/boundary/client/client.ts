@@ -36,10 +36,16 @@ export type { ContractShape, DomainErrorValue } from "../protocol/contract-shape
 /** The normalized error envelope transports use for outside-world failures. */
 export type ClientError = { error: EmittedFrameworkErrorCode; detail?: string };
 
+export interface ClientCallOptions {
+  /** Cancels transport and waiting; accepted server work is not rolled back. */
+  signal?: AbortSignal;
+}
+
 /** A transport-agnostic request descriptor passed to {@link ClientTransport}. */
 export interface ClientRequest {
   path: string;
   input: unknown;
+  signal?: AbortSignal;
 }
 
 /** A transport function that executes a {@link ClientRequest} and resolves to its result. */
@@ -71,8 +77,8 @@ type EndpointResult<C extends ContractShape, P extends keyof C, TError> =
 export type Endpoint<C extends ContractShape, P extends keyof C, TError = ClientError> = [
   C[P]["input"],
 ] extends [Record<string, never>]
-  ? (input?: C[P]["input"]) => Promise<EndpointResult<C, P, TError>>
-  : (input: C[P]["input"]) => Promise<EndpointResult<C, P, TError>>;
+  ? (input?: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>>
+  : (input: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>>;
 
 /** The indexed surface: `client["/auth/login"](input)`. */
 export type IndexedClient<C extends ContractShape, TError = ClientError> = {
@@ -154,9 +160,10 @@ function buildPath(segments: string[]): string {
  */
 function makeProxy(
   segments: string[],
-  call: (path: string, body: unknown) => Promise<unknown>,
+  call: (path: string, body: unknown, options?: ClientCallOptions) => Promise<unknown>,
 ): unknown {
-  const fn = (body: unknown) => call(buildPath(segments), body);
+  const fn = (body: unknown, options?: ClientCallOptions) =>
+    call(buildPath(segments), body, options);
   return new Proxy(fn, {
     get(_target, prop) {
       // The root client must not be thenable, but nested `then` is a valid
@@ -165,7 +172,7 @@ function makeProxy(
       return makeProxy([...segments, prop], call);
     },
     apply(_target, _thisArg, args) {
-      return call(buildPath(segments), args[0]);
+      return call(buildPath(segments), args[0], args[1] as ClientCallOptions | undefined);
     },
   });
 }
@@ -181,9 +188,13 @@ function makeProxy(
 export function createClient<C extends ContractShape, TError = ClientError>(
   options: ClientOptions<TError>,
 ): Client<C, TError> {
-  const call = async (path: string, body: unknown) => {
+  const call = async (path: string, body: unknown, callOptions?: ClientCallOptions) => {
     try {
-      return await options.transport({ path, input: body ?? {} });
+      return await options.transport({
+        path,
+        input: body ?? {},
+        ...(callOptions?.signal === undefined ? {} : { signal: callOptions.signal }),
+      });
     } catch {
       return { error: FrameworkErrorCode.TRANSPORT_ERROR };
     }

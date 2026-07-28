@@ -10,6 +10,7 @@ export type {
 export { FrameworkErrorCode } from "@engine/boundary/protocol/errors";
 export type { EmittedFrameworkErrorCode, InvocationResult } from "@engine/boundary/protocol/errors";
 export type { Invoker, InvokeOptions } from "@engine/boundary/invocation/invoke";
+export type { ExecutionLimits } from "@engine/boundary/invocation/lifecycle";
 export { createGateway } from "@engine/boundary/gateway/public-gateway";
 export type {
   Gateway,

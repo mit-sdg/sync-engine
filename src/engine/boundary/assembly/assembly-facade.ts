@@ -11,7 +11,7 @@ import type { AssembledApp, AssembleOptions } from "./assemble.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
 export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<
   AssembledApp<TConcepts>,
-  "invoker" | "concepts" | "publicInterface" | "form"
+  "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form"
 >;
 
 export type AssemblyOptions<
@@ -30,6 +30,8 @@ export function assemble<
     invoker: assembled.invoker,
     concepts: assembled.concepts,
     publicInterface: assembled.publicInterface,
+    beginDrain: assembled.beginDrain,
+    whenIdle: assembled.whenIdle,
     form: assembled.form,
   };
   rememberAssembly(facade, assembled);

@@ -71,7 +71,7 @@ semantics](./semantics.md#reactions).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `PersistingConcept`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -89,12 +89,16 @@ assemble(options: AssemblyOptions): Assembly
 | `instances`             | no       | Ready implementations by concept name; each overrides `initialize`              |
 | `logging`               | no       | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                           |
 | `retention`             | no       | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"` |
+| `logStore`              | no       | New `MemoryStore`; application-owned store, mutually exclusive with `retention` |
+| `executionLimits`       | no       | Unbounded profile; validates and enforces every `ExecutionLimits` field         |
 
 A retention window must be a finite, non-negative integer. `{ window: 0 }`
 allows an active flow to complete before automatic eviction.
 
-`Assembly` exposes `concepts`, `invoker`, `publicInterface`, and
-`form(fusedFormer)`. `ActionRefusal` is the direct-action refusal result.
+`Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
+`whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
+both lifecycle promises resolve when accepted causal work actually settles.
+`ActionRefusal` is the direct-action refusal result.
 `ConceptImplementation`, `Implementations`, and `ImplementationOverrides` name
 complete or partial implementation maps. Assembled non-query actions are
 asynchronous and conservatively resolve to their awaited result or an
@@ -141,7 +145,7 @@ restart limits are normative in [Execution semantics](./semantics.md#logs-concep
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `ParseResult`, `ParsedArgs`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `receive`, `respond`
+`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayClientError`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `ParseResult`, `ParsedArgs`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `receive`, `respond`
 
 <!-- register:boundary:end -->
 
@@ -193,12 +197,20 @@ invoker.invoke(path, input, options?: InvokeOptions): Promise<InvocationResult>
 | `additionalComposition` | no       | No additional gateway declarations                            |
 | `logging`               | no       | `Logging.OFF` from the `assembly` subpath                     |
 | `retention`             | no       | `{ window: 100 }`; same accepted values as assembly retention |
+| `logStore`              | no       | New `MemoryStore`; mutually exclusive with `retention`        |
+| `executionLimits`       | no       | Unbounded gateway execution                                   |
 
 | `InvokeOptions` field | Default / effect                                                             |
 | --------------------- | ---------------------------------------------------------------------------- |
 | `signal`              | No signal; an abort ends the wait with `ABORTED`                             |
 | `timeoutMs`           | `30_000`; expiry ends the wait with `TIMED_OUT`                              |
 | `correlationId`       | The generated request id; supplied values cross gateway and application logs |
+
+`ExecutionLimits` requires positive finite integers for active root flows,
+pending requests, actions and firings per flow, rows per evaluation, and the
+maximum caller deadline. Overload and drain return `UNAVAILABLE`. `Gateway`
+also exposes `beginDrain()` and `whenIdle()` and includes the target assembly's
+lifecycle when that target supplies it.
 
 `Gateway`, `GatewayTarget`, `GatewayClientError`, `Invoker`, and
 `InvocationResult` name these contracts. Timeout and abort stop waiting but do
@@ -247,6 +259,7 @@ may accompany an error, but exception text from an unknown failure is omitted.
 | -------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
 | `INVALID_INPUT`            | Gateway input admission or oversized request body              | 422 for admission; 413 for oversized body      |
 | `NOT_FOUND`                | Unknown route                                                  | 404                                            |
+| `UNAVAILABLE`              | Overload or draining admission                                 | 503                                            |
 | `TIMED_OUT`                | Invocation wait expired                                        | 504                                            |
 | `ABORTED`                  | Invocation signal aborted                                      | 499                                            |
 | `INTERNAL_ERROR`           | Application, framework, or interpreter fault                   | 500                                            |
@@ -261,7 +274,7 @@ may accompany an error, but exception text from an unknown failure is omitted.
 
 <!-- register:client:start -->
 
-`Client`, `ClientError`, `ClientOptions`, `ClientRequest`, `ClientTransport`, `ContractShape`, `DomainErrorValue`, `HeadersOption`, `HttpClientOptions`, `createClient`, `createHttpClient`, `createHttpTransport`, `createLocalClient`
+`Client`, `ClientCallOptions`, `ClientError`, `ClientOptions`, `ClientRequest`, `ClientTransport`, `ContractShape`, `DomainErrorValue`, `HeadersOption`, `HttpClientOptions`, `createClient`, `createHttpClient`, `createHttpTransport`, `createLocalClient`
 
 <!-- register:client:end -->
 
@@ -283,7 +296,9 @@ may accompany an error, but exception text from an unknown failure is omitted.
 
 `ClientOptions.transport` and `createLocalClient`'s `invoker` are required.
 `HeadersOption`, `ClientTransport`, and `ClientRequest` name those extension
-contracts. A `Client<Contract>` supports grouped access such as
+contracts. Every endpoint call accepts an optional second `ClientCallOptions`
+argument whose signal cancels transport and waiting, not accepted server work.
+A `Client<Contract>` supports grouped access such as
 `client.rooms.get(input)` and indexed access such as
 `client["/rooms/get"]`, followed by the input call.
 

@@ -342,6 +342,17 @@ describe("createLocalClient", () => {
 
     expect(await client.err({ kind: "INVALID" })).toEqual({ error: { code: "INVALID" } });
   });
+
+  test("passes per-call abort signals to local invocation", async () => {
+    const { invoker } = setup();
+    const client = createLocalClient<TestApi>({ invoker: invoker as never });
+    const controller = new AbortController();
+    controller.abort();
+
+    expect(await client.echo({ message: "ignored" }, { signal: controller.signal })).toEqual({
+      error: FrameworkErrorCode.ABORTED,
+    });
+  });
 });
 
 describe("createInvoker non-DOMException with aborted signal", () => {

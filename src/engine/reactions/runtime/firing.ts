@@ -20,7 +20,10 @@ export interface FiringBranch {
 export class FiringBook {
   private readonly inFlightConsumed = new Map<string, Map<string, number>>();
 
-  constructor(private readonly store: LogStore) {}
+  constructor(
+    private readonly store: LogStore,
+    private readonly admit?: (flow: string) => void,
+  ) {}
 
   hasConsumed(recordId: string | undefined, reaction: string): boolean {
     if (recordId === undefined) return false;
@@ -36,6 +39,7 @@ export class FiringBook {
 
   mark(branch: FiringBranch): void {
     if (branch.marked) return;
+    this.admit?.(branch.fill.flow);
     branch.marked = true;
     for (const id of branch.fill.whenIds) {
       let byReaction = this.inFlightConsumed.get(id);
