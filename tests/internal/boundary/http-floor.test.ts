@@ -199,6 +199,25 @@ describe("HTTP floor", () => {
     );
   });
 
+  test("does not replace an existing response header with correlation", async () => {
+    const { application, floor, gateway } = setup();
+    const fetch = createHttpHandler({
+      application,
+      floor,
+      gateway,
+      correlation: { resolve: () => "trace-1", responseHeader: "Set-Cookie" },
+    });
+    const response = await fetch(
+      new Request("http://learning.test/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+
+    expect(response.headers.get("Set-Cookie")).toContain("session=secret-session");
+  });
+
   test("uses only the cookie on protected routes and clears unauthorized credentials", async () => {
     const { fetch } = setup();
     const accepted = await fetch(

@@ -78,9 +78,10 @@ function withCorrelation(
   correlationId: string | undefined,
   options: HttpCorrelationOptions | undefined,
 ): Response {
-  if (correlationId !== undefined && options?.responseHeader !== undefined) {
+  const header = options?.responseHeader;
+  if (correlationId !== undefined && header !== undefined && !response.headers.has(header)) {
     try {
-      response.headers.set(options.responseHeader, correlationId);
+      response.headers.set(header, correlationId);
     } catch {
       // Correlation decoration must not turn an otherwise handled request into a rejection.
     }
