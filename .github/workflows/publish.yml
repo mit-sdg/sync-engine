@@ -101,4 +101,4 @@ jobs:
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - run: sha256sum --check release/package.tgz.sha256
-      - run: npm publish release/package.tgz --provenance --tag beta --access public
+      - run: npm publish ./release/package.tgz --provenance --tag beta --access public

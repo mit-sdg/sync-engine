@@ -335,7 +335,7 @@ describe("release source facts", () => {
     "needs: verify",
     "id-token: write",
     "name: npm",
-    "npm publish release/package.tgz --provenance --tag beta --access public",
+    "npm publish ./release/package.tgz --provenance --tag beta --access public",
   ])("requires the publish-only fact %s", (fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-publish-fact");

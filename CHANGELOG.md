@@ -5,6 +5,31 @@ subpaths, behavior, and generated formats may change incompatibly between beta
 releases. Pin an exact version, follow the [support policy](SUPPORT.md), and
 review the [operational limits](docs/operations.md) before deployment.
 
+## [1.0.0-beta.1] - 2026-07-29
+
+The beta.0 publication attempt did not reach npm because its publish command
+treated the packed tarball path as a Git source. Beta.1 corrects that release
+automation without changing the package's public behavior.
+
+### Compatibility
+
+- No public API or behavior changes from beta.0.
+
+### Migration
+
+- None.
+
+### Generated formats
+
+- None.
+
+### Runtime and security support
+
+- The protected publication job passes the verified tarball as an explicit local
+  path to npm.
+
+[Release][1.0.0-beta.1] | [Changes since 1.0.0-beta.0][1.0.0-beta.1-compare]
+
 ## [1.0.0-beta.0] - 2026-07-28
 
 The beta cutover completes the support, compatibility, production-boundary,
@@ -188,6 +213,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.1]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.1
+[1.0.0-beta.1-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.0...v1.0.0-beta.1
 [1.0.0-beta.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.0
 [1.0.0-beta.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-alpha.0...v1.0.0-beta.0
 [1.0.0-alpha.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-alpha.0
