@@ -1,18 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
-import { actionNameOf, vocabulary } from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
-import {
-  assemble,
-  createInvoker,
-  createLocalClient,
-  endpoint,
-  fail,
-  FrameworkErrorCode,
-  receive,
-  Requesting,
-  respond,
-} from "@sync-engine/internal/boundary";
-import type { InvocationResult } from "@sync-engine/internal/boundary";
+import { createLocalClient } from "@sync-engine/client";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
+import { createInvoker, Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
+import type { InvocationResult } from "@sync-engine/boundary";
+import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
 
 type TestApi = {
   "/echo": { input: { message: string }; output: { echoed: string } };
@@ -23,21 +18,46 @@ type TestApi = {
   };
 };
 
+class CompletingConcept {
+  complete(_: Record<string, never>) {
+    return {};
+  }
+}
+
 function setup() {
+  const words = vocabulary({ concepts: { Completing: CompletingConcept }, computations: {} });
+  const { Completing } = words.concepts;
   const composition = {
     Echo: endpoint("/echo", ({ message }: Vars) =>
       receive({ message }).then(respond({ echoed: message })),
     ),
     Err: endpoint("/err", ({ kind }: Vars) => receive({ kind }).then(fail({ code: kind }))),
+    Unanswered: endpoint("/unanswered", () => receive({}).then(Completing.complete({}))),
   };
   const app = assemble({
-    vocabulary: vocabulary({ concepts: {}, computations: {} }),
+    vocabulary: words,
     composition,
   });
   return { invoker: app.invoker, reaction: app.engine };
 }
 
 describe("createInvoker", () => {
+  test("refreshes standing reads before admitting each application ask", async () => {
+    const refreshes: string[] = [];
+    const requesting = new Requesting();
+    const reaction = new Reacting();
+    const invoker = createInvoker({
+      boundary: requesting,
+      instrumented: reaction.instrumentConcept(requesting, "RequestBoundary"),
+      contracts: { "/required": { required: ["value"] } },
+      refresh: () => refreshes.push("refreshed"),
+    });
+
+    await invoker.invoke("/required", {});
+
+    expect(refreshes).toEqual(["refreshed"]);
+  });
+
   test("invokes endpoint and returns success with echoed value", async () => {
     const { invoker } = setup();
 
@@ -332,6 +352,17 @@ describe("createLocalClient", () => {
     const client = createLocalClient<TestApi>({ invoker: invoker as never });
 
     expect(await client.err({ kind: "INVALID" })).toEqual({ error: { code: "INVALID" } });
+  });
+
+  test("passes per-call abort signals to local invocation", async () => {
+    const { invoker } = setup();
+    const client = createLocalClient<TestApi>({ invoker: invoker as never });
+    const controller = new AbortController();
+    controller.abort();
+
+    expect(await client.echo({ message: "ignored" }, { signal: controller.signal })).toEqual({
+      error: FrameworkErrorCode.ABORTED,
+    });
   });
 });
 

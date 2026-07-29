@@ -47,11 +47,11 @@ export function bindingBag<TVars extends Vars = Vars>(): BindingBag<TVars> {
 export function assertSeparateBags(
   kind: string,
   name: string,
-  bags: ReadonlyArray<readonly [label: string, minted: ReadonlyMap<string, symbol>]>,
+  bags: ReadonlyArray<readonly [label: string, names: Iterable<string>]>,
 ): void {
   const seen = new Map<string, string>();
   for (const [label, minted] of bags) {
-    for (const binding of minted.keys()) {
+    for (const binding of minted) {
       const prior = seen.get(binding);
       if (prior !== undefined) {
         throw new Error(
@@ -68,10 +68,8 @@ export interface ObjectRefSpec<Ref, Fused> {
   kind: string;
   name: string;
   inputs: readonly string[];
-  inputVars: readonly symbol[];
   nameKey: string;
-  payloadKey: string;
-  payload: unknown;
+  properties: PropertyDescriptorMap;
   fuse: (ref: Ref, input: Mapping) => Fused;
 }
 
@@ -100,8 +98,7 @@ export function objectRef<Ref extends (input: Mapping) => Fused, Fused>(
   Object.defineProperties(ref, {
     [spec.nameKey]: { value: spec.name, enumerable: true },
     ins: { value: [...spec.inputs], enumerable: true },
-    inputVars: { value: [...spec.inputVars], enumerable: false },
-    [spec.payloadKey]: { value: spec.payload, enumerable: false },
+    ...spec.properties,
   });
   return ref;
 }

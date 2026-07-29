@@ -5,6 +5,8 @@ and documented execution contracts. Start with [Engine
 architecture](docs/architecture.md) before moving implementation files, and
 read [Execution semantics](docs/semantics.md) before changing observable
 runtime behavior.
+Public compatibility and vulnerability work must also follow the [support
+policy](SUPPORT.md) and [security policy](SECURITY.md).
 
 ## Set up the checkout
 
@@ -26,18 +28,21 @@ project-specific configuration.
 | Concept or composition behavior  | `bun run check`, `bun run test`, `bun run examples:check`                              |
 | Public exports or types          | `bun run check`, `bun run test`, `bun run declarations:check`, `bun run package:check` |
 | Generated-artifact logic         | `bun run check`, `bun run test`, `bun run examples:check`, `bun run scenario`          |
-| Packaging, CLI, or release files | All checks above plus `bun run build` and `bun run package:check`                      |
+| Packaging, CLI, or release files | Full suite below, including `bun run release:check`, package checks, and audit         |
 
 Run the full suite before submitting a change that crosses more than one area:
 
 ```sh
 bun run check
+bun run release:check
 bun run test
+bun run coverage
 bun run build
 bun run declarations:check
 bun run examples:check
 bun run scenario
 bun run package:check
+bun audit
 ```
 
 ## Generated files
@@ -55,7 +60,7 @@ the committed files with fresh output.
 
 ## Public entrypoints
 
-The seven files under `src/<subpath>/index.ts` are export-only public barrels.
+The six files under `src/<subpath>/index.ts` are export-only public barrels.
 Internal engine code imports engine modules rather than public barrels. The
 architecture check enforces dependency direction and rejects unsupported
 entrypoints. Any export change requires corresponding public API and declaration
@@ -75,5 +80,9 @@ reference only when implementation and contract tests establish the behavior.
 ## Release work
 
 Do not commit, tag, or publish a release as part of an ordinary contribution.
+After changing version or toolchain facts in the root manifest, run
+`bun run release:update` and review the concrete standalone-manifest changes.
 Release maintainers use the [Contributor release
-procedure](docs/releasing.md) after all intended changes reach `main`.
+procedure](docs/releasing.md) after all intended changes reach `main`. Released
+versions are immutable; compatibility, migration, generated-format, and
+runtime/security notes are required for every release.

@@ -1,7 +1,8 @@
 /* Minimal mock concepts used for testing */
 
-import { Refuse } from "@sync-engine/internal/reactions";
-import type { Empty } from "@sync-engine/internal/reactions";
+import { Refuse } from "@sync-engine/advanced";
+import { vocabulary } from "@sync-engine/language";
+import type { Empty } from "@sync-engine/internal/reactions/types";
 
 export class CounterConcept {
   public count = 0;
@@ -106,3 +107,19 @@ export class CrashingConcept {
     throw new Error("kaboom");
   }
 }
+
+export const mockVocabulary = vocabulary({
+  concepts: {
+    Button: ButtonConcept,
+    Counter: CounterConcept,
+    Crashing: CrashingConcept,
+    Gate: GateConcept,
+    List: ListConcept,
+    Notification: NotificationConcept,
+    Recorder: RecorderConcept,
+    Throwing: ThrowingConcept,
+  },
+  computations: {},
+});
+
+export const mockRefs = mockVocabulary.concepts;

@@ -4,8 +4,8 @@ import {
   frameworkError,
   FrameworkErrorCode,
   success,
-} from "@sync-engine/internal/boundary";
-import type { InvocationResult } from "@sync-engine/internal/boundary";
+} from "@sync-engine/internal/boundary/protocol/types";
+import type { InvocationResult } from "@sync-engine/internal/boundary/protocol/types";
 
 describe("success", () => {
   test("success returns the value in the ok branch", () => {

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
-import { request, type LogEvent, Logging, Reacting, when } from "@sync-engine/internal/reactions";
+import { vocabulary, when } from "@sync-engine/language";
+import type { LogEvent } from "@sync-engine/advanced";
+import { quietReacting } from "../../utils/reacting.ts";
 import {
   ButtonConcept,
   CounterConcept,
@@ -8,21 +10,28 @@ import {
   ThrowingConcept,
 } from "./mocks.ts";
 
+const refs = vocabulary({
+  concepts: {
+    Button: ButtonConcept,
+    Counter: CounterConcept,
+    Notification: NotificationConcept,
+    Recorder: RecorderConcept,
+  },
+}).concepts;
+
 // @covers-action Reacting.addObserver
 // @covers-action Reacting.emitObserverEvents
 // @covers-concept LogEvent
 
 /** Build a fresh engine with no reactions registered. */
 function engine() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   return { reacting };
 }
 
 /** Build an engine with one button-to-counter reaction. */
 function engineWithReactions() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const { Button, Counter, Notification, Recorder } = reacting.instrument({
     Button: new ButtonConcept(),
     Counter: new CounterConcept(),
@@ -32,7 +41,7 @@ function engineWithReactions() {
 
   reacting.register({
     ButtonIncrements: (_vars: Record<string, symbol>) =>
-      when(Button.clicked, { kind: "inc" }, {}).then(request(Counter.increment, {})),
+      when(refs.Button.clicked({ kind: "inc" }).responds()).then(refs.Counter.increment({})),
   });
 
   return { reacting, Button, Counter, Notification, Recorder };

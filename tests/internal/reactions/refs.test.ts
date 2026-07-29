@@ -1,4 +1,3 @@
-import { lineOf } from "@sync-engine/internal/reads/lines";
 /**
  * Static concept refs: authoring against names, resolved per engine.
  *
@@ -10,20 +9,21 @@ import { lineOf } from "@sync-engine/internal/reads/lines";
  */
 import { describe, expect, test } from "vite-plus/test";
 import {
-  request,
-  former,
   isActionRef,
   isQueryRef,
   isReaction,
-  reaction,
+} from "@sync-engine/internal/reactions/authoring/refs";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import {
   each,
+  former,
+  reaction,
   whether,
-  Reacting,
   view,
-  where,
   vocabulary,
   when,
-} from "@sync-engine/internal/reactions";
+  where,
+} from "@sync-engine/language";
 
 class NotingConcept {
   static readonly queries = { _getNote: "optional", _all: "many" } as const;
@@ -77,7 +77,7 @@ describe("vocabulary refs", () => {
 
   test("reaction(...) brands the reaction function", () => {
     const taggedReaction = reaction(({ note }) =>
-      when(Noting.add, {}, { note }).then(request(Echoing.hear, { text: "x" })),
+      when(Noting.add({}).responds({ note })).then(Echoing.hear({ text: "x" })),
     );
     expect(isReaction(taggedReaction)).toBe(true);
     expect(isReaction(() => undefined)).toBe(false);
@@ -87,27 +87,27 @@ describe("vocabulary refs", () => {
 // ── Module-level templates, shared by every engine below ──────────────────
 
 const readsAs = view("(note) reads as (text)", ({ note, text }, _outputs, _bindings) =>
-  where(lineOf({ query: Noting._getNote }, { note }).is({ text })),
+  where(Noting._getNote({ note }).is({ text })),
 ).holds();
 
 const theNotes = former("the notes ()", (_inputs, { note, text }) =>
-  each(lineOf({ query: Noting._all }, {}).is({ note, text })).form({ note, text }),
+  each(Noting._all({}).is({ note, text })).form({ note, text }),
 );
 
 const theNoteCard = former("the note card of (note)", ({ note }, { text }) =>
-  where(whether(lineOf({ query: Noting._getNote }, { note }).is({ text }))).form({ text }),
+  where(whether(Noting._getNote({ note }).is({ text }))).form({ text }),
 ).optional();
 
 const theShelf = former("the shelf ()", (_inputs, { note, text }) =>
-  each(lineOf({ query: Noting._all }, {}).is({ note, text: text }))
+  each(Noting._all({}).is({ note, text: text }))
     .form({ note })
     .splicing(whether(theNoteCard({ note }))),
 );
 
 const EchoNote = reaction(({ note, text }) =>
-  when(Noting.add, {}, { note })
-    .where(lineOf({ query: Noting._getNote }, { note }).is({ text }), readsAs({ note, text }))
-    .then(request(Echoing.hear, { text })),
+  when(Noting.add({}).responds({ note }))
+    .where(Noting._getNote({ note }).is({ text }), readsAs({ note, text }))
+    .then(Echoing.hear({ text })),
 );
 
 function build() {

@@ -34,66 +34,41 @@ import { lineOf } from "@engine/reads/lines";
 import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
 import { parseSpec } from "../concepts/concept-spec.ts";
 import type { ComputationFn, ComputationRef } from "@engine/reads/computations";
-import type { ConceptMetadata } from "../concepts/concept-metadata.ts";
+import {
+  CONCEPT_PROTOCOL,
+  conceptProtocolOf,
+  type ConceptMetadata,
+} from "../concepts/concept-metadata.ts";
 import type {
   ActionCall,
   InstrumentedAction,
   Mapping,
   Reaction,
-  StepNode,
   TriggerActionLine,
 } from "../types.ts";
-import {
-  validateQueryContractMap,
-  type QueryPromises,
-  type QueryPromise,
-} from "@engine/reads/query-contracts";
+import { validateQueryContractMap } from "@engine/reads/query-contracts";
+import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
+import { setOwn } from "@engine/utils/own-property";
+import { brandActionRef, brandQueryRef, type ActionRef, type QueryRef } from "./references.ts";
 
-const ActionRefBrand: unique symbol = Symbol("ActionRefBrand");
-const QueryRefBrand: unique symbol = Symbol("QueryRefBrand");
+export { isActionRef, isQueryRef } from "./references.ts";
+export type { ActionRef, QueryRef } from "./references.ts";
+
 const ReactionBrand: unique symbol = Symbol("ReactionBrand");
 const VocabularyClasses: unique symbol = Symbol("VocabularyClasses");
 const VocabularyComputations: unique symbol = Symbol("VocabularyComputations");
 const VocabularyMetadata: unique symbol = Symbol("VocabularyMetadata");
+declare const ActionTypeAnchor: unique symbol;
 
 /** Any concept class the vocabulary can hold. */
 export type ConceptClass = new (...args: never[]) => object;
-
-/** A static reference to one concept action: `{ concept, action }` as data. */
-export interface ActionRef {
-  (input: Mapping): StepNode;
-  readonly refConcept: string;
-  readonly refAction: string;
-}
-
-/**
- * A static reference to one concept query. Calling it with an input pattern
- * returns a typed query line whose `.is(...)` method declares output matches.
- * The reference carries the query's name and promise; a missing `.concept`
- * marks it unresolved.
- */
-export interface QueryRef {
-  (pattern: Mapping): QueryReadLine;
-  readonly refConcept: string;
-  readonly refQuery: string;
-  readonly queryName: string;
-  readonly queryPromise?: QueryPromise;
-}
-
-export function isActionRef(value: unknown): value is ActionRef {
-  return hasFuncBrand(value, ActionRefBrand);
-}
-
-export function isQueryRef(value: unknown): value is QueryRef {
-  return hasFuncBrand(value, QueryRefBrand);
-}
 
 function makeActionRef(concept: string, action: string): ActionRef {
   const ref = ((input: Mapping) => actionLine(ref, input)) as unknown as ActionRef;
   Object.defineProperty(ref, "name", { value: `${concept}.${action}` });
   Object.defineProperty(ref, "refConcept", { value: concept, enumerable: true });
   Object.defineProperty(ref, "refAction", { value: action, enumerable: true });
-  return brand(ref, ActionRefBrand);
+  return brandActionRef(ref);
 }
 
 function makeQueryRef(concept: string, query: string, promise: QueryPromise | undefined): QueryRef {
@@ -108,7 +83,7 @@ function makeQueryRef(concept: string, query: string, promise: QueryPromise | un
   if (promise !== undefined) {
     Object.defineProperty(ref, "queryPromise", { value: promise, enumerable: true });
   }
-  return brand(ref, QueryRefBrand);
+  return brandQueryRef(ref);
 }
 
 /** Property names a ref proxy answers with `undefined` instead of an error. */
@@ -132,17 +107,25 @@ export type QueryLineFn<F> = F extends (input: infer I) => infer A
     }
   : F;
 
-/** An action member called as authored data instead of executed directly. */
+/**
+ * An action member called as authored data instead of executed directly. The
+ * final, uncallable overload anchors generated `ReturnType` and `Parameters`
+ * references to the declared implementation signature; authored calls select
+ * the generic line-builder overload so input completeness remains visible.
+ */
 type RequiredInputKeys<I> = {
   [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
 }[keyof I];
 
-export type ActionLineFn<F> = F extends (input: infer I) => unknown
-  ? <P extends SlotPattern<I>>(
-      pattern: P,
-    ) => RequiredInputKeys<I> extends keyof P
-      ? ActionCall<F & InstrumentedAction, P>
-      : TriggerActionLine<F & InstrumentedAction, P>
+export type ActionLineFn<F> = F extends (input: infer I) => infer A
+  ? {
+      <P extends SlotPattern<I>>(
+        pattern: P,
+      ): RequiredInputKeys<I> extends keyof P
+        ? ActionCall<F & InstrumentedAction, P, A>
+        : TriggerActionLine<F & InstrumentedAction, P, A>;
+      (input: I, anchor: typeof ActionTypeAnchor): A;
+    }
   : F;
 
 /**
@@ -235,14 +218,14 @@ export interface VocabularyDeclaration<
 }
 
 /**
- * The contracts a specification supplies on its own. Refusal branches need the
- * Error class that signals each code, so a registration derives those; prose
- * and query promises the document already states in full.
+ * The machine-readable metadata a specification supplies on its own. State
+ * prose is not metadata. Refusal branches need the Error class that signals
+ * each code, so a registration derives those separately.
  */
 function specifiedContracts(spec: string): ConceptMetadata {
   const { purpose, principle, queries } = parseSpec(spec);
   const promises: Record<string, QueryPromise> = {};
-  for (const query of queries) promises[query.name] = query.promise;
+  for (const query of queries) setOwn(promises, query.name, query.promise);
   return { purpose, principle, queries: promises };
 }
 
@@ -372,23 +355,27 @@ export function vocabulary(
     if (typeof cls !== "function" || cls.prototype === undefined) {
       throw new Error(`Vocabulary: "${name}" must be a concept class.`);
     }
-    classes[name] = cls;
-    let declaredMetadata: ConceptMetadata | undefined;
+    setOwn(classes, name, cls);
+    let declaredContracts: ConceptMetadata = {};
     if (descriptor !== undefined) {
       const { class: _class, spec, ...contracts } = descriptor;
-      declaredMetadata =
+      declaredContracts =
         spec === undefined ? contracts : { ...specifiedContracts(spec), ...contracts };
-      validateConceptMetadata(name, cls, declaredMetadata);
-      metadata[name] = declaredMetadata;
     }
-    refs[name] = conceptRefProxy(name, cls, declaredMetadata?.queries);
+    const declaredMetadata: ConceptMetadata = {
+      ...declaredContracts,
+      [CONCEPT_PROTOCOL]: conceptProtocolOf(cls.prototype as object),
+    };
+    validateConceptMetadata(name, cls, declaredMetadata);
+    setOwn(metadata, name, declaredMetadata);
+    setOwn(refs, name, conceptRefProxy(name, cls, declaredMetadata.queries));
   }
   Object.defineProperty(refs, VocabularyClasses, { value: { ...classes } });
 
   const definitions = (source.computations ?? {}) as Record<string, ComputationFn>;
   const computations: Record<string, ComputationRef> = {};
   for (const [name, fn] of Object.entries(definitions)) {
-    computations[name] = computationRef(name, fn, "vocabulary");
+    setOwn(computations, name, computationRef(name, fn, "vocabulary"));
   }
   const result = { concepts: refs, computations };
   Object.defineProperties(result, {

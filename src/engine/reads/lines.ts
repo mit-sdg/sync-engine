@@ -18,7 +18,7 @@
 
 import { brand, hasBrand, hasFuncBrand, LineBrand, RelationViewBrand } from "./brands.ts";
 import type { InstrumentedQuery, Mapping } from "@engine/reactions/types";
-import type { QueryPromise } from "./query-contracts.ts";
+import type { QueryPromise } from "./query-metadata.ts";
 import { isPlainObject } from "./matchers.ts";
 
 /** A view declared as a relation: named inputs, promised outputs, a body. */

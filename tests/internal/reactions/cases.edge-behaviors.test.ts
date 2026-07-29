@@ -1,20 +1,15 @@
-import { lineOf } from "@sync-engine/internal/reads/lines";
 /**
  * Regression coverage for edge behavior in the reaction engine.
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  Logging,
-  reaction,
-  Reacting,
-  type Vars,
-  when,
-  actionNameOf,
-} from "@sync-engine/internal/reactions";
+import { Logging } from "@sync-engine/assembly";
+import { reaction, vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { bindInputMapping } from "@sync-engine/internal/reads/frames.ts";
-import { ButtonConcept, ListConcept, RecorderConcept, ThrowingConcept } from "./mocks.ts";
+import { ButtonConcept, ListConcept, mockRefs, RecorderConcept, ThrowingConcept } from "./mocks.ts";
 
 // ── One evaluation per trigger record ─────────────────────────────────────
 
@@ -22,7 +17,7 @@ describe("one evaluation per trigger record", () => {
   test("a later action does not reevaluate an earlier trigger in the same flow", async () => {
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;
-    const { Button, List, Recorder } = reacting.instrument({
+    const { Button, Recorder } = reacting.instrument({
       Button: new ButtonConcept(),
       List: new ListConcept(),
       Recorder: new RecorderConcept(),
@@ -33,14 +28,14 @@ describe("one evaluation per trigger record", () => {
       // add(1) and succeeds after add(2). The second action must not cause the
       // first trigger record to be evaluated again against newer state.
       WatchForTwo: reaction(({ trigger }: Vars) =>
-        when(List.add, { value: trigger }, {})
-          .where(lineOf({ query: List._items }, {}).is({ value: 2 }))
-          .then(request(Recorder.record, { tag: 2 })),
+        when(mockRefs.List.add({ value: trigger }).responds())
+          .where(mockRefs.List._items({}).is({ value: 2 }))
+          .then(mockRefs.Recorder.record({ tag: 2 } as never)),
       ),
       AddTwice: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "twice" })
-          .then(request(List.add, { value: 1 }))
-          .then(request(List.add, { value: 2 })),
+        when(mockRefs.Button.clicked({ kind: "twice" }).responds())
+          .then(mockRefs.List.add({ value: 1 }))
+          .then(mockRefs.List.add({ value: 2 })),
       ),
     });
 
@@ -67,8 +62,11 @@ describe("sibling reactions consume when-records independently", () => {
         return {};
       }
     }
+    const { StepMarker: StepMarkerRef } = vocabulary({
+      concepts: { StepMarker },
+    }).concepts;
 
-    const { Button, StepMarker: SM } = reacting.instrument({
+    const { Button } = reacting.instrument({
       Button: new ButtonConcept(),
       StepMarker: new StepMarker(),
     });
@@ -78,10 +76,10 @@ describe("sibling reactions consume when-records independently", () => {
     // names, with no shared trace to overwrite.
     reacting.register({
       OverwriteA: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "race-test" }, {}).then(request(SM.a, {})),
+        when(mockRefs.Button.clicked({ kind: "race-test" }).responds()).then(StepMarkerRef.a({})),
       ),
       OverwriteB: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "race-test" }, {}).then(request(SM.b, {})),
+        when(mockRefs.Button.clicked({ kind: "race-test" }).responds()).then(StepMarkerRef.b({})),
       ),
     });
 
@@ -104,7 +102,7 @@ describe("sibling reactions consume when-records independently", () => {
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;
 
-    const { Button, Recorder, Throwing } = reacting.instrument({
+    const { Button, Recorder } = reacting.instrument({
       Button: new ButtonConcept(),
       Recorder: new RecorderConcept(),
       Throwing: new ThrowingConcept(),
@@ -114,12 +112,14 @@ describe("sibling reactions consume when-records independently", () => {
     // sibling's firing and consumption remain independent of the other.
     reacting.register({
       GoodBranch: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "par-mixed" }, {}).then(
-          request(Recorder.record, { tag: "good-branch" }),
+        when(mockRefs.Button.clicked({ kind: "par-mixed" }).responds()).then(
+          mockRefs.Recorder.record({ tag: "good-branch" }),
         ),
       ),
       BadBranch: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "par-mixed" }, {}).then(request(Throwing.explode, {})),
+        when(mockRefs.Button.clicked({ kind: "par-mixed" }).responds()).then(
+          mockRefs.Throwing.explode({}),
+        ),
       ),
     });
 
@@ -160,8 +160,11 @@ describe("missing bindings in query inputs", () => {
         return {};
       }
     }
+    const { Inspector: InspectorRef } = vocabulary({
+      concepts: { Inspector: InspectorConcept },
+    }).concepts;
 
-    const { Button, Inspector } = reacting.instrument({
+    const { Inspector } = reacting.instrument({
       Button: new ButtonConcept(),
       Inspector: new InspectorConcept(),
     });
@@ -169,8 +172,8 @@ describe("missing bindings in query inputs", () => {
     expect(() =>
       reacting.register({
         MissingBinding: reaction((_vars: Vars) =>
-          when(Button.clicked, { kind: "test" }, {}).then(
-            request(Inspector.inspect, { kind: Symbol("nonexistent") }),
+          when(mockRefs.Button.clicked({ kind: "test" }).responds()).then(
+            InspectorRef.inspect({ kind: Symbol("nonexistent") }),
           ),
         ),
       }),

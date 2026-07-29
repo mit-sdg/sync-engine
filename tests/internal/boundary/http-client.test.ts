@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { createHttpClient, createHttpTransport } from "@sync-engine/internal/boundary";
-import type { Client } from "@sync-engine/internal/boundary";
-import { FrameworkErrorCode } from "@sync-engine/internal/boundary";
+import { FrameworkErrorCode } from "@sync-engine/boundary";
+import { createHttpClient, createHttpTransport } from "@sync-engine/client";
+import type { Client } from "@sync-engine/client";
 
 type TestApi = {
   "/auth/login": { input: { username: string; password: string }; output: { token: string } };
@@ -107,6 +107,15 @@ describe("createHttpClient", () => {
     expect(fetch).toHaveBeenCalledWith("http://localhost/auth/login", expect.any(Object));
   });
 
+  test("an explicit root baseUrl does not fall back to /api", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const client = createHttpClient<TestApi>({ baseUrl: "/", fetch });
+
+    await client.auth.login({ username: "a", password: "b" });
+
+    expect(fetch).toHaveBeenCalledWith("/auth/login", expect.any(Object));
+  });
+
   test("an omitted baseUrl sends requests beneath /api", async () => {
     const fetch = mockFetch({ token: "x" });
     const client = createHttpClient<TestApi>({ fetch });
@@ -153,6 +162,85 @@ describe("createHttpClient", () => {
     const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({ error: FrameworkErrorCode.NETWORK_ERROR });
+  });
+
+  test("an aborted call passes its signal to fetch and returns ABORTED", async () => {
+    const controller = new AbortController();
+    const fetch: typeof globalThis.fetch = vi.fn((_input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      controller.abort();
+      return Promise.reject(new DOMException("Aborted", "AbortError"));
+    }) as unknown as typeof fetch;
+    const client = makeClient(fetch);
+
+    const result = await client.auth.login(
+      { username: "a", password: "b" },
+      { signal: controller.signal },
+    );
+
+    expect(result).toEqual({ error: FrameworkErrorCode.ABORTED });
+  });
+
+  test("abort settles while async headers are pending and does not call fetch", async () => {
+    const controller = new AbortController();
+    const fetch = mockFetch({ token: "should-not-arrive" });
+    let headersStarted!: () => void;
+    let releaseHeaders!: (headers: Record<string, string>) => void;
+    const started = new Promise<void>((resolve) => {
+      headersStarted = resolve;
+    });
+    const client = createHttpClient<TestApi>({
+      baseUrl: "http://localhost",
+      fetch,
+      headers: () => {
+        headersStarted();
+        return new Promise((resolve) => {
+          releaseHeaders = resolve;
+        });
+      },
+    });
+
+    const pending = client.auth.login(
+      { username: "a", password: "b" },
+      { signal: controller.signal },
+    );
+    await started;
+    controller.abort();
+    let promptResult: Awaited<typeof pending> | "still-pending";
+    try {
+      promptResult = await Promise.race([
+        pending,
+        new Promise<"still-pending">((resolve) => setTimeout(() => resolve("still-pending"), 20)),
+      ]);
+    } finally {
+      releaseHeaders({ Authorization: "Bearer late" });
+    }
+
+    expect(promptResult).toEqual({ error: FrameworkErrorCode.ABORTED });
+    await expect(pending).resolves.toEqual({ error: FrameworkErrorCode.ABORTED });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("an abort while reading the response body returns ABORTED", async () => {
+    const controller = new AbortController();
+    const fetch: typeof globalThis.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => {
+          controller.abort();
+          return Promise.reject(new DOMException("Aborted", "AbortError"));
+        },
+      } as Response),
+    ) as unknown as typeof fetch;
+    const client = makeClient(fetch);
+
+    const result = await client.auth.login(
+      { username: "a", password: "b" },
+      { signal: controller.signal },
+    );
+
+    expect(result).toEqual({ error: FrameworkErrorCode.ABORTED });
   });
 
   test("a non-JSON success response returns BAD_JSON", async () => {

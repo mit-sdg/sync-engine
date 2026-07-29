@@ -30,9 +30,15 @@ import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metada
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
 import type { InstrumentedConcept } from "@engine/reactions/runtime/instrumenting";
-import { MemoryStore, type RetentionPolicy } from "@engine/reactions/runtime/log-store";
+import {
+  MemoryStore,
+  type LogStore,
+  type RetentionPolicy,
+} from "@engine/reactions/runtime/log-store";
 import { Logging } from "@engine/reactions/runtime/logging";
-import type { EngineObserver } from "@engine/reactions/runtime/observer";
+import type { EngineObserver } from "@engine/reactions/runtime/logging";
+import { OperationalEvents } from "@engine/reactions/runtime/operational";
+import type { OperationalObserver } from "@engine/reactions/runtime/operational";
 import { Reacting } from "@engine/reactions/runtime/reacting";
 import type {
   Mapping,
@@ -47,11 +53,17 @@ import type { ComputationFn } from "@engine/reads/computations";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
 import { isRelationView } from "@engine/reads/lines";
 import type { RelationView } from "@engine/reads/lines";
+import { canonicalValue } from "@engine/utils/canonical-json";
 import { logger } from "@engine/utils/logger";
+import { createRedactor } from "@engine/utils/redaction";
+import type { RedactionPolicy } from "@engine/utils/redaction";
+import { setOwn } from "@engine/utils/own-property";
 import { brand, hasBrand } from "@engine/reads/brands";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
-import type { ApplicationInterface } from "../protocol/application-interface.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
+import { assertPortableHttpPath } from "../protocol/http-path.ts";
+import { assertEndpointValidators } from "../protocol/validation.ts";
+import type { EndpointValidators } from "../protocol/validation.ts";
 import { refusalFunnel } from "../invocation/funnel.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import {
@@ -59,7 +71,15 @@ import {
   Requesting,
   settleRequestInterpreterFailure,
 } from "../invocation/invoke.ts";
-import { deriveInputContracts, wireContracts } from "../wire/wire.ts";
+import { RuntimeLifecycle } from "../invocation/lifecycle.ts";
+import type { ExecutionLimits } from "../invocation/lifecycle.ts";
+import {
+  assertInputContractsMatchReceivePatterns,
+  deriveInputContracts,
+} from "../wire/wire-contracts.ts";
+import type { EndpointDeclaration, EndpointIdentity } from "./endpoint-portability.ts";
+import { assertApplicationLocality } from "./locality-validation.ts";
+import { validateConceptImplementation } from "./concept-set.ts";
 
 // Endpoints author against these request-boundary references.
 
@@ -104,6 +124,12 @@ export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
   readonly path: string;
   readonly reaction: (vars: Vars) => TResult;
   readonly input?: InputContractDecl;
+  readonly validators?: EndpointValidators;
+}
+
+export interface EndpointOptions {
+  readonly input?: InputContractDecl;
+  readonly validators?: EndpointValidators;
 }
 
 /**
@@ -116,25 +142,21 @@ export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
 export function endpoint(
   path: string,
   reaction: (vars: Vars) => ReactionDeclaration,
-  opts?: { input?: InputContractDecl },
+  opts?: EndpointOptions,
 ): EndpointDef<ReactionDeclaration>;
 export function endpoint(
   path: string,
   reaction: (vars: Vars) => ReactionPartition,
-  opts?: { input?: InputContractDecl },
+  opts?: EndpointOptions,
 ): EndpointDef<ReactionPartition>;
-export function endpoint(
-  path: string,
-  reaction: Reaction,
-  opts?: { input?: InputContractDecl },
-): EndpointDef {
-  if (typeof path !== "string" || !path.startsWith("/")) {
-    throw new Error(`endpoint(...): "${path}" is not a path.`);
-  }
+export function endpoint(path: string, reaction: Reaction, opts?: EndpointOptions): EndpointDef {
+  assertPortableHttpPath(path, "endpoint(...)");
+  if (opts?.validators !== undefined) assertEndpointValidators(opts.validators, path);
   const def = {
     path,
     reaction,
     ...(opts?.input !== undefined ? { input: opts.input } : {}),
+    ...(opts?.validators !== undefined ? { validators: opts.validators } : {}),
   } as EndpointDef;
   brand(def, EndpointBrand);
   return def;
@@ -157,13 +179,40 @@ function pinToPath(decl: ReactionDeclaration, path: string): ReactionDeclaration
 
 // ── assemble ────────────────────────────────────────────────────────────────
 
-export interface AssembleOptions<T extends Record<string, ConceptClass>> {
+export type ConceptInitializers<T extends Record<string, ConceptClass>> = {
+  [K in keyof T]?: ConstructorParameters<T[K]>;
+};
+
+export type ConceptInstances<T extends Record<string, ConceptClass>> = {
+  [K in keyof T]?: object;
+};
+
+type RequiredConstructorName<T extends Record<string, ConceptClass>> = {
+  [K in keyof T]: [] extends ConstructorParameters<T[K]> ? never : K;
+}[keyof T];
+
+export type RequiredConstructionSources<T extends Record<string, ConceptClass>> = [
+  RequiredConstructorName<T>,
+] extends [never]
+  ? unknown
+  :
+      | {
+          initialize: {
+            [K in RequiredConstructorName<T>]: ConstructorParameters<T[K]>;
+          };
+        }
+      | { instances: Record<RequiredConstructorName<T>, object> };
+
+export interface AssembleBaseOptions<
+  T extends Record<string, ConceptClass>,
+  I extends ConceptInstances<T> = ConceptInstances<T>,
+> {
   /** The concept vocabulary: every name bound to its canonical class. */
   vocabulary: DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>;
-  /** Constructor args per name; by default every concept is constructed with no arguments. */
-  initialize?: { [K in keyof T]?: ConstructorParameters<T[K]> };
+  /** Constructor args per name; classes callable without arguments may be omitted. */
+  initialize?: ConceptInitializers<T>;
   /** Ready instances per name; these take precedence over `initialize`. */
-  instances?: { [K in keyof T]?: object };
+  instances?: I;
   /**
    * The application composition: reactions, views, and formers. Endpoint
    * declarations are boundary-specialized reactions.
@@ -173,7 +222,18 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
   logging?: Logging;
   /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
   retention?: RetentionPolicy;
+  /** Application-owned occurrence store. It cannot be combined with `retention`. */
+  logStore?: LogStore;
+  /** Opt-in production execution limits. */
+  executionLimits?: ExecutionLimits;
+  /** Bounded synchronous handoff for stable operational events. */
+  observers?: readonly OperationalObserver[];
+  /** Additional sensitive field names for this assembly only. */
+  redaction?: RedactionPolicy;
 }
+
+export type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> &
+  RequiredConstructionSources<T>;
 
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
   engine: Reacting;
@@ -184,18 +244,41 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   /** The instrumented concepts, by vocabulary name — the canonical class types them. */
   concepts: { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> };
   contracts: Record<string, InputContractDecl>;
+  validators: Readonly<Record<string, EndpointValidators>>;
+  beginDrain(): Promise<void>;
+  whenIdle(): Promise<void>;
   /** The public route and admission facts a separate gateway may consume. */
   publicInterface: ApplicationInterface;
   /** Public boundary categories declared beside concept refusals. */
   publicErrors: Readonly<Record<string, PublicErrorCategory>>;
   /** Endpoint identity retained even when a reaction has no portable IR. */
-  endpointOfReaction: ReadonlyMap<string, { name: string; path: string }>;
+  endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
+  /** Every authored endpoint declaration, independent of lowering. */
+  endpoints: readonly EndpointDeclaration[];
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
   form(fused: FusedFormer): Promise<unknown>;
 }
 
 function isFormerRef(value: unknown): value is FormerRef {
   return typeof value === "function" && typeof (value as FormerRef).formerName === "string";
+}
+
+function portableInputContract(path: string, contract: InputContractDecl): InputContractDecl {
+  let defaults: Record<string, unknown> | undefined;
+  try {
+    defaults =
+      contract.defaults === undefined
+        ? undefined
+        : (canonicalValue(contract.defaults) as Record<string, unknown>);
+  } catch (error) {
+    throw new TypeError(`assemble: input defaults for ${path} must be canonical JSON-portable.`, {
+      cause: error,
+    });
+  }
+  return {
+    ...(contract.required === undefined ? {} : { required: [...contract.required] }),
+    ...(defaults === undefined ? {} : { defaults }),
+  };
 }
 
 /**
@@ -246,85 +329,120 @@ export function assemble<
 export function assemble<T extends Record<string, ConceptClass>>(
   options: AssembleOptions<T>,
 ): AssembledApp<T> {
-  const engine = new Reacting(
-    new ActionConcept(new MemoryStore(options.retention ?? { window: 100 })),
-  );
+  if (options.logStore !== undefined && options.retention !== undefined) {
+    throw new Error("assemble: logStore and retention cannot both be supplied.");
+  }
+  const operational = new OperationalEvents(options.observers);
+  const lifecycle = new RuntimeLifecycle(options.executionLimits, operational);
+  const store = options.logStore ?? new MemoryStore(options.retention ?? { window: 100 });
+  const redactor = createRedactor(options.redaction);
+  const engine = new Reacting(new ActionConcept(store, operational, redactor), lifecycle);
   engine.logging = options.logging ?? Logging.OFF;
   engine.registerComputations(vocabularyComputations(options.vocabulary));
 
   const boundary = new Requesting();
   engine.Action._onFlowQuiescent(({ flow, interpreterFailed }) => {
     if (interpreterFailed) settleRequestInterpreterFailure(boundary, flow);
+    lifecycle.flowSettled(flow);
   });
   const instrumentedBoundary = engine.instrumentConcept(boundary, "RequestBoundary");
 
-  // ── Concepts: instances win, initialize supplies args, default is no-arg ──
+  // ── Concepts: instances win, initialize supplies args, no-arg classes default-construct ──
   const classes = vocabularyClasses(options.vocabulary);
   for (const source of [options.instances, options.initialize]) {
     for (const name of Object.keys(source ?? {})) {
-      if (!(name in classes)) {
+      if (!Object.hasOwn(classes, name)) {
         throw new Error(`assemble: "${name}" is not a name in the vocabulary.`);
       }
     }
   }
   const concepts: Record<string, object> = {};
   const publicErrors: Record<string, PublicErrorCategory> = {};
+  const metadataByName = vocabularyMetadata(options.vocabulary);
   for (const [name, cls] of Object.entries(classes)) {
-    const provided = (options.instances as Record<string, object> | undefined)?.[name];
-    const metadata = vocabularyMetadata(options.vocabulary)[name];
+    const supplied = options.instances as Record<string, object> | undefined;
+    const provided =
+      supplied !== undefined && Object.hasOwn(supplied, name) ? supplied[name] : undefined;
+    const metadata = Object.hasOwn(metadataByName, name) ? metadataByName[name] : undefined;
     for (const [code, category] of Object.entries(metadata?.publicErrors ?? {})) {
-      const prior = publicErrors[code];
+      const prior = Object.hasOwn(publicErrors, code) ? publicErrors[code] : undefined;
       if (prior !== undefined && prior !== category) {
         throw new Error(
           `assemble: refusal "${code}" has conflicting public categories "${prior}" and "${category}".`,
         );
       }
-      publicErrors[code] = category;
+      setOwn(publicErrors, code, category);
     }
-    if (provided !== undefined) {
-      if (metadata !== undefined) attachConceptMetadata(provided, metadata);
-      concepts[name] = engine.instrumentConcept(provided, name);
-      continue;
+    let instance = provided;
+    if (instance === undefined) {
+      const initialization = options.initialize as Record<string, readonly unknown[]> | undefined;
+      const args =
+        initialization !== undefined && Object.hasOwn(initialization, name)
+          ? initialization[name]
+          : undefined;
+      if (args === undefined && cls.length > 0) {
+        throw new Error(
+          `assemble: concept "${name}" requires constructor arguments; supply initialize or instances.`,
+        );
+      }
+      const Constructor = cls as new (...ctorArgs: unknown[]) => object;
+      instance = new Constructor(...(args ?? []));
     }
-    const args = (options.initialize as Record<string, readonly unknown[]> | undefined)?.[name];
-    const Constructor = cls as new (...ctorArgs: unknown[]) => object;
-    const instance = new Constructor(...(args ?? []));
+    validateConceptImplementation("assemble", name, cls, instance);
     if (metadata !== undefined) attachConceptMetadata(instance, metadata);
-    concepts[name] = engine.instrumentConcept(instance, name);
+    setOwn(concepts, name, engine.instrumentConcept(instance, name));
   }
 
   // ── The composition: tagged exports register under their dotted path ─────
   const reactions: Record<string, Reaction> = {};
   const contracts: Record<string, InputContractDecl> = {};
-  const endpointOfReaction = new Map<string, { name: string; path: string }>();
+  const validators: Record<string, EndpointValidators> = {};
+  const endpointOfReaction = new Map<string, EndpointIdentity>();
+  const endpoints: EndpointDeclaration[] = [];
   const views: RelationView[] = [];
   const formers: FormerRef[] = [];
 
   const visit = (value: unknown, name: string): void => {
     if (isReaction(value)) {
-      if (reactions[name] !== undefined)
+      if (Object.hasOwn(reactions, name))
         throw new Error(`assemble: two reactions named "${name}".`);
-      reactions[name] = value;
+      setOwn(reactions, name, value);
       return;
     }
     if (isEndpointDef(value)) {
       const declared = value.reaction($vars);
       const declarations = declarationsOf(declared);
       declarations.forEach((entry) => pinToPath(entry, value.path));
-      declarations.forEach((_, index) => {
+      const reactionNames = declarations.map((_, index) => {
         const reactionName = index === 0 ? name : `${name}:${index + 1}`;
         endpointOfReaction.set(reactionName, { name, path: value.path });
+        return reactionName;
       });
-      if (reactions[name] !== undefined)
+      endpoints.push({ name, path: value.path, reactions: reactionNames });
+      if (Object.hasOwn(reactions, name))
         throw new Error(`assemble: two reactions named "${name}".`);
-      reactions[name] = () => declared;
+      setOwn(reactions, name, () => declared);
       if (value.input !== undefined) {
-        if (contracts[value.path] !== undefined) {
+        if (Object.hasOwn(contracts, value.path)) {
           throw new Error(
             `assemble: duplicate input contract for ${value.path} — a path's contract is declared at most once.`,
           );
         }
-        contracts[value.path] = value.input;
+        setOwn(contracts, value.path, portableInputContract(value.path, value.input));
+      }
+      if (value.validators !== undefined) {
+        let existing = validators[value.path] ?? {};
+        for (const kind of ["input", "output"] as const) {
+          const validator = value.validators[kind];
+          if (validator === undefined) continue;
+          if (existing[kind] !== undefined) {
+            throw new Error(
+              `assemble: duplicate ${kind} validator for ${value.path} — a path's validator is declared at most once.`,
+            );
+          }
+          existing = { ...existing, [kind]: validator };
+          setOwn(validators, value.path, existing);
+        }
       }
       return;
     }
@@ -348,32 +466,48 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   // Name order, deliberately: registration order carries no meaning.
   const ordered: Record<string, Reaction> = {};
-  for (const name of Object.keys(reactions).sort()) ordered[name] = reactions[name];
+  for (const name of Object.keys(reactions).sort()) setOwn(ordered, name, reactions[name]);
   engine.register(ordered);
   engine.declareViews(...views);
   engine.declareFormers(...formers);
 
+  const app = engine.exportReactions();
+  assertApplicationLocality("assemble", app);
+
   // Declared contracts take precedence; receive patterns fill missing entries.
-  for (const [path, decl] of Object.entries(deriveInputContracts(engine.exportReactions()))) {
-    contracts[path] ??= decl;
+  assertInputContractsMatchReceivePatterns(app, contracts);
+  for (const [path, decl] of Object.entries(deriveInputContracts(app))) {
+    if (!Object.hasOwn(contracts, path)) setOwn(contracts, path, decl);
   }
 
   engine.register(refusalFunnel(instrumentedBoundary as unknown as RequestBoundaryActions));
   engine.addObserver(respondRaceObserver);
 
+  const endpointPaths = new Set(endpoints.map(({ path }) => path));
   const invoker = createInvoker({
     boundary,
     instrumented: instrumentedBoundary as unknown as RequestBoundaryActions,
     contracts,
+    validators,
+    routes: endpointPaths,
+    lifecycle,
+    onInvalidOutput: ({ path, requestId, errorClass }) => {
+      engine.Action._recordIntegrityFailure({
+        kind: "invalid-output",
+        flow: requestId,
+        route: path,
+        errorClass,
+        at: Date.now(),
+      });
+    },
     refresh: () => engine.invalidateAllCaches(),
   });
 
   const publicInterface: ApplicationInterface = {
     routes: Object.fromEntries(
-      wireContracts(engine.exportReactions(), { contracts }).endpoints.map(({ path }) => [
-        path,
-        contracts[path] ?? {},
-      ]),
+      [...endpointPaths]
+        .sort()
+        .map((path) => [path, canonicalValue(contracts[path] ?? {}) as InputContractDecl]),
     ),
   };
 
@@ -384,9 +518,13 @@ export function assemble<T extends Record<string, ConceptClass>>(
     boundaryActions: instrumentedBoundary as unknown as RequestBoundaryActions,
     concepts: concepts as { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> },
     contracts,
+    validators,
+    beginDrain: () => lifecycle.beginDrain(),
+    whenIdle: () => lifecycle.whenIdle(),
     publicInterface,
     publicErrors,
     endpointOfReaction,
+    endpoints,
     form: (fused) => engine.form(fused),
   };
 }

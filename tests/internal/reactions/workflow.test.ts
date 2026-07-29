@@ -1,16 +1,12 @@
-import { lineOf } from "@sync-engine/internal/reads/lines";
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  custom,
-  type Empty,
-  Logging,
-  oneOf,
-  reaction,
-  Reacting,
-  type Vars,
-  when,
-} from "@sync-engine/internal/reactions";
+import { reaction, vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import { oneOf } from "@sync-engine/internal/reads/matchers";
+import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
+import { conditionOp, custom } from "@sync-engine/internal/reads/where-ops";
+import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
+import { quietReacting } from "../../utils/reacting.ts";
+import type { Empty, StepNode } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, ListConcept, RecorderConcept, ThrowingConcept } from "./mocks.ts";
 
 class DecisionConcept {
@@ -37,9 +33,20 @@ class StepRecorder {
   }
 }
 
+const refs = vocabulary({
+  concepts: {
+    Button: ButtonConcept,
+    Completion: CompletionConcept,
+    Decision: DecisionConcept,
+    List: ListConcept,
+    Recorder: RecorderConcept,
+    StepRecorder,
+    Throwing: ThrowingConcept,
+  },
+}).concepts;
+
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Button: new ButtonConcept(),
     Completion: new CompletionConcept(),
@@ -54,12 +61,12 @@ function setup() {
 
 describe("pipeline then", () => {
   test("threads request output bindings through chained steps", async () => {
-    const { reacting, Button, Decision, Recorder } = setup();
+    const { reacting, Button, Recorder } = setup();
     reacting.register({
       Pipeline: reaction(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind })
-          .then(request(Decision.decide, { kind }, { route }))
-          .then(request(Recorder.record, { tag: route })),
+        when(refs.Button.clicked({ kind }).responds())
+          .then(refs.Decision.decide({ kind }).responds({ route }))
+          .then(refs.Recorder.record({ tag: route })),
       ),
     });
 
@@ -69,29 +76,34 @@ describe("pipeline then", () => {
 
   test("stops after an error outcome", async () => {
     const { reacting, Button, Recorder, Throwing } = setup();
+    let refusalTransformed = false;
     reacting.register({
-      // explode refuses (an error outcome), so the chain never reaches the
-      // "after" step — the ask's pipeline stops at the refusal.
-      Stop: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "stop" })
-          .then(request(Recorder.record, { tag: "before" }))
-          .then(request(Throwing.explode, {}))
-          .then(request(Recorder.record, { tag: "after" })),
-      ),
+      Stop: reaction((_vars: Vars) => {
+        const refusing = refs.Throwing.explode({}) as StepNode;
+        refusing.transform = (frames) => {
+          refusalTransformed = true;
+          return frames;
+        };
+        return when(refs.Button.clicked({ kind: "stop" }).responds())
+          .then(refs.Recorder.record({ tag: "before" }))
+          .then(refusing as never)
+          .then(refs.Recorder.record({ tag: "after" }));
+      }),
     });
 
     await Button.clicked({ kind: "stop" });
     expect(Throwing.hit).toBe(true);
+    expect(refusalTransformed).toBe(true);
     expect(Recorder.order).toEqual(["before"]);
   });
 
   test("drops a frame when a successful output pattern does not unify", async () => {
-    const { reacting, Button, Decision, Recorder } = setup();
+    const { reacting, Button, Recorder } = setup();
     reacting.register({
       Mismatch: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "mismatch" })
-          .then(request(Decision.decide, { kind: "approve" }, { route: "rejected" }))
-          .then(request(Recorder.record, { tag: "unreachable" })),
+        when(refs.Button.clicked({ kind: "mismatch" }).responds())
+          .then(refs.Decision.decide({ kind: "approve" }).responds({ route: "rejected" }))
+          .then(refs.Recorder.record({ tag: "unreachable" })),
       ),
     });
 
@@ -100,17 +112,17 @@ describe("pipeline then", () => {
   });
 
   test("allows only empty output mappings for completion", async () => {
-    const { reacting, Button, Completion, Recorder } = setup();
+    const { reacting, Button, Recorder } = setup();
     reacting.register({
       Complete: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "complete" })
-          .then(request(Completion.finish, {}, {}))
-          .then(request(Recorder.record, { tag: "ok" })),
+        when(refs.Button.clicked({ kind: "complete" }).responds())
+          .then(refs.Completion.finish({}).responds())
+          .then(refs.Recorder.record({ tag: "ok" })),
       ),
       CompleteMismatch: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "complete" })
-          .then(request(Completion.finish, {}, { absent: "value" }))
-          .then(request(Recorder.record, { tag: "bad" })),
+        when(refs.Button.clicked({ kind: "complete" }).responds())
+          .then(refs.Completion.finish({}).responds({ absent: "value" } as never))
+          .then(refs.Recorder.record({ tag: "bad" })),
       ),
     });
 
@@ -124,11 +136,13 @@ describe("matchers in when patterns", () => {
     const { reacting, Button, Recorder } = setup();
     reacting.register({
       Matcher: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: /^appro/ }).then(request(Recorder.record, { tag: "regex" })),
+        when(refs.Button.clicked({ kind: /^appro/ } as never).responds()).then(
+          refs.Recorder.record({ tag: "regex" }),
+        ),
       ),
       OneOf: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: oneOf("manual", "reject") }).then(
-          request(Recorder.record, { tag: "oneof" }),
+        when(refs.Button.clicked({ kind: oneOf("manual", "reject") } as never).responds()).then(
+          refs.Recorder.record({ tag: "oneof" }),
         ),
       ),
     });
@@ -140,23 +154,24 @@ describe("matchers in when patterns", () => {
   });
 });
 
-describe("step where fan-out", () => {
-  test("step where fan-out reaches following siblings", async () => {
-    const { reacting, Button, Completion, List, Recorder } = setup();
+describe("raw step transforms", () => {
+  test("a step transform fans out before following pipeline stages", async () => {
+    const { reacting, Button, List, Recorder } = setup();
     await List.add({ value: 1 });
     await List.add({ value: 2 });
     reacting.register({
-      Fanout: reaction(({ value, tag }: Vars) =>
-        when(Button.clicked, { kind: "fanout" })
-          .then(
-            request(Completion.finish, {}).where(
-              lineOf({ query: List._items }, {}).is({ value }),
-              custom((item) => `v:${String(item)}`, [value], [tag]),
-            ),
-          )
-          .then(request(Recorder.record, { tag }))
-          .then(request(Recorder.record, { tag })),
-      ),
+      Fanout: reaction(({ value, tag }: Vars) => {
+        const completion = refs.Completion.finish({}) as StepNode;
+        completion.transformOps = [
+          conditionOp(refs.List._items({}).is({ value }), "test step transform") as WhereOp,
+          custom((item) => `v:${String(item)}`, [value], [tag]),
+        ];
+        completion.transform = (frames) => applyWhereOps(frames, completion.transformOps ?? []);
+        return when(refs.Button.clicked({ kind: "fanout" }).responds())
+          .then(completion as never)
+          .then(refs.Recorder.record({ tag }))
+          .then(refs.Recorder.record({ tag }));
+      }),
     });
 
     await Button.clicked({ kind: "fanout" });
@@ -170,14 +185,14 @@ describe("sibling reactions on a shared trigger", () => {
     reacting.register({
       // step1's output binding threads into step2; order matters within the chain.
       ParallelPipeline: reaction(({ data }: Vars) =>
-        when(Button.clicked, { kind: "parallel" })
-          .then(request(SR.step1, {}, { data }))
-          .then(request(SR.step2, { data })),
+        when(refs.Button.clicked({ kind: "parallel" }).responds())
+          .then(refs.StepRecorder.step1({}).responds({ data }))
+          .then(refs.StepRecorder.step2({ data })),
       ),
       // A separate reaction on the same trigger — an independent sibling.
       Sibling: reaction((_vars: Vars) =>
-        when(Button.clicked, { kind: "parallel" }).then(
-          request(Recorder.record, { tag: "sibling" }),
+        when(refs.Button.clicked({ kind: "parallel" }).responds()).then(
+          refs.Recorder.record({ tag: "sibling" }),
         ),
       ),
     });
@@ -190,15 +205,17 @@ describe("sibling reactions on a shared trigger", () => {
 
 describe("construction guards", () => {
   test("rejects an empty pipeline", () => {
-    const { Button } = setup();
-    expect(() => when(Button.clicked, {}).then()).toThrow("at least one callable action line");
+    setup();
+    expect(() => (when(refs.Button.clicked({}).responds()).then as Function)()).toThrow(
+      "at least one callable action line",
+    );
   });
 
   test("when builders and action chains are not thenable", async () => {
-    const { Button, Completion } = setup();
+    setup();
     await expect(
-      Promise.resolve(when(Button.clicked, {}) as unknown as Promise<unknown>),
+      Promise.resolve(when(refs.Button.clicked({}).responds()) as unknown as Promise<unknown>),
     ).rejects.toThrow("not a promise");
-    expect((request(Completion.finish, {}) as any).then).toBeUndefined();
+    expect((refs.Completion.finish({}) as any).then).toBeUndefined();
   });
 });

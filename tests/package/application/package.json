@@ -5,13 +5,18 @@
   "scripts": {
     "generate": "sync-engine artifacts pin --config generated.config.ts",
     "typecheck": "tsc --noEmit",
-    "principle": "bun src/concepts/rooming/rooming.test.ts",
+    "principle": "bun src/concepts/rooming/rooming.test.ts && bun src/concepts/mitigating/mitigating.test.ts",
     "start": "bun src/scenario.ts"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-alpha.0"
+    "@mit-sdg/sync-engine": "1.0.0-beta.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.0"
-  }
+    "typescript": ">=6 <7"
+  },
+  "engines": {
+    "bun": ">=1.3.14 <1.4",
+    "node": ">=24 <25"
+  },
+  "packageManager": "bun@1.3.14"
 }

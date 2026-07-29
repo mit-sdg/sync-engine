@@ -6,12 +6,13 @@ runtime behavior is specified in [Execution semantics](semantics.md).
 
 ## Action
 
-A non-underscore method declared by a concept specification and implemented on
-the concept's prototype. An assembled action is instrumented: the engine records
-an ask before running the method and records a return, refusal, or fault
-afterward. TypeScript `private` and `protected` methods still exist on the
-runtime prototype; use ECMAScript `#private` methods for implementation helpers
-that registration must not treat as concept members.
+A non-underscore concept method. `registerConcept` requires each specified
+action to be a callable prototype method of the registered class or one of its
+base classes. An assembled action is instrumented: the engine records an ask
+before running the method and records a return, refusal, or fault afterward.
+TypeScript `private` and `protected` methods still exist on the runtime
+prototype; use ECMAScript `#private` methods for implementation helpers that
+registration must not treat as concept members.
 
 ## Ask
 
@@ -55,8 +56,10 @@ an admitted input, and may produce one boundary response.
 
 ## Fault
 
-An unexpected action throw or integrity failure. A fault is not a deliberate
-refusal. It leaves the action ask without a returned/refused outcome.
+An unexpected failure attached to an action ask, such as an action throw or a
+former-evaluation failure. A fault is not a deliberate refusal. The engine
+records a fault mark and leaves the action ask without a returned/refused
+outcome.
 
 ## Flow
 
@@ -73,11 +76,18 @@ evaluated when asked; the engine does not store its result.
 One successful reaction match after all trigger and `where` conditions. A
 firing records bindings, consumed triggers, and produced asks.
 
+## Integrity failure
+
+Evidence that accepted execution violated an engine-owned contract, such as an
+invalid successful endpoint output or an execution-budget breach discovered
+after work was accepted. An integrity failure is distinct from an action fault
+and need not leave the underlying action ask without a returned outcome.
+
 ## Occurrence
 
 A recorded action invocation, return, refusal, or fault. The occurrence log also
-contains firing and interpreter-failure evidence. Occurrences are execution
-evidence, not concept state.
+contains firing, reaction-failure, and integrity-failure evidence. Occurrences
+are execution evidence, not concept state.
 
 ## Principle
 
@@ -86,9 +96,10 @@ the concept class directly and verifies the story without an assembly.
 
 ## Query
 
-An underscore-prefixed concept method that reads current state. Queries are
-memoized between invalidation points and are not recorded as action
-occurrences.
+An underscore-prefixed concept method that, by contract, reads current state.
+`registerConcept` requires each specified query to be a callable prototype
+method of the registered class or one of its base classes. Queries are memoized
+between invalidation points and are not recorded as action occurrences.
 
 ## Reaction
 

@@ -1,7 +1,14 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { conceptFloor, conceptSet, PublicError, registerConcept } from "@sync-engine/assembly";
+import {
+  assemble as assembleApplication,
+  conceptFloor,
+  conceptSet,
+  PublicError,
+  registerConcept,
+} from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { assemble } from "@sync-engine/internal/boundary";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
+import { applicationManifest, renderApp } from "@sync-engine/tooling";
 
 class MissingItem extends Error {}
 
@@ -131,9 +138,99 @@ describe("external concept registration", () => {
       detail: "There is no such item.",
     });
   });
+
+  test("retains explicitly registered prototype-named public error codes as own keys", () => {
+    class ToStringRefusal extends Error {}
+    class ConstructorRefusal extends Error {}
+    class ProtoRefusal extends Error {}
+    class Refusing {
+      refuse(_: Record<string, never>) {
+        return {};
+      }
+    }
+    const specialSpec = specFor(`
+## Actions
+
+\`\`\`actions
+refuse () : return ()
+  then
+    refuse toString "A registered toString refusal."
+    refuse constructor "A registered constructor refusal."
+    refuse __proto__ "A registered proto refusal."
+\`\`\`
+`);
+    const refusals = Object.fromEntries([
+      ["toString", ToStringRefusal],
+      ["constructor", ConstructorRefusal],
+      ["__proto__", ProtoRefusal],
+    ]);
+    const publicErrors = Object.fromEntries([
+      ["toString", PublicError.NOT_FOUND],
+      ["constructor", PublicError.CONFLICT],
+      ["__proto__", PublicError.FORBIDDEN],
+    ]);
+    const set = conceptSet({
+      Refusing: registerConcept({
+        class: Refusing,
+        spec: specialSpec,
+        refusals,
+        publicErrors,
+      }),
+    });
+    const application = assemble({ vocabulary: set.vocabulary, composition: {} });
+
+    for (const categories of [set.publicErrors, application.publicErrors]) {
+      expect(Object.hasOwn(categories, "toString")).toBe(true);
+      expect(Object.hasOwn(categories, "constructor")).toBe(true);
+      expect(Object.hasOwn(categories, "__proto__")).toBe(true);
+      expect(categories.toString).toBe("NOT_FOUND");
+      expect(categories.constructor).toBe("CONFLICT");
+      expect(categories.__proto__).toBe("FORBIDDEN");
+      expect(Object.getPrototypeOf(categories)).toBe(Object.prototype);
+    }
+  });
 });
 
-describe("the specification and the class hold each other", () => {
+describe("parsed declarations and class methods", () => {
+  test("state notation is absent from registration and every generated design surface", () => {
+    const marker = "STATE_ONLY_SENTINEL";
+    const registration = registerConcept({
+      class: Cataloging,
+      spec: catalogingSpec.replace(
+        "## Actions",
+        `## State\n\n\`\`\`state\n${marker}\n` +
+          "there are no methods and the database has an incompatible field {]\n" +
+          "```\n\n## Actions",
+      ),
+      refusals: { ITEM_NOT_FOUND: MissingItem },
+    });
+
+    expect(registration.specification).toEqual(cataloging.specification);
+    expect(registration.specification).not.toHaveProperty("state");
+
+    const set = conceptSet({ Cataloging: registration });
+    const Find = endpoint("/find", () =>
+      receive({})
+        .then(set.concepts.Cataloging.find({}).responds())
+        .then(respond({ found: true })),
+    );
+    const application = assembleApplication({
+      vocabulary: set.vocabulary,
+      composition: { Find },
+      instances: set.implementations(),
+    });
+    const manifest = applicationManifest(application);
+    const readBack = renderApp({
+      title: "State boundary",
+      concepts: manifest.concepts,
+      app: manifest.application,
+    });
+
+    expect(JSON.stringify(manifest)).not.toContain(marker);
+    expect(readBack).not.toContain(marker);
+    expect(manifest.endpoints[0]?.validators).toEqual({ input: false, output: false });
+  });
+
   test("an action the class does not implement fails by name", () => {
     expect(() =>
       registerConcept({
@@ -267,6 +364,117 @@ describe("concept floors", () => {
     const mongo = set.implementations("mongo", { store: "primary" });
     expect(mongo.Remembering).toEqual(new Remembering("primary"));
     expect(mongo.Cataloging).toEqual(new PersistentCataloging("primary"));
+  });
+
+  test("requires a named floor for a concept with required constructor arguments", () => {
+    const set = conceptSet({
+      Cataloging: registerConcept({
+        class: PersistentCataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        floors: { persistent: () => new PersistentCataloging("primary") },
+      }),
+    });
+
+    expect(() => (set.implementations as () => unknown)()).toThrow(
+      'conceptSet: concept "Cataloging" requires constructor arguments; use a named floor.',
+    );
+    expect(set.implementations("persistent", undefined).Cataloging).toEqual(
+      new PersistentCataloging("primary"),
+    );
+  });
+
+  test("accepts an inherited subclass replacement and inventories its complete protocol", () => {
+    const set = conceptSet({
+      Cataloging: registerConcept({
+        class: Cataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        floors: { persistent: () => new PersistentCataloging("primary") },
+      }),
+    });
+    const application = assembleApplication({
+      vocabulary: set.vocabulary,
+      composition: {},
+      instances: set.implementations("persistent", undefined),
+    });
+
+    expect(applicationManifest(application).concepts).toContainEqual({
+      name: "Cataloging",
+      purpose: "Keep a catalog.",
+      principle: "A missing item is refused.",
+      actions: [
+        { name: "find", roles: [], refusals: ["ITEM_NOT_FOUND"] },
+        { name: "misplaced", roles: [] },
+      ],
+      queries: [{ name: "_find", roles: [], returns: "optional" }],
+    });
+  });
+
+  test("accepts own-method object replacements and inventories them deterministically", () => {
+    const set = conceptSet({
+      Cataloging: registerConcept({
+        class: Cataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        floors: {
+          structural: () => ({
+            freshID: () => "injected-helper",
+            misplaced(_: Record<string, never>) {
+              throw new MissingItem("same class, wrong action");
+            },
+            _find(_: Record<string, never>): { item: string }[] {
+              return [];
+            },
+            find(_: Record<string, never>) {
+              throw new MissingItem("missing");
+            },
+          }),
+        },
+      }),
+    });
+    const application = assembleApplication({
+      vocabulary: set.vocabulary,
+      composition: {},
+      instances: set.implementations("structural", undefined),
+    });
+
+    expect(applicationManifest(application).concepts).toContainEqual({
+      name: "Cataloging",
+      purpose: "Keep a catalog.",
+      principle: "A missing item is refused.",
+      actions: [
+        { name: "find", roles: [], refusals: ["ITEM_NOT_FOUND"] },
+        { name: "misplaced", roles: [] },
+      ],
+      queries: [{ name: "_find", roles: [], returns: "optional" }],
+    });
+    expect(JSON.stringify(applicationManifest(application).concepts)).not.toContain("freshID");
+  });
+
+  test("rejects a malformed floor implementation before it reaches assembly", () => {
+    const set = conceptSet({
+      Cataloging: registerConcept({
+        class: Cataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        floors: {
+          malformed: (() => ({
+            find: "not callable",
+            misplaced(_: Record<string, never>) {
+              return {};
+            },
+            _find(_: Record<string, never>) {
+              return [];
+            },
+          })) as never,
+        },
+      }),
+    });
+
+    expect(() => set.implementations("malformed", undefined)).toThrow(
+      'floor "malformed": implementation for "Cataloging" does not implement `find`',
+    );
   });
 
   test("a floor factory receives the name the concept is registered under", () => {

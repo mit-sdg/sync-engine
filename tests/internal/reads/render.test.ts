@@ -5,21 +5,16 @@
  * The full-app rendering is pinned by a golden file (the stitch spec).
  */
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  type Frames,
-  inventoryOf,
-  renderReaction,
-  renderWhereOp,
-  rolesOf,
-  Logging,
-  Reacting,
-  when,
-  type ReactionIR,
-  type Vars,
-  type WhereOpIR,
-} from "@sync-engine/internal/reactions";
-import { ButtonConcept, CounterConcept } from "../reactions/mocks.ts";
+import { Logging } from "@sync-engine/assembly";
+import { when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import type { Frames } from "@sync-engine/internal/reads/frames";
+import type { ReactionIR, WhereOpIR } from "@sync-engine/internal/reads/ir";
+import { renderReaction, renderWhereOp } from "@sync-engine/internal/reads/render";
+import { inventoryOf, rolesOf } from "@sync-engine/internal/reactions/concepts/introspect";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import type { StepNode } from "@sync-engine/internal/reactions/types";
+import { ButtonConcept, CounterConcept, mockRefs } from "../reactions/mocks.ts";
 
 // ── renderReaction ─────────────────────────────────────────────────────────────
 
@@ -328,6 +323,41 @@ describe("inventoryOf", () => {
     expect(inventory.principle).toBe("Ada greets Sam, and the application records the greeting.");
   });
 
+  test("inventories inherited protocol methods without publishing injected callbacks", () => {
+    class BaseConcept {
+      zeta(_: Record<string, never>) {
+        return {};
+      }
+      _zeta(_: Record<string, never>) {
+        return [];
+      }
+    }
+    class CompleteConcept extends BaseConcept {
+      constructor(readonly freshID = () => "generated") {
+        super();
+      }
+      alpha(_: Record<string, never>) {
+        return {};
+      }
+      _alpha(_: Record<string, never>) {
+        return [];
+      }
+    }
+
+    const inventory = inventoryOf(new CompleteConcept());
+    expect(inventory).toMatchObject({
+      actions: [
+        { name: "alpha", roles: [] },
+        { name: "zeta", roles: [] },
+      ],
+      queries: [
+        { name: "_alpha", roles: [] },
+        { name: "_zeta", roles: [] },
+      ],
+    });
+    expect(inventory.actions.map(({ name }) => name)).not.toContain("freshID");
+  });
+
   test("rolesOf declines to guess", () => {
     expect(rolesOf(({ a, b }: { a: string; b: string }) => [a, b])).toEqual(["a", "b"]);
     expect(rolesOf((_: object) => 0)).toEqual([]);
@@ -342,15 +372,18 @@ describe("renderApp", () => {
   function mockEngine(): Reacting {
     const engine = new Reacting();
     engine.logging = Logging.OFF;
-    const { Counter, Button } = engine.instrument({
+    engine.instrument({
       Counter: new CounterConcept(),
       Button: new ButtonConcept(),
     });
     engine.register({
       CounterClicked: ({ kind }: Vars) =>
-        when(Button.clicked, { kind }).then(request(Counter.increment, {})),
-      ClickAndNotify: ({ kind }: Vars) =>
-        when(Button.clicked, { kind }).then(request(Counter.increment, {}).named("Inc")),
+        when(mockRefs.Button.clicked({ kind }).responds()).then(mockRefs.Counter.increment({})),
+      ClickAndNotify: ({ kind }: Vars) => {
+        const increment = mockRefs.Counter.increment({}) as StepNode;
+        increment.stepName = "Inc";
+        return when(mockRefs.Button.clicked({ kind }).responds()).then(increment as never);
+      },
     });
     return engine;
   }
@@ -364,20 +397,20 @@ describe("renderApp", () => {
   test("a reaction that stayed a pipeline is listed with its reason, never dropped", () => {
     const engine = new Reacting();
     engine.logging = Logging.OFF;
-    const { Counter } = engine.instrument({
+    engine.instrument({
       Counter: new CounterConcept(),
     });
     engine.register({
-      JustCount: (_: Vars) => when(Counter.increment, {}).then(request(Counter.decrement, {})),
+      JustCount: (_: Vars) =>
+        when(mockRefs.Counter.increment({}).responds()).then(mockRefs.Counter.decrement({})),
     });
     expect(engine.renderApp("Test")).not.toContain("Reactions represented only by executable code");
 
-    const WithTransform = (_: Vars) =>
-      when(Counter.increment, {}).then(
-        request(Counter.decrement, {}).where((frames: Frames) =>
-          frames.map((frame) => ({ ...frame })),
-        ),
-      );
+    const WithTransform = (_: Vars) => {
+      const transformed = mockRefs.Counter.decrement({}) as StepNode;
+      transformed.transform = (frames: Frames) => frames.map((frame) => ({ ...frame }));
+      return when(mockRefs.Counter.increment({}).responds()).then(transformed as never);
+    };
     engine.register({ WithTransform });
 
     const spec = engine.renderApp("Test");

@@ -10,8 +10,8 @@
  *    pre-firing failures consume nothing, while consequence-stage failures may
  *    accompany a firing that already retained its consumption and effects.
  *
- * A store folds these entries into indexes by id, flow, and reaction. Matching
- * reads those indexes. Each store defines what `prune()` removes.
+ * The runtime folds these entries into an occurrence index by id, flow, and
+ * reaction. Matching reads that index.
  */
 
 import type { ActionOutcome, InstrumentedAction } from "../types.ts";
@@ -88,6 +88,23 @@ export interface ReactionFailureRecord {
   at: number;
 }
 
+/** Opaque evidence that a successful endpoint value violated its reviewed runtime contract. */
+export type IntegrityFailureRecord = {
+  flow: string;
+  at: number;
+} & (
+  | {
+      kind: "invalid-output";
+      route: string;
+      errorClass: "ValidationFailure" | "ValidatorFault";
+    }
+  | {
+      kind: "execution-limit";
+      limit: "actions" | "firings" | "rows";
+      errorClass: "ExecutionLimitExceeded";
+    }
+);
+
 /** An entry appended to the log. Engine-created mappings are field-name redacted. */
 export type LogEntry =
   | { kind: "invocation"; at: number; record: ActionRecord }
@@ -100,18 +117,16 @@ export type LogEntry =
     }
   | { kind: "firing"; at: number; firing: FiringRecord }
   | { kind: "reaction-failure"; at: number; failure: ReactionFailureRecord }
+  | { kind: "integrity-failure"; at: number; failure: IntegrityFailureRecord }
   /**
    * A fault entry names the interrupted ask and records its validated
    * framework classification. The ask remains without an outcome.
    */
   | { kind: "fault"; at: number; id: string; fault: Record<string, unknown> };
 
-/**
- * Storage interface for appended entries, retained action indexes, firing
- * indexes, consumption queries, and pruning.
- */
+/** The runtime occurrence index used for matching, consumption, and retention. */
 export interface LogStore {
-  /** Append one immutable entry, folding it into the indexed views. */
+  /** Fold one immutable occurrence entry into the indexed views. */
   append(entry: LogEntry): void;
   /** Look up a single action record by id. */
   byId(id: string): ActionRecord | undefined;
@@ -135,9 +150,7 @@ export interface LogStore {
   readonly flowIndex: Map<string, ActionRecord[]>;
 }
 
-/**
- * Fold entries into memory and retain them according to the configured policy.
- */
+/** The core in-memory occurrence index. */
 export class MemoryStore implements LogStore {
   readonly actions: Map<string, ActionRecord> = new Map();
   readonly flowIndex: Map<string, ActionRecord[]> = new Map();
@@ -145,6 +158,8 @@ export class MemoryStore implements LogStore {
   readonly firings: Map<string, FiringRecord[]> = new Map();
   /** Non-consuming evaluation failures, in occurrence order. */
   readonly reactionFailures: ReactionFailureRecord[] = [];
+  /** Boundary integrity failures, in occurrence order. */
+  readonly integrityFailures: IntegrityFailureRecord[] = [];
   /** Derived index folded from firing entries: record id → reactions that consumed it. */
   private consumedIndex: Map<string, Set<string>> = new Map();
   private settledFlowOrder: string[] = [];
@@ -195,6 +210,9 @@ export class MemoryStore implements LogStore {
       case "reaction-failure":
         this.reactionFailures.push(entry.failure);
         return;
+      case "integrity-failure":
+        this.integrityFailures.push(entry.failure);
+        return;
     }
   }
 
@@ -225,7 +243,8 @@ export class MemoryStore implements LogStore {
       this.dropRecords(records);
       this.flowIndex.delete(flow);
     }
-    this.dropReactionFailures(flow);
+    this.dropFlowEntries(this.reactionFailures, flow);
+    this.dropFlowEntries(this.integrityFailures, flow);
     this.activeFlows.delete(flow);
     const position = this.settledFlowOrder.indexOf(flow);
     if (position >= 0) this.settledFlowOrder.splice(position, 1);
@@ -258,7 +277,7 @@ export class MemoryStore implements LogStore {
         evicted += toRemove.length;
         if (keepFrom === 0) {
           this.flowIndex.delete(flow);
-          this.dropReactionFailures(flow);
+          this.dropFlowEntries(this.reactionFailures, flow);
         }
       }
     }
@@ -285,9 +304,9 @@ export class MemoryStore implements LogStore {
     return id !== undefined && (this.consumedIndex.get(id)?.size ?? 0) > 0;
   }
 
-  private dropReactionFailures(flow: string): void {
-    for (let index = this.reactionFailures.length - 1; index >= 0; index--) {
-      if (this.reactionFailures[index]?.flow === flow) this.reactionFailures.splice(index, 1);
+  private dropFlowEntries(list: Array<{ flow: string }>, flow: string): void {
+    for (let index = list.length - 1; index >= 0; index--) {
+      if (list[index]?.flow === flow) list.splice(index, 1);
     }
   }
 

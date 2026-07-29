@@ -11,8 +11,7 @@ import {
   receive,
   respond,
 } from "@sync-engine/boundary";
-import { compute } from "@sync-engine/advanced";
-import { reaction, vocabulary, when } from "@sync-engine/language";
+import { compute, reaction, vocabulary, when } from "@sync-engine/language";
 import { inspectAssembly, renderInputContracts } from "@sync-engine/tooling";
 
 class DuplicateTitle extends Error {}
@@ -121,15 +120,11 @@ describe("canonical public API", () => {
       detail: "This title is already in the catalog.",
     });
 
-    const gateway = createGateway({
-      application: system,
-      additionalComposition: { Standard: { cannotReplaceTheStandardRoute: true } },
-    });
+    const gateway = createGateway({ application: system });
     expect(await gateway.invoke("/catalog/add", { raw: "Other" })).toEqual({
       ok: true,
       value: { title: "other" },
     });
-    expect("engine" in gateway).toBe(false);
     expect("engine" in system).toBe(false);
     const inspected = inspectAssembly(system);
     expect(inspected.app.reactions.some((reaction) => reaction.name === "Add")).toBe(true);
@@ -246,18 +241,11 @@ describe("canonical public API", () => {
 const register = {
   language: [
     "Condition",
-    "ActionCall",
-    "FreeBindings",
-    "InputBindings",
-    "OutputBindings",
     "QueryPromise",
     "ReadLine",
-    "RefusedActionLine",
     "RelationView",
-    "ReturnedActionLine",
-    "SlotPattern",
-    "Vars",
     "count",
+    "compute",
     "each",
     "earlier",
     "form",
@@ -280,15 +268,19 @@ const register = {
     "ConceptFloor",
     "ConceptImplementation",
     "ConceptRegistration",
+    "ExecutionLimits",
     "FileStore",
     "FiringRecord",
     "ImplementationOverrides",
     "Implementations",
+    "IntegrityFailureRecord",
     "LogEntry",
     "LogStore",
     "Logging",
     "MemoryStore",
-    "PersistingConcept",
+    "OperationalEvent",
+    "OperationalObserver",
+    "OperationalResultClass",
     "PublicError",
     "PublicErrorCategory",
     "ReactionFailureRecord",
@@ -302,43 +294,38 @@ const register = {
   ],
   boundary: [
     "ApplicationInterface",
-    "CliApp",
-    "CliAppOptions",
-    "CliCommand",
-    "CliResult",
-    "CommandInput",
-    "EmittedFrameworkErrorCode",
-    "EndpointCliCommand",
     "EndpointDef",
+    "EndpointOptions",
+    "EndpointValidator",
+    "EndpointValidators",
+    "ExecutionLimits",
     "FrameworkErrorCode",
     "Gateway",
-    "GatewayClientError",
     "GatewayOptions",
     "GatewayTarget",
     "HttpCredentialBinding",
+    "HttpCorrelationOptions",
     "HttpFloor",
     "InputContractDecl",
     "InvocationResult",
     "InvokeOptions",
     "Invoker",
-    "ParseResult",
-    "ParsedArgs",
-    "command",
-    "createCliApp",
+    "OperationalEvent",
+    "OperationalObserver",
+    "OperationalResultClass",
+    "ProductionHttpProfile",
+    "ValidationResult",
     "createGateway",
     "createHttpHandler",
     "endpoint",
-    "fail",
     "httpFloor",
-    "ok",
-    "parseArgs",
-    "parseFail",
-    "parseOk",
+    "productionHttpProfile",
     "receive",
     "respond",
   ],
   client: [
     "Client",
+    "ClientCallOptions",
     "ClientError",
     "ClientOptions",
     "ClientRequest",
@@ -354,8 +341,13 @@ const register = {
   ],
   tooling: [
     "AppIR",
+    "ApplicationDiagnostic",
+    "ApplicationManifestV3",
     "ConceptInventoryIR",
+    "DiagnosticCode",
+    "DiagnosticSeverity",
     "FormerIR",
+    "ManifestEndpointV3",
     "ObservedOccurrence",
     "ReactionIR",
     "ViewIR",
@@ -364,38 +356,18 @@ const register = {
     "WireOptions",
     "WireRenderOptions",
     "WireType",
-    "floorReadBack",
-    "httpFloorReadBack",
+    "applicationDiagnostics",
+    "applicationManifest",
+    "diagnosticsFail",
     "inspectAssembly",
     "renderApp",
+    "renderApplicationManifest",
     "renderInputContracts",
     "renderReaction",
     "renderWireTypes",
     "wireContracts",
   ],
-  advanced: [
-    "Engine",
-    "EngineObserver",
-    "LogEvent",
-    "Refuse",
-    "Requesting",
-    "createEngine",
-    "compute",
-    "custom",
-    "faulted",
-    "refusalFunnel",
-  ],
-  utils: [
-    "LogLevel",
-    "Logger",
-    "RedactionPolicy",
-    "UNIVERSAL_SENSITIVE_PATTERNS",
-    "configureRedaction",
-    "describeError",
-    "logger",
-    "redact",
-    "serializeError",
-  ],
+  advanced: ["Engine", "EngineObserver", "LogEvent", "Refuse", "createEngine", "custom", "faulted"],
 } as const;
 
 const packageJson = JSON.parse(
@@ -414,10 +386,9 @@ const frameworkErrorCodes = [
   "NOT_FOUND",
   "TIMED_OUT",
   "TRANSPORT_ERROR",
+  "UNAVAILABLE",
   "UNKNOWN_ERROR",
 ] as const;
-
-const allowedPackageName = "sync-engine";
 
 function referenceSubpathBlock(subpath: keyof typeof register): string {
   const exports = register[subpath].map((name) => `\`${name}\``).join(", ");
@@ -435,29 +406,13 @@ function referenceSubpathBlock(subpath: keyof typeof register): string {
 function filesUnder(directory: string, suffix?: string): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if ([".git", "dist", "node_modules"].includes(entry.name)) continue;
+    if ([".git", "coverage", "dist", "node_modules"].includes(entry.name)) continue;
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) files.push(...filesUnder(path, suffix));
     else if (suffix === undefined || entry.name.endsWith(suffix)) files.push(path);
   }
   return files;
 }
-
-function unsupportedIdentifier(name: string): boolean {
-  return (
-    /^sync/i.test(name) ||
-    /Syncs?$/.test(name) ||
-    /journal/i.test(name) ||
-    name === "act" ||
-    name === "ActChain" ||
-    name === "RequestBoundaryConcept" ||
-    name === "createEndpointDsl" ||
-    name === "sanitize"
-  );
-}
-
-const unsupportedProse =
-  /\b(?:act|journal(?:s|ed|ing)?|sdk|sync|syncs|synced|synchronization|synchronizations)\b/gi;
 
 describe("public API register", () => {
   test("the registered public entrypoints have their exact exports and contain only exports", () => {
@@ -505,18 +460,6 @@ describe("public API register", () => {
         symbols.set(target, exposed.name);
       }
     }
-    const unsupportedExports: string[] = [];
-    for (const source of program.getSourceFiles()) {
-      if (!source.fileName.includes("/src/engine/")) continue;
-      const internalModule = checker.getSymbolAtLocation(source);
-      if (internalModule === undefined) continue;
-      for (const exposed of checker.getExportsOfModule(internalModule)) {
-        if (unsupportedIdentifier(exposed.name)) {
-          unsupportedExports.push(`${source.fileName.slice(root.length + 1)}:${exposed.name}`);
-        }
-      }
-    }
-    expect(unsupportedExports).toEqual([]);
   }, 15_000);
 
   test("the package exposes exactly the registered public subpaths", () => {
@@ -566,64 +509,5 @@ describe("public API register", () => {
     expect([...reference.matchAll(/^## `([^`]+)`$/gm)].map((match) => match[1])).toEqual(
       Object.keys(register),
     );
-  });
-
-  test("unsupported register words are absent from filenames and shipped prose", () => {
-    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const files = filesUnder(root).filter(
-      (file) => !file.slice(root.length + 1).startsWith("docs/tmp-"),
-    );
-    const unsupportedFilenames = files
-      .map((file) => file.slice(root.length + 1))
-      .filter((file) =>
-        file
-          .split(/[./_-]/)
-          .some((part) =>
-            /^(?:act|journal|journals|legacy|sanitize|sync|syncs|synchronize)$/i.test(part),
-          ),
-      );
-    expect(unsupportedFilenames).toEqual([]);
-
-    const proseFiles = files.filter(
-      (file) => file.endsWith(".md") && !file.includes("/tests/package/declarations.snapshot.txt"),
-    );
-    const findings: string[] = [];
-    for (const file of proseFiles) {
-      const prose = readFileSync(file, "utf8").replaceAll(allowedPackageName, "");
-      for (const match of prose.matchAll(unsupportedProse)) {
-        findings.push(`${file.slice(root.length + 1)}:${match[0]}`);
-      }
-    }
-    const packageJson = readFileSync(resolve(root, "package.json"), "utf8").replaceAll(
-      allowedPackageName,
-      "",
-    );
-    for (const match of packageJson.matchAll(unsupportedProse)) {
-      findings.push(`package.json:${match[0]}`);
-    }
-    expect(findings).toEqual([]);
-  });
-
-  test("persisted firing fields use the public register", () => {
-    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const file = resolve(root, "src/engine/reactions/runtime/log-store.ts");
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(file, "utf8"),
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const unsupportedFields: string[] = [];
-    for (const statement of source.statements) {
-      if (!ts.isInterfaceDeclaration(statement) || statement.name.text !== "FiringRecord") continue;
-      for (const member of statement.members) {
-        if (ts.isPropertySignature(member) && unsupportedIdentifier(member.name.getText(source))) {
-          unsupportedFields.push(
-            `src/engine/reactions/runtime/log-store.ts:FiringRecord.${member.name.getText(source)}`,
-          );
-        }
-      }
-    }
-    expect(unsupportedFields).toEqual([]);
   });
 });

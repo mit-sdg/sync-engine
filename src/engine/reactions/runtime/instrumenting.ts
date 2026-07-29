@@ -2,7 +2,7 @@ import { FrameworkErrorCode } from "@engine/utils/framework-error-codes";
 import { inspect, inspectCustom, uuid } from "@engine/utils/runtime";
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
-import { ActionConcept } from "./actions.ts";
+import { ActionConcept, breachLimit } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
 import { refusalFor } from "../concepts/concept-metadata.ts";
 import { CONCEPT_NAME, conceptNameOf } from "../concepts/introspect.ts";
@@ -13,14 +13,12 @@ import { actionId, actionSettlement, byReaction, flow } from "../context.ts";
 import type { ActionSettlement } from "../context.ts";
 import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
 import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
-import { memoizeQuery } from "./query-cache.ts";
+import { registerEvaluationQuery } from "@engine/reads/queries";
+import type { ActionScheduling } from "./action-scheduler.ts";
+import type { ExecutionControl } from "./operational.ts";
+import { memoizeQuery } from "@engine/utils/memoize";
 
 type ActionArguments = Record<string | symbol, unknown>;
-
-export interface ActionLine {
-  done: boolean;
-  settled: Promise<void>;
-}
 
 /** A deliberate refusal returned to the direct caller of an instrumented action. */
 export type ActionRefusal = Readonly<Record<string, unknown>> & {
@@ -34,12 +32,13 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
  * throw its declared refusal. Once instrumented, every action is asynchronous
  * because the engine records and reacts to its occurrence before settling the
  * caller. A deliberate refusal resolves to its refusal mapping; ordinary
- * faults reject. Queries retain their declared return shape.
+ * faults reject. Queries are asynchronous roots so admission, limits, drain,
+ * and idle observation include their complete evaluation.
  */
 export type InstrumentedConcept<T extends object> = {
   [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result
     ? Key extends `_${string}`
-      ? T[Key]
+      ? (...args: Args) => Promise<Awaited<Result>>
       : (...args: Args) => Promise<Awaited<Result> | ActionRefusal>
     : T[Key];
 };
@@ -48,13 +47,37 @@ export interface InstrumentationState {
   actions: ActionConcept;
   boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
   queryCaches: WeakMap<object, Array<{ invalidate: () => void }>>;
-  actionLines: WeakMap<object, ActionLine>;
-  waitingActionBodies: WeakMap<object, Set<{ flow: string; release: () => void }>>;
+  scheduler: ActionScheduling;
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
-  conceptsByName: Map<string, object>;
+  registerConcept(name: string, instrumented: object): void;
+  execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
   react(record: ActionRecord, durationMs?: number): Promise<void>;
   emit(record: ActionRecord, durationMs?: number): void;
+}
+
+/**
+ * Run the reaction round that follows a durable landing. A failure there is
+ * logged and observed but can never take ownership of the caller's settled
+ * outcome, so it is swallowed after the evidence exists.
+ */
+export async function reactQuietly(
+  state: Pick<InstrumentationState, "react" | "emit">,
+  record: ActionRecord,
+  durationMs: number | undefined,
+  landing: string,
+  context: Record<string, unknown> = {},
+  emitOnFailure = false,
+): Promise<void> {
+  try {
+    await state.react(record, durationMs);
+  } catch (error) {
+    logger.error(`Reaction body failed after the ${landing} was recorded`, {
+      ...context,
+      error: serializeError(error),
+    });
+    if (emitOnFailure) state.emit(record, durationMs);
+  }
 }
 
 const frameworkErrorCodes = new Set<string>(Object.values(FrameworkErrorCode));
@@ -128,21 +151,46 @@ export function instrumentConcept<T extends object>(
         const memoized = boundActions.get(actionKey);
         if (memoized !== undefined) return memoized;
         const withCache = memoizeQuery(value.bind(concept));
-        const query = withCache as typeof withCache & {
+        const displayName = `${conceptNameOf(concept)}.${String(property)}`;
+        const directQuery =
+          state.execution?.admitFlow === undefined
+            ? withCache
+            : async (...args: Parameters<typeof withCache>) => {
+                const flowToken = uuid();
+                if (state.execution?.admitFlow?.(flowToken, displayName, flowToken) !== undefined) {
+                  throw new Error(`Read "${displayName}" is unavailable.`);
+                }
+                withCache.invalidate();
+                try {
+                  const result = await withCache(...args);
+                  const count = Array.isArray(result) ? result.length : 1;
+                  if (state.execution?.rows(count) === false) {
+                    throw breachLimit(state.actions, flowToken, "rows");
+                  }
+                  return result;
+                } finally {
+                  state.execution?.flowSettled?.(flowToken);
+                }
+              };
+        const instrumentedQuery = directQuery as typeof directQuery & {
           concept?: object;
           queryName?: string;
           queryLabel?: string;
           queryPromise?: import("@engine/reads/query-contracts").QueryPromise;
         };
-        query.concept = concept;
-        query.queryName = String(property);
-        query.queryLabel = `${conceptNameOf(concept)}.${String(property)}`;
-        query.queryPromise = queryPromiseOf(concept, String(property));
-        boundActions.set(actionKey, withCache as unknown as InstrumentedAction);
+        instrumentedQuery.concept = concept;
+        instrumentedQuery.queryName = String(property);
+        instrumentedQuery.queryLabel = displayName;
+        instrumentedQuery.queryPromise = queryPromiseOf(concept, String(property));
+        registerEvaluationQuery(
+          instrumentedQuery as import("../types.ts").InstrumentedQuery,
+          withCache as import("../types.ts").InstrumentedQuery,
+        );
+        boundActions.set(actionKey, instrumentedQuery as unknown as InstrumentedAction);
         const caches = state.queryCaches.get(concept) ?? [];
         if (!state.queryCaches.has(concept)) state.queryCaches.set(concept, caches);
         caches.push(withCache);
-        return withCache;
+        return instrumentedQuery;
       }
 
       let instrumented = boundActions.get(actionKey);
@@ -156,7 +204,6 @@ export function instrumentConcept<T extends object>(
         const invalidate = () => {
           state.queryCaches.get(concept)?.forEach((cache) => cache.invalidate());
         };
-        invalidate();
         let {
           [flow]: flowToken,
           [actionId]: id,
@@ -168,6 +215,7 @@ export function instrumentConcept<T extends object>(
           typeof reportSettlement === "function"
             ? (reportSettlement as (settlement: ActionSettlement) => void)
             : undefined;
+        const directRoot = flowToken === undefined;
         if (flowToken === undefined) flowToken = uuid();
         if (typeof flowToken !== "string") {
           throw new Error(
@@ -180,123 +228,55 @@ export function instrumentConcept<T extends object>(
             `Action "${displayName}": expected actionId to be a string; received ${receivedKind(id)}.`,
           );
         }
+        if (
+          directRoot &&
+          state.execution?.admitFlow?.(flowToken, displayName, flowToken) !== undefined
+        ) {
+          return { error: FrameworkErrorCode.UNAVAILABLE };
+        }
+        if (state.execution?.action(flowToken) === false) {
+          let breach: Error;
+          try {
+            breach = breachLimit(state.actions, flowToken, "actions");
+          } finally {
+            if (directRoot) state.execution?.abandon?.(flowToken);
+          }
+          throw breach;
+        }
+        invalidate();
 
+        const matchingInput = state.actions._beginMatchingInput({ id, flow: flowToken, input });
         const record: ActionRecord = {
           id,
           action: instrumented as InstrumentedAction,
           concept,
-          input,
+          input: matchingInput,
           flow: flowToken,
           ...(typeof askedBy === "string" ? { by: askedBy } : {}),
         };
-        state.actions._beginMatchingInput({ id, flow: flowToken, input });
         try {
           state.actions.invoke(record);
           report?.("ask-recorded");
 
-          let waiting = state.waitingActionBodies.get(concept);
-          if (waiting === undefined) {
-            waiting = new Set();
-            state.waitingActionBodies.set(concept, waiting);
-          }
-          // A requested consequence on this concept cannot wait behind the
-          // body whose requested reaction is awaiting that consequence. Make
-          // every earlier slot runnable; the serial line still preserves their
-          // invocation order.
-          const earlierReservations = [...waiting];
-          if (earlierReservations.some((entry) => entry.flow === flowToken)) {
-            for (const entry of earlierReservations) entry.release();
-          }
-
-          let resolveRun = (_value: unknown): void => {};
-          let rejectRun = (_error: unknown): void => {};
-          const run = new Promise<unknown>((resolve, reject) => {
-            resolveRun = resolve;
-            rejectRun = reject;
-          });
-          let started: number | undefined;
-          const prior = state.actionLines.get(concept);
-          let predecessorDone = prior?.done ?? true;
-          let released = false;
-          let bodyStarted = false;
-          let line: ActionLine;
-          const startBody = () => {
-            if (!released || !predecessorDone || bodyStarted) return;
-            bodyStarted = true;
-            started ??= performance.now();
-            try {
-              const result = action(input);
-              if (result instanceof Promise) {
-                void result.then(
-                  (output) => {
-                    invalidate();
-                    line.done = true;
-                    resolveRun(output);
-                  },
-                  (error) => {
-                    invalidate();
-                    line.done = true;
-                    rejectRun(error);
-                  },
-                );
-              } else {
-                invalidate();
-                line.done = true;
-                resolveRun(result);
-              }
-            } catch (error) {
-              invalidate();
-              line.done = true;
-              rejectRun(error);
-            }
-          };
-          const reservation = {
+          const reservation = state.scheduler.reserve({
+            concept,
             flow: flowToken,
-            release: () => {
-              if (released) return;
-              released = true;
-              waiting.delete(reservation);
-              if (waiting.size === 0) state.waitingActionBodies.delete(concept);
-              if (prior?.done === true) predecessorDone = true;
-              startBody();
-            },
-          };
-          waiting.add(reservation);
-          state.waitingActionBodies.set(concept, waiting);
-
-          if (prior !== undefined && !prior.done) {
-            void prior.settled.then(() => {
-              predecessorDone = true;
-              startBody();
-            });
-          }
-          const tail = run.then(
-            () => undefined,
-            () => undefined,
-          );
-          line = { done: false, settled: tail };
-          state.actionLines.set(concept, line);
-          void tail.then(() => {
-            if (state.actionLines.get(concept) === line) state.actionLines.delete(concept);
+            body: action,
+            input,
+            onBodySettled: invalidate,
           });
 
-          try {
-            await state.react({ ...record });
-          } catch (error) {
-            logger.error("Reaction body failed after the action ask was recorded", {
-              actionId: id,
-              concept: concept.constructor.name,
-              action: action.name,
-              error: serializeError(error),
-            });
-          }
-          started ??= performance.now();
+          await reactQuietly(state, { ...record }, undefined, "action ask", {
+            actionId: id,
+            concept: concept.constructor.name,
+            action: action.name,
+          });
           reservation.release();
 
           let output: Record<string, unknown>;
           let outcome: ActionOutcome | undefined;
           try {
-            output = (await run) as Record<string, unknown>;
+            output = (await reservation.result) as Record<string, unknown>;
             if (contract !== undefined) {
               outcome = {
                 kind: "result",
@@ -324,37 +304,39 @@ export function instrumentConcept<T extends object>(
                 outcome = { kind: "error", error: output };
                 warnUndeclaredRefusal(displayName, contract, refusal.code);
               } else {
-                const durationMs = performance.now() - started;
+                const durationMs = reservation.durationMs();
                 state.actions.faulted({ id, fault: errorOutputFromThrown(error) });
                 report?.("fault-recorded");
-                try {
-                  await state.react({ ...record }, durationMs);
-                } catch (immediateError) {
-                  logger.error("Reaction body failed after the action fault was recorded", {
+                await reactQuietly(
+                  state,
+                  { ...record },
+                  durationMs,
+                  "action fault",
+                  {
                     actionId: id,
                     concept: concept.constructor.name,
                     action: action.name,
-                    error: serializeError(immediateError),
-                  });
-                  state.emit({ ...record }, durationMs);
-                }
+                  },
+                  true,
+                );
                 throw error;
               }
             }
           }
-          const durationMs = performance.now() - started;
+          const durationMs = reservation.durationMs();
           state.actions.invoked({ id, output, outcome });
-          try {
-            await state.react({ ...record, output }, durationMs);
-          } catch (error) {
-            logger.error("Reaction body failed after the action outcome was recorded", {
+          await reactQuietly(
+            state,
+            { ...record, output },
+            durationMs,
+            "action outcome",
+            {
               actionId: id,
               concept: concept.constructor.name,
               action: action.name,
-              error: serializeError(error),
-            });
-            state.emit({ ...record, output }, durationMs);
-          }
+            },
+            true,
+          );
           return output;
         } finally {
           state.actions._endMatchingInput(flowToken);
@@ -376,16 +358,7 @@ export function instrumentConcept<T extends object>(
   });
 
   state.rawConceptsByInstrumented.set(instrumentedConcept, concept);
-  const conceptName = conceptNameOf(concept);
-  if (
-    state.conceptsByName.has(conceptName) &&
-    state.conceptsByName.get(conceptName) !== instrumentedConcept
-  ) {
-    logger.warn(
-      `Two concepts share the name "${conceptName}" — exported reactions naming it will resolve to the most recently instrumented one.`,
-    );
-  }
-  state.conceptsByName.set(conceptName, instrumentedConcept);
+  state.registerConcept(conceptNameOf(concept), instrumentedConcept);
   return instrumentedConcept;
 }
 
@@ -410,4 +383,51 @@ export function instrument(
     }
   }
   return instrumentConcept(state, concepts);
+}
+
+/** Owns the mutable proxy identities and query caches for one engine. */
+export class ConceptInstrumentation {
+  private readonly state: InstrumentationState;
+
+  constructor(
+    dependencies: Omit<
+      InstrumentationState,
+      "boundActionsByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts"
+    >,
+  ) {
+    this.state = {
+      ...dependencies,
+      boundActionsByConcept: new WeakMap(),
+      queryCaches: new WeakMap(),
+      rawConceptsByInstrumented: new WeakMap(),
+      concepts: new Set(),
+    };
+  }
+
+  instrumentConcept<T extends object>(concept: T, name?: string): T {
+    return instrumentConcept(this.state, concept, name);
+  }
+
+  instrument<T extends Record<string, object>>(concepts: T): T;
+  instrument<T extends object>(concept: T): T;
+  instrument(concepts: Record<string, object> | object): Record<string, object> | object {
+    return instrument(this.state, concepts);
+  }
+
+  invalidate(concept: object): void {
+    const raw = this.rawConceptOf(concept);
+    this.state.queryCaches.get(raw)?.forEach((cache) => cache.invalidate());
+  }
+
+  invalidateAll(): void {
+    for (const ref of this.state.concepts) {
+      const concept = ref.deref();
+      if (concept !== undefined) this.invalidate(concept);
+      else this.state.concepts.delete(ref);
+    }
+  }
+
+  rawConceptOf(instrumented: object): object {
+    return this.state.rawConceptsByInstrumented.get(instrumented) ?? instrumented;
+  }
 }

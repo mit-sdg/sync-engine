@@ -38,6 +38,15 @@ former-root errors fail when the former is installed for evaluation.
 | Author sibling endpoint paths            | [Endpoint siblings](#12--an-endpoint-uses-the-same-sibling-shape)         |
 | Preserve a record through optional reads | [Only `whether` lines](#13--a-body-of-only-whether-lines)                 |
 
+## Error index
+
+| Rejected attempt                        | Entry                                                         |
+| --------------------------------------- | ------------------------------------------------------------- |
+| Open a name that no later line uses     | [A plain line](#1--a-plain-line)                              |
+| Open a fresh name inside `no(...)`      | [`no`](#5--no--denial)                                        |
+| Fold a source promising at most one row | [An optional former](#8--a-former-that-may-decline--optional) |
+| Form one record from a many-row source  | [Selection folds](#9--folds-consume-a-captured-range)         |
+
 ## The scene
 
 Everything below reads against the
@@ -107,7 +116,8 @@ Reaction "bad.ReopenOnJoin": "reading" is opened and never used — omit the key
 ## 2 · The promise decides, not the words
 
 `_membership` promises exactly one row — every member-circle pair has a
-standing — so a line reading it can never drop anything:
+standing. This line accepts that row and binds its `joined` field, so the line
+cannot drop the case:
 
 ```ts
 const theStandingOf = view(
@@ -123,6 +133,9 @@ const theStandingOf = view(
   own `one()` terminal carries that promise outward, and the engine checks it
   when the view is read.
 - **Opens**: `joined`.
+
+A `one` promise guarantees the source row, not a pattern match. A literal or an
+already-bound name in `.is(...)` can still reject that row and drop the case.
 
 ```
 the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); checked when read

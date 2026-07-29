@@ -1,11 +1,10 @@
 /**
- * **The concept specification, read as contract.**
+ * **The machine-readable parts of a concept specification.**
  *
- * A concept's `spec.md` is the single authored source for what the concept
- * promises: its purpose and principle in prose, its actions and their refusal
- * branches in an `actions` fence, and its queries and their cardinality in a
- * `queries` fence. Registration parses the document and derives the contract
- * from it, so the same facts are never restated in TypeScript.
+ * Registration extracts purpose and principle prose, action names, inputs and
+ * refusal branches from an `actions` fence, and query names, inputs and
+ * cardinality from a `queries` fence. An optional State section is
+ * uninterpreted human notation and is not represented by {@link ConceptSpec}.
  *
  * ````md
  * ## Actions
@@ -30,7 +29,7 @@
  * A refusal's message is the normative sentence the boundary reports.
  */
 
-import type { QueryPromise } from "@engine/reads/query-contracts";
+import type { QueryPromise } from "@engine/reads/query-metadata";
 
 /** One refusal branch: the code the boundary returns and the sentence it carries. */
 export interface SpecRefusal {
@@ -52,7 +51,7 @@ export interface SpecQuery {
   promise: QueryPromise;
 }
 
-/** A concept's complete authored contract. */
+/** The machine-readable registration contract extracted from a concept specification. */
 export interface ConceptSpec {
   purpose: string;
   principle: string;
@@ -179,9 +178,9 @@ function parseEach<T extends { name: string }>(
 }
 
 /**
- * Read a concept's contract from its specification's markdown text (import the
- * document with `{ type: "text" }`). Throws, naming the section or line, when
- * the document is missing or malformed.
+ * Extract a concept's machine-readable registration contract from specification
+ * markdown (import the document with `{ type: "text" }`). Throws, naming the
+ * section or line, when a parsed part is missing or malformed.
  */
 export function parseSpec(markdown: string): ConceptSpec {
   if (typeof markdown !== "string" || markdown.trim() === "") {

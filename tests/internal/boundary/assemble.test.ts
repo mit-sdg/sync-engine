@@ -8,17 +8,12 @@
  * reaction's name — never a silent tiebreak.
  */
 import { describe, expect, test } from "vite-plus/test";
-import {
-  MemoryStore,
-  Logging,
-  no,
-  request,
-  reaction,
-  vocabulary,
-  when,
-  where,
-} from "@sync-engine/internal/reactions";
-import { assemble, endpoint, fail, receive, respond } from "@sync-engine/internal/boundary";
+import { Logging, MemoryStore } from "@sync-engine/assembly";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { no, reaction, vocabulary, when, where } from "@sync-engine/language";
+import { Frames } from "@sync-engine/internal/reads/frames";
+import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { wireContracts } from "@sync-engine/tooling";
 
 class CountingConcept {
   static readonly queries = { _current: "one", _named: "optional", _seen: "many" } as const;
@@ -56,9 +51,7 @@ const vocab = vocabulary({
 const { Counting, Echoing } = vocab.concepts;
 
 const Increment = endpoint("/counter/increment", ({ count }) =>
-  receive({})
-    .then(request(Counting.increment, {}, { count }))
-    .then(respond({ count })),
+  receive({}).then(Counting.increment({}).responds({ count })).then(respond({ count })),
 );
 
 describe("assemble", () => {
@@ -79,7 +72,7 @@ describe("assemble", () => {
 
   test("reactions register under their dotted composition path", async () => {
     const EchoIncrements = reaction(({ count }) =>
-      when(Counting.increment, {}, { count }).then(request(Echoing.hear, { text: "bump" })),
+      when(Counting.increment({}).responds({ count })).then(Echoing.hear({ text: "bump" })),
     );
     const app = assemble({
       vocabulary: vocab,
@@ -105,6 +98,17 @@ describe("assemble", () => {
     expect(app.concepts.Echoing.heard).toEqual([]);
   });
 
+  test("rejects omitted constructor arguments even through an untyped call", () => {
+    class RequiredConcept {
+      constructor(readonly name: string) {}
+    }
+    const required = vocabulary({ concepts: { Required: RequiredConcept }, computations: {} });
+
+    expect(() => assemble({ vocabulary: required, composition: {} } as never)).toThrow(
+      'assemble: concept "Required" requires constructor arguments; supply initialize or instances.',
+    );
+  });
+
   test("instances win outright and answer to the vocabulary name", async () => {
     const substituted = new CountingConcept(100);
     const app = assemble({
@@ -115,6 +119,16 @@ describe("assemble", () => {
     });
     await app.invoker.invoke("/counter/increment", {});
     expect(substituted.count).toBe(101);
+  });
+
+  test("rejects a supplied implementation that omits the concept protocol", () => {
+    expect(() =>
+      assemble({
+        vocabulary: vocab,
+        instances: { Counting: {} } as never,
+        composition: {},
+      }),
+    ).toThrow('assemble: implementation for "Counting" does not implement `increment`, `_current`');
   });
 
   test("a name outside the vocabulary is an assembly error", () => {
@@ -149,6 +163,90 @@ describe("assemble", () => {
       routes: {
         "/counter/increment": {},
         "/notes/create": { required: ["text", "author"] },
+      },
+    });
+  });
+
+  test("a declared default makes a receive key optional across route alternatives", async () => {
+    const WithText = endpoint(
+      "/notes/alternative",
+      ({ text }) => receive({ kind: "text", text }).then(respond({ text })),
+      { input: { required: ["kind"], defaults: { text: "untitled" } } },
+    );
+    const WithoutText = endpoint("/notes/alternative", () =>
+      receive({ kind: "empty" }).then(respond({ text: null })),
+    );
+    const app = assemble({ vocabulary: vocab, composition: { WithText, WithoutText } });
+
+    await expect(app.invoker.invoke("/notes/alternative", { kind: "text" })).resolves.toEqual({
+      ok: true,
+      value: { text: "untitled" },
+    });
+    const generated = wireContracts(app.engine.exportReactions(), { contracts: app.contracts });
+    expect(generated.endpoints[0]?.input).toMatchObject({
+      kind: "object",
+      fields: [{ key: "kind" }, { key: "text", optional: true }],
+    });
+  });
+
+  test("rejects an explicit contract whose omitted keys cannot match a receive alternative", () => {
+    const WithText = endpoint(
+      "/notes/contradictory",
+      ({ text }) => receive({ kind: "text", text }).then(respond({ text })),
+      { input: { required: ["kind"] } },
+    );
+
+    expect(() => assemble({ vocabulary: vocab, composition: { WithText } })).toThrow(
+      "assemble: input contract for /notes/contradictory admits omitted optional keys that no receive alternative can match.",
+    );
+  });
+
+  test("accepts a default that selects one literal receive alternative", async () => {
+    const Plain = endpoint(
+      "/notes/literal-default",
+      () => receive({ format: "plain" }).then(respond({ format: "plain" })),
+      { input: { defaults: { format: "rich" } } },
+    );
+    const Rich = endpoint("/notes/literal-default", () =>
+      receive({ format: "rich" }).then(respond({ format: "rich" })),
+    );
+    const app = assemble({ vocabulary: vocab, composition: { Plain, Rich } });
+
+    await expect(app.invoker.invoke("/notes/literal-default", {})).resolves.toEqual({
+      ok: true,
+      value: { format: "rich" },
+    });
+  });
+
+  test("rejects an executable endpoint that cannot join the public route set", () => {
+    const ClosureEndpoint = endpoint("/closure", ({ count, hidden }) =>
+      receive({})
+        .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
+        .then(Counting.increment({}).responds({ count }))
+        .then(respond({ hidden })),
+    );
+
+    expect(() =>
+      assemble({
+        vocabulary: vocab,
+        composition: { Api: { ClosureEndpoint } },
+      }),
+    ).toThrow(
+      "assemble: ordinary assembly accepts portable behavior only:\n" +
+        '- local reaction "Api.ClosureEndpoint": unlowered reaction: ' +
+        "step 2 needs a value bound by a closure where",
+    );
+  });
+
+  test("the assembled invoker rejects paths outside the declared endpoint catalog", async () => {
+    const app = assemble({ vocabulary: vocab, composition: { Increment } });
+
+    await expect(app.invoker.invoke("/missing", {})).resolves.toEqual({
+      ok: false,
+      error: {
+        kind: "framework",
+        code: "NOT_FOUND",
+        detail: "Unknown endpoint: /missing",
       },
     });
   });

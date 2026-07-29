@@ -33,36 +33,29 @@
  *
  */
 
-import type {
-  BranchChain,
-  InstrumentedQuery,
-  Mapping,
-  StepNode,
-  UnnamedStepNode,
-} from "@engine/reactions/types";
+import type { InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import { conditionOp } from "./where-ops.ts";
 import { brand, CountOpBrand, hasBrand, ViewBlockBrand } from "./brands.ts";
-import { branchChain } from "@engine/reactions/authoring/nodes";
 import type { ViewOpIR } from "./ir.ts";
-import { lowerRelationBlocks } from "./lower.ts";
+import { lowerRelationBlocks } from "./view-lowering.ts";
 import { assertConceptQuery } from "./queries.ts";
 import {
   assertSeparateBags,
   bindingBag,
   type FreeBindings,
   type InputBindings,
+  objectRef,
   type OutputBindings,
 } from "./sentence.ts";
 import { brandRelationView, lineOf } from "./lines.ts";
 import type { RelationView } from "./lines.ts";
-import type { QueryPromise } from "./query-contracts.ts";
-import { symbolsInMapping } from "./former-analysis.ts";
-import { opNamesIR, scheduleBlock } from "./schedule.ts";
+import type { QueryPromise } from "./query-metadata.ts";
+import { operationFootprint } from "./operation-footprint.ts";
+import { assertNoOrphanedOpens, scheduleBlock } from "./schedule.ts";
 import { formFrom } from "./former-builders.ts";
 import type { FormNode } from "./former-builders.ts";
 import type { FormerEntry } from "./former-nodes.ts";
-import { isPlainMapping } from "./matchers.ts";
 
 /**
  * An aggregation: bind the number of rows a query answers with right now.
@@ -84,7 +77,6 @@ declare const ViewBlockType: unique symbol;
 export type ViewBlock = ViewOp[] & {
   readonly [ViewBlockType]: true;
   form(entries: Record<string, FormerEntry>): FormNode;
-  then(node: UnnamedStepNode): BranchChain;
 };
 
 /** State one view alternative as a variadic conjunction. */
@@ -95,21 +87,6 @@ export function where(...conditions: Array<Condition | CountOp>): ViewBlock {
   const block = brand(ops, ViewBlockBrand) as ViewBlock;
   Object.defineProperty(block, "form", {
     value: (entries: Record<string, FormerEntry>) => formFrom(block, entries),
-  });
-  Object.defineProperty(block, "then", {
-    value: (...nodes: StepNode[]) => {
-      if (nodes.length !== 1) {
-        throw new Error("a branch-local then(...) takes one callable action line.");
-      }
-      if (block.some(isCountOp)) {
-        throw new Error(
-          "count(...) cannot be used in a reaction condition. " +
-            "To return a row count, use each(line).count() in a former. " +
-            "To test a count as policy, define a view and read that view.",
-        );
-      }
-      return branchChain(block as WhereOp[], nodes[0] as UnnamedStepNode);
-    },
   });
   return block;
 }
@@ -167,47 +144,11 @@ function assertViewOps(name: string, alternatives: readonly (readonly ViewOp[])[
   }
 }
 
-/** Validate a view call against its declared input names. */
-function assertViewInputs(name: string, inputs: readonly string[], input: Mapping): Mapping {
-  if (!isPlainMapping(input)) {
-    throw new Error(`View "${name}" takes one object-shaped input mapping.`);
-  }
-  for (const key of Object.keys(input)) {
-    if (!inputs.includes(key)) {
-      throw new Error(`View "${name}": "${key}" is not an input; expected (${inputs.join(", ")}).`);
-    }
-  }
-  for (const inputName of inputs) {
-    if (!(inputName in input)) {
-      throw new Error(`View "${name}": required input "${inputName}" is missing.`);
-    }
-  }
-  return input;
-}
-
 function symbolsInViewOps(alternatives: readonly (readonly ViewOp[])[]): Set<symbol> {
   const used = new Set<symbol>();
-  const add = (mapping: Mapping): void => {
-    for (const variable of symbolsInMapping(mapping)) used.add(variable);
-  };
   for (const block of alternatives) {
     for (const op of block) {
-      if (op.op === "count") {
-        add(op.in);
-        used.add(op.out);
-      } else if (op.op === "holds") {
-        add(op.fused.in);
-      } else if (op.op === "compute") {
-        add(op.in);
-        used.add(op.out);
-      } else if (op.op === "custom") {
-        op.in.forEach((variable) => used.add(variable));
-        op.out.forEach((variable) => used.add(variable));
-      } else {
-        add(op.in);
-        add(op.out);
-        if (op.op === "find") add(op.not ?? {});
-      }
+      for (const variable of operationFootprint(op, "authored").mentions) used.add(variable);
     }
   }
   return used;
@@ -227,6 +168,27 @@ function assertBagUsed(
 }
 
 /**
+ * The view shape invariants: empty outputs mean `holds()`; named outputs mean
+ * a row promise. Enforced at definition, registration, and IR import.
+ */
+export function assertViewShape(
+  site: string,
+  outs: readonly string[],
+  promise: string | undefined,
+  holds: boolean,
+): void {
+  if (outs.length === 0 && !holds) {
+    throw new Error(`${site}: an empty output binding bag must end in holds().`);
+  }
+  if (outs.length > 0 && holds) {
+    throw new Error(`${site}: holds() requires an empty output binding bag.`);
+  }
+  if (outs.length > 0 && promise !== "one" && promise !== "optional" && promise !== "many") {
+    throw new Error(`${site}: an output view must carry its one, optional, or many promise.`);
+  }
+}
+
+/**
  * Construct a {@link RelationView} from validated parts. Both `view(...)` and
  * `registerViews(...)` use this function.
  * @internal
@@ -240,48 +202,40 @@ export function relationViewWith(
   alternatives: readonly (readonly ViewOpIR[])[],
   holdsPredicate = false,
 ): RelationView {
-  const ref = ((pattern: Mapping) =>
-    lineOf({ view: ref }, assertViewInputs(name, ins, pattern))) as RelationView;
-  Object.defineProperties(ref, {
-    viewName: { value: name, enumerable: true },
-    ins: { value: [...ins], enumerable: true },
-    outs: { value: [...outs], enumerable: true },
-    bindings: { value: [...bindings], enumerable: true },
-    ...(promise !== undefined ? { promise: { value: promise, enumerable: true } } : {}),
-    holdsPredicate: { value: holdsPredicate, enumerable: true },
-    alternatives: { value: alternatives, enumerable: false },
-    holds: {
-      value: (): RelationView => {
-        if (outs.length !== 0) {
-          throw new Error(`View "${name}": holds() requires an empty output binding bag.`);
-        }
-        return relationViewWith(name, ins, outs, bindings, undefined, alternatives, true);
+  const ref = objectRef<RelationView, ReturnType<RelationView>>({
+    kind: "View",
+    name,
+    inputs: ins,
+    nameKey: "viewName",
+    properties: {
+      outs: { value: [...outs], enumerable: true },
+      bindings: { value: [...bindings], enumerable: true },
+      ...(promise !== undefined ? { promise: { value: promise, enumerable: true } } : {}),
+      holdsPredicate: { value: holdsPredicate, enumerable: true },
+      alternatives: { value: alternatives, enumerable: false },
+      holds: {
+        value: (): RelationView => {
+          if (outs.length !== 0) {
+            throw new Error(`View "${name}": holds() requires an empty output binding bag.`);
+          }
+          return relationViewWith(name, ins, outs, bindings, undefined, alternatives, true);
+        },
       },
+      ...Object.fromEntries(
+        (["one", "optional", "many"] as const).map((word) => [
+          word,
+          {
+            value: (): RelationView => {
+              if (outs.length === 0) {
+                throw new Error(`View "${name}": ${word}() requires at least one output binding.`);
+              }
+              return relationViewWith(name, ins, outs, bindings, word, alternatives);
+            },
+          },
+        ]),
+      ),
     },
-    one: {
-      value: (): RelationView => {
-        if (outs.length === 0) {
-          throw new Error(`View "${name}": one() requires at least one output binding.`);
-        }
-        return relationViewWith(name, ins, outs, bindings, "one", alternatives);
-      },
-    },
-    optional: {
-      value: (): RelationView => {
-        if (outs.length === 0) {
-          throw new Error(`View "${name}": optional() requires at least one output binding.`);
-        }
-        return relationViewWith(name, ins, outs, bindings, "optional", alternatives);
-      },
-    },
-    many: {
-      value: (): RelationView => {
-        if (outs.length === 0) {
-          throw new Error(`View "${name}": many() requires at least one output binding.`);
-        }
-        return relationViewWith(name, ins, outs, bindings, "many", alternatives);
-      },
-    },
+    fuse: (view, input) => lineOf({ view }, input),
   });
   return brandRelationView(ref);
 }
@@ -317,9 +271,9 @@ export function view(
   }
   assertViewOps(name, alternatives);
   assertSeparateBags("View", name, [
-    ["input", inputs.minted],
-    ["output", outputs.minted],
-    ["free", bindings.minted],
+    ["input", inputs.minted.keys()],
+    ["output", outputs.minted.keys()],
+    ["free", bindings.minted.keys()],
   ]);
   const used = symbolsInViewOps(alternatives);
   const declared = new Set([
@@ -352,21 +306,7 @@ export function view(
         throw new Error(`View "${name}": an alternative never binds output binding "${output}".`);
       }
     }
-    const counts = new Map<string, number>();
-    for (const op of scheduled.ordered) {
-      for (const binding of opNamesIR(op)) counts.set(binding, (counts.get(binding) ?? 0) + 1);
-    }
-    for (const output of outs) counts.set(output, (counts.get(output) ?? 0) + 1);
-    for (const op of scheduled.ordered) {
-      for (const opened of scheduled.opens.get(op) ?? []) {
-        if ((counts.get(opened) ?? 0) <= 1) {
-          const partition = free.includes(opened) ? "free binding" : "binding";
-          throw new Error(
-            `View "${name}": ${partition} "${opened}" is opened and never used — omit it or use it in a later line.`,
-          );
-        }
-      }
-    }
+    assertNoOrphanedOpens(scheduled, outs, `View "${name}"`);
   }
   return relationViewWith(name, ins, outs, free, outs.length > 0 ? "many" : undefined, lowered);
 }

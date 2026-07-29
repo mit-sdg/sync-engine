@@ -1,0 +1,70 @@
+import {
+  publicFrameworkCategoryOf,
+  registeredPublicCategoryOf,
+} from "../protocol/public-errors.ts";
+import { FrameworkErrorCode } from "../protocol/types.ts";
+import type { WireContractsIR } from "../wire/wire-contracts.ts";
+import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
+import { normalizeHttpBasePath } from "../protocol/http-path.ts";
+
+export { normalizeHttpBasePath } from "../protocol/http-path.ts";
+
+export interface ProductionHttpProfile {
+  origin: string;
+  basePath?: string;
+}
+
+export function normalizeProductionHttpProfile(
+  declaration: ProductionHttpProfile,
+  label = "productionHttpProfile",
+  productionReason = "",
+): ProductionHttpProfile {
+  let origin: URL;
+  try {
+    origin = new URL(declaration.origin);
+  } catch {
+    throw new Error(`${label}: origin must be an absolute HTTP or HTTPS origin.`);
+  }
+  if (
+    !["http:", "https:"].includes(origin.protocol) ||
+    origin.origin !== declaration.origin.replace(/\/$/, "")
+  ) {
+    throw new Error(`${label}: origin must contain only an HTTP or HTTPS origin.`);
+  }
+  if (process.env.NODE_ENV === "production" && origin.protocol !== "https:") {
+    throw new Error(`${label}: production requires an HTTPS public origin${productionReason}.`);
+  }
+  const basePath = normalizeHttpBasePath(declaration.basePath, `${label}: basePath`);
+  return Object.freeze({
+    origin: origin.origin,
+    ...(basePath === "" ? {} : { basePath }),
+  });
+}
+
+export function productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile {
+  return normalizeProductionHttpProfile(declaration);
+}
+
+export function projectProductionHttpWire(
+  wire: WireContractsIR,
+  categories: Readonly<Record<string, PublicErrorCategory>>,
+): WireContractsIR {
+  return {
+    endpoints: wire.endpoints.map((endpoint) => {
+      const errors = new Set<PublicErrorCategory | "INTERNAL_ERROR">();
+      for (const code of endpoint.errors) {
+        if (code === FrameworkErrorCode.INVALID_INPUT && endpoint.inputAdmissionError !== false) {
+          errors.add(publicFrameworkCategoryOf(code));
+        }
+        if (code !== FrameworkErrorCode.INVALID_INPUT || Object.hasOwn(categories, code)) {
+          errors.add(registeredPublicCategoryOf(code, categories));
+        }
+      }
+      if (endpoint.openError) errors.add("INTERNAL_ERROR");
+      return { ...endpoint, errors: [...errors].sort(), openError: false };
+    }),
+    appWide: [
+      ...new Set(wire.appWide.map((code) => registeredPublicCategoryOf(code, categories))),
+    ].sort(),
+  };
+}

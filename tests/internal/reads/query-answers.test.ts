@@ -1,15 +1,9 @@
-import { lineOf } from "@sync-engine/internal/reads/lines";
 /** Query answers and the optional promises that narrow their cardinality. */
 import { describe, expect, test } from "vite-plus/test";
-import {
-  former,
-  Logging,
-  rowsOfAnswer,
-  each,
-  Reacting,
-  vocabulary,
-  where,
-} from "@sync-engine/internal/reactions";
+import { each, former, vocabulary, where } from "@sync-engine/language";
+import { rowsOfAnswer } from "@sync-engine/internal/reads/queries";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 
 class BalancesConcept {
   static readonly queries = {
@@ -73,8 +67,7 @@ const BrokenReads = testVocabulary.concepts.Broken;
 const UndeclaredReads = testVocabulary.concepts.UndeclaredQueries;
 
 function setup<T extends object>(instance: T, name: string): { reacting: Reacting; concept: T } {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   return { reacting, concept: reacting.instrument({ [name]: instance })[name] as T };
 }
 
@@ -112,9 +105,9 @@ describe("query answers", () => {
   });
 
   test("a scalar query answer raises a query fault", async () => {
-    const { reacting, concept: Broken } = setup(new BrokenConcept(), "Broken");
+    const { reacting } = setup(new BrokenConcept(), "Broken");
     const scalar = former("scalar ()", (_inputs, { value }) =>
-      where(lineOf({ query: Broken._scalar }, {}).is({ value })).form({ value }),
+      where(BrokenReads._scalar({}).is({ value })).form({ value }),
     );
     await expect(reacting.form(scalar({}))).rejects.toThrow('promises "one"');
     await expect(reacting.form(scalar({}))).rejects.toThrow("Broken._scalar");

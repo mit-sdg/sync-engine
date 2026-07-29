@@ -1,7 +1,7 @@
 /** Core type vocabulary for declarative reactions. */
 import type { Frames } from "@engine/reads/frames";
 import type { AnyWhereOp, Condition, WhereOp } from "@engine/reads/where-ops";
-import type { QueryPromise } from "@engine/reads/query-contracts";
+import type { QueryMetadata } from "@engine/reads/query-metadata";
 
 /** A plain, string-keyed record — the shape an action's input/output takes. */
 export type Mapping = Record<string, unknown>;
@@ -110,42 +110,73 @@ export interface StepNode {
 export interface ActionCall<
   TAction extends InstrumentedAction = InstrumentedAction,
   TInput extends Mapping = Mapping,
+  TReturn = unknown,
 > extends StepNode {
   readonly [CompleteInputBrand]: true;
   action: ActionPattern & { action: TAction; input: TInput };
   linePosture: "requested";
   responds<TOutput extends Mapping = Empty>(
-    output?: TOutput,
+    output?: ExactActionOutputPattern<TReturn, TOutput>,
   ): ReturnedActionLine<TAction, TInput, TOutput>;
   refuses<TRefusal extends Mapping = Empty>(
     output?: TRefusal,
   ): RefusedActionLine<TAction, TInput, TRefusal>;
-  named(name: string): NamedActionCall<TAction, TInput>;
+  named(name: string): NamedActionCall<TAction, TInput, TReturn>;
 }
 
 /** A requested callable action line whose required input slots remain open. */
 export interface TriggerActionLine<
   TAction extends InstrumentedAction = InstrumentedAction,
   TInput extends Mapping = Mapping,
+  TReturn = unknown,
 > {
   kind: "step";
   action: ActionPattern & { action: TAction; input: TInput };
   linePosture: "requested";
   responds<TOutput extends Mapping = Empty>(
-    output?: TOutput,
+    output?: ExactActionOutputPattern<TReturn, TOutput>,
   ): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
   refuses<TRefusal extends Mapping = Empty>(
     output?: TRefusal,
   ): RefusedTriggerActionLine<TAction, TInput, TRefusal>;
-  named(name: string): TriggerActionLine<TAction, TInput>;
+  named(name: string): TriggerActionLine<TAction, TInput, TReturn>;
 }
+
+type ActionOutput<TReturn> = unknown extends TReturn
+  ? Mapping
+  : Awaited<TReturn> extends Mapping
+    ? Awaited<TReturn>
+    : Empty;
+
+type ActionOutputKeys<TReturn> =
+  ActionOutput<TReturn> extends infer Output
+    ? Output extends Mapping
+      ? keyof Output
+      : never
+    : never;
+
+type ValueAt<Output, Key extends PropertyKey> = Output extends Mapping
+  ? Key extends keyof Output
+    ? Output[Key]
+    : never
+  : never;
+
+type ActionOutputValue<TReturn, Key extends PropertyKey> = ValueAt<ActionOutput<TReturn>, Key>;
+
+type ActionOutputPattern<TReturn> = {
+  readonly [Key in ActionOutputKeys<TReturn>]?: ActionOutputValue<TReturn, Key> | symbol;
+};
+
+type ExactActionOutputPattern<TReturn, TOutput extends Mapping> = TOutput &
+  ActionOutputPattern<TReturn> &
+  Record<Exclude<keyof TOutput, ActionOutputKeys<TReturn>>, never>;
 
 export interface NamedActionCall<
   TAction extends InstrumentedAction = InstrumentedAction,
   TInput extends Mapping = Mapping,
-> extends ActionCall<TAction, TInput> {
+  TReturn = unknown,
+> extends ActionCall<TAction, TInput, TReturn> {
   readonly [NamedLineBrand]: true;
-  named(name: string): NamedActionCall<TAction, TInput>;
 }
 
 /** A callable action line pinned to a successful return. */
@@ -178,7 +209,6 @@ export interface NamedReturnedActionLine<
   TOutput extends Mapping = Mapping,
 > extends ReturnedActionLine<TAction, TInput, TOutput> {
   readonly [NamedLineBrand]: true;
-  named(name: string): NamedReturnedActionLine<TAction, TInput, TOutput>;
 }
 
 /** A callable action line pinned to a declared refusal. */
@@ -211,7 +241,6 @@ export interface NamedRefusedActionLine<
   TRefusal extends Mapping = Mapping,
 > extends RefusedActionLine<TAction, TInput, TRefusal> {
   readonly [NamedLineBrand]: true;
-  named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
 }
 
 /** A callable consequence before it receives a sibling-path label. */
@@ -284,14 +313,10 @@ export interface InstrumentedAction extends AnyAction {
  * carrying identity back-references, so a where op that reads state stays
  * data: the op serializes as (concept name, query name) rather than a closure.
  */
-export interface InstrumentedQuery {
+export interface InstrumentedQuery extends QueryMetadata {
   (input: Mapping): unknown | Promise<unknown>;
   concept?: object;
   queryName?: string;
-  /** `Concept.query`, for contract faults that name their source. */
-  queryLabel?: string;
-  /** The concept's cardinality promise, checked against the determiner at registration. */
-  queryPromise?: QueryPromise;
 }
 
 /** The untyped logic-variable proxy supplied to reaction functions. */

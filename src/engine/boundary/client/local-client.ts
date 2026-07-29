@@ -1,4 +1,4 @@
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import type { ContractShape } from "../protocol/types.ts";
 import { toJsonEnvelope, toJsonValue } from "../protocol/envelope.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { Client } from "./client.ts";
@@ -14,6 +14,7 @@ export function createLocalClient<C extends ContractShape>(options: {
         await options.invoker.invoke(
           request.path as keyof C & string,
           toJsonValue(request.input) as never,
+          { signal: request.signal },
         ),
       ),
   });

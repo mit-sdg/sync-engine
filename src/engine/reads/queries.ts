@@ -5,7 +5,17 @@
 
 import type { Frame, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import { bindInputMapping } from "./frames.ts";
-import type { QueryPromise } from "./query-contracts.ts";
+import type { QueryMetadata } from "./query-metadata.ts";
+
+const evaluationQueries = new WeakMap<InstrumentedQuery, InstrumentedQuery>();
+
+/** Give engine-owned evaluations the cached implementation behind a direct-read root. */
+export function registerEvaluationQuery(
+  direct: InstrumentedQuery,
+  evaluation: InstrumentedQuery,
+): void {
+  evaluationQueries.set(direct, evaluation);
+}
 
 /**
  * A query returned something other than one record or an array of records.
@@ -20,11 +30,7 @@ export class QueryAnswerFault extends Error {
 }
 
 /** Query metadata used in cardinality-fault messages. */
-export interface NamedQuery {
-  queryName?: string;
-  queryLabel?: string;
-  queryPromise?: QueryPromise;
-}
+export interface NamedQuery extends QueryMetadata {}
 
 /**
  * A state read ranges only over a concept query — an instrumented,
@@ -105,5 +111,6 @@ export async function queryRows(
   input: Mapping,
   frame: Frame,
 ): Promise<unknown[]> {
-  return rowsOfAnswer(await query(bindInputMapping(frame, input)), query);
+  const evaluate = evaluationQueries.get(query) ?? query;
+  return rowsOfAnswer(await evaluate(bindInputMapping(frame, input)), query);
 }

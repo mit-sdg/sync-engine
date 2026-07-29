@@ -1,12 +1,39 @@
+import { ListenerSet } from "@engine/utils/listener-set";
 import { logger } from "@engine/utils/logger";
 import { redact, serializeError } from "@engine/utils/redaction";
+import type { Redactor } from "@engine/utils/redaction";
 import { inspect } from "@engine/utils/runtime";
 import type { ActionRecord } from "./actions.ts";
 import type { ActionConcept } from "./actions.ts";
 import { actionNameOf, conceptNameOf } from "../concepts/introspect.ts";
-import type { EngineObserver, LogEvent } from "./observer.ts";
-import type { ActionOutcome, Frame } from "../types.ts";
+import type { ActionOutcome, Frame, Mapping } from "../types.ts";
 import type { Frames } from "@engine/reads/frames";
+
+/**
+ * The engine sends observers one {@link LogEvent} after each instrumented
+ * non-query action. The event contains the concept and action names,
+ * field-name-redacted input, output, and outcome when present, asking reaction
+ * when present, flow, duration, and timestamp. Query methods whose names start
+ * with `_` do not emit events. If an observer throws, the engine logs the
+ * exception class and continues to the next observer.
+ */
+export interface LogEvent {
+  concept: string;
+  action: string;
+  input: Mapping;
+  output: Mapping;
+  /** The answering posture, when the action answered (result or refusal). */
+  outcome?: ActionOutcome;
+  /** The reaction that made this ask, if any. */
+  by?: string;
+  flow: string;
+  durationMs: number;
+  ts: number;
+}
+
+export interface EngineObserver {
+  onAction(ev: LogEvent): void;
+}
 
 export enum Logging {
   OFF,
@@ -16,14 +43,16 @@ export enum Logging {
 
 /** Builds action events, calls observers, and writes interpreter diagnostics. */
 export class ReactionLogger {
-  readonly observers = new Set<EngineObserver>();
+  private readonly observers = new ListenerSet<EngineObserver>();
   level = Logging.OFF;
 
-  constructor(private readonly actions: ActionConcept) {}
+  constructor(
+    private readonly actions: ActionConcept,
+    private readonly redactor: Redactor = { redact },
+  ) {}
 
   addObserver(observer: EngineObserver): () => void {
-    this.observers.add(observer);
-    return () => this.observers.delete(observer);
+    return this.observers.add(observer);
   }
 
   clearObservers(): void {
@@ -35,13 +64,18 @@ export class ReactionLogger {
     const stored = record.id === undefined ? undefined : this.actions._getById(record.id);
     const sourceOutcome = stored?.outcome ?? record.outcome;
     const outcome =
-      sourceOutcome === undefined ? undefined : (redact(sourceOutcome) as ActionOutcome);
+      sourceOutcome === undefined
+        ? undefined
+        : (this.redactor.redact(sourceOutcome) as ActionOutcome);
     const by = record.by ?? stored?.by;
     return {
       concept: conceptNameOf(record.concept),
       action: actionNameOf(record.action),
-      input: redact(stored?.input ?? record.input) as Record<string, unknown>,
-      output: redact(stored?.output ?? record.output ?? {}) as Record<string, unknown>,
+      input: this.redactor.redact(stored?.input ?? record.input) as Record<string, unknown>,
+      output: this.redactor.redact(stored?.output ?? record.output ?? {}) as Record<
+        string,
+        unknown
+      >,
       ...(outcome !== undefined ? { outcome } : {}),
       ...(by !== undefined ? { by } : {}),
       flow: record.flow,
@@ -53,14 +87,11 @@ export class ReactionLogger {
   /** Call each observer; log an opaque error class when one throws. */
   emit(record: ActionRecord, durationMs?: number): void {
     if (this.observers.size === 0 || durationMs === undefined) return;
-    const event = this.toEvent(record, durationMs);
-    for (const observer of this.observers) {
-      try {
-        observer.onAction(event);
-      } catch (error) {
-        logger.warn("observer threw", { error: serializeError(error) });
-      }
-    }
+    this.observers.notify(
+      (observer, event) => observer.onAction(event),
+      this.toEvent(record, durationMs),
+      (error) => logger.warn("observer threw", { error: serializeError(error) }),
+    );
   }
 
   frames(message: string, frames: Frames<Frame>): void {
@@ -72,9 +103,9 @@ export class ReactionLogger {
       const { concept, input, output, flow, id, outcome } = record;
       logger.debug("Reacting to action:", {
         concept: concept.constructor.name,
-        input: redact(input),
-        output: redact(output),
-        outcome: redact(outcome),
+        input: this.redactor.redact(input),
+        output: this.redactor.redact(output),
+        outcome: this.redactor.redact(outcome),
         flow,
         actionId: id,
       });
@@ -83,7 +114,7 @@ export class ReactionLogger {
     if (this.level === Logging.TRACE) {
       const { concept, action, input, output } = this.toEvent(record, durationMs ?? 0);
       logger.debug(
-        `\n${concept}.${action} ${inspect(redact(input))} => ${inspect(redact(output))}\n`,
+        `\n${concept}.${action} ${inspect(this.redactor.redact(input))} => ${inspect(this.redactor.redact(output))}\n`,
       );
     }
   }

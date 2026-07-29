@@ -3,7 +3,8 @@
 Reading Circle is the shortest complete multi-concept example. Members create
 and join circles, select a reading, and discuss it. The application keeps its
 reactions, policy views, formers, and endpoints in one composition module so
-the whole design can be read in one place. It requires Bun 1.3 or newer.
+the whole design can be read in one place. Runtime and toolchain requirements
+are declared in `package.json` and the repository [support policy](../../SUPPORT.md).
 
 ## Run the example
 
@@ -29,9 +30,9 @@ circle page. It also returns the `ALREADY_JOINED` concept refusal and the
 - A former joins circle, selection, discussion, and response state into one
   page value.
 - Endpoints expose the application through the standard gateway, local client,
-  generic HTTP adapter, and generated wire contract.
+  and generated wire contract. Public HTTP policy belongs in a deployment floor.
 - Principle tests exercise each concept directly; application tests exercise
-  the assembled and HTTP boundaries.
+  the assembled boundary.
 
 ## Source map
 
@@ -41,10 +42,10 @@ circle page. It also returns the `ALREADY_JOINED` concept refusal and the
 | `src/concept-set.ts`                                         | Named registrations, vocabulary, and implementations                     |
 | `src/composition/reading-circle.ts`                          | Reactions, views, former, and endpoints                                  |
 | `src/assembly.ts`                                            | Application assembly                                                     |
-| `src/edge.ts`                                                | Standard gateway and HTTP handler                                        |
-| `src/client.ts`                                              | Generated-contract client factories                                      |
+| `src/edge.ts`                                                | Standard gateway                                                         |
+| `src/client.ts`                                              | Transport-neutral generated-contract client helper                       |
 | `src/scenario.ts`                                            | Complete local-gateway scenario                                          |
-| `tests/application.test.ts`                                  | Assembled behavior, HTTP, and deterministic snapshot tests               |
+| `tests/application.test.ts`                                  | Assembled behavior and deterministic snapshot tests                      |
 | `generated.config.ts`                                        | Artifact command configuration                                           |
 | [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                                               |
 | [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                                          |

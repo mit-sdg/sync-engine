@@ -1,4 +1,3 @@
-import { lineOf } from "@sync-engine/internal/reads/lines";
 import { contributedKeys, useFormer } from "@sync-engine/internal/reads/former-nodes";
 /**
  * Formed results evaluated when requested. These tests cover records, lists,
@@ -6,28 +5,25 @@ import { contributedKeys, useFormer } from "@sync-engine/internal/reads/former-n
  * inputs, data round trips, and rendering.
  */
 import { describe, expect, test } from "vite-plus/test";
+import { faulted } from "@sync-engine/advanced";
 import {
-  request,
   earlier,
-  faulted,
-  former,
-  FormerFault,
-  Logging,
-  opaqueCount,
-  reaction,
-  form,
-  renderFormer,
   each,
-  whether,
-  Reacting,
-  type Vars,
+  form,
+  former,
+  reaction,
   view,
   vocabulary,
-  where,
-  type WhereOp,
   when,
-} from "@sync-engine/internal/reactions";
-import { RecorderConcept } from "../reactions/mocks.ts";
+  where,
+  whether,
+} from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import { FormerFault } from "@sync-engine/internal/reads/former-nodes";
+import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
+import { renderFormer } from "@sync-engine/internal/reads/render";
+import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
+import { quietReacting } from "../../utils/reacting.ts";
 
 // ── Test concepts — the corpus's shapes, in miniature ─────────────────────
 
@@ -110,26 +106,37 @@ class ProfilingConcept {
   }
 }
 
+class FormerRecorderConcept {
+  order: unknown[] = [];
+
+  record({ tag }: { tag: unknown }) {
+    this.order.push(tag);
+    return {};
+  }
+}
+
 const testVocabulary = vocabulary({
   concepts: {
     Threading: ThreadingConcept,
     Grading: { class: GradingConcept },
     Profiling: { class: ProfilingConcept },
+    Recorder: FormerRecorderConcept,
   },
 });
 const ThreadingReads = testVocabulary.concepts.Threading;
 const GradingReads = testVocabulary.concepts.Grading;
+const ProfilingReads = testVocabulary.concepts.Profiling;
+const RecorderActions = testVocabulary.concepts.Recorder;
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Threading: new ThreadingConcept(),
     Grading: new GradingConcept(),
     Profiling: new ProfilingConcept(),
-    Recorder: new RecorderConcept(),
   });
-  return { reacting, ...concepts };
+  const Recorder = reacting.instrumentConcept(new FormerRecorderConcept(), "Recorder");
+  return { reacting, ...concepts, Recorder };
 }
 
 async function seedThread(Threading: ThreadingConcept, conversation = "c1") {
@@ -172,8 +179,22 @@ describe("formers: definition", () => {
     );
     expect(thread.formerName).toBe("thread (conversation)");
     expect(thread.ins).toEqual(["conversation"]);
-    expect(() => thread({})).toThrow('required input "conversation" is missing');
-    expect(() => thread("c1" as never)).toThrow("takes one object-shaped input mapping");
+    expect(() => thread({})).toThrowError(
+      new Error('Former "thread (conversation)": required input "conversation" is missing.'),
+    );
+    expect(() => thread({ conversation: "c1", extra: true })).toThrowError(
+      new Error(
+        'Former "thread (conversation)": "extra" is not an input; expected (conversation).',
+      ),
+    );
+    expect(() => thread("c1" as never)).toThrowError(
+      new Error('Former "thread (conversation)" takes one object-shaped input mapping.'),
+    );
+    expect(thread.name).toBe("ref");
+    expect(thread.optional.name).toBe("value");
+    expect(Object.keys(thread)).toEqual(["formerName", "ins", "promise", "bindings"]);
+    expect(Object.getOwnPropertyDescriptor(thread, "inputVars")?.enumerable).toBe(false);
+    expect(Object.getOwnPropertyDescriptor(thread, "body")?.enumerable).toBe(false);
   });
 
   test("name text is semantically inert", () => {
@@ -212,7 +233,7 @@ describe("formers: definition", () => {
         ).form({ author }),
       ),
     ).toThrow(
-      'record conditions are unresolved — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
+      'the conditions cannot be ordered — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
     );
   });
 
@@ -229,7 +250,7 @@ describe("formers: definition", () => {
         }),
       ),
     ).toThrow(
-      'selection conditions are unresolved — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
+      'the conditions cannot be ordered — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
     );
   });
 
@@ -323,9 +344,9 @@ describe("formers: evaluation", () => {
 // ── At-most-one query reads ────────────────────────────────────────────────
 
 describe("formers: records from at-most-one queries", () => {
-  const profileCard = (Profiling: ProfilingConcept) =>
+  const profileCard = () =>
     former("profile card (person)", ({ person }, { profile, bio }) =>
-      where(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })).form({
+      where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
         person,
         profile,
         bio,
@@ -335,7 +356,7 @@ describe("formers: records from at-most-one queries", () => {
   test("a matching query row binds fields into the record", async () => {
     const { reacting, Profiling } = setup();
     Profiling.profiles.push({ profile: "p1", owner: "priya", bio: "designs" });
-    expect(await reacting.form(profileCard(Profiling)({ person: "priya" }))).toEqual({
+    expect(await reacting.form(profileCard()({ person: "priya" }))).toEqual({
       person: "priya",
       profile: "p1",
       bio: "designs",
@@ -343,13 +364,9 @@ describe("formers: records from at-most-one queries", () => {
   });
 
   test("a required single-value read faults when no row exists", async () => {
-    const { reacting, Profiling } = setup();
-    await expect(reacting.form(profileCard(Profiling)({ person: "nobody" }))).rejects.toThrow(
-      FormerFault,
-    );
-    await expect(reacting.form(profileCard(Profiling)({ person: "nobody" }))).rejects.toThrow(
-      "FORMER_NONE",
-    );
+    const { reacting } = setup();
+    await expect(reacting.form(profileCard()({ person: "nobody" }))).rejects.toThrow(FormerFault);
+    await expect(reacting.form(profileCard()({ person: "nobody" }))).rejects.toThrow("FORMER_NONE");
   });
 
   test("a single-value read faults on several rows in both forms", async () => {
@@ -358,13 +375,11 @@ describe("formers: records from at-most-one queries", () => {
       { profile: "p1", owner: "priya", bio: "one" },
       { profile: "p2", owner: "priya", bio: "two" },
     );
-    await expect(reacting.form(profileCard(Profiling)({ person: "priya" }))).rejects.toThrow(
+    await expect(reacting.form(profileCard()({ person: "priya" }))).rejects.toThrow(
       'promises "optional"',
     );
     const optionalCard = former("optional card (person)", ({ person }, { profile, bio }) =>
-      where(
-        whether(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })),
-      ).form({
+      where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
         person,
         profile,
       }),
@@ -375,11 +390,9 @@ describe("formers: records from at-most-one queries", () => {
   });
 
   test("whether assigns null to fields when the query returns no row", async () => {
-    const { reacting, Profiling } = setup();
+    const { reacting } = setup();
     const card = former("card (person)", ({ person }, { profile, bio }) =>
-      where(
-        whether(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })),
-      ).form({
+      where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
         person,
         profile,
         bio,
@@ -393,13 +406,13 @@ describe("formers: records from at-most-one queries", () => {
   });
 
   test("absence propagates: a read through an unbound name is nothing, never a fault", async () => {
-    const { reacting, Profiling } = setup();
+    const { reacting } = setup();
     // No profile exists for "nobody", so `profile` remains unset. The second
     // query therefore returns no row, and `whether` keeps the record.
     const chained = former("chained (person)", ({ person }, { profile, bio }) =>
       where(
-        whether(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })),
-        whether(lineOf({ query: Profiling._ofOwner }, { owner: profile }).is({})),
+        whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })),
+        whether(ProfilingReads._ofOwner({ owner: profile }).is({})),
       ).form({ person, profile }),
     );
     expect(await reacting.form(chained({ person: "nobody" }))).toEqual({
@@ -503,7 +516,7 @@ describe("formers: the gradebook matrix", () => {
             learner,
             name,
             cells: each(GradingReads._items({}).is({ item, position }))
-              .where(whether(lineOf({ query: Grading._grade }, { learner, item }).is({ score })))
+              .where(whether(GradingReads._grade({ learner, item }).is({ score })))
               .arranged(position)
               .form({ item, score }),
           }),
@@ -552,8 +565,8 @@ describe("formers: dispatch integration", () => {
     );
     reacting.register({
       ServeThread: reaction(({ conversation }: Vars) =>
-        when(Threading.open, { conversation }).then(
-          request(Recorder.record, { tag: summary({ conversation }) }),
+        when(ThreadingReads.open({ conversation }).responds()).then(
+          RecorderActions.record({ tag: summary({ conversation }) }),
         ),
       ),
     });
@@ -563,17 +576,17 @@ describe("formers: dispatch integration", () => {
   });
 
   test("a former fault prevents the consequence action from running", async () => {
-    const { reacting, Profiling, Threading, Recorder } = setup();
+    const { reacting, Threading, Recorder } = setup();
     const card = former("card (person)", ({ person }, { profile, bio }) =>
-      where(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })).form({
+      where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
         person,
         bio,
       }),
     );
     reacting.register({
       ServeCard: reaction(({ conversation }: Vars) =>
-        when(Threading.open, { conversation }).then(
-          request(Recorder.record, { tag: card({ person: "nobody" }) }),
+        when(ThreadingReads.open({ conversation }).responds()).then(
+          RecorderActions.record({ tag: card({ person: "nobody" }) }),
         ),
       ),
     });
@@ -582,7 +595,7 @@ describe("formers: dispatch integration", () => {
   });
 
   test("a fault channel matches a forming fault's raw input without retaining it", async () => {
-    const { reacting, Profiling, Threading } = setup();
+    const { reacting, Threading } = setup();
     let observedSetupKey: unknown;
     class ProtectedAction {
       run(_: { setupKey: unknown }) {
@@ -595,22 +608,25 @@ describe("formers: dispatch integration", () => {
         return {};
       }
     }
-    const Protected = reacting.instrumentConcept(new ProtectedAction(), "Protected");
-    const Recorded = reacting.instrumentConcept(new FaultRecorder(), "FaultRecorder");
+    const faultRefs = vocabulary({
+      concepts: { Protected: ProtectedAction, FaultRecorder },
+    }).concepts;
+    reacting.instrumentConcept(new ProtectedAction(), "Protected");
+    reacting.instrumentConcept(new FaultRecorder(), "FaultRecorder");
     const card = former("protected card (person)", ({ person }, { profile, bio }) =>
-      where(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })).form({
+      where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
         person,
         bio,
       }),
     );
     reacting.register({
       FormProtectedInput: reaction(({ conversation }: Vars) =>
-        when(Threading.open, { conversation }).then(
-          request(Protected.run, { setupKey: card({ person: "setup-key-sentinel" }) }),
+        when(ThreadingReads.open({ conversation }).responds()).then(
+          faultRefs.Protected.run({ setupKey: card({ person: "setup-key-sentinel" }) }),
         ),
       ),
       ObserveFormingFault: reaction(({ input }: Vars) =>
-        when(faulted({ input })).then(request(Recorded.record, { setupKey: input })),
+        when(faulted({ input })).then(faultRefs.FaultRecorder.record({ setupKey: input })),
       ),
     });
 
@@ -646,8 +662,8 @@ describe("formers: IR round-trip", () => {
     );
     reacting.register({
       ServeThread: reaction(({ conversation }: Vars) =>
-        when(Threading.open, { conversation }).then(
-          request(Recorder.record, { tag: summary({ conversation }) }),
+        when(ThreadingReads.open({ conversation }).responds()).then(
+          RecorderActions.record({ tag: summary({ conversation }) }),
         ),
       ),
     });
@@ -660,7 +676,7 @@ describe("formers: IR round-trip", () => {
     expect(app.formers.map((f) => f.name)).toEqual(["summary (conversation)"]);
     const consequence = app.reactions[0].then[0];
     expect(JSON.stringify(consequence.input)).toContain('"$former"');
-    expect(opaqueCount(app)).toBe(0);
+    expect(analyzeLocalBehavior(app).occurrences).toHaveLength(0);
   });
 
   test("export ∘ register is a fixed point, and behavior carries over", async () => {
@@ -721,7 +737,7 @@ describe("formers: IR round-trip", () => {
   });
 
   test("two different definitions of one sentence are rejected", () => {
-    const { reacting, Threading, Recorder } = setup();
+    const { reacting } = setup();
     const one = former("the same (conversation)", ({ conversation }, { node }) =>
       each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node }),
     );
@@ -731,8 +747,8 @@ describe("formers: IR round-trip", () => {
     const declare = (name: string, ref: typeof one) =>
       reacting.register({
         [name]: reaction(({ conversation }: Vars) =>
-          when(Threading.open, { conversation }).then(
-            request(Recorder.record, { tag: ref({ conversation }) }),
+          when(ThreadingReads.open({ conversation }).responds()).then(
+            RecorderActions.record({ tag: ref({ conversation }) }),
           ),
         ),
       });
@@ -770,15 +786,11 @@ describe("formers: IR round-trip", () => {
 
 describe("formers: rendering", () => {
   test("a former renders as a former block", () => {
-    const { reacting, Profiling } = setup();
+    const { reacting } = setup();
     const summary = former(
       "summary (conversation)",
       ({ conversation }, { node, parent, author, createdAt, profile, bio }) =>
-        where(
-          whether(
-            lineOf({ query: Profiling._ofOwner }, { owner: conversation }).is({ profile, bio }),
-          ),
-        ).form({
+        where(whether(ProfilingReads._ofOwner({ owner: conversation }).is({ profile, bio }))).form({
           conversation,
           bio,
           replyCount: each(
@@ -814,14 +826,14 @@ describe("formers: rendering", () => {
   });
 
   test("the app spec carries a Formers section, and the consequence reads as the sentence", () => {
-    const { reacting, Threading, Recorder } = setup();
+    const { reacting } = setup();
     const summary = former("summary (conversation)", ({ conversation }, { node }) =>
       each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node }),
     );
     reacting.register({
       ServeThread: reaction(({ conversation }: Vars) =>
-        when(Threading.open, { conversation }).then(
-          request(Recorder.record, { tag: summary({ conversation }) }),
+        when(ThreadingReads.open({ conversation }).responds()).then(
+          RecorderActions.record({ tag: summary({ conversation }) }),
         ),
       ),
     });
@@ -840,9 +852,9 @@ describe("formers: rendering", () => {
 
 describe("formers: fragments (splice)", () => {
   /** A reusable optional profile fragment merged into post rows. */
-  function postSummaryFragment(Profiling: ProfilingConcept) {
+  function postSummaryFragment() {
     return former("the profile summary of (person)", ({ person }, { profile, bio }) =>
-      where(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })).form({
+      where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
         profile,
         bio,
       }),
@@ -853,7 +865,7 @@ describe("formers: fragments (splice)", () => {
     const { reacting, Threading, Profiling } = setup();
     Profiling.profiles.push({ profile: "p1", owner: "priya", bio: "designs" });
     await seedThread(Threading);
-    const summary = postSummaryFragment(Profiling);
+    const summary = postSummaryFragment();
     const posts = former("the posts of (conversation)", ({ conversation }, { node, author }) =>
       each(ThreadingReads._nodes({ conversation }).is({ node, author }))
         .form({ node, author })
@@ -871,7 +883,7 @@ describe("formers: fragments (splice)", () => {
   test("a named former nests at a key; whether forms blanks and plain drops", async () => {
     const { reacting, Profiling } = setup();
     Profiling.profiles.push({ profile: "p1", owner: "priya", bio: "designs" });
-    const summary = postSummaryFragment(Profiling);
+    const summary = postSummaryFragment();
     const nested = former("the nested profile of (person)", ({ person }, _bindings) =>
       form({ person, summary: whether(summary({ person })) }),
     );
@@ -893,7 +905,7 @@ describe("formers: fragments (splice)", () => {
     const { reacting, Threading, Profiling } = setup();
     Profiling.profiles.push({ profile: "p1", owner: "priya", bio: "designs" });
     await seedThread(Threading);
-    const summary = postSummaryFragment(Profiling);
+    const summary = postSummaryFragment();
     const posts = former(
       "the profiled posts of (conversation)",
       ({ conversation }, { node, author }) =>
@@ -909,15 +921,14 @@ describe("formers: fragments (splice)", () => {
   });
 
   test("a splice anchor bound by nothing is a definition error", () => {
-    const { Profiling } = setup();
-    const summary = postSummaryFragment(Profiling);
+    const summary = postSummaryFragment();
     expect(() =>
       former("the floating summary (conversation)", ({ conversation }, { node, person }) =>
         each(ThreadingReads._nodes({ conversation }).is({ node }))
           .form({ node })
           .splicing(whether(summary({ person }))),
       ),
-    ).toThrow("bound by nothing");
+    ).toThrow('splice "the profile summary of (person)" anchor uses "person" before it is bound');
   });
 
   test("several fragment rows fault for either splice posture", async () => {
@@ -927,7 +938,7 @@ describe("formers: fragments (splice)", () => {
       { profile: "p2", owner: "priya", bio: "two" },
     );
     await seedThread(Threading);
-    const summary = postSummaryFragment(Profiling);
+    const summary = postSummaryFragment();
     const posts = former("the posts of (conversation)", ({ conversation }, { node, author }) =>
       each(ThreadingReads._nodes({ conversation }).is({ node, author }))
         .form({ node })
@@ -939,8 +950,7 @@ describe("formers: fragments (splice)", () => {
   });
 
   test("splice key collisions are definition-time errors; only record roots splice", () => {
-    const { Profiling } = setup();
-    const summary = postSummaryFragment(Profiling);
+    const summary = postSummaryFragment();
     expect(() =>
       former("colliding (conversation)", ({ conversation }, { node, author }) =>
         each(ThreadingReads._nodes({ conversation }).is({ node, author }))
@@ -957,8 +967,8 @@ describe("formers: fragments (splice)", () => {
   });
 
   test("the IR retains fragments through dependency-first export and round-trip", () => {
-    const { reacting, Threading, Profiling, Recorder } = setup();
-    const summary = postSummaryFragment(Profiling);
+    const { reacting } = setup();
+    const summary = postSummaryFragment();
     const posts = former("the posts of (conversation)", ({ conversation }, { node, author }) =>
       each(ThreadingReads._nodes({ conversation }).is({ node, author }))
         .form({ node, author })
@@ -966,8 +976,8 @@ describe("formers: fragments (splice)", () => {
     );
     reacting.register({
       Serve: reaction(({ conversation }: Vars) =>
-        when(Threading.open, { conversation }).then(
-          request(Recorder.record, { tag: posts({ conversation }) }),
+        when(ThreadingReads.open({ conversation }).responds()).then(
+          RecorderActions.record({ tag: posts({ conversation }) }),
         ),
       ),
     });
@@ -988,8 +998,8 @@ describe("formers: fragments (splice)", () => {
   });
 
   test("a splice renders as the … line, posture said when it drops", () => {
-    const { reacting, Profiling } = setup();
-    const summary = postSummaryFragment(Profiling);
+    const { reacting } = setup();
+    const summary = postSummaryFragment();
     const posts = former("the posts of (conversation)", ({ conversation }, { node, author }) =>
       each(ThreadingReads._nodes({ conversation }).is({ node, author }))
         .form({ node })
@@ -1013,11 +1023,11 @@ describe("formers: nodes and keys", () => {
   });
 
   test("contributedKeys includes keys from spliced fragments", () => {
-    const { Profiling } = setup();
     const frag = former("frag (person)", ({ person }, { profile, bio }) =>
-      where(
-        whether(lineOf({ query: Profiling._ofOwner }, { owner: person }).is({ profile, bio })),
-      ).form({ profile, bio }),
+      where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
+        profile,
+        bio,
+      }),
     );
     const host = former("host (node)", ({ node }, _bindings) =>
       form({ node }).splicing(whether(frag({ person: "priya" }))),

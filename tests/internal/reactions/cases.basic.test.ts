@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Logging, Reacting } from "@sync-engine/internal/reactions";
+import { Logging } from "@sync-engine/assembly";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import {
   ButtonConcept,
   CounterConcept,
@@ -21,7 +22,7 @@ function setup() {
     List: new ListConcept(),
     Recorder: new RecorderConcept(),
   });
-  reacting.register(makeReactions(Button, Counter, Notification, List, Recorder));
+  reacting.register(makeReactions());
   return { Button, Counter, Notification, List, Recorder };
 }
 

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "sync-engine check && sync-engine artifacts check --config generated.config.ts && tsc --noEmit",
+    "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check --config generated.config.ts && tsc --noEmit",
     "generate": "sync-engine artifacts pin",
     "typecheck": "tsc --noEmit",
     "principle": "bun src/concepts/noting/noting.test.ts",
@@ -13,6 +13,11 @@
     "@mit-sdg/sync-engine": "{{version}}"
   },
   "devDependencies": {
-    "typescript": "^5.9.0"
-  }
+    "typescript": "{{typescript}}"
+  },
+  "engines": {
+    "bun": "{{bun}}",
+    "node": "{{node}}"
+  },
+  "packageManager": "{{packageManager}}"
 }

@@ -1,5 +1,5 @@
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
-import { FrameworkErrorCode } from "./errors.ts";
+import { FrameworkErrorCode } from "./types.ts";
 
 export const PUBLIC_ERROR_CATEGORIES = {
   INVALID_REQUEST: "INVALID_REQUEST",
@@ -9,14 +9,20 @@ export const PUBLIC_ERROR_CATEGORIES = {
   CONFLICT: "CONFLICT",
 } as const satisfies Record<PublicErrorCategory, PublicErrorCategory>;
 
-const publicCategories = new Set<string>(Object.values(PUBLIC_ERROR_CATEGORIES));
+function isPublicErrorCategory(value: unknown): value is PublicErrorCategory {
+  return typeof value === "string" && Object.hasOwn(PUBLIC_ERROR_CATEGORIES, value);
+}
 
-/** Project a domain or framework error code onto the HTTP floor's public vocabulary. */
-export function publicCategoryOf(
+export function registeredPublicCategoryOf(
   code: string,
   categories: Readonly<Record<string, PublicErrorCategory>>,
 ): PublicErrorCategory | "INTERNAL_ERROR" {
-  if (publicCategories.has(code)) return code as PublicErrorCategory;
+  if (!Object.hasOwn(categories, code)) return "INTERNAL_ERROR";
+  const category = categories[code];
+  return isPublicErrorCategory(category) ? category : "INTERNAL_ERROR";
+}
+
+export function publicFrameworkCategoryOf(code: string): PublicErrorCategory | "INTERNAL_ERROR" {
   switch (code) {
     case FrameworkErrorCode.INVALID_INPUT:
     case FrameworkErrorCode.BAD_JSON:
@@ -24,11 +30,19 @@ export function publicCategoryOf(
       return "INVALID_REQUEST";
     case FrameworkErrorCode.NOT_FOUND:
       return "NOT_FOUND";
-    case FrameworkErrorCode.INTERNAL_ERROR:
-      return "INTERNAL_ERROR";
     default:
-      return categories[code] ?? "INTERNAL_ERROR";
+      return "INTERNAL_ERROR";
   }
+}
+
+/** Project a generated error code onto the production HTTP vocabulary. */
+export function publicCategoryOf(
+  code: string,
+  categories: Readonly<Record<string, PublicErrorCategory>>,
+): PublicErrorCategory | "INTERNAL_ERROR" {
+  return Object.hasOwn(categories, code)
+    ? registeredPublicCategoryOf(code, categories)
+    : publicFrameworkCategoryOf(code);
 }
 
 export function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number {
@@ -44,6 +58,8 @@ export function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERRO
     case "CONFLICT":
       return 409;
     case "INTERNAL_ERROR":
+      return 500;
+    default:
       return 500;
   }
 }

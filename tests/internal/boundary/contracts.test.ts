@@ -6,16 +6,11 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { vocabulary } from "@sync-engine/internal/reactions";
-import type { Vars } from "@sync-engine/internal/reactions";
-import {
-  assemble,
-  endpoint,
-  FrameworkErrorCode,
-  receive,
-  renderInputContracts,
-  respond,
-} from "@sync-engine/internal/boundary";
+import { vocabulary } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
+import { renderInputContracts } from "@sync-engine/internal/boundary/protocol/endpoints";
 
 function setup() {
   const composition = {
@@ -136,6 +131,43 @@ describe("declared endpoint input contracts", () => {
     );
 
     expect(result).toEqual({ ok: true, value: { item: "i1", note: "hello" } });
+  });
+
+  test("defaults and admitted input preserve prototype-named own data", async () => {
+    const defaults = JSON.parse(
+      '{"__proto__":{"nested":{"__proto__":"kept"}},"prototype":"default"}',
+    ) as Record<string, unknown>;
+    let admitted: Record<string, unknown> | undefined;
+    const Special = endpoint("/special", () => receive().then(respond({ ok: true })), {
+      input: { required: ["constructor"], defaults },
+      validators: {
+        input: (value) => {
+          admitted = value as Record<string, unknown>;
+          return { ok: true };
+        },
+      },
+    });
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: {}, computations: {} }),
+      composition: { Special },
+    });
+    const input = JSON.parse('{"constructor":"caller"}') as Record<string, unknown>;
+
+    expect(await app.invoker.invoke("/special" as never, input as never)).toEqual({
+      ok: true,
+      value: { ok: true },
+    });
+    if (admitted === undefined) throw new Error("input validator did not run");
+    for (const key of ["__proto__", "constructor", "prototype"]) {
+      expect(Object.hasOwn(admitted, key)).toBe(true);
+    }
+    const nested = (admitted.__proto__ as Record<string, unknown>).nested as Record<
+      string,
+      unknown
+    >;
+    expect(Object.hasOwn(nested, "__proto__")).toBe(true);
+    expect(Object.getPrototypeOf(admitted)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(nested)).toBe(Object.prototype);
   });
 
   test("an undeclared endpoint derives required keys from its receive pattern", async () => {

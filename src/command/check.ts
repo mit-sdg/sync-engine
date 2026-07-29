@@ -1,23 +1,12 @@
 import { readFileSync } from "node:fs";
-import { readdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
-
-async function filesBelow(
-  directory: string,
-  filter?: (name: string) => boolean,
-): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files = await Promise.all(
-    entries.map(async (entry) => {
-      const path = resolve(directory, entry.name);
-      if (entry.isDirectory()) return filesBelow(path, filter);
-      return entry.isFile() && (filter === undefined || filter(entry.name)) ? [path] : [];
-    }),
-  );
-  return files.flat();
-}
+import { applicationManifest } from "@engine/tooling/manifest";
+import { diagnosticsFail } from "@engine/tooling/diagnostics";
+import { inspectGenerated } from "@engine/tooling/generated-artifacts";
+import { filesBelow } from "./files-below.ts";
+import { loadGeneratedApplication } from "./generated-config.ts";
 
 function parseFile(path: string): ts.SourceFile {
   return ts.createSourceFile(
@@ -240,17 +229,39 @@ export async function conceptDirectories(
     .sort();
 }
 
-const usage = `sync-engine check [--concepts <path...>]
-  Verify every concept specification against its class.
+const usage = `sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
+  Check parsed action/query declarations against class source and optionally inspect application diagnostics.
   Defaults to src/concepts.`;
 
 export async function checkCommand(args: readonly string[]): Promise<void> {
-  const conceptsIndex = args.indexOf("--concepts");
-  let conceptRoots = ["src/concepts"];
-  if (conceptsIndex !== -1) {
-    conceptRoots = args.slice(conceptsIndex + 1);
-    if (conceptRoots.length === 0) throw new Error(usage);
+  let conceptRoots: string[] | undefined;
+  let configPath: string | undefined;
+  let failOnWarnings = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--concepts" && conceptRoots === undefined) {
+      conceptRoots = [];
+      while (args[index + 1] !== undefined && !args[index + 1].startsWith("-")) {
+        conceptRoots.push(args[index + 1]);
+        index += 1;
+      }
+      if (conceptRoots.length === 0) throw new Error(usage);
+      continue;
+    }
+    if (argument === "--config" && configPath === undefined) {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("-")) throw new Error(usage);
+      configPath = value;
+      index += 1;
+      continue;
+    }
+    if (argument === "--fail-on-warnings" && !failOnWarnings) {
+      failOnWarnings = true;
+      continue;
+    }
+    throw new Error(usage);
   }
+  conceptRoots ??= ["src/concepts"];
 
   const root = process.cwd();
   const directories = await conceptDirectories(conceptRoots, root);
@@ -260,8 +271,24 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
   const failures = directories.flatMap((directory) => conceptFailures(directory, root));
   if (failures.length > 0) {
     throw new Error(
-      `Concept specification check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
+      `Concept action/query source check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
     );
   }
-  console.log(`Specification check passed for ${directories.length} concepts.`);
+  console.log(`Concept action/query source check passed for ${directories.length} concepts.`);
+
+  if (configPath !== undefined) {
+    const application = await loadGeneratedApplication(configPath, root);
+    const diagnostics = await inspectGenerated(
+      application,
+      (assembled) => applicationManifest(assembled).diagnostics,
+    );
+    for (const diagnostic of diagnostics) {
+      console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
+    }
+    const policy = failOnWarnings ? "warnings" : "errors";
+    if (diagnosticsFail(diagnostics, policy)) {
+      throw new Error(`Application diagnostic check failed with policy "${policy}".`);
+    }
+    console.log(`Application diagnostic check passed with ${diagnostics.length} advisories.`);
+  }
 }

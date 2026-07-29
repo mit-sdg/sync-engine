@@ -1,21 +1,23 @@
 /** Evaluate a fused former into its shaped tree, at the moment of asking. */
 
 import { Frames, readPatternValue } from "./frames.ts";
-import { applyWhereOps } from "./where-ops.ts";
-import { varNamesInPattern } from "./former-analysis.ts";
+import { applyWhereOps } from "./where-evaluation.ts";
+import { varNamesInPattern } from "./operation-footprint.ts";
 import { FormerFault } from "./former-nodes.ts";
 import type { FormerRef, FusedFormer } from "./former-nodes.ts";
 import { liveOf } from "./ir.ts";
 import type { ArrangedIR, FormerNodeIR, PatternIR, SpliceIR } from "./ir.ts";
-import type { ReadEnv } from "./env.ts";
+import type { ReadEnv } from "./definition-registry.ts";
 import type { Frame, Mapping } from "@engine/reactions/types";
+import { setOwn } from "@engine/utils/own-property";
 
 /** One selection's shared shape: source line and refinements. */
 type SelectionIR = Extract<FormerNodeIR, { from: object }>;
+type AssertRows = (count: number) => void;
 
 /** Whether an input pattern reads through an unbound variable — absence propagates. */
 function inputUnbound(input: PatternIR, frame: Frame): boolean {
-  return varNamesInPattern(input).some((name) => !(name in frame));
+  return varNamesInPattern(input).some((name) => !Object.hasOwn(frame, name));
 }
 
 /** The selection's surviving row-frames, in order: rows unified, conditions applied. */
@@ -24,12 +26,13 @@ async function selectFrames(
   selection: SelectionIR,
   frame: Frame,
   env: ReadEnv,
+  assertRows?: AssertRows,
 ): Promise<Frames> {
   if (inputUnbound(selection.from.in, frame)) return new Frames();
-  const expanded = await applyWhereOps(new Frames(frame), [selection.from], env);
+  const expanded = await applyWhereOps(new Frames(frame), [selection.from], env, assertRows);
   const where = selection.where ?? [];
   if (where.length === 0) return expanded;
-  return applyWhereOps(expanded, where, env);
+  return applyWhereOps(expanded, where, env, assertRows);
 }
 
 function compareValues(left: unknown, right: unknown): number {
@@ -54,9 +57,14 @@ function arrange(frames: Frames, ordering: ArrangedIR | undefined): Frame[] {
 const DROP_ROW: unique symbol = Symbol("DROP_ROW");
 const ABSENT: unique symbol = Symbol("ABSENT");
 
-/** The fragment a splice names: its definition-site ref, or the registered one. */
-function fragmentOf(use: SpliceIR, hostName: string, env: ReadEnv): FormerRef {
-  return (liveOf(use) as FormerRef | undefined) ?? env.formerByName(use.fragment, hostName);
+/** A nested former's definition-site ref, or the registered former of the same name. */
+function nestedFormerOf(
+  use: { fragment: string } | { former: string },
+  hostName: string,
+  env: ReadEnv,
+): FormerRef {
+  const name = "fragment" in use ? use.fragment : use.former;
+  return (liveOf(use) as FormerRef | undefined) ?? env.formerByName(name, hostName);
 }
 
 /**
@@ -69,13 +77,14 @@ async function evalSplice(
   hostName: string,
   hostScope: Frame,
   env: ReadEnv,
+  assertRows?: AssertRows,
 ): Promise<Record<string, unknown> | typeof DROP_ROW> {
-  const fragment = fragmentOf(use, hostName, env);
+  const fragment = nestedFormerOf(use, hostName, env);
   const input = resolveInput(use.in, hostScope);
   if (input === ABSENT) {
     return use.whether ? (blankNode(fragment.body) as Record<string, unknown>) : DROP_ROW;
   }
-  const result = await evaluateFormer(fragment, input, env);
+  const result = await evaluateFormer(fragment, input, env, assertRows);
   if (result === ABSENT) {
     return use.whether ? (blankNode(fragment.body) as Record<string, unknown>) : DROP_ROW;
   }
@@ -89,13 +98,9 @@ function resolveInput(input: PatternIR, frame: Frame): Mapping | typeof ABSENT {
   for (const [key, pattern] of Object.entries(input)) {
     const read = readPatternValue(pattern, frame);
     if (read.isVariable && !read.bound) return ABSENT;
-    resolved[key] = read.value;
+    setOwn(resolved, key, read.value);
   }
   return resolved;
-}
-
-function formerOf(node: Extract<FormerNodeIR, { node: "former" }>, host: string, env: ReadEnv) {
-  return (liveOf(node) as FormerRef | undefined) ?? env.formerByName(node.former, host);
 }
 
 function blankNode(node: FormerNodeIR): unknown {
@@ -120,10 +125,11 @@ async function evaluateFormer(
   ref: FormerRef,
   input: Mapping,
   env: ReadEnv,
+  assertRows?: AssertRows,
 ): Promise<unknown | typeof ABSENT> {
   const frame: Frame = {};
-  for (const inputName of ref.ins) frame[inputName] = input[inputName];
-  const result = await evalNode(ref.formerName, ref.body, frame, env);
+  for (const inputName of ref.ins) setOwn(frame, inputName, input[inputName]);
+  const result = await evalNode(ref.formerName, ref.body, frame, env, assertRows);
   if (result !== DROP_ROW) return result;
   if (ref.promise === "optional") return ABSENT;
   throw new FormerFault(
@@ -137,14 +143,15 @@ async function evalNode(
   node: FormerNodeIR,
   frame: Frame,
   env: ReadEnv,
+  assertRows?: AssertRows,
 ): Promise<unknown> {
   switch (node.node) {
     case "leaf": {
-      const value = node.var in frame ? frame[node.var] : null;
+      const value = Object.hasOwn(frame, node.var) ? frame[node.var] : null;
       return value === undefined ? null : value;
     }
     case "record": {
-      const matches = await applyWhereOps(new Frames(frame), node.where ?? [], env);
+      const matches = await applyWhereOps(new Frames(frame), node.where ?? [], env, assertRows);
       if (matches.length === 0) return DROP_ROW;
       if (matches.length > 1) {
         throw new FormerFault(
@@ -155,51 +162,59 @@ async function evalNode(
       const scope = matches[0];
       const result: Record<string, unknown> = {};
       for (const [key, child] of Object.entries(node.entries)) {
-        const value = await evalNode(formerName, child, scope, env);
+        const value = await evalNode(formerName, child, scope, env, assertRows);
         if (value === DROP_ROW) return DROP_ROW;
-        result[key] = value;
+        setOwn(result, key, value);
       }
       for (const use of node.splices ?? []) {
-        const sub = await evalSplice(use, formerName, scope, env);
+        const sub = await evalSplice(use, formerName, scope, env, assertRows);
         if (sub === DROP_ROW) return DROP_ROW;
-        Object.assign(result, sub);
+        for (const [key, value] of Object.entries(sub)) setOwn(result, key, value);
       }
       return result;
     }
     case "former": {
-      const ref = formerOf(node, formerName, env);
+      const ref = nestedFormerOf(node, formerName, env);
       const input = resolveInput(node.in, frame);
       if (input === ABSENT) return node.whether ? blankNode(ref.body) : DROP_ROW;
-      const result = await evaluateFormer(ref, input, env);
+      const result = await evaluateFormer(ref, input, env, assertRows);
       if (result === ABSENT) return node.whether ? blankNode(ref.body) : DROP_ROW;
       return result;
     }
     case "each": {
-      const selected = arrange(await selectFrames(formerName, node, frame, env), node.arranged);
+      const selected = arrange(
+        await selectFrames(formerName, node, frame, env, assertRows),
+        node.arranged,
+      );
       const items: unknown[] = [];
       for (const rowFrame of selected) {
-        const item = await evalNode(formerName, node.as, rowFrame, env);
+        const item = await evalNode(formerName, node.as, rowFrame, env, assertRows);
         if (item === DROP_ROW) continue;
+        assertRows?.(items.length + 1);
         items.push(item);
       }
       return items;
     }
     case "count":
-      return (await selectFrames(formerName, node, frame, env)).length;
+      return (await selectFrames(formerName, node, frame, env, assertRows)).length;
     case "first": {
-      const selected = arrange(await selectFrames(formerName, node, frame, env), node.arranged);
+      const selected = arrange(
+        await selectFrames(formerName, node, frame, env, assertRows),
+        node.arranged,
+      );
       if (selected.length === 0) return null;
       const value = selected[0][node.value];
       return value === undefined ? null : value;
     }
     case "distinct": {
-      const selected = await selectFrames(formerName, node, frame, env);
+      const selected = await selectFrames(formerName, node, frame, env, assertRows);
       const seen = new Set<unknown>();
       const values: unknown[] = [];
       for (const rowFrame of selected) {
         const value = rowFrame[node.value];
         if (value === undefined || seen.has(value)) continue;
         seen.add(value);
+        assertRows?.(values.length + 1);
         values.push(value);
       }
       return values;
@@ -214,7 +229,11 @@ async function evalNode(
  * engine evaluates). A violated former promise throws {@link FormerFault}.
  * When forming a consequence input, the engine records that fault on the ask.
  */
-export async function formTree(fused: FusedFormer, env: ReadEnv): Promise<unknown> {
+export async function formTree(
+  fused: FusedFormer,
+  env: ReadEnv,
+  assertRows?: AssertRows,
+): Promise<unknown> {
   for (const inputName of fused.former.ins) {
     if (typeof fused.in[inputName] === "symbol") {
       throw new Error(
@@ -223,6 +242,7 @@ export async function formTree(fused: FusedFormer, env: ReadEnv): Promise<unknow
       );
     }
   }
-  const tree = await evaluateFormer(fused.former, fused.in, env);
+  assertRows?.(1);
+  const tree = await evaluateFormer(fused.former, fused.in, env, assertRows);
   return tree === ABSENT ? null : tree;
 }

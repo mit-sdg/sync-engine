@@ -38,14 +38,18 @@ authoritative contract when a guide omits an edge case.
 
 ## Find an example
 
+- [Advanced recipes](advanced-recipes.md) demonstrates explicit restart
+  recovery and an inbound CLI over a real application endpoint.
 - [Example book](book.md) places small read constructions beside generated
   read-back and representative errors.
 - [Reading Circle](../examples/reading-circle/README.md) is the shortest complete
   multi-concept application.
 - [Operations Room](../examples/operations-room/README.md) demonstrates
   selectable reaction packs, replaceable policy, and staged formers.
+- [Production HTTP](../examples/production-http/README.md) separates registered
+  public-error projection from optional same-origin cookie credentials.
 
-Both applications are independently installable. Their generated Markdown and
+All applications are independently installable. Their generated Markdown and
 TypeScript files are pinned outputs from their assemblies.
 
 ## Evaluate a deployment
@@ -53,6 +57,10 @@ TypeScript files are pinned outputs from their assemblies.
 - [Operational limits](operations.md) states suitable and unsuitable uses,
   concurrency boundaries, resource limits, persistence limits, and host
   responsibilities.
+- [Support policy](../SUPPORT.md) defines beta compatibility, exact-version
+  generated contracts, runtime/toolchain ranges, and the support window.
+- [Security policy](../SECURITY.md) defines private vulnerability reporting,
+  security-fix eligibility, response targets, and the host/application boundary.
 - [Execution semantics](semantics.md#boundary-gateway-and-client) defines the
   transport-neutral boundary and client result model.
 - [Changelog](../CHANGELOG.md) records release-specific compatibility changes.

@@ -1,7 +1,6 @@
 /** Import-leaf brands keep read-side predicates from creating value cycles. */
 export const WhereOpBrand: unique symbol = Symbol("WhereOpBrand");
 export const CountOpBrand: unique symbol = Symbol("CountOpBrand");
-export const ClaimBrand: unique symbol = Symbol("ClaimBrand");
 export const ViewBlockBrand: unique symbol = Symbol("ViewBlockBrand");
 export const LineBrand: unique symbol = Symbol("LineBrand");
 export const RelationViewBrand: unique symbol = Symbol("RelationViewBrand");
@@ -23,14 +22,4 @@ export function hasBrand(value: unknown, marker: symbol): value is object {
 
 export function hasFuncBrand(value: unknown, marker: symbol): value is object {
   return typeof value === "function" && (value as never)[marker] === true;
-}
-
-export function setOwn<T extends object>(obj: T, key: string | symbol, value: unknown): T {
-  Object.defineProperty(obj, key, {
-    value,
-    enumerable: true,
-    configurable: true,
-    writable: true,
-  });
-  return obj;
 }

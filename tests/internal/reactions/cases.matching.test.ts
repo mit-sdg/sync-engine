@@ -1,20 +1,27 @@
 /** Focused engine tests covering matching, flow isolation, and firing consumption. */
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  Frames,
-  Logging,
-  Reacting,
-  type Vars,
-  when,
-} from "@sync-engine/internal/reactions";
+import { Logging } from "@sync-engine/assembly";
+import { earlier, vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import { Frames } from "@sync-engine/internal/reads/frames";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
 import {
   CounterConcept,
   GateConcept,
   ListConcept,
   NotificationConcept,
   RecorderConcept,
+  mockRefs,
 } from "./mocks.ts";
+
+const pairWords = vocabulary({
+  concepts: {},
+  computations: {
+    rootTag: ({ tag }) => !String(tag).includes(":"),
+    derivedFrom: ({ tag1, tag2 }) => String(tag2) === `${String(tag1)}:a`,
+  },
+});
 
 /** Wire a Gate + Recorder pair to reactions that branch on output shape. */
 function gateSetup() {
@@ -27,9 +34,11 @@ function gateSetup() {
 
   // Mutually exclusive: only one of these can ever match a single check.
   const OnError = ({ error }: Vars) =>
-    when(Gate.check, {}, { error }).then(request(Gate.record, { msg: error }));
+    when(mockRefs.Gate.check({}).refuses({ error })).then(mockRefs.Gate.record({ msg: error }));
   const OnQuestion = ({ question }: Vars) =>
-    when(Gate.check, {}, { question }).then(request(Gate.record, { msg: question }));
+    when(mockRefs.Gate.check({}).responds({ question })).then(
+      mockRefs.Gate.record({ msg: question }),
+    );
   reacting.register({ OnError, OnQuestion });
   return { Gate, Recorder };
 }
@@ -59,9 +68,10 @@ describe("engine: flow isolation", () => {
 });
 
 describe("engine: consumption-based double-fire prevention", () => {
-  test("a multi-`when` reaction consumes each record at most once", async () => {
+  test("a multi-record reaction consumes each record at most once", async () => {
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;
+    reacting.registerComputations(vocabularyComputations(pairWords));
     const { Recorder, Counter } = reacting.instrument({
       Recorder: new RecorderConcept(),
       Counter: new CounterConcept(),
@@ -69,26 +79,23 @@ describe("engine: consumption-based double-fire prevention", () => {
 
     // Cascade: a simple tag produces its ":a" successor (same flow).
     const Cascade = ({ tag, next }: Vars) =>
-      when(Recorder.record, { tag }, {})
+      when(mockRefs.Recorder.record({ tag }).responds())
         .where((frames: Frames) =>
           frames
             .filter(($) => !String($[tag]).includes(":"))
             .map((frame) => ({ ...frame, [next]: `${String(frame[tag])}:a` })),
         )
-        .then(request(Recorder.record, { tag: next }));
+        .then(mockRefs.Recorder.record({ tag: next }));
 
     // Pair: matches the (base, base:a) pair exactly once and bumps a counter.
     const Pair = ({ tag1, tag2 }: Vars) =>
-      when([
-        [Recorder.record, { tag: tag1 }],
-        [Recorder.record, { tag: tag2 }],
-      ])
-        .where((frames: Frames) =>
-          frames
-            .filter(($) => !String($[tag1]).includes(":"))
-            .filter(($) => String($[tag2]) === `${String($[tag1])}:a`),
+      when(mockRefs.Recorder.record({ tag: tag2 }).responds())
+        .where(
+          earlier(mockRefs.Recorder.record, { tag: tag1 }),
+          pairWords.computations.rootTag({ tag: tag1 }),
+          pairWords.computations.derivedFrom({ tag1, tag2 }),
         )
-        .then(request(Counter.increment, {}));
+        .then(mockRefs.Counter.increment({}));
     reacting.register({ Cascade, Pair });
 
     await Recorder.record({ tag: "x" });
@@ -108,7 +115,7 @@ describe("engine: input field matching", () => {
     });
 
     const OptionalFieldReaction = ({ tag, optional, next }: Vars) =>
-      when(Recorder.record, { tag, optional }, {})
+      when(mockRefs.Recorder.record({ tag, optional } as never).responds())
         .where((frames: Frames) =>
           frames
             .filter(($) => !String($[tag]).includes(":"))
@@ -117,7 +124,7 @@ describe("engine: input field matching", () => {
               [next]: `optional:${String(frame[tag])}`,
             })),
         )
-        .then(request(Recorder.record, { tag: next }));
+        .then(mockRefs.Recorder.record({ tag: next }));
     reacting.register({ OptionalFieldReaction });
 
     await Recorder.record({ tag: "required-only" });
@@ -135,7 +142,9 @@ describe("engine: input field matching", () => {
     });
 
     const OutputRequiredReaction = ({ out }: Vars) =>
-      when(Gate.record, {}, { out }).then(request(Recorder.record, { tag: "never" }));
+      when(mockRefs.Gate.record({}).responds({ out } as never)).then(
+        mockRefs.Recorder.record({ tag: "never" }),
+      );
     reacting.register({ OutputRequiredReaction });
 
     await Gate.record({ msg: "test" });
@@ -150,7 +159,7 @@ describe("engine: input field matching", () => {
     });
 
     const NestedThenReaction = ({ tag, inner, next }: Vars) =>
-      when(Recorder.record, { tag }, {})
+      when(mockRefs.Recorder.record({ tag }).responds())
         .where((frames: Frames) =>
           frames
             .filter(($) => !String($[tag]).includes(":"))
@@ -160,7 +169,7 @@ describe("engine: input field matching", () => {
               [inner]: `inner-${String(frame[tag])}`,
             })),
         )
-        .then(request(Recorder.record, { tag: next, extra: { inner } }));
+        .then(mockRefs.Recorder.record({ tag: next, extra: { inner } } as never));
     reacting.register({ NestedThenReaction });
 
     await Recorder.record({ tag: "outer" });
@@ -175,7 +184,7 @@ describe("engine: input field matching", () => {
     });
 
     const UnboundOptionalReaction = ({ present, next }: Vars) =>
-      when(Recorder.record, { tag: present }, {})
+      when(mockRefs.Recorder.record({ tag: present }).responds())
         .where((frames: Frames) =>
           frames
             .filter(($) => !String($[present]).includes(":"))
@@ -184,7 +193,7 @@ describe("engine: input field matching", () => {
               [next]: `unbound:${String(frame[present])}`,
             })),
         )
-        .then(request(Recorder.record, { tag: next }));
+        .then(mockRefs.Recorder.record({ tag: next }));
     reacting.register({ UnboundOptionalReaction });
 
     await Recorder.record({ tag: "hello" });
@@ -202,7 +211,7 @@ describe("engine: deeply nested then resolution", () => {
 
     reacting.register({
       DeepNest: ({ tag, inner }: Vars) =>
-        when(Recorder.record, { tag }, {})
+        when(mockRefs.Recorder.record({ tag }).responds())
           .where((frames: Frames) =>
             frames
               .filter(($) => !String($[tag]).includes(":"))
@@ -212,7 +221,7 @@ describe("engine: deeply nested then resolution", () => {
               })),
           )
           .then(
-            request(Recorder.record, {
+            mockRefs.Recorder.record({
               tag: "@:done",
               extra: { nested: { deep: inner } },
             }),
@@ -236,11 +245,11 @@ describe("engine: symbol-keyed input pattern", () => {
     reacting.register({
       SymbolKeyPat: (_vars: Vars) =>
         when(
-          Recorder.record,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          { [symKey]: "impossible", tag: "expected" } as any,
-          {},
-        ).then(request(Recorder.record, { tag: "after-sym" })),
+          mockRefs.Recorder.record(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            { [symKey]: "impossible", tag: "expected" } as any,
+          ).responds(),
+        ).then(mockRefs.Recorder.record({ tag: "after-sym" })),
     });
 
     await Recorder.record({ tag: "expected" });
@@ -258,9 +267,9 @@ describe("engine: literal pattern values compare structurally", () => {
     });
 
     const OnAdd = ({ value }: Vars) =>
-      when(List.add, {}, { value })
-        .then(request(Notification.notify, { message: "first", tags: ["a", "b"] } as never))
-        .then(request(Notification.notify, { message: "second" }));
+      when(mockRefs.List.add({}).responds({ value }))
+        .then(mockRefs.Notification.notify({ message: "first", tags: ["a", "b"] } as never))
+        .then(mockRefs.Notification.notify({ message: "second" }));
     reacting.register({ OnAdd });
 
     await List.add({ value: 1 });
@@ -278,8 +287,8 @@ describe("engine: literal pattern values compare structurally", () => {
     });
 
     const OnTagged = (_: Vars) =>
-      when(Notification.notify, { tags: ["x", "y"] } as never, {}).then(
-        request(Notification.notify, { message: "matched" }),
+      when(mockRefs.Notification.notify({ tags: ["x", "y"] } as never).responds()).then(
+        mockRefs.Notification.notify({ message: "matched" }),
       );
     reacting.register({ OnTagged });
 

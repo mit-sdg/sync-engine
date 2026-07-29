@@ -1,7 +1,7 @@
 # Execution semantics
 
 This page defines the observable execution contract for actions, reactions,
-reads, formed results, and application boundaries in the current 1.0 alpha.
+reads, formed results, and application boundaries in the current 1.0 beta.
 The [documentation index](./index.md) points to the authoring guides, the
 [example book](./book.md) demonstrates representative constructions, and the
 [Public API](./public-surface.md) lists the exports.
@@ -22,6 +22,25 @@ record or an array and is treated as potentially many. `no`, `whether`, and
 folds, and the producer's declaration control the result shape. A `then(...)`
 group states independent siblings; later groups state temporal dependence.
 
+## Contract index
+
+| Contract need                               | Section                                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Action outcomes, refusals, and direct calls | [Actions, refusals, and faults](#actions-refusals-and-faults)                           |
+| Trigger matching and consequence paths      | [Reactions](#reactions)                                                                 |
+| Portable and local definitions              | [Portable and local behavior](#portable-and-local-behavior)                             |
+| In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                 |
+| Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                            |
+| Query promises, caching, and equality       | [Queries](#queries)                                                                     |
+| Views and formed results                    | [Views and formers](#views-and-formers)                                                 |
+| Sibling and endpoint settlement             | [Sibling paths and endpoint settlement](#sibling-paths-and-endpoint-settlement)         |
+| Gateway, client, validation, and HTTP       | [Boundary, gateway, and client](#boundary-gateway-and-client)                           |
+| Generated caller contracts                  | [Generated wire](#generated-wire)                                                       |
+| Deployment and resource limits              | [Operational limits](#operational-limits)                                               |
+| Interpreter failure delivery                | [Failures between action asks](#failures-between-action-asks)                           |
+| Timeout and abort                           | [Cancellation](#cancellation)                                                           |
+| Occurrence logs and restart                 | [Logs, concept implementations, and restart](#logs-concept-implementations-and-restart) |
+
 ## Actions, refusals, and faults
 
 An action occurrence begins when the engine records its ask, before the action
@@ -29,6 +48,12 @@ body runs. The ask carries an id, the concept and action names, its input, and a
 flow token: the correlation identity shared by one outside request and its
 consequences. An ask made by a reaction also carries the reaction name as `by`
 provenance.
+
+Matching snapshots arrays, plain records, and ordinary `Date` values when the
+ask begins, preserving cycles and repeated references. Other object kinds retain
+identity semantics. The action implementation still receives the caller's
+original input object, so later mutation cannot rewrite the occurrence that
+reactions match.
 
 The action then settles in one of two outcome postures:
 
@@ -53,8 +78,8 @@ For a direct call through `Assembly.concepts`, a returned action resolves to its
 success value and a refusal resolves to an `ActionRefusal` mapping with an
 `error` code. A registered exception refusal also carries the specification's
 sentence as `detail`; a `Refuse` escape hatch may carry other data. A fault
-rejects the direct call. Underscore-prefixed query calls keep their declared
-return shape and do not return action refusals.
+rejects the direct call. Underscore-prefixed query calls are asynchronous roots
+with their declared answer inside the promise and do not return action refusals.
 
 The direct caller receives a scalar action return unchanged. Occurrence
 matching normalizes a non-object return to an empty successful result, so
@@ -90,12 +115,12 @@ The trigger form selects the posture:
 | `when(Concept.action(pattern).refuses(refusal))` | the refused outcome                            |
 | `when(returned(...))` / `when(refused(...))`     | the corresponding cross-action posture channel |
 
-Each returned or refused outcome, and each fault mark watched by a framework
-reaction, gives each matching public single-trigger reaction one evaluation. A
-later record cannot make that reaction reconsider an earlier trigger. Manually
-registered multi-trigger IR can instead join a newly landed record with earlier
-unconsumed records in the flow. A `where` block may produce several bindings,
-so one evaluation may produce several firings. Each firing record
+Each requested ask, returned or refused outcome, and fault mark watched by a
+framework reaction gives each matching public single-trigger reaction one
+evaluation. A later record cannot make that reaction reconsider an earlier
+trigger. Manually registered multi-trigger IR can instead join a newly landed
+record with earlier unconsumed records in the flow. A `where` block may produce
+several bindings, so one evaluation may produce several firings. Each firing record
 names the reaction, its binding, the trigger it consumed, and the asks it
 produced. Once an evaluation records a firing, consumption prevents that
 reaction from evaluating the trigger again; other reactions consume it
@@ -122,6 +147,23 @@ before its trailing branch label.
 The public `when(...)` form accepts one trigger. Use `earlier` for directional
 correlation, views for standing policy, and concept guards for decisions that
 must run once. The package exports no public multi-occurrence join form.
+
+### Portable and local behavior
+
+A definition is **portable** only when its canonical JSON representation can be
+round-tripped and registered against the same named vocabulary. Named concept
+actions, queries, views, formers, and vocabulary computations satisfy that
+contract when their definitions contain only the portable IR vocabulary.
+Closures, explicit custom operations, `$is` object-identity patterns, raw result
+transforms, and whole reaction definitions that lowering cannot represent are
+local executable behavior. JSON markers for local behavior make it inspectable;
+they do not make its function or identity re-registerable.
+
+Ordinary assembly accepts portable behavior only. It rejects every local
+reaction, view, or former before an invoker, route set, generated plan, or
+artifact write is exposed. Manual engines under the `advanced` subpath may
+execute local constructs, but they do not gain ordinary assembly's application
+boundary or portability guarantees.
 
 ## Execution and concurrency
 
@@ -222,19 +264,27 @@ is not row-schema validation. A record missing a field named in `.is` does not
 match that pattern.
 
 Queries are memoized by concept instance and argument between invalidation
-points. Instrumented actions invalidate all query caches before and after their
-bodies, and an assembled outside invocation invalidates caches before dispatch.
+points. Instrumented actions invalidate the acted-on concept instance's query
+caches before and after their bodies, and an assembled outside invocation
+invalidates all concept query caches before dispatch.
 A rejected native `Promise` from the same JavaScript realm is removed from the
 cache. Arbitrary thenables are cached as ordinary values. Direct state mutation
 or an external database change that bypasses an instrumented action can remain
 hidden until the next invalidation; a query call is not guaranteed to execute
-its implementation on every read.
+its implementation on every read. Cache-key construction traverses at most 100
+nested levels. A call with a deeper argument still executes but bypasses
+memoization for that call.
+Cache arguments follow read equality: arrays and plain records are structural,
+`Date` values use their timestamps, and maps, sets, class instances, regular
+expressions, functions, symbols, and other opaque values use identity.
+Equivalent acyclic structural values share entries; cyclic values are bounded
+and safe but may occupy separate entries when their graph shapes differ.
 
 Read equality and literal action-pattern equality are structural for arrays and
 plain records, timestamp-based for `Date`, and identity-based for maps, sets,
-class instances, and other objects. Reusing an already bound variable in an
-action pattern uses strict identity/value comparison instead. Many-row read
-matching retains the first structurally distinct fill. Former `.distinct(...)`
+class instances, and other objects. Reusing an already-bound variable in an
+action pattern uses this same equality. Many-row read matching retains the first
+structurally distinct fill. Former `.distinct(...)`
 uses JavaScript `Set` semantics and skips `undefined`. `.first(...)` uses the
 first selected row after optional arrangement. `arranged("newest")` reverses
 source order; it does not inspect a timestamp field.
@@ -247,10 +297,11 @@ How such a fault is delivered depends on where the read occurs. See
 A **view** names a match. Its builder receives separate input, output, and free
 binding bags. A predicate view ends in `.holds()`. A view with outputs defaults
 to `.many()` and may instead declare `.one()` or `.optional()`. Its human name
-carries no signature or cardinality. At a use-site a view takes one
-object-shaped input mapping and is read exactly like a concept query. Its local
-bindings do not escape. Stacked `where` blocks are alternatives; any matching
-block can supply a result.
+carries no signature or cardinality. At a use-site a view takes one plain
+object input mapping. Every enumerable own key must be declared, and every
+declared input must be present according to the JavaScript `in` operator. The
+view is read exactly like a concept query. Its local bindings do not escape.
+Stacked `where` blocks are alternatives; any matching block can supply a result.
 
 The engine checks a concept query's declared promise whenever it reads the
 query and checks a view's declared promise whenever it reads the view. The
@@ -266,7 +317,8 @@ always produces one result whose shape is determined by `.form`, `.count`,
 selection already has a defined result. The human name carries neither inputs
 nor cardinality. The engine checks the promise when the former is evaluated. A
 record's `where` cannot open a name from a `many` source. Use `each` when the
-result should contain rows.
+result should contain rows. Like a view, a former call takes one plain object
+mapping with the same enumerable-own-key and required-input checks.
 
 Production handles absence and plurality in three ways:
 
@@ -290,7 +342,9 @@ formed result.
 If a former faults while forming a reaction consequence, that consequence ask
 is recorded with the fault and remains unanswered. Calling a former directly
 has no action ask to mark, so the evaluation rejects instead. The operational
-delivery boundary is described under
+fault is a `FormerFault`: `FORMER_NONE` means a former promising one answer
+produced none, and `FORMER_MANY` means a record body produced several matches.
+These faults are not domain refusals. The operational delivery boundary is described under
 [Failures between action asks](#failures-between-action-asks).
 
 ## Decisions that must not race
@@ -353,65 +407,139 @@ The [application-boundary guide](./guide/application-boundary.md) owns the
 authoring path from assembly through the fixed gateway and generated client.
 Semantically, `assemble` gives an application its own boundary and occurrence
 log. The log records what happened in that assembly; it is not concept state.
-`createGateway` builds a second, fixed standard application in front of it,
-with separate routing, admission, forwarding, boundary, and log. The gateway
-and application share a correlation id, not a log. The public gateway factory
-accepts an application and additive composition; it does not expose a general
-replacement gateway vocabulary or assembly.
+`createGateway` decorates the application's `Invoker` with route admission,
+forwarding, caller timeout and abort handling, limits, observation, and ordered
+drain. It does not create a second reaction engine or occurrence log. Gateway
+and application observation share the effective correlation id.
 
 The local and HTTP clients resolve to the same simple shape: the endpoint's
 success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
-boundary answer keeps domain errors and framework errors distinct. The HTTP
-adapter also owns method, JSON parsing, a one-mebibyte request-body limit, and
-status mapping; framework failures mapped to 5xx responses omit diagnostic
-detail. Client, invocation, and CLI adapters also omit exception text when an
-unknown thrown value becomes a framework error. A top-level `error` field in an
-authored response denotes a domain failure, so a successful endpoint result
+boundary answer keeps domain errors and framework errors distinct. Every HTTP
+handler owns method checks, JSON parsing, a one-mebibyte request-body limit, and
+status mapping. Client, invocation, and CLI adapters omit exception text when
+an unknown thrown value becomes a framework error. A top-level `error` field in
+an authored response denotes a domain failure, so a successful endpoint result
 cannot use `error` as an ordinary top-level data field. See the exact
 [cancellation boundary](#cancellation).
 
-An HTTP floor may bind one logical credential input to a cookie. The application
-declares the credential name and input, the endpoint that issues it and the
-returned token and expiry fields, the successful endpoints that clear it, and
-the public origin. Registration checks those names against the assembly. Any
-endpoint whose input contract requires that credential becomes protected
-without another floor edit.
+An opt-in `ExecutionLimits` profile bounds active root flows, pending requests,
+actions and firings per flow, evaluation rows, and caller deadlines. Profile
+values and explicit deadlines are positive finite integers. Work rejected for
+overload or drain returns `UNAVAILABLE` and creates no root action occurrence.
+An accepted flow that exceeds an action, firing, or row budget records integrity
+evidence and follows interpreter-failure settlement as opaque `INTERNAL_ERROR`.
 
-The fixed floor accepts JSON `POST` requests, enforces the declared origin when
+Ordinary assembly and gateway options accept operational observers. The stable
+event union reports action settlement, interpreter and integrity failure,
+invocation settlement, execution-limit breach, and drain state. Applicable
+events carry action id, flow, route, asking reaction, correlation id, safe
+result class, wall-clock time, and monotonic duration. They never carry action
+input or output.
+
+Each public `gateway.invoke(...)` emits exactly one invocation settlement after
+its final downstream or gateway rejection result is known. Gateway observers
+also receive its limit and drain events, but there are no internal gateway
+concept-action events. The settlement uses the caller-requested application
+path, the effective gateway/application correlation id, the final result class
+and framework code when applicable, and a duration through final completion.
+It omits `flow` because the internal gateway root identity is not a stable
+public request identity.
+
+Observer callbacks are synchronous bounded handoff: the engine catches throws
+and never awaits observer work, while queueing, exporting, and network I/O
+remain host responsibilities.
+
+HTTP handlers may resolve an inbound correlation id and project the effective
+value in a response header. Accepted identifiers are non-empty,
+control-character-free ByteStrings of at most 128 code units without leading or
+trailing spaces; invalid, non-ByteString, or faulting resolver results become a fresh UUID. Response
+header names are validated when a handler is constructed, and decoration cannot
+reject a handled request. A handler also rejects construction unless its
+standard gateway targets the supplied assembly. When direct callers omit a
+correlation id, the gateway establishes a fresh UUID once at public entry and
+carries it through gateway and application observation. Correlation does not
+deduplicate work and is not an idempotency key.
+
+Endpoint paths and HTTP base paths are portable absolute URL pathnames. Their
+declared spelling must survive WHATWG URL pathname handling exactly: queries,
+fragments, scheme-relative paths, literal spaces or Unicode, dot-segment
+normalization (including encoded dot segments), malformed percent escapes, and
+other noncanonical spellings are rejected. Percent-encoded path data remains
+valid when URL handling preserves it. `/` is a valid endpoint path and means no
+prefix when used as a base path. A trailing base-path slash is accepted and
+removed before routing, so `/api/` and `/api` declare the same base.
+
+`productionHttpProfile(...)` declares a public origin and optional base path.
+The handler form carrying that profile and the assembly is the production
+credential-free policy. It accepts JSON `POST` requests, preserves ordinary
+successful values, and projects domain refusals only through public categories
+registered by the assembly. A private, unknown, non-string, or dynamically open
+domain failure becomes `{ error: "INTERNAL_ERROR" }`. Framework input and route
+failures become `INVALID_REQUEST` and `NOT_FOUND`; every framework server
+failure becomes the same opaque internal response. Diagnostic detail never
+crosses this policy. The declared origin identifies public deployment and
+enforces the production HTTPS check; the credential-free profile does not use
+an inbound `Origin` header as an authorization or CORS decision.
+
+An HTTP floor may additionally bind one logical credential input to a cookie.
+The application declares the credential name and input, the endpoint that
+issues it and the returned token and expiry fields, the successful endpoints
+that clear it, and the public origin. Credential and output field names must be
+JavaScript-style identifiers. Issue and clear paths must be canonical portable
+paths, and clear paths must be distinct. Assembly validation requires every
+named path to exist, at least one endpoint to require the credential input, and
+every top-level alternative of the issuing endpoint's successful output to
+contain the token and expiry fields. Any endpoint whose input contract requires
+that credential becomes protected without another floor edit.
+
+The fixed floor uses the production profile's request and public-error policy,
+enforces the declared origin when
 an `Origin` header is present, replaces a protected request's credential input
 with the cookie value, and never accepts that value from the body. It projects
-concept refusal codes through their registered public categories and keeps
-framework faults opaque. The issuing endpoint's token and expiry fields become
-the cookie and do not enter its HTTP response. Successful clearing endpoints
-and an unauthorized protected request clear the cookie. Responses that issue
-or clear the cookie use `Cache-Control: no-store`. The floor is a same-origin boundary: it does not
-answer CORS preflights or emit CORS headers.
+concept refusal codes through the same registered categories. The issuing
+endpoint's token and expiry fields become the cookie and do not enter its HTTP
+response. At runtime, the token must be a string and the expiry must be a valid
+`Date` or a value whose string representation is date-parsable; malformed issue
+output becomes opaque `INTERNAL_ERROR`. Successful clearing endpoints and an
+unauthorized protected request clear the cookie. Responses that issue or clear
+the cookie use `Cache-Control: no-store`. The floor is a same-origin boundary:
+it does not answer CORS preflights or emit CORS headers.
+The floor adds no implicit `/api` route alias; serving below `/api` requires an
+explicit `basePath: "/api"` declaration.
 
-**Runtime validation boundary.** Gateway admission validates the route and the
-request's outer shape. The input must be a non-null, non-array object and contain every
-required own key. Extra keys remain. Defaults are shallow and apply only when a
-key is absent; a present value is never overwritten. Admission does not
-validate primitive types or nested shapes. Explicit `null` and, for direct
-invocation, explicit `undefined` therefore pass a required-key check. JSON
-transport removes `undefined` object fields before admission. The concept
-action accepts the admitted values or refuses them through its registered
-vocabulary. Any unexpected throw is the opaque framework fault
-`INTERNAL_ERROR`. The generated TypeScript contract checks callers during
-typecheck but adds no runtime value validator or schema derived from concept
-specifications. Admission reads and spreads input properties outside the
-invoker's failure-normalization catch; a proxy or getter that throws can reject
-a direct `invoke(...)` call.
+**Runtime validation boundary.** Gateway admission and the assembled invoker
+validate the route and request's outer shape. The input must be a non-null,
+non-array object and contain every required own key. Extra keys remain. Defaults
+are shallow and apply only when a key is absent; a present value is never
+overwritten. An endpoint may additionally attach application-supplied input and
+successful-output validators. The input validator sees the admitted value after
+defaults and runs before the application boundary ask is recorded. Invalid
+input returns `INVALID_INPUT`. The output validator runs before a successful
+result leaves the invoker. Invalid output records integrity evidence and becomes
+opaque `INTERNAL_ERROR`; domain and framework failures are not output-validated.
+
+Without an input validator, primitive types and nested shapes are not checked,
+so explicit `null` and direct-invocation `undefined` pass required-key presence.
+JSON transport removes `undefined` object fields before admission. Validators
+inspect values but do not transform them, and thrown validator failures fail
+closed. The generated TypeScript contract remains a static caller check rather
+than runtime validation. Optional concept State sections are uninterpreted human
+notation; they do not contribute to endpoint contracts or validators, and no
+schema is inferred from concept specifications.
 
 Absent an explicit endpoint input contract, assembly derives required keys from
 portable endpoint IR as the intersection of non-reserved keys mentioned by
-every exported `receive(...)` pattern for that path. An executable-only endpoint
-has no derived contract. An explicit contract replaces a derived contract, and
-only one endpoint declaration may supply an explicit contract for a path.
+every exported `receive(...)` pattern for that path. Local endpoint behavior is
+an assembly error. An explicit contract replaces a derived contract, and only
+one endpoint declaration may supply an explicit contract for a path. Assembly
+rejects an explicit contract when omitting its optional keys cannot match any
+receive alternative after defaults are applied.
 
-Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
+Production profiles and floors reject a non-HTTPS public origin when
+`NODE_ENV=production`. Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
 `Domain`. An HTTPS origin uses a `Secure` cookie whose name has the `__Host-`
-prefix; production rejects a non-HTTPS origin. Deployment responsibilities are
-listed under [Boundary operations](#boundary-operations).
+prefix. Deployment responsibilities are listed under [Boundary
+operations](#boundary-operations).
 
 For JSON-representable values, both clients expose the same projected data. The
 local client serializes and parses input and output before returning it. Dates
@@ -420,12 +548,10 @@ not have identical error codes: the local transport normally reports
 `TRANSPORT_ERROR`, while HTTP request serialization can report `NETWORK_ERROR`
 and server response serialization can report `INTERNAL_ERROR`.
 
-The generic HTTP adapter and credential HTTP floor are different protocol
-surfaces. The generic adapter exposes ordinary domain failures as HTTP 400 and
-maps selected framework codes to statuses. The credential floor projects
-private codes to public categories, makes malformed request failures opaque,
-and consumes or supplies credential fields through cookies. Do not infer one
-adapter's status or detail behavior from the other.
+The production profile exposes only registered categories and opaque protocol
+failures. The credential floor adds cookie consumption and issuance to that
+production policy. Both handlers apply the same request limits, JSON projection,
+correlation, and public status mapping.
 
 ## Generated wire
 
@@ -439,26 +565,20 @@ including `Date` to `string`. Strict generation rejects any leaf that cannot be
 traced to a signature. Without an anchor, the renderer emits a structural
 contract and uses `Json` for leaves it cannot trace to a signature.
 
-Artifact rendering, checking, and pinning also reject an executable endpoint
-that could not be lowered to portable reaction data. The error names the
-endpoint and unsupported construction; generation never emits a partial wire
-surface that silently omits such an endpoint. Executable-only non-endpoint
-reactions remain listed in the generated read-back.
+Ordinary assembly rejects every local reaction, view, or former. The error names
+each local owner before a route or artifact plan is exposed. Direct invocation,
+gateway routing, HTTP, and generation therefore share one complete portable
+design instead of silently omitting executable-only behavior.
 
-Ordinary assembly does not apply that endpoint-lowering rejection. A
-local-only endpoint can therefore remain executable through the direct invoker
-while absent from `publicInterface.routes` and the standard gateway. Every
-served assembly should run artifact checking as a deployment gate until
-ordinary assembly makes endpoint identity authoritative.
-
-When a generated application descriptor supplies an HTTP floor, one module
-contains both contracts. The contract named by `wireName` retains the logical
-application inputs, outputs, and refusal codes for a local client. A second
-contract, named by `httpWireName` or `${wireName}Http`, omits the cookie-bound
-input from protected routes and the consumed token and expiry fields from the
-issuing route's output. Its error union carries public categories rather than
-private refusal codes. Both contracts share the generated type helpers and
-vocabulary anchor.
+When a generated application descriptor supplies `httpProfile` or `httpFloor`,
+one module contains both contracts. The contract named by `wireName` retains the
+logical application inputs, outputs, and refusal codes for a local client. A
+second contract, named by `httpWireName` or `${wireName}Http`, carries public
+categories rather than private refusal codes. With `httpFloor`, that contract
+also omits the cookie-bound input from protected routes and the consumed token
+and expiry fields from the issuing route's output. Both contracts share the
+generated type helpers and vocabulary anchor. A descriptor cannot supply both
+HTTP fields.
 
 These are TypeScript guarantees. Input admission is stated under
 [Boundary, gateway, and client](#boundary-gateway-and-client); output validation
@@ -469,19 +589,61 @@ limits are stated under [Boundary operations](#boundary-operations).
 The following limits matter when an application depends on ordering, failure
 delivery, cancellation, persistence, restart, or boundary operation.
 
+### Supported multi-instance topology
+
+Several application instances may use the same durable domain state when each
+instance has its own assembly, concept objects, action scheduler, gateway, and
+occurrence store, and host-supplied concept implementations connect them to a
+transactional store. The concept action that owns a state decision must perform
+its uniqueness, capacity, and durable domain-operation idempotency checks in one
+storage transaction. Storage constraints or equivalent storage coordination,
+not action queues or correlation ids, decide cross-instance conflicts.
+
+Reactions and occurrence matching remain local to the assembly that observed
+the action. The gateway emits operational events without owning another log. An
+idempotent concept action may therefore return one stable persisted result
+when retried while its surrounding reaction executes once for every successful
+action occurrence.
+
+This topology does not provide:
+
+- exactly-once action or reaction execution;
+- a distributed reaction scheduler;
+- occurrence replay or reaction resumption after restart;
+- rollback across actions in a reaction chain;
+- cross-process serialization without application storage coordination; or
+- deduplication by correlation id.
+
+Database drivers, transactions, constraints, locks, migrations, domain
+operation identifiers, and recovery policy remain application and host
+responsibilities.
+
 ### Execution and resource bounds
 
-The HTTP adapter limits one request body to 1,048,576 bytes, and automatic log
-retention bounds settled-flow inspection. The runtime has no unified limit for
-active root flows, pending boundary requests, per-concept action queues,
-actions or firings per flow, evaluation frames, or query-result fan-out. Active
-and timed-out work can therefore consume memory or queue capacity beyond the
-settled-log window.
+Every HTTP handler limits one request body to 1,048,576 bytes, automatic log
+retention bounds settled-flow inspection, and `ExecutionLimits` provides the
+engine-owned production budget. Row limits stop engine-owned expansion during
+reaction matching, where evaluation, direct reads, and former evaluation. A
+query implementation still owns the memory needed to construct its answer.
+These limits do not replace host limits for connections, request rate, DDoS
+protection, exporter queues, or autoscaling.
 
-The host must bound admission, connections, request rate, concurrency, and
-shutdown. The current alpha exposes no assembly or gateway drain operation and
-no promise that resolves when all accepted causal flows are idle. See
-[Operational limits](operations.md) for deployment selection guidance.
+`beginDrain()` on an assembly rejects its new roots immediately and resolves
+when accepted causal flows become idle. A gateway first rejects new public
+gateway roots, lets those accepted roots cross application admission, then
+drains the downstream assembly and waits for both layers. Do not expose the
+downstream invoker as a second public admission path while gateway shutdown is
+in progress. `whenIdle()` observes the same ordered gateway/application work
+without changing admission. Caller timeout and abort remove a pending wait but
+never release active-flow accounting. The host still owns the listener, OS
+signals, hard shutdown deadline, floor and log-store closure, and process exit.
+
+A direct call through `Assembly.concepts`, and direct `Assembly.form(...)`
+evaluation, is an assembly root: it participates in active-root limits, idle
+observation, row limits, and drain admission. A rejected direct action resolves
+to `{ error: "UNAVAILABLE" }` before an action occurrence is recorded; a
+rejected direct query or former evaluation rejects. Pending-request limits apply
+only to boundary invocations because direct roots do not create request waits.
 
 ### Ordering and state-read timing
 
@@ -501,6 +663,12 @@ chain is not a database transaction:
 earlier actions are not rolled back when a later action refuses or faults.
 The runtime provides no retry deduplication or exactly-once guarantee. A retry
 may repeat a completed action or overlap work that continued after timeout.
+
+Queries and read evaluation do not enter the action queue. A query can overlap
+an asynchronous action body or another query and does not receive a
+transactional snapshot of concept state. Query implementations must avoid side
+effects; concept storage must provide any isolation required between reads and
+writes.
 
 `earlier` reads matching action records whose invocation position precedes the
 trigger in the same flow. Ordinary query reads instead read concept state when
@@ -554,8 +722,10 @@ An invocation already aborted when it begins does not reach the gateway. While
 a request is pending, aborting marks it to resolve with `ABORTED`. The standard
 gateway forwards the signal to the application invoker, where it also ends the
 wait; the signal does not cancel, prevent, or roll back accepted concept work.
-The default timeout is 30 seconds; `InvokeOptions.timeoutMs`
-selects another duration, and expiry resolves with `TIMED_OUT`. Timeout and
+Local and HTTP client calls accept the same signal as their optional second
+argument. The default timeout is 30 seconds without a profile and the profile's
+maximum request duration with one; `InvokeOptions.timeoutMs` selects a validated
+duration no greater than that maximum, and expiry resolves with `TIMED_OUT`. Timeout and
 abort end the pending wait but do not themselves record a
 `RequestBoundary.respond` occurrence, so recorded application work may remain
 unanswered. Continued work can later ask `respond`; after pending state is gone,
@@ -574,31 +744,35 @@ duration.
 ### Logs, concept implementations, and restart
 
 Concept state is separate from the assembly's occurrence log. The engine sends
-append-only invocation, outcome, fault, firing, and reaction-failure entries to
+append-only invocation, outcome, fault, firing, reaction-failure, and integrity-failure entries to
 its `LogStore`, which folds them into indexes for matching and inspection.
 Retention may evict indexed entries, so no assembly promises to retain every
 occurrence forever.
 
-The configured field-name redaction policy applies before entries reach a
-store, observer, or inspection summary. During an active causal flow, the
+Each ordinary assembly creates its own field-name redactor before entries reach
+a store, observer, or inspection summary. During an active causal flow, the
 interpreter privately retains original values for execution and matching, then
 clears them when the outermost action settles. Ordinary process logs omit
-exception messages, stacks, causes, and attached fields. `serializeError(...)`
-provides that opaque class-only representation. `describeError(...)` instead
-returns unredacted exception text and is suitable only for a caller-reviewed
-diagnostic channel, not an automatic public error envelope.
+exception messages, stacks, causes, and attached fields. Caller-reviewed
+diagnostic channels may expose exception text, but automatic public error
+envelopes do not. Assembly redaction copies exact field names and the pattern
+list but retains the supplied `RegExp` objects; callers must not mutate those
+expressions after constructing an assembly. There is no setter for a
+process-global redaction policy.
 
 Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
 most recent settled causal flows. Its `retention` option can select another
-window, `"keepAll"`, or `"evictConsumed"`; the standard gateway has the same
-independent option and default. Automatic window enforcement does not evict an
-active flow, so active flows may temporarily exceed a window. Explicit
+window, `"keepAll"`, or `"evictConsumed"`; `logStore` installs an
+application-owned store instead and is mutually exclusive with `retention`.
+Assembly does not close a supplied store. The host must close any
+resources behind a custom store after drain, using the store's own API.
+Automatic window enforcement does not evict an active flow, so active flows may
+temporarily exceed a window. Explicit
 `evictFlow` calls and custom stores are outside that protection. Advanced
-callers may pass a `FileStore`
-or custom `LogStore` to `createEngine(store?)`. `FileStore` appends JSONL;
-retention trims its in-memory fold without rewriting that file.
-`PersistingConcept` manages an application-supplied store registry; it does not
-bind concept state or install an assembly log store.
+callers may also pass a `FileStore` or custom `LogStore` to
+`createEngine(store?)`. `FileStore` composes an in-memory occurrence index with
+an append-only JSONL audit sink; retention trims the index without rewriting
+that file.
 
 `"keepAll"` never prunes indexed evidence. `"evictConsumed"` removes only a
 consumed suffix when `prune()` is called; flow settlement does not call that
@@ -612,9 +786,10 @@ replay firings. JSONL occurrences are evidence, not restart recovery.
 
 ### Boundary operations
 
-When `NODE_ENV=production`, the HTTP floor rejects a public origin that is not
-HTTPS. A production host must set that environment value. The floor does not
-provide TLS termination, HSTS, or trusted-proxy handling; deployment must supply
-them. Generated wire contracts typecheck callers, but the gateway does not
-validate returned values against generated output types or derive a runtime
-validator from concept specifications.
+When `NODE_ENV=production`, production HTTP profiles and floors reject a public
+origin that is not HTTPS. A production host must set that environment value.
+The Fetch handler does not provide CORS policy, TLS termination, HSTS,
+trusted-proxy handling, reverse-proxy policy, or authentication; deployment and
+application code must supply them. Generated wire contracts typecheck callers,
+but the gateway does not validate returned values against generated output
+types or derive a runtime validator from concept specifications.

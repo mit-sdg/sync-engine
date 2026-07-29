@@ -1,6 +1,7 @@
 import { assemble } from "@sync-engine/assembly";
-import { endpoint, receive, respond } from "@sync-engine/internal/boundary";
-import { Frames, request, vocabulary } from "@sync-engine/internal/reactions";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { vocabulary } from "@sync-engine/language";
+import { Frames } from "@sync-engine/internal/reads/frames";
 
 class SessioningConcept {
   current({ session }: { session: string }) {
@@ -14,7 +15,7 @@ const { Sessioning } = declared.concepts;
 const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
   receive({})
     .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
-    .then(request(Sessioning.current, { session: "fixed" }, { user }))
+    .then(Sessioning.current({ session: "fixed" }).responds({ user }))
     .then(respond({ hidden })),
 );
 

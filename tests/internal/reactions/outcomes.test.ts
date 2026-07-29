@@ -5,13 +5,10 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import {
-  contractOf,
-  Logging,
-  type OutcomeContracts,
-  Refuse,
-  Reacting,
-} from "@sync-engine/internal/reactions";
+import { Refuse } from "@sync-engine/advanced";
+import { contractOf } from "@sync-engine/internal/reactions/concepts/outcomes";
+import type { OutcomeContracts } from "@sync-engine/internal/reactions/concepts/outcomes";
+import { quietReacting } from "../../utils/reacting.ts";
 import { attachConceptMetadata } from "@sync-engine/internal/reactions/concepts/concept-metadata.ts";
 
 class ContractedConcept {
@@ -31,8 +28,7 @@ class ContractedConcept {
 }
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const { Contracted } = reacting.instrument({ Contracted: new ContractedConcept() });
   return { reacting, Contracted };
 }

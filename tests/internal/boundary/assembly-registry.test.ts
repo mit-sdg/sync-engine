@@ -1,10 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  assemblyBehind,
-  rememberAssembly,
-} from "../../../src/engine/boundary/assembly/assembly-registry.ts";
+import { assemblyBehind, rememberAssembly } from "@engine/boundary/assembly/assembly-registry";
 
-type RegistryModule = typeof import("../../../src/engine/boundary/assembly/assembly-registry.ts");
+type RegistryModule = typeof import("@engine/boundary/assembly/assembly-registry");
 
 describe("assembly registry", () => {
   test("shares assemblies between separately loaded package copies", async () => {

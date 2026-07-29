@@ -12,10 +12,10 @@ import {
   domainError,
   FrameworkErrorCode,
   frameworkError,
-  isEmittedFrameworkErrorCode,
+  isFrameworkErrorCode,
   success,
-} from "./errors.ts";
-import type { InvocationResult } from "./errors.ts";
+  type InvocationResult,
+} from "./types.ts";
 
 /**
  * An {@link InvocationResult} as its flat wire body: the success value bare,
@@ -50,11 +50,6 @@ export function toJsonValue(value: unknown): unknown {
   return JSON.parse(serializeJsonValue(value)) as unknown;
 }
 
-/** Serialize one result exactly as the HTTP boundary carries it. */
-export function serializeEnvelope(result: InvocationResult): string {
-  return serializeJsonValue(toEnvelope(result));
-}
-
 /** Apply the HTTP boundary's JSON projection to an in-process result. */
 export function toJsonEnvelope(result: InvocationResult): unknown {
   return toJsonValue(toEnvelope(result));
@@ -71,7 +66,7 @@ export function fromEnvelope(
 ): InvocationResult {
   if (classification === "framework") {
     return frameworkError(
-      isEmittedFrameworkErrorCode(output.error) ? output.error : FrameworkErrorCode.INTERNAL_ERROR,
+      isFrameworkErrorCode(output.error) ? output.error : FrameworkErrorCode.INTERNAL_ERROR,
     );
   }
   if ("error" in output) {

@@ -1,7 +1,8 @@
 # Getting started
 
 This introductory walkthrough creates and runs the smallest complete
-sync-engine application. It assumes TypeScript and requires Bun 1.3 or newer.
+sync-engine application. Use the versions in the [runtime and toolchain support
+policy](../../SUPPORT.md).
 The walkthrough does not cover every authoring form; use the [Public
 API](../public-surface.md) and [Execution semantics](../semantics.md) as the
 authoritative references.
@@ -9,7 +10,7 @@ authoritative references.
 ## Create the project
 
 ```sh
-bunx --package @mit-sdg/sync-engine@alpha sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
 cd note-keeper
 bun install
 ```
@@ -17,6 +18,7 @@ bun install
 The command writes a project only when none of its template files would be
 overwritten. The generated application has one Noting concept, two endpoints,
 an assembly, a local-gateway scenario, and generated-artifact configuration.
+Pin an exact package version when reproducing an evaluation or deployment.
 
 ## Generated files
 
@@ -55,10 +57,10 @@ bun run start
 ```
 
 `generate` writes `generated/note-keeper.md` and `generated/wire.ts`. `check`
-compares the concept specification with its class, verifies that generated
-files match the assembly, and typechecks the project. A successful
-specification check reports one checked concept; artifact and type checks are
-silent on success.
+compares parsed action and query declarations with the class source, verifies
+that generated files match the assembly, and typechecks the project. A
+successful source check reports one checked concept; artifact and type checks
+are silent on success.
 
 `principle` runs the Noting class directly and prints `principle holds`.
 `start` calls the application through its gateway and prints JSON containing a
@@ -75,10 +77,12 @@ bunx sync-engine artifacts check
 
 ## Follow one request through the project
 
-`src/concepts/noting/spec.md` is the authored contract. It states the concept's
-purpose and principle, declares action signatures and refusal branches, and
-declares query cardinality. [Concept specification format](../concept-specification.md)
-defines exactly which parts are parsed and checked.
+`src/concepts/noting/spec.md` is the authored specification. It states the
+concept's purpose and principle, declares action signatures and refusal
+branches, and declares query cardinality. Its optional State section is
+uninterpreted human notation, not a schema or a class/storage conformance
+descriptor. [Concept specification format](../concept-specification.md) defines
+exactly which parts are parsed and checked.
 
 `src/concepts/noting/noting.ts` implements the contract as an ordinary class.
 Public methods are actions. Methods prefixed with `_` are queries. The class has
@@ -121,14 +125,21 @@ export const WriteNote = endpoint("/notes/write", ({ text, note }) =>
 );
 
 export const GetNote = endpoint("/notes/get", ({ note }) =>
-  receive({ note }).then(respond({ page: notePage({ note }) })),
+  receive({ note }).then(
+    where(Noting._get({ note }))
+      .then(respond({ page: notePage({ note }) }))
+      .named("found"),
+    where(no(Noting._get({ note })))
+      .then(respond({ error: "NOTE_NOT_FOUND" }))
+      .named("missing"),
+  ),
 );
 ```
 
 `WriteNote` receives `text`, asks `Noting.write`, waits for its returned
-occurrence, and responds with the new identifier. `GetNote` forms a page from
-the current query result. These declarations do not execute while the module is
-loaded.
+occurrence, and responds with the new identifier. `GetNote` forms a page when
+the note exists and returns `NOTE_NOT_FOUND` when it does not. These declarations
+do not execute while the module is loaded.
 
 ## Assemble and invoke
 
@@ -159,7 +170,9 @@ diff; do not edit generated files directly.
 
 Generated TypeScript checks typed callers. Gateway admission only checks the
 route, an outer object, and required-key presence. It does not validate
-primitive or nested values at runtime.
+primitive or nested values by default. Public endpoints can attach explicit
+runtime input and successful-output validators as shown in [Application
+boundary](application-boundary.md#receive-ask-respond).
 
 Continue to [Define one behavior](concepts.md). The remaining guide sequence is
 [Connect independent behaviors](reactions.md), [Views and

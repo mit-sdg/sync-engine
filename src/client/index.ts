@@ -4,6 +4,7 @@ export { createHttpClient, createHttpTransport } from "@engine/boundary/client/h
 export { createLocalClient } from "@engine/boundary/client/local-client";
 export type {
   Client,
+  ClientCallOptions,
   ClientError,
   ClientOptions,
   ClientRequest,

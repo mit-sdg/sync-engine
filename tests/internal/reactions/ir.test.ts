@@ -1,25 +1,18 @@
-import { lineOf } from "@sync-engine/internal/reads/lines";
 /**
  * Reaction lowering and serialized reaction registration. These tests cover step
  * chains, consequence-input validation, JSON round trips, and fixture export.
  */
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  type ActionTriggerIR,
-  type AppIR,
-  compute,
-  type Frames,
-  Logging,
-  opaqueCount,
-  reaction,
-  Reacting,
-  type Vars,
-  when,
-  vocabulary,
-  vocabularyComputations,
-} from "@sync-engine/internal/reactions";
-import { ButtonConcept, CounterConcept, ListConcept, RecorderConcept } from "./mocks.ts";
+import { reaction, vocabulary, when, where } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import type { Frames } from "@sync-engine/internal/reads/frames";
+import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
+import type { ActionTriggerIR, AppIR } from "@sync-engine/internal/reads/ir";
+import { compute } from "@sync-engine/internal/reads/where-ops";
+import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
+import { quietReacting } from "../../utils/reacting.ts";
+import type { StepNode } from "@sync-engine/internal/reactions/types";
+import { ButtonConcept, CounterConcept, ListConcept, mockRefs, RecorderConcept } from "./mocks.ts";
 
 class DecidingConcept {
   decide({ kind }: { kind: string }) {
@@ -27,9 +20,17 @@ class DecidingConcept {
   }
 }
 
+const refs = vocabulary({
+  concepts: {
+    Button: ButtonConcept,
+    Deciding: DecidingConcept,
+    List: ListConcept,
+    Recorder: RecorderConcept,
+  },
+}).concepts;
+
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Button: new ButtonConcept(),
     Deciding: new DecidingConcept(),
@@ -41,12 +42,12 @@ function setup() {
 
 describe("lowering: chains become reactions", () => {
   test("a two-step then lowers to a chained reaction pinned to its own ask", () => {
-    const { reacting, Button, Deciding, Recorder } = setup();
+    const { reacting } = setup();
     reacting.register({
       Chain: reaction(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind })
-          .then(request(Deciding.decide, { kind }, { route }))
-          .then(request(Recorder.record, { tag: route })),
+        when(refs.Button.clicked({ kind }).responds())
+          .then(refs.Deciding.decide({ kind }).responds({ route }))
+          .then(refs.Recorder.record({ tag: route })),
       ),
     });
 
@@ -62,6 +63,7 @@ describe("lowering: chains become reactions", () => {
         action: "clicked",
         input: { kind: { $var: "kind" } },
         output: {},
+        posture: "returned",
       },
     ]);
     expect(head.then).toEqual([
@@ -79,12 +81,12 @@ describe("lowering: chains become reactions", () => {
   });
 
   test("a later step recovers trigger input with an earlier read", () => {
-    const { reacting, Button, Deciding, Recorder } = setup();
+    const { reacting } = setup();
     reacting.register({
       NeedsRoot: reaction(({ kind, route }: Vars) =>
-        when(Button.clicked, { kind })
-          .then(request(Deciding.decide, {}, { route }))
-          .then(request(Recorder.record, { tag: kind })),
+        when(refs.Button.clicked({ kind }).responds())
+          .then(refs.Deciding.decide({}).responds({ route }) as never)
+          .then(refs.Recorder.record({ tag: kind })),
       ),
     });
 
@@ -98,19 +100,56 @@ describe("lowering: chains become reactions", () => {
           action: "clicked",
           input: { kind: { $var: "kind" } },
           output: {},
+          posture: "returned",
         },
       },
     ]);
   });
 
-  test(".named() overrides a derived reaction name", () => {
-    const { reacting, Button, Deciding, Recorder } = setup();
-    reacting.register({
-      Named: reaction(({ route }: Vars) =>
-        when(Button.clicked, { kind: "n" })
-          .then(request(Deciding.decide, { kind: "n" }, { route }))
-          .then(request(Recorder.record, { tag: route }).named("RecordRoute")),
+  test("a later stage can use bindings opened by its own portable where", async () => {
+    const first = setup();
+    await first.List.add({ value: 7 });
+    first.reacting.register({
+      StageRead: reaction(({ kind, value }: Vars) =>
+        when(refs.Button.clicked({ kind }).responds())
+          .then(refs.Deciding.decide({ kind: "fixed" }))
+          .then(
+            where(refs.List._items({ kind } as never).is({ value })).then(
+              refs.Recorder.record({ tag: value }),
+            ),
+          ),
       ),
+    });
+
+    const exported: AppIR = JSON.parse(JSON.stringify(first.reacting.exportReactions()));
+    expect(exported.unlowered).toEqual([]);
+    expect(exported.reactions[1]?.where).toMatchObject([
+      { op: "earlier", when: { input: { kind: { $var: "kind" } } } },
+      {
+        op: "find",
+        query: { concept: "List", query: "_items" },
+        in: { kind: { $var: "kind" } },
+        out: { value: { $var: "value" } },
+      },
+    ]);
+
+    const second = setup();
+    await second.List.add({ value: 7 });
+    second.reacting.registerReactions(exported.reactions);
+    await second.Button.clicked({ kind: "go" });
+    expect(second.Recorder.order).toEqual([7]);
+  });
+
+  test(".named() overrides a derived reaction name", () => {
+    const { reacting } = setup();
+    reacting.register({
+      Named: reaction(({ route }: Vars) => {
+        const record = refs.Recorder.record({ tag: route }) as StepNode;
+        record.stepName = "RecordRoute";
+        return when(refs.Button.clicked({ kind: "n" }).responds())
+          .then(refs.Deciding.decide({ kind: "n" }).responds({ route }))
+          .then(record as never);
+      }),
     });
     expect(reacting.exportReactions().reactions.map((reaction) => reaction.name)).toEqual([
       "Named",
@@ -119,34 +158,32 @@ describe("lowering: chains become reactions", () => {
   });
 
   test("a step transform is reported as executable-only code", () => {
-    const { reacting, Button, Deciding, Recorder } = setup();
+    const { reacting } = setup();
     reacting.register({
-      Transformed: reaction(({ tag }: Vars) =>
-        when(Button.clicked, { kind: "c" })
-          .then(
-            request(Deciding.decide, { kind: "c" }).where((frames: Frames) =>
-              frames.map((frame) => ({ ...frame })),
-            ),
-          )
-          .then(request(Recorder.record, { tag })),
-      ),
+      Transformed: reaction(({ tag }: Vars) => {
+        const transformed = refs.Deciding.decide({ kind: "c" }) as StepNode;
+        transformed.transform = (frames: Frames) => frames.map((frame) => ({ ...frame }));
+        return when(refs.Button.clicked({ kind: "c" }).responds())
+          .then(transformed as never)
+          .then(refs.Recorder.record({ tag }));
+      }),
     });
     const app = reacting.exportReactions();
     expect(app.reactions).toEqual([]);
-    expect(app.unlowered).toEqual([
+    expect(app.unlowered).toMatchObject([
       { name: "Transformed", reason: "a step transform in the pipeline" },
     ]);
-    expect(opaqueCount(app)).toBe(1);
+    expect(analyzeLocalBehavior(app).occurrences).toHaveLength(1);
   });
 
   test("a later step does not repeat a state read from an earlier step", () => {
-    const { reacting, Button, List, Recorder } = setup();
+    const { reacting } = setup();
     reacting.register({
       RowCrossing: reaction(({ value }: Vars) =>
-        when(Button.clicked, { kind: "rows" })
-          .where(lineOf({ query: List._items }, {}).is({ value }))
-          .then(request(Recorder.record, { tag: "first" }))
-          .then(request(Recorder.record, { tag: value })),
+        when(refs.Button.clicked({ kind: "rows" }).responds())
+          .where(refs.List._items({}).is({ value }))
+          .then(refs.Recorder.record({ tag: "first" }))
+          .then(refs.Recorder.record({ tag: value })),
       ),
     });
     const app = reacting.exportReactions();
@@ -156,12 +193,12 @@ describe("lowering: chains become reactions", () => {
 
 describe("then-input strictness", () => {
   test("a registration-time Date error points to per-firing calculations", () => {
-    const { reacting, Button, Recorder } = setup();
+    const { reacting } = setup();
     expect(() =>
       reacting.register({
         Frozen: reaction((_vars: Vars) =>
-          when(Button.clicked, { kind: "d" }).then(
-            request(Recorder.record, { tag: new Date() as never }),
+          when(refs.Button.clicked({ kind: "d" }).responds()).then(
+            refs.Recorder.record({ tag: new Date() as never }),
           ),
         ),
       }),
@@ -169,24 +206,37 @@ describe("then-input strictness", () => {
   });
 
   test("a function in a then input is rejected", () => {
-    const { reacting, Button, Recorder } = setup();
+    const { reacting } = setup();
     expect(() =>
       reacting.register({
         Sneaky: reaction((_vars: Vars) =>
-          when(Button.clicked, { kind: "f" }).then(
-            request(Recorder.record, { tag: (() => "nope") as never }),
+          when(refs.Button.clicked({ kind: "f" }).responds()).then(
+            refs.Recorder.record({ tag: (() => "nope") as never }),
           ),
         ),
       }),
     ).toThrow("a function");
   });
 
+  test("literal undefined in a then pattern is rejected before encoding", () => {
+    const { reacting } = setup();
+    expect(() =>
+      reacting.register({
+        Undefined: reaction((_vars: Vars) =>
+          when(refs.Button.clicked({ kind: "u" }).responds()).then(
+            refs.Recorder.record({ tag: undefined as never }),
+          ),
+        ),
+      }),
+    ).toThrow(/literal undefined.*portable patterns.*omit the key/s);
+  });
+
   test("nested literals and variables stay legal", () => {
-    const { reacting, Button, Recorder } = setup();
+    const { reacting } = setup();
     reacting.register({
       Fine: reaction(({ kind }: Vars) =>
-        when(Button.clicked, { kind }).then(
-          request(Recorder.record, { tag: { nested: [1, "two", null, kind] } as never }),
+        when(refs.Button.clicked({ kind }).responds()).then(
+          refs.Recorder.record({ tag: { nested: [1, "two", null, kind] } as never }),
         ),
       ),
     });
@@ -205,10 +255,10 @@ describe("round trip: export → JSON → registerReactions", () => {
     const declare = (engine: ReturnType<typeof setup>) => {
       engine.reacting.register({
         Chain: reaction(({ route, mark }: Vars) =>
-          when(engine.Button.clicked, { kind: "go" })
+          when(refs.Button.clicked({ kind: "go" }).responds())
             .where(compute(stamp, { kind: "go" }, mark))
-            .then(request(engine.Deciding.decide, { kind: "go" }, { route }))
-            .then(request(engine.Recorder.record, { tag: route })),
+            .then(refs.Deciding.decide({ kind: "go" }).responds({ route }))
+            .then(refs.Recorder.record({ tag: route })),
         ),
       });
     };
@@ -282,23 +332,24 @@ describe("round trip: export → JSON → registerReactions", () => {
 
 describe("mock concepts export supported reactions", () => {
   test("every reaction lowers with zero opaque ops and serializes", () => {
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
-    const { Counter, Button } = reacting.instrument({
+    const reacting = quietReacting();
+    reacting.instrument({
       Counter: new CounterConcept(),
       Button: new ButtonConcept(),
     });
     reacting.register({
       TrackClicks: ({ kind }: Vars) =>
-        when(Button.clicked, { kind }).then(request(Counter.increment, {})),
+        when(mockRefs.Button.clicked({ kind }).responds()).then(mockRefs.Counter.increment({})),
       DoubleClick: ({ kind }: Vars) =>
-        when(Button.clicked, { kind }).then(request(Counter.decrement, {}).named("Dec")),
+        when(mockRefs.Button.clicked({ kind }).responds()).then(
+          mockRefs.Counter.decrement({}).named("Dec"),
+        ),
     });
 
     const app = reacting.exportReactions();
     expect(app.unlowered).toEqual([]);
     expect(app.reactions.length).toBe(2);
-    expect(opaqueCount(app)).toBe(0);
+    expect(analyzeLocalBehavior(app).occurrences).toHaveLength(0);
     expect(JSON.parse(JSON.stringify(app))).toEqual(app);
   });
 });

@@ -19,13 +19,18 @@
 import type { ActionOutcome } from "../types.ts";
 import { uuid } from "@engine/utils/runtime";
 import { redact, serializeError } from "@engine/utils/redaction";
+import { ListenerSet } from "@engine/utils/listener-set";
+import { snapshotValue } from "@engine/utils/snapshot";
+import type { Redactor } from "@engine/utils/redaction";
 import { logger } from "@engine/utils/logger";
 import {
   MemoryStore,
   type ActionRecord,
+  type IntegrityFailureRecord,
   type LogStore,
   type ReactionFailureRecord,
 } from "./log-store.ts";
+import type { OperationalEvents } from "./operational.ts";
 
 export type { ActionRecord } from "./log-store.ts";
 
@@ -67,9 +72,13 @@ export function normalizeOutcome(output: unknown): ActionOutcome {
 export class ActionConcept {
   private readonly matchingValues = new Map<string, MatchingRecordValues>();
   private readonly activeFlowValues = new Map<string, ActiveFlowValues>();
-  private readonly flowQuiescenceListeners = new Set<(event: FlowQuiescence) => void>();
+  private readonly flowQuiescenceListeners = new ListenerSet<(event: FlowQuiescence) => void>();
 
-  constructor(public readonly store: LogStore = new MemoryStore()) {}
+  constructor(
+    public readonly store: LogStore = new MemoryStore(),
+    readonly operational?: OperationalEvents,
+    readonly redactor: Redactor = { redact },
+  ) {}
 
   /** Folded view: all retained records, keyed by their unique id. */
   get actions(): Map<string, ActionRecord> {
@@ -93,13 +102,13 @@ export class ActionConcept {
       record: {
         ...record,
         id,
-        input: redact(record.input) as Record<string, unknown>,
+        input: this.redactor.redact(record.input) as Record<string, unknown>,
       },
     });
     return { id };
   }
 
-  /** Begin retaining raw input; raw output and outcome are added when the action resolves. */
+  /** Snapshot and retain raw input; raw output and outcome are added when the action resolves. */
   _beginMatchingInput({
     id,
     flow,
@@ -108,7 +117,8 @@ export class ActionConcept {
     id: string;
     flow: string;
     input: Record<string, unknown>;
-  }): void {
+  }): Record<string, unknown> {
+    const snapshot = snapshotValue(input) as Record<string, unknown>;
     const active = this.activeFlowValues.get(flow) ?? {
       depth: 0,
       ids: new Set<string>(),
@@ -117,7 +127,8 @@ export class ActionConcept {
     active.depth++;
     active.ids.add(id);
     this.activeFlowValues.set(flow, active);
-    this.matchingValues.set(id, { input });
+    this.matchingValues.set(id, { input: snapshot });
+    return snapshot;
   }
 
   /** Clear transient values and report quiescence when a flow's outermost call settles. */
@@ -128,25 +139,42 @@ export class ActionConcept {
     if (active.depth > 0) return;
     for (const id of active.ids) this.matchingValues.delete(id);
     this.activeFlowValues.delete(flow);
-    const event = { flow, interpreterFailed: active.interpreterFailed };
-    const listeners = Array.from(this.flowQuiescenceListeners);
-    for (const listener of listeners) {
-      try {
-        listener(event);
-      } catch (error) {
+    this.flowQuiescenceListeners.notify(
+      (listener, event) => listener(event),
+      { flow, interpreterFailed: active.interpreterFailed },
+      (error) =>
         logger.error("Flow quiescence listener failed", {
           flow,
           error: serializeError(error),
-        });
-      }
-    }
+        }),
+    );
     this.store.flowSettled?.(flow);
   }
 
   /** Observe fully settled causal flows before occurrence retention is applied. */
   _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void {
-    this.flowQuiescenceListeners.add(listener);
-    return () => this.flowQuiescenceListeners.delete(listener);
+    return this.flowQuiescenceListeners.add(listener);
+  }
+
+  /** Serialize and record a sanitized failure produced between instrumented action asks. */
+  _recordInterpreterFailure(
+    reaction: string,
+    flow: string,
+    triggerIds: string[],
+    stage: ReactionFailureRecord["stage"],
+    error: unknown,
+    consequence: Pick<ReactionFailureRecord, "action" | "actionId"> = {},
+  ): void {
+    const serialized = serializeError(error);
+    this._recordReactionFailure({
+      reaction,
+      flow,
+      triggerIds,
+      stage,
+      ...consequence,
+      errorClass: typeof serialized.name === "string" ? serialized.name : "Error",
+      at: Date.now(),
+    });
   }
 
   /** Record durable interpreter evidence and mark its active flow as failed. */
@@ -154,6 +182,59 @@ export class ActionConcept {
     const active = this.activeFlowValues.get(failure.flow);
     if (active !== undefined) active.interpreterFailed = true;
     this.store.append({ kind: "reaction-failure", at: failure.at, failure });
+    this.operational?.emit(
+      this.operational.withContext(failure.flow, {
+        type: "interpreter-failed",
+        at: failure.at,
+        flow: failure.flow,
+        reaction: failure.reaction,
+        stage: failure.stage,
+        ...(failure.action === undefined ? {} : { action: failure.action }),
+        ...(failure.actionId === undefined ? {} : { actionId: failure.actionId }),
+        errorClass: failure.errorClass,
+      }),
+    );
+  }
+
+  /** Construct and record an accepted execution-limit breach. */
+  _recordExecutionLimit(
+    flow: string,
+    limit: Extract<IntegrityFailureRecord, { kind: "execution-limit" }>["limit"],
+  ): void {
+    this._recordIntegrityFailure({
+      kind: "execution-limit",
+      flow,
+      limit,
+      errorClass: "ExecutionLimitExceeded",
+      at: Date.now(),
+    });
+  }
+
+  /** Record a boundary integrity failure and make the active flow fail closed. */
+  _recordIntegrityFailure(failure: IntegrityFailureRecord): void {
+    const active = this.activeFlowValues.get(failure.flow);
+    if (active !== undefined) active.interpreterFailed = true;
+    this.store.append({ kind: "integrity-failure", at: failure.at, failure });
+    this.operational?.emit(
+      this.operational.withContext(failure.flow, {
+        type: "integrity-failed",
+        at: failure.at,
+        flow: failure.flow,
+        kind: failure.kind,
+        errorClass: failure.errorClass,
+      }),
+    );
+    if (failure.kind === "execution-limit") {
+      this.operational?.emit(
+        this.operational.withContext(failure.flow, {
+          type: "execution-limit-breached",
+          at: failure.at,
+          flow: failure.flow,
+          limit: failure.limit,
+          accepted: true,
+        }),
+      );
+    }
   }
 
   /** Return a transient record with raw input, output, and outcome while its flow is active. */
@@ -194,8 +275,8 @@ export class ActionConcept {
       kind: "outcome",
       at: Date.now(),
       id,
-      output: redact(output) as Record<string, unknown>,
-      outcome: redact(resolvedOutcome) as ActionOutcome,
+      output: this.redactor.redact(output) as Record<string, unknown>,
+      outcome: this.redactor.redact(resolvedOutcome) as ActionOutcome,
     });
     return { id };
   }
@@ -237,4 +318,20 @@ export class ActionConcept {
   evictConsumedFlows(): number {
     return this.store.prune();
   }
+}
+
+/** Record an accepted execution-limit breach and return its caller-facing error. */
+export function breachLimit(
+  actions: Pick<ActionConcept, "_recordExecutionLimit">,
+  flow: string,
+  limit: "actions" | "firings" | "rows",
+): Error {
+  actions._recordExecutionLimit(flow, limit);
+  return new Error(
+    limit === "rows"
+      ? "The evaluation exceeded its row limit."
+      : limit === "actions"
+        ? "The flow exceeded its action limit."
+        : "The flow exceeded its firing limit.",
+  );
 }

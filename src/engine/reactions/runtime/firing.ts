@@ -1,6 +1,7 @@
 import type { FiringRecord, LogStore } from "./log-store.ts";
 import { uuid } from "@engine/utils/runtime";
 import { redact } from "@engine/utils/redaction";
+import type { Redactor } from "@engine/utils/redaction";
 
 export interface FiringFill {
   reaction: string;
@@ -20,7 +21,11 @@ export interface FiringBranch {
 export class FiringBook {
   private readonly inFlightConsumed = new Map<string, Map<string, number>>();
 
-  constructor(private readonly store: LogStore) {}
+  constructor(
+    private readonly store: LogStore,
+    private readonly admit?: (flow: string) => void,
+    private readonly redactor: Redactor = { redact },
+  ) {}
 
   hasConsumed(recordId: string | undefined, reaction: string): boolean {
     if (recordId === undefined) return false;
@@ -36,6 +41,7 @@ export class FiringBook {
 
   mark(branch: FiringBranch): void {
     if (branch.marked) return;
+    this.admit?.(branch.fill.flow);
     branch.marked = true;
     for (const id of branch.fill.whenIds) {
       let byReaction = this.inFlightConsumed.get(id);
@@ -64,22 +70,25 @@ export class FiringBook {
   }
 
   record(fill: FiringFill): void {
-    if (fill.branches.some((branch) => branch.marked)) {
-      this.store.append({
-        kind: "firing",
-        at: Date.now(),
-        firing: {
-          id: uuid(),
-          reaction: fill.reaction,
-          flow: fill.flow,
-          bindings: redact(fill.bindings) as Record<string, unknown>,
-          consumed: fill.whenIds,
-          produced: fill.produced,
+    try {
+      if (fill.branches.some((branch) => branch.marked)) {
+        this.store.append({
+          kind: "firing",
           at: Date.now(),
-        },
-      });
+          firing: {
+            id: uuid(),
+            reaction: fill.reaction,
+            flow: fill.flow,
+            bindings: this.redactor.redact(fill.bindings) as Record<string, unknown>,
+            consumed: fill.whenIds,
+            produced: fill.produced,
+            at: Date.now(),
+          },
+        });
+      }
+    } finally {
+      for (const branch of fill.branches) this.unmark(branch);
     }
-    for (const branch of fill.branches) this.unmark(branch);
   }
 
   firings(reaction: string): FiringRecord[] {

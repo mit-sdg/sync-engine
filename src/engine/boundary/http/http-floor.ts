@@ -1,10 +1,13 @@
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import { assemblyBehind } from "../assembly/assembly-registry.ts";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
-import { publicCategoryOf } from "../protocol/public-errors.ts";
-import { wireContracts } from "../wire/wire.ts";
-import type { WireContractsIR, WireType } from "../wire/wire.ts";
+import { wireContracts } from "../wire/wire-contracts.ts";
+import type { WireContractsIR } from "../wire/wire-contracts.ts";
+import type { WireType } from "../wire/wire-types.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
+import type { ProductionHttpProfile } from "./http-profile.ts";
+import { normalizeProductionHttpProfile, projectProductionHttpWire } from "./http-profile.ts";
+import { assertPortableHttpPath } from "../protocol/http-path.ts";
 
 export interface HttpCredentialBinding {
   name: string;
@@ -17,29 +20,14 @@ export interface HttpCredentialBinding {
   clear: readonly string[];
 }
 
-export interface HttpFloor {
-  origin: string;
+export interface HttpFloor extends ProductionHttpProfile {
   credential: HttpCredentialBinding;
 }
 
 const FIELD_NAME = /^[A-Za-z_$][\w$]*$/;
 
 export function httpFloor(declaration: HttpFloor): HttpFloor {
-  let origin: URL;
-  try {
-    origin = new URL(declaration.origin);
-  } catch {
-    throw new Error("httpFloor: origin must be an absolute HTTP or HTTPS origin.");
-  }
-  if (
-    !["http:", "https:"].includes(origin.protocol) ||
-    origin.origin !== declaration.origin.replace(/\/$/, "")
-  ) {
-    throw new Error("httpFloor: origin must contain only an HTTP or HTTPS origin.");
-  }
-  if (process.env.NODE_ENV === "production" && origin.protocol !== "https:") {
-    throw new Error("httpFloor: production requires an HTTPS public origin for secure cookies.");
-  }
+  const profile = normalizeProductionHttpProfile(declaration, "httpFloor", " for secure cookies");
   const credential = declaration.credential;
   for (const [seat, value] of [
     ["credential name", credential.name],
@@ -50,13 +38,13 @@ export function httpFloor(declaration: HttpFloor): HttpFloor {
     if (!FIELD_NAME.test(value)) throw new Error(`httpFloor: ${seat} "${value}" is not a field.`);
   }
   for (const path of [credential.issue.path, ...credential.clear]) {
-    if (!path.startsWith("/")) throw new Error(`httpFloor: "${path}" is not an endpoint path.`);
+    assertPortableHttpPath(path, "httpFloor: credential endpoint");
   }
   if (new Set(credential.clear).size !== credential.clear.length) {
     throw new Error("httpFloor: credential clearing endpoints must be distinct.");
   }
   return Object.freeze({
-    origin: origin.origin,
+    ...profile,
     credential: Object.freeze({
       ...credential,
       issue: Object.freeze({ ...credential.issue }),
@@ -77,28 +65,40 @@ function topLevelFields(type: WireType): Set<string> | undefined {
   return common;
 }
 
+export function credentialProtectedPaths(
+  contracts: Readonly<Record<string, InputContractDecl>>,
+  input: string,
+): Set<string> {
+  return new Set(
+    Object.entries(contracts)
+      .filter(([, contract]) => contract.required?.includes(input))
+      .map(([path]) => path),
+  );
+}
+
 export function validateHttpFloor(
   application: Assembly<Record<string, new (...args: never[]) => object>>,
   floor: HttpFloor,
+  wire?: WireContractsIR,
 ): void {
   const assembled = assemblyBehind(application);
   const paths = new Set(Object.keys(assembled.publicInterface.routes));
   for (const path of [floor.credential.issue.path, ...floor.credential.clear]) {
     if (!paths.has(path)) throw new Error(`httpFloor: unknown endpoint path "${path}".`);
   }
-  const protectedPaths = Object.entries(assembled.contracts).filter(([, contract]) =>
-    contract.required?.includes(floor.credential.input),
-  );
-  if (protectedPaths.length === 0) {
+  const protectedPaths = credentialProtectedPaths(assembled.contracts, floor.credential.input);
+  if (protectedPaths.size === 0) {
     throw new Error(
       `httpFloor: no endpoint declares credential input "${floor.credential.input}".`,
     );
   }
-  const wire = wireContracts(assembled.engine.exportReactions(), {
-    contracts: assembled.contracts,
-    inventories: assembled.engine.exportConcepts(),
-  });
-  const issuing = wire.endpoints.find(({ path }) => path === floor.credential.issue.path);
+  const contracts =
+    wire ??
+    wireContracts(assembled.engine.exportReactions(), {
+      contracts: assembled.contracts,
+      inventories: assembled.engine.exportConcepts(),
+    });
+  const issuing = contracts.endpoints.find(({ path }) => path === floor.credential.issue.path);
   const fields = issuing === undefined ? undefined : topLevelFields(issuing.output);
   for (const output of [floor.credential.issue.output, floor.credential.issue.expires]) {
     if (!fields?.has(output)) {
@@ -126,16 +126,13 @@ export function projectHttpWire(
   floor: HttpFloor,
 ): WireContractsIR {
   const credential = floor.credential;
+  const projected = projectProductionHttpWire(wire, categories);
+  const protectedPaths = credentialProtectedPaths(contracts, credential.input);
   return {
-    endpoints: wire.endpoints.map((endpoint) => {
-      const protectedRoute =
-        contracts[endpoint.path]?.required?.includes(credential.input) ?? false;
-      const errors = [
-        ...new Set(endpoint.errors.map((code) => publicCategoryOf(code, categories))),
-      ].sort();
+    endpoints: projected.endpoints.map((endpoint) => {
       return {
         ...endpoint,
-        input: protectedRoute
+        input: protectedPaths.has(endpoint.path)
           ? omitTopLevel(endpoint.input, new Set([credential.input]))
           : endpoint.input,
         output:
@@ -145,69 +142,8 @@ export function projectHttpWire(
                 new Set([credential.issue.output, credential.issue.expires]),
               )
             : endpoint.output,
-        errors,
-        openError: false,
       };
     }),
-    appWide: [...new Set(wire.appWide.map((code) => publicCategoryOf(code, categories)))].sort(),
+    appWide: projected.appWide,
   };
-}
-
-export function projectAssemblyHttpWire(
-  application: Assembly<Record<string, new (...args: never[]) => object>>,
-  wire: WireContractsIR,
-  floor: HttpFloor,
-): WireContractsIR {
-  validateHttpFloor(application, floor);
-  const assembled = assemblyBehind(application);
-  return projectHttpWire(wire, assembled.contracts, assembled.publicErrors, floor);
-}
-
-export function httpFloorReadBack(
-  application: Assembly<Record<string, new (...args: never[]) => object>>,
-  floor: HttpFloor,
-): string {
-  validateHttpFloor(application, floor);
-  const assembled = assemblyBehind(application);
-  const protectedPaths = Object.entries(assembled.contracts)
-    .filter(([, contract]) => contract.required?.includes(floor.credential.input))
-    .map(([path]) => path)
-    .sort();
-  const clearing =
-    floor.credential.clear.length === 0
-      ? "No endpoint clears the credential cookie after success."
-      : floor.credential.clear.length === 1
-        ? `A successful ${floor.credential.clear[0]} clears the credential cookie.`
-        : `Successful calls to ${floor.credential.clear.join(", ")} clear the credential cookie.`;
-  return [
-    `HTTP floor public origin: ${floor.origin}.`,
-    `Credential "${floor.credential.name}" binds cookie-only input "${floor.credential.input}" on ${protectedPaths.length} endpoints.`,
-    `A successful ${floor.credential.issue.path} stores output "${floor.credential.issue.output}" in the credential cookie and reads its expiry from "${floor.credential.issue.expires}".`,
-    clearing,
-  ].join("\n");
-}
-
-export function floorReadBack(options: {
-  application: Assembly<Record<string, new (...args: never[]) => object>>;
-  conceptFloor: {
-    name: string;
-    instances: Record<string, object>;
-    resources: readonly string[];
-  };
-  httpFloor: HttpFloor;
-}): string {
-  const implementations = Object.entries(options.conceptFloor.instances)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, instance]) => {
-      const implementation = Object.getPrototypeOf(instance)?.constructor?.name ?? "Unknown";
-      return `  ${name}: ${implementation}`;
-    });
-  return [
-    `Concept floor "${options.conceptFloor.name}".`,
-    "Implementations:",
-    ...implementations,
-    `Resources: ${options.conceptFloor.resources.join(", ") || "none"}.`,
-    "",
-    httpFloorReadBack(options.application, options.httpFloor),
-  ].join("\n");
 }

@@ -1,0 +1,16 @@
+{
+  "name": "multi-instance-backend-scenario",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.0",
+    "@sync-engine-fixture/multi-instance-client": "1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": ">=6 <7"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

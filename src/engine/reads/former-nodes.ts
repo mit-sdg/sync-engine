@@ -10,7 +10,7 @@ import { objectRef } from "./sentence.ts";
 import type { Mapping } from "@engine/reactions/types";
 import { liveOf } from "./ir.ts";
 import type { FormerNodeIR } from "./ir.ts";
-import type { QueryPromise } from "./query-contracts.ts";
+import type { QueryPromise } from "./query-metadata.ts";
 import type { FindOp, WhereOp } from "./where-ops.ts";
 
 // ── Node shapes ────────────────────────────────────────────────────────────
@@ -172,21 +172,22 @@ export function formerRefWith(
     kind: "Former",
     name,
     inputs: ins,
-    inputVars,
     nameKey: "formerName",
-    payloadKey: "body",
-    payload: body,
-    fuse: fuseFormer,
-  });
-  Object.defineProperty(ref, "promise", { value: promise, enumerable: true });
-  Object.defineProperty(ref, "bindings", { value: [...bindings], enumerable: true });
-  Object.defineProperty(ref, "optional", {
-    value: (): FormerRef => {
-      if (body.node !== "record") {
-        throw new Error(`Former "${name}": a selection always answers and cannot be optional.`);
-      }
-      return formerRefWith(name, ins, inputVars, bindings, "optional", body);
+    properties: {
+      inputVars: { value: [...inputVars], enumerable: false },
+      body: { value: body, enumerable: false },
+      promise: { value: promise, enumerable: true },
+      bindings: { value: [...bindings], enumerable: true },
+      optional: {
+        value: (): FormerRef => {
+          if (body.node !== "record") {
+            throw new Error(`Former "${name}": a selection always answers and cannot be optional.`);
+          }
+          return formerRefWith(name, ins, inputVars, bindings, "optional", body);
+        },
+      },
     },
+    fuse: fuseFormer,
   });
   return ref;
 }

@@ -9,6 +9,10 @@ class OneAnswer {
     return { value };
   }
 
+  choose({ kind }: { kind: "number" | "text" }): { number: number } | { text: string } {
+    return kind === "number" ? { number: 1 } : { text: "one" };
+  }
+
   _answer(_: Record<string, never>): { value: number } {
     return { value: 1 };
   }
@@ -53,6 +57,30 @@ const words = vocabulary({
   computations: {},
 });
 const { OneAnswer: Answering } = words.concepts;
+
+const recordInput: Parameters<typeof Answering.record>[0] = { value: 1 };
+const recordOutput: ReturnType<typeof Answering.record> = { value: 1 };
+void recordInput;
+void recordOutput;
+
+// @ts-expect-error A vocabulary action ref is not assignable as its implementation function.
+const recordImplementation: (input: { value: number }) => { value: number } = Answering.record;
+void recordImplementation;
+
+const authoredRecord = Answering.record({ value: 1 });
+// @ts-expect-error Calling an action ref produces an authored line, not the implementation result.
+const calledRecord: { value: number } = authoredRecord;
+void calledRecord;
+
+// @ts-expect-error The implementation anchor's required never argument cannot be supplied.
+Answering.record({ value: 1 }, undefined);
+
+Answering.choose({ kind: "number" }).responds({ number: 1 });
+Answering.choose({ kind: "text" }).responds({ text: "one" });
+// @ts-expect-error Variant output fields retain their declared value types.
+Answering.choose({ kind: "number" }).responds({ number: "one" });
+// @ts-expect-error Output patterns reject fields absent from every return variant.
+Answering.choose({ kind: "number" }).responds({ number: 1, unknown: true });
 
 reaction(({ value }) =>
   when(Answering.start({}).responds()).then(

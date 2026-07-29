@@ -1,13 +1,13 @@
 import { brandWhereOp, conditionOp, isCondition } from "@engine/reads/where-ops";
-import type { AnyWhereOp, EarlierOp } from "@engine/reads/where-ops";
-import { isCountOp } from "@engine/reads/views";
+import type { AnyWhereOp, Condition, EarlierOp, WhereOp } from "@engine/reads/where-ops";
+import { isCountOp, where as viewWhere, type CountOp, type ViewBlock } from "@engine/reads/views";
 import { assertReactionNodes } from "./nodes.ts";
 import { siblingTree } from "./partitions.ts";
 import { isChannelPattern } from "./channels.ts";
-import { isActionRef } from "./refs.ts";
-import { flow } from "../context.ts";
+import { actionPattern, branchChain } from "./nodes.ts";
 import type {
-  ActionPattern,
+  BranchChain,
+  UnnamedStepNode,
   ChannelPattern,
   InstrumentedAction,
   Mapping,
@@ -20,21 +20,7 @@ import type {
   WhereFn,
 } from "../types.ts";
 
-/** Normalize one action and its patterns into the occurrence data the engine matches. */
-export function actionPattern(
-  action: InstrumentedAction,
-  input: Mapping,
-  output?: Mapping,
-): ActionPattern {
-  const concept = action.concept;
-  if (concept === undefined) {
-    if (isActionRef(action)) {
-      return { concept: action, action, input, flow, ...(output ? { output } : {}) };
-    }
-    throw new Error(`Action ${action.name} is not instrumented.`);
-  }
-  return { concept, action, input, flow, ...(output ? { output } : {}) };
-}
+export { actionPattern } from "./nodes.ts";
 
 /** Read matching occurrences strictly before a trigger in its causal flow. */
 export function earlier(action: InstrumentedAction, input: Mapping, output?: Mapping): EarlierOp {
@@ -109,4 +95,29 @@ function declarativeWhenBuilder(
       return siblingTree(patterns, { whereOps }, nodes);
     },
   } as WhenBuilderWithWhere;
+}
+
+export interface AuthoredWhereBlock extends ViewBlock {
+  then(node: UnnamedStepNode): BranchChain;
+}
+
+/** State a read conjunction, optionally qualifying one reaction branch with it. */
+export function where(...conditions: Array<Condition | CountOp>): AuthoredWhereBlock {
+  const block = viewWhere(...conditions) as AuthoredWhereBlock;
+  Object.defineProperty(block, "then", {
+    value: (...nodes: UnnamedStepNode[]) => {
+      if (nodes.length !== 1) {
+        throw new Error("a branch-local then(...) takes one callable action line.");
+      }
+      if (block.some(isCountOp)) {
+        throw new Error(
+          "count(...) cannot be used in a reaction condition. " +
+            "To return a row count, use each(line).count() in a former. " +
+            "To test a count as policy, define a view and read that view.",
+        );
+      }
+      return branchChain(block as WhereOp[], nodes[0]);
+    },
+  });
+  return block;
 }

@@ -4,8 +4,9 @@ This guide uses the larger [Operations Room
 example](../../examples/operations-room/README.md), not the Note Keeper
 scaffold from [Getting started](getting-started.md). It shows how one of that
 application's concepts becomes independently testable: specification, plain
-TypeScript class, principle test, and registration. The authoritative grammar
-is in [Concept specification format](../concept-specification.md).
+TypeScript class, principle test, and registration. The authoritative machine
+grammar and uninterpreted prose boundary are in [Concept specification
+format](../concept-specification.md).
 
 The operations room needs alerts that remain open until someone acknowledges
 them. Start with the Purpose and Principle from Alerting's specification:
@@ -31,7 +32,7 @@ The Purpose says why the behavior matters. The Principle gives named people a
 concrete sequence: raise alerts, keep each recipient's alerts separate,
 acknowledge one, and refuse a repeated acknowledgement.
 
-## Specify the state and actions
+## Write state notation and declare actions
 
 Alerting owns alerts and two facts about each one. `Person` and `Subject` are
 opaque identities supplied by an application; Alerting neither creates nor
@@ -46,6 +47,13 @@ a set of Alerts with
   a subject Subject
 ```
 ````
+
+This State section is optional, uninterpreted notation for readers. The `state`
+fence has no accepted machine grammar. Registration and `sync-engine check` do
+not compare it with the class's fields or with a floor, database, or other
+storage implementation. Alerting's principle and direct implementation tests,
+plus backend constraint tests for any durable implementation, establish those
+properties instead.
 
 Its actions state every successful change and the case the concept refuses:
 
@@ -111,11 +119,14 @@ _Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../ex
 
 ## Declare the queries
 
-A **query** only reads state. The specification's `queries` fence names each
-one and promises `one`, `optional`, or `many`. A `one` query returns one
-record; the other two return arrays holding at most one row or any number of
-rows. `_openFor` promises `many` because one recipient may have any number of
-open alerts:
+A **query** must only read state. The engine identifies queries by their
+underscore-prefixed method names; it does not inspect or enforce their purity.
+Queries are memoized, so side effects would occur only on cache misses at
+invalidation-dependent times. The specification's `queries`
+fence names each query and promises `one`, `optional`, or `many`. A `one` query
+returns one record; the other two return arrays holding at most one row or any
+number of rows. `_openFor` promises `many` because one recipient may have any
+number of open alerts:
 
 _Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../examples/operations-room/src/concepts/alerting/spec.md)_
 
@@ -215,20 +226,22 @@ export const alerting = registerConcept({
 
 Validation occurs at several distinct times:
 
-| Time                | Checks                                                                                               |
-| ------------------- | ---------------------------------------------------------------------------------------------------- |
-| `registerConcept`   | Action/query names, declared refusal mappings, and input names recoverable by runtime reflection     |
-| `sync-engine check` | Action/query names and input names recoverable from supported TypeScript source forms                |
-| Assembly            | Composition names, binding availability, declaration compatibility, and supported registration forms |
-| Query read          | Query result container and declared cardinality                                                      |
-| Action execution    | The implementation's own value and domain checks                                                     |
+| Time                | Checks                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `registerConcept`   | Parsed action/query names, declared refusal mappings, and input names recoverable by runtime reflection |
+| `sync-engine check` | Parsed action/query names and input names recoverable from supported TypeScript source forms            |
+| Assembly            | Composition names, binding availability, declaration compatibility, and supported registration forms    |
+| Query read          | Query result container and declared cardinality                                                         |
+| Action execution    | The implementation's own value and domain checks                                                        |
 
-Neither registration path validates state declarations, field types, returned
-field names, uniqueness, or invariants. Query result checks do not validate row
-fields against the prose output list. [Concept specification
-format](../concept-specification.md) records the accepted source forms and
-unchecked fields; [Execution semantics](../semantics.md#queries) defines read
-failures.
+State notation contributes nothing to `ConceptSpec`, metadata, manifests,
+read-back, wire contracts, input contracts, or endpoint validators. Neither
+registration path validates state properties, field types, returned field
+names, uniqueness, invariants, or storage. Query result checks do not validate
+row fields against the prose output list, and no runtime schema is inferred.
+[Concept specification format](../concept-specification.md) records the accepted
+source forms and uninterpreted notation; [Execution
+semantics](../semantics.md#queries) defines read failures.
 
 The operations room includes that registry once in its explicit concept set.
 The key `Alerting` in that set gives the concept its application name. The set

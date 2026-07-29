@@ -6,15 +6,15 @@
  * intermediate result: `when` matching produces it, `where` transforms it, and
  * `then` consumes it.
  *
- * `Frames` extends `Array` and is wrapped in a `Proxy` so that every standard
- * array method which returns a new array (`map`, `filter`, `flatMap`, `slice`,
- * `concat`, `reverse`, `sort`, `splice`, …) transparently returns a `Frames`
- * again, keeping the fluent API closed over the type.
+ * `Frames` extends `Array`, so every standard array method which returns a new
+ * array (`map`, `filter`, `flatMap`, `slice`, `concat`, `reverse`, `sort`,
+ * `splice`, …) transparently returns a `Frames` again through the default
+ * species constructor, keeping the fluent API closed over the type.
  */
 import type { Frame, Mapping } from "@engine/reactions/types";
 import { structurallyEqual } from "./value-equality.ts";
 import { hasMarkerKey, isVarIR } from "./ir.ts";
-import { setOwn } from "./brands.ts";
+import { setOwn } from "@engine/utils/own-property";
 
 /**
  * The frame key a variable leaf binds under: a symbol for authored
@@ -153,37 +153,5 @@ export function expandOutputRows(
   }
 }
 
-export { structurallyEqual } from "./value-equality.ts";
-
-/** Keep the first occurrence of each structurally equal frame. */
-export function distinctFrames(frames: Frames): Frames {
-  const distinct = new Frames();
-  for (const frame of frames) {
-    if (![...distinct].some((prior) => structurallyEqual(prior, frame))) distinct.push(frame);
-  }
-  return distinct;
-}
-
 // biome-ignore lint/suspicious/noUnsafeDeclarationMerging: The interface overloads Array methods so fluent frame transforms keep their narrowed return types.
-export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
-  constructor(...frames: TFrame[]) {
-    super(...frames);
-    // Re-wrap array-returning methods so the fluent API stays a `Frames`.
-    // biome-ignore lint/correctness/noConstructorReturn: Returning this proxy keeps built-in Array methods closed over Frames.
-    return new Proxy(this, {
-      get(target, prop, receiver) {
-        const value = Reflect.get(target, prop, receiver);
-        if (typeof value !== "function") {
-          return value;
-        }
-        return function (this: Frames<TFrame>, ...args: unknown[]) {
-          const result = value.apply(this, args);
-          if (Array.isArray(result) && !(result instanceof Frames)) {
-            return new Frames(...result);
-          }
-          return result;
-        };
-      },
-    });
-  }
-}
+export class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {}

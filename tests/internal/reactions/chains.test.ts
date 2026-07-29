@@ -1,15 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  Logging,
-  reaction,
-  Refuse,
-  refused,
-  Reacting,
-  type Empty,
-  type Vars,
-  when,
-} from "@sync-engine/internal/reactions";
+import { Refuse } from "@sync-engine/advanced";
+import { reaction, vocabulary, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import { quietReacting } from "../../utils/reacting.ts";
+import type { Empty } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, RecorderConcept } from "./mocks.ts";
 
 class DecisionConcept {
@@ -24,9 +18,17 @@ class FailingConcept {
   }
 }
 
+const refs = vocabulary({
+  concepts: {
+    Button: ButtonConcept,
+    Decision: DecisionConcept,
+    Failing: FailingConcept,
+    Recorder: RecorderConcept,
+  },
+}).concepts;
+
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Button: new ButtonConcept(),
     Decision: new DecisionConcept(),
@@ -43,18 +45,10 @@ describe("outcome-conditioned chains", () => {
   test("an output-pattern reaction pinned by provenance fires only for its asker", async () => {
     const { reacting, Button, Decision, Recorder } = setup();
     reacting.register({
-      Route: reaction(({ kind }: Vars) =>
-        when(Button.clicked, { kind }).then(request(Decision.decide, { kind })),
-      ),
-      Approved: reaction((_: Vars) =>
-        when(Decision.decide, {}, { route: "approved" }, { by: "Route", posture: "returned" }).then(
-          request(Recorder.record, { tag: "approved" }),
-        ),
-      ),
-      Declined: reaction((_: Vars) =>
-        when(Decision.decide, {}, { route: "rejected" }, { by: "Route" }).then(
-          request(Recorder.record, { tag: "rejected" }),
-        ),
+      Route: reaction(({ kind, route }: Vars) =>
+        when(refs.Button.clicked({ kind }).responds())
+          .then(refs.Decision.decide({ kind }).responds({ route }))
+          .then(refs.Recorder.record({ tag: route })),
       ),
     });
 
@@ -73,13 +67,10 @@ describe("outcome-conditioned chains", () => {
   test("a refusal chains through the refused channel pinned to its asker", async () => {
     const { reacting, Button, Failing, Recorder } = setup();
     reacting.register({
-      Try: reaction((_: Vars) =>
-        when(Button.clicked, { kind: "go" }).then(request(Failing.fail, {})),
-      ),
-      Recover: reaction(({ message }: Vars) =>
-        when(refused({ action: "fail", message }, { by: "Try" })).then(
-          request(Recorder.record, { tag: message }),
-        ),
+      Try: reaction(({ message }: Vars) =>
+        when(refs.Button.clicked({ kind: "go" }).responds())
+          .then(refs.Failing.fail({}).refuses({ message }))
+          .then(refs.Recorder.record({ tag: message })),
       ),
     });
 
@@ -92,13 +83,13 @@ describe("outcome-conditioned chains", () => {
   });
 
   test("an error outcome stops the asking pipeline; recovery is the chain's", async () => {
-    const { reacting, Button, Failing, Recorder } = setup();
+    const { reacting, Button, Recorder } = setup();
     reacting.register({
       Try: reaction((_: Vars) =>
-        when(Button.clicked, { kind: "go" })
-          .then(request(Recorder.record, { tag: "before" }))
-          .then(request(Failing.fail, {}))
-          .then(request(Recorder.record, { tag: "unreachable" })),
+        when(refs.Button.clicked({ kind: "go" }).responds())
+          .then(refs.Recorder.record({ tag: "before" }))
+          .then(refs.Failing.fail({}))
+          .then(refs.Recorder.record({ tag: "unreachable" })),
       ),
     });
 

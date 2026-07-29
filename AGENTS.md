@@ -18,11 +18,13 @@ the formatter, linter, typechecker, and test runner beneath those scripts.
 | --------------------------------- | ---------------------------- |
 | Install dependencies              | `bun install`                |
 | Architecture, specs, lint, types  | `bun run check`              |
+| Check release-owned source facts  | `bun run release:check`      |
+| Update owned release manifests    | `bun run release:update`     |
 | Run the full test suite           | `bun run test`               |
 | Build JavaScript and declarations | `bun run build`              |
 | Check declaration snapshot        | `bun run declarations:check` |
 | Check packed consumer             | `bun run package:check`      |
-| Run both example scenarios        | `bun run scenario`           |
+| Run all example scenarios         | `bun run scenario`           |
 | Check pinned generated artifacts  | `bun run examples:check`     |
 | Typecheck only                    | `bun run typecheck`          |
 
@@ -58,31 +60,34 @@ the book.
 
 ## Project Structure
 
-| Directory                      | Purpose                                                                                                                             |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `src/language/` … `src/utils/` | Public package subpaths; each directory contains one export-only `index.ts` file                                                    |
-| `src/command/`                 | Source for the installed `sync-engine` executable                                                                                   |
-| `src/engine/reactions/`        | Reaction capabilities nested under `authoring/`, `concepts/`, and `runtime/`, plus shared concern contracts and facades at the root |
-| `src/engine/reads/`            | Where operations, views, formers, lowering, evaluation, IR, and rendering                                                           |
-| `src/engine/boundary/`         | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, `http/`, and `wire/`             |
-| `src/engine/hosting/`          | Log retention and persistence                                                                                                       |
-| `src/engine/tooling/`          | Assembly inspection and generated-artifact implementation                                                                           |
-| `src/engine/utils/`            | Shared dependency-neutral utilities and framework primitives                                                                        |
-| `docs/`                        | Public guide, API reference, and execution semantics                                                                                |
-| `examples/`                    | Runnable applications, shared example concepts, and pinned generated artifacts                                                      |
-| `scripts/`                     | Build, package, architecture, declaration, and maintenance commands                                                                 |
-| `.github/`                     | Continuous integration using the same named package commands contributors run                                                       |
-| `tests/internal/`              | Focused units mirroring reactions, reads, boundary, and hosting                                                                     |
-| `tests/package/`               | Source and packed type contracts, the isolated consumer fixture, and generated declarations                                         |
-| `examples/*/tests/`            | End-to-end coverage colocated with each self-contained example                                                                      |
-| `tests/docs/`                  | Guide source-link and excerpt verification                                                                                          |
-| `tests/utils/`                 | Public utility contract coverage                                                                                                    |
-| `tests/public-api.test.ts`     | Exact export register, public-package-subpath check, and unsupported-entrypoint check                                               |
+| Directory                        | Purpose                                                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `src/language/` … `src/tooling/` | Public package subpaths; each directory contains one export-only `index.ts` file                                                    |
+| `src/command/`                   | Source for the installed `sync-engine` executable                                                                                   |
+| `src/engine/reactions/`          | Reaction capabilities nested under `authoring/`, `concepts/`, and `runtime/`, plus shared concern contracts and facades at the root |
+| `src/engine/reads/`              | Where operations, views, formers, lowering, evaluation, IR, and rendering                                                           |
+| `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, `http/`, and `wire/`             |
+| `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
+| `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
+| `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |
+| `docs/`                          | Public guide, API reference, and execution semantics                                                                                |
+| `examples/`                      | Runnable applications, shared example concepts, and pinned generated artifacts                                                      |
+| `scripts/`                       | Build, package, architecture, declaration, and maintenance commands                                                                 |
+| `.github/`                       | Continuous integration using the same named package commands contributors run                                                       |
+| `tests/internal/`                | Focused units mirroring reactions, reads, boundary, and hosting                                                                     |
+| `tests/package/`                 | Source and packed type contracts, the isolated consumer fixture, and generated declarations                                         |
+| `examples/*/tests/`              | End-to-end coverage colocated with each self-contained example                                                                      |
+| `tests/docs/`                    | Guide source-link and excerpt verification                                                                                          |
+| `tests/internal/utils/`          | Shared utility implementation coverage                                                                                              |
+| `tests/public-api.test.ts`       | Exact export register, public-package-subpath check, and unsupported-entrypoint check                                               |
 
 Public entrypoints contain exports only. Code under `src/engine/` imports other
 engine modules rather than a public entrypoint. The architecture check enforces
-these dependency directions, rejects unsupported top-level and test directories,
-and the public API test pins the exact export map and nested constants.
+these dependency directions and import spellings, rejects unsupported
+top-level and test directories, nested barrels, unreachable source, invalid
+generated provenance, package export mismatches, and every runtime import SCC
+while ignoring type-only edges. The public API test pins the exact export map
+and nested constants.
 
 ### Import conventions
 

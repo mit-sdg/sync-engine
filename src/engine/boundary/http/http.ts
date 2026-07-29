@@ -1,43 +1,25 @@
-import type { InvocationResult } from "../protocol/errors.ts";
-import { FrameworkErrorCode } from "../protocol/errors.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
-import { serializeEnvelope, serializeJsonValue } from "../protocol/envelope.ts";
+import {
+  FrameworkErrorCode,
+  type ContractShape,
+  type InvocationResult,
+} from "../protocol/types.ts";
+import { serializeJsonValue } from "../protocol/envelope.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import { assemblyBehind } from "../assembly/assembly-registry.ts";
 import type { HttpFloor } from "./http-floor.ts";
-import { validateHttpFloor } from "./http-floor.ts";
+import { credentialProtectedPaths, validateHttpFloor } from "./http-floor.ts";
+import type { ProductionHttpProfile } from "./http-profile.ts";
+import { normalizeHttpBasePath, normalizeProductionHttpProfile } from "./http-profile.ts";
+import { applicationBehindGateway } from "../protocol/gateway-registry.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
-import { publicCategoryOf, publicErrorStatus } from "../protocol/public-errors.ts";
+import {
+  publicErrorStatus,
+  publicFrameworkCategoryOf,
+  registeredPublicCategoryOf,
+} from "../protocol/public-errors.ts";
 import { isPlainObject } from "@engine/reads/matchers";
-
-// The body is the flat wire envelope; http adds only the status decoration —
-// 200 for success, 400 for a domain error, and the code's own status for a
-// framework fault.
-function mapResultToResponse(result: InvocationResult): Response {
-  const status = result.ok
-    ? 200
-    : result.error.kind === "domain"
-      ? 400
-      : statusFor(result.error.code, 500);
-  const exposed =
-    !result.ok && result.error.kind === "framework" && status >= 500
-      ? ({
-          ok: false,
-          error: { kind: "framework", code: result.error.code },
-        } satisfies InvocationResult)
-      : result;
-  let body: string;
-  try {
-    body = serializeEnvelope(exposed);
-  } catch {
-    return internalErrorResponse();
-  }
-  return new Response(body, {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+import { setOwn } from "@engine/utils/own-property";
 
 function internalErrorResponse(): Response {
   return new Response(`{"error":"${FrameworkErrorCode.INTERNAL_ERROR}"}`, {
@@ -46,24 +28,66 @@ function internalErrorResponse(): Response {
   });
 }
 
-function statusFor(code: unknown, fallback = 400): number {
-  switch (code) {
-    case FrameworkErrorCode.NOT_FOUND:
-      return 404;
-    case FrameworkErrorCode.INVALID_INPUT:
-      return 422;
-    case FrameworkErrorCode.TIMED_OUT:
-      return 504;
-    case FrameworkErrorCode.ABORTED:
-      return 499;
-    case FrameworkErrorCode.INTERNAL_ERROR:
-      return 500;
-    default:
-      return fallback;
-  }
+const MAX_BODY_BYTES = 1_048_576;
+
+export interface HttpCorrelationOptions {
+  resolve(request: Request): string | undefined;
+  responseHeader?: string;
 }
 
-const MAX_BODY_BYTES = 1_048_576;
+function normalizeCorrelationOptions(
+  options: HttpCorrelationOptions | undefined,
+): HttpCorrelationOptions | undefined {
+  if (options === undefined) return undefined;
+  const resolve = options.resolve;
+  const responseHeader = options.responseHeader;
+  if (responseHeader !== undefined) {
+    try {
+      new Headers().set(responseHeader, "correlation");
+    } catch {
+      throw new Error("createHttpHandler: correlation.responseHeader must be a valid header name.");
+    }
+  }
+  return { resolve, ...(responseHeader === undefined ? {} : { responseHeader }) };
+}
+
+function correlationIdFor(
+  request: Request,
+  options: HttpCorrelationOptions | undefined,
+): string | undefined {
+  if (options === undefined) return undefined;
+  let resolved: string | undefined;
+  try {
+    resolved = options.resolve(request);
+  } catch {
+    resolved = undefined;
+  }
+  if (typeof resolved !== "string" || resolved.length === 0 || resolved.length > 128) {
+    return crypto.randomUUID();
+  }
+  for (let index = 0; index < resolved.length; index++) {
+    const code = resolved.charCodeAt(index);
+    if (code < 32 || code === 127 || code > 255) return crypto.randomUUID();
+  }
+  if (resolved.startsWith(" ") || resolved.endsWith(" ")) return crypto.randomUUID();
+  return resolved;
+}
+
+function withCorrelation(
+  response: Response,
+  correlationId: string | undefined,
+  options: HttpCorrelationOptions | undefined,
+): Response {
+  const header = options?.responseHeader;
+  if (correlationId !== undefined && header !== undefined && !response.headers.has(header)) {
+    try {
+      response.headers.set(header, correlationId);
+    } catch {
+      // Correlation decoration must not turn an otherwise handled request into a rejection.
+    }
+  }
+  return response;
+}
 
 type RequestTextResult =
   | { ok: true; text: string }
@@ -105,115 +129,161 @@ async function readRequestText(request: Request): Promise<RequestTextResult> {
   }
 }
 
-function normalizeBasePath(basePath: string | undefined): string {
-  if (basePath === undefined || basePath === "" || basePath === "/") return "";
-  if (!basePath.startsWith("/")) throw new TypeError("basePath must start with '/'.");
-  return basePath.replace(/\/+$/, "");
-}
+type FloorHandlerOptions = {
+  gateway: Invoker<ContractShape>;
+  application: Assembly<Record<string, new (...args: never[]) => object>>;
+  floor: HttpFloor;
+  correlation?: HttpCorrelationOptions;
+};
+
+type ProfileHandlerOptions = {
+  gateway: Invoker<ContractShape>;
+  application: Assembly<Record<string, new (...args: never[]) => object>>;
+  profile: ProductionHttpProfile;
+  correlation?: HttpCorrelationOptions;
+};
 
 export function createHttpHandler(
-  options:
-    | { gateway: Invoker<ContractShape>; basePath?: string }
-    | { invoker: Invoker<ContractShape>; basePath?: string }
-    | {
-        gateway: Invoker<ContractShape>;
-        application: Assembly<Record<string, new (...args: never[]) => object>>;
-        floor: HttpFloor;
-      },
+  options: FloorHandlerOptions | ProfileHandlerOptions,
 ): (request: Request) => Promise<Response> {
-  if ("floor" in options) return createFloorHandler(options);
-  const base = normalizeBasePath(options.basePath);
-  const target = "gateway" in options ? options.gateway : options.invoker;
+  if ("floor" in options) validateHttpFloor(options.application, options.floor);
+  const assembled = assemblyBehind(options.application);
+  if (applicationBehindGateway(options.gateway) !== options.application) {
+    throw new Error("createHttpHandler: gateway must target the supplied application.");
+  }
+  const correlation = normalizeCorrelationOptions(options.correlation);
+  const categories = assembled.publicErrors;
+  const floor = "floor" in options ? options.floor : undefined;
+  const declaration = "floor" in options ? options.floor : options.profile;
+  const profile = normalizeProductionHttpProfile(
+    declaration,
+    floor === undefined ? "productionHttpProfile" : "httpFloor",
+    floor === undefined ? "" : " for secure cookies",
+  );
+  const base = normalizeHttpBasePath(profile.basePath);
+  const credential = floor?.credential;
+  const secure = new URL(profile.origin).protocol === "https:";
+  const cookieName =
+    credential === undefined ? "" : secure ? `__Host-${credential.name}` : credential.name;
+  const protectedPaths =
+    credential === undefined
+      ? new Set<string>()
+      : credentialProtectedPaths(assembled.contracts, credential.input);
+
+  const cookie = (value: string, expires: Date) =>
+    `${cookieName}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/; ` +
+    `Expires=${expires.toUTCString()}${secure ? "; Secure" : ""}`;
+  const clearedCookie = () =>
+    `${cookieName}=; HttpOnly; SameSite=Strict; Path=/; ` +
+    `Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0${secure ? "; Secure" : ""}`;
 
   return async (request) => {
-    if (request.method !== "POST") {
-      return new Response(
-        JSON.stringify({ error: FrameworkErrorCode.BAD_STATUS, detail: "Method not allowed" }),
-        { status: 405, headers: { "Content-Type": "application/json" } },
-      );
+    const correlationId = correlationIdFor(request, correlation);
+    const reply = (response: Response) => withCorrelation(response, correlationId, correlation);
+    const invalid = () => reply(publicJson({ error: "INVALID_REQUEST" }, 400));
+    if (request.method !== "POST") return invalid();
+    const origin = request.headers.get("Origin");
+    if (floor !== undefined && origin !== null && origin !== profile.origin) {
+      return reply(publicJson({ error: "FORBIDDEN" }, 403));
     }
-
-    const url = new URL(request.url);
-    let path = url.pathname;
-    if (base !== "" && path !== base && !path.startsWith(`${base}/`)) {
-      return new Response(
-        JSON.stringify({
-          error: FrameworkErrorCode.NOT_FOUND,
-          detail: `Unknown endpoint: ${path}`,
-        }),
-        { status: 404, headers: { "Content-Type": "application/json" } },
-      );
+    const contentType = request.headers.get("Content-Type");
+    if (contentType !== null && !/^application\/json(?:\s*;|$)/i.test(contentType)) {
+      return invalid();
     }
+    let path = new URL(request.url).pathname;
     if (base !== "") {
+      if (path !== base && !path.startsWith(`${base}/`)) {
+        return reply(publicJson({ error: "NOT_FOUND" }, 404));
+      }
       path = path.slice(base.length);
     }
-
     if (!path.startsWith("/") || path === "") {
-      return new Response(
-        JSON.stringify({
-          error: FrameworkErrorCode.NOT_FOUND,
-          detail: `Unknown endpoint: ${path}`,
-        }),
-        { status: 404, headers: { "Content-Type": "application/json" } },
-      );
+      return reply(publicJson({ error: "NOT_FOUND" }, 404));
     }
 
     let body: unknown;
     const requestText = await readRequestText(request);
-    if (!requestText.ok) {
-      if (requestText.reason === "too_large") {
-        return new Response(
-          JSON.stringify({
-            error: FrameworkErrorCode.INVALID_INPUT,
-            detail: "Request body exceeds the 1 MiB limit",
-          }),
-          { status: 413, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(
-        JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
-    }
+    if (!requestText.ok) return invalid();
     try {
       body = requestText.text === "" ? {} : JSON.parse(requestText.text);
     } catch {
-      return new Response(
-        JSON.stringify({ error: FrameworkErrorCode.BAD_JSON, detail: "Invalid request body" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+      return invalid();
+    }
+    if (credential !== undefined && protectedPaths.has(path)) {
+      if (!isPlainObject(body)) return invalid();
+      setOwn(
+        body,
+        credential.input,
+        cookieValue(request.headers.get("Cookie"), cookieName) ?? null,
       );
     }
 
     let result: InvocationResult;
     try {
-      result = await target.invoke(path, body as never, {
+      result = await options.gateway.invoke(path, body as never, {
         signal: request.signal,
+        correlationId,
       });
     } catch {
-      return internalErrorResponse();
+      return reply(internalErrorResponse());
     }
+    try {
+      if (!result.ok) {
+        const failure = publicFailure(result, categories);
+        const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";
+        return reply(
+          publicJson(
+            { error: failure.error },
+            failure.status,
+            clear ? { cookie: clearedCookie(), noStore: true } : {},
+          ),
+        );
+      }
 
-    return mapResultToResponse(result);
+      const value = result.value;
+      if (credential === undefined) return reply(publicJson(value, 200));
+      if (path === credential.issue.path) {
+        if (!isPlainObject(value)) {
+          return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
+        }
+        const record = value as Record<string, unknown>;
+        const token = record[credential.issue.output];
+        const sourceExpiry = record[credential.issue.expires];
+        const expires =
+          sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
+        if (typeof token !== "string" || Number.isNaN(expires.getTime())) {
+          return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
+        }
+        const publicValue = Object.fromEntries(
+          Object.entries(record).filter(
+            ([key]) => key !== credential.issue.output && key !== credential.issue.expires,
+          ),
+        );
+        return reply(
+          publicJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true }),
+        );
+      }
+      if (credential.clear.includes(path)) {
+        return reply(publicJson(value, 200, { cookie: clearedCookie(), noStore: true }));
+      }
+      return reply(publicJson(value, 200));
+    } catch {
+      return reply(internalErrorResponse());
+    }
   };
 }
-
-type FloorHandlerOptions = {
-  gateway: Invoker<ContractShape>;
-  application: Assembly<Record<string, new (...args: never[]) => object>>;
-  floor: HttpFloor;
-};
 
 function publicFailure(
   result: Exclude<InvocationResult, { ok: true }>,
   categories: Readonly<Record<string, PublicErrorCategory>>,
 ): { error: string; status: number } {
-  const code =
+  const category =
     result.error.kind === "framework"
-      ? result.error.code
-      : typeof result.error.value === "string"
-        ? result.error.value
-        : "";
-  const category = publicCategoryOf(code, categories);
+      ? publicFrameworkCategoryOf(result.error.code)
+      : registeredPublicCategoryOf(
+          typeof result.error.value === "string" ? result.error.value : "",
+          categories,
+        );
   return { error: category, status: publicErrorStatus(category) };
 }
 
@@ -231,110 +301,18 @@ function cookieValue(header: string | null, name: string): string | undefined {
   return undefined;
 }
 
-function floorJson(
+function publicJson(
   body: unknown,
   status: number,
   options: { cookie?: string; noStore?: boolean } = {},
 ): Response {
-  let serialized: string;
   try {
-    serialized = serializeJsonValue(body);
+    const serialized = serializeJsonValue(body);
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (options.cookie !== undefined) headers.set("Set-Cookie", options.cookie);
+    if (options.noStore === true) headers.set("Cache-Control", "no-store");
+    return new Response(serialized, { status, headers });
   } catch {
     return internalErrorResponse();
   }
-  const headers = new Headers({ "Content-Type": "application/json" });
-  if (options.cookie !== undefined) headers.set("Set-Cookie", options.cookie);
-  if (options.noStore === true) headers.set("Cache-Control", "no-store");
-  return new Response(serialized, { status, headers });
-}
-
-function createFloorHandler(options: FloorHandlerOptions): (request: Request) => Promise<Response> {
-  validateHttpFloor(options.application, options.floor);
-  const assembled = assemblyBehind(options.application);
-  const routes = assembled.publicInterface.routes;
-  const categories = assembled.publicErrors;
-  const credential = options.floor.credential;
-  const secure = new URL(options.floor.origin).protocol === "https:";
-  const cookieName = secure ? `__Host-${credential.name}` : credential.name;
-  const protectedPaths = new Set(
-    Object.entries(assembled.contracts)
-      .filter(([, contract]) => contract.required?.includes(credential.input))
-      .map(([path]) => path),
-  );
-
-  const cookie = (value: string, expires: Date) =>
-    `${cookieName}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/; ` +
-    `Expires=${expires.toUTCString()}${secure ? "; Secure" : ""}`;
-  const clearedCookie = () =>
-    `${cookieName}=; HttpOnly; SameSite=Strict; Path=/; ` +
-    `Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0${secure ? "; Secure" : ""}`;
-
-  return async (request) => {
-    const invalid = () => floorJson({ error: "INVALID_REQUEST" }, 400);
-    if (request.method !== "POST") return invalid();
-    const origin = request.headers.get("Origin");
-    if (origin !== null && origin !== options.floor.origin) {
-      return floorJson({ error: "FORBIDDEN" }, 403);
-    }
-    const contentType = request.headers.get("Content-Type");
-    if (contentType !== null && !/^application\/json(?:\s*;|$)/i.test(contentType)) {
-      return invalid();
-    }
-    let path = new URL(request.url).pathname;
-    if (!(path in routes) && path.startsWith("/api/")) path = path.slice("/api".length);
-
-    let body: unknown;
-    const requestText = await readRequestText(request);
-    if (!requestText.ok) return invalid();
-    try {
-      body = requestText.text === "" ? {} : JSON.parse(requestText.text);
-    } catch {
-      return invalid();
-    }
-    if (protectedPaths.has(path)) {
-      if (!isPlainObject(body)) return invalid();
-      (body as Record<string, unknown>)[credential.input] =
-        cookieValue(request.headers.get("Cookie"), cookieName) ?? null;
-    }
-
-    let result: InvocationResult;
-    try {
-      result = await options.gateway.invoke(path, body as never, { signal: request.signal });
-    } catch {
-      return internalErrorResponse();
-    }
-    if (!result.ok) {
-      const failure = publicFailure(result, categories);
-      const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";
-      return floorJson(
-        { error: failure.error },
-        failure.status,
-        clear ? { cookie: clearedCookie(), noStore: true } : {},
-      );
-    }
-
-    const value = result.value;
-    if (path === credential.issue.path) {
-      if (!isPlainObject(value)) {
-        return floorJson({ error: "INTERNAL_ERROR" }, 500);
-      }
-      const record = value as Record<string, unknown>;
-      const token = record[credential.issue.output];
-      const sourceExpiry = record[credential.issue.expires];
-      const expires = sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
-      if (typeof token !== "string" || Number.isNaN(expires.getTime())) {
-        return floorJson({ error: "INTERNAL_ERROR" }, 500);
-      }
-      const publicValue = Object.fromEntries(
-        Object.entries(record).filter(
-          ([key]) => key !== credential.issue.output && key !== credential.issue.expires,
-        ),
-      );
-      return floorJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true });
-    }
-    if (credential.clear.includes(path)) {
-      return floorJson(value, 200, { cookie: clearedCookie(), noStore: true });
-    }
-    return floorJson(value, 200);
-  };
 }

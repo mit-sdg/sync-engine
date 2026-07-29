@@ -27,19 +27,23 @@
  */
 
 import type { Prettify } from "../protocol/endpoints.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
-import { FrameworkErrorCode } from "../protocol/errors.ts";
-import type { EmittedFrameworkErrorCode } from "../protocol/errors.ts";
+import { FrameworkErrorCode, type ContractShape } from "../protocol/types.ts";
 
-export type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
+export type { ContractShape, DomainErrorValue } from "../protocol/types.ts";
 
 /** The normalized error envelope transports use for outside-world failures. */
-export type ClientError = { error: EmittedFrameworkErrorCode; detail?: string };
+export type ClientError = { error: FrameworkErrorCode; detail?: string };
+
+export interface ClientCallOptions {
+  /** Cancels transport and waiting; accepted server work is not rolled back. */
+  signal?: AbortSignal;
+}
 
 /** A transport-agnostic request descriptor passed to {@link ClientTransport}. */
 export interface ClientRequest {
   path: string;
   input: unknown;
+  signal?: AbortSignal;
 }
 
 /** A transport function that executes a {@link ClientRequest} and resolves to its result. */
@@ -71,8 +75,8 @@ type EndpointResult<C extends ContractShape, P extends keyof C, TError> =
 export type Endpoint<C extends ContractShape, P extends keyof C, TError = ClientError> = [
   C[P]["input"],
 ] extends [Record<string, never>]
-  ? (input?: C[P]["input"]) => Promise<EndpointResult<C, P, TError>>
-  : (input: C[P]["input"]) => Promise<EndpointResult<C, P, TError>>;
+  ? (input?: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>>
+  : (input: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>>;
 
 /** The indexed surface: `client["/auth/login"](input)`. */
 export type IndexedClient<C extends ContractShape, TError = ClientError> = {
@@ -113,7 +117,11 @@ type AllPathChains<
   C extends ContractShape,
   TError,
   P extends keyof C & string = keyof C & string,
-> = P extends unknown ? PathChain<P, C, TError, P> : never;
+> = P extends unknown
+  ? P extends "/then" | `/then/${string}`
+    ? {}
+    : PathChain<P, C, TError, P>
+  : never;
 
 /**
  * The first segment as a property and the remaining path as one key:
@@ -123,14 +131,17 @@ type RemainderPathChain<
   P extends keyof C & string,
   C extends ContractShape,
   TError = ClientError,
-> = P extends `/${infer First}/${infer Rest}`
-  ? { [K in First]: { [R in Rest]: Endpoint<C, P, TError> } }
-  : {};
+> = P extends "/then" | `/then/${string}`
+  ? {}
+  : P extends `/${infer First}/${infer Rest}`
+    ? { [K in First]: { [R in Rest]: Endpoint<C, P, TError> } }
+    : {};
 
 /**
  * The full client type for a contract `C`. Both calling styles coexist because
  * the contract paths (`/group/method`) cleanly split into a flat index and an
- * arbitrarily-deep grouped tree.
+ * arbitrarily-deep grouped tree. Paths rooted at `/then` are indexed-only so
+ * the root client cannot be mistaken for a promise.
  */
 export type Client<C extends ContractShape, TError = ClientError> = IndexedClient<C, TError> &
   GroupedClient<C, TError>;
@@ -154,9 +165,10 @@ function buildPath(segments: string[]): string {
  */
 function makeProxy(
   segments: string[],
-  call: (path: string, body: unknown) => Promise<unknown>,
+  call: (path: string, body: unknown, options?: ClientCallOptions) => Promise<unknown>,
 ): unknown {
-  const fn = (body: unknown) => call(buildPath(segments), body);
+  const fn = (body: unknown, options?: ClientCallOptions) =>
+    call(buildPath(segments), body, options);
   return new Proxy(fn, {
     get(_target, prop) {
       // The root client must not be thenable, but nested `then` is a valid
@@ -165,7 +177,7 @@ function makeProxy(
       return makeProxy([...segments, prop], call);
     },
     apply(_target, _thisArg, args) {
-      return call(buildPath(segments), args[0]);
+      return call(buildPath(segments), args[0], args[1] as ClientCallOptions | undefined);
     },
   });
 }
@@ -181,9 +193,13 @@ function makeProxy(
 export function createClient<C extends ContractShape, TError = ClientError>(
   options: ClientOptions<TError>,
 ): Client<C, TError> {
-  const call = async (path: string, body: unknown) => {
+  const call = async (path: string, body: unknown, callOptions?: ClientCallOptions) => {
     try {
-      return await options.transport({ path, input: body ?? {} });
+      return await options.transport({
+        path,
+        input: body ?? {},
+        ...(callOptions?.signal === undefined ? {} : { signal: callOptions.signal }),
+      });
     } catch {
       return { error: FrameworkErrorCode.TRANSPORT_ERROR };
     }

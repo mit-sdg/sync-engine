@@ -1,5 +1,5 @@
 /**
- * Hold every concept specification to its class, reading the TypeScript source.
+ * Compare parsed action and query declarations with their TypeScript classes.
  *
  * Registration makes the same comparison when an application starts, but by
  * then a parameter's type is gone: `end(_: { session: string })` reaches the
@@ -7,10 +7,10 @@
  * therefore compares inputs only for a method that destructures them, and
  * stays silent about one that does not.
  *
- * Reading the source recovers what erasure removed. A signature that disagrees
- * with its specification fails here even when the implementation never names
- * its inputs — a placeholder parameter, a plain named parameter, or none at
- * all. Run it from `bun run check`.
+ * Reading the source recovers what erasure removed. A parsed action or query
+ * signature that disagrees with the class fails here even when the
+ * implementation never names its inputs. State prose and class fields are not
+ * inputs to this check. Run it from `bun run check`.
  */
 
 import { resolve } from "node:path";
@@ -26,8 +26,8 @@ if (import.meta.main) {
   const failures = directories.flatMap((directory) => conceptFailures(directory, root));
   if (failures.length > 0) {
     throw new Error(
-      `Concept specification check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
+      `Concept action/query source check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
     );
   }
-  console.log(`specification check passed for ${directories.length} concepts`);
+  console.log(`concept action/query source check passed for ${directories.length} concepts`);
 }

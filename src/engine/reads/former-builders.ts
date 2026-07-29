@@ -33,8 +33,10 @@ import {
   type FormerUse,
   useFormer,
 } from "./former-nodes.ts";
-import { assertBound, symbolsUsed } from "./former-analysis.ts";
-import { lowerFormerBody } from "./lower.ts";
+import type { Mapping } from "@engine/reactions/types";
+import { assertFormerBindings } from "./former-bindings.ts";
+import { operationFootprint, symbolsInMapping } from "./operation-footprint.ts";
+import { lowerFormerBody } from "./former-lowering.ts";
 
 /** The ordering vocabulary: `arranged.oldest`, `arranged.newest`, `arranged.by(v)`. */
 export const arranged = {
@@ -339,6 +341,52 @@ export function each(line: ReadLine): SelectionBuilder {
   return builderOf({ from, where: [] });
 }
 
+/** Every variable a body mentions — the declared-vs-used check's census. */
+function symbolsUsed(node: FormerNode, into: Set<symbol>): void {
+  const fromMapping = (mapping: Mapping): void => {
+    for (const variable of symbolsInMapping(mapping)) into.add(variable);
+  };
+  const fromOp = (op: WhereOp): void => {
+    const footprint = operationFootprint(op, "authored");
+    for (const variable of footprint.inputs) into.add(variable);
+    // Relation outputs can test existing values; explicit operation outputs only produce them.
+    if (op.op === "find" || op.op === "whether") {
+      for (const variable of footprint.produces) into.add(variable);
+    }
+    if (op.op === "no") for (const variable of footprint.negative) into.add(variable);
+  };
+  switch (node.node) {
+    case "leaf":
+      into.add(node.var);
+      return;
+    case "record":
+      for (const op of node.where) fromOp(op);
+      for (const [, child] of node.entries) symbolsUsed(child, into);
+      // A splice's anchors are uses of the host's variables.
+      for (const use of node.splices) fromMapping(use.fused.in);
+      return;
+    case "former":
+      fromMapping(node.use.fused.in);
+      return;
+    default: {
+      fromMapping(node.from.in);
+      fromMapping(node.from.not ?? {});
+      for (const variable of symbolsInMapping(node.from.out)) into.add(variable);
+      for (const op of node.where) fromOp(op);
+      if (node.node === "each") symbolsUsed(node.as, into);
+      if (node.node === "first" || node.node === "distinct") into.add(node.value);
+      if (
+        (node.node === "each" || node.node === "first") &&
+        node.arranged !== undefined &&
+        "by" in node.arranged
+      ) {
+        into.add(node.arranged.by);
+      }
+      return;
+    }
+  }
+}
+
 // ── The former itself ──────────────────────────────────────────────────────
 
 /**
@@ -358,8 +406,8 @@ export function former(
     throw new Error(`Former "${name}": the builder must return a former node.`);
   }
   assertSeparateBags("Former", name, [
-    ["input", inputs.minted],
-    ["free", bindings.minted],
+    ["input", inputs.minted.keys()],
+    ["free", bindings.minted.keys()],
   ]);
   const used = new Set<symbol>();
   symbolsUsed(body, used);
@@ -382,16 +430,17 @@ export function former(
     }
   }
   const inputVars = [...inputs.minted.values()];
-  assertBound(name, body, new Set(inputVars), new Set(bindings.minted.values()));
 
   // The definition boundary: the checked builder tree lowers to the IR here,
   // and the IR body is what registers, evaluates, exports, and renders.
+  const lowered = lowerFormerBody(inputVars, body);
+  assertFormerBindings(lowered, new Set(inputs.minted.keys()), name);
   return formerRefWith(
     name,
     [...inputs.minted.keys()],
     inputVars,
     [...bindings.minted.keys()],
     "one",
-    lowerFormerBody(inputVars, body),
+    lowered,
   );
 }

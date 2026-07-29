@@ -10,7 +10,7 @@
 
 import { isPlainMapping } from "./matchers.ts";
 import type { Mapping } from "@engine/reactions/types";
-import { setOwn } from "./brands.ts";
+import { setOwn } from "@engine/utils/own-property";
 
 /** Returned by a caller's handler to decline a node and let the walk descend. */
 export const DESCEND: unique symbol = Symbol("descend");

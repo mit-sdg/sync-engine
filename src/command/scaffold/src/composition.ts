@@ -1,5 +1,5 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { former, where } from "@mit-sdg/sync-engine/language";
+import { former, no, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "./concept-set.ts";
 
 const { Noting } = concepts;
@@ -13,5 +13,12 @@ export const WriteNote = endpoint("/notes/write", ({ text, note }) =>
 );
 
 export const GetNote = endpoint("/notes/get", ({ note }) =>
-  receive({ note }).then(respond({ page: notePage({ note }) })),
+  receive({ note }).then(
+    where(Noting._get({ note }))
+      .then(respond({ page: notePage({ note }) }))
+      .named("found"),
+    where(no(Noting._get({ note })))
+      .then(respond({ error: "NOTE_NOT_FOUND" }))
+      .named("missing"),
+  ),
 );

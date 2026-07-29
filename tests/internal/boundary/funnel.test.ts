@@ -1,29 +1,22 @@
 /** Standard delivery of concept refusals and runtime faults to boundary requests. */
 
 import { describe, expect, test } from "vite-plus/test";
+import { Refuse } from "@sync-engine/advanced";
+import { Logging } from "@sync-engine/assembly";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
+import type { InvocationResult } from "@sync-engine/boundary";
+import { former, vocabulary, where, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import type { Empty } from "@sync-engine/internal/reactions/types";
 import {
-  actionNameOf,
-  request,
-  former,
-  Logging,
-  Refuse,
-  Reacting,
-  vocabulary,
-  where,
-  when,
-} from "@sync-engine/internal/reactions";
-import type { Empty, Vars } from "@sync-engine/internal/reactions";
-import {
-  assemble,
-  endpoint,
   FAULT_REPLY,
   FAULT_REACTION,
-  receive,
   refusalFunnel,
-  Requesting,
-  respond,
-} from "@sync-engine/internal/boundary";
-import type { InvocationResult } from "@sync-engine/internal/boundary";
+} from "@sync-engine/internal/boundary/invocation/funnel";
+import { Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 
 const faultSentinels = {
   message: "mongodb://boundary-user:boundary-password@example.test/private",
@@ -60,17 +53,17 @@ function setup() {
   // deliver concept refusals and runtime faults.
   const composition = {
     Claim: endpoint("/seats/claim", ({ seat }: Vars) =>
-      receive({ seat }).then(request(Seating.claim, { seat })).then(respond({ seat })),
+      receive({ seat }).then(Seating.claim({ seat })).then(respond({ seat })),
     ),
     DoubleFirst: endpoint("/seats/double", ({ seat }: Vars) =>
-      receive({ seat }).then(request(Seating.claim, { seat })),
+      receive({ seat }).then(Seating.claim({ seat })),
     ),
     DoubleSecond: endpoint("/seats/double", ({ seat }: Vars) =>
-      receive({ seat }).then(request(Seating.claim, { seat })),
+      receive({ seat }).then(Seating.claim({ seat })),
     ),
     Audit: endpoint("/seats/audit", () =>
       receive()
-        .then(request(Seating.audit, {}))
+        .then(Seating.audit({}))
         .then(respond({ ok: true })),
     ),
   };
@@ -242,15 +235,18 @@ describe("faults while forming response input", () => {
         throw new Error("concept unavailable");
       }
     }
+    const refs = vocabulary({
+      concepts: { RequestBoundary: FailingBoundary, Seating: SeatingConcept },
+    }).concepts;
     const reaction = new Reacting();
     reaction.logging = Logging.OFF;
     const boundary = new FailingBoundary();
     const instrumented = reaction.instrumentConcept(boundary, "RequestBoundary");
-    const { Seating } = reaction.instrument({ Seating: new SeatingConcept() });
+    reaction.instrument({ Seating: new SeatingConcept() });
     const Audit = ({ requestId }: Vars) =>
-      when(instrumented.request, { path: "/seats/audit", requestId })
-        .then(request(Seating.audit, {}))
-        .then(request(instrumented.respond, { ok: true, requestId }));
+      when(refs.RequestBoundary.request({ path: "/seats/audit", requestId }).responds())
+        .then(refs.Seating.audit({}))
+        .then(refs.RequestBoundary.respond({ ok: true, requestId }));
     reaction.register({
       Audit,
       ...refusalFunnel(instrumented),

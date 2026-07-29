@@ -14,18 +14,21 @@
     "resolveJsonModule": true,
     "types": ["node"],
     "paths": {
+      "@command/*": ["./src/command/*"],
       "@engine/*": ["./src/engine/*"],
+      "@examples/operations-room/*": ["./examples/operations-room/src/*"],
+      "@examples/reading-circle/*": ["./examples/reading-circle/src/*"],
+      "@examples/*": ["./examples/*"],
       "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
+      "@root/*": ["./*"],
+      "@scripts/*": ["./scripts/*"],
       "@sync-engine/*": ["./src/*/index.ts"],
-      "@sync-engine/internal/reactions": ["./tests/internal/reactions/test-register.ts"],
       "@sync-engine/internal/reactions/*": ["./src/engine/reactions/*"],
       "@sync-engine/internal/reads/*": ["./src/engine/reads/*"],
-      "@sync-engine/internal/boundary": ["./src/engine/boundary/index.ts"],
       "@sync-engine/internal/boundary/*": ["./src/engine/boundary/*"],
-      "@sync-engine/internal/hosting": ["./src/engine/hosting/index.ts"],
       "@sync-engine/internal/hosting/*": ["./src/engine/hosting/*"]
     }
   },
   "include": ["examples", "scripts", "src", "tests"],
-  "exclude": ["src/command/scaffold", "tests/package/application"]
+  "exclude": ["src/command/scaffold", "tests/package/application", "tests/package/multi-instance"]
 }

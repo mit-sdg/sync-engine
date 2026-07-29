@@ -11,7 +11,7 @@ import type {
   ChannelPattern,
   InstrumentedAction,
 } from "@sync-engine/internal/reactions/types.ts";
-import { oneOf } from "@sync-engine/internal/reactions";
+import { oneOf } from "@sync-engine/internal/reads/matchers";
 import { withLive } from "@sync-engine/internal/reads/ir.ts";
 
 describe("reaction matching", () => {
@@ -19,6 +19,14 @@ describe("reaction matching", () => {
     const item = Symbol("item");
     expect(unifyPattern({ item: "a" }, { item }, {})).toEqual({ [item]: "a" });
     expect(unifyPattern({ item: "b" }, { item }, { [item]: "a" })).toBeUndefined();
+  });
+
+  test("tests repeated plain values structurally while preserving opaque identity", () => {
+    const value = Symbol("value");
+    expect(
+      unifyPattern({ value: { nested: ["same"] } }, { value }, { [value]: { nested: ["same"] } }),
+    ).toBeDefined();
+    expect(unifyPattern({ value: new Map() }, { value }, { [value]: new Map() })).toBeUndefined();
   });
 
   test("does not match inherited record fields or inherited frame bindings", () => {

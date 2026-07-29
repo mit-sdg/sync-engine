@@ -10,7 +10,12 @@
 import type { ActionPattern, InstrumentedAction } from "../types.ts";
 import type { ConceptInventoryIR } from "@engine/reads/ir";
 import { contractOf } from "./outcomes.ts";
-import { conceptMetadataOf } from "./concept-metadata.ts";
+import {
+  callableConceptMember,
+  CONCEPT_PROTOCOL,
+  conceptMetadataOf,
+  conceptProtocolOf,
+} from "./concept-metadata.ts";
 import { queryPromiseOf } from "@engine/reads/query-contracts";
 
 /**
@@ -97,33 +102,39 @@ export function inventoryOf(concept: object): ConceptInventoryIR {
     actions: [],
     queries: [],
   };
-  const authored = concept.constructor as { purpose?: unknown; principle?: unknown };
+  const authored = (
+    Object.getPrototypeOf(concept) as {
+      constructor?: { purpose?: unknown; principle?: unknown };
+    } | null
+  )?.constructor;
   const metadata = conceptMetadataOf(concept);
-  const purpose = metadata?.purpose ?? authored.purpose;
-  const principle = metadata?.principle ?? authored.principle;
+  const purpose = metadata?.purpose ?? authored?.purpose;
+  const principle = metadata?.principle ?? authored?.principle;
   if (typeof purpose === "string") inventory.purpose = purpose;
   if (typeof principle === "string") inventory.principle = principle;
 
-  for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(concept))) {
-    if (name === "constructor") continue;
-    const member = (concept as Record<string, unknown>)[name];
-    if (typeof member !== "function") continue;
-    const roles = rolesOf(member as (...args: never[]) => unknown);
-    if (name.startsWith("_")) {
-      inventory.queries.push({
-        name,
-        ...(roles !== undefined ? { roles } : {}),
-        ...(queryPromiseOf(concept, name) !== undefined
-          ? { returns: queryPromiseOf(concept, name) }
-          : {}),
-      });
-      continue;
-    }
+  const prototype = Object.getPrototypeOf(concept) as object | null;
+  const protocol = metadata?.[CONCEPT_PROTOCOL] ?? conceptProtocolOf(prototype ?? concept);
+  for (const name of protocol.actions) {
+    const member = callableConceptMember(concept, name);
+    if (member === undefined) continue;
+    const roles = rolesOf(member);
     const refusals = contractOf(concept, name)?.refusals;
     inventory.actions.push({
       name,
       ...(roles !== undefined ? { roles } : {}),
       ...(refusals !== undefined ? { refusals: [...refusals] } : {}),
+    });
+  }
+  for (const name of protocol.queries) {
+    const member = callableConceptMember(concept, name);
+    if (member === undefined) continue;
+    const roles = rolesOf(member);
+    const promise = queryPromiseOf(concept, name);
+    inventory.queries.push({
+      name,
+      ...(roles !== undefined ? { roles } : {}),
+      ...(promise !== undefined ? { returns: promise } : {}),
     });
   }
   return inventory;

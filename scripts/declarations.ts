@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { filesBelow } from "./walk.ts";
+import { filesBelow } from "../src/command/files-below.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const declarations = resolve(root, "dist");

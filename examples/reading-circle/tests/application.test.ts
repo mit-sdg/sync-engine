@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises";
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
 import { describe, expect, test } from "vite-plus/test";
 import type { ReadingCircleWire } from "../generated/wire.ts";
-import { createReadingCircleClient, loadCirclePage } from "../src/client.ts";
+import { loadCirclePage } from "../src/client.ts";
 import { GatheringConcept } from "../src/concepts/gathering/gathering.ts";
-import { buildReadingCircle, buildReadingCircleHttp } from "../src/edge.ts";
+import { buildReadingCircle } from "../src/edge.ts";
 import { runScenario } from "../src/scenario.ts";
 
 describe("canonical reading-circle example", () => {
@@ -39,26 +39,10 @@ describe("canonical reading-circle example", () => {
     const circles = createLocalClient<ReadingCircleWire>({ invoker: gateway });
     await circles.circles.choose({ circle, reading: "An Essay" });
 
-    await expect(circles.circles.page({ circle })).resolves.toMatchObject({
-      page: { circle, members: [{ member: "Ada" }], reading: { reading: "An Essay" } },
-    });
-  });
-
-  test("the frontend client reaches the fixed gateway through HTTP", async () => {
-    const { gateway, handler } = buildReadingCircleHttp();
-    const local = createLocalClient<ReadingCircleWire>({ invoker: gateway });
-    const created = await local.circles.create({ name: "Web Gathering", host: "Ada" });
-    if ("error" in created) throw new Error(String(created.error));
-    const circle = String(created.circle);
-    await local.circles.choose({ circle, reading: "An Essay" });
-    const frontend = createReadingCircleClient({
-      baseUrl: "http://reading.test/api",
-      fetch: (input, init) => handler(new Request(input, init)),
-    });
-
-    await expect(loadCirclePage(frontend, circle)).resolves.toMatchObject({
+    await expect(loadCirclePage(circles, circle)).resolves.toMatchObject({
       circle,
       members: [{ member: "Ada" }],
+      reading: { reading: "An Essay" },
     });
   });
 

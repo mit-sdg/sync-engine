@@ -3,7 +3,8 @@
 Operations Room is a modular incident-response example. It combines Gathering,
 Selecting, Discussing, and Alerting while keeping reaction packs, contribution
 policy, and concept implementation overrides selectable at assembly time. Its
-formers build a nested dashboard. It requires Bun 1.3 or newer.
+formers build a nested dashboard. Runtime and toolchain requirements are declared
+in `package.json` and the repository [support policy](../../SUPPORT.md).
 
 ## Run the example
 
@@ -50,10 +51,10 @@ endpoint declaration unchanged.
 | `src/composition/room.ts`                                      | Room endpoints and staged formers                                                                               |
 | `src/composition/contributions.ts`                             | Policy-parameterized contribution endpoints                                                                     |
 | `src/assembly.ts`                                              | Composition and implementation selection                                                                        |
-| `src/edge.ts`                                                  | Standard gateway and generic HTTP handler                                                                       |
-| `src/client.ts`                                                | Generated-contract HTTP client                                                                                  |
+| `src/edge.ts`                                                  | Standard gateway                                                                                                |
+| `src/client.ts`                                                | Transport-neutral generated-contract client helper                                                              |
 | `src/scenario.ts`                                              | End-to-end local scenario                                                                                       |
-| `tests/application.test.ts`                                    | Default, pack, policy, client, and HTTP behavior                                                                |
+| `tests/application.test.ts`                                    | Default, pack, policy, and client behavior                                                                      |
 | `generated.config.ts`                                          | Artifact command configuration                                                                                  |
 | [`generated/operations-room.md`](generated/operations-room.md) | Pinned assembled read-back                                                                                      |
 | [`generated/wire.ts`](generated/wire.ts)                       | Pinned TypeScript wire contract                                                                                 |

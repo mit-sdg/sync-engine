@@ -13,6 +13,7 @@
     "types": ["node"],
     "paths": {
       "@engine/*": ["../../src/engine/*"],
+      "@examples/reading-circle/*": ["./src/*"],
       "@mit-sdg/sync-engine/*": ["../../src/*/index.ts"]
     }
   },

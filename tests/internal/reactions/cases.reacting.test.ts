@@ -1,17 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  request,
-  actionNodeId,
-  type Frames,
-  Logging,
-  MemoryStore,
-  type LogEntry,
-  Reacting,
-  type Vars,
-  when,
-} from "@sync-engine/internal/reactions";
+import { Logging, MemoryStore } from "@sync-engine/assembly";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
+import { earlier, when } from "@sync-engine/language";
+import type { Vars } from "@sync-engine/internal/reactions/types";
+import type { Frames } from "@sync-engine/internal/reads/frames";
+import { actionNodeId } from "@sync-engine/internal/reactions/concepts/introspect";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";
+import type { LogEntry } from "@sync-engine/internal/reactions/runtime/log-store";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import {
   ButtonConcept,
   CounterConcept,
@@ -20,6 +16,7 @@ import {
   NotificationConcept,
   RecorderConcept,
   ThrowingConcept,
+  mockRefs,
 } from "./mocks.ts";
 import { makeReactions, registerReactionComputations } from "./reactions.ts";
 
@@ -35,7 +32,7 @@ function setup() {
     List: new ListConcept(),
     Recorder: new RecorderConcept(),
   });
-  reacting.register(makeReactions(Button, Counter, Notification, List, Recorder));
+  reacting.register(makeReactions());
   return { reacting, Button, Counter, Notification, List, Recorder };
 }
 
@@ -92,7 +89,7 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     List.add({ value: 3 });
 
     const OnlyEven = ({ tag, value, evenTag }: Vars) =>
-      when(Recorder.record, { tag }, {})
+      when(mockRefs.Recorder.record({ tag }).responds())
         .where((frames: Frames) =>
           frames
             .filter(($) => String($[tag]).startsWith("v:"))
@@ -106,7 +103,7 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
               [evenTag]: `even:${String(frame[value])}`,
             })),
         )
-        .then(request(Recorder.record, { tag: evenTag }));
+        .then(mockRefs.Recorder.record({ tag: evenTag }));
     reacting.register({ OnlyEven });
 
     await Button.clicked({ kind: "fanout" });
@@ -158,7 +155,7 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
   test("a faulted consequence prevents later actions in its pipeline", async () => {
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;
-    const { Button, Recorder, Throwing } = reacting.instrument({
+    const { Button, Recorder } = reacting.instrument({
       Button: new ButtonConcept(),
       Recorder: new RecorderConcept(),
       Throwing: new ThrowingConcept(),
@@ -166,9 +163,9 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     reacting.register({
       ChainWithThrow: ({ kind }: Vars) =>
-        when(Button.clicked, { kind }, {})
-          .then(request(Throwing.explode, {}))
-          .then(request(Recorder.record, { tag: "after-throw" })),
+        when(mockRefs.Button.clicked({ kind }).responds())
+          .then(mockRefs.Throwing.explode({}))
+          .then(mockRefs.Recorder.record({ tag: "after-throw" })),
     });
 
     await Button.clicked({ kind: "test" });
@@ -186,17 +183,20 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     reacting.register({
       StartWorkflow: ({ kind }: Vars) =>
-        when(Button.clicked, { kind }, {})
-          .then(request(Throwing.safe, {}))
-          .then(request(Throwing.explode, {})),
+        when(mockRefs.Button.clicked({ kind }).responds())
+          .then(mockRefs.Throwing.safe({}))
+          .then(mockRefs.Throwing.explode({})),
       Response: ({ ok }: Vars) =>
-        when([
-          [Button.clicked, { kind: "test" }],
-          [Throwing.safe, {}, { ok }],
-          [Throwing.explode, {}],
-        ]).then(request(Recorder.record, { tag: "response" })),
+        when(mockRefs.Throwing.explode({}).responds())
+          .where(
+            earlier(mockRefs.Button.clicked, { kind: "test" }),
+            earlier(mockRefs.Throwing.safe, {}, { ok }),
+          )
+          .then(mockRefs.Recorder.record({ tag: "response" })),
       ErrorResponse: ({ error }: Vars) =>
-        when(Throwing.explode, {}, { error }).then(request(Recorder.record, { tag: "error" })),
+        when(mockRefs.Throwing.explode({}).refuses({ error })).then(
+          mockRefs.Recorder.record({ tag: "error" }),
+        ),
     });
 
     await Button.clicked({ kind: "test" });
@@ -243,7 +243,7 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     expect(c3).toBe(1);
   });
 
-  test("invalidateCaches refreshes one concept's memoized query", async () => {
+  test("manual engine queries retain memoized results until invalidated", async () => {
     class CachingConcept {
       calls = 0;
       _data(_: Record<PropertyKey, never>) {
@@ -319,14 +319,14 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     reacting.register({
       BadWhere: (_vars: Vars) =>
-        when(Button.clicked, { kind: "trigger" }, {})
+        when(mockRefs.Button.clicked({ kind: "trigger" }).responds())
           .where(() => {
             throw new Error("where-explosion");
           })
-          .then(request(Recorder.record, { tag: "bad" })),
+          .then(mockRefs.Recorder.record({ tag: "bad" })),
       GoodReaction: (_vars: Vars) =>
-        when(Button.clicked, { kind: "trigger" }, {}).then(
-          request(Recorder.record, { tag: "good" }),
+        when(mockRefs.Button.clicked({ kind: "trigger" }).responds()).then(
+          mockRefs.Recorder.record({ tag: "good" }),
         ),
     });
 
@@ -360,13 +360,13 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     });
     reacting.register({
       Retained: (_vars: Vars) =>
-        when(Button.clicked, { kind: "retained" }, {})
+        when(mockRefs.Button.clicked({ kind: "retained" }).responds())
           .where(async (frames: Frames) => {
             enteredWhere();
             await waitForRelease;
             return frames;
           })
-          .then(request(Recorder.record, { tag: "kept" })),
+          .then(mockRefs.Recorder.record({ tag: "kept" })),
     });
 
     const pending = Button.clicked({ kind: "retained" });
@@ -392,13 +392,15 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     const store = new FaultRejectingStore();
     const reacting = new Reacting(new ActionConcept(store));
     reacting.logging = Logging.OFF;
-    const { Button, Crashing } = reacting.instrument({
+    const { Button } = reacting.instrument({
       Button: new ButtonConcept(),
       Crashing: new CrashingConcept(),
     });
     reacting.register({
       PartialFault: (_vars: Vars) =>
-        when(Button.clicked, { kind: "crash" }, {}).then(request(Crashing.crash, {})),
+        when(mockRefs.Button.clicked({ kind: "crash" }).responds()).then(
+          mockRefs.Crashing.crash({}),
+        ),
     });
 
     await Button.clicked({ kind: "crash" });
@@ -419,14 +421,18 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     reacting.register({
       ReRegister: (_vars: Vars) =>
-        when(Button.clicked, { kind: "re-reg" }, {}).then(request(Recorder.record, { tag: "old" })),
+        when(mockRefs.Button.clicked({ kind: "re-reg" }).responds()).then(
+          mockRefs.Recorder.record({ tag: "old" }),
+        ),
     });
     await Button.clicked({ kind: "re-reg" });
     expect(Recorder.order).toContain("old");
 
     reacting.register({
       ReRegister: (_vars: Vars) =>
-        when(Button.clicked, { kind: "re-reg" }, {}).then(request(Recorder.record, { tag: "new" })),
+        when(mockRefs.Button.clicked({ kind: "re-reg" }).responds()).then(
+          mockRefs.Recorder.record({ tag: "new" }),
+        ),
     });
     await Button.clicked({ kind: "re-reg" });
 

@@ -1,5 +1,5 @@
-import { actionPattern } from "./words.ts";
 import type {
+  ActionPattern,
   BranchChain,
   InstrumentedAction,
   Mapping,
@@ -8,6 +8,8 @@ import type {
   ThenNode,
   UnnamedStepNode,
 } from "../types.ts";
+import { flow } from "../context.ts";
+import { isActionRef } from "./references.ts";
 import type { WhereOp } from "@engine/reads/where-ops";
 import { brand, hasBrand } from "@engine/reads/brands";
 
@@ -99,4 +101,20 @@ export function assertReactionNodes(nodes: readonly ThenNode[]): void {
       );
     }
   }
+}
+
+/** Normalize an authored action reference into an occurrence pattern. */
+export function actionPattern(
+  action: InstrumentedAction,
+  input: Mapping,
+  output?: Mapping,
+): ActionPattern {
+  const concept = action.concept;
+  if (concept === undefined) {
+    if (isActionRef(action)) {
+      return { concept: action, action, input, flow, ...(output ? { output } : {}) };
+    }
+    throw new Error(`Action ${action.name} is not instrumented.`);
+  }
+  return { concept, action, input, flow, ...(output ? { output } : {}) };
 }

@@ -1,9 +1,10 @@
 # Command-line reference
 
-The installed `sync-engine` executable scaffolds projects, checks concept
-specifications, and checks or generates assembly artifacts. Commands require
-Bun 1.3 or newer and run relative to the current working directory unless a
-path says otherwise.
+The installed `sync-engine` executable scaffolds projects, compares parsed
+concept action/query declarations with class source, and checks or generates
+assembly artifacts. Commands follow the [runtime and toolchain support
+policy](../SUPPORT.md) and run relative to the current working directory unless
+a path says otherwise.
 
 ```text
 sync-engine <topic> <command>
@@ -12,6 +13,10 @@ sync-engine <topic> <command>
 `sync-engine`, `sync-engine help`, `sync-engine --help`, and `sync-engine -h`
 print command help and exit successfully. A command error prints the error
 message without a stack and sets exit status 1.
+
+Commands accept only the operands and options shown below. Unknown options,
+repeated options, missing option values, and trailing operands are rejected
+before a command applies defaults, imports configuration, or writes files.
 
 ## `sync-engine new`
 
@@ -22,10 +27,9 @@ sync-engine new <directory>
 `new` writes the one-concept project used by [Getting
 started](guide/getting-started.md). The basename of `<directory>` determines
 the package name, generated application title, TypeScript identifiers, and
-specification filename. The command does not validate that the basename
-produces legal TypeScript identifiers. Use a name beginning with a letter and
-containing letters, digits, or hyphens; a numeric-only or punctuation-only name
-can be written successfully but fail typechecking.
+specification filename. It must begin with a lowercase letter and contain only
+lowercase letters, digits, and single hyphens. Invalid names are rejected before
+the destination directory is created.
 
 The command may create `<directory>` and missing subdirectories. Before writing,
 it checks every intended template path. If any intended file already exists,
@@ -39,7 +43,7 @@ installing, generating, checking, and running the project.
 ## `sync-engine check`
 
 ```text
-sync-engine check [--concepts <path...>]
+sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
 ```
 
 `check` recursively finds `spec.md` under each supplied root. The default root
@@ -47,14 +51,22 @@ is `src/concepts`. Each discovered concept directory must contain `registry.ts`,
 and that registry must call `registerConcept` with a class imported by name.
 
 The command parses the specification and class source, then compares action and
-query names and supported input parameter forms. [Concept specification
-format](concept-specification.md) defines the accepted grammar and validation
-boundary.
+query names and supported input parameter forms. It does not read State notation
+as grammar or compare it with class fields or storage. [Concept specification
+format](concept-specification.md) defines the accepted machine grammar and
+uninterpreted boundary.
+
+`--concepts` consumes one or more paths, ending at the next option. Each of
+`--concepts`, `--config`, and `--fail-on-warnings` may appear at most once.
+
+`--config` also assembles the application and prints its structured diagnostics.
+`--fail-on-warnings` promotes warning diagnostics only when `--config` is
+present; without a config there are no application diagnostics to promote.
 
 Success prints:
 
 ```text
-Specification check passed for N concepts.
+Concept action/query source check passed for N concepts.
 ```
 
 The command fails when no concept directories are found or when any concept
@@ -82,8 +94,12 @@ artifacts.
 
 ### `pin`
 
-Renders and writes both artifacts. The command creates the configured output
-directory when necessary and is silent on success.
+Renders and validates both artifacts before its first filesystem effect. The
+command creates configured parent directories, skips byte-identical files, and
+replaces changed files through a same-directory temporary file and rename. It
+does not delete unknown files and is silent on success. Replacement is atomic
+per file, not across both artifacts. A later write failure can leave an earlier
+artifact updated; the command does not roll back completed writes.
 
 ### `pin-spec`
 
@@ -93,17 +109,29 @@ Renders both artifacts but writes only the assembled Markdown specification.
 
 Renders both artifacts but writes only the TypeScript wire contract.
 
+### `manifest`
+
+Prints `sync-engine.application-manifest` version `3` as canonical JSON. The
+manifest contains application design, declaration-owned endpoints, input and
+wire contracts, validator-presence flags, structured diagnostics, and a digest
+over those fields. It excludes occurrences and other runtime state.
+
 ### `spec`
 
-For an assembly with no non-portable endpoint, prints assembly counts, reports
-non-portable non-endpoint reactions, and prints the assembled read-back. The
-counts cover registered reactions, views, formers, unlowered executable
-reactions, and serialized `compute` operations in the exported IR. The last
-value counts operation occurrences, not distinct computation names.
+For a valid assembly, prints assembly counts and the assembled read-back. The
+counts cover registered reactions, views, formers, and serialized `compute`
+operations in the exported IR. The last value counts operation occurrences, not
+distinct computation names.
 
 ### `wire`
 
 Prints the generated TypeScript wire contract.
+
+`sync-engine check --config generated.config.ts` prints the same structured
+application diagnostics after checking parsed concept action/query declarations
+against class source. Diagnostics are advisory unless their severity is
+`error`; `--fail-on-warnings` promotes warning diagnostics to a failing
+repository gate.
 
 ## Artifact failure conditions
 
@@ -111,11 +139,16 @@ Every artifact command imports and assembles the configured application.
 Assembly, import, configuration, or rendering failures therefore fail the
 command before comparison or writing.
 
-Artifact rendering rejects an executable endpoint that cannot be lowered to a
-complete portable contract. The diagnostic names the endpoint path, reaction,
-and unsupported construction. This rejection applies to every artifact
-subcommand, including `spec`. Non-endpoint reactions may remain
-executable-only; the assembled read-back reports them as unlowered.
+After inspection, the command begins assembly drain and waits for idle before
+returning. A descriptor that owns generation-only resources may supply a
+`close()` callback; the command invokes it after drain, including when inspection
+or rendering fails. This cleanup belongs to the descriptor and does not make
+ordinary assembly own concept-floor or store resources.
+
+Assembly rejects every local reaction, view, or former. This rejection applies
+before every artifact subcommand, including `spec`, can expose a route or write
+a path. Local executable behavior remains available only through manual engines
+under the `advanced` subpath.
 
 Strict wire generation also rejects a leaf that cannot be traced to the
 configured vocabulary type anchor. Generation never emits a successful partial

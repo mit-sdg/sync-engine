@@ -14,7 +14,6 @@
  */
 
 import type { ActionPosture, ChannelPosture } from "@engine/reactions/types";
-import { foldFormerNode, foldReaction, foldView } from "./schema.ts";
 
 /** A JSON-safe pattern value: literals, variables, matchers, nested shapes. */
 export type ValueIR =
@@ -273,6 +272,13 @@ export interface ReactionIR {
 export interface UnloweredIR {
   name: string;
   reason: string;
+  /** Inspectable facts retained even though the complete definition is local code. */
+  known: {
+    when: TriggerIR[];
+    where: WhereOpIR[];
+    then: ConsequenceIR[];
+    patterns: PatternIR[];
+  };
 }
 
 /** Everything the engine knows about its registered reactions, as data. */
@@ -303,9 +309,8 @@ export interface QueryInventoryIR {
 }
 
 /**
- * Registered actions, queries, prose, and refusal codes for one concept.
- * Purpose and principle are carried only when the concept class authors them
- * (`static purpose` / `static principle`); the renderer marks the absence.
+ * Registered actions, queries, purpose, principle, and refusal codes for one
+ * concept. Uninterpreted State sections are not inventory data.
  */
 export interface ConceptInventoryIR {
   name: string;
@@ -313,14 +318,4 @@ export interface ConceptInventoryIR {
   principle?: string;
   actions: ActionInventoryIR[];
   queries: QueryInventoryIR[];
-}
-
-/** Count unlowered reactions and custom read operations in an exported app. */
-export function opaqueCount(app: AppIR): number {
-  let count = app.unlowered.length;
-  const countCustoms = { op: (op: { op: string }) => (count += op.op === "custom" ? 1 : 0) };
-  for (const reaction of app.reactions) foldReaction(reaction, countCustoms);
-  for (const view of app.views) foldView(view, countCustoms);
-  for (const formerIR of app.formers) foldFormerNode(formerIR.body, countCustoms);
-  return count;
 }

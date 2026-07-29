@@ -8,8 +8,8 @@
  * setup.
  */
 
-import { FrameworkErrorCode } from "../protocol/errors.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import { isAborted, raceDeadline } from "@engine/utils/deadline";
+import { FrameworkErrorCode, type ContractShape } from "../protocol/types.ts";
 import type { Client, ClientTransport } from "./client.ts";
 import { createClient } from "./client.ts";
 
@@ -48,8 +48,10 @@ export interface HttpClientOptions {
 const FALLBACK_BASE_URL = "/api";
 
 function cleanBaseUrl(value: string | undefined): string | undefined {
-  const trimmed = value?.trim().replace(/\/$/, "");
-  return trimmed === "" ? undefined : trimmed;
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed === "") return undefined;
+  if (trimmed === "/") return "";
+  return trimmed.replace(/\/+$/, "");
 }
 
 function configuredBaseUrl(): string | undefined {
@@ -61,7 +63,24 @@ function configuredBaseUrl(): string | undefined {
 }
 
 function resolveBaseUrl(baseUrl: string | undefined): string {
-  return cleanBaseUrl(baseUrl) ?? configuredBaseUrl() ?? FALLBACK_BASE_URL;
+  return baseUrl === undefined
+    ? (configuredBaseUrl() ?? FALLBACK_BASE_URL)
+    : (cleanBaseUrl(baseUrl) ?? FALLBACK_BASE_URL);
+}
+
+type HeaderResolution = { aborted: true } | { aborted: false; headers: Record<string, string> };
+
+async function resolveHeaders(
+  option: HeadersOption | undefined,
+  signal: AbortSignal | undefined,
+): Promise<HeaderResolution> {
+  if (isAborted(signal)) return { aborted: true };
+  if (typeof option !== "function") return { aborted: false, headers: option ?? {} };
+
+  return raceDeadline<HeaderResolution>(
+    Promise.resolve(option()).then((headers) => ({ aborted: false, headers })),
+    { signal, onAbort: () => ({ aborted: true }) },
+  );
 }
 
 /**
@@ -75,31 +94,38 @@ async function httpRequest(
   credentials: "include" | "omit" | "same-origin" | undefined,
   path: string,
   body: unknown,
+  signal?: AbortSignal,
 ): Promise<unknown> {
-  let extraHeaders: Record<string, string> = {};
+  let resolvedHeaders: HeaderResolution;
   try {
-    extraHeaders =
-      typeof headersOption === "function" ? await headersOption() : (headersOption ?? {});
+    resolvedHeaders = await resolveHeaders(headersOption, signal);
   } catch {
     return { error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED };
+  }
+  if (resolvedHeaders.aborted || isAborted(signal)) {
+    return { error: FrameworkErrorCode.ABORTED };
   }
 
   let response: Response;
   try {
     response = await fetchImpl(baseUrl + path, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...extraHeaders },
+      headers: { "Content-Type": "application/json", ...resolvedHeaders.headers },
       body: JSON.stringify(body ?? {}),
       credentials: credentials ?? "include",
+      signal,
     });
   } catch {
-    return { error: FrameworkErrorCode.NETWORK_ERROR };
+    return {
+      error: isAborted(signal) ? FrameworkErrorCode.ABORTED : FrameworkErrorCode.NETWORK_ERROR,
+    };
   }
 
   let text: string;
   try {
     text = await response.text();
   } catch {
+    if (isAborted(signal)) return { error: FrameworkErrorCode.ABORTED };
     return {
       error: FrameworkErrorCode.BAD_JSON,
       detail: `Failed to read response body from ${path} (status ${response.status}).`,
@@ -136,7 +162,15 @@ export function createHttpTransport(options: HttpClientOptions = {}): ClientTran
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const credentials = options.credentials;
   return (request) =>
-    httpRequest(fetchImpl, baseUrl, options.headers, credentials, request.path, request.input);
+    httpRequest(
+      fetchImpl,
+      baseUrl,
+      options.headers,
+      credentials,
+      request.path,
+      request.input,
+      request.signal,
+    );
 }
 
 /**

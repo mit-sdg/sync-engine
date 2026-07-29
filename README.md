@@ -18,30 +18,31 @@ contract.
 
 ## Status and requirements
 
-Version 1 is alpha. It is not recommended for production. Public APIs,
-execution behavior, and generated files may change incompatibly between alpha
-releases. Pin an exact version for evaluation and read the [operational
+Version 1 is beta. It is not recommended as a sole production control plane.
+Public APIs, execution behavior, and generated formats may change incompatibly
+between beta releases. Only the newest beta is supported; pin an exact version,
+read the [support policy](SUPPORT.md), and review the [operational
 limits](docs/operations.md) before choosing a deployment.
 
-The package is ESM-only. Shipped TypeScript projects and CLI commands require
-Bun 1.3 or newer. Built library modules support Node.js 24 or newer.
+The package is ESM-only. See the [support policy](SUPPORT.md) for current runtime
+and toolchain requirements.
 
 ## Install in an existing project
 
 ```sh
-bun add @mit-sdg/sync-engine@alpha
+bun add @mit-sdg/sync-engine@beta
 ```
 
 ## Create an application
 
 ```sh
-bunx --package @mit-sdg/sync-engine@alpha sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
 cd note-keeper
 bun install
 ```
 
-For a reproducible evaluation, replace `@alpha` with an exact version such as
-`@1.0.0-alpha.0`.
+For a reproducible evaluation, replace `@beta` with the exact version
+`@1.0.0-beta.0`.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
@@ -96,9 +97,19 @@ export const ChooseMitigation = endpoint(
 ```
 
 An assembly can expose the endpoint through a direct invoker, the standard
-gateway, a local JSON-parity client, or the HTTP adapter. Generated TypeScript
-describes accepted inputs and possible outputs. It does not validate hostile
-values at runtime.
+gateway, a local JSON-parity client, or HTTP. Use the production HTTP profile to
+project only registered public error categories without choosing a credential
+mechanism; add the same-origin cookie floor only when the application needs that
+binding. Generated TypeScript describes accepted inputs and possible outputs. It
+does not validate hostile values at runtime; endpoint validator hooks provide
+that separate runtime contract when an application needs it. Validators are
+application-supplied; the engine does not infer them from concept specifications.
+
+Endpoint behavior must be portable: canonical JSON-round-trippable and
+re-registerable against the same named vocabulary. Closures, custom operations,
+object-identity patterns, raw transforms, and whole unlowered definitions are
+local and cannot occur in an ordinary assembly. Manual engines under
+`@mit-sdg/sync-engine/advanced` retain those explicit local escape hatches.
 
 ## Guarantees and non-guarantees
 
@@ -107,16 +118,25 @@ The ordinary assembly provides these guarantees:
 - one action body runs at a time per concept instance within one assembly;
 - each action ask and its return, refusal, or fault are recorded;
 - composition is checked before registered behavior executes;
+- local behavior is rejected before any public route is exposed;
 - generated artifacts fail rather than silently omit an endpoint they cannot
   represent;
+- optional execution profiles bound admission and accepted causal work;
+- assemblies and gateways stop admission and report actual idle state;
+- stable operational events carry route and correlation without application values;
 - handled client and boundary failures resolve as typed result envelopes.
 
 The ordinary assembly does not provide transactions across actions, rollback,
 concept-state persistence, occurrence replay, restart recovery, distributed
 serialization, exactly-once execution, or runtime validation of generated
-types. Timeout and abort stop waiting; they do not cancel accepted work. The
-default in-memory log retains a bounded inspection window rather than every
-occurrence forever.
+types. A specification's optional State section is uninterpreted human notation:
+it is not compared with class fields or storage and does not enter manifests,
+read-back, wire contracts, input contracts, or endpoint validators. State
+properties belong in principle, implementation, and backend constraint tests.
+Runtime validation is explicit per endpoint rather than inferred from generated
+types or State notation. Timeout and abort stop waiting; they do not cancel
+accepted work. The default in-memory log retains a bounded inspection window
+rather than every occurrence forever.
 
 See [Execution semantics](docs/semantics.md) for the precise contracts and
 [Operational limits](docs/operations.md) for selection and deployment guidance.
@@ -127,7 +147,7 @@ The [documentation index](docs/index.md) separates the material by task.
 
 - [Getting started](docs/guide/getting-started.md) — scaffold and run the
   smallest complete application.
-- [Authoring guide](docs/guide/concepts.md) — concepts, reactions, views,
+- [Authoring guide](docs/index.md#start-an-application) — concepts, reactions, views,
   formers, and endpoints in dependency order.
 - [Example book](docs/book.md) — small, tested reading constructions and exact
   registration failures.
@@ -135,24 +155,27 @@ The [documentation index](docs/index.md) separates the material by task.
   defaults, and error codes.
 - [Concept specification format](docs/concept-specification.md) and [CLI
   reference](docs/cli.md) — authoritative file and command contracts.
-- [Examples](examples/README.md) — independently installable Reading Circle
-  and Operations Room applications.
+- [Examples](examples/README.md) — independently installable Reading Circle,
+  Operations Room, and Production HTTP applications.
+- [Support policy](SUPPORT.md) and [security policy](SECURITY.md) — beta
+  compatibility, generated contracts, support windows, and private reporting.
 - [Engine architecture](docs/architecture.md) and [contributing
   guide](CONTRIBUTING.md) — implementation and repository work.
 
-From a source checkout, install dependencies and run both example scenarios:
+From a source checkout, install dependencies and run all example scenarios:
 
 ```sh
 bun install
 bun run scenario
 ```
 
-## Upgrading alpha versions
+## Upgrading beta versions
 
-Alpha releases carry no migration guarantee. Before changing a pinned version,
-read the [changelog](CHANGELOG.md) and the corresponding [GitHub
-release](https://github.com/mit-sdg/sync-engine/releases). Regenerate and review
-all pinned artifacts after the upgrade.
+Beta releases may make incompatible changes with explicit migration notes.
+Before changing a pinned version, read the [changelog](CHANGELOG.md) and the
+corresponding [GitHub release](https://github.com/mit-sdg/sync-engine/releases).
+Regenerate and review all pinned artifacts; generated clients, servers, and
+tooling must use the same exact package version.
 
 ## License
 
