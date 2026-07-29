@@ -1,5 +1,8 @@
 # sync-engine
 
+[![npm beta](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm%20beta)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
+[![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
+
 sync-engine is a TypeScript library for composing independently implemented
 application behaviors. Each behavior, called a **concept**, owns its state,
 actions, queries, and expected refusals. Application composition connects
