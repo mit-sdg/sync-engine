@@ -113,10 +113,11 @@ export function planGenerated(
       : `${options.wireBanner}\n// Generator: ${generator}.`;
   const logicalWire = renderWireTypes(manifest.wire, {
     moduleName: wireName,
+    banner: wireBanner,
     ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }),
     strictLeaves: options.strictLeaves ?? false,
   });
-  const renderedWire = (
+  const renderedWire =
     options.httpWire === undefined
       ? logicalWire
       : logicalWire +
@@ -127,8 +128,7 @@ export function planGenerated(
           ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }),
           strictLeaves: options.strictLeaves ?? false,
           preamble: false,
-        })
-  ).replace(/^\/\/ Generated wire contracts.*\n\/\/ Regenerated.*\n/, `${wireBanner}\n`);
+        });
   return artifactPlan([
     {
       path: specification,

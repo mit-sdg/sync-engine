@@ -1,19 +1,14 @@
 import { OperationalEvents, type OperationalObserver } from "@engine/reactions/runtime/operational";
 import { admitInput } from "../protocol/admit.ts";
-import type { ApplicationInterface } from "../protocol/application-interface.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import type { ApplicationInterface, ContractShape, InvocationResult } from "../protocol/types.ts";
 import {
   applicationBehindInvoker,
   rememberGatewayApplication,
 } from "../protocol/gateway-registry.ts";
-import {
-  FrameworkErrorCode,
-  type EmittedFrameworkErrorCode,
-  type InvocationResult,
-} from "../protocol/errors.ts";
+import { FrameworkErrorCode, frameworkError } from "../protocol/types.ts";
 import { toJsonValue } from "../protocol/envelope.ts";
 import type { Invoker, InvokeOptions } from "../invocation/invoke.ts";
-import { RuntimeLifecycle, type ExecutionLimits } from "../invocation/lifecycle.ts";
+import { requestTimeout, RuntimeLifecycle, type ExecutionLimits } from "../invocation/lifecycle.ts";
 import { isAborted, raceDeadline } from "@engine/utils/deadline";
 
 type GatewayResult = InvocationResult<unknown, unknown>;
@@ -38,17 +33,6 @@ export interface Gateway<C extends ContractShape> extends Invoker<C> {
   whenIdle(): Promise<void>;
 }
 
-function frameworkFailure(code: EmittedFrameworkErrorCode, detail?: string): GatewayResult {
-  return {
-    ok: false,
-    error: {
-      kind: "framework",
-      code,
-      ...(detail === undefined ? {} : { detail }),
-    },
-  };
-}
-
 function projectResult(result: GatewayResult): GatewayResult {
   try {
     if (result.ok) return { ok: true, value: toJsonValue(result.value) };
@@ -60,7 +44,7 @@ function projectResult(result: GatewayResult): GatewayResult {
     }
     return result;
   } catch {
-    return frameworkFailure(FrameworkErrorCode.INTERNAL_ERROR);
+    return frameworkError(FrameworkErrorCode.INTERNAL_ERROR);
   }
 }
 
@@ -71,9 +55,9 @@ function waitForInvocation(
 ): Promise<GatewayResult> {
   return raceDeadline(invocation, {
     timeoutMs,
-    onTimeout: () => frameworkFailure(FrameworkErrorCode.TIMED_OUT),
+    onTimeout: () => frameworkError(FrameworkErrorCode.TIMED_OUT),
     signal,
-    onAbort: () => frameworkFailure(FrameworkErrorCode.ABORTED),
+    onAbort: () => frameworkError(FrameworkErrorCode.ABORTED),
   });
 }
 
@@ -124,36 +108,35 @@ export function createGateway<C extends ContractShape = ContractShape>(
       };
 
       if (isAborted(invokeOptions.signal)) {
-        return settle(frameworkFailure(FrameworkErrorCode.ABORTED)) as never;
+        return settle(frameworkError(FrameworkErrorCode.ABORTED)) as never;
       }
 
-      const timeoutMs =
-        invokeOptions.timeoutMs ?? options.executionLimits?.maxRequestDurationMs ?? 30_000;
+      const timeoutMs = requestTimeout(invokeOptions.timeoutMs, options.executionLimits);
       const timeoutError = lifecycle.validateTimeout(timeoutMs);
       if (timeoutError !== undefined) {
-        return settle(frameworkFailure(FrameworkErrorCode.INVALID_INPUT, timeoutError)) as never;
+        return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError)) as never;
       }
 
       const flow = crypto.randomUUID();
       const rejection = lifecycle.admit(flow, path, correlationId);
       if (rejection !== undefined) {
-        return settle(frameworkFailure(FrameworkErrorCode.UNAVAILABLE)) as never;
+        return settle(frameworkError(FrameworkErrorCode.UNAVAILABLE)) as never;
       }
 
       let invocation: Promise<GatewayResult> | undefined;
       let result: GatewayResult;
       try {
         if (!Object.hasOwn(application.publicInterface.routes, path)) {
-          result = frameworkFailure(
+          result = frameworkError(
             FrameworkErrorCode.NOT_FOUND,
             `Unknown endpoint: ${String(path)}`,
           );
         } else {
           const admission = admitInput(application.publicInterface.routes[path] ?? {}, path, input);
           if (!admission.ok) {
-            result = frameworkFailure(FrameworkErrorCode.INVALID_INPUT);
+            result = frameworkError(FrameworkErrorCode.INVALID_INPUT);
           } else if (isAborted(invokeOptions.signal)) {
-            result = frameworkFailure(FrameworkErrorCode.ABORTED);
+            result = frameworkError(FrameworkErrorCode.ABORTED);
           } else {
             try {
               invocation = Promise.resolve(
@@ -163,17 +146,17 @@ export function createGateway<C extends ContractShape = ContractShape>(
                 }),
               ).then(
                 (settled) => settled as GatewayResult,
-                () => frameworkFailure(FrameworkErrorCode.TRANSPORT_ERROR),
+                () => frameworkError(FrameworkErrorCode.TRANSPORT_ERROR),
               );
             } catch {
-              invocation = Promise.resolve(frameworkFailure(FrameworkErrorCode.TRANSPORT_ERROR));
+              invocation = Promise.resolve(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
             }
             const tracked = invocation.finally(() => lifecycle.flowSettled(flow));
             result = await waitForInvocation(tracked, timeoutMs, invokeOptions.signal);
           }
         }
       } catch {
-        result = frameworkFailure(FrameworkErrorCode.TRANSPORT_ERROR);
+        result = frameworkError(FrameworkErrorCode.TRANSPORT_ERROR);
       } finally {
         lifecycle.pendingSettled(flow);
         if (invocation === undefined) lifecycle.flowSettled(flow);

@@ -79,6 +79,7 @@ export function credentialProtectedPaths(
 export function validateHttpFloor(
   application: Assembly<Record<string, new (...args: never[]) => object>>,
   floor: HttpFloor,
+  wire?: WireContractsIR,
 ): void {
   const assembled = assemblyBehind(application);
   const paths = new Set(Object.keys(assembled.publicInterface.routes));
@@ -91,11 +92,13 @@ export function validateHttpFloor(
       `httpFloor: no endpoint declares credential input "${floor.credential.input}".`,
     );
   }
-  const wire = wireContracts(assembled.engine.exportReactions(), {
-    contracts: assembled.contracts,
-    inventories: assembled.engine.exportConcepts(),
-  });
-  const issuing = wire.endpoints.find(({ path }) => path === floor.credential.issue.path);
+  const contracts =
+    wire ??
+    wireContracts(assembled.engine.exportReactions(), {
+      contracts: assembled.contracts,
+      inventories: assembled.engine.exportConcepts(),
+    });
+  const issuing = contracts.endpoints.find(({ path }) => path === floor.credential.issue.path);
   const fields = issuing === undefined ? undefined : topLevelFields(issuing.output);
   for (const output of [floor.credential.issue.output, floor.credential.issue.expires]) {
     if (!fields?.has(output)) {
@@ -143,14 +146,4 @@ export function projectHttpWire(
     }),
     appWide: projected.appWide,
   };
-}
-
-export function projectAssemblyHttpWire(
-  application: Assembly<Record<string, new (...args: never[]) => object>>,
-  wire: WireContractsIR,
-  floor: HttpFloor,
-): WireContractsIR {
-  validateHttpFloor(application, floor);
-  const assembled = assemblyBehind(application);
-  return projectHttpWire(wire, assembled.contracts, assembled.publicErrors, floor);
 }

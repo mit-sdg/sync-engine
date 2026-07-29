@@ -9,8 +9,7 @@
  */
 
 import { isAborted, raceDeadline } from "@engine/utils/deadline";
-import { FrameworkErrorCode } from "../protocol/errors.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import { FrameworkErrorCode, type ContractShape } from "../protocol/types.ts";
 import type { Client, ClientTransport } from "./client.ts";
 import { createClient } from "./client.ts";
 

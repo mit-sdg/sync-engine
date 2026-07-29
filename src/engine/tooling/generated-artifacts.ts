@@ -3,10 +3,11 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, posix, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
+import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
 import type { HttpFloor } from "@engine/boundary/http/http-floor";
-import { projectAssemblyHttpWire } from "@engine/boundary/http/http-floor";
+import { projectHttpWire, validateHttpFloor } from "@engine/boundary/http/http-floor";
 import type { ProductionHttpProfile } from "@engine/boundary/http/http-profile";
-import { projectAssemblyProductionHttpWire } from "@engine/boundary/http/http-profile";
+import { projectProductionHttpWire } from "@engine/boundary/http/http-profile";
 import { pascal, slug } from "@engine/utils/case";
 import {
   applyArtifactPlan,
@@ -119,11 +120,20 @@ function completeGeneratedPlan(
   plan: ArtifactPlan;
 } {
   const manifest = applicationManifest(assembled);
+  const facts = assemblyBehind(assembled);
   const httpWire =
     application.httpFloor !== undefined
-      ? projectAssemblyHttpWire(assembled, manifest.wire, application.httpFloor)
+      ? (() => {
+          validateHttpFloor(assembled, application.httpFloor, manifest.wire);
+          return projectHttpWire(
+            manifest.wire,
+            facts.contracts,
+            facts.publicErrors,
+            application.httpFloor,
+          );
+        })()
       : application.httpProfile !== undefined
-        ? projectAssemblyProductionHttpWire(assembled, manifest.wire)
+        ? projectProductionHttpWire(manifest.wire, facts.publicErrors)
         : undefined;
   return {
     manifest,

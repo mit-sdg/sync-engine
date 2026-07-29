@@ -38,40 +38,43 @@ function sortByName<T extends { name: string }>(values: readonly T[]): T[] {
   return [...values].sort((left, right) => ordinal(left.name, right.name));
 }
 
-function stableViews(views: readonly ViewIR[]): ViewIR[] {
-  const byName = new Map(views.map((view) => [view.name, view]));
+function stableByDependency<T extends { name: string }>(
+  values: readonly T[],
+  dependenciesOf: (value: T) => Iterable<string>,
+): T[] {
+  const byName = new Map(values.map((value) => [value.name, value]));
   const emitted = new Set<string>();
   const visiting = new Set<string>();
-  const result: ViewIR[] = [];
-  const visit = (view: ViewIR) => {
-    if (emitted.has(view.name) || visiting.has(view.name)) return;
-    visiting.add(view.name);
+  const result: T[] = [];
+  const visit = (value: T) => {
+    if (emitted.has(value.name) || visiting.has(value.name)) return;
+    visiting.add(value.name);
+    for (const name of [...new Set(dependenciesOf(value))].sort(ordinal)) {
+      const dependency = byName.get(name);
+      if (dependency !== undefined) visit(dependency);
+    }
+    visiting.delete(value.name);
+    emitted.add(value.name);
+    result.push(value);
+  };
+  for (const value of sortByName(values)) visit(value);
+  return result;
+}
+
+function stableViews(views: readonly ViewIR[]): ViewIR[] {
+  return stableByDependency(views, (view) => {
     const dependencies = new Set<string>();
     for (const block of view.alternatives) {
       for (const op of block) {
         if ("view" in op && typeof op.view === "string") dependencies.add(op.view);
       }
     }
-    for (const name of [...dependencies].sort(ordinal)) {
-      const dependency = byName.get(name);
-      if (dependency !== undefined) visit(dependency);
-    }
-    visiting.delete(view.name);
-    emitted.add(view.name);
-    result.push(view);
-  };
-  for (const view of sortByName(views)) visit(view);
-  return result;
+    return dependencies;
+  });
 }
 
 function stableFormers(formers: readonly FormerIR[]): FormerIR[] {
-  const byName = new Map(formers.map((former) => [former.name, former]));
-  const emitted = new Set<string>();
-  const visiting = new Set<string>();
-  const result: FormerIR[] = [];
-  const visit = (former: FormerIR) => {
-    if (emitted.has(former.name) || visiting.has(former.name)) return;
-    visiting.add(former.name);
+  return stableByDependency(formers, (former) => {
     const dependencies = new Set<string>();
     foldFormerNode(former.body, {
       node: (node) => {
@@ -79,16 +82,8 @@ function stableFormers(formers: readonly FormerIR[]): FormerIR[] {
       },
       splice: ({ fragment }) => dependencies.add(fragment),
     });
-    for (const name of [...dependencies].sort(ordinal)) {
-      const dependency = byName.get(name);
-      if (dependency !== undefined) visit(dependency);
-    }
-    visiting.delete(former.name);
-    emitted.add(former.name);
-    result.push(former);
-  };
-  for (const former of sortByName(formers)) visit(former);
-  return result;
+    return dependencies;
+  });
 }
 
 function stableApp(app: AppIR): AppIR {

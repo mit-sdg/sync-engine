@@ -1,6 +1,8 @@
-import type { InvocationResult } from "../protocol/errors.ts";
-import { FrameworkErrorCode } from "../protocol/errors.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import {
+  FrameworkErrorCode,
+  type ContractShape,
+  type InvocationResult,
+} from "../protocol/types.ts";
 import { serializeJsonValue } from "../protocol/envelope.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { Assembly } from "../assembly/assembly-facade.ts";

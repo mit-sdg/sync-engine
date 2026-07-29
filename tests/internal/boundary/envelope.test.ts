@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { fromEnvelope } from "@sync-engine/internal/boundary/protocol/envelope.ts";
-import { FrameworkErrorCode } from "@sync-engine/internal/boundary/protocol/errors";
+import { FrameworkErrorCode } from "@sync-engine/internal/boundary/protocol/types";
 
 describe("fromEnvelope", () => {
   test("ignores authored framework classification fields", () => {

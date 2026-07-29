@@ -1,5 +1,5 @@
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
-import { FrameworkErrorCode } from "./errors.ts";
+import { FrameworkErrorCode } from "./types.ts";
 
 export const PUBLIC_ERROR_CATEGORIES = {
   INVALID_REQUEST: "INVALID_REQUEST",

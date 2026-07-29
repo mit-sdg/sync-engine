@@ -29,14 +29,14 @@ export { endpoint, receive, respond } from "../engine/boundary/assembly/assemble
 export type { EndpointDef, EndpointOptions } from "../engine/boundary/assembly/assemble.ts";
 export type { InputContractDecl } from "../engine/boundary/protocol/endpoints.ts";
 export type { EndpointValidator, EndpointValidators, ValidationResult, } from "../engine/boundary/protocol/validation.ts";
-export { FrameworkErrorCode } from "../engine/boundary/protocol/errors.ts";
-export type { EmittedFrameworkErrorCode, InvocationResult } from "../engine/boundary/protocol/errors.ts";
+export { FrameworkErrorCode } from "../engine/boundary/protocol/types.ts";
+export type { InvocationResult } from "../engine/boundary/protocol/types.ts";
 export type { Invoker, InvokeOptions } from "../engine/boundary/invocation/invoke.ts";
 export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
 export type { OperationalEvent, OperationalObserver, OperationalResultClass, } from "../engine/reactions/runtime/operational.ts";
 export { createGateway } from "../engine/boundary/gateway/gateway.ts";
 export type { Gateway, GatewayOptions, GatewayTarget } from "../engine/boundary/gateway/gateway.ts";
-export type { ApplicationInterface } from "../engine/boundary/protocol/application-interface.ts";
+export type { ApplicationInterface } from "../engine/boundary/protocol/types.ts";
 export { createHttpHandler } from "../engine/boundary/http/http.ts";
 export type { HttpCorrelationOptions } from "../engine/boundary/http/http.ts";
 export { productionHttpProfile } from "../engine/boundary/http/http-profile.ts";
@@ -124,8 +124,7 @@ import type { ComputationFn } from "../../reads/computations.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
 import type { RedactionPolicy } from "../../utils/redaction.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
-import type { ApplicationInterface } from "../protocol/application-interface.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
 import type { EndpointValidators } from "../protocol/validation.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import { Requesting } from "../invocation/invoke.ts";
@@ -395,12 +394,11 @@ export declare function assertApplicationLocality(owner: string, app: AppIR): vo
  * ```
  */
 import type { Prettify } from "../protocol/endpoints.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
-import type { EmittedFrameworkErrorCode } from "../protocol/errors.ts";
-export type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
+import { FrameworkErrorCode, type ContractShape } from "../protocol/types.ts";
+export type { ContractShape, DomainErrorValue } from "../protocol/types.ts";
 /** The normalized error envelope transports use for outside-world failures. */
 export type ClientError = {
-    error: EmittedFrameworkErrorCode;
+    error: FrameworkErrorCode;
     detail?: string;
 };
 export interface ClientCallOptions {
@@ -489,7 +487,7 @@ export declare function createClient<C extends ContractShape, TError = ClientErr
  * {@link createHttpTransport} to compose the transport with a custom client
  * setup.
  */
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import { type ContractShape } from "../protocol/types.ts";
 import type { Client, ClientTransport } from "./client.ts";
 export type { ClientError } from "./client.ts";
 /** A header bag, or a (possibly async) function producing one per request. */
@@ -537,7 +535,7 @@ export declare function createHttpTransport(options?: HttpClientOptions): Client
 export declare function createHttpClient<C extends ContractShape>(options?: HttpClientOptions): Client<C>;
 
 === dist/engine/boundary/client/local-client.d.ts ===
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import type { ContractShape } from "../protocol/types.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { Client } from "./client.ts";
 /** Consume an assembled boundary in process through the ordinary client contract. */
@@ -547,8 +545,7 @@ export declare function createLocalClient<C extends ContractShape>(options: {
 
 === dist/engine/boundary/gateway/gateway.d.ts ===
 import { type OperationalObserver } from "../../reactions/runtime/operational.ts";
-import type { ApplicationInterface } from "../protocol/application-interface.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import { type ExecutionLimits } from "../invocation/lifecycle.ts";
 export interface GatewayTarget {
@@ -592,12 +589,10 @@ export interface HttpFloor extends ProductionHttpProfile {
 }
 export declare function httpFloor(declaration: HttpFloor): HttpFloor;
 export declare function credentialProtectedPaths(contracts: Readonly<Record<string, InputContractDecl>>, input: string): Set<string>;
-export declare function validateHttpFloor(application: Assembly<Record<string, new (...args: never[]) => object>>, floor: HttpFloor): void;
+export declare function validateHttpFloor(application: Assembly<Record<string, new (...args: never[]) => object>>, floor: HttpFloor, wire?: WireContractsIR): void;
 export declare function projectHttpWire(wire: WireContractsIR, contracts: Readonly<Record<string, InputContractDecl>>, categories: Readonly<Record<string, PublicErrorCategory>>, floor: HttpFloor): WireContractsIR;
-export declare function projectAssemblyHttpWire(application: Assembly<Record<string, new (...args: never[]) => object>>, wire: WireContractsIR, floor: HttpFloor): WireContractsIR;
 
 === dist/engine/boundary/http/http-profile.d.ts ===
-import type { Assembly } from "../assembly/assembly-facade.ts";
 import type { WireContractsIR } from "../wire/wire-contracts.ts";
 import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
 export { normalizeHttpBasePath } from "../protocol/http-path.ts";
@@ -608,10 +603,9 @@ export interface ProductionHttpProfile {
 export declare function normalizeProductionHttpProfile(declaration: ProductionHttpProfile, label?: string, productionReason?: string): ProductionHttpProfile;
 export declare function productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile;
 export declare function projectProductionHttpWire(wire: WireContractsIR, categories: Readonly<Record<string, PublicErrorCategory>>): WireContractsIR;
-export declare function projectAssemblyProductionHttpWire(application: Assembly<Record<string, new (...args: never[]) => object>>, wire: WireContractsIR): WireContractsIR;
 
 === dist/engine/boundary/http/http.d.ts ===
-import type { ContractShape } from "../protocol/contract-shape.ts";
+import { type ContractShape } from "../protocol/types.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import type { HttpFloor } from "./http-floor.ts";
@@ -662,9 +656,8 @@ export declare function refusalFunnel(boundary: RequestBoundaryActions): Record<
 
 === dist/engine/boundary/invocation/invoke.d.ts ===
 import type { OutcomeContracts } from "../../reactions/concepts/outcomes.ts";
-import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
+import type { ContractShape, DomainErrorValue, InvocationResult } from "../protocol/types.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
-import type { InvocationResult } from "../protocol/errors.ts";
 import type { EndpointValidator, EndpointValidators } from "../protocol/validation.ts";
 import { RuntimeLifecycle } from "./lifecycle.ts";
 export declare class Requesting {
@@ -729,6 +722,8 @@ export interface ExecutionLimits {
     maxRequestDurationMs: number;
 }
 export type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
+/** Resolve one caller timeout against optional host execution limits. */
+export declare function requestTimeout(timeoutMs: number | undefined, limits?: ExecutionLimits): number;
 export declare function assertExecutionLimits(limits: ExecutionLimits): void;
 /** Owns admission and quiescence independently of caller waits and log retention. */
 export declare class RuntimeLifecycle {
@@ -780,28 +775,6 @@ export type AdmitResult = {
 /** Check `input` against `contract` and name `path` in every failure. */
 export declare function admitInput(contract: InputContractDecl, path: string, input: unknown): AdmitResult;
 
-=== dist/engine/boundary/protocol/application-interface.d.ts ===
-import type { InputContractDecl } from "./endpoints.ts";
-/**
- * The application facts a gateway may rely on. It deliberately contains no
- * concepts, reactions, engine instance, or transport details.
- */
-export interface ApplicationInterface {
-    readonly routes: Readonly<Record<string, InputContractDecl>>;
-}
-
-=== dist/engine/boundary/protocol/contract-shape.d.ts ===
-/** The structural shape accepted by typed boundary clients and invokers. */
-export type ContractShape = Record<string, {
-    input: unknown;
-    output: unknown;
-    error?: unknown;
-}>;
-/** The value carried inside a wire error envelope. */
-export type DomainErrorValue<T> = T extends {
-    error: infer E;
-} ? E : T;
-
 === dist/engine/boundary/protocol/endpoints.d.ts ===
 /**
  * Declare typed application endpoints over request and response actions.
@@ -838,7 +811,7 @@ export declare function renderInputContracts(contracts: Record<string, InputCont
  * `detail`. The distinction the flat form drops (domain vs framework) is
  * carried beside the response by the request boundary.
  */
-import type { InvocationResult } from "./errors.ts";
+import { type InvocationResult } from "./types.ts";
 /**
  * An {@link InvocationResult} as its flat wire body: the success value bare,
  * a domain value as-is when it already reads as an error envelope (else
@@ -858,45 +831,8 @@ export declare function toJsonEnvelope(result: InvocationResult): unknown;
  */
 export declare function fromEnvelope(output: Record<string, unknown>, classification?: "authored" | "framework"): InvocationResult;
 
-=== dist/engine/boundary/protocol/errors.d.ts ===
-import type { EmittedFrameworkErrorCode, FrameworkErrorCode as FrameworkErrorCodeValue } from "../../utils/framework-error-codes.ts";
-export type InvocationResult<TOutput = unknown, TDomainError = unknown> = {
-    ok: true;
-    value: TOutput;
-} | {
-    ok: false;
-    error: {
-        kind: "domain";
-        value: TDomainError;
-    } | {
-        kind: "framework";
-        code: EmittedFrameworkErrorCode;
-        detail?: string;
-    };
-};
-export declare const FrameworkErrorCode: {
-    readonly UNKNOWN_ERROR: "UNKNOWN_ERROR";
-    readonly INVALID_INPUT: "INVALID_INPUT";
-    readonly INTERNAL_ERROR: "INTERNAL_ERROR";
-    readonly NOT_FOUND: "NOT_FOUND";
-    readonly UNAVAILABLE: "UNAVAILABLE";
-    readonly TIMED_OUT: "TIMED_OUT";
-    readonly ABORTED: "ABORTED";
-    readonly TRANSPORT_ERROR: "TRANSPORT_ERROR";
-    readonly BAD_STATUS: "BAD_STATUS";
-    readonly NETWORK_ERROR: "NETWORK_ERROR";
-    readonly BAD_JSON: "BAD_JSON";
-    readonly HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED";
-};
-export type FrameworkErrorCode = FrameworkErrorCodeValue;
-export type { EmittedFrameworkErrorCode };
-export declare function isEmittedFrameworkErrorCode(value: unknown): value is EmittedFrameworkErrorCode;
-export declare function success<T>(value: T): InvocationResult<T, never>;
-export declare function domainError<E>(value: E): InvocationResult<never, E>;
-export declare function frameworkError(code: EmittedFrameworkErrorCode, detail?: string): InvocationResult<never, never>;
-
 === dist/engine/boundary/protocol/gateway-registry.d.ts ===
-import type { ApplicationInterface } from "./application-interface.ts";
+import type { ApplicationInterface } from "./types.ts";
 interface RegisteredApplication {
     readonly identity: object;
     readonly publicInterface: ApplicationInterface;
@@ -927,6 +863,60 @@ export declare function publicFrameworkCategoryOf(code: string): PublicErrorCate
 /** Project a generated error code onto the production HTTP vocabulary. */
 export declare function publicCategoryOf(code: string, categories: Readonly<Record<string, PublicErrorCategory>>): PublicErrorCategory | "INTERNAL_ERROR";
 export declare function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number;
+
+=== dist/engine/boundary/protocol/types.d.ts ===
+import type { FrameworkErrorCode as FrameworkErrorCodeValue } from "../../utils/framework-error-codes.ts";
+import type { InputContractDecl } from "./endpoints.ts";
+/** The structural shape accepted by typed boundary clients and invokers. */
+export type ContractShape = Record<string, {
+    input: unknown;
+    output: unknown;
+    error?: unknown;
+}>;
+/** The value carried inside a wire error envelope. */
+export type DomainErrorValue<T> = T extends {
+    error: infer E;
+} ? E : T;
+/**
+ * The application facts a gateway may rely on. It deliberately contains no
+ * concepts, reactions, engine instance, or transport details.
+ */
+export interface ApplicationInterface {
+    readonly routes: Readonly<Record<string, InputContractDecl>>;
+}
+export type InvocationResult<TOutput = unknown, TDomainError = unknown> = {
+    ok: true;
+    value: TOutput;
+} | {
+    ok: false;
+    error: {
+        kind: "domain";
+        value: TDomainError;
+    } | {
+        kind: "framework";
+        code: FrameworkErrorCodeValue;
+        detail?: string;
+    };
+};
+export declare const FrameworkErrorCode: {
+    readonly UNKNOWN_ERROR: "UNKNOWN_ERROR";
+    readonly INVALID_INPUT: "INVALID_INPUT";
+    readonly INTERNAL_ERROR: "INTERNAL_ERROR";
+    readonly NOT_FOUND: "NOT_FOUND";
+    readonly UNAVAILABLE: "UNAVAILABLE";
+    readonly TIMED_OUT: "TIMED_OUT";
+    readonly ABORTED: "ABORTED";
+    readonly TRANSPORT_ERROR: "TRANSPORT_ERROR";
+    readonly BAD_STATUS: "BAD_STATUS";
+    readonly NETWORK_ERROR: "NETWORK_ERROR";
+    readonly BAD_JSON: "BAD_JSON";
+    readonly HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED";
+};
+export type FrameworkErrorCode = FrameworkErrorCodeValue;
+export declare function isFrameworkErrorCode(value: unknown): value is FrameworkErrorCodeValue;
+export declare function success<T>(value: T): InvocationResult<T, never>;
+export declare function domainError<E>(value: E): InvocationResult<never, E>;
+export declare function frameworkError(code: FrameworkErrorCodeValue, detail?: string): InvocationResult<never, never>;
 
 === dist/engine/boundary/protocol/validation.d.ts ===
 /**
@@ -1061,6 +1051,8 @@ export {};
 import type { WireContractsIR } from "./wire-contracts.ts";
 export interface WireRenderOptions {
     moduleName?: string;
+    /** Replace the default generated-file banner. */
+    banner?: string;
     vocabulary?: {
         from: string;
         export: string;
@@ -1131,32 +1123,19 @@ export declare function nullableWireLeaves(type: WireType): WireType;
  * in-memory index and independently appends every entry to JSONL. The engine
  * does not load or replay that file on restart.
  */
-import { type ActionRecord, type FiringRecord, type IntegrityFailureRecord, type LogEntry, type LogStore, type ReactionFailureRecord, type RetentionPolicy } from "../reactions/runtime/log-store.ts";
+import { MemoryStore, type LogEntry, type RetentionPolicy } from "../reactions/runtime/log-store.ts";
 /**
- * A {@link LogStore} with an in-memory occurrence index and append-only JSONL
- * audit sink. Pruning changes only the index; constructing a new store never
+ * A {@link MemoryStore} with an append-only JSONL audit sink. The inherited
+ * store owns matching, consumption, and retention; the sink records every
+ * accepted entry before the in-memory fold.
+ * Pruning changes only the index; constructing a new store never
  * replays the file.
  */
-export declare class FileStore implements LogStore {
+export declare class FileStore extends MemoryStore {
     readonly path: string;
-    readonly policy: RetentionPolicy;
-    private readonly index;
     private readonly audit;
     constructor(path: string, policy?: RetentionPolicy);
-    get actions(): Map<string, ActionRecord>;
-    get flowIndex(): Map<string, ActionRecord[]>;
-    get firings(): Map<string, FiringRecord[]>;
-    get reactionFailures(): ReactionFailureRecord[];
-    get integrityFailures(): IntegrityFailureRecord[];
     append(entry: LogEntry): void;
-    byId(id: string): ActionRecord | undefined;
-    byFlow(flow: string): ActionRecord[] | undefined;
-    firingsByReaction(reaction: string): FiringRecord[];
-    hasConsumed(recordId: string, reaction: string): boolean;
-    consumedBy(recordId: string): string[];
-    prune(): number;
-    flowSettled(flow: string): void;
-    evictFlow(flow: string): void;
     /** Reject entries the in-memory fold would reject before they reach disk. */
     private assertAppendable;
 }
@@ -4582,8 +4561,6 @@ export declare const FrameworkErrorCode: {
     readonly HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED";
 };
 export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode];
-/** Framework codes the shipped boundaries can emit. */
-export type EmittedFrameworkErrorCode = FrameworkErrorCode;
 
 === dist/engine/utils/global-registry.d.ts ===
 /**

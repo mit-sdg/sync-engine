@@ -182,7 +182,7 @@ recovery.
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `EmittedFrameworkErrorCode`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ProductionHttpProfile`, `ValidationResult`, `createGateway`, `createHttpHandler`, `endpoint`, `httpFloor`, `productionHttpProfile`, `receive`, `respond`
+`ApplicationInterface`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ProductionHttpProfile`, `ValidationResult`, `createGateway`, `createHttpHandler`, `endpoint`, `httpFloor`, `productionHttpProfile`, `receive`, `respond`
 
 <!-- register:boundary:end -->
 
@@ -320,9 +320,9 @@ construction, and response decoration never rejects a handled request.
 
 ### Framework Errors
 
-`FrameworkErrorCode` is the stable value object;
-`EmittedFrameworkErrorCode` is its value union. Controlled admission details
-may accompany an error, but exception text from an unknown failure is omitted.
+`FrameworkErrorCode` is the stable value object; its value union names every
+framework failure a shipped boundary may emit. Controlled admission details may
+accompany an error, but exception text from an unknown failure is omitted.
 
 | Code                       | Ordinary source                                                |
 | -------------------------- | -------------------------------------------------------------- |
@@ -372,7 +372,7 @@ A `Client<Contract>` supports grouped access such as
 `client["/rooms/get"]`, followed by the input call.
 
 `ContractShape` is the path-to-input/output/error record accepted by every
-constructor. `ClientError` is `{ error: EmittedFrameworkErrorCode; detail?:
+constructor. `ClientError` is `{ error: FrameworkErrorCode; detail?:
 string }`; `DomainErrorValue` extracts a generated route's domain error value.
 Calls resolve to success or error envelopes rather than throwing for handled
 transport failures. JSON projection and error delivery are normative in

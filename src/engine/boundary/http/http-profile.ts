@@ -1,10 +1,8 @@
-import type { Assembly } from "../assembly/assembly-facade.ts";
-import { assemblyBehind } from "../assembly/assembly-registry.ts";
 import {
   publicFrameworkCategoryOf,
   registeredPublicCategoryOf,
 } from "../protocol/public-errors.ts";
-import { FrameworkErrorCode } from "../protocol/errors.ts";
+import { FrameworkErrorCode } from "../protocol/types.ts";
 import type { WireContractsIR } from "../wire/wire-contracts.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
 import { normalizeHttpBasePath } from "../protocol/http-path.ts";
@@ -69,11 +67,4 @@ export function projectProductionHttpWire(
       ...new Set(wire.appWide.map((code) => registeredPublicCategoryOf(code, categories))),
     ].sort(),
   };
-}
-
-export function projectAssemblyProductionHttpWire(
-  application: Assembly<Record<string, new (...args: never[]) => object>>,
-  wire: WireContractsIR,
-): WireContractsIR {
-  return projectProductionHttpWire(wire, assemblyBehind(application).publicErrors);
 }

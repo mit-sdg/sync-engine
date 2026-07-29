@@ -7,6 +7,8 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
 export interface WireRenderOptions {
   moduleName?: string;
+  /** Replace the default generated-file banner. */
+  banner?: string;
   vocabulary?: { from: string; export: string };
   strictLeaves?: boolean;
   /** Name of this contract's application-wide error union. */
@@ -114,8 +116,11 @@ export function renderWireTypes(
   const lines: string[] = [];
   if (options.preamble !== false) {
     lines.push(
-      `// Generated wire contracts by ${PACKAGE_NAME}@${PACKAGE_VERSION} — do not edit.`,
-      "// Regenerated from registered formers, action outcomes, and input contracts.",
+      options.banner ??
+        `// Generated wire contracts by ${PACKAGE_NAME}@${PACKAGE_VERSION} — do not edit.`,
+      ...(options.banner === undefined
+        ? ["// Regenerated from registered formers, action outcomes, and input contracts."]
+        : []),
       "",
     );
   }

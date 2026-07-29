@@ -11,12 +11,7 @@ import { appendFileSync } from "node:fs";
 import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import {
   MemoryStore,
-  type ActionRecord,
-  type FiringRecord,
-  type IntegrityFailureRecord,
   type LogEntry,
-  type LogStore,
-  type ReactionFailureRecord,
   type RetentionPolicy,
 } from "@engine/reactions/runtime/log-store";
 import { createRedactor } from "@engine/utils/redaction";
@@ -96,78 +91,27 @@ class JsonlAuditSink {
 }
 
 /**
- * A {@link LogStore} with an in-memory occurrence index and append-only JSONL
- * audit sink. Pruning changes only the index; constructing a new store never
+ * A {@link MemoryStore} with an append-only JSONL audit sink. The inherited
+ * store owns matching, consumption, and retention; the sink records every
+ * accepted entry before the in-memory fold.
+ * Pruning changes only the index; constructing a new store never
  * replays the file.
  */
-export class FileStore implements LogStore {
-  private readonly index: MemoryStore;
+export class FileStore extends MemoryStore {
   private readonly audit: JsonlAuditSink;
 
   constructor(
     public readonly path: string,
-    public readonly policy: RetentionPolicy = "keepAll",
+    policy: RetentionPolicy = "keepAll",
   ) {
-    this.index = new MemoryStore(policy);
+    super(policy);
     this.audit = new JsonlAuditSink(path);
   }
 
-  get actions(): Map<string, ActionRecord> {
-    return this.index.actions;
-  }
-
-  get flowIndex(): Map<string, ActionRecord[]> {
-    return this.index.flowIndex;
-  }
-
-  get firings(): Map<string, FiringRecord[]> {
-    return this.index.firings;
-  }
-
-  get reactionFailures(): ReactionFailureRecord[] {
-    return this.index.reactionFailures;
-  }
-
-  get integrityFailures(): IntegrityFailureRecord[] {
-    return this.index.integrityFailures;
-  }
-
-  append(entry: LogEntry): void {
+  override append(entry: LogEntry): void {
     this.assertAppendable(entry);
     this.audit.append(entry);
-    this.index.append(entry);
-  }
-
-  byId(id: string): ActionRecord | undefined {
-    return this.index.byId(id);
-  }
-
-  byFlow(flow: string): ActionRecord[] | undefined {
-    return this.index.byFlow(flow);
-  }
-
-  firingsByReaction(reaction: string): FiringRecord[] {
-    return this.index.firingsByReaction(reaction);
-  }
-
-  hasConsumed(recordId: string, reaction: string): boolean {
-    return this.index.hasConsumed(recordId, reaction);
-  }
-
-  consumedBy(recordId: string): string[] {
-    return this.index.consumedBy(recordId);
-  }
-
-  prune(): number {
-    return this.index.prune();
-  }
-
-  flowSettled(flow: string): void {
-    this.index.flowSettled(flow);
-  }
-
-  evictFlow(flow: string): void {
-    this.index.evictFlow(flow);
+    super.append(entry);
   }
 
   /** Reject entries the in-memory fold would reject before they reach disk. */
@@ -175,7 +119,7 @@ export class FileStore implements LogStore {
     if (entry.kind === "invocation" && entry.record.id === undefined) {
       throw new Error("Invocation entry requires a record id.");
     }
-    if ((entry.kind === "outcome" || entry.kind === "fault") && !this.index.actions.has(entry.id)) {
+    if ((entry.kind === "outcome" || entry.kind === "fault") && !this.actions.has(entry.id)) {
       throw new Error(`Action with id ${entry.id} not found.`);
     }
   }

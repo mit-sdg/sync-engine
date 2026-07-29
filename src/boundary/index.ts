@@ -7,8 +7,8 @@ export type {
   EndpointValidators,
   ValidationResult,
 } from "@engine/boundary/protocol/validation";
-export { FrameworkErrorCode } from "@engine/boundary/protocol/errors";
-export type { EmittedFrameworkErrorCode, InvocationResult } from "@engine/boundary/protocol/errors";
+export { FrameworkErrorCode } from "@engine/boundary/protocol/types";
+export type { InvocationResult } from "@engine/boundary/protocol/types";
 export type { Invoker, InvokeOptions } from "@engine/boundary/invocation/invoke";
 export type { ExecutionLimits } from "@engine/boundary/invocation/lifecycle";
 export type {
@@ -18,7 +18,7 @@ export type {
 } from "@engine/reactions/runtime/operational";
 export { createGateway } from "@engine/boundary/gateway/gateway";
 export type { Gateway, GatewayOptions, GatewayTarget } from "@engine/boundary/gateway/gateway";
-export type { ApplicationInterface } from "@engine/boundary/protocol/application-interface";
+export type { ApplicationInterface } from "@engine/boundary/protocol/types";
 export { createHttpHandler } from "@engine/boundary/http/http";
 export type { HttpCorrelationOptions } from "@engine/boundary/http/http";
 export { productionHttpProfile } from "@engine/boundary/http/http-profile";

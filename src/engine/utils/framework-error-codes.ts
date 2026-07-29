@@ -14,6 +14,3 @@ export const FrameworkErrorCode = {
 } as const;
 
 export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode];
-
-/** Framework codes the shipped boundaries can emit. */
-export type EmittedFrameworkErrorCode = FrameworkErrorCode;

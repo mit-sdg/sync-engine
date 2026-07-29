@@ -10,6 +10,12 @@ export interface ExecutionLimits {
 export type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+/** Resolve one caller timeout against optional host execution limits. */
+export function requestTimeout(timeoutMs: number | undefined, limits?: ExecutionLimits): number {
+  return timeoutMs ?? limits?.maxRequestDurationMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+}
 
 function assertPositiveInteger(value: number, name: keyof ExecutionLimits): void {
   if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {

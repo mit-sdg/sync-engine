@@ -2,15 +2,14 @@ import type { OutcomeContracts } from "@engine/reactions/concepts/outcomes";
 import { Refuse } from "@engine/reactions/concepts/refuse";
 import { flow } from "@engine/reactions/context";
 import { admitInput } from "../protocol/admit.ts";
-import type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
+import type { ContractShape, DomainErrorValue, InvocationResult } from "../protocol/types.ts";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import { fromEnvelope } from "../protocol/envelope.ts";
-import { FrameworkErrorCode, frameworkError } from "../protocol/errors.ts";
-import type { InvocationResult } from "../protocol/errors.ts";
+import { FrameworkErrorCode, frameworkError } from "../protocol/types.ts";
 import { validateRuntimeValue } from "../protocol/validation.ts";
 import type { EndpointValidator, EndpointValidators } from "../protocol/validation.ts";
 import { isAborted, raceDeadline } from "@engine/utils/deadline";
-import { RuntimeLifecycle } from "./lifecycle.ts";
+import { requestTimeout, RuntimeLifecycle } from "./lifecycle.ts";
 
 interface PendingRequest {
   resolve: (value: Record<string, unknown>) => void;
@@ -308,9 +307,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
           frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`),
         );
       }
-      const DEFAULT_TIMEOUT_MS = 30_000;
-      const timeoutMs =
-        invokeOpts.timeoutMs ?? lifecycle?.limits?.maxRequestDurationMs ?? DEFAULT_TIMEOUT_MS;
+      const timeoutMs = requestTimeout(invokeOpts.timeoutMs, lifecycle?.limits);
       const timeoutError = deadlinePolicy.validateTimeout(timeoutMs);
       if (timeoutError !== undefined) {
         return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError));

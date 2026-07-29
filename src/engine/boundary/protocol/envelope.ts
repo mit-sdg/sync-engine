@@ -12,10 +12,10 @@ import {
   domainError,
   FrameworkErrorCode,
   frameworkError,
-  isEmittedFrameworkErrorCode,
+  isFrameworkErrorCode,
   success,
-} from "./errors.ts";
-import type { InvocationResult } from "./errors.ts";
+  type InvocationResult,
+} from "./types.ts";
 
 /**
  * An {@link InvocationResult} as its flat wire body: the success value bare,
@@ -66,7 +66,7 @@ export function fromEnvelope(
 ): InvocationResult {
   if (classification === "framework") {
     return frameworkError(
-      isEmittedFrameworkErrorCode(output.error) ? output.error : FrameworkErrorCode.INTERNAL_ERROR,
+      isFrameworkErrorCode(output.error) ? output.error : FrameworkErrorCode.INTERNAL_ERROR,
     );
   }
   if ("error" in output) {

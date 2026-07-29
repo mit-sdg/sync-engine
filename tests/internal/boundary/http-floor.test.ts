@@ -10,7 +10,7 @@ import {
   respond,
   type OperationalEvent,
 } from "@sync-engine/boundary";
-import { projectAssemblyHttpWire } from "@sync-engine/internal/boundary/http/http-floor";
+import { projectHttpWire, validateHttpFloor } from "@sync-engine/internal/boundary/http/http-floor";
 import { projectProductionHttpWire } from "@sync-engine/internal/boundary/http/http-profile";
 import { assemblyBehind } from "@sync-engine/internal/boundary/assembly/assembly-registry";
 import { rememberApplicationInvoker } from "@sync-engine/internal/boundary/protocol/gateway-registry";
@@ -238,7 +238,8 @@ describe("HTTP floor", () => {
       contracts: assembled.contracts,
       inventories: assembled.engine.exportConcepts(),
     });
-    const projected = projectAssemblyHttpWire(application, raw, floor);
+    validateHttpFloor(application, floor, raw);
+    const projected = projectHttpWire(raw, assembled.contracts, assembled.publicErrors, floor);
     const login = projected.endpoints.find(({ path }) => path === "/login");
     const me = projected.endpoints.find(({ path }) => path === "/me");
     expect(JSON.stringify(login?.output)).not.toMatch(/session|expiresAt/);

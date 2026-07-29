@@ -1,5 +1,5 @@
 import { globalRegistry } from "@engine/utils/global-registry";
-import type { ApplicationInterface } from "./application-interface.ts";
+import type { ApplicationInterface } from "./types.ts";
 
 interface RegisteredApplication {
   readonly identity: object;

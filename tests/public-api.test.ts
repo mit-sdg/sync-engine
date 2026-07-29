@@ -294,7 +294,6 @@ const register = {
   ],
   boundary: [
     "ApplicationInterface",
-    "EmittedFrameworkErrorCode",
     "EndpointDef",
     "EndpointOptions",
     "EndpointValidator",

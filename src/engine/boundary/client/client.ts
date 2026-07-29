@@ -27,14 +27,12 @@
  */
 
 import type { Prettify } from "../protocol/endpoints.ts";
-import type { ContractShape } from "../protocol/contract-shape.ts";
-import { FrameworkErrorCode } from "../protocol/errors.ts";
-import type { EmittedFrameworkErrorCode } from "../protocol/errors.ts";
+import { FrameworkErrorCode, type ContractShape } from "../protocol/types.ts";
 
-export type { ContractShape, DomainErrorValue } from "../protocol/contract-shape.ts";
+export type { ContractShape, DomainErrorValue } from "../protocol/types.ts";
 
 /** The normalized error envelope transports use for outside-world failures. */
-export type ClientError = { error: EmittedFrameworkErrorCode; detail?: string };
+export type ClientError = { error: FrameworkErrorCode; detail?: string };
 
 export interface ClientCallOptions {
   /** Cancels transport and waiting; accepted server work is not rolled back. */
