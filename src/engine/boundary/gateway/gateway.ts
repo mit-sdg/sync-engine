@@ -14,12 +14,9 @@ import {
 import { toJsonValue } from "../protocol/envelope.ts";
 import type { Invoker, InvokeOptions } from "../invocation/invoke.ts";
 import { RuntimeLifecycle, type ExecutionLimits } from "../invocation/lifecycle.ts";
+import { isAborted, raceDeadline } from "@engine/utils/deadline";
 
 type GatewayResult = InvocationResult<unknown, unknown>;
-
-function isAborted(signal: AbortSignal | undefined): boolean {
-  return signal?.aborted === true;
-}
 
 export interface GatewayTarget {
   invoker: Invoker<ContractShape>;
@@ -72,23 +69,11 @@ function waitForInvocation(
   timeoutMs: number,
   signal?: AbortSignal,
 ): Promise<GatewayResult> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (result: GatewayResult) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      signal?.removeEventListener("abort", abort);
-      resolve(result);
-    };
-    const abort = () => finish(frameworkFailure(FrameworkErrorCode.ABORTED));
-    const timeout = setTimeout(
-      () => finish(frameworkFailure(FrameworkErrorCode.TIMED_OUT)),
-      timeoutMs,
-    );
-    signal?.addEventListener("abort", abort, { once: true });
-    if (isAborted(signal)) abort();
-    void invocation.then(finish);
+  return raceDeadline(invocation, {
+    timeoutMs,
+    onTimeout: () => frameworkFailure(FrameworkErrorCode.TIMED_OUT),
+    signal,
+    onAbort: () => frameworkFailure(FrameworkErrorCode.ABORTED),
   });
 }
 

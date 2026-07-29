@@ -8,6 +8,7 @@
  * setup.
  */
 
+import { isAborted, raceDeadline } from "@engine/utils/deadline";
 import { FrameworkErrorCode } from "../protocol/errors.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import type { Client, ClientTransport } from "./client.ts";
@@ -70,10 +71,6 @@ function resolveBaseUrl(baseUrl: string | undefined): string {
 
 type HeaderResolution = { aborted: true } | { aborted: false; headers: Record<string, string> };
 
-function isAborted(signal: AbortSignal | undefined): boolean {
-  return signal?.aborted === true;
-}
-
 async function resolveHeaders(
   option: HeadersOption | undefined,
   signal: AbortSignal | undefined,
@@ -81,27 +78,10 @@ async function resolveHeaders(
   if (isAborted(signal)) return { aborted: true };
   if (typeof option !== "function") return { aborted: false, headers: option ?? {} };
 
-  const pending = Promise.resolve(option());
-  if (signal === undefined) return { aborted: false, headers: await pending };
-  if (signal.aborted) return { aborted: true };
-
-  return new Promise((resolve, reject) => {
-    const onAbort = () => {
-      signal.removeEventListener("abort", onAbort);
-      resolve({ aborted: true });
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    pending.then(
-      (headers) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve({ aborted: false, headers });
-      },
-      (error: unknown) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
+  return raceDeadline<HeaderResolution>(
+    Promise.resolve(option()).then((headers) => ({ aborted: false, headers })),
+    { signal, onAbort: () => ({ aborted: true }) },
+  );
 }
 
 /**

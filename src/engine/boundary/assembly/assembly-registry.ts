@@ -1,3 +1,4 @@
+import { globalRegistry } from "@engine/utils/global-registry";
 import type { AssembledApp } from "./assemble.ts";
 
 type AssemblyRegistry = WeakMap<
@@ -5,11 +6,11 @@ type AssemblyRegistry = WeakMap<
   AssembledApp<Record<string, new (...args: never[]) => object>>
 >;
 
-const registryKey = Symbol.for("@mit-sdg/sync-engine/assembly-registry");
-const registered = Reflect.get(globalThis, registryKey) as unknown;
-const assemblies: AssemblyRegistry =
-  registered instanceof WeakMap ? (registered as AssemblyRegistry) : new WeakMap();
-if (registered === undefined) Reflect.set(globalThis, registryKey, assemblies);
+const assemblies = globalRegistry<AssemblyRegistry>(
+  "@mit-sdg/sync-engine/assembly-registry",
+  () => new WeakMap(),
+  (value): value is AssemblyRegistry => value instanceof WeakMap,
+);
 
 export function rememberAssembly(
   facade: object,

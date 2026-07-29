@@ -1,9 +1,14 @@
 /**
- * Equality for values that cross the engine boundary.
+ * Equality for live values that cross the engine boundary.
  *
  * Records and arrays compare structurally. Dates compare by timestamp. Other
  * object kinds compare only by identity, which avoids guessing at the meaning
  * of maps, sets, class instances, and custom prototypes.
+ *
+ * This is the lenient runtime equality: any pair of values is comparable and
+ * symbol keys participate. For design-time comparison of serialized IR —
+ * strict JSON where non-plain values are rejected rather than tolerated — see
+ * `canonicallyEqual` in the engine's canonical-json utility.
  */
 export function structurallyEqual(left: unknown, right: unknown): boolean {
   return compare(left, right, new WeakMap());

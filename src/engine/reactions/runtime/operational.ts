@@ -1,3 +1,4 @@
+import { ListenerSet } from "@engine/utils/listener-set";
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
 import type { IntegrityFailureRecord, ReactionFailureRecord } from "./log-store.ts";
@@ -77,7 +78,7 @@ export interface FlowOperationalContext {
 
 /** Synchronous nonblocking handoff. Observers own any queueing or I/O. */
 export class OperationalEvents {
-  private readonly observers = new Set<OperationalObserver>();
+  private readonly observers = new ListenerSet<OperationalObserver>();
   private readonly contexts = new Map<string, FlowOperationalContext>();
 
   constructor(observers: readonly OperationalObserver[] = []) {
@@ -97,18 +98,11 @@ export class OperationalEvents {
   }
 
   emit(event: OperationalEvent): void {
-    for (const observer of this.observers) {
-      try {
-        const returned = observer(event) as unknown;
-        if (returned instanceof Promise) {
-          void returned.catch((error: unknown) => {
-            logger.warn("operational observer rejected", { error: serializeError(error) });
-          });
-        }
-      } catch (error) {
-        logger.warn("operational observer threw", { error: serializeError(error) });
-      }
-    }
+    this.observers.notify(
+      (observer, current) => observer(current),
+      event,
+      (error) => logger.warn("operational observer failed", { error: serializeError(error) }),
+    );
   }
 
   withContext<T extends EventBase>(flow: string, event: T): T {

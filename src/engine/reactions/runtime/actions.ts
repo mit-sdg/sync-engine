@@ -19,9 +19,10 @@
 import type { ActionOutcome } from "../types.ts";
 import { uuid } from "@engine/utils/runtime";
 import { redact, serializeError } from "@engine/utils/redaction";
+import { ListenerSet } from "@engine/utils/listener-set";
+import { snapshotValue } from "@engine/utils/snapshot";
 import type { Redactor } from "@engine/utils/redaction";
 import { logger } from "@engine/utils/logger";
-import { setOwn } from "@engine/utils/own-property";
 import {
   MemoryStore,
   type ActionRecord,
@@ -43,47 +44,6 @@ interface ActiveFlowValues {
   depth: number;
   ids: Set<string>;
   interpreterFailed: boolean;
-}
-
-function snapshotMatchValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
-  if (value === null || typeof value !== "object") return value;
-  const prior = seen.get(value);
-  if (prior !== undefined) return prior;
-
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype === Date.prototype) {
-    try {
-      const snapshot = new Date(Date.prototype.getTime.call(value));
-      seen.set(value, snapshot);
-      return snapshot;
-    } catch {
-      return value;
-    }
-  }
-  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value;
-  const snapshot: Record<PropertyKey, unknown> | unknown[] = Array.isArray(value)
-    ? []
-    : Object.create(prototype);
-  if (Array.isArray(snapshot)) snapshot.length = (value as unknown[]).length;
-  seen.set(value, snapshot);
-  for (const key of Reflect.ownKeys(value)) {
-    if (key === "length") continue;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (descriptor?.enumerable !== true) continue;
-    try {
-      const entry = "value" in descriptor ? descriptor.value : Reflect.get(value, key, value);
-      setOwn(snapshot, key, snapshotMatchValue(entry, seen));
-    } catch (error) {
-      Object.defineProperty(snapshot, key, {
-        get() {
-          throw error;
-        },
-        enumerable: true,
-        configurable: true,
-      });
-    }
-  }
-  return snapshot;
 }
 
 export interface FlowQuiescence {
@@ -112,7 +72,7 @@ export function normalizeOutcome(output: unknown): ActionOutcome {
 export class ActionConcept {
   private readonly matchingValues = new Map<string, MatchingRecordValues>();
   private readonly activeFlowValues = new Map<string, ActiveFlowValues>();
-  private readonly flowQuiescenceListeners = new Set<(event: FlowQuiescence) => void>();
+  private readonly flowQuiescenceListeners = new ListenerSet<(event: FlowQuiescence) => void>();
 
   constructor(
     public readonly store: LogStore = new MemoryStore(),
@@ -158,7 +118,7 @@ export class ActionConcept {
     flow: string;
     input: Record<string, unknown>;
   }): Record<string, unknown> {
-    const snapshot = snapshotMatchValue(input, new WeakMap()) as Record<string, unknown>;
+    const snapshot = snapshotValue(input) as Record<string, unknown>;
     const active = this.activeFlowValues.get(flow) ?? {
       depth: 0,
       ids: new Set<string>(),
@@ -179,25 +139,21 @@ export class ActionConcept {
     if (active.depth > 0) return;
     for (const id of active.ids) this.matchingValues.delete(id);
     this.activeFlowValues.delete(flow);
-    const event = { flow, interpreterFailed: active.interpreterFailed };
-    const listeners = Array.from(this.flowQuiescenceListeners);
-    for (const listener of listeners) {
-      try {
-        listener(event);
-      } catch (error) {
+    this.flowQuiescenceListeners.notify(
+      (listener, event) => listener(event),
+      { flow, interpreterFailed: active.interpreterFailed },
+      (error) =>
         logger.error("Flow quiescence listener failed", {
           flow,
           error: serializeError(error),
-        });
-      }
-    }
+        }),
+    );
     this.store.flowSettled?.(flow);
   }
 
   /** Observe fully settled causal flows before occurrence retention is applied. */
   _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void {
-    this.flowQuiescenceListeners.add(listener);
-    return () => this.flowQuiescenceListeners.delete(listener);
+    return this.flowQuiescenceListeners.add(listener);
   }
 
   /** Serialize and record a sanitized failure produced between instrumented action asks. */

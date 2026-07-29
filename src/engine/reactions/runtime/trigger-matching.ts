@@ -1,67 +1,25 @@
 /** Join one landed occurrence with an executable reaction's trigger clauses. */
 
 import { Frames } from "@engine/reads/frames";
+import { snapshotValue } from "@engine/utils/snapshot";
 import type { ActionConcept, ActionRecord } from "./actions.ts";
 import { flow, landing } from "../context.ts";
 import type { ChannelPattern, ChannelPosture, ExecutableReaction, Frame } from "../types.ts";
 import { matchArguments, matchChannel, postureOfOutcome } from "./matching.ts";
 
-function cloneMatchValue(value: unknown, seen: WeakMap<object, object>): unknown {
-  if (value === null || typeof value !== "object") return value;
-  const prior = seen.get(value);
-  if (prior !== undefined) return prior;
-
-  const prototype = Object.getPrototypeOf(value);
-  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value;
-  const cloned: Record<PropertyKey, unknown> | unknown[] = Array.isArray(value)
-    ? []
-    : Object.create(prototype);
-  if (Array.isArray(cloned)) cloned.length = (value as unknown[]).length;
-  seen.set(value, cloned);
-  for (const key of Reflect.ownKeys(value)) {
-    if (key === "length") continue;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (descriptor?.enumerable !== true) continue;
-    Object.defineProperty(cloned, key, {
-      get() {
-        const source = "value" in descriptor ? descriptor.value : Reflect.get(value, key, value);
-        const result = cloneMatchValue(source, seen);
-        Object.defineProperty(cloned, key, {
-          value: result,
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        });
-        return result;
-      },
-      set(next) {
-        Object.defineProperty(cloned, key, {
-          value: next,
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        });
-      },
-      enumerable: true,
-      configurable: true,
-    });
-  }
-  return cloned;
-}
-
-function snapshotRecord(record: ActionRecord, seen: WeakMap<object, object>): ActionRecord {
+function snapshotRecord(record: ActionRecord, seen: WeakMap<object, unknown>): ActionRecord {
   return {
     ...record,
-    input: cloneMatchValue(record.input, seen) as Record<string, unknown>,
+    input: snapshotValue(record.input, seen) as Record<string, unknown>,
     ...(record.output === undefined
       ? {}
-      : { output: cloneMatchValue(record.output, seen) as Record<string, unknown> }),
+      : { output: snapshotValue(record.output, seen) as Record<string, unknown> }),
     ...(record.outcome === undefined
       ? {}
-      : { outcome: cloneMatchValue(record.outcome, seen) as ActionRecord["outcome"] }),
+      : { outcome: snapshotValue(record.outcome, seen) as ActionRecord["outcome"] }),
     ...(record.fault === undefined
       ? {}
-      : { fault: cloneMatchValue(record.fault, seen) as Record<string, unknown> }),
+      : { fault: snapshotValue(record.fault, seen) as Record<string, unknown> }),
   };
 }
 
@@ -76,7 +34,7 @@ export class TriggerMatcher {
   ) {}
 
   match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]] {
-    const snapshots = new WeakMap<object, object>();
+    const snapshots = new WeakMap<object, unknown>();
     const landed = snapshotRecord(
       this.records._matchingRecord(
         (record.id !== undefined ? this.records._getById(record.id) : undefined) ?? record,

@@ -1,3 +1,4 @@
+import { globalRegistry } from "@engine/utils/global-registry";
 import type { ApplicationInterface } from "./application-interface.ts";
 
 interface RegisteredApplication {
@@ -10,15 +11,10 @@ interface GatewayRegistry {
   readonly applicationsByGateway: WeakMap<object, RegisteredApplication>;
 }
 
-const registryKey = Symbol.for("@mit-sdg/sync-engine/gateway-registry");
-const registered = Reflect.get(globalThis, registryKey) as GatewayRegistry | undefined;
-const registry =
-  registered ??
-  ({
-    applicationsByInvoker: new WeakMap(),
-    applicationsByGateway: new WeakMap(),
-  } satisfies GatewayRegistry);
-if (registered === undefined) Reflect.set(globalThis, registryKey, registry);
+const registry = globalRegistry<GatewayRegistry>("@mit-sdg/sync-engine/gateway-registry", () => ({
+  applicationsByInvoker: new WeakMap(),
+  applicationsByGateway: new WeakMap(),
+}));
 
 export function rememberApplicationInvoker(
   invoker: object,

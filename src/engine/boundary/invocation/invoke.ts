@@ -9,6 +9,7 @@ import { FrameworkErrorCode, frameworkError } from "../protocol/errors.ts";
 import type { InvocationResult } from "../protocol/errors.ts";
 import { validateRuntimeValue } from "../protocol/validation.ts";
 import type { EndpointValidator, EndpointValidators } from "../protocol/validation.ts";
+import { isAborted, raceDeadline } from "@engine/utils/deadline";
 import { RuntimeLifecycle } from "./lifecycle.ts";
 
 interface PendingRequest {
@@ -42,20 +43,19 @@ async function waitForDispatch(
   deadline: number,
   signal?: AbortSignal,
 ): Promise<void> {
-  if (signal?.aborted === true) return;
+  if (isAborted(signal)) return;
   const remaining = Math.max(0, deadline - performance.now());
   if (remaining === 0) return;
 
-  await new Promise<void>((resolve) => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const finish = () => {
-      if (timer !== undefined) clearTimeout(timer);
-      signal?.removeEventListener("abort", finish);
-      resolve();
-    };
-    timer = setTimeout(finish, remaining);
-    signal?.addEventListener("abort", finish, { once: true });
-    void dispatch.then(finish, finish);
+  const settled = dispatch.then(
+    () => undefined,
+    () => undefined,
+  );
+  await raceDeadline(settled, {
+    timeoutMs: remaining,
+    onTimeout: () => undefined,
+    signal,
+    onAbort: () => undefined,
   });
 }
 
@@ -418,8 +418,4 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       }
     },
   } as Invoker<C>;
-}
-
-function isAborted(signal: AbortSignal | undefined): boolean {
-  return signal?.aborted === true;
 }

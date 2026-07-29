@@ -16,7 +16,7 @@ import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-cont
 import { registerEvaluationQuery } from "@engine/reads/queries";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import type { ExecutionControl } from "./operational.ts";
-import { memoizeQuery } from "./query-cache.ts";
+import { memoizeQuery } from "@engine/utils/memoize";
 
 type ActionArguments = Record<string | symbol, unknown>;
 

@@ -7,7 +7,6 @@ import { analyzeLocalBehavior, localDefinitionKey } from "@engine/reads/local-be
 import { foldFormerNode } from "@engine/reads/schema";
 import { canonicalJson } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
-import { reactionNameBelongsTo } from "@engine/utils/reaction-name";
 
 export type DiagnosticSeverity = "info" | "warning" | "error";
 
@@ -29,8 +28,14 @@ export interface ApplicationDiagnostic {
   message: string;
 }
 
+/** Whether a lowered reaction name belongs to one of the endpoint's authored roots. */
 function reactionBelongsTo(reaction: ReactionIR, endpoint: EndpointDeclaration): boolean {
-  return reactionNameBelongsTo(reaction.name, endpoint.reactions);
+  return endpoint.reactions.some(
+    (root) =>
+      reaction.name === root ||
+      reaction.name.startsWith(`${root}#`) ||
+      reaction.name.startsWith(`${root}:`),
+  );
 }
 
 function hasEndpointCondition(reaction: ReactionIR): boolean {

@@ -1,3 +1,4 @@
+import { ListenerSet } from "@engine/utils/listener-set";
 import { logger } from "@engine/utils/logger";
 import { redact, serializeError } from "@engine/utils/redaction";
 import type { Redactor } from "@engine/utils/redaction";
@@ -17,7 +18,7 @@ export enum Logging {
 
 /** Builds action events, calls observers, and writes interpreter diagnostics. */
 export class ReactionLogger {
-  readonly observers = new Set<EngineObserver>();
+  private readonly observers = new ListenerSet<EngineObserver>();
   level = Logging.OFF;
 
   constructor(
@@ -26,8 +27,7 @@ export class ReactionLogger {
   ) {}
 
   addObserver(observer: EngineObserver): () => void {
-    this.observers.add(observer);
-    return () => this.observers.delete(observer);
+    return this.observers.add(observer);
   }
 
   clearObservers(): void {
@@ -62,14 +62,11 @@ export class ReactionLogger {
   /** Call each observer; log an opaque error class when one throws. */
   emit(record: ActionRecord, durationMs?: number): void {
     if (this.observers.size === 0 || durationMs === undefined) return;
-    const event = this.toEvent(record, durationMs);
-    for (const observer of this.observers) {
-      try {
-        observer.onAction(event);
-      } catch (error) {
-        logger.warn("observer threw", { error: serializeError(error) });
-      }
-    }
+    this.observers.notify(
+      (observer, event) => observer.onAction(event),
+      this.toEvent(record, durationMs),
+      (error) => logger.warn("observer threw", { error: serializeError(error) }),
+    );
   }
 
   frames(message: string, frames: Frames<Frame>): void {

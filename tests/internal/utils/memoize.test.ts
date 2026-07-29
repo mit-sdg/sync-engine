@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  memoizeQuery,
-  queryCacheKey,
-} from "@sync-engine/internal/reactions/runtime/query-cache.ts";
+import { memoizeQuery, queryCacheKey } from "@engine/utils/memoize";
 
 function deeplyNested(wrap: (value: unknown, depth: number) => unknown): unknown {
   let value: unknown = "leaf";

@@ -2233,7 +2233,7 @@ export declare enum Logging {
 export declare class ReactionLogger {
     private readonly actions;
     private readonly redactor;
-    readonly observers: Set<EngineObserver>;
+    private readonly observers;
     level: Logging;
     constructor(actions: ActionConcept, redactor?: Redactor);
     addObserver(observer: EngineObserver): () => void;
@@ -2366,30 +2366,6 @@ export declare class OperationalEvents {
     emit(event: OperationalEvent): void;
     withContext<T extends EventBase>(flow: string, event: T): T;
 }
-export {};
-
-=== dist/engine/reactions/runtime/query-cache.d.ts ===
-/**
- * Query memoization between mutations.
- *
- * Instrumentation invalidates every query cache before and after an action
- * body. This module owns only cache identity and rejected-promise eviction.
- */
-type AnyFn = (...args: never[]) => unknown;
-export interface MemoizedQuery<T extends AnyFn> {
-    (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
-    invalidate(): void;
-}
-interface IdentityTable {
-    symbols: Map<symbol, number>;
-    functions: WeakMap<Function, number>;
-    objects: WeakMap<object, number>;
-    next: number;
-}
-/** Build a deterministic key without conflating cyclic, collection, or identity values. */
-export declare function queryCacheKey(args: readonly unknown[], identities?: IdentityTable): string;
-/** Memoize a query until invalidated; a rejected promise is never retained. */
-export declare function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T>;
 export {};
 
 === dist/engine/reactions/runtime/reacting-export.d.ts ===
@@ -4081,11 +4057,16 @@ export {};
 
 === dist/engine/reads/value-equality.d.ts ===
 /**
- * Equality for values that cross the engine boundary.
+ * Equality for live values that cross the engine boundary.
  *
  * Records and arrays compare structurally. Dates compare by timestamp. Other
  * object kinds compare only by identity, which avoids guessing at the meaning
  * of maps, sets, class instances, and custom prototypes.
+ *
+ * This is the lenient runtime equality: any pair of values is comparable and
+ * symbol keys participate. For design-time comparison of serialized IR —
+ * strict JSON where non-plain values are rejected rather than tolerated — see
+ * `canonicallyEqual` in the engine's canonical-json utility.
  */
 export declare function structurallyEqual(left: unknown, right: unknown): boolean;
 
@@ -4586,6 +4567,12 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | {
 export declare function canonicalValue(value: unknown): JsonValue;
 /** Canonical UTF-16 JSON with a final newline for files and standard output. */
 export declare function canonicalJson(value: unknown): string;
+/**
+ * Strict design-time equality over the canonical JSON projection: symbol
+ * keys and `undefined` entries drop out, and non-JSON values throw. For
+ * lenient equality over live runtime values, see `structurallyEqual` in the
+ * reads value-equality module.
+ */
 export declare function canonicallyEqual(left: unknown, right: unknown): boolean;
 /** A deterministic content identifier for canonical design data. */
 export declare function canonicalDigest(value: unknown): string;
@@ -4599,6 +4586,22 @@ export declare function camel(name: string): string;
 export declare function heading(name: string): string;
 /** `Operations room` → `operations-room` */
 export declare function slug(headingText: string): string;
+
+=== dist/engine/utils/deadline.d.ts ===
+/** True when an optional abort signal has already fired. */
+export declare function isAborted(signal: AbortSignal | undefined): boolean;
+/**
+ * Race `pending` against an optional timeout and an optional abort signal.
+ * The first settlement wins; losing sides are cleaned up. A `pending`
+ * rejection rejects the race; a timeout or an abort resolves with its
+ * configured fallback (or `undefined` when none is configured).
+ */
+export declare function raceDeadline<T>(pending: Promise<T>, options: {
+    timeoutMs?: number;
+    onTimeout?: () => T;
+    signal?: AbortSignal;
+    onAbort?: () => T;
+}): Promise<T>;
 
 === dist/engine/utils/framework-error-codes.d.ts ===
 export declare const FrameworkErrorCode: {
@@ -4619,6 +4622,38 @@ export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof Framew
 /** Framework codes the shipped boundaries can emit. */
 export type EmittedFrameworkErrorCode = FrameworkErrorCode;
 
+=== dist/engine/utils/global-registry.d.ts ===
+/**
+ * Return a process-wide registry pinned to `globalThis` under a well-known
+ * symbol, so duplicate copies of this package (application plus tooling, or
+ * linked checkouts) share facade-to-internals associations instead of
+ * forking them. When the pinned slot already holds a value it is trusted
+ * (optionally after `validate`); a polluted slot yields a fresh unpinned
+ * registry rather than a crash.
+ */
+export declare function globalRegistry<T>(key: string, create: () => T, validate?: (value: unknown) => value is T): T;
+
+=== dist/engine/utils/listener-set.d.ts ===
+/**
+ * A set of listeners with safe notification: a listener that throws or
+ * rejects is reported to `onError` and skipped without disrupting the
+ * remaining listeners. Registration dedupes by identity, and notification
+ * iterates over a snapshot so listeners may deregister mid-notify.
+ */
+export declare class ListenerSet<L> {
+    private readonly listeners;
+    /** Register a listener; returns its deregistration. */
+    add(listener: L): () => void;
+    clear(): void;
+    get size(): number;
+    /**
+     * Invoke every listener with `event`. A synchronous throw is reported to
+     * `onError` immediately; a returned promise's rejection is reported when it
+     * lands.
+     */
+    notify<E>(invoke: (listener: L, event: E) => unknown, event: E, onError: (error: unknown) => void): void;
+}
+
 === dist/engine/utils/logger.d.ts ===
 import { serializeError } from "./redaction.ts";
 export { serializeError };
@@ -4630,6 +4665,30 @@ export interface Logger {
     error(msg: string, meta?: Record<string, unknown>): void;
 }
 export declare const logger: Logger;
+
+=== dist/engine/utils/memoize.d.ts ===
+/**
+ * Query memoization between mutations.
+ *
+ * Instrumentation invalidates every query cache before and after an action
+ * body. This module owns only cache identity and rejected-promise eviction.
+ */
+type AnyFn = (...args: never[]) => unknown;
+export interface MemoizedQuery<T extends AnyFn> {
+    (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
+    invalidate(): void;
+}
+interface IdentityTable {
+    symbols: Map<symbol, number>;
+    functions: WeakMap<Function, number>;
+    objects: WeakMap<object, number>;
+    next: number;
+}
+/** Build a deterministic key without conflating cyclic, collection, or identity values. */
+export declare function queryCacheKey(args: readonly unknown[], identities?: IdentityTable): string;
+/** Memoize a query until invalidated; a rejected promise is never retained. */
+export declare function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T>;
+export {};
 
 === dist/engine/utils/ordinal.d.ts ===
 /** Locale-independent UTF-16 ordering, matching JavaScript's relational comparison. */
@@ -4648,10 +4707,6 @@ export interface GeneratorIdentity {
 }
 export declare const GENERATOR_IDENTITY: GeneratorIdentity;
 export declare function assertCurrentGenerator(identity: unknown, owner: string): asserts identity is GeneratorIdentity;
-
-=== dist/engine/utils/reaction-name.d.ts ===
-/** Whether a lowered reaction name belongs to one of the named authored roots. */
-export declare function reactionNameBelongsTo(name: string, roots: readonly string[]): boolean;
 
 === dist/engine/utils/redaction.d.ts ===
 /**
@@ -4689,6 +4744,9 @@ export declare function redact(obj: unknown, depth?: number): unknown;
 export declare const inspectCustom: unique symbol;
 export declare function inspect(value: unknown): string;
 export declare function uuid(): string;
+
+=== dist/engine/utils/snapshot.d.ts ===
+export declare function snapshotValue(value: unknown, seen?: WeakMap<object, unknown>): unknown;
 
 === dist/language/index.d.ts ===
 /** Words used to declare concepts, reactions, views, and formers. */

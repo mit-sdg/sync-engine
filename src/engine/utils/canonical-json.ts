@@ -66,6 +66,12 @@ export function canonicalJson(value: unknown): string {
   return `${JSON.stringify(canonicalValue(value), null, 2)}\n`;
 }
 
+/**
+ * Strict design-time equality over the canonical JSON projection: symbol
+ * keys and `undefined` entries drop out, and non-JSON values throw. For
+ * lenient equality over live runtime values, see `structurallyEqual` in the
+ * reads value-equality module.
+ */
 export function canonicallyEqual(left: unknown, right: unknown): boolean {
   return canonicalJson(left) === canonicalJson(right);
 }
