@@ -566,7 +566,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
   for (const command of [
     "sha256sum --check release/package.tgz.sha256",
-    "npm publish release/package.tgz --provenance --tag beta --access public",
+    "npm publish ./release/package.tgz --provenance --tag beta --access public",
   ]) {
     if (!hasRunCommand(publication, command)) {
       failures.push(`.github/workflows/publish.yml: publish job is missing ${command}`);

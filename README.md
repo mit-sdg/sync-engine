@@ -42,7 +42,7 @@ bun install
 ```
 
 For a reproducible evaluation, replace `@beta` with the exact version
-`@1.0.0-beta.0`.
+`@1.0.0-beta.1`.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
