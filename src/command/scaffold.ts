@@ -8,27 +8,16 @@
  * reader can continue from either one.
  */
 
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { camel, heading, pascal, slug } from "@engine/utils/case";
+import { filesBelow } from "./files-below.ts";
 
 const reTemplate = /\{\{(\w+)\}\}/g;
 const PROJECT_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
-
-/** Walk `dir` recursively and yield every file path relative to it. */
-async function* relativeFiles(dir: string, base = dir): AsyncGenerator<string> {
-  for (const name of await readdir(dir)) {
-    const full = join(dir, name);
-    if ((await stat(full)).isDirectory()) {
-      yield* relativeFiles(full, base);
-    } else {
-      yield relative(base, full).split(sep).join(posix.sep);
-    }
-  }
-}
 
 /** Resolve the templates directory relative to this file. */
 function templatesDir(): string {
@@ -65,8 +54,9 @@ async function projectFiles(name: string, templates: string): Promise<Record<str
     content.replace(reTemplate, (_match, key: string) => replacements[key] ?? _match);
 
   const files: Record<string, string> = {};
-  for await (const entry of relativeFiles(templates)) {
-    files[entry] = apply(await readFile(join(templates, entry), "utf8"));
+  for (const file of await filesBelow(templates)) {
+    const entry = relative(templates, file).split(sep).join(posix.sep);
+    files[entry] = apply(await readFile(file, "utf8"));
   }
   return files;
 }

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { activeWorkflowSource, externalWorkflowActions, workflowUses } from "./workflow.ts";
 
 const exampleManifests = [
   "examples/reading-circle/package.json",
@@ -176,14 +177,6 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function activeWorkflowSource(source: string): string {
-  return source
-    .split(/\r?\n/)
-    .filter((line) => !line.trimStart().startsWith("#"))
-    .map((line) => line.replace(/\s+#.*$/, ""))
-    .join("\n");
 }
 
 function workflowJob(source: string, name: string): string {
@@ -470,12 +463,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const workflows = [".github/workflows/ci.yml", ".github/workflows/publish.yml"];
   for (const path of workflows) {
     const source = activeWorkflowSource(sources.get(path) ?? "");
-    const uses = [...source.matchAll(/\buses:\s*([^\s#]+)/g)].map((match) => match[1] ?? "");
-    for (const use of uses) {
-      if (use.startsWith("./")) continue;
-      const separator = use.lastIndexOf("@");
-      const action = use.slice(0, separator);
-      const reference = use.slice(separator + 1);
+    const uses = workflowUses(source);
+    for (const { use, action, reference } of externalWorkflowActions(source)) {
       const expected = expectedActions.get(action);
       if (expected === undefined) {
         failures.push(`${path}: external action ${action || use} is not in the reviewed pin set`);

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { posix } from "node:path";
 import ts from "typescript";
+import { externalWorkflowActions } from "./workflow.ts";
 
 export interface ArchitectureProject {
   /** Text for every repository file plus any untracked source files to inspect. */
@@ -586,13 +587,9 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     /^\.github\/workflows\/[^/]+\.ya?ml$/.test(candidate),
   )) {
     const source = files.get(path) ?? "";
-    for (const match of source.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/gm)) {
-      const action = match[1] ?? "";
-      if (action.startsWith("./")) continue;
-      const separator = action.lastIndexOf("@");
-      const reference = separator < 0 ? "" : action.slice(separator + 1);
+    for (const { use, reference } of externalWorkflowActions(source)) {
       if (!/^[0-9a-fA-F]{40}$/.test(reference)) {
-        failures.push(`${path}: external action ${action} must use an exact 40-hex SHA`);
+        failures.push(`${path}: external action ${use} must use an exact 40-hex SHA`);
       }
     }
   }
