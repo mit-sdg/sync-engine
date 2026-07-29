@@ -61,6 +61,18 @@ const releasedChangelogDigests = new Map([
   ["0.1.1", "8d14d20525ef8a9e501c58610c33b278ec6c5cc61335bf7eb9995d9c71e196f5"],
   ["0.1.0", "9cd7baf8a9d9646e728dc3b23fc28500955a780c5a4e86b1f5321b4b380c96e8"],
 ]);
+const publishVerificationGates = [
+  "bun run release:check",
+  "bun run check",
+  "bun run test",
+  "bun run coverage",
+  "bun run build",
+  "bun run declarations:check",
+  "bun run examples:check",
+  "bun run scenario",
+  "bun run package:check",
+  "bun audit",
+] as const;
 
 type JsonObject = Record<string, unknown>;
 
@@ -520,18 +532,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   ]) {
     if (!publish.includes(fact)) failures.push(`.github/workflows/publish.yml: missing ${fact}`);
   }
-  for (const gate of [
-    "bun run release:check",
-    "bun run check",
-    "bun run test",
-    "bun run coverage",
-    "bun run build",
-    "bun run declarations:check",
-    "bun run examples:check",
-    "bun run scenario",
-    "bun run package:check",
-    "bun audit",
-  ]) {
+  for (const gate of publishVerificationGates) {
     if (!hasRunCommand(verify, gate)) {
       failures.push(`.github/workflows/publish.yml: verify job must run ${gate}`);
     }
@@ -551,18 +552,9 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       }
     }
   }
-  const verifyOrder = [
-    "bun run release:check",
-    "bun run check",
-    "bun run test",
-    "bun run coverage",
-    "bun run build",
-    "bun run declarations:check",
-    "bun run examples:check",
-    "bun run scenario",
-    "bun run package:check",
-    "bun audit",
-  ].map((command) => runCommandPosition(verify, command));
+  const verifyOrder = publishVerificationGates.map((command) =>
+    runCommandPosition(verify, command),
+  );
   if (
     verifyOrder.some((position) => position < 0) ||
     verifyOrder.some((position, index) => index > 0 && position <= verifyOrder[index - 1])
@@ -619,11 +611,15 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     ["[1-9]\\d*", "/^1\\.0\\.0-beta\\.(?:0|[1-9]\\d*)$/"],
   ] as const;
   for (const [fact, source] of sourceValidation) {
-    if (!verify.includes(source)) {
-      failures.push(`.github/workflows/publish.yml: verify source validation is missing ${fact}`);
-    }
-    if (!publication.includes(source)) {
-      failures.push(`.github/workflows/publish.yml: publish source validation is missing ${fact}`);
+    for (const [jobName, job] of [
+      ["verify", verify],
+      ["publish", publication],
+    ] as const) {
+      if (!job.includes(source)) {
+        failures.push(
+          `.github/workflows/publish.yml: ${jobName} source validation is missing ${fact}`,
+        );
+      }
     }
   }
   for (const fact of [

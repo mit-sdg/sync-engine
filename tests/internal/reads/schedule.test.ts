@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 import type { WhereOpIR } from "@sync-engine/internal/reads/ir";
 import type { ViewOpIR } from "@sync-engine/internal/reads/ir";
+import { operationFootprint } from "@sync-engine/internal/reads/operation-footprint";
+import type { AnyWhereOp } from "@sync-engine/internal/reads/where-ops";
 import {
   opNamesIR,
   opNeedsIR,
@@ -11,6 +13,42 @@ import {
 const query = { concept: "Items", query: "_items" };
 
 describe("where scheduling", () => {
+  test("authored footprints retain duplicate symbol occurrences", () => {
+    const input = Symbol("input");
+    const output = Symbol("output");
+    const denied = Symbol("denied");
+    const op: AnyWhereOp = {
+      op: "find",
+      in: { first: input, second: input },
+      out: { value: output },
+      not: { state: denied },
+    };
+
+    const footprint = operationFootprint(op, "authored");
+    const produced: symbol[] = footprint.produces;
+    expect(footprint.requires).toEqual([input, input, denied]);
+    expect(produced).toEqual([output]);
+    expect(footprint.mentions).toEqual([input, input, output, denied]);
+    expect(footprint.negative).toEqual([denied]);
+  });
+
+  test("IR footprints ignore authored-only excess properties", () => {
+    const earlier = {
+      op: "earlier",
+      when: { kind: "action", concept: "C", action: "a", input: { x: { $var: "x" } }, output: {} },
+      pattern: { input: { wrong: Symbol("wrong") }, output: {} },
+    } as WhereOpIR;
+    const holds = {
+      op: "holds",
+      computation: "ok",
+      in: { expected: { $var: "expected" } },
+      fused: { in: { wrong: Symbol("wrong") } },
+    } as ViewOpIR;
+
+    expect(operationFootprint(earlier, "ir").produces).toEqual(["x"]);
+    expect(operationFootprint(holds, "ir").inputs).toEqual(["expected"]);
+  });
+
   test("classifies the bindings read, opened, and mentioned by each op", () => {
     const find: WhereOpIR = {
       op: "find",

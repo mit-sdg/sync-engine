@@ -128,8 +128,21 @@ describe("views: definition", () => {
     const mayRead = mayReadView();
     expect(mayRead.viewName).toBe("(requester) may read (file)");
     expect(mayRead.ins).toEqual(["requester", "file"]);
-    expect(() => mayRead({ requester: "priya" })).toThrow('required input "file" is missing');
-    expect(() => mayRead("priya" as never)).toThrow("takes one object-shaped input mapping");
+    expect(() => mayRead({ requester: "priya" })).toThrowError(
+      new Error('View "(requester) may read (file)": required input "file" is missing.'),
+    );
+    expect(() => mayRead({ requester: "priya", file: "f1", extra: true })).toThrowError(
+      new Error(
+        'View "(requester) may read (file)": "extra" is not an input; expected (requester, file).',
+      ),
+    );
+    expect(() => mayRead("priya" as never)).toThrowError(
+      new Error('View "(requester) may read (file)" takes one object-shaped input mapping.'),
+    );
+    expect(mayRead.name).toBe("ref");
+    expect(mayRead.holds.name).toBe("value");
+    expect(Object.keys(mayRead)).toEqual(["viewName", "ins", "outs", "bindings", "holdsPredicate"]);
+    expect(Object.getOwnPropertyDescriptor(mayRead, "alternatives")?.enumerable).toBe(false);
   });
 
   test("an input binding the body never uses is a definition error", () => {

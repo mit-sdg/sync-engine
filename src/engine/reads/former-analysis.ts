@@ -6,6 +6,7 @@ import type { PatternIR } from "./ir.ts";
 import type { FormerNode } from "./former-nodes.ts";
 import type { Mapping } from "@engine/reactions/types";
 import type { WhereOp } from "./where-ops.ts";
+import { operationFootprint } from "./operation-footprint.ts";
 
 export function symbolsInMapping(mapping: Mapping): symbol[] {
   const found: symbol[] = [];
@@ -28,43 +29,23 @@ export function varNamesInPattern(pattern: PatternIR): string[] {
 }
 
 function whereOpBindings(op: WhereOp): symbol[] {
-  switch (op.op) {
-    case "find":
-    case "whether":
-      return symbolsInMapping(op.out);
-    case "no":
-    case "holds":
-      return [];
-    case "compute":
-      return [op.out];
-    case "custom":
-      return [...op.out];
-  }
+  return operationFootprint(op, "authored").produces;
 }
 
 function whereOpRequirements(op: WhereOp): Array<readonly [symbol, string]> {
-  if (op.op === "holds") {
-    return symbolsInMapping(op.fused.in).map((variable) => [variable, "condition line"]);
-  }
-  if (op.op === "custom") {
-    return op.in.map((variable) => [variable, "custom(...) input"]);
-  }
-  const required: Array<readonly [symbol, string]> = symbolsInMapping(op.in).map((variable) => [
+  const footprint = operationFootprint(op, "authored");
+  const inputRole =
+    op.op === "holds"
+      ? "condition line"
+      : op.op === "custom"
+        ? "custom(...) input"
+        : `${op.op}(...) input`;
+  const required: Array<readonly [symbol, string]> = footprint.inputs.map((variable) => [
     variable,
-    `${op.op}(...) input`,
+    inputRole,
   ]);
-  if (op.op === "no") {
-    required.push(
-      ...symbolsInMapping(op.out).map((variable) => [variable, "no(...) test"] as const),
-    );
-  }
-  if (op.op === "find") {
-    required.push(
-      ...symbolsInMapping(op.not ?? {}).map(
-        (variable) => [variable, "find(...).is.not(...) test"] as const,
-      ),
-    );
-  }
+  const negativeRole = op.op === "no" ? "no(...) test" : "find(...).is.not(...) test";
+  required.push(...footprint.negative.map((variable) => [variable, negativeRole] as const));
   return required;
 }
 
@@ -212,19 +193,21 @@ export function symbolsUsed(node: FormerNode, into: Set<symbol>): void {
   const fromMapping = (mapping: Mapping): void => {
     for (const variable of symbolsInMapping(mapping)) into.add(variable);
   };
+  const fromOp = (op: WhereOp): void => {
+    const footprint = operationFootprint(op, "authored");
+    for (const variable of footprint.inputs) into.add(variable);
+    // Relation outputs can test existing values; explicit operation outputs only produce them.
+    if (op.op === "find" || op.op === "whether") {
+      for (const variable of footprint.produces) into.add(variable);
+    }
+    if (op.op === "no") for (const variable of footprint.negative) into.add(variable);
+  };
   switch (node.node) {
     case "leaf":
       into.add(node.var);
       return;
     case "record":
-      for (const op of node.where) {
-        if (op.op === "holds") fromMapping(op.fused.in);
-        else if (op.op === "custom") op.in.forEach((variable) => into.add(variable));
-        else {
-          fromMapping(op.in);
-          if ("out" in op && typeof op.out === "object") fromMapping(op.out);
-        }
-      }
+      for (const op of node.where) fromOp(op);
       for (const [, child] of node.entries) symbolsUsed(child, into);
       // A splice's anchors are uses of the host's variables.
       for (const use of node.splices) fromMapping(use.fused.in);
@@ -236,14 +219,7 @@ export function symbolsUsed(node: FormerNode, into: Set<symbol>): void {
       fromMapping(node.from.in);
       fromMapping(node.from.not ?? {});
       for (const variable of symbolsInMapping(node.from.out)) into.add(variable);
-      for (const op of node.where) {
-        if (op.op === "holds") fromMapping(op.fused.in);
-        else if (op.op === "custom") op.in.forEach((variable) => into.add(variable));
-        else {
-          fromMapping(op.in);
-          if ("out" in op && typeof op.out === "object") fromMapping(op.out);
-        }
-      }
+      for (const op of node.where) fromOp(op);
       if (node.node === "each") symbolsUsed(node.as, into);
       if (node.node === "first" || node.node === "distinct") into.add(node.value);
       if (

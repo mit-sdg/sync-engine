@@ -285,7 +285,22 @@ describe("wire TypeScript renderer", () => {
           input: { kind: "object", fields: [] },
           output: {
             kind: "object",
-            fields: [{ key: "value", type: { kind: "json" } }],
+            fields: [
+              {
+                key: "value",
+                type: {
+                  kind: "union",
+                  of: [
+                    { kind: "json" },
+                    {
+                      kind: "object",
+                      fields: [{ key: "nested", type: { kind: "json" } }],
+                    },
+                    { kind: "array", of: { kind: "json" } },
+                  ],
+                },
+              },
+            ],
           },
           errors: [],
           openError: false,
@@ -297,7 +312,9 @@ describe("wire TypeScript renderer", () => {
         vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
         strictLeaves: true,
       }),
-    ).toThrow("strictLeaves found unresolved Json at /opaque.output.value");
+    ).toThrow(
+      "strictLeaves found unresolved Json at /opaque.output.value, /opaque.output.value.nested, /opaque.output.value[]",
+    );
   });
 
   test("the anchored module typechecks exact client-facing leaves", async () => {

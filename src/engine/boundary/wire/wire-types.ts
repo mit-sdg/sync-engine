@@ -22,6 +22,26 @@ export type WireType =
 export const JSON_TYPE: WireType = { kind: "json" };
 const NULL_TYPE: WireType = { kind: "literal", value: null };
 
+export function unresolvedWireLeaves(
+  type: WireType,
+  path: string,
+  unionPath: (path: string, index: number) => string = (path) => path,
+): string[] {
+  if (type.kind === "json") return [path];
+  if (type.kind === "object") {
+    return type.fields.flatMap((field) =>
+      unresolvedWireLeaves(field.type, `${path}.${field.key}`, unionPath),
+    );
+  }
+  if (type.kind === "array") return unresolvedWireLeaves(type.of, `${path}[]`, unionPath);
+  if (type.kind === "union") {
+    return type.of.flatMap((member, index) =>
+      unresolvedWireLeaves(member, unionPath(path, index), unionPath),
+    );
+  }
+  return [];
+}
+
 function hasOneNullDifference(
   left: Extract<WireType, { kind: "object" }>,
   right: Extract<WireType, { kind: "object" }>,

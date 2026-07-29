@@ -1,14 +1,11 @@
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   checkGenerated,
   inspectGenerated,
   pinGenerated,
   renderGenerated,
-  resolveApplication,
-  type GeneratedApplication,
 } from "@engine/tooling/generated-artifacts";
 import { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
+import { loadGeneratedApplication } from "./generated-config.ts";
 
 const HELP = new Set([undefined, "help", "--help", "-h"]);
 const ACTIONS = new Set(["check", "pin", "pin-spec", "pin-wire", "manifest", "spec", "wire"]);
@@ -40,12 +37,7 @@ export async function artifactsCommand(args: readonly string[]): Promise<void> {
     throw new Error(usage);
   }
   const configPath = options.length === 0 ? "generated.config.ts" : options[1];
-  const configUrl = pathToFileURL(resolve(process.cwd(), configPath));
-  const module = (await import(configUrl.href)) as { default?: GeneratedApplication };
-  if (module.default === undefined) {
-    throw new Error(`${configPath} must default-export an application artifact configuration`);
-  }
-  const application = resolveApplication(module.default, configUrl);
+  const application = await loadGeneratedApplication(configPath, process.cwd());
 
   switch (action) {
     case "check":

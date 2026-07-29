@@ -321,9 +321,14 @@ describe("release source facts", () => {
       "bun run coverage",
       "bun run omitted-coverage",
     );
-    expect(checkRelease(sources)).toContain(
+    expect(
+      checkRelease(sources).filter((failure) =>
+        failure.startsWith(".github/workflows/publish.yml: verify"),
+      ),
+    ).toEqual([
       ".github/workflows/publish.yml: verify job must run bun run coverage",
-    );
+      ".github/workflows/publish.yml: verify gates must remain in reviewed order",
+    ]);
   });
 
   test.each([
@@ -341,10 +346,21 @@ describe("release source facts", () => {
     "requires source validation fact %s",
     (fact) => {
       const sources = fixture();
-      replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-source-fact");
-      expect(checkRelease(sources)).toContainEqual(
-        expect.stringContaining(`source validation is missing ${fact}`),
+      sources.set(
+        ".github/workflows/publish.yml",
+        (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
+          fact,
+          "omitted-source-fact",
+        ),
       );
+      expect(
+        checkRelease(sources).filter((failure) =>
+          failure.endsWith(`source validation is missing ${fact}`),
+        ),
+      ).toEqual([
+        `.github/workflows/publish.yml: verify source validation is missing ${fact}`,
+        `.github/workflows/publish.yml: publish source validation is missing ${fact}`,
+      ]);
     },
   );
 

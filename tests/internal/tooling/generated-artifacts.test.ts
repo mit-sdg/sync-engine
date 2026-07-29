@@ -18,6 +18,7 @@ import {
 } from "@engine/tooling/generated-artifacts";
 import { inspectAssembly } from "@engine/tooling/inspection";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
+import { loadGeneratedApplication } from "@command/generated-config";
 
 /**
  * A real config location — the packaged sample application — so the defaults
@@ -462,6 +463,22 @@ describe("generated application artifacts", () => {
 });
 
 describe("an artifact configuration's defaults", () => {
+  test("the command loader resolves a generated configuration", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "sync-engine-config-"));
+    try {
+      await mkdir(join(directory, "src"));
+      await writeFile(
+        join(directory, "generated.config.ts"),
+        'export default { assemble() {}, title: "Loaded application" };\n',
+      );
+      await writeFile(join(directory, "src/concept-set.ts"), "export const vocabulary = {};\n");
+      const resolved = await loadGeneratedApplication("generated.config.ts", directory);
+      expect(resolved.title).toBe("Loaded application");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("a title and an assembly are enough", () => {
     const resolved = resolveApplication(
       {

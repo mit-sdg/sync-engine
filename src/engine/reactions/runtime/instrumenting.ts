@@ -15,6 +15,7 @@ import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
 import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
 import { registerEvaluationQuery } from "@engine/reads/queries";
 import type { ActionScheduling } from "./action-scheduler.ts";
+import type { ExecutionControl } from "./operational.ts";
 import { memoizeQuery } from "./query-cache.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
@@ -50,13 +51,7 @@ export interface InstrumentationState {
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
   registerConcept(name: string, instrumented: object): void;
-  execution?: {
-    action(flow: string): boolean;
-    rows(count: number): boolean;
-    admitFlow?(flow: string, route: string, correlationId: string): unknown;
-    abandon?(flow: string): void;
-    flowSettled?(flow: string): void;
-  };
+  execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
   react(record: ActionRecord, durationMs?: number): Promise<void>;
   emit(record: ActionRecord, durationMs?: number): void;
 }
@@ -146,13 +141,7 @@ export function instrumentConcept<T extends object>(
                   const result = await withCache(...args);
                   const count = Array.isArray(result) ? result.length : 1;
                   if (state.execution?.rows(count) === false) {
-                    state.actions._recordIntegrityFailure({
-                      kind: "execution-limit",
-                      flow: flowToken,
-                      limit: "rows",
-                      errorClass: "ExecutionLimitExceeded",
-                      at: Date.now(),
-                    });
+                    state.actions._recordExecutionLimit(flowToken, "rows");
                     throw new Error("The evaluation exceeded its row limit.");
                   }
                   return result;
@@ -224,13 +213,7 @@ export function instrumentConcept<T extends object>(
         }
         if (state.execution?.action(flowToken) === false) {
           try {
-            state.actions._recordIntegrityFailure({
-              kind: "execution-limit",
-              flow: flowToken,
-              limit: "actions",
-              errorClass: "ExecutionLimitExceeded",
-              at: Date.now(),
-            });
+            state.actions._recordExecutionLimit(flowToken, "actions");
           } finally {
             if (directRoot) state.execution?.abandon?.(flowToken);
           }
@@ -383,70 +366,47 @@ export function instrument(
 
 /** Owns the mutable proxy identities and query caches for one engine. */
 export class ConceptInstrumentation {
-  private readonly boundActionsByConcept = new WeakMap<
-    object,
-    Map<AnyAction, InstrumentedAction>
-  >();
-  private readonly queryCaches = new WeakMap<object, Array<{ invalidate: () => void }>>();
-  private readonly rawConceptsByInstrumented = new WeakMap<object, object>();
-  private readonly concepts = new Set<WeakRef<object>>();
+  private readonly state: InstrumentationState;
 
   constructor(
-    private readonly dependencies: {
-      actions: ActionConcept;
-      scheduler: ActionScheduling;
-      execution?: {
-        action(flow: string): boolean;
-        rows(count: number): boolean;
-        admitFlow?(flow: string, route: string, correlationId: string): unknown;
-        abandon?(flow: string): void;
-        flowSettled?(flow: string): void;
-      };
-      react(record: ActionRecord, durationMs?: number): Promise<void>;
-      emit(record: ActionRecord, durationMs?: number): void;
-      registerConcept(name: string, instrumented: object): void;
-    },
-  ) {}
+    dependencies: Omit<
+      InstrumentationState,
+      "boundActionsByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts"
+    >,
+  ) {
+    this.state = {
+      ...dependencies,
+      boundActionsByConcept: new WeakMap(),
+      queryCaches: new WeakMap(),
+      rawConceptsByInstrumented: new WeakMap(),
+      concepts: new Set(),
+    };
+  }
 
   instrumentConcept<T extends object>(concept: T, name?: string): T {
-    return instrumentConcept(this.state(), concept, name);
+    return instrumentConcept(this.state, concept, name);
   }
 
   instrument<T extends Record<string, object>>(concepts: T): T;
   instrument<T extends object>(concept: T): T;
   instrument(concepts: Record<string, object> | object): Record<string, object> | object {
-    return instrument(this.state(), concepts);
+    return instrument(this.state, concepts);
   }
 
   invalidate(concept: object): void {
-    const raw = this.rawConceptsByInstrumented.get(concept) ?? concept;
-    this.queryCaches.get(raw)?.forEach((cache) => cache.invalidate());
+    const raw = this.rawConceptOf(concept);
+    this.state.queryCaches.get(raw)?.forEach((cache) => cache.invalidate());
   }
 
   invalidateAll(): void {
-    for (const ref of this.concepts) {
+    for (const ref of this.state.concepts) {
       const concept = ref.deref();
       if (concept !== undefined) this.invalidate(concept);
-      else this.concepts.delete(ref);
+      else this.state.concepts.delete(ref);
     }
   }
 
   rawConceptOf(instrumented: object): object {
-    return this.rawConceptsByInstrumented.get(instrumented) ?? instrumented;
-  }
-
-  private state(): InstrumentationState {
-    return {
-      actions: this.dependencies.actions,
-      boundActionsByConcept: this.boundActionsByConcept,
-      queryCaches: this.queryCaches,
-      scheduler: this.dependencies.scheduler,
-      rawConceptsByInstrumented: this.rawConceptsByInstrumented,
-      concepts: this.concepts,
-      execution: this.dependencies.execution,
-      react: this.dependencies.react,
-      emit: this.dependencies.emit,
-      registerConcept: this.dependencies.registerConcept,
-    };
+    return this.state.rawConceptsByInstrumented.get(instrumented) ?? instrumented;
   }
 }

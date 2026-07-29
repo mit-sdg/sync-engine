@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { chmod, cp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { filesBelow } from "./walk.ts";
+import { filesBelow } from "../src/command/files-below.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 await rm(resolve(root, "dist"), { recursive: true, force: true });

@@ -2,6 +2,15 @@ import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
 import type { IntegrityFailureRecord, ReactionFailureRecord } from "./log-store.ts";
 
+export interface ExecutionControl {
+  action(flow: string): boolean;
+  firing(flow: string): boolean;
+  rows(count: number): boolean;
+  admitFlow?(flow: string, route: string, correlationId: string): unknown;
+  abandon?(flow: string): void;
+  flowSettled?(flow: string): void;
+}
+
 export type OperationalResultClass =
   | "success"
   | "domain-error"

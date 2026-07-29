@@ -52,28 +52,6 @@ function expandDistinctRows(
   return matches;
 }
 
-interface ViewShape {
-  name: string;
-  ins: readonly string[];
-  outs: readonly string[];
-  bindings: readonly string[];
-  promise?: "one" | "optional" | "many";
-  holdsPredicate: boolean;
-  alternatives: readonly (readonly ViewOpIR[])[];
-}
-
-function viewShapeOf(view: RelationView): ViewShape {
-  return {
-    name: view.viewName,
-    ins: view.ins,
-    outs: view.outs,
-    bindings: view.bindings,
-    promise: view.promise,
-    holdsPredicate: view.holdsPredicate,
-    alternatives: view.alternatives as readonly (readonly ViewOpIR[])[],
-  };
-}
-
 function queryOf(
   query: InstrumentedQuery | QueryRefIR,
   env: ReadEnv | undefined,
@@ -118,25 +96,24 @@ async function viewRows(
   env: ReadEnv | undefined,
   assertRows?: AssertRows,
 ): Promise<unknown[]> {
-  const shape = viewShapeOf(view);
   const filled = bindInputMapping(frame, input);
   const seed: Frame = {};
-  for (const name of shape.ins) {
+  for (const name of view.ins) {
     if (Object.hasOwn(filled, name)) setOwn(seed, name, filled[name]);
   }
   const survivors: Frame[] = [];
-  for (const block of shape.alternatives) {
+  for (const block of view.alternatives as readonly (readonly ViewOpIR[])[]) {
     for (const survivor of await applyViewOps(new Frames(seed), block, env, assertRows)) {
       assertRows?.(survivors.length + 1);
       survivors.push(survivor);
     }
-    if (shape.outs.length === 0 && survivors.length > 0) break;
+    if (view.outs.length === 0 && survivors.length > 0) break;
   }
-  if (shape.outs.length === 0) return survivors.length > 0 ? [{}] : [];
+  if (view.outs.length === 0) return survivors.length > 0 ? [{}] : [];
   const rows: Record<string, unknown>[] = [];
   for (const survivor of survivors) {
     const row: Record<string, unknown> = {};
-    for (const out of shape.outs) {
+    for (const out of view.outs) {
       if (Object.hasOwn(survivor, out)) setOwn(row, out, survivor[out]);
     }
     if (!rows.some((prior) => structurallyEqual(prior, row))) {
@@ -144,14 +121,14 @@ async function viewRows(
       rows.push(row);
     }
   }
-  if (shape.promise === "one" && rows.length !== 1) {
+  if (view.promise === "one" && rows.length !== 1) {
     throw new QueryAnswerFault(
-      `View "${shape.name}" promises one row but produced ${rows.length}.`,
+      `View "${view.viewName}" promises one row but produced ${rows.length}.`,
     );
   }
-  if (shape.promise === "optional" && rows.length > 1) {
+  if (view.promise === "optional" && rows.length > 1) {
     throw new QueryAnswerFault(
-      `View "${shape.name}" promises at most one row but produced ${rows.length}.`,
+      `View "${view.viewName}" promises at most one row but produced ${rows.length}.`,
     );
   }
   return rows;

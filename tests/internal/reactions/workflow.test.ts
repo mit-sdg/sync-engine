@@ -78,19 +78,24 @@ describe("pipeline then", () => {
 
   test("stops after an error outcome", async () => {
     const { reacting, Button, Recorder, Throwing } = setup();
+    let refusalTransformed = false;
     reacting.register({
-      // explode refuses (an error outcome), so the chain never reaches the
-      // "after" step — the ask's pipeline stops at the refusal.
-      Stop: reaction((_vars: Vars) =>
-        when(refs.Button.clicked({ kind: "stop" }).responds())
+      Stop: reaction((_vars: Vars) => {
+        const refusing = refs.Throwing.explode({}) as StepNode;
+        refusing.transform = (frames) => {
+          refusalTransformed = true;
+          return frames;
+        };
+        return when(refs.Button.clicked({ kind: "stop" }).responds())
           .then(refs.Recorder.record({ tag: "before" }))
-          .then(refs.Throwing.explode({}))
-          .then(refs.Recorder.record({ tag: "after" })),
-      ),
+          .then(refusing as never)
+          .then(refs.Recorder.record({ tag: "after" }));
+      }),
     });
 
     await Button.clicked({ kind: "stop" });
     expect(Throwing.hit).toBe(true);
+    expect(refusalTransformed).toBe(true);
     expect(Recorder.order).toEqual(["before"]);
   });
 

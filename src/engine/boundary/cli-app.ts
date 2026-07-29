@@ -176,21 +176,33 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
     return text;
   }
 
+  async function executeCommand(
+    command: AnyCliCommand,
+    input: unknown,
+    invoker: Invoker<C> | undefined,
+  ): Promise<CliResult> {
+    try {
+      if (isEndpointCommand(command)) {
+        if (invoker === undefined) {
+          return fail(`Endpoint command "${command.path}" needs an invoker.`);
+        }
+        const result = await invoker.invoke(command.path as keyof C & string, input as never);
+        return command.format(result);
+      }
+      return await (command as CliCommand<unknown>).run(input);
+    } catch {
+      return fail("Command failed.");
+    }
+  }
+
   function deriveExecutor(command: AnyCliCommand): CliExecutor {
     if (isEndpointCommand(command)) {
-      const endpoint = command;
       const invoker = options.invoker;
       return async (positionals, opts) => {
         try {
-          const parsed = endpoint.parse(positionals, opts);
+          const parsed = command.parse(positionals, opts);
           if (!parsed.ok) return fail(parsed.message);
-          if (invoker === undefined)
-            return fail(`Endpoint command "${endpoint.path}" needs an invoker.`);
-          const result = await invoker.invoke(
-            endpoint.path as keyof C & string,
-            parsed.value as never,
-          );
-          return endpoint.format(result);
+          return executeCommand(command, parsed.value, invoker);
         } catch {
           return fail("Command failed.");
         }
@@ -207,9 +219,7 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
           if (typeof parsed === "object" && parsed !== null && "exitCode" in parsed) {
             return parsed as CliResult;
           }
-          return await plainCommand.run(
-            parsed as ReturnType<NonNullable<typeof plainCommand.parse>>,
-          );
+          return executeCommand(command, parsed, options.invoker);
         } catch {
           return fail("Command failed.");
         }
@@ -217,13 +227,11 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
     }
 
     return async (positionals, opts) => {
-      try {
-        return await plainCommand.run({ positionals, options: opts } as unknown as Parameters<
-          typeof plainCommand.run
-        >[0]);
-      } catch {
-        return fail("Command failed.");
-      }
+      return executeCommand(
+        command,
+        { positionals, options: opts } as unknown as Parameters<typeof plainCommand.run>[0],
+        options.invoker,
+      );
     };
   }
 
@@ -260,22 +268,7 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
         `Unknown command: ${String(commandName)}\nRun '${name || "cli"} help' to list commands.`,
       );
     }
-    try {
-      if (isEndpointCommand(command)) {
-        if (options.invoker === undefined) {
-          return fail(`Endpoint command "${command.path}" needs an invoker.`);
-        }
-        const result = await options.invoker.invoke(
-          command.path as keyof C & string,
-          input as never,
-        );
-        return command.format(result);
-      }
-      const plainCommand = command as CliCommand<CommandInput<TCommands, K>>;
-      return await plainCommand.run(input);
-    } catch {
-      return fail("Command failed.");
-    }
+    return executeCommand(command, input, options.invoker);
   }
 
   function help(): string {

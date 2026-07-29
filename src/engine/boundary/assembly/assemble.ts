@@ -374,24 +374,21 @@ export function assemble<T extends Record<string, ConceptClass>>(
       }
       setOwn(publicErrors, code, category);
     }
-    if (provided !== undefined) {
-      validateConceptImplementation("assemble", name, cls, provided);
-      if (metadata !== undefined) attachConceptMetadata(provided, metadata);
-      setOwn(concepts, name, engine.instrumentConcept(provided, name));
-      continue;
+    let instance = provided;
+    if (instance === undefined) {
+      const initialization = options.initialize as Record<string, readonly unknown[]> | undefined;
+      const args =
+        initialization !== undefined && Object.hasOwn(initialization, name)
+          ? initialization[name]
+          : undefined;
+      if (args === undefined && cls.length > 0) {
+        throw new Error(
+          `assemble: concept "${name}" requires constructor arguments; supply initialize or instances.`,
+        );
+      }
+      const Constructor = cls as new (...ctorArgs: unknown[]) => object;
+      instance = new Constructor(...(args ?? []));
     }
-    const initialization = options.initialize as Record<string, readonly unknown[]> | undefined;
-    const args =
-      initialization !== undefined && Object.hasOwn(initialization, name)
-        ? initialization[name]
-        : undefined;
-    if (args === undefined && cls.length > 0) {
-      throw new Error(
-        `assemble: concept "${name}" requires constructor arguments; supply initialize or instances.`,
-      );
-    }
-    const Constructor = cls as new (...ctorArgs: unknown[]) => object;
-    const instance = new Constructor(...(args ?? []));
     validateConceptImplementation("assemble", name, cls, instance);
     if (metadata !== undefined) attachConceptMetadata(instance, metadata);
     setOwn(concepts, name, engine.instrumentConcept(instance, name));
@@ -487,12 +484,13 @@ export function assemble<T extends Record<string, ConceptClass>>(
   engine.register(refusalFunnel(instrumentedBoundary as unknown as RequestBoundaryActions));
   engine.addObserver(respondRaceObserver);
 
+  const endpointPaths = new Set(endpoints.map(({ path }) => path));
   const invoker = createInvoker({
     boundary,
     instrumented: instrumentedBoundary as unknown as RequestBoundaryActions,
     contracts,
     validators,
-    routes: new Set(endpoints.map(({ path }) => path)),
+    routes: endpointPaths,
     lifecycle,
     onInvalidOutput: ({ path, requestId, errorClass }) => {
       engine.Action._recordIntegrityFailure({
@@ -508,7 +506,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   const publicInterface: ApplicationInterface = {
     routes: Object.fromEntries(
-      [...new Set(endpoints.map(({ path }) => path))]
+      [...endpointPaths]
         .sort()
         .map((path) => [path, canonicalValue(contracts[path] ?? {}) as InputContractDecl]),
     ),

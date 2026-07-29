@@ -45,17 +45,17 @@ import {
   bindingBag,
   type FreeBindings,
   type InputBindings,
+  objectRef,
   type OutputBindings,
 } from "./sentence.ts";
 import { brandRelationView, lineOf } from "./lines.ts";
 import type { RelationView } from "./lines.ts";
 import type { QueryPromise } from "./query-metadata.ts";
-import { symbolsInMapping } from "./former-analysis.ts";
+import { operationFootprint } from "./operation-footprint.ts";
 import { opNamesIR, scheduleBlock } from "./schedule.ts";
 import { formFrom } from "./former-builders.ts";
 import type { FormNode } from "./former-builders.ts";
 import type { FormerEntry } from "./former-nodes.ts";
-import { isPlainMapping } from "./matchers.ts";
 
 /**
  * An aggregation: bind the number of rows a query answers with right now.
@@ -144,47 +144,11 @@ function assertViewOps(name: string, alternatives: readonly (readonly ViewOp[])[
   }
 }
 
-/** Validate a view call against its declared input names. */
-function assertViewInputs(name: string, inputs: readonly string[], input: Mapping): Mapping {
-  if (!isPlainMapping(input)) {
-    throw new Error(`View "${name}" takes one object-shaped input mapping.`);
-  }
-  for (const key of Object.keys(input)) {
-    if (!inputs.includes(key)) {
-      throw new Error(`View "${name}": "${key}" is not an input; expected (${inputs.join(", ")}).`);
-    }
-  }
-  for (const inputName of inputs) {
-    if (!(inputName in input)) {
-      throw new Error(`View "${name}": required input "${inputName}" is missing.`);
-    }
-  }
-  return input;
-}
-
 function symbolsInViewOps(alternatives: readonly (readonly ViewOp[])[]): Set<symbol> {
   const used = new Set<symbol>();
-  const add = (mapping: Mapping): void => {
-    for (const variable of symbolsInMapping(mapping)) used.add(variable);
-  };
   for (const block of alternatives) {
     for (const op of block) {
-      if (op.op === "count") {
-        add(op.in);
-        used.add(op.out);
-      } else if (op.op === "holds") {
-        add(op.fused.in);
-      } else if (op.op === "compute") {
-        add(op.in);
-        used.add(op.out);
-      } else if (op.op === "custom") {
-        op.in.forEach((variable) => used.add(variable));
-        op.out.forEach((variable) => used.add(variable));
-      } else {
-        add(op.in);
-        add(op.out);
-        if (op.op === "find") add(op.not ?? {});
-      }
+      for (const variable of operationFootprint(op, "authored").mentions) used.add(variable);
     }
   }
   return used;
@@ -217,48 +181,51 @@ export function relationViewWith(
   alternatives: readonly (readonly ViewOpIR[])[],
   holdsPredicate = false,
 ): RelationView {
-  const ref = ((pattern: Mapping) =>
-    lineOf({ view: ref }, assertViewInputs(name, ins, pattern))) as RelationView;
-  Object.defineProperties(ref, {
-    viewName: { value: name, enumerable: true },
-    ins: { value: [...ins], enumerable: true },
-    outs: { value: [...outs], enumerable: true },
-    bindings: { value: [...bindings], enumerable: true },
-    ...(promise !== undefined ? { promise: { value: promise, enumerable: true } } : {}),
-    holdsPredicate: { value: holdsPredicate, enumerable: true },
-    alternatives: { value: alternatives, enumerable: false },
-    holds: {
-      value: (): RelationView => {
-        if (outs.length !== 0) {
-          throw new Error(`View "${name}": holds() requires an empty output binding bag.`);
-        }
-        return relationViewWith(name, ins, outs, bindings, undefined, alternatives, true);
+  const ref = objectRef<RelationView, ReturnType<RelationView>>({
+    kind: "View",
+    name,
+    inputs: ins,
+    nameKey: "viewName",
+    properties: {
+      outs: { value: [...outs], enumerable: true },
+      bindings: { value: [...bindings], enumerable: true },
+      ...(promise !== undefined ? { promise: { value: promise, enumerable: true } } : {}),
+      holdsPredicate: { value: holdsPredicate, enumerable: true },
+      alternatives: { value: alternatives, enumerable: false },
+      holds: {
+        value: (): RelationView => {
+          if (outs.length !== 0) {
+            throw new Error(`View "${name}": holds() requires an empty output binding bag.`);
+          }
+          return relationViewWith(name, ins, outs, bindings, undefined, alternatives, true);
+        },
+      },
+      one: {
+        value: (): RelationView => {
+          if (outs.length === 0) {
+            throw new Error(`View "${name}": one() requires at least one output binding.`);
+          }
+          return relationViewWith(name, ins, outs, bindings, "one", alternatives);
+        },
+      },
+      optional: {
+        value: (): RelationView => {
+          if (outs.length === 0) {
+            throw new Error(`View "${name}": optional() requires at least one output binding.`);
+          }
+          return relationViewWith(name, ins, outs, bindings, "optional", alternatives);
+        },
+      },
+      many: {
+        value: (): RelationView => {
+          if (outs.length === 0) {
+            throw new Error(`View "${name}": many() requires at least one output binding.`);
+          }
+          return relationViewWith(name, ins, outs, bindings, "many", alternatives);
+        },
       },
     },
-    one: {
-      value: (): RelationView => {
-        if (outs.length === 0) {
-          throw new Error(`View "${name}": one() requires at least one output binding.`);
-        }
-        return relationViewWith(name, ins, outs, bindings, "one", alternatives);
-      },
-    },
-    optional: {
-      value: (): RelationView => {
-        if (outs.length === 0) {
-          throw new Error(`View "${name}": optional() requires at least one output binding.`);
-        }
-        return relationViewWith(name, ins, outs, bindings, "optional", alternatives);
-      },
-    },
-    many: {
-      value: (): RelationView => {
-        if (outs.length === 0) {
-          throw new Error(`View "${name}": many() requires at least one output binding.`);
-        }
-        return relationViewWith(name, ins, outs, bindings, "many", alternatives);
-      },
-    },
+    fuse: (view, input) => lineOf({ view }, input),
   });
   return brandRelationView(ref);
 }

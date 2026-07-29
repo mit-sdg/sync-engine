@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { applicationExamples } from "../examples/register.ts";
 import { checkArchitecture } from "./architecture.ts";
-import { filesBelow } from "./walk.ts";
+import { filesBelow } from "../src/command/files-below.ts";
 
 const root = resolve(import.meta.dirname, "..");
 

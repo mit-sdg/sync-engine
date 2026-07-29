@@ -65,6 +65,17 @@ function topLevelFields(type: WireType): Set<string> | undefined {
   return common;
 }
 
+export function credentialProtectedPaths(
+  contracts: Readonly<Record<string, InputContractDecl>>,
+  input: string,
+): Set<string> {
+  return new Set(
+    Object.entries(contracts)
+      .filter(([, contract]) => contract.required?.includes(input))
+      .map(([path]) => path),
+  );
+}
+
 export function validateHttpFloor(
   application: Assembly<Record<string, new (...args: never[]) => object>>,
   floor: HttpFloor,
@@ -74,10 +85,8 @@ export function validateHttpFloor(
   for (const path of [floor.credential.issue.path, ...floor.credential.clear]) {
     if (!paths.has(path)) throw new Error(`httpFloor: unknown endpoint path "${path}".`);
   }
-  const protectedPaths = Object.entries(assembled.contracts).filter(([, contract]) =>
-    contract.required?.includes(floor.credential.input),
-  );
-  if (protectedPaths.length === 0) {
+  const protectedPaths = credentialProtectedPaths(assembled.contracts, floor.credential.input);
+  if (protectedPaths.size === 0) {
     throw new Error(
       `httpFloor: no endpoint declares credential input "${floor.credential.input}".`,
     );
@@ -115,13 +124,12 @@ export function projectHttpWire(
 ): WireContractsIR {
   const credential = floor.credential;
   const projected = projectProductionHttpWire(wire, categories);
+  const protectedPaths = credentialProtectedPaths(contracts, credential.input);
   return {
     endpoints: projected.endpoints.map((endpoint) => {
-      const protectedRoute =
-        contracts[endpoint.path]?.required?.includes(credential.input) ?? false;
       return {
         ...endpoint,
-        input: protectedRoute
+        input: protectedPaths.has(endpoint.path)
           ? omitTopLevel(endpoint.input, new Set([credential.input]))
           : endpoint.input,
         output:

@@ -219,6 +219,20 @@ export class ActionConcept {
     );
   }
 
+  /** Construct and record an accepted execution-limit breach. */
+  _recordExecutionLimit(
+    flow: string,
+    limit: Extract<IntegrityFailureRecord, { kind: "execution-limit" }>["limit"],
+  ): void {
+    this._recordIntegrityFailure({
+      kind: "execution-limit",
+      flow,
+      limit,
+      errorClass: "ExecutionLimitExceeded",
+      at: Date.now(),
+    });
+  }
+
   /** Record a boundary integrity failure and make the active flow fail closed. */
   _recordIntegrityFailure(failure: IntegrityFailureRecord): void {
     const active = this.activeFlowValues.get(failure.flow);

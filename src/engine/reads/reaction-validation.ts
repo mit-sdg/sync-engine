@@ -3,7 +3,7 @@ import type { ReactionDeclaration, StepNode } from "@engine/reactions/types";
 import { isFusedFormer } from "./former-nodes.ts";
 import { isMatcher, isPlainMapping } from "./matchers.ts";
 import { walkValueTree } from "./value-tree.ts";
-import type { AnyWhereOp } from "./where-ops.ts";
+import { operationFootprint } from "./operation-footprint.ts";
 
 const extraUses = new WeakMap<ReactionDeclaration, readonly symbol[]>();
 
@@ -29,44 +29,6 @@ function countSymbols(value: unknown, counts: Map<symbol, number>): void {
   });
 }
 
-function countOpSymbols(op: AnyWhereOp, counts: Map<symbol, number>): void {
-  switch (op.op) {
-    case "find":
-    case "whether":
-      countSymbols(op.in, counts);
-      countSymbols(op.out, counts);
-      if ("not" in op) countSymbols(op.not, counts);
-      return;
-    case "no":
-      countSymbols(op.in, counts);
-      countSymbols(op.out, counts);
-      return;
-    case "holds":
-      countSymbols(op.fused.in, counts);
-      return;
-    case "compute":
-      countSymbols(op.in, counts);
-      countSymbols([op.out], counts);
-      return;
-    case "custom":
-      countSymbols([...op.in, ...op.out], counts);
-      return;
-    case "earlier":
-      countSymbols(op.pattern.input, counts);
-      countSymbols(op.pattern.output, counts);
-      return;
-  }
-}
-
-function outputVars(op: AnyWhereOp): symbol[] {
-  if (op.op !== "find" && op.op !== "whether") return [];
-  const vars = new Set<symbol>();
-  walkValueTree(op.out, (value) => {
-    if (typeof value === "symbol") vars.add(value);
-  });
-  return [...vars];
-}
-
 export function lintReactionOpens(name: string, decl: ReactionDeclaration): void {
   const ops = [...(decl.whereOps ?? []), ...decl.then.flatMap((node) => node.whereOps ?? [])];
   if (ops.length === 0) return;
@@ -78,17 +40,22 @@ export function lintReactionOpens(name: string, decl: ReactionDeclaration): void
       countSymbols(clause.output, counts);
     }
   }
-  for (const op of ops) countOpSymbols(op, counts);
+  for (const op of ops) {
+    countSymbols(operationFootprint(op, "authored").mentions, counts);
+  }
   for (const node of decl.then) {
     countSymbols(node.action.input, counts);
     countSymbols(node.action.output, counts);
-    for (const op of node.transformOps ?? []) countOpSymbols(op, counts);
+    for (const op of node.transformOps ?? []) {
+      countSymbols(operationFootprint(op, "authored").mentions, counts);
+    }
   }
   for (const variable of extraUses.get(decl) ?? []) {
     counts.set(variable, (counts.get(variable) ?? 0) + 1);
   }
   for (const op of ops) {
-    for (const variable of outputVars(op)) {
+    if (op.op !== "find" && op.op !== "whether") continue;
+    for (const variable of new Set(operationFootprint(op, "authored").produces)) {
       if ((counts.get(variable) ?? 0) <= 1) {
         throw new Error(
           `Reaction "${name}": "${String(variable.description ?? variable.toString())}" is opened and never used — omit the key instead.`,

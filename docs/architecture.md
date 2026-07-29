@@ -64,13 +64,13 @@ occurrence indexes. `ActionConcept` in
 `src/engine/reactions/runtime/actions.ts` is the small adapter that appends log
 entries and retains unredacted values only while their causal flow is active.
 
-`Reacting` remains the internal host facade, but it owns no reaction catalog or
-proxy-cache collection. `reaction-catalog.ts` exclusively owns executable
-reactions, trigger indexes, exported lowered/unlowered definitions, and base
-registration names. `ConceptInstrumentation` in `instrumenting.ts` exclusively
-owns proxy identities, raw-concept links, weak concept references, and query
-caches. Callers receive lookup, registration, and invalidation operations rather
-than those mutable collections.
+`Reacting` remains the internal host facade, but it owns no reaction catalog.
+`reaction-catalog.ts` exclusively owns executable reactions, trigger indexes,
+exported lowered/unlowered definitions, and base registration names. One
+`ConceptInstrumentation` owns one explicit `InstrumentationState` containing
+proxy identities, raw-concept links, weak concept references, and query caches;
+`instrumenting.ts` operates on that persistent state rather than rebuilding it
+for each operation.
 
 The interpreter stages likewise have explicit boundaries:
 

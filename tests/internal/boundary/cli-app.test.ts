@@ -334,6 +334,18 @@ describe("createCliApp", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  test("run recognizes an inherited exitCode on a parser result", async () => {
+    const run = vi.fn(async () => ok("unreachable"));
+    const parsed = Object.assign(Object.create({ exitCode: 1 }), {
+      stdout: "",
+      stderr: "inherited failure\n",
+    }) as ReturnType<typeof fail>;
+    const app = createCliApp({ inherited: { parse: () => parsed, run } });
+
+    await expect(app.run(["inherited"])).resolves.toBe(parsed);
+    expect(run).not.toHaveBeenCalled();
+  });
+
   test("run returns an opaque command failure on stderr", async () => {
     const app = createCliApp({
       explode: {
@@ -500,5 +512,26 @@ describe("createCliApp", () => {
     const result = await app.dispatch("boom", {});
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toBe("Command failed.\n");
+  });
+
+  test("run and dispatch contain endpoint formatter errors behind the same boundary", async () => {
+    const app = createCliApp(
+      {
+        boom: command(
+          { path: "/boom" },
+          {
+            parse: () => parseOk({}),
+            format: () => {
+              throw new Error("format-boom");
+            },
+          },
+        ),
+      },
+      { invoker: { invoke: async () => ({ ok: true, value: {} }) } as never },
+    );
+
+    const failure = { stdout: "", stderr: "Command failed.\n", exitCode: 1 };
+    await expect(app.run(["boom"])).resolves.toEqual(failure);
+    await expect(app.dispatch("boom", {})).resolves.toEqual(failure);
   });
 });

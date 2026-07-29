@@ -181,8 +181,22 @@ describe("formers: definition", () => {
     );
     expect(thread.formerName).toBe("thread (conversation)");
     expect(thread.ins).toEqual(["conversation"]);
-    expect(() => thread({})).toThrow('required input "conversation" is missing');
-    expect(() => thread("c1" as never)).toThrow("takes one object-shaped input mapping");
+    expect(() => thread({})).toThrowError(
+      new Error('Former "thread (conversation)": required input "conversation" is missing.'),
+    );
+    expect(() => thread({ conversation: "c1", extra: true })).toThrowError(
+      new Error(
+        'Former "thread (conversation)": "extra" is not an input; expected (conversation).',
+      ),
+    );
+    expect(() => thread("c1" as never)).toThrowError(
+      new Error('Former "thread (conversation)" takes one object-shaped input mapping.'),
+    );
+    expect(thread.name).toBe("ref");
+    expect(thread.optional.name).toBe("value");
+    expect(Object.keys(thread)).toEqual(["formerName", "ins", "promise", "bindings"]);
+    expect(Object.getOwnPropertyDescriptor(thread, "inputVars")?.enumerable).toBe(false);
+    expect(Object.getOwnPropertyDescriptor(thread, "body")?.enumerable).toBe(false);
   });
 
   test("name text is semantically inert", () => {

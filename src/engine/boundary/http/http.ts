@@ -6,7 +6,7 @@ import type { Invoker } from "../invocation/invoke.ts";
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import { assemblyBehind } from "../assembly/assembly-registry.ts";
 import type { HttpFloor } from "./http-floor.ts";
-import { validateHttpFloor } from "./http-floor.ts";
+import { credentialProtectedPaths, validateHttpFloor } from "./http-floor.ts";
 import type { ProductionHttpProfile } from "./http-profile.ts";
 import { normalizeHttpBasePath, normalizeProductionHttpProfile } from "./http-profile.ts";
 import { applicationBehindGateway } from "../protocol/gateway-registry.ts";
@@ -140,72 +140,10 @@ type ProfileHandlerOptions = {
   correlation?: HttpCorrelationOptions;
 };
 
-type PolicyHandlerOptions = FloorHandlerOptions | ProfileHandlerOptions;
-
 export function createHttpHandler(
   options: FloorHandlerOptions | ProfileHandlerOptions,
 ): (request: Request) => Promise<Response> {
-  return "floor" in options ? createFloorHandler(options) : createProfileHandler(options);
-}
-
-function publicFailure(
-  result: Exclude<InvocationResult, { ok: true }>,
-  categories: Readonly<Record<string, PublicErrorCategory>>,
-): { error: string; status: number } {
-  const category =
-    result.error.kind === "framework"
-      ? publicFrameworkCategoryOf(result.error.code)
-      : registeredPublicCategoryOf(
-          typeof result.error.value === "string" ? result.error.value : "",
-          categories,
-        );
-  return { error: category, status: publicErrorStatus(category) };
-}
-
-function cookieValue(header: string | null, name: string): string | undefined {
-  if (header === null) return undefined;
-  for (const item of header.split(";")) {
-    const separator = item.indexOf("=");
-    if (separator === -1 || item.slice(0, separator).trim() !== name) continue;
-    try {
-      return decodeURIComponent(item.slice(separator + 1).trim());
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
-}
-
-function publicJson(
-  body: unknown,
-  status: number,
-  options: { cookie?: string; noStore?: boolean } = {},
-): Response {
-  try {
-    const serialized = serializeJsonValue(body);
-    const headers = new Headers({ "Content-Type": "application/json" });
-    if (options.cookie !== undefined) headers.set("Set-Cookie", options.cookie);
-    if (options.noStore === true) headers.set("Cache-Control", "no-store");
-    return new Response(serialized, { status, headers });
-  } catch {
-    return internalErrorResponse();
-  }
-}
-
-function createFloorHandler(options: FloorHandlerOptions): (request: Request) => Promise<Response> {
-  validateHttpFloor(options.application, options.floor);
-  return createPolicyHandler(options);
-}
-
-function createProfileHandler(
-  options: ProfileHandlerOptions,
-): (request: Request) => Promise<Response> {
-  return createPolicyHandler(options);
-}
-
-function createPolicyHandler(
-  options: PolicyHandlerOptions,
-): (request: Request) => Promise<Response> {
+  if ("floor" in options) validateHttpFloor(options.application, options.floor);
   const assembled = assemblyBehind(options.application);
   if (applicationBehindGateway(options.gateway) !== options.application) {
     throw new Error("createHttpHandler: gateway must target the supplied application.");
@@ -224,13 +162,10 @@ function createPolicyHandler(
   const secure = new URL(profile.origin).protocol === "https:";
   const cookieName =
     credential === undefined ? "" : secure ? `__Host-${credential.name}` : credential.name;
-  const protectedPaths = new Set(
+  const protectedPaths =
     credential === undefined
-      ? []
-      : Object.entries(assembled.contracts)
-          .filter(([, contract]) => contract.required?.includes(credential.input))
-          .map(([path]) => path),
-  );
+      ? new Set<string>()
+      : credentialProtectedPaths(assembled.contracts, credential.input);
 
   const cookie = (value: string, expires: Date) =>
     `${cookieName}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/; ` +
@@ -333,4 +268,48 @@ function createPolicyHandler(
       return reply(internalErrorResponse());
     }
   };
+}
+
+function publicFailure(
+  result: Exclude<InvocationResult, { ok: true }>,
+  categories: Readonly<Record<string, PublicErrorCategory>>,
+): { error: string; status: number } {
+  const category =
+    result.error.kind === "framework"
+      ? publicFrameworkCategoryOf(result.error.code)
+      : registeredPublicCategoryOf(
+          typeof result.error.value === "string" ? result.error.value : "",
+          categories,
+        );
+  return { error: category, status: publicErrorStatus(category) };
+}
+
+function cookieValue(header: string | null, name: string): string | undefined {
+  if (header === null) return undefined;
+  for (const item of header.split(";")) {
+    const separator = item.indexOf("=");
+    if (separator === -1 || item.slice(0, separator).trim() !== name) continue;
+    try {
+      return decodeURIComponent(item.slice(separator + 1).trim());
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function publicJson(
+  body: unknown,
+  status: number,
+  options: { cookie?: string; noStore?: boolean } = {},
+): Response {
+  try {
+    const serialized = serializeJsonValue(body);
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (options.cookie !== undefined) headers.set("Set-Cookie", options.cookie);
+    if (options.noStore === true) headers.set("Cache-Control", "no-store");
+    return new Response(serialized, { status, headers });
+  } catch {
+    return internalErrorResponse();
+  }
 }

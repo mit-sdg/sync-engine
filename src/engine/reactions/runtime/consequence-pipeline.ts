@@ -164,8 +164,7 @@ export class ConsequencePipeline {
     for (const node of nodes) {
       const next: Frame[] = [];
       for (const currentFrame of current) {
-        const result = await this.runStepNode(currentFrame, node, reaction, branch);
-        if (!result.stop) next.push(...result.frames);
+        next.push(...(await this.runStepNode(currentFrame, node, reaction, branch)));
       }
       current = new Frames(...next);
       this.assertRows(branch.fill.flow, current.length);
@@ -179,7 +178,7 @@ export class ConsequencePipeline {
     node: StepNode,
     reaction: ExecutableReaction,
     branch: FiringBranch,
-  ): Promise<{ frames: Frames; stop: boolean }> {
+  ): Promise<Frames> {
     let matched: ActionArguments;
     try {
       matched = this.matchThen(node.action, frame, reaction.name, branch.fill.flow);
@@ -227,7 +226,7 @@ export class ConsequencePipeline {
         if (settlement !== "fault-recorded") {
           this.recordStepFailure(reaction, node, branch, "consequence-dispatch", error, id);
         }
-        return this.stopped();
+        return new Frames();
       }
       logger.error("Consequence action failed before its ask was recorded", {
         action: actionNameOf(node.action.action as InstrumentedAction),
@@ -236,7 +235,7 @@ export class ConsequencePipeline {
       });
       this.recordStepFailure(reaction, node, branch, "consequence-dispatch", error, id);
       this.firingBook.unmark(branch);
-      return this.stopped();
+      return new Frames();
     }
     branch.fill.produced.push(id);
 
@@ -261,7 +260,7 @@ export class ConsequencePipeline {
         id,
       );
     }
-    if (childFrames.length === 0) return { frames: childFrames, stop: true };
+    if (childFrames.length === 0) return childFrames;
 
     if (node.transform !== undefined) {
       try {
@@ -283,7 +282,7 @@ export class ConsequencePipeline {
         );
       }
     }
-    return { frames: childFrames, stop: outcome.kind === "error" };
+    return outcome.kind === "error" ? new Frames() : childFrames;
   }
 
   private framesWithStepOutput(
@@ -304,14 +303,14 @@ export class ConsequencePipeline {
     message: string,
     error: unknown,
     actionIdValue?: string,
-  ): { frames: Frames; stop: true } {
+  ): Frames {
     logger.error(`Reaction "${reaction.name}": ${message}`, {
       action: actionNameOf(node.action.action as InstrumentedAction),
       ...(actionIdValue !== undefined ? { actionId: actionIdValue } : {}),
       error: serializeError(error),
     });
     this.recordStepFailure(reaction, node, branch, stage, error, actionIdValue);
-    return this.stopped();
+    return new Frames();
   }
 
   private recordStepFailure(
@@ -328,10 +327,6 @@ export class ConsequencePipeline {
     });
   }
 
-  private stopped(): { frames: Frames; stop: true } {
-    return { frames: new Frames(), stop: true };
-  }
-
   private assertCausalFlow(frames: Frames, expected: string): void {
     for (const frame of frames) {
       if (frame[flow] !== expected) {
@@ -346,7 +341,7 @@ export class ConsequencePipeline {
     reaction: ExecutableReaction,
     branch: FiringBranch,
     error: unknown,
-  ): Promise<{ frames: Frames; stop: boolean }> {
+  ): Promise<Frames> {
     const { [flow]: flowToken, [actionId]: id, [byAskingReaction]: askedBy, ...rest } = matched;
     logger.error(`Reaction "${reaction.name}": consequence input former failed`, {
       action: actionNameOf(node.action.action as InstrumentedAction),
@@ -355,9 +350,9 @@ export class ConsequencePipeline {
     });
     const concept = (node.action.action as InstrumentedAction).concept;
     if (typeof id !== "string" || typeof flowToken !== "string" || concept === undefined) {
-      return this.stopped();
+      return new Frames();
     }
-    if (!this.consumeAction(flowToken)) return this.stopped();
+    if (!this.consumeAction(flowToken)) return new Frames();
     const describe = (value: unknown): unknown =>
       mapValueTree(value, (entry) =>
         isFusedFormer(entry)
@@ -393,7 +388,7 @@ export class ConsequencePipeline {
     } finally {
       this.actions._endMatchingInput(flowToken);
     }
-    return this.stopped();
+    return new Frames();
   }
 
   private async resolveFormerInputs(input: ActionArguments): Promise<ActionArguments> {

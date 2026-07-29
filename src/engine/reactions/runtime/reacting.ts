@@ -53,6 +53,7 @@ import { InterpreterFailures } from "./interpreter-failures.ts";
 import { Logging, ReactionLogger } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./observer.ts";
+import type { ExecutionControl } from "./operational.ts";
 import { ReactionCatalog } from "./reaction-catalog.ts";
 import { exportConcepts, exportReactions, readBack, renderApp } from "./reacting-export.ts";
 import { matchArguments as matchActionArguments } from "./matching.ts";
@@ -81,26 +82,9 @@ export class Reacting {
   private readonly triggerMatcher: TriggerMatcher;
   private readonly consequencePipeline: ConsequencePipeline;
   private readonly firingPipeline: FiringPipeline;
-  private readonly execution?: {
-    action(flow: string): boolean;
-    firing(flow: string): boolean;
-    rows(count: number): boolean;
-    admitFlow?(flow: string, route: string, correlationId: string): unknown;
-    abandon?(flow: string): void;
-    flowSettled?(flow: string): void;
-  };
+  private readonly execution?: ExecutionControl;
 
-  constructor(
-    actionConcept: ActionConcept = new ActionConcept(),
-    execution?: {
-      action(flow: string): boolean;
-      firing(flow: string): boolean;
-      rows(count: number): boolean;
-      admitFlow?(flow: string, route: string, correlationId: string): unknown;
-      abandon?(flow: string): void;
-      flowSettled?(flow: string): void;
-    },
-  ) {
+  constructor(actionConcept: ActionConcept = new ActionConcept(), execution?: ExecutionControl) {
     this.Action = actionConcept;
     this.reactions = this.catalog.reactions;
     this.reactionsByAction = this.catalog.reactionsByAction;
@@ -111,7 +95,7 @@ export class Reacting {
       actionConcept.store,
       (flowToken) => {
         if (this.execution?.firing(flowToken) !== false) return;
-        this.recordExecutionLimit(flowToken, "firings");
+        this.Action._recordExecutionLimit(flowToken, "firings");
         throw new Error("The flow exceeded its firing limit.");
       },
       actionConcept.redactor,
@@ -536,23 +520,13 @@ export class Reacting {
 
   private assertRows(flowToken: string, count: number): void {
     if (this.execution?.rows(count) !== false) return;
-    this.recordExecutionLimit(flowToken, "rows");
+    this.Action._recordExecutionLimit(flowToken, "rows");
     throw new Error("The evaluation exceeded its row limit.");
   }
 
   private consumeAction(flowToken: string): boolean {
     if (this.execution?.action(flowToken) !== false) return true;
-    this.recordExecutionLimit(flowToken, "actions");
+    this.Action._recordExecutionLimit(flowToken, "actions");
     return false;
-  }
-
-  private recordExecutionLimit(flowToken: string, limit: "actions" | "firings" | "rows"): void {
-    this.Action._recordIntegrityFailure({
-      kind: "execution-limit",
-      flow: flowToken,
-      limit,
-      errorClass: "ExecutionLimitExceeded",
-      at: Date.now(),
-    });
   }
 }

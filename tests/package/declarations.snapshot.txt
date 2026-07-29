@@ -62,6 +62,23 @@ export declare function conceptFailures(directory: string, projectRoot?: string)
 export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;
 export declare function checkCommand(args: readonly string[]): Promise<void>;
 
+=== dist/command/files-below.d.ts ===
+/** List regular files depth-first without following symlinks. */
+export declare function filesBelow(directory: string, filter?: (name: string) => boolean): Promise<string[]>;
+
+=== dist/command/generated-config.d.ts ===
+import { type GeneratedApplication } from "../engine/tooling/generated-artifacts.ts";
+export declare function loadGeneratedApplication(configPath: string, root: string): Promise<GeneratedApplication & {
+    directory: URL;
+    specification: string;
+    wire: string;
+    wireName: string;
+    vocabularyFrom: {
+        from: string;
+        export: string;
+    };
+}>;
+
 === dist/command/main.d.ts ===
 #!/usr/bin/env bun
 export {};
@@ -634,6 +651,7 @@ export interface HttpFloor extends ProductionHttpProfile {
     credential: HttpCredentialBinding;
 }
 export declare function httpFloor(declaration: HttpFloor): HttpFloor;
+export declare function credentialProtectedPaths(contracts: Readonly<Record<string, InputContractDecl>>, input: string): Set<string>;
 export declare function validateHttpFloor(application: Assembly<Record<string, new (...args: never[]) => object>>, floor: HttpFloor): void;
 export declare function projectHttpWire(wire: WireContractsIR, contracts: Readonly<Record<string, InputContractDecl>>, categories: Readonly<Record<string, PublicErrorCategory>>, floor: HttpFloor): WireContractsIR;
 export declare function projectAssemblyHttpWire(application: Assembly<Record<string, new (...args: never[]) => object>>, wire: WireContractsIR, floor: HttpFloor): WireContractsIR;
@@ -1158,6 +1176,7 @@ export type WireType = {
     of: WireType[];
 };
 export declare const JSON_TYPE: WireType;
+export declare function unresolvedWireLeaves(type: WireType, path: string, unionPath?: (path: string, index: number) => string): string[];
 export declare function unionWireTypes(of: WireType[]): WireType;
 export declare function nullableWireType(type: WireType): WireType;
 export declare function referenceWireType(reference: {
@@ -1880,6 +1899,10 @@ export declare class ActionConcept {
     _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void;
     /** Record durable interpreter evidence and mark its active flow as failed. */
     _recordReactionFailure(failure: ReactionFailureRecord): void;
+    /** Construct and record an accepted execution-limit breach. */
+    _recordExecutionLimit(flow: string, limit: Extract<IntegrityFailureRecord, {
+        kind: "execution-limit";
+    }>["limit"]): void;
     /** Record a boundary integrity failure and make the active flow fail closed. */
     _recordIntegrityFailure(failure: IntegrityFailureRecord): void;
     /** Return a transient record with raw input, output, and outcome while its flow is active. */
@@ -1957,7 +1980,6 @@ export declare class ConsequencePipeline {
     private framesWithStepOutput;
     private failStep;
     private recordStepFailure;
-    private stopped;
     private assertCausalFlow;
     private landFormingFault;
     private resolveFormerInputs;
@@ -2022,6 +2044,7 @@ import { ActionConcept } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
 import type { AnyAction, InstrumentedAction } from "../types.ts";
 import type { ActionScheduling } from "./action-scheduler.ts";
+import type { ExecutionControl } from "./operational.ts";
 /** A deliberate refusal returned to the direct caller of an instrumented action. */
 export type ActionRefusal = Readonly<Record<string, unknown>> & {
     readonly error: string;
@@ -2049,13 +2072,7 @@ export interface InstrumentationState {
     rawConceptsByInstrumented: WeakMap<object, object>;
     concepts: Set<WeakRef<object>>;
     registerConcept(name: string, instrumented: object): void;
-    execution?: {
-        action(flow: string): boolean;
-        rows(count: number): boolean;
-        admitFlow?(flow: string, route: string, correlationId: string): unknown;
-        abandon?(flow: string): void;
-        flowSettled?(flow: string): void;
-    };
+    execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
     react(record: ActionRecord, durationMs?: number): Promise<void>;
     emit(record: ActionRecord, durationMs?: number): void;
 }
@@ -2067,32 +2084,14 @@ export declare function instrument<T extends Record<string, object>>(state: Inst
 export declare function instrument<T extends object>(state: InstrumentationState, concept: T): T;
 /** Owns the mutable proxy identities and query caches for one engine. */
 export declare class ConceptInstrumentation {
-    private readonly dependencies;
-    private readonly boundActionsByConcept;
-    private readonly queryCaches;
-    private readonly rawConceptsByInstrumented;
-    private readonly concepts;
-    constructor(dependencies: {
-        actions: ActionConcept;
-        scheduler: ActionScheduling;
-        execution?: {
-            action(flow: string): boolean;
-            rows(count: number): boolean;
-            admitFlow?(flow: string, route: string, correlationId: string): unknown;
-            abandon?(flow: string): void;
-            flowSettled?(flow: string): void;
-        };
-        react(record: ActionRecord, durationMs?: number): Promise<void>;
-        emit(record: ActionRecord, durationMs?: number): void;
-        registerConcept(name: string, instrumented: object): void;
-    });
+    private readonly state;
+    constructor(dependencies: Omit<InstrumentationState, "boundActionsByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts">);
     instrumentConcept<T extends object>(concept: T, name?: string): T;
     instrument<T extends Record<string, object>>(concepts: T): T;
     instrument<T extends object>(concept: T): T;
     invalidate(concept: object): void;
     invalidateAll(): void;
     rawConceptOf(instrumented: object): object;
-    private state;
 }
 
 === dist/engine/reactions/runtime/interpreter-failures.d.ts ===
@@ -2375,6 +2374,14 @@ export interface EngineObserver {
 
 === dist/engine/reactions/runtime/operational.d.ts ===
 import type { IntegrityFailureRecord, ReactionFailureRecord } from "./log-store.ts";
+export interface ExecutionControl {
+    action(flow: string): boolean;
+    firing(flow: string): boolean;
+    rows(count: number): boolean;
+    admitFlow?(flow: string, route: string, correlationId: string): unknown;
+    abandon?(flow: string): void;
+    flowSettled?(flow: string): void;
+}
 export type OperationalResultClass = "success" | "domain-error" | "framework-error" | "refusal" | "fault";
 interface EventBase {
     readonly type: string;
@@ -2499,6 +2506,7 @@ import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { Logging } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./observer.ts";
+import type { ExecutionControl } from "./operational.ts";
 type ActionArguments = Record<string | symbol, unknown>;
 interface FrameProvenance {
     flow: string;
@@ -2521,14 +2529,7 @@ export declare class Reacting {
     private readonly consequencePipeline;
     private readonly firingPipeline;
     private readonly execution?;
-    constructor(actionConcept?: ActionConcept, execution?: {
-        action(flow: string): boolean;
-        firing(flow: string): boolean;
-        rows(count: number): boolean;
-        admitFlow?(flow: string, route: string, correlationId: string): unknown;
-        abandon?(flow: string): void;
-        flowSettled?(flow: string): void;
-    });
+    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     get logging(): Logging;
@@ -2562,7 +2563,6 @@ export declare class Reacting {
     private applyEarlier;
     private assertRows;
     private consumeAction;
-    private recordExecutionLimit;
 }
 export {};
 
@@ -3838,6 +3838,34 @@ export declare function isMatcher(value: unknown): value is Matcher;
 export declare function isPlainMapping(value: unknown): value is Mapping;
 export declare function isPlainObject(value: unknown): value is Record<string, unknown>;
 
+=== dist/engine/reads/operation-footprint.d.ts ===
+/** Binding facts shared by authored operations and their string-backed IR. */
+import type { Mapping } from "../reactions/types.ts";
+import type { ViewOpIR, WhereOpIR } from "./ir.ts";
+import type { AnyWhereOp } from "./where-ops.ts";
+type AuthoredCountOp = {
+    readonly op: "count";
+    readonly in: Mapping;
+    readonly out: symbol;
+};
+export type AuthoredOperation = AnyWhereOp | AuthoredCountOp;
+export type IROperation = WhereOpIR | ViewOpIR;
+export interface OperationFootprint<Name extends string | symbol> {
+    /** Names read from the operation's primary input. */
+    inputs: Name[];
+    /** Names that must be bound before the operation can run. */
+    requires: Name[];
+    /** Names the operation may bind. */
+    produces: Name[];
+    /** Every occurrence, in diagnostic counting order and without deduplication. */
+    mentions: Name[];
+    /** Names tested under `no` or `.is.not`. */
+    negative: Name[];
+}
+export declare function operationFootprint(op: AuthoredOperation, backing: "authored"): OperationFootprint<symbol>;
+export declare function operationFootprint(op: IROperation, backing: "ir"): OperationFootprint<string>;
+export {};
+
 === dist/engine/reads/pattern-encoding.d.ts ===
 /** Shared encoding for authored patterns used by reactions, views, and formers. */
 import type { ActionPattern, InstrumentedQuery, Mapping, TriggerPattern } from "../reactions/types.ts";
@@ -4172,10 +4200,8 @@ export interface ObjectRefSpec<Ref, Fused> {
     kind: string;
     name: string;
     inputs: readonly string[];
-    inputVars: readonly symbol[];
     nameKey: string;
-    payloadKey: string;
-    payload: unknown;
+    properties: PropertyDescriptorMap;
     fuse: (ref: Ref, input: Mapping) => Fused;
 }
 /** Build a callable reference whose sole argument is its named input mapping. */

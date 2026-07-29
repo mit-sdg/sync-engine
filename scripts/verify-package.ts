@@ -3,7 +3,7 @@ import { copyFile, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "n
 import { tmpdir } from "node:os";
 import { dirname, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { filesBelow } from "./walk.ts";
+import { filesBelow } from "../src/command/files-below.ts";
 import { applicationExamples } from "../examples/register.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -40,6 +40,10 @@ interface NpmPackResult {
   size: number;
   unpackedSize: number;
   files: Array<{ path: string; mode: number }>;
+}
+
+interface DependencyManifest {
+  dependencies: Record<string, string>;
 }
 
 function packWithNpm(cwd = root, destination = temporary): NpmPackResult {
@@ -80,6 +84,10 @@ function portablePath(path: string): string {
 
 function tarballSpecifier(from: string, tarball: string): string {
   return `file:${portablePath(relative(from, tarball))}`;
+}
+
+async function writePackageManifest(path: string, manifest: DependencyManifest): Promise<void> {
+  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 function packedPathExists(entries: Set<string>, path: string): boolean {
@@ -140,6 +148,21 @@ try {
   }
   const tarball = resolve(temporary, packed.filename);
 
+  async function preparePackageManifest<T extends DependencyManifest = DependencyManifest>(
+    manifestPath: string,
+    versionError: string,
+  ): Promise<T> {
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as T;
+    if (manifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
+      throw new Error(versionError);
+    }
+    manifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(
+      dirname(manifestPath),
+      tarball,
+    );
+    return manifest;
+  }
+
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
   const entries = new Set(listing.trim().split(/\r?\n/));
   if ([...entries].some((entry) => entry.startsWith("package/docs/tmp-"))) {
@@ -198,17 +221,12 @@ try {
 
   const scaffold = resolve(temporary, "scaffold");
   run("bun", [resolve(installed, packageJson.bin["sync-engine"]), "new", scaffold], temporary);
-  const scaffoldManifest = JSON.parse(
-    await readFile(resolve(scaffold, "package.json"), "utf8"),
-  ) as { dependencies: Record<string, string> };
-  if (scaffoldManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
-    throw new Error(`packed scaffold must depend on version ${packageJson.version}`);
-  }
-  scaffoldManifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(scaffold, tarball);
-  await writeFile(
-    resolve(scaffold, "package.json"),
-    `${JSON.stringify(scaffoldManifest, null, 2)}\n`,
+  const scaffoldManifestPath = resolve(scaffold, "package.json");
+  const scaffoldManifest = await preparePackageManifest(
+    scaffoldManifestPath,
+    `packed scaffold must depend on version ${packageJson.version}`,
   );
+  await writePackageManifest(scaffoldManifestPath, scaffoldManifest);
   run("bun", ["install", "--ignore-scripts"], scaffold);
   run("bun", ["run", "generate"], scaffold);
   run("bun", ["run", "check"], scaffold);
@@ -219,14 +237,11 @@ try {
     const isolated = resolve(temporary, example);
     await cp(resolve(installed, "examples", example), isolated, { recursive: true });
     const manifestPath = resolve(isolated, "package.json");
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
-      dependencies: Record<string, string>;
-    };
-    if (manifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
-      throw new Error(`${example} must depend on the package version ${packageJson.version}`);
-    }
-    manifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(isolated, tarball);
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const manifest = await preparePackageManifest(
+      manifestPath,
+      `${example} must depend on the package version ${packageJson.version}`,
+    );
+    await writePackageManifest(manifestPath, manifest);
     run("bun", ["install", "--ignore-scripts"], isolated);
     run("bun", ["run", "check"], isolated);
     run("bun", ["run", "start"], isolated);
@@ -234,17 +249,12 @@ try {
 
   await cp(resolve(root, "tests/package/application"), standalone, { recursive: true });
   await rename(resolve(standalone, "tsconfig.project.json"), resolve(standalone, "tsconfig.json"));
-  const standaloneManifest = JSON.parse(
-    await readFile(resolve(standalone, "package.json"), "utf8"),
-  ) as { dependencies: Record<string, string> };
-  if (standaloneManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
-    throw new Error(`package application must depend on version ${packageJson.version}`);
-  }
-  standaloneManifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(standalone, tarball);
-  await writeFile(
-    resolve(standalone, "package.json"),
-    `${JSON.stringify(standaloneManifest, null, 2)}\n`,
+  const standaloneManifestPath = resolve(standalone, "package.json");
+  const standaloneManifest = await preparePackageManifest(
+    standaloneManifestPath,
+    `package application must depend on version ${packageJson.version}`,
   );
+  await writePackageManifest(standaloneManifestPath, standaloneManifest);
   run("bun", ["install", "--ignore-scripts"], standalone);
   run("bun", ["run", "generate"], standalone);
   run("bun", ["run", "typecheck"], standalone);
@@ -255,16 +265,10 @@ try {
   const clientProject = resolve(multiInstance, "client");
   const backendProject = resolve(multiInstance, "backend");
   const clientManifestPath = resolve(clientProject, "package.json");
-  const clientManifest = JSON.parse(await readFile(clientManifestPath, "utf8")) as {
-    dependencies: Record<string, string>;
-    name: string;
-    version: string;
-  };
-  if (clientManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
-    throw new Error(`multi-instance client must depend on version ${packageJson.version}`);
-  }
-  clientManifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(clientProject, tarball);
-  await writeFile(clientManifestPath, `${JSON.stringify(clientManifest, null, 2)}\n`);
+  const clientManifest = await preparePackageManifest<
+    DependencyManifest & { name: string; version: string }
+  >(clientManifestPath, `multi-instance client must depend on version ${packageJson.version}`);
+  await writePackageManifest(clientManifestPath, clientManifest);
   runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], clientProject);
 
   const installedForClient = resolve(clientProject, "node_modules/@mit-sdg/sync-engine");
@@ -288,7 +292,7 @@ try {
   // The packed client names the published engine version. Its temporary
   // installation used the just-built tarball only to generate and compile it.
   clientManifest.dependencies["@mit-sdg/sync-engine"] = packageJson.version;
-  await writeFile(clientManifestPath, `${JSON.stringify(clientManifest, null, 2)}\n`);
+  await writePackageManifest(clientManifestPath, clientManifest);
   const packedClient = packWithNpm(clientProject, multiInstance);
   const expectedClientFilename = `${clientManifest.name
     .replace(/^@/, "")
@@ -321,24 +325,21 @@ try {
   }
 
   const backendManifestPath = resolve(backendProject, "package.json");
-  const backendManifest = JSON.parse(await readFile(backendManifestPath, "utf8")) as {
-    dependencies: Record<string, string>;
-  };
-  if (backendManifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
-    throw new Error(`multi-instance backend must depend on version ${packageJson.version}`);
-  }
+  const backendManifest = await preparePackageManifest(
+    backendManifestPath,
+    `multi-instance backend must depend on version ${packageJson.version}`,
+  );
   if (
     backendManifest.dependencies["@sync-engine-fixture/multi-instance-client"] !==
     clientManifest.version
   ) {
     throw new Error(`multi-instance backend must depend on client ${clientManifest.version}`);
   }
-  backendManifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(backendProject, tarball);
   backendManifest.dependencies["@sync-engine-fixture/multi-instance-client"] = tarballSpecifier(
     backendProject,
     clientTarball,
   );
-  await writeFile(backendManifestPath, `${JSON.stringify(backendManifest, null, 2)}\n`);
+  await writePackageManifest(backendManifestPath, backendManifest);
   runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], backendProject);
   run(
     "node",

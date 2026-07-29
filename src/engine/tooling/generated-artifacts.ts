@@ -13,6 +13,7 @@ import {
   checkArtifactPlan,
   type ArtifactFilesystem,
   type ArtifactPlan,
+  type ArtifactStatus,
   planGenerated,
 } from "./artifact-plan.ts";
 import { applicationManifest, type ApplicationManifestV3 } from "./manifest.ts";
@@ -129,16 +130,14 @@ function completeGeneratedPlan(
     plan: planGenerated(manifest, {
       title: application.title,
       specification: application.specification,
-      ...(application.specificationBanner === undefined
-        ? {}
-        : { specificationBanner: application.specificationBanner }),
+      specificationBanner: application.specificationBanner,
       wire: application.wire,
       wireName: application.wireName,
-      ...(application.wireBanner === undefined ? {} : { wireBanner: application.wireBanner }),
+      wireBanner: application.wireBanner,
       vocabulary: application.vocabularyFrom,
       strictLeaves: true,
-      ...(httpWire === undefined ? {} : { httpWire }),
-      ...(application.httpWireName === undefined ? {} : { httpWireName: application.httpWireName }),
+      httpWire,
+      httpWireName: application.httpWireName,
     }),
   };
 }
@@ -221,6 +220,18 @@ function nodeFilesystem(directory: URL): ArtifactFilesystem {
   };
 }
 
+function assertNoArtifactFailures(
+  status: readonly ArtifactStatus[],
+  operation: "apply" | "check",
+): void {
+  const failed = status.filter(({ status: state }) => state === "failed");
+  if (failed.length > 0) {
+    throw new Error(
+      `generated artifacts: failed to ${operation} ${failed.map(({ path }) => path).join(", ")}`,
+    );
+  }
+}
+
 export async function pinGenerated(
   application: ResolvedApplication,
   artifact: "all" | "specification" | "wire" = "all",
@@ -229,12 +240,7 @@ export async function pinGenerated(
     await generatedPlan(application, artifact),
     nodeFilesystem(application.directory),
   );
-  const failed = status.filter(({ status: state }) => state === "failed");
-  if (failed.length > 0) {
-    throw new Error(
-      `generated artifacts: failed to apply ${failed.map(({ path }) => path).join(", ")}`,
-    );
-  }
+  assertNoArtifactFailures(status, "apply");
 }
 
 export async function checkGenerated(application: ResolvedApplication): Promise<void> {
@@ -242,18 +248,11 @@ export async function checkGenerated(application: ResolvedApplication): Promise<
     await generatedPlan(application),
     nodeFilesystem(application.directory),
   );
-  const failed = status.filter(({ status: state }) => state === "failed");
-  if (failed.length > 0) {
-    throw new Error(
-      `generated artifacts: failed to check ${failed.map(({ path }) => path).join(", ")}`,
-    );
-  }
-  const mismatches = status
-    .filter(({ status: state }) => state !== "unchanged")
-    .map(({ path }) => path);
+  assertNoArtifactFailures(status, "check");
+  const mismatches = status.filter(({ status: state }) => state !== "unchanged");
   if (mismatches.length > 0) {
     throw new Error(
-      `${mismatches.join(" and ")} differ from generated output; inspect the changes and run the matching pin command`,
+      `${mismatches.map(({ path }) => path).join(" and ")} differ from generated output; inspect the changes and run the matching pin command`,
     );
   }
 }

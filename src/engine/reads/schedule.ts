@@ -5,75 +5,25 @@
  * names each line opens for later unused-binding checks.
  */
 
-import { varNamesInPattern } from "./former-analysis.ts";
 import type { ViewOpIR, WhereOpIR } from "./ir.ts";
+import { operationFootprint } from "./operation-footprint.ts";
 
 type AnyOpIR = WhereOpIR | ViewOpIR;
 
 /** The names an op needs bound before it can evaluate. */
 export function opNeedsIR(op: AnyOpIR): string[] {
-  switch (op.op) {
-    case "find":
-    case "whether":
-      return [
-        ...varNamesInPattern(op.in),
-        ...("not" in op && op.not !== undefined ? varNamesInPattern(op.not) : []),
-      ];
-    case "no":
-      // Nothing fresh under a denial: the whole line reads over bound names.
-      return [...varNamesInPattern(op.in), ...varNamesInPattern(op.out)];
-    case "holds":
-    case "compute":
-    case "count":
-      return varNamesInPattern(op.in);
-    case "custom":
-      return [...op.in];
-    case "earlier":
-      return [];
-  }
+  return operationFootprint(op, "ir").requires;
 }
 
 /** The names an op can open, given what is already bound. */
 export function opOpensIR(op: AnyOpIR, bound: ReadonlySet<string>): string[] {
-  const fresh = (names: string[]): string[] => [...new Set(names.filter((n) => !bound.has(n)))];
-  switch (op.op) {
-    case "find":
-    case "whether":
-      return fresh(varNamesInPattern(op.out));
-    case "compute":
-    case "count":
-      return fresh([op.out]);
-    case "custom":
-      return fresh([...op.out]);
-    case "earlier":
-      return fresh([...varNamesInPattern(op.when.input), ...varNamesInPattern(op.when.output)]);
-    default:
-      return [];
-  }
+  const produced = operationFootprint(op, "ir").produces;
+  return [...new Set(produced.filter((name) => !bound.has(name)))];
 }
 
 /** Every name an op's patterns mention, opening or not — the lint's counts. */
 export function opNamesIR(op: AnyOpIR): string[] {
-  switch (op.op) {
-    case "find":
-    case "whether":
-      return [
-        ...varNamesInPattern(op.in),
-        ...varNamesInPattern(op.out),
-        ...("not" in op && op.not !== undefined ? varNamesInPattern(op.not) : []),
-      ];
-    case "no":
-      return [...varNamesInPattern(op.in), ...varNamesInPattern(op.out)];
-    case "holds":
-      return varNamesInPattern(op.in);
-    case "compute":
-    case "count":
-      return [...varNamesInPattern(op.in), op.out];
-    case "custom":
-      return [...op.in, ...op.out];
-    case "earlier":
-      return [...varNamesInPattern(op.when.input), ...varNamesInPattern(op.when.output)];
-  }
+  return operationFootprint(op, "ir").mentions;
 }
 
 /** What one scheduled block settled: the order, and each op's opened names. */
@@ -113,11 +63,7 @@ function describeOp(op: AnyOpIR): string {
 
 /** Names tested by a negative condition: `no`'s pattern or an `.is.not` pattern. */
 function negativeNames(op: AnyOpIR): string[] {
-  if (op.op === "no") return varNamesInPattern(op.out);
-  if ((op.op === "find" || op.op === "whether") && "not" in op && op.not !== undefined) {
-    return varNamesInPattern(op.not);
-  }
-  return [];
+  return operationFootprint(op, "ir").negative;
 }
 
 /**

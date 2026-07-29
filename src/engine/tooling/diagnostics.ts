@@ -1,5 +1,6 @@
 import type { EndpointDeclaration } from "@engine/boundary/assembly/endpoint-portability";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
+import { unresolvedWireLeaves } from "@engine/boundary/wire/wire-types";
 import type { WireType } from "@engine/boundary/wire/wire-types";
 import type { AppIR, FormerIR, ReactionIR } from "@engine/reads/ir";
 import { analyzeLocalBehavior, localDefinitionKey } from "@engine/reads/local-behavior";
@@ -134,22 +135,14 @@ function endpointDiagnostics(
 function unresolvedWireDiagnostics(wire: WireContractsIR): ApplicationDiagnostic[] {
   const diagnostics: ApplicationDiagnostic[] = [];
   const visit = (type: WireType, path: string, endpoint: string) => {
-    if (type.kind === "json") {
+    for (const site of unresolvedWireLeaves(type, path, (at, index) => `${at}|${index}`)) {
       diagnostics.push({
         severity: "warning",
         code: "UNRESOLVED_WIRE_LEAF",
         definition: { kind: "endpoint", name: endpoint },
         endpoint: { name: endpoint, path: endpoint },
-        message: `Endpoint "${endpoint}" has an unresolved wire leaf at ${path}.`,
+        message: `Endpoint "${endpoint}" has an unresolved wire leaf at ${site}.`,
       });
-      return;
-    }
-    if (type.kind === "array") visit(type.of, `${path}[]`, endpoint);
-    if (type.kind === "object") {
-      for (const field of type.fields) visit(field.type, `${path}.${field.key}`, endpoint);
-    }
-    if (type.kind === "union") {
-      type.of.forEach((member, index) => visit(member, `${path}|${index}`, endpoint));
     }
   };
   for (const endpoint of wire.endpoints) {

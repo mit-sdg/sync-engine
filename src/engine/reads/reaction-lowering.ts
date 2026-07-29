@@ -19,6 +19,7 @@ import {
   patternVariables,
 } from "./pattern-encoding.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
+import { operationFootprint } from "./operation-footprint.ts";
 
 export type LoweredWhereOp = AnyWhereOp;
 
@@ -37,39 +38,11 @@ export interface LowerOutcome {
 }
 
 function opOutVars(op: AnyWhereOp): symbol[] {
-  switch (op.op) {
-    case "find":
-    case "whether":
-      return [...patternVariables(op.out)];
-    case "no":
-      return [];
-    case "compute":
-      return [op.out];
-    case "custom":
-      return [...op.out];
-    case "holds":
-      return [];
-    case "earlier":
-      return [...patternVariables(op.pattern.input, op.pattern.output)];
-  }
+  return operationFootprint(op, "authored").produces;
 }
 
 function opInVars(op: AnyWhereOp): symbol[] {
-  switch (op.op) {
-    case "find":
-    case "whether":
-      return [...patternVariables(op.in, "not" in op ? op.not : undefined)];
-    case "no":
-      return [...patternVariables(op.in, op.out)];
-    case "compute":
-      return [...patternVariables(op.in)];
-    case "holds":
-      return [...patternVariables(op.fused.in)];
-    case "custom":
-      return [...op.in];
-    case "earlier":
-      return [];
-  }
+  return operationFootprint(op, "authored").requires;
 }
 
 function intersects(a: Set<symbol>, b: Iterable<symbol>): boolean {

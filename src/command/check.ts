@@ -1,28 +1,12 @@
 import { readFileSync } from "node:fs";
-import { readdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 import { applicationManifest } from "@engine/tooling/manifest";
 import { diagnosticsFail } from "@engine/tooling/diagnostics";
-import { inspectGenerated, resolveApplication } from "@engine/tooling/generated-artifacts";
-import type { GeneratedApplication } from "@engine/tooling/generated-artifacts";
-
-async function filesBelow(
-  directory: string,
-  filter?: (name: string) => boolean,
-): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files = await Promise.all(
-    entries.map(async (entry) => {
-      const path = resolve(directory, entry.name);
-      if (entry.isDirectory()) return filesBelow(path, filter);
-      return entry.isFile() && (filter === undefined || filter(entry.name)) ? [path] : [];
-    }),
-  );
-  return files.flat();
-}
+import { inspectGenerated } from "@engine/tooling/generated-artifacts";
+import { filesBelow } from "./files-below.ts";
+import { loadGeneratedApplication } from "./generated-config.ts";
 
 function parseFile(path: string): ts.SourceFile {
   return ts.createSourceFile(
@@ -293,12 +277,7 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
   console.log(`Concept action/query source check passed for ${directories.length} concepts.`);
 
   if (configPath !== undefined) {
-    const configUrl = pathToFileURL(resolve(root, configPath));
-    const module = (await import(configUrl.href)) as { default?: GeneratedApplication };
-    if (module.default === undefined) {
-      throw new Error(`${configPath} must default-export an application artifact configuration`);
-    }
-    const application = resolveApplication(module.default, configUrl);
+    const application = await loadGeneratedApplication(configPath, root);
     const diagnostics = await inspectGenerated(
       application,
       (assembled) => applicationManifest(assembled).diagnostics,

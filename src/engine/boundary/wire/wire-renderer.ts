@@ -1,7 +1,7 @@
 /** Render a hand-built or derived wire contract IR as a TypeScript module. */
 
 import type { WireContractsIR } from "./wire-contracts.ts";
-import { JSON_TYPE } from "./wire-types.ts";
+import { JSON_TYPE, unresolvedWireLeaves } from "./wire-types.ts";
 import type { WireOrigin, WireType } from "./wire-types.ts";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
@@ -13,29 +13,6 @@ export interface WireRenderOptions {
   appWideErrorName?: string;
   /** Omit shared imports and helpers when appending another contract. */
   preamble?: boolean;
-}
-
-function unresolvedLeaves(type: WireType, site: string, into: string[]): void {
-  switch (type.kind) {
-    case "json":
-      into.push(site);
-      return;
-    case "object":
-      for (const field of type.fields) {
-        unresolvedLeaves(field.type, `${site}.${field.key}`, into);
-      }
-      return;
-    case "array":
-      unresolvedLeaves(type.of, `${site}[]`, into);
-      return;
-    case "union":
-      for (const member of type.of) unresolvedLeaves(member, site, into);
-      return;
-    case "reference":
-    case "number":
-    case "literal":
-      return;
-  }
 }
 
 function originType(origin: WireOrigin): string {
@@ -125,8 +102,8 @@ export function renderWireTypes(
     }
     const unresolved: string[] = [];
     for (const endpoint of wire.endpoints) {
-      unresolvedLeaves(endpoint.input, `${endpoint.path}.input`, unresolved);
-      unresolvedLeaves(endpoint.output, `${endpoint.path}.output`, unresolved);
+      unresolved.push(...unresolvedWireLeaves(endpoint.input, `${endpoint.path}.input`));
+      unresolved.push(...unresolvedWireLeaves(endpoint.output, `${endpoint.path}.output`));
     }
     if (unresolved.length > 0) {
       throw new Error(
