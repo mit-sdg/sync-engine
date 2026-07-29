@@ -3,7 +3,6 @@
  * chains, consequence-input validation, JSON round trips, and fixture export.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { Logging } from "@sync-engine/assembly";
 import { reaction, vocabulary, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
@@ -11,7 +10,7 @@ import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior
 import type { ActionTriggerIR, AppIR } from "@sync-engine/internal/reads/ir";
 import { compute } from "@sync-engine/internal/reads/where-ops";
 import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 import type { StepNode } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, CounterConcept, ListConcept, mockRefs, RecorderConcept } from "./mocks.ts";
 
@@ -31,8 +30,7 @@ const refs = vocabulary({
 }).concepts;
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Button: new ButtonConcept(),
     Deciding: new DecidingConcept(),
@@ -334,8 +332,7 @@ describe("round trip: export → JSON → registerReactions", () => {
 
 describe("mock concepts export supported reactions", () => {
   test("every reaction lowers with zero opaque ops and serializes", () => {
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
+    const reacting = quietReacting();
     reacting.instrument({
       Counter: new CounterConcept(),
       Button: new ButtonConcept(),

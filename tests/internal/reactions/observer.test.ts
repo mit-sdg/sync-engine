@@ -1,8 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Logging } from "@sync-engine/assembly";
 import { vocabulary, when } from "@sync-engine/language";
 import type { LogEvent } from "@sync-engine/advanced";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 import {
   ButtonConcept,
   CounterConcept,
@@ -26,15 +25,13 @@ const refs = vocabulary({
 
 /** Build a fresh engine with no reactions registered. */
 function engine() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   return { reacting };
 }
 
 /** Build an engine with one button-to-counter reaction. */
 function engineWithReactions() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const { Button, Counter, Notification, Recorder } = reacting.instrument({
     Button: new ButtonConcept(),
     Counter: new CounterConcept(),

@@ -6,7 +6,6 @@ import { contributedKeys, useFormer } from "@sync-engine/internal/reads/former-n
  */
 import { describe, expect, test } from "vite-plus/test";
 import { faulted } from "@sync-engine/advanced";
-import { Logging } from "@sync-engine/assembly";
 import {
   earlier,
   each,
@@ -24,7 +23,7 @@ import { FormerFault } from "@sync-engine/internal/reads/former-nodes";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
 import { renderFormer } from "@sync-engine/internal/reads/render";
 import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 
 // ── Test concepts — the corpus's shapes, in miniature ─────────────────────
 
@@ -130,8 +129,7 @@ const ProfilingReads = testVocabulary.concepts.Profiling;
 const RecorderActions = testVocabulary.concepts.Recorder;
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Threading: new ThreadingConcept(),
     Grading: new GradingConcept(),

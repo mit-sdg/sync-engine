@@ -1,12 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Logging } from "@sync-engine/assembly";
 import { reaction, vocabulary, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { oneOf } from "@sync-engine/internal/reads/matchers";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { conditionOp, custom } from "@sync-engine/internal/reads/where-ops";
 import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 import type { Empty, StepNode } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, ListConcept, RecorderConcept, ThrowingConcept } from "./mocks.ts";
 
@@ -47,8 +46,7 @@ const refs = vocabulary({
 }).concepts;
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Button: new ButtonConcept(),
     Completion: new CompletionConcept(),

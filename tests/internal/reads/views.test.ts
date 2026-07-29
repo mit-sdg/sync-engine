@@ -7,7 +7,6 @@
  * own examples: `(requester) may read (file)`, `(venue) has room`.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { Logging } from "@sync-engine/assembly";
 import {
   count,
   earlier,
@@ -29,7 +28,7 @@ import { custom } from "@sync-engine/internal/reads/where-ops";
 import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
 import type { ViewOp } from "@sync-engine/internal/reads/views";
 import { $vars } from "@sync-engine/internal/reactions/authoring/vars";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 import { RecorderConcept } from "../reactions/mocks.ts";
 
 // ── Test concepts ──────────────────────────────────────────────────────────
@@ -88,8 +87,7 @@ const refs = vocabulary({
 }).concepts;
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Filing: new FilingConcept(),
     Seating: new SeatingConcept(),

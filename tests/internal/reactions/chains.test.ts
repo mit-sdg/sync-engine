@@ -1,9 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
-import { Logging } from "@sync-engine/assembly";
 import { reaction, vocabulary, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 import type { Empty } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, RecorderConcept } from "./mocks.ts";
 
@@ -29,8 +28,7 @@ const refs = vocabulary({
 }).concepts;
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     Button: new ButtonConcept(),
     Decision: new DecisionConcept(),

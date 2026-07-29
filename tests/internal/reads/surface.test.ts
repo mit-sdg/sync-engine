@@ -5,7 +5,6 @@ import { isQueryReadLine, lineOf } from "@sync-engine/internal/reads/lines";
  * and generated read-backs.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { Logging } from "@sync-engine/assembly";
 import {
   each,
   form,
@@ -24,7 +23,7 @@ import { Frames } from "@sync-engine/internal/reads/frames";
 import { isReadLine } from "@sync-engine/internal/reads/lines";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { $vars } from "@sync-engine/internal/reactions/authoring/vars";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 
 // ── Declared query promises ────────────────────────────────────────────────
 
@@ -97,8 +96,7 @@ const words = vocabulary({
 const { Posting, Timing, Grading, Recording } = words.concepts;
 
 function build() {
-  const engine = new Reacting();
-  engine.logging = Logging.OFF;
+  const engine = quietReacting();
   const live = {
     Posting: engine.instrumentConcept(new PostingConcept(), "Posting"),
     Timing: engine.instrumentConcept(new TimingConcept(), "Timing"),

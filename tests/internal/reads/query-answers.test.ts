@@ -1,9 +1,9 @@
 /** Query answers and the optional promises that narrow their cardinality. */
 import { describe, expect, test } from "vite-plus/test";
-import { Logging } from "@sync-engine/assembly";
 import { each, former, vocabulary, where } from "@sync-engine/language";
 import { rowsOfAnswer } from "@sync-engine/internal/reads/queries";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 
 class BalancesConcept {
   static readonly queries = {
@@ -67,8 +67,7 @@ const BrokenReads = testVocabulary.concepts.Broken;
 const UndeclaredReads = testVocabulary.concepts.UndeclaredQueries;
 
 function setup<T extends object>(instance: T, name: string): { reacting: Reacting; concept: T } {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   return { reacting, concept: reacting.instrument({ [name]: instance })[name] as T };
 }
 

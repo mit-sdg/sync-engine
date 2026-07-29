@@ -5,7 +5,6 @@ import { lineOf } from "@sync-engine/internal/reads/lines";
  * absence, promise enforcement, and repeated bindings.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { Logging } from "@sync-engine/assembly";
 import { is, no, reaction, whether, vocabulary, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
@@ -13,7 +12,7 @@ import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { compute, custom } from "@sync-engine/internal/reads/where-ops";
 import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
 import { $vars } from "@sync-engine/internal/reactions/authoring/vars";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 import type { InstrumentedQuery } from "@sync-engine/internal/reactions/types";
 import { ListConcept, RecorderConcept } from "../reactions/mocks.ts";
 
@@ -58,8 +57,7 @@ const refs = vocabulary({
 }).concepts;
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const concepts = reacting.instrument({
     List: new ListConcept(),
     Recorder: new RecorderConcept(),
@@ -251,8 +249,7 @@ describe("where ops: construction guards", () => {
 
 describe("where ops: inside a reaction", () => {
   test("an absent whether output reaches a consequence as null", async () => {
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
+    const reacting = quietReacting();
     const { Promised, Recorder } = reacting.instrument({
       Promised: new PromisedConcept(),
       Recorder: new RecorderConcept(),
@@ -270,8 +267,7 @@ describe("where ops: inside a reaction", () => {
   });
 
   test("plain reads use each query's declared promise", async () => {
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
+    const reacting = quietReacting();
     const { Promised, Recorder } = reacting.instrument({
       Promised: new PromisedConcept(),
       Recorder: new RecorderConcept(),

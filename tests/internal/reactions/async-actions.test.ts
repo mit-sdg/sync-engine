@@ -5,10 +5,9 @@
 
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
-import { Logging } from "@sync-engine/assembly";
 import { vocabulary, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
-import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
+import { quietReacting } from "../../utils/reacting.ts";
 import type { Frames } from "@sync-engine/internal/reads/frames.ts";
 
 const tick = (ms = 1) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -51,8 +50,7 @@ class AuditConcept {
 const refs = vocabulary({ concepts: { Ledger: LedgerConcept, Audit: AuditConcept } }).concepts;
 
 function setup() {
-  const reacting = new Reacting();
-  reacting.logging = Logging.OFF;
+  const reacting = quietReacting();
   const { Ledger, Audit } = reacting.instrument({
     Ledger: new LedgerConcept(),
     Audit: new AuditConcept(),
@@ -129,8 +127,7 @@ describe("engine: async concept actions", () => {
       concepts: { Ordered: OrderedConcept, Delay: DelayConcept },
     }).concepts;
 
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
+    const reacting = quietReacting();
     const raw = new OrderedConcept();
     const { Ordered } = reacting.instrument({
       Ordered: raw,
@@ -174,8 +171,7 @@ describe("engine: async concept actions", () => {
       concepts: { Reentrant: ReentrantConcept },
     }).concepts;
 
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
+    const reacting = quietReacting();
     const raw = new ReentrantConcept();
     const { Reentrant } = reacting.instrument({ Reentrant: raw });
     reacting.register({
