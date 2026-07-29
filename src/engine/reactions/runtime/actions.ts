@@ -21,6 +21,7 @@ import { uuid } from "@engine/utils/runtime";
 import { redact, serializeError } from "@engine/utils/redaction";
 import type { Redactor } from "@engine/utils/redaction";
 import { logger } from "@engine/utils/logger";
+import { setOwn } from "@engine/utils/own-property";
 import {
   MemoryStore,
   type ActionRecord,
@@ -42,6 +43,47 @@ interface ActiveFlowValues {
   depth: number;
   ids: Set<string>;
   interpreterFailed: boolean;
+}
+
+function snapshotMatchValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
+  if (value === null || typeof value !== "object") return value;
+  const prior = seen.get(value);
+  if (prior !== undefined) return prior;
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype === Date.prototype) {
+    try {
+      const snapshot = new Date(Date.prototype.getTime.call(value));
+      seen.set(value, snapshot);
+      return snapshot;
+    } catch {
+      return value;
+    }
+  }
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value;
+  const snapshot: Record<PropertyKey, unknown> | unknown[] = Array.isArray(value)
+    ? []
+    : Object.create(prototype);
+  if (Array.isArray(snapshot)) snapshot.length = (value as unknown[]).length;
+  seen.set(value, snapshot);
+  for (const key of Reflect.ownKeys(value)) {
+    if (key === "length") continue;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor?.enumerable !== true) continue;
+    try {
+      const entry = "value" in descriptor ? descriptor.value : Reflect.get(value, key, value);
+      setOwn(snapshot, key, snapshotMatchValue(entry, seen));
+    } catch (error) {
+      Object.defineProperty(snapshot, key, {
+        get() {
+          throw error;
+        },
+        enumerable: true,
+        configurable: true,
+      });
+    }
+  }
+  return snapshot;
 }
 
 export interface FlowQuiescence {
@@ -106,7 +148,7 @@ export class ActionConcept {
     return { id };
   }
 
-  /** Begin retaining raw input; raw output and outcome are added when the action resolves. */
+  /** Snapshot and retain raw input; raw output and outcome are added when the action resolves. */
   _beginMatchingInput({
     id,
     flow,
@@ -115,7 +157,8 @@ export class ActionConcept {
     id: string;
     flow: string;
     input: Record<string, unknown>;
-  }): void {
+  }): Record<string, unknown> {
+    const snapshot = snapshotMatchValue(input, new WeakMap()) as Record<string, unknown>;
     const active = this.activeFlowValues.get(flow) ?? {
       depth: 0,
       ids: new Set<string>(),
@@ -124,7 +167,8 @@ export class ActionConcept {
     active.depth++;
     active.ids.add(id);
     this.activeFlowValues.set(flow, active);
-    this.matchingValues.set(id, { input });
+    this.matchingValues.set(id, { input: snapshot });
+    return snapshot;
   }
 
   /** Clear transient values and report quiescence when a flow's outermost call settles. */

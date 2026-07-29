@@ -238,15 +238,15 @@ export function instrumentConcept<T extends object>(
         }
         invalidate();
 
+        const matchingInput = state.actions._beginMatchingInput({ id, flow: flowToken, input });
         const record: ActionRecord = {
           id,
           action: instrumented as InstrumentedAction,
           concept,
-          input,
+          input: matchingInput,
           flow: flowToken,
           ...(typeof askedBy === "string" ? { by: askedBy } : {}),
         };
-        state.actions._beginMatchingInput({ id, flow: flowToken, input });
         try {
           state.actions.invoke(record);
           report?.("ask-recorded");

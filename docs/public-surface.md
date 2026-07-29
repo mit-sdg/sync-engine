@@ -85,18 +85,18 @@ semantics](./semantics.md#reactions).
 assemble(options: AssemblyOptions): Assembly
 ```
 
-| `AssemblyOptions` field | Required | Default / effect                                                                  |
-| ----------------------- | -------- | --------------------------------------------------------------------------------- |
-| `vocabulary`            | yes      | Declared application vocabulary                                                   |
-| `composition`           | yes      | Reactions, endpoints, views, and formers to register                              |
-| `initialize`            | no       | Constructor argument tuples by concept name; otherwise `[]`                       |
-| `instances`             | no       | Ready implementations by concept name; each overrides `initialize`                |
-| `logging`               | no       | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                             |
-| `retention`             | no       | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"`   |
-| `logStore`              | no       | New `MemoryStore`; a supplied store remains caller-owned and excludes `retention` |
-| `executionLimits`       | no       | Unbounded profile; validates and enforces every `ExecutionLimits` field           |
-| `observers`             | no       | No operational observers                                                          |
-| `redaction`             | no       | Universal sensitive-field patterns only                                           |
+| `AssemblyOptions` field | Required    | Default / effect                                                                                        |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
+| `vocabulary`            | yes         | Declared application vocabulary                                                                         |
+| `composition`           | yes         | Reactions, endpoints, views, and formers to register                                                    |
+| `initialize`            | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them |
+| `instances`             | no          | Ready implementations by concept name; each overrides `initialize`                                      |
+| `logging`               | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                   |
+| `retention`             | no          | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"`                         |
+| `logStore`              | no          | New `MemoryStore`; a supplied store remains caller-owned and excludes `retention`                       |
+| `executionLimits`       | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                 |
+| `observers`             | no          | No operational observers                                                                                |
+| `redaction`             | no          | Universal sensitive-field patterns only                                                                 |
 
 A retention window must be a finite, non-negative integer. `{ window: 0 }`
 allows an active flow to complete before automatic eviction.
@@ -142,6 +142,9 @@ must be a factory function. A floor name is available through the typed
 `implementations(...)` overload only when every concept supplies it. If an
 incomplete floor is selected by bypassing that type restriction, selection
 fails at runtime. `conceptSet` also rejects conflicting public categories.
+The zero-argument `implementations()` form is available only when every
+canonical class can be constructed without required arguments; otherwise use a
+named floor.
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`
@@ -218,6 +221,8 @@ required because at least one path alternative does not mention it. An
 executable-only endpoint has no derived contract. An explicit contract is
 authoritative and replaces the derived contract; it does not merge with it. At
 most one endpoint declaration may supply an explicit contract for a given path.
+Assembly rejects an explicit contract when omitting its optional keys cannot
+match any receive alternative after declared defaults are applied.
 Input validation follows shallow defaulting and precedes the application ask.
 Invalid successful output is recorded as an integrity failure and returned as
 opaque `INTERNAL_ERROR`. A path may declare each validator at most once.
@@ -299,10 +304,19 @@ supported endpoint and no-prefix base, and trailing base-path slashes normalize
 away. `HttpFloor` has no implicit `/api` alias; declare `basePath: "/api"` when
 that prefix is part of the deployment URL.
 
+Every handler form requires a standard gateway targeting the supplied assembly;
+construction rejects unrecognized gateways and gateways for another assembly.
+Gateway execution limits and observers remain configured through `createGateway`.
+Same-version duplicate package copies share this identity through the global
+registry; interoperability across different package versions is not guaranteed.
+
 Every handler form accepts `correlation?: HttpCorrelationOptions`. Its resolver
-maps an inbound request to a non-empty, control-character-free identifier of at
-most 128 UTF-16 code units. A thrown or invalid result is replaced with a UUID.
-`responseHeader` optionally projects the effective identifier on every response.
+maps an inbound request to a non-empty, control-character-free ByteString of at
+most 128 code units, without leading or trailing spaces. A thrown,
+non-ByteString, or otherwise invalid result is replaced with a UUID.
+`responseHeader` optionally projects the effective
+identifier on every response. Invalid header names are rejected at handler
+construction, and response decoration never rejects a handled request.
 
 ### CLI
 
@@ -323,6 +337,8 @@ assembled endpoint and projects its result onto a process.
 `CliAppOptions.name` and `.version` default to `""`; `invoker` defaults to
 absent and is required only by endpoint commands. `CliCommand`,
 `EndpointCliCommand`, and `CommandInput` name command contracts.
+Command entries are own properties, and `help`, `--help`, and `-h` are reserved
+for built-in help.
 
 ### Framework Errors
 

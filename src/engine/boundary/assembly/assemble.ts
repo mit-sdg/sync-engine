@@ -74,7 +74,10 @@ import {
 } from "../invocation/invoke.ts";
 import { RuntimeLifecycle } from "../invocation/lifecycle.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
-import { deriveInputContracts } from "../wire/wire-contracts.ts";
+import {
+  assertInputContractsMatchReceivePatterns,
+  deriveInputContracts,
+} from "../wire/wire-contracts.ts";
 import type { EndpointDeclaration, EndpointIdentity } from "./endpoint-portability.ts";
 import { assertApplicationLocality } from "./locality-validation.ts";
 import { validateConceptImplementation } from "./concept-set.ts";
@@ -177,13 +180,40 @@ function pinToPath(decl: ReactionDeclaration, path: string): ReactionDeclaration
 
 // ── assemble ────────────────────────────────────────────────────────────────
 
-export interface AssembleOptions<T extends Record<string, ConceptClass>> {
+export type ConceptInitializers<T extends Record<string, ConceptClass>> = {
+  [K in keyof T]?: ConstructorParameters<T[K]>;
+};
+
+export type ConceptInstances<T extends Record<string, ConceptClass>> = {
+  [K in keyof T]?: object;
+};
+
+type RequiredConstructorName<T extends Record<string, ConceptClass>> = {
+  [K in keyof T]: [] extends ConstructorParameters<T[K]> ? never : K;
+}[keyof T];
+
+export type RequiredConstructionSources<T extends Record<string, ConceptClass>> = [
+  RequiredConstructorName<T>,
+] extends [never]
+  ? unknown
+  :
+      | {
+          initialize: {
+            [K in RequiredConstructorName<T>]: ConstructorParameters<T[K]>;
+          };
+        }
+      | { instances: Record<RequiredConstructorName<T>, object> };
+
+export interface AssembleBaseOptions<
+  T extends Record<string, ConceptClass>,
+  I extends ConceptInstances<T> = ConceptInstances<T>,
+> {
   /** The concept vocabulary: every name bound to its canonical class. */
   vocabulary: DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>;
-  /** Constructor args per name; by default every concept is constructed with no arguments. */
-  initialize?: { [K in keyof T]?: ConstructorParameters<T[K]> };
+  /** Constructor args per name; classes callable without arguments may be omitted. */
+  initialize?: ConceptInitializers<T>;
   /** Ready instances per name; these take precedence over `initialize`. */
-  instances?: { [K in keyof T]?: object };
+  instances?: I;
   /**
    * The application composition: reactions, views, and formers. Endpoint
    * declarations are boundary-specialized reactions.
@@ -202,6 +232,9 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
   /** Additional sensitive field names for this assembly only. */
   redaction?: RedactionPolicy;
 }
+
+export type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> &
+  RequiredConstructionSources<T>;
 
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
   engine: Reacting;
@@ -315,7 +348,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   });
   const instrumentedBoundary = engine.instrumentConcept(boundary, "RequestBoundary");
 
-  // ── Concepts: instances win, initialize supplies args, default is no-arg ──
+  // ── Concepts: instances win, initialize supplies args, no-arg classes default-construct ──
   const classes = vocabularyClasses(options.vocabulary);
   for (const source of [options.instances, options.initialize]) {
     for (const name of Object.keys(source ?? {})) {
@@ -352,6 +385,11 @@ export function assemble<T extends Record<string, ConceptClass>>(
       initialization !== undefined && Object.hasOwn(initialization, name)
         ? initialization[name]
         : undefined;
+    if (args === undefined && cls.length > 0) {
+      throw new Error(
+        `assemble: concept "${name}" requires constructor arguments; supply initialize or instances.`,
+      );
+    }
     const Constructor = cls as new (...ctorArgs: unknown[]) => object;
     const instance = new Constructor(...(args ?? []));
     validateConceptImplementation("assemble", name, cls, instance);
@@ -441,6 +479,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   assertApplicationLocality("assemble", app);
 
   // Declared contracts take precedence; receive patterns fill missing entries.
+  assertInputContractsMatchReceivePatterns(app, contracts);
   for (const [path, decl] of Object.entries(deriveInputContracts(app))) {
     if (!Object.hasOwn(contracts, path)) setOwn(contracts, path, decl);
   }

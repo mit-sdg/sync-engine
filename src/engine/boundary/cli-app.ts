@@ -117,6 +117,41 @@ type CliExecutor = (
 ) => Promise<CliResult>;
 
 const DEFAULT_DESCRIPTION = "No description provided.";
+const RESERVED_COMMAND_NAMES = new Set(["help", "--help", "-h"]);
+
+function validateCommand(name: string, value: unknown): asserts value is AnyCliCommand {
+  if (RESERVED_COMMAND_NAMES.has(name)) {
+    throw new Error(`Command name "${name}" is reserved.`);
+  }
+  if (typeof value !== "object" || value === null) {
+    throw new Error(`Command "${name}" must be an object.`);
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (candidate.description !== undefined && typeof candidate.description !== "string") {
+    throw new Error(`Command "${name}" description must be a string.`);
+  }
+
+  if ("path" in candidate || "format" in candidate) {
+    if (typeof candidate.path !== "string") {
+      throw new Error(`Command "${name}" must define a string path.`);
+    }
+    if (typeof candidate.parse !== "function") {
+      throw new Error(`Command "${name}" must define a parse function.`);
+    }
+    if (typeof candidate.format !== "function") {
+      throw new Error(`Command "${name}" must define a format function.`);
+    }
+    return;
+  }
+
+  if (candidate.parse !== undefined && typeof candidate.parse !== "function") {
+    throw new Error(`Command "${name}" parse must be a function.`);
+  }
+  if (typeof candidate.run !== "function") {
+    throw new Error(`Command "${name}" must define a run function.`);
+  }
+}
 
 export function createCliApp<TCommands extends Commands, C extends ContractShape = ContractShape>(
   commands: TCommands,
@@ -192,12 +227,13 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
     };
   }
 
-  const executors = new Map<string, CliExecutor>(
-    Object.entries(commands).map(([cmdName, cmd]) => [
-      cmdName,
-      deriveExecutor(cmd as AnyCliCommand),
-    ]),
-  );
+  const registeredCommands = new Map<string, AnyCliCommand>();
+  const executors = new Map<string, CliExecutor>();
+  for (const [cmdName, cmd] of Object.entries(commands)) {
+    validateCommand(cmdName, cmd);
+    registeredCommands.set(cmdName, cmd);
+    executors.set(cmdName, deriveExecutor(cmd));
+  }
 
   async function run(args: string[]): Promise<CliResult> {
     const commandName = args[0] ?? "help";
@@ -205,12 +241,11 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
       return ok(buildHelp());
     }
 
-    const command = commands[commandName] as AnyCliCommand | undefined;
-    if (command === undefined) {
+    const executor = executors.get(commandName);
+    if (executor === undefined) {
       return fail(`Unknown command: ${commandName}\nRun '${name || "cli"} help' to list commands.`);
     }
 
-    const executor = executors.get(commandName) ?? deriveExecutor(command);
     const { positionals, options: opts } = parseArgs(args.slice(1));
     return executor(positionals, opts);
   }
@@ -219,7 +254,12 @@ export function createCliApp<TCommands extends Commands, C extends ContractShape
     commandName: K,
     input: CommandInput<TCommands, K>,
   ): Promise<CliResult> {
-    const command = commands[commandName] as TCommands[K];
+    const command = registeredCommands.get(commandName as string) as TCommands[K] | undefined;
+    if (command === undefined) {
+      return fail(
+        `Unknown command: ${String(commandName)}\nRun '${name || "cli"} help' to list commands.`,
+      );
+    }
     try {
       if (isEndpointCommand(command)) {
         if (options.invoker === undefined) {

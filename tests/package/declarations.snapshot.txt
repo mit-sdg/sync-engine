@@ -120,12 +120,12 @@ export declare function receive(input?: Mapping): WhenBuilder;
 /** Answer the request this reaction was triggered by. */
 export declare function respond(body?: Mapping): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
     requestId: symbol;
-}>;
+}, Record<string, unknown>>;
 /** Answer the request with an application-defined error value. */
 export declare function fail(error?: unknown): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
     error: unknown;
     requestId: symbol;
-}>;
+}, Record<string, unknown>>;
 export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
     readonly path: string;
     readonly reaction: (vars: Vars) => TResult;
@@ -146,17 +146,31 @@ export interface EndpointOptions {
 export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionDeclaration, opts?: EndpointOptions): EndpointDef<ReactionDeclaration>;
 export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionPartition, opts?: EndpointOptions): EndpointDef<ReactionPartition>;
 export declare function isEndpointDef(value: unknown): value is EndpointDef;
-export interface AssembleOptions<T extends Record<string, ConceptClass>> {
+export type ConceptInitializers<T extends Record<string, ConceptClass>> = {
+    [K in keyof T]?: ConstructorParameters<T[K]>;
+};
+export type ConceptInstances<T extends Record<string, ConceptClass>> = {
+    [K in keyof T]?: object;
+};
+type RequiredConstructorName<T extends Record<string, ConceptClass>> = {
+    [K in keyof T]: [] extends ConstructorParameters<T[K]> ? never : K;
+}[keyof T];
+export type RequiredConstructionSources<T extends Record<string, ConceptClass>> = [
+    RequiredConstructorName<T>
+] extends [never] ? unknown : {
+    initialize: {
+        [K in RequiredConstructorName<T>]: ConstructorParameters<T[K]>;
+    };
+} | {
+    instances: Record<RequiredConstructorName<T>, object>;
+};
+export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I extends ConceptInstances<T> = ConceptInstances<T>> {
     /** The concept vocabulary: every name bound to its canonical class. */
     vocabulary: DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>;
-    /** Constructor args per name; by default every concept is constructed with no arguments. */
-    initialize?: {
-        [K in keyof T]?: ConstructorParameters<T[K]>;
-    };
+    /** Constructor args per name; classes callable without arguments may be omitted. */
+    initialize?: ConceptInitializers<T>;
     /** Ready instances per name; these take precedence over `initialize`. */
-    instances?: {
-        [K in keyof T]?: object;
-    };
+    instances?: I;
     /**
      * The application composition: reactions, views, and formers. Endpoint
      * declarations are boundary-specialized reactions.
@@ -175,6 +189,7 @@ export interface AssembleOptions<T extends Record<string, ConceptClass>> {
     /** Additional sensitive field names for this assembly only. */
     redaction?: RedactionPolicy;
 }
+export type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> & RequiredConstructionSources<T>;
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
     engine: Reacting;
     invoker: Invoker<ContractShape>;
@@ -210,19 +225,19 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
 export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary"> & {
     vocabulary: DeclaredVocabulary<TEntries, TComputations>;
 }): AssembledApp<ConceptClassesOf<TEntries>>;
+export {};
 
 === dist/engine/boundary/assembly/assembly-facade.d.ts ===
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
-import type { AssembledApp, AssembleOptions } from "./assemble.ts";
+import type { AssembleBaseOptions, AssembledApp, RequiredConstructionSources } from "./assemble.ts";
 import type { ConceptImplementation } from "./concept-set.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
 export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
-export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary" | "instances"> & {
+export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = Omit<AssembleBaseOptions<ConceptClassesOf<TEntries>, {
+    [Name in keyof ConceptClassesOf<TEntries>]?: ConceptImplementation<ConceptClassesOf<TEntries>[Name]>;
+}>, "vocabulary"> & RequiredConstructionSources<ConceptClassesOf<TEntries>> & {
     vocabulary: DeclaredVocabulary<TEntries, TComputations>;
-    instances?: {
-        [Name in keyof ConceptClassesOf<TEntries>]?: ConceptImplementation<ConceptClassesOf<TEntries>[Name]>;
-    };
 };
 export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: AssemblyOptions<TEntries, TComputations>): Assembly<ConceptClassesOf<TEntries>>;
 
@@ -309,11 +324,14 @@ type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => voi
 type FloorContext<S extends Record<string, AnyRegistration>, Floor extends CompleteFloorNames<S>> = UnionToIntersection<{
     [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? Floor extends keyof F ? Parameters<F[Floor]>[0] : never : never;
 }[keyof S]>;
+type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> = {
+    [Name in keyof S]: S[Name] extends RegisteredConcept<infer C, infer _F> ? [] extends ConstructorParameters<C> ? never : Name : Name;
+}[keyof S];
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>> {
     vocabulary: VocabularyOf<S>;
     concepts: VocabularyOf<S>["concepts"];
     publicErrors: Readonly<Record<string, PublicErrorCategory>>;
-    implementations(): Implementations<VocabularyOf<S>>;
+    implementations(...args: [RequiredConstructorRegistration<S>] extends [never] ? [] : [never]): Implementations<VocabularyOf<S>>;
     implementations<Floor extends CompleteFloorNames<S>>(floor: Floor, context: FloorContext<S, Floor>): Implementations<VocabularyOf<S>>;
 }
 export declare function conceptSet<const S extends Record<string, AnyRegistration>>(registrations: S): RegisteredConceptSet<S>;
@@ -921,6 +939,18 @@ export declare function success<T>(value: T): InvocationResult<T, never>;
 export declare function domainError<E>(value: E): InvocationResult<never, E>;
 export declare function frameworkError(code: EmittedFrameworkErrorCode, detail?: string): InvocationResult<never, never>;
 
+=== dist/engine/boundary/protocol/gateway-registry.d.ts ===
+import type { ApplicationInterface } from "./application-interface.ts";
+interface RegisteredApplication {
+    readonly identity: object;
+    readonly publicInterface: ApplicationInterface;
+}
+export declare function rememberApplicationInvoker(invoker: object, identity: object, publicInterface: ApplicationInterface): void;
+export declare function applicationBehindInvoker(invoker: object): RegisteredApplication | undefined;
+export declare function rememberGatewayApplication(gateway: object, application: RegisteredApplication): void;
+export declare function applicationBehindGateway(gateway: object): object | undefined;
+export {};
+
 === dist/engine/boundary/protocol/http-path.d.ts ===
 /** Require a path whose spelling survives WHATWG URL pathname handling exactly. */
 export declare function assertPortableHttpPath(path: unknown, label: string): asserts path is string;
@@ -1008,6 +1038,8 @@ export declare function wireContracts(app: AppIR, opts?: WireOptions): WireContr
  * assembly boundary.
  */
 export declare function deriveInputContracts(app: AppIR, opts?: WireOptions): Record<string, InputContractDecl>;
+/** Reject explicit contracts whose optional fields can strand a receive branch. */
+export declare function assertInputContractsMatchReceivePatterns(app: AppIR, contracts: Readonly<Record<string, InputContractDecl>>, opts?: WireOptions): void;
 
 === dist/engine/boundary/wire/wire-inference.d.ts ===
 /** Infer wire types for endpoint inputs, response values, and former trees. */
@@ -1300,6 +1332,7 @@ export type { ActionRef, QueryRef } from "./references.ts";
 declare const VocabularyClasses: unique symbol;
 declare const VocabularyComputations: unique symbol;
 declare const VocabularyMetadata: unique symbol;
+declare const ActionTypeAnchor: unique symbol;
 /** Any concept class the vocabulary can hold. */
 export type ConceptClass = new (...args: never[]) => object;
 /** The row shape a query's declared answer carries. */
@@ -1316,11 +1349,19 @@ export type QueryLineFn<F> = F extends (input: infer I) => infer A ? {
     (pattern: SlotPattern<I>): QueryReadLine<QueryRow<A>>;
     (input: I): A;
 } : F;
-/** An action member called as authored data instead of executed directly. */
+/**
+ * An action member called as authored data instead of executed directly. The
+ * final, uncallable overload anchors generated `ReturnType` and `Parameters`
+ * references to the declared implementation signature; authored calls select
+ * the generic line-builder overload so input completeness remains visible.
+ */
 type RequiredInputKeys<I> = {
     [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
 }[keyof I];
-export type ActionLineFn<F> = F extends (input: infer I) => unknown ? <P extends SlotPattern<I>>(pattern: P) => RequiredInputKeys<I> extends keyof P ? ActionCall<F & InstrumentedAction, P> : TriggerActionLine<F & InstrumentedAction, P> : F;
+export type ActionLineFn<F> = F extends (input: infer I) => infer A ? {
+    <P extends SlotPattern<I>>(pattern: P): RequiredInputKeys<I> extends keyof P ? ActionCall<F & InstrumentedAction, P, A> : TriggerActionLine<F & InstrumentedAction, P, A>;
+    (input: I, anchor: typeof ActionTypeAnchor): A;
+} : F;
 /**
  * The members of a concept instance as its vocabulary ref exposes them:
  * actions become callable data lines for `when` and `then`;
@@ -1827,12 +1868,12 @@ export declare class ActionConcept {
     invoke(record: ActionRecord): {
         id: string;
     };
-    /** Begin retaining raw input; raw output and outcome are added when the action resolves. */
+    /** Snapshot and retain raw input; raw output and outcome are added when the action resolves. */
     _beginMatchingInput({ id, flow, input, }: {
         id: string;
         flow: string;
         input: Record<string, unknown>;
-    }): void;
+    }): Record<string, unknown>;
     /** Clear transient values and report quiescence when a flow's outermost call settles. */
     _endMatchingInput(flow: string): void;
     /** Observe fully settled causal flows before occurrence retention is applied. */
@@ -1903,10 +1944,11 @@ export declare class ConsequencePipeline {
     private readonly failures;
     private readonly react;
     private readonly assertRows;
+    private readonly consumeAction;
     constructor(actions: ActionConcept, firingBook: FiringBook, definitions: {
         formerNamed(name: string): FormerRef | undefined;
         readEnv(): ReadEnv;
-    }, failures: InterpreterFailures, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void);
+    }, failures: InterpreterFailures, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
     dispatch(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured: CapturedTriggers, triggerIdsByFrame: string[][]): Promise<void>;
     matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
     private bindingsOf;
@@ -2409,6 +2451,7 @@ export interface MemoizedQuery<T extends AnyFn> {
 interface IdentityTable {
     symbols: Map<symbol, number>;
     functions: WeakMap<Function, number>;
+    objects: WeakMap<object, number>;
     next: number;
 }
 /** Build a deterministic key without conflating cyclic, collection, or identity values. */
@@ -2518,6 +2561,7 @@ export declare class Reacting {
     private applyLoweredWhere;
     private applyEarlier;
     private assertRows;
+    private consumeAction;
     private recordExecutionLimit;
 }
 export {};
@@ -2664,32 +2708,40 @@ export interface StepNode {
     named(name: string): StepNode;
 }
 /** A requested callable action line. */
-export interface ActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping> extends StepNode {
+export interface ActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TReturn = unknown> extends StepNode {
     readonly [CompleteInputBrand]: true;
     action: ActionPattern & {
         action: TAction;
         input: TInput;
     };
     linePosture: "requested";
-    responds<TOutput extends Mapping = Empty>(output?: TOutput): ReturnedActionLine<TAction, TInput, TOutput>;
+    responds<TOutput extends Mapping = Empty>(output?: ExactActionOutputPattern<TReturn, TOutput>): ReturnedActionLine<TAction, TInput, TOutput>;
     refuses<TRefusal extends Mapping = Empty>(output?: TRefusal): RefusedActionLine<TAction, TInput, TRefusal>;
-    named(name: string): NamedActionCall<TAction, TInput>;
+    named(name: string): NamedActionCall<TAction, TInput, TReturn>;
 }
 /** A requested callable action line whose required input slots remain open. */
-export interface TriggerActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping> {
+export interface TriggerActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TReturn = unknown> {
     kind: "step";
     action: ActionPattern & {
         action: TAction;
         input: TInput;
     };
     linePosture: "requested";
-    responds<TOutput extends Mapping = Empty>(output?: TOutput): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
+    responds<TOutput extends Mapping = Empty>(output?: ExactActionOutputPattern<TReturn, TOutput>): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
     refuses<TRefusal extends Mapping = Empty>(output?: TRefusal): RefusedTriggerActionLine<TAction, TInput, TRefusal>;
-    named(name: string): TriggerActionLine<TAction, TInput>;
+    named(name: string): TriggerActionLine<TAction, TInput, TReturn>;
 }
-export interface NamedActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping> extends ActionCall<TAction, TInput> {
+type ActionOutput<TReturn> = unknown extends TReturn ? Mapping : Awaited<TReturn> extends Mapping ? Awaited<TReturn> : Empty;
+type ActionOutputKeys<TReturn> = ActionOutput<TReturn> extends infer Output ? Output extends Mapping ? keyof Output : never : never;
+type ValueAt<Output, Key extends PropertyKey> = Output extends Mapping ? Key extends keyof Output ? Output[Key] : never : never;
+type ActionOutputValue<TReturn, Key extends PropertyKey> = ValueAt<ActionOutput<TReturn>, Key>;
+type ActionOutputPattern<TReturn> = {
+    readonly [Key in ActionOutputKeys<TReturn>]?: ActionOutputValue<TReturn, Key> | symbol;
+};
+type ExactActionOutputPattern<TReturn, TOutput extends Mapping> = TOutput & ActionOutputPattern<TReturn> & Record<Exclude<keyof TOutput, ActionOutputKeys<TReturn>>, never>;
+export interface NamedActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TReturn = unknown> extends ActionCall<TAction, TInput, TReturn> {
     readonly [NamedLineBrand]: true;
-    named(name: string): NamedActionCall<TAction, TInput>;
+    named(name: string): NamedActionCall<TAction, TInput, TReturn>;
 }
 /** A callable action line pinned to a successful return. */
 export interface ReturnedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TOutput extends Mapping = Mapping> extends StepNode {

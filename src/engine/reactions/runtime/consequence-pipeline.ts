@@ -60,6 +60,7 @@ export class ConsequencePipeline {
     private readonly failures: InterpreterFailures,
     private readonly react: (record: ActionRecord, durationMs?: number) => Promise<void>,
     private readonly assertRows: (flow: string, count: number) => void,
+    private readonly consumeAction: (flow: string) => boolean,
   ) {}
 
   async dispatch(
@@ -356,6 +357,7 @@ export class ConsequencePipeline {
     if (typeof id !== "string" || typeof flowToken !== "string" || concept === undefined) {
       return this.stopped();
     }
+    if (!this.consumeAction(flowToken)) return this.stopped();
     const describe = (value: unknown): unknown =>
       mapValueTree(value, (entry) =>
         isFusedFormer(entry)
@@ -371,7 +373,11 @@ export class ConsequencePipeline {
       ...(typeof askedBy === "string" ? { by: askedBy } : {}),
     };
     this.firingBook.mark(branch);
-    this.actions._beginMatchingInput({ id, flow: flowToken, input: record.input });
+    record.input = this.actions._beginMatchingInput({
+      id,
+      flow: flowToken,
+      input: record.input,
+    });
     try {
       this.actions.invoke(record);
       this.actions.faulted({ id, fault: errorOutputFromThrown(error) });

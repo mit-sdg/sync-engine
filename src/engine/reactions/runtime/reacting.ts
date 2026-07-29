@@ -138,6 +138,7 @@ export class Reacting {
       failures,
       (record, durationMs) => this.react(record, durationMs),
       (flowToken, count) => this.assertRows(flowToken, count),
+      (flowToken) => this.consumeAction(flowToken),
     );
     this.firingPipeline = new FiringPipeline(
       this.triggerMatcher,
@@ -539,7 +540,13 @@ export class Reacting {
     throw new Error("The evaluation exceeded its row limit.");
   }
 
-  private recordExecutionLimit(flowToken: string, limit: "firings" | "rows"): void {
+  private consumeAction(flowToken: string): boolean {
+    if (this.execution?.action(flowToken) !== false) return true;
+    this.recordExecutionLimit(flowToken, "actions");
+    return false;
+  }
+
+  private recordExecutionLimit(flowToken: string, limit: "actions" | "firings" | "rows"): void {
     this.Action._recordIntegrityFailure({
       kind: "execution-limit",
       flow: flowToken,

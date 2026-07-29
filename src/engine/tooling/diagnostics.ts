@@ -118,7 +118,7 @@ function endpointDiagnostics(
             : `Endpoint "${endpoint.name}" at "${endpoint.path}" has duplicate ${duplicate} answer conditions; both can respond to the same request.`,
       });
     }
-    if (answers.length > 0 && answers.every(hasEndpointCondition) && !exhaustiveReadPair(answers)) {
+    if (answers.every(hasEndpointCondition) && !exhaustiveReadPair(answers)) {
       diagnostics.push({
         severity: "warning",
         code: "MISSING_ENDPOINT_FALLBACK",

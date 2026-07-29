@@ -13,6 +13,7 @@ import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { no, reaction, vocabulary, when, where } from "@sync-engine/language";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { wireContracts } from "@sync-engine/tooling";
 
 class CountingConcept {
   static readonly queries = { _current: "one", _named: "optional", _seen: "many" } as const;
@@ -97,6 +98,17 @@ describe("assemble", () => {
     expect(app.concepts.Echoing.heard).toEqual([]);
   });
 
+  test("rejects omitted constructor arguments even through an untyped call", () => {
+    class RequiredConcept {
+      constructor(readonly name: string) {}
+    }
+    const required = vocabulary({ concepts: { Required: RequiredConcept }, computations: {} });
+
+    expect(() => assemble({ vocabulary: required, composition: {} } as never)).toThrow(
+      'assemble: concept "Required" requires constructor arguments; supply initialize or instances.',
+    );
+  });
+
   test("instances win outright and answer to the vocabulary name", async () => {
     const substituted = new CountingConcept(100);
     const app = assemble({
@@ -152,6 +164,57 @@ describe("assemble", () => {
         "/counter/increment": {},
         "/notes/create": { required: ["text", "author"] },
       },
+    });
+  });
+
+  test("a declared default makes a receive key optional across route alternatives", async () => {
+    const WithText = endpoint(
+      "/notes/alternative",
+      ({ text }) => receive({ kind: "text", text }).then(respond({ text })),
+      { input: { required: ["kind"], defaults: { text: "untitled" } } },
+    );
+    const WithoutText = endpoint("/notes/alternative", () =>
+      receive({ kind: "empty" }).then(respond({ text: null })),
+    );
+    const app = assemble({ vocabulary: vocab, composition: { WithText, WithoutText } });
+
+    await expect(app.invoker.invoke("/notes/alternative", { kind: "text" })).resolves.toEqual({
+      ok: true,
+      value: { text: "untitled" },
+    });
+    const generated = wireContracts(app.engine.exportReactions(), { contracts: app.contracts });
+    expect(generated.endpoints[0]?.input).toMatchObject({
+      kind: "object",
+      fields: [{ key: "kind" }, { key: "text", optional: true }],
+    });
+  });
+
+  test("rejects an explicit contract whose omitted keys cannot match a receive alternative", () => {
+    const WithText = endpoint(
+      "/notes/contradictory",
+      ({ text }) => receive({ kind: "text", text }).then(respond({ text })),
+      { input: { required: ["kind"] } },
+    );
+
+    expect(() => assemble({ vocabulary: vocab, composition: { WithText } })).toThrow(
+      "assemble: input contract for /notes/contradictory admits omitted optional keys that no receive alternative can match.",
+    );
+  });
+
+  test("accepts a default that selects one literal receive alternative", async () => {
+    const Plain = endpoint(
+      "/notes/literal-default",
+      () => receive({ format: "plain" }).then(respond({ format: "plain" })),
+      { input: { defaults: { format: "rich" } } },
+    );
+    const Rich = endpoint("/notes/literal-default", () =>
+      receive({ format: "rich" }).then(respond({ format: "rich" })),
+    );
+    const app = assemble({ vocabulary: vocab, composition: { Plain, Rich } });
+
+    await expect(app.invoker.invoke("/notes/literal-default", {})).resolves.toEqual({
+      ok: true,
+      value: { format: "rich" },
     });
   });
 

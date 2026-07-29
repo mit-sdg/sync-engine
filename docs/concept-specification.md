@@ -118,10 +118,11 @@ descriptor; prose in a State section will not be inferred as that descriptor.
 
 ## `registerConcept` checks
 
-`registerConcept({ class, spec, ... })` inspects only own prototype methods
-declared directly on the registered class. An inherited method cannot satisfy a
-specification declaration or enter this validation inventory. The function
-performs these checks against the parsed document:
+`registerConcept({ class, spec, ... })` inventories callable prototype methods
+from the registered class and its base classes up to, but not including,
+`Object.prototype`. An inherited method can therefore satisfy a specification
+declaration and is also rejected when the specification does not declare it.
+The function performs these checks against the parsed document:
 
 - action and query names agree in both directions;
 - every declared refusal code has one distinct `Error` class;
@@ -142,7 +143,9 @@ TypeScript source. `registry.ts` must use a named import whose module specifier
 resolves directly to the source file that declares the class; the checker does
 not follow re-export chains or perform general TypeScript module resolution. It
 compares methods declared directly in that class with the action and query
-names and fails closed when it cannot interpret a method's parameter syntax.
+names and fails closed when it cannot interpret a method's parameter syntax. It
+does not traverse a base class, so a specification relying on an inherited
+method can pass `registerConcept` while failing the source check.
 
 Supported method parameter forms are:
 

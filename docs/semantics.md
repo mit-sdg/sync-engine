@@ -49,6 +49,12 @@ flow token: the correlation identity shared by one outside request and its
 consequences. An ask made by a reaction also carries the reaction name as `by`
 provenance.
 
+Matching snapshots arrays, plain records, and ordinary `Date` values when the
+ask begins, preserving cycles and repeated references. Other object kinds retain
+identity semantics. The action implementation still receives the caller's
+original input object, so later mutation cannot rewrite the occurrence that
+reactions match.
+
 The action then settles in one of two outcome postures:
 
 - **returned** — the action completed and its result was recorded;
@@ -258,8 +264,9 @@ is not row-schema validation. A record missing a field named in `.is` does not
 match that pattern.
 
 Queries are memoized by concept instance and argument between invalidation
-points. Instrumented actions invalidate all query caches before and after their
-bodies, and an assembled outside invocation invalidates caches before dispatch.
+points. Instrumented actions invalidate the acted-on concept instance's query
+caches before and after their bodies, and an assembled outside invocation
+invalidates all concept query caches before dispatch.
 A rejected native `Promise` from the same JavaScript realm is removed from the
 cache. Arbitrary thenables are cached as ordinary values. Direct state mutation
 or an external database change that bypasses an instrumented action can remain
@@ -267,6 +274,11 @@ hidden until the next invalidation; a query call is not guaranteed to execute
 its implementation on every read. Cache-key construction traverses at most 100
 nested levels. A call with a deeper argument still executes but bypasses
 memoization for that call.
+Cache arguments follow read equality: arrays and plain records are structural,
+`Date` values use their timestamps, and maps, sets, class instances, regular
+expressions, functions, symbols, and other opaque values use identity.
+Equivalent acyclic structural values share entries; cyclic values are bounded
+and safe but may occupy separate entries when their graph shapes differ.
 
 Read equality and literal action-pattern equality are structural for arrays and
 plain records, timestamp-based for `Date`, and identity-based for maps, sets,
@@ -438,10 +450,15 @@ and never awaits observer work, while queueing, exporting, and network I/O
 remain host responsibilities.
 
 HTTP handlers may resolve an inbound correlation id and project the effective
-value in a response header. Invalid or faulting resolver results become a fresh
-UUID. When direct callers omit one, the gateway establishes a fresh UUID once
-at public entry and carries it through gateway and application observation.
-Correlation does not deduplicate work and is not an idempotency key.
+value in a response header. Accepted identifiers are non-empty,
+control-character-free ByteStrings of at most 128 code units without leading or
+trailing spaces; invalid, non-ByteString, or faulting resolver results become a fresh UUID. Response
+header names are validated when a handler is constructed, and decoration cannot
+reject a handled request. A handler also rejects construction unless its
+standard gateway targets the supplied assembly. When direct callers omit a
+correlation id, the gateway establishes a fresh UUID once at public entry and
+carries it through gateway and application observation. Correlation does not
+deduplicate work and is not an idempotency key.
 
 Endpoint paths and HTTP base paths are portable absolute URL pathnames. Their
 declared spelling must survive WHATWG URL pathname handling exactly: queries,
@@ -514,7 +531,9 @@ Absent an explicit endpoint input contract, assembly derives required keys from
 portable endpoint IR as the intersection of non-reserved keys mentioned by
 every exported `receive(...)` pattern for that path. Local endpoint behavior is
 an assembly error. An explicit contract replaces a derived contract, and only
-one endpoint declaration may supply an explicit contract for a path.
+one endpoint declaration may supply an explicit contract for a path. Assembly
+rejects an explicit contract when omitting its optional keys cannot match any
+receive alternative after defaults are applied.
 
 Production profiles and floors reject a non-HTTPS public origin when
 `NODE_ENV=production`. Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no

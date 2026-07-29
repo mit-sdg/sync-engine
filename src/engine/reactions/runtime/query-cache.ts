@@ -24,23 +24,24 @@ export interface MemoizedQuery<T extends AnyFn> {
 interface IdentityTable {
   symbols: Map<symbol, number>;
   functions: WeakMap<Function, number>;
+  objects: WeakMap<object, number>;
   next: number;
 }
 
 function identityTable(): IdentityTable {
-  return { symbols: new Map(), functions: new WeakMap(), next: 1 };
+  return { symbols: new Map(), functions: new WeakMap(), objects: new WeakMap(), next: 1 };
 }
 
 /** Build a deterministic key without conflating cyclic, collection, or identity values. */
 export function queryCacheKey(args: readonly unknown[], identities = identityTable()): string {
-  const seen = new Map<object, number>();
+  const active = new Map<object, number>();
   let nextReference = 1;
 
   const referenceId = (value: object): number => {
-    const known = seen.get(value);
+    const known = active.get(value);
     if (known !== undefined) return known;
     const id = nextReference++;
-    seen.set(value, id);
+    active.set(value, id);
     return id;
   };
 
@@ -72,36 +73,37 @@ export function queryCacheKey(args: readonly unknown[], identities = identityTab
         break;
     }
 
-    const existing = seen.get(value);
-    if (existing !== undefined) return `ref:${existing}`;
-    const id = referenceId(value);
-    if (value instanceof Date) return `date:${id}:${value.getTime()}`;
-    if (value instanceof RegExp) return `regexp:${id}:${value.source}/${value.flags}`;
-    if (Array.isArray(value)) {
-      return `array:${id}:[${value.map((entry) => encode(entry, depth + 1)).join(",")}]`;
-    }
-    if (value instanceof Map) {
-      const entries = [...value.entries()]
-        .map(([key, entry]) => `${encode(key, depth + 1)}=>${encode(entry, depth + 1)}`)
-        .sort();
-      return `map:${id}:{${entries.join(",")}}`;
-    }
-    if (value instanceof Set) {
-      return `set:${id}:{${[...value]
-        .map((entry) => encode(entry, depth + 1))
-        .sort()
-        .join(",")}}`;
+    if (value instanceof Date) return `date:${value.getTime()}`;
+    const prototype = Object.getPrototypeOf(value);
+    const structural = Array.isArray(value) || prototype === Object.prototype || prototype === null;
+    if (!structural) {
+      const id = identities.objects.get(value) ?? identities.next++;
+      identities.objects.set(value, id);
+      return `object:${id}`;
     }
 
-    const prototype = Object.getPrototypeOf(value);
-    const label = prototype === null ? "null" : (prototype.constructor?.name ?? "object");
-    const entries = Object.keys(value)
-      .sort()
+    const existing = active.get(value);
+    if (existing !== undefined) return `ref:${existing}`;
+    const id = referenceId(value);
+    if (Array.isArray(value)) {
+      const entries = Array.from({ length: value.length }, (_, index) =>
+        encode(value[index], depth + 1),
+      ).join(",");
+      active.delete(value);
+      return `array:${id}:${value.length}:[${entries}]`;
+    }
+
+    const entries = Reflect.ownKeys(value)
+      .map((key) => ({ key, encodedKey: encode(key, depth + 1) }))
+      .sort((left, right) =>
+        left.encodedKey < right.encodedKey ? -1 : left.encodedKey > right.encodedKey ? 1 : 0,
+      )
       .map(
-        (key) =>
-          `${JSON.stringify(key)}:${encode((value as Record<string, unknown>)[key], depth + 1)}`,
+        ({ key, encodedKey }) =>
+          `${encodedKey}:${encode((value as Record<PropertyKey, unknown>)[key], depth + 1)}`,
       );
-    return `object:${label}:${id}:{${entries.join(",")}}`;
+    active.delete(value);
+    return `record:${prototype === null ? "null" : "plain"}:${id}:{${entries.join(",")}}`;
   };
 
   return args.map((value) => encode(value)).join("|");

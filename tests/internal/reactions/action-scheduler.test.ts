@@ -55,6 +55,35 @@ describe("action scheduler", () => {
     expect(order).toEqual(["root", "consequence"]);
   });
 
+  test("does not release an interleaved flow during same-flow reentrancy", async () => {
+    const scheduler = new ActionScheduler();
+    const concept = {};
+    const order: string[] = [];
+    const root = reserve(scheduler, concept, "first-flow", () => {
+      order.push("root");
+      return "root";
+    });
+    const other = reserve(scheduler, concept, "other-flow", () => {
+      order.push("other");
+      return "other";
+    });
+    const consequence = reserve(scheduler, concept, "first-flow", () => {
+      order.push("consequence");
+      return "consequence";
+    });
+
+    consequence.release();
+    await root.result;
+    expect(order).toEqual(["root"]);
+
+    other.release();
+    await expect(Promise.all([other.result, consequence.result])).resolves.toEqual([
+      "other",
+      "consequence",
+    ]);
+    expect(order).toEqual(["root", "other", "consequence"]);
+  });
+
   test("continues after successful and rejected predecessors", async () => {
     const scheduler = new ActionScheduler();
     const concept = {};

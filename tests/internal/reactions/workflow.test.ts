@@ -118,7 +118,7 @@ describe("pipeline then", () => {
       ),
       CompleteMismatch: reaction((_vars: Vars) =>
         when(refs.Button.clicked({ kind: "complete" }).responds())
-          .then(refs.Completion.finish({}).responds({ absent: "value" }))
+          .then(refs.Completion.finish({}).responds({ absent: "value" } as never))
           .then(refs.Recorder.record({ tag: "bad" })),
       ),
     });

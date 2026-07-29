@@ -3,6 +3,10 @@ import { admitInput } from "../protocol/admit.ts";
 import type { ApplicationInterface } from "../protocol/application-interface.ts";
 import type { ContractShape } from "../protocol/contract-shape.ts";
 import {
+  applicationBehindInvoker,
+  rememberGatewayApplication,
+} from "../protocol/gateway-registry.ts";
+import {
   FrameworkErrorCode,
   type EmittedFrameworkErrorCode,
   type InvocationResult,
@@ -95,8 +99,15 @@ export function createGateway<C extends ContractShape = ContractShape>(
   const operational = new OperationalEvents(options.observers);
   const lifecycle = new RuntimeLifecycle(options.executionLimits, operational);
   const { application } = options;
+  const registeredApplication = applicationBehindInvoker(application.invoker);
+  if (
+    registeredApplication !== undefined &&
+    registeredApplication.publicInterface !== application.publicInterface
+  ) {
+    throw new Error("createGateway: application publicInterface must belong to its invoker.");
+  }
 
-  return {
+  const gateway: Gateway<C> = {
     async beginDrain() {
       await lifecycle.beginDrain();
       await application.beginDrain?.();
@@ -186,4 +197,8 @@ export function createGateway<C extends ContractShape = ContractShape>(
       return settle(projectResult(result)) as never;
     },
   };
+  if (registeredApplication !== undefined) {
+    rememberGatewayApplication(gateway, registeredApplication);
+  }
+  return gateway;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { MemoryStore } from "@sync-engine/assembly";
-import { each, earlier, former, reaction, vocabulary, when } from "@sync-engine/language";
+import { each, earlier, former, reaction, vocabulary, when, where } from "@sync-engine/language";
 import type { Empty, Vars } from "@sync-engine/internal/reactions/types";
 import { flow } from "@sync-engine/internal/reactions/context";
 import { ActionConcept, type ActionRecord } from "@sync-engine/internal/reactions/runtime/actions";
@@ -521,6 +521,40 @@ describe("assembly execution lifecycle", () => {
         expect.objectContaining({ kind: "execution-limit", limit: entry.limit }),
       );
     }
+  });
+
+  test("a consequence input former fault consumes action budget without an over-limit ask", async () => {
+    class DoubledConcept {
+      static readonly queries = { _rows: "optional" } as const;
+      _rows(_: Empty) {
+        return [{ value: "one" }, { value: "two" }];
+      }
+    }
+    const words = vocabulary({ concepts: { Doubled: DoubledConcept }, computations: {} });
+    const { Doubled } = words.concepts;
+    const doubled = former("the doubled value", (_inputs, { value }) =>
+      where(Doubled._rows({}).is({ value })).form({ value }),
+    );
+    const FaultingResponse = endpoint("/former-budget", () =>
+      receive().then(respond({ value: doubled({}) })),
+    );
+    const app = assemble({
+      vocabulary: words,
+      composition: { FaultingResponse, doubled },
+      executionLimits: limits({ maxActionsPerFlow: 1 }),
+      retention: "keepAll",
+    });
+
+    expect(await app.invoker.invoke("/former-budget", {})).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
+    });
+    const store = app.engine.Action.store as MemoryStore;
+    expect(store.integrityFailures).toContainEqual(
+      expect.objectContaining({ kind: "execution-limit", limit: "actions" }),
+    );
+    expect(store.actions.size).toBe(1);
+    expect(app.engine.Action._getMatchingRecordCount()).toBe(0);
   });
 
   test("ordinary assembly accepts an application-owned log store", async () => {

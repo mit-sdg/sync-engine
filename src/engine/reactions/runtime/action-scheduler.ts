@@ -51,11 +51,13 @@ export class ActionScheduler implements ActionScheduling {
     }
 
     // A same-flow consequence cannot wait behind the body whose requested
-    // reaction is awaiting it. Release every earlier slot; the line still
-    // preserves body arrival order.
+    // reaction is awaiting it. Release only that flow's earlier slots; other
+    // flows still own their release after their requested reactions finish.
     const earlierReservations = [...schedule.waiting];
     if (earlierReservations.some((entry) => entry.flow === flow)) {
-      for (const entry of earlierReservations) entry.release();
+      for (const entry of earlierReservations) {
+        if (entry.flow === flow) entry.release();
+      }
     }
 
     let resolveRun = (_value: Awaited<Result> | PromiseLike<Awaited<Result>>): void => {};

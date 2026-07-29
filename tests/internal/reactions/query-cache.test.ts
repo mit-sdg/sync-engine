@@ -13,32 +13,34 @@ function deeplyNested(wrap: (value: unknown, depth: number) => unknown): unknown
 describe("query cache", () => {
   test("keys equivalent plain mappings independently of property order", () => {
     expect(queryCacheKey([{ left: 1, right: 2 }])).toBe(queryCacheKey([{ right: 2, left: 1 }]));
+    expect(queryCacheKey([{ left: { value: 1 }, right: { value: 2 } }])).toBe(
+      queryCacheKey([{ right: { value: 2 }, left: { value: 1 } }]),
+    );
   });
 
   test("keys cyclic values without recursing forever", () => {
-    const value: Record<string, unknown> = { name: "cycle" };
-    value.self = value;
+    const left: Record<string, unknown> = { name: "cycle" };
+    const right: Record<string, unknown> = { name: "cycle" };
+    left.self = left;
+    right.self = right;
 
-    expect(() => queryCacheKey([value])).not.toThrow();
+    expect(queryCacheKey([left])).toBe(queryCacheKey([right]));
+  });
+
+  test("does not make repeated references significant in structural values", () => {
+    const shared = { value: 1 };
+
+    expect(queryCacheKey([[shared, shared]])).toBe(queryCacheKey([[{ value: 1 }, { value: 1 }]]));
+  });
+
+  test("does not conflate sparse arrays with arrays of another length", () => {
+    expect(queryCacheKey([[]])).not.toBe(queryCacheKey([Array(1)]));
+    expect(queryCacheKey([Array(1)])).toBe(queryCacheKey([[undefined]]));
   });
 
   test.each([
     ["objects", (value: unknown) => ({ value })],
     ["arrays", (value: unknown) => [value]],
-    ["maps", (value: unknown) => new Map([["value", value]])],
-    ["sets", (value: unknown) => new Set([value])],
-    [
-      "mixed values",
-      (value: unknown, depth: number) => {
-        const wrappers = [
-          () => ({ value }),
-          () => [value],
-          () => new Map([["value", value]]),
-          () => new Set([value]),
-        ];
-        return wrappers[depth % wrappers.length]!();
-      },
-    ],
   ])("rejects deeply nested %s with a bounded error", (_name, wrap) => {
     expect(() => queryCacheKey([deeplyNested(wrap)])).toThrow(
       "Query cache key exceeds maximum depth of 100",
@@ -62,14 +64,42 @@ describe("query cache", () => {
     expect(queryCacheKey(args).split("|")).toHaveLength(200);
   });
 
-  test("does not conflate collection values", () => {
-    expect(queryCacheKey([new Map([["left", 1]])])).not.toBe(
-      queryCacheKey([new Map([["right", 1]])]),
-    );
-    expect(queryCacheKey([new Set(["left"])])).not.toBe(queryCacheKey([new Set(["right"])]));
+  test("memoizes structural records, arrays, and Date timestamps", () => {
+    let calls = 0;
+    const query = memoizeQuery((input: unknown) => ({ call: ++calls, input }));
+
+    const record = query({ nested: [1, { right: 2 }] });
+    expect(query({ nested: [1, { right: 2 }] })).toBe(record);
+
+    const date = query(new Date(123));
+    expect(query(new Date(123))).toBe(date);
+    expect(query(new Date(124))).not.toBe(date);
   });
 
-  test("memoizes equal inputs, keeps identity values separate, and invalidates", () => {
+  test.each([
+    ["maps", () => new Map([["value", 1]])],
+    ["sets", () => new Set([1])],
+    ["regular expressions", () => /value/gi],
+    [
+      "class instances",
+      () =>
+        new (class Value {
+          value = 1;
+        })(),
+    ],
+    ["objects with custom prototypes", () => Object.create({ value: 1 })],
+  ])("keeps distinct identity-based %s separate", (_name, makeValue) => {
+    let calls = 0;
+    const query = memoizeQuery((input: unknown) => ({ call: ++calls, input }));
+    const value = makeValue();
+    const first = query(value);
+
+    expect(query(value)).toBe(first);
+    expect(query(makeValue())).not.toBe(first);
+    expect(calls).toBe(2);
+  });
+
+  test("memoizes equal inputs, keeps symbol values separate, and invalidates", () => {
     let calls = 0;
     const query = memoizeQuery((input: { value: number; token?: symbol }) => {
       calls += 1;
@@ -126,8 +156,14 @@ describe("query cache", () => {
     expect(queryCacheKey([d1])).not.toBe(queryCacheKey([d2]));
   });
 
-  test("encodes function identities", () => {
-    expect(queryCacheKey([() => 1])).toMatch(/^function:\d+$/);
+  test("keeps function identities separate", () => {
+    let calls = 0;
+    const query = memoizeQuery((input: () => number) => ({ call: ++calls, input }));
+    const fn = () => 1;
+    const first = query(fn);
+
+    expect(query(fn)).toBe(first);
+    expect(query(() => 1)).not.toBe(first);
   });
 
   test("assigns distinct ids to distinct functions within one call", () => {
@@ -135,5 +171,15 @@ describe("query cache", () => {
     const fnB = () => 2;
     const [idA, idB] = queryCacheKey([fnA, fnB]).split("|");
     expect(idA).not.toBe(idB);
+  });
+
+  test("includes symbol-keyed plain-record fields", () => {
+    const key = Symbol("key");
+    let calls = 0;
+    const query = memoizeQuery((input: Record<PropertyKey, unknown>) => ({ call: ++calls, input }));
+    const first = query({ [key]: 1 });
+
+    expect(query({ [key]: 1 })).toBe(first);
+    expect(query({ [Symbol("key")]: 1 })).not.toBe(first);
   });
 });

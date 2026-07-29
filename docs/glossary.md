@@ -7,12 +7,12 @@ runtime behavior is specified in [Execution semantics](semantics.md).
 ## Action
 
 A non-underscore concept method. `registerConcept` requires each specified
-action to be an own prototype method declared directly by the registered class.
-An assembled action is instrumented: the engine records an ask before running
-the method and records a return, refusal, or fault afterward. TypeScript
-`private` and `protected` methods still exist on the runtime prototype; use
-ECMAScript `#private` methods for implementation helpers that registration must
-not treat as concept members.
+action to be a callable prototype method of the registered class or one of its
+base classes. An assembled action is instrumented: the engine records an ask
+before running the method and records a return, refusal, or fault afterward.
+TypeScript `private` and `protected` methods still exist on the runtime
+prototype; use ECMAScript `#private` methods for implementation helpers that
+registration must not treat as concept members.
 
 ## Ask
 
@@ -97,9 +97,9 @@ the concept class directly and verifies the story without an assembly.
 ## Query
 
 An underscore-prefixed concept method that, by contract, reads current state.
-`registerConcept` requires each specified query to be an own prototype method
-declared directly by the registered class. Queries are memoized between
-invalidation points and are not recorded as action occurrences.
+`registerConcept` requires each specified query to be a callable prototype
+method of the registered class or one of its base classes. Queries are memoized
+between invalidation points and are not recorded as action occurrences.
 
 ## Reaction
 

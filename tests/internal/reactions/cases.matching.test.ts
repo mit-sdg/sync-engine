@@ -142,7 +142,7 @@ describe("engine: input field matching", () => {
     });
 
     const OutputRequiredReaction = ({ out }: Vars) =>
-      when(mockRefs.Gate.record({}).responds({ out })).then(
+      when(mockRefs.Gate.record({}).responds({ out } as never)).then(
         mockRefs.Recorder.record({ tag: "never" }),
       );
     reacting.register({ OutputRequiredReaction });

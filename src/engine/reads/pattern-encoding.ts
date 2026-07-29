@@ -58,6 +58,9 @@ export class PatternVariables {
 }
 
 function encodeValue(value: unknown, vars: PatternVariables): ValueIR {
+  if (value === undefined) {
+    throw new Error("Portable patterns cannot contain literal undefined; omit the key instead.");
+  }
   if (value === null || typeof value === "boolean" || typeof value === "number") return value;
   if (typeof value === "string") return value;
   if (typeof value === "symbol") return { $var: vars.nameOf(value) };

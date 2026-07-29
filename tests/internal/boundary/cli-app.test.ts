@@ -180,6 +180,63 @@ describe("createCliApp", () => {
     });
   });
 
+  test("ordinary command records do not register inherited object names", async () => {
+    const app = createCliApp({
+      ping: {
+        run: async () => ok("pong"),
+      },
+    });
+
+    await expect(app.run(["toString"])).resolves.toEqual({
+      stdout: "",
+      stderr: "Unknown command: toString\nRun 'cli help' to list commands.\n",
+      exitCode: 1,
+    });
+  });
+
+  test("null-prototype command records run commands and render help", async () => {
+    const commands: Record<
+      string,
+      { description: string; run: () => Promise<ReturnType<typeof ok>> }
+    > = Object.create(null);
+    commands.ping = {
+      description: "Send a ping",
+      run: async () => ok("pong"),
+    };
+    const app = createCliApp(commands, { name: "testcli" });
+
+    await expect(app.run(["ping"])).resolves.toEqual({
+      stdout: "pong\n",
+      stderr: "",
+      exitCode: 0,
+    });
+    expect(app.help()).toBe(
+      "testcli\n\nCommands:\n" + "  ping      Send a ping\n" + "  help      Show command help.\n",
+    );
+  });
+
+  test.each(["help", "--help", "-h"])("rejects reserved command name %s", (name) => {
+    expect(() =>
+      createCliApp({
+        [name]: {
+          run: async () => ok("unreachable"),
+        },
+      }),
+    ).toThrow(`Command name "${name}" is reserved.`);
+  });
+
+  test.each([
+    ["null entry", { broken: null }, 'Command "broken" must be an object.'],
+    ["missing runner", { broken: {} }, 'Command "broken" must define a run function.'],
+    [
+      "malformed endpoint",
+      { broken: { path: "/broken", parse: () => parseOk({}) } },
+      'Command "broken" must define a format function.',
+    ],
+  ])("rejects a %s during construction", (_case, commands, message) => {
+    expect(() => createCliApp(commands as never)).toThrow(message);
+  });
+
   test("dispatch routes to typed input directly", async () => {
     const app = createCliApp({
       echo: {

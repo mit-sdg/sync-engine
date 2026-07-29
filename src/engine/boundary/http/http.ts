@@ -9,6 +9,7 @@ import type { HttpFloor } from "./http-floor.ts";
 import { validateHttpFloor } from "./http-floor.ts";
 import type { ProductionHttpProfile } from "./http-profile.ts";
 import { normalizeHttpBasePath, normalizeProductionHttpProfile } from "./http-profile.ts";
+import { applicationBehindGateway } from "../protocol/gateway-registry.ts";
 import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
 import {
   publicErrorStatus,
@@ -32,6 +33,22 @@ export interface HttpCorrelationOptions {
   responseHeader?: string;
 }
 
+function normalizeCorrelationOptions(
+  options: HttpCorrelationOptions | undefined,
+): HttpCorrelationOptions | undefined {
+  if (options === undefined) return undefined;
+  const resolve = options.resolve;
+  const responseHeader = options.responseHeader;
+  if (responseHeader !== undefined) {
+    try {
+      new Headers().set(responseHeader, "correlation");
+    } catch {
+      throw new Error("createHttpHandler: correlation.responseHeader must be a valid header name.");
+    }
+  }
+  return { resolve, ...(responseHeader === undefined ? {} : { responseHeader }) };
+}
+
 function correlationIdFor(
   request: Request,
   options: HttpCorrelationOptions | undefined,
@@ -48,8 +65,9 @@ function correlationIdFor(
   }
   for (let index = 0; index < resolved.length; index++) {
     const code = resolved.charCodeAt(index);
-    if (code < 32 || code === 127) return crypto.randomUUID();
+    if (code < 32 || code === 127 || code > 255) return crypto.randomUUID();
   }
+  if (resolved.startsWith(" ") || resolved.endsWith(" ")) return crypto.randomUUID();
   return resolved;
 }
 
@@ -59,7 +77,11 @@ function withCorrelation(
   options: HttpCorrelationOptions | undefined,
 ): Response {
   if (correlationId !== undefined && options?.responseHeader !== undefined) {
-    response.headers.set(options.responseHeader, correlationId);
+    try {
+      response.headers.set(options.responseHeader, correlationId);
+    } catch {
+      // Correlation decoration must not turn an otherwise handled request into a rejection.
+    }
   }
   return response;
 }
@@ -185,6 +207,10 @@ function createPolicyHandler(
   options: PolicyHandlerOptions,
 ): (request: Request) => Promise<Response> {
   const assembled = assemblyBehind(options.application);
+  if (applicationBehindGateway(options.gateway) !== options.application) {
+    throw new Error("createHttpHandler: gateway must target the supplied application.");
+  }
+  const correlation = normalizeCorrelationOptions(options.correlation);
   const categories = assembled.publicErrors;
   const floor = "floor" in options ? options.floor : undefined;
   const declaration = "floor" in options ? options.floor : options.profile;
@@ -214,9 +240,8 @@ function createPolicyHandler(
     `Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0${secure ? "; Secure" : ""}`;
 
   return async (request) => {
-    const correlationId = correlationIdFor(request, options.correlation);
-    const reply = (response: Response) =>
-      withCorrelation(response, correlationId, options.correlation);
+    const correlationId = correlationIdFor(request, correlation);
+    const reply = (response: Response) => withCorrelation(response, correlationId, correlation);
     const invalid = () => reply(publicJson({ error: "INVALID_REQUEST" }, 400));
     if (request.method !== "POST") return invalid();
     const origin = request.headers.get("Origin");

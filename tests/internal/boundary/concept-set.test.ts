@@ -366,6 +366,24 @@ describe("concept floors", () => {
     expect(mongo.Cataloging).toEqual(new PersistentCataloging("primary"));
   });
 
+  test("requires a named floor for a concept with required constructor arguments", () => {
+    const set = conceptSet({
+      Cataloging: registerConcept({
+        class: PersistentCataloging,
+        spec: catalogingSpec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+        floors: { persistent: () => new PersistentCataloging("primary") },
+      }),
+    });
+
+    expect(() => (set.implementations as () => unknown)()).toThrow(
+      'conceptSet: concept "Cataloging" requires constructor arguments; use a named floor.',
+    );
+    expect(set.implementations("persistent", undefined).Cataloging).toEqual(
+      new PersistentCataloging("primary"),
+    );
+  });
+
   test("accepts an inherited subclass replacement and inventories its complete protocol", () => {
     const set = conceptSet({
       Cataloging: registerConcept({

@@ -60,6 +60,10 @@ const Current = endpoint(
   { input: { required: ["session"] } },
 );
 
+const Unanswered = endpoint("/unanswered", ({ user }) =>
+  receive({ user }).then(Sessioning.start({ user })),
+);
+
 const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
   receive({})
     .where((frames: Frames) => frames.map((frame) => ({ ...frame, [hidden]: "kept" })))
@@ -100,6 +104,22 @@ describe("generated application artifacts", () => {
     expect(rendered).toContain("RequestBoundary.respond (");
   });
 
+  test("warns when an endpoint has no answer path", () => {
+    const application = assemble({
+      vocabulary: vocabularyDeclaration,
+      composition: { Unanswered },
+    });
+
+    expect(inspectAssembly(application).diagnostics).toContainEqual({
+      severity: "warning",
+      code: "MISSING_ENDPOINT_FALLBACK",
+      definition: { kind: "endpoint", name: "Unanswered" },
+      endpoint: { name: "Unanswered", path: "/unanswered" },
+      message:
+        'Endpoint "Unanswered" at "/unanswered" has no explicit unconditional fallback; coverage cannot be proved.',
+    });
+  });
+
   test("the installed command prints exact, stackless help", () => {
     const root = fileURLToPath(new URL("../../../", import.meta.url));
     const expected = `Usage: sync-engine <topic> <command>
@@ -138,6 +158,41 @@ describe("generated application artifacts", () => {
       stdout: "",
       stderr: expected,
     });
+  });
+
+  test("installed commands reject unknown flags and trailing arguments before effects", async () => {
+    const root = fileURLToPath(new URL("../../../", import.meta.url));
+    const temporary = await mkdtemp(join(tmpdir(), "sync-engine-cli-args-"));
+    const main = join(root, "src/command/main.ts");
+    const run = (...args: string[]) =>
+      spawnSync("bun", [main, ...args], { cwd: temporary, encoding: "utf8" });
+    try {
+      await writeFile(
+        join(temporary, "generated.config.ts"),
+        'await Bun.write(new URL("./imported", import.meta.url), "imported");\nexport default {};\n',
+      );
+
+      const typo = run("artifacts", "pin", "--confgi", "ignored.config.ts");
+      expect(typo.status).toBe(1);
+      expect(typo.stderr).toContain("sync-engine artifacts <command> [--config path]");
+      expect(existsSync(join(temporary, "imported"))).toBe(false);
+
+      const trailing = run("new", "valid-project", "trailing");
+      expect(trailing.status).toBe(1);
+      expect(trailing.stderr).toContain("Usage: sync-engine <topic> <command>");
+      expect(existsSync(join(temporary, "valid-project"))).toBe(false);
+
+      const helpTrailing = run("--help", "trailing");
+      expect(helpTrailing.status).toBe(1);
+      expect(helpTrailing.stdout).toBe("");
+      expect(helpTrailing.stderr).toContain("Usage: sync-engine <topic> <command>");
+
+      const unknown = run("check", "--unknown");
+      expect(unknown.status).toBe(1);
+      expect(unknown.stderr).toContain("sync-engine check [--concepts <path...>]");
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
   });
 
   test("an HTTP floor emits logical and projected named contracts", async () => {

@@ -136,7 +136,9 @@ async function viewRows(
   const rows: Record<string, unknown>[] = [];
   for (const survivor of survivors) {
     const row: Record<string, unknown> = {};
-    for (const out of shape.outs) setOwn(row, out, survivor[out]);
+    for (const out of shape.outs) {
+      if (Object.hasOwn(survivor, out)) setOwn(row, out, survivor[out]);
+    }
     if (!rows.some((prior) => structurallyEqual(prior, row))) {
       assertRows?.(rows.length + 1);
       rows.push(row);

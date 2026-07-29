@@ -9,6 +9,7 @@ import type {
   ValueIR,
 } from "@engine/reads/ir";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
+import { unifyPattern } from "@engine/reactions/runtime/matching";
 import { inferInputWireType, inferPatternWireType } from "./wire-inference.ts";
 import { analyzeReactionProvenance } from "./wire-provenance.ts";
 import type { ProvenanceCell } from "./wire-provenance.ts";
@@ -463,6 +464,38 @@ export function deriveInputContracts(
     }
   }
   return out;
+}
+
+/** Reject explicit contracts whose optional fields can strand a receive branch. */
+export function assertInputContractsMatchReceivePatterns(
+  app: AppIR,
+  contracts: Readonly<Record<string, InputContractDecl>>,
+  opts: WireOptions = {},
+): void {
+  const boundary = {
+    concept: opts.boundary?.concept ?? "RequestBoundary",
+    request: opts.boundary?.request ?? "request",
+  };
+  const patternsByPath = collectRequestPatternsByPath(app.reactions, boundary);
+  for (const [path, contract] of Object.entries(contracts)) {
+    const patterns = patternsByPath.get(path) ?? [];
+    const required = new Set(contract.required ?? []);
+    const defaults = contract.defaults ?? {};
+    const viable = patterns.some((pattern) => {
+      const defaultedPattern: PatternIR = {};
+      for (const [key, value] of Object.entries(pattern)) {
+        if (RESERVED_BOUNDARY_KEYS.has(key) || required.has(key)) continue;
+        if (!Object.hasOwn(defaults, key)) return false;
+        setOwn(defaultedPattern, key, value);
+      }
+      return unifyPattern(defaults as Record<string, unknown>, defaultedPattern, {}) !== undefined;
+    });
+    if (patterns.length > 0 && !viable) {
+      throw new Error(
+        `assemble: input contract for ${path} admits omitted optional keys that no receive alternative can match.`,
+      );
+    }
+  }
 }
 
 function buildRefusalIndex(inventories: ConceptInventoryIR[]): RefusalsOf {

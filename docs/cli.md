@@ -14,6 +14,10 @@ sync-engine <topic> <command>
 print command help and exit successfully. A command error prints the error
 message without a stack and sets exit status 1.
 
+Commands accept only the operands and options shown below. Unknown options,
+repeated options, missing option values, and trailing operands are rejected
+before a command applies defaults, imports configuration, or writes files.
+
 ## `sync-engine new`
 
 ```text
@@ -51,6 +55,9 @@ query names and supported input parameter forms. It does not read State notation
 as grammar or compare it with class fields or storage. [Concept specification
 format](concept-specification.md) defines the accepted machine grammar and
 uninterpreted boundary.
+
+`--concepts` consumes one or more paths, ending at the next option. Each of
+`--concepts`, `--config`, and `--fail-on-warnings` may appear at most once.
 
 `--config` also assembles the application and prints its structured diagnostics.
 `--fail-on-warnings` promotes warning diagnostics only when `--config` is

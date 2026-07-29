@@ -10,6 +10,21 @@ void manifestVersion;
 
 class FirstConcept {}
 class SecondConcept {}
+class RequiredConcept {
+  constructor(readonly name: string) {}
+}
+class AlsoRequiredConcept {
+  constructor(readonly count: number) {}
+}
+class DefaultedConcept {
+  constructor(readonly name = "default") {}
+}
+class RestConcept {
+  readonly names: string[];
+  constructor(...names: string[]) {
+    this.names = names;
+  }
+}
 
 const spec = "# Concept";
 const context = { store: "primary" };
@@ -70,6 +85,47 @@ incomplete.implementations();
 // @ts-expect-error A named floor is available only when every registration declares it.
 incomplete.implementations("mongo", context);
 
+const requiredSet = conceptSet({
+  Required: registerConcept({
+    class: RequiredConcept,
+    spec,
+    floors: { named: () => new RequiredConcept("named") },
+  }),
+});
+// @ts-expect-error Required constructor arguments cannot be silently omitted.
+requiredSet.implementations();
+requiredSet.implementations("named", undefined);
+
+const ergonomicSet = conceptSet({
+  Defaulted: registerConcept({ class: DefaultedConcept, spec }),
+  Rest: registerConcept({ class: RestConcept, spec }),
+});
+ergonomicSet.implementations();
+
+const requiredVocabulary = vocabulary({
+  concepts: {
+    Required: RequiredConcept,
+    AlsoRequired: AlsoRequiredConcept,
+    Defaulted: DefaultedConcept,
+    Rest: RestConcept,
+  },
+  computations: {},
+});
+// @ts-expect-error Every required constructor needs initialize or instances.
+assemble({ vocabulary: requiredVocabulary, composition: {} });
+assemble({
+  vocabulary: requiredVocabulary,
+  composition: {},
+  initialize: { Required: ["initialized"], AlsoRequired: [1] },
+});
+assemble({
+  vocabulary: requiredVocabulary,
+  composition: {},
+  instances: {
+    Required: new RequiredConcept("provided"),
+    AlsoRequired: new AlsoRequiredConcept(1),
+  },
+});
 class SynchronousActionConcept {
   constructor(readonly prefix = "") {}
 

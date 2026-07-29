@@ -8,10 +8,12 @@ import {
   productionHttpProfile,
   receive,
   respond,
+  type OperationalEvent,
 } from "@sync-engine/boundary";
 import { projectAssemblyHttpWire } from "@sync-engine/internal/boundary/http/http-floor";
 import { projectProductionHttpWire } from "@sync-engine/internal/boundary/http/http-profile";
 import { assemblyBehind } from "@sync-engine/internal/boundary/assembly/assembly-registry";
+import { rememberApplicationInvoker } from "@sync-engine/internal/boundary/protocol/gateway-registry";
 import { wireContracts } from "@sync-engine/internal/boundary/wire/wire-contracts";
 
 class UnknownSession extends Error {}
@@ -128,19 +130,32 @@ function poisonPublicCategories(application: ReturnType<typeof setup>["applicati
   });
 }
 
+function gatewayWithInvoker(
+  application: ReturnType<typeof setup>["application"],
+  invoker: { invoke: (...args: never[]) => Promise<unknown> },
+) {
+  rememberApplicationInvoker(invoker, application, application.publicInterface);
+  return createGateway({
+    application: { invoker: invoker as never, publicInterface: application.publicInterface },
+  });
+}
+
 async function expectOpaqueRuntimeCodes(
-  handlerFor: (gateway: {
-    invoke: () => Promise<unknown>;
-  }) => (request: Request) => Promise<Response>,
+  application: ReturnType<typeof setup>["application"],
+  handlerFor: (
+    gateway: ReturnType<typeof createGateway>,
+  ) => (request: Request) => Promise<Response>,
   url: string,
 ): Promise<void> {
   let code = "";
-  const handler = handlerFor({
-    invoke: async () => ({
-      ok: false as const,
-      error: { kind: "domain" as const, value: code, detail: "private refusal detail" },
+  const handler = handlerFor(
+    gatewayWithInvoker(application, {
+      invoke: async () => ({
+        ok: false as const,
+        error: { kind: "domain" as const, value: code, detail: "private refusal detail" },
+      }),
     }),
-  });
+  );
   for (const runtimeCode of [
     "toString",
     "constructor",
@@ -152,8 +167,11 @@ async function expectOpaqueRuntimeCodes(
     const response = await handler(
       new Request(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: "session=secret-session",
+        },
+        body: JSON.stringify({ session: "secret-session" }),
       }),
     );
     expect(response.status, runtimeCode).toBe(500);
@@ -255,7 +273,8 @@ describe("HTTP floor", () => {
     const { application, floor } = setup();
     poisonPublicCategories(application);
     await expectOpaqueRuntimeCodes(
-      (gateway) => createHttpHandler({ application, floor, gateway: gateway as never }),
+      application,
+      (gateway) => createHttpHandler({ application, floor, gateway }),
       "http://learning.test/me",
     );
   });
@@ -306,13 +325,18 @@ describe("HTTP floor", () => {
     const fetch = createHttpHandler({
       application,
       floor,
-      gateway: { invoke: async () => ({ ok: true as const, value }) } as never,
+      gateway: gatewayWithInvoker(application, {
+        invoke: async () => ({ ok: true as const, value }),
+      }),
     });
 
     const response = await fetch(
-      new Request("http://learning.test/cyclic", {
+      new Request("http://learning.test/me", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: "session=secret-session",
+        },
         body: "{}",
       }),
     );
@@ -326,11 +350,11 @@ describe("HTTP floor", () => {
     const fetch = createHttpHandler({
       application,
       floor,
-      gateway: {
+      gateway: gatewayWithInvoker(application, {
         invoke: async () => {
           throw new Error("private floor failure");
         },
-      },
+      }),
     });
 
     const response = await fetch(
@@ -360,7 +384,7 @@ describe("HTTP floor", () => {
     const fetch = createHttpHandler({
       application,
       floor,
-      gateway: { invoke: async () => result } as never,
+      gateway: gatewayWithInvoker(application, { invoke: async () => result }),
       correlation: {
         resolve: () => "hostile-result",
         responseHeader: "X-Request-Id",
@@ -409,7 +433,9 @@ describe("HTTP floor", () => {
     const fetch = createHttpHandler({
       application,
       floor,
-      gateway: { invoke: async () => ({ ok: true as const, value }) } as never,
+      gateway: gatewayWithInvoker(application, {
+        invoke: async () => ({ ok: true as const, value }),
+      }),
       correlation: {
         resolve: () => "hostile-issue",
         responseHeader: "X-Request-Id",
@@ -528,17 +554,17 @@ describe("production HTTP profile", () => {
     const privateFetch = createHttpHandler({
       application,
       profile,
-      gateway: {
+      gateway: gatewayWithInvoker(application, {
         invoke: async () => ({
           ok: false as const,
           error: { kind: "domain" as const, value: "PRIVATE_REFUSAL" },
         }),
-      },
+      }),
     });
     const frameworkFetch = createHttpHandler({
       application,
       profile,
-      gateway: {
+      gateway: gatewayWithInvoker(application, {
         invoke: async () => ({
           ok: false as const,
           error: {
@@ -547,13 +573,13 @@ describe("production HTTP profile", () => {
             detail: "private capacity detail",
           },
         }),
-      },
+      }),
     });
     const request = () =>
-      new Request("https://learning.test/private", {
+      new Request("https://learning.test/me", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ session: "secret-session" }),
       });
 
     const privateResponse = await privateFetch(request());
@@ -569,9 +595,110 @@ describe("production HTTP profile", () => {
     poisonPublicCategories(application);
     const profile = productionHttpProfile({ origin: "https://learning.test" });
     await expectOpaqueRuntimeCodes(
-      (gateway) => createHttpHandler({ application, profile, gateway: gateway as never }),
+      application,
+      (gateway) => createHttpHandler({ application, profile, gateway }),
       "https://learning.test/me",
     );
+  });
+
+  test.each(["profile", "floor"])(
+    "rejects a %s handler paired with another app's gateway",
+    (kind) => {
+      const first = setup();
+      const second = setup();
+      expect(() =>
+        kind === "profile"
+          ? createHttpHandler({
+              application: first.application,
+              gateway: second.gateway,
+              profile: productionHttpProfile({ origin: "https://learning.test" }),
+            })
+          : createHttpHandler({
+              application: first.application,
+              gateway: second.gateway,
+              floor: first.floor,
+            }),
+      ).toThrow(/gateway must target the supplied application/);
+    },
+  );
+
+  test("rejects a gateway target split across two assembled applications", () => {
+    const first = setup();
+    const second = setup();
+    expect(() =>
+      createGateway({
+        application: {
+          invoker: second.application.invoker,
+          publicInterface: first.application.publicInterface,
+        },
+      }),
+    ).toThrow(/publicInterface must belong to its invoker/);
+  });
+
+  test.each([
+    ["non-ByteString Unicode", "trace-\u0100"],
+    ["a lone surrogate", "trace-\ud800"],
+  ])("replaces %s correlation with a header-safe UUID", async (_case, resolved) => {
+    const { application, gateway } = setup();
+    const fetch = createHttpHandler({
+      application,
+      gateway,
+      profile: productionHttpProfile({ origin: "https://learning.test" }),
+      correlation: { resolve: () => resolved, responseHeader: "X-Request-Id" },
+    });
+
+    const response = await fetch(
+      new Request("https://learning.test/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: "secret-session" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Request-Id")).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
+
+  test("rejects an invalid correlation response header at construction", () => {
+    const { application, gateway } = setup();
+    expect(() =>
+      createHttpHandler({
+        application,
+        gateway,
+        profile: productionHttpProfile({ origin: "https://learning.test" }),
+        correlation: { resolve: () => "trace-1", responseHeader: "invalid header" },
+      }),
+    ).toThrow(/responseHeader must be a valid header name/);
+  });
+
+  test("replaces surrounding-space correlation so observers and headers share one identifier", async () => {
+    const { application } = setup();
+    const events: OperationalEvent[] = [];
+    const gateway = createGateway({ application, observers: [(event) => events.push(event)] });
+    const fetch = createHttpHandler({
+      application,
+      gateway,
+      profile: productionHttpProfile({ origin: "https://learning.test" }),
+      correlation: { resolve: () => " trace-1 ", responseHeader: "X-Request-Id" },
+    });
+
+    const response = await fetch(
+      new Request("https://learning.test/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: "secret-session" }),
+      }),
+    );
+    const responseId = response.headers.get("X-Request-Id");
+    const settled = events.find((event) => event.type === "invocation-settled");
+
+    expect(response.status).toBe(200);
+    expect(responseId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(settled?.correlationId).toBe(responseId);
   });
 
   test("keeps route identity across direct, gateway, profile, and floor calls", async () => {

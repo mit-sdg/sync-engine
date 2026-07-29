@@ -11,6 +11,7 @@ import {
 import { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
 
 const HELP = new Set([undefined, "help", "--help", "-h"]);
+const ACTIONS = new Set(["check", "pin", "pin-spec", "pin-wire", "manifest", "spec", "wire"]);
 
 const usage = `sync-engine artifacts <command> [--config path]
   check      Verify the assembled read-back and wire contract against the assembly.
@@ -26,13 +27,19 @@ The configuration path defaults to generated.config.ts.`;
 export async function artifactsCommand(args: readonly string[]): Promise<void> {
   const [action, ...options] = args;
   if (HELP.has(action)) {
+    if (options.length > 0) throw new Error(usage);
     console.log(usage);
     return;
   }
 
-  const configIndex = options.indexOf("--config");
-  const configPath = configIndex === -1 ? "generated.config.ts" : options.at(configIndex + 1);
-  if (configPath === undefined) throw new Error(usage);
+  if (action === undefined || !ACTIONS.has(action)) throw new Error(usage);
+  if (
+    options.length !== 0 &&
+    (options.length !== 2 || options[0] !== "--config" || options[1].startsWith("-"))
+  ) {
+    throw new Error(usage);
+  }
+  const configPath = options.length === 0 ? "generated.config.ts" : options[1];
   const configUrl = pathToFileURL(resolve(process.cwd(), configPath));
   const module = (await import(configUrl.href)) as { default?: GeneratedApplication };
   if (module.default === undefined) {

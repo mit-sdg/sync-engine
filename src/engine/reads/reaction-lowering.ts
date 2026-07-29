@@ -106,24 +106,51 @@ function lowerChainStep(
   const available = patternVariables(trigger.input, trigger.output);
   const needed = patternVariables(step.action.input);
   const ops: LoweredWhereOp[] = [...(step.whereOps ?? [])];
+  const pendingStepOps = [...ops];
   const initialWhereOps = [...(decl.whereOps ?? []), ...(chain[0].whereOps ?? [])];
 
   const stillMissing = (): Set<symbol> =>
     new Set([...needed].filter((variable) => !available.has(variable)));
+  const settleStepOps = (): void => {
+    let settled = true;
+    while (settled) {
+      settled = false;
+      for (let j = 0; j < pendingStepOps.length; j++) {
+        const op = pendingStepOps[j];
+        if (!opInVars(op).every((variable) => available.has(variable))) continue;
+        for (const variable of opOutVars(op)) available.add(variable);
+        pendingStepOps.splice(j, 1);
+        j--;
+        settled = true;
+      }
+    }
+  };
+  const bindingsNeededNow = (): Set<symbol> => {
+    const missing = stillMissing();
+    for (const op of pendingStepOps) {
+      for (const variable of opInVars(op)) {
+        if (!available.has(variable)) missing.add(variable);
+      }
+    }
+    return missing;
+  };
+
+  settleStepOps();
 
   const sources: Array<TriggerPattern | ActionPattern> = [
-    ...decl.when,
     ...chain.slice(0, i - 1).map((prior, j) => returnedTrigger(prior, names[j])),
+    ...decl.when,
   ];
   for (const source of sources) {
     const sourceVars =
       "channel" in source ? triggerVars(source) : patternVariables(source.input, source.output);
-    if (!intersects(sourceVars, stillMissing())) continue;
+    if (!intersects(sourceVars, bindingsNeededNow())) continue;
     if ("channel" in source) {
       return { reason: `step ${i + 1} needs a binding from a channel trigger` };
     }
     ops.push({ op: "earlier", pattern: { ...source, output: source.output ?? {} } });
     for (const variable of sourceVars) available.add(variable);
+    settleStepOps();
   }
 
   if (stillMissing().size > 0) {

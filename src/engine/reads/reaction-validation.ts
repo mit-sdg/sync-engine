@@ -110,7 +110,13 @@ function describeValue(value: unknown): string {
 
 function assertDataValue(reactionName: string, action: string, key: string, value: unknown): void {
   if (value === null || typeof value === "symbol") return;
-  if (["boolean", "number", "string", "bigint", "undefined"].includes(typeof value)) return;
+  if (value === undefined) {
+    throw new Error(
+      `Reaction "${reactionName}": then input "${key}" for ${action} is literal undefined — ` +
+        "portable patterns cannot represent undefined; omit the key instead.",
+    );
+  }
+  if (["boolean", "number", "string", "bigint"].includes(typeof value)) return;
   if (isFusedFormer(value)) return;
   if (Array.isArray(value)) {
     for (const item of value) assertDataValue(reactionName, action, key, item);

@@ -28,12 +28,13 @@ const HELP = new Set([undefined, "help", "--help", "-h"]);
 async function main(): Promise<void> {
   const [topic, ...rest] = process.argv.slice(2);
   if (HELP.has(topic)) {
+    if (rest.length > 0) throw new Error(usage);
     console.log(usage);
     return;
   }
 
   if (topic === "new") {
-    if (rest[0] === undefined) throw new Error(usage);
+    if (rest.length !== 1 || rest[0].startsWith("-")) throw new Error(usage);
     const written = await scaffoldProject(rest[0]);
     console.log(`Wrote ${written.length} files into ${rest[0]}:`);
     for (const path of written) console.log(`  ${path}`);

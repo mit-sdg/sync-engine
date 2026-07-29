@@ -58,6 +58,7 @@ const ReactionBrand: unique symbol = Symbol("ReactionBrand");
 const VocabularyClasses: unique symbol = Symbol("VocabularyClasses");
 const VocabularyComputations: unique symbol = Symbol("VocabularyComputations");
 const VocabularyMetadata: unique symbol = Symbol("VocabularyMetadata");
+declare const ActionTypeAnchor: unique symbol;
 
 /** Any concept class the vocabulary can hold. */
 export type ConceptClass = new (...args: never[]) => object;
@@ -106,17 +107,25 @@ export type QueryLineFn<F> = F extends (input: infer I) => infer A
     }
   : F;
 
-/** An action member called as authored data instead of executed directly. */
+/**
+ * An action member called as authored data instead of executed directly. The
+ * final, uncallable overload anchors generated `ReturnType` and `Parameters`
+ * references to the declared implementation signature; authored calls select
+ * the generic line-builder overload so input completeness remains visible.
+ */
 type RequiredInputKeys<I> = {
   [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
 }[keyof I];
 
-export type ActionLineFn<F> = F extends (input: infer I) => unknown
-  ? <P extends SlotPattern<I>>(
-      pattern: P,
-    ) => RequiredInputKeys<I> extends keyof P
-      ? ActionCall<F & InstrumentedAction, P>
-      : TriggerActionLine<F & InstrumentedAction, P>
+export type ActionLineFn<F> = F extends (input: infer I) => infer A
+  ? {
+      <P extends SlotPattern<I>>(
+        pattern: P,
+      ): RequiredInputKeys<I> extends keyof P
+        ? ActionCall<F & InstrumentedAction, P, A>
+        : TriggerActionLine<F & InstrumentedAction, P, A>;
+      (input: I, anchor: typeof ActionTypeAnchor): A;
+    }
   : F;
 
 /**

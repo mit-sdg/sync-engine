@@ -310,11 +310,21 @@ type FloorContext<
   }[keyof S]
 >;
 
+type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> = {
+  [Name in keyof S]: S[Name] extends RegisteredConcept<infer C, infer _F>
+    ? [] extends ConstructorParameters<C>
+      ? never
+      : Name
+    : Name;
+}[keyof S];
+
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>> {
   vocabulary: VocabularyOf<S>;
   concepts: VocabularyOf<S>["concepts"];
   publicErrors: Readonly<Record<string, PublicErrorCategory>>;
-  implementations(): Implementations<VocabularyOf<S>>;
+  implementations(
+    ...args: [RequiredConstructorRegistration<S>] extends [never] ? [] : [never]
+  ): Implementations<VocabularyOf<S>>;
   implementations<Floor extends CompleteFloorNames<S>>(
     floor: Floor,
     context: FloorContext<S, Floor>,
@@ -390,6 +400,11 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
     for (const [name, registration] of Object.entries(registrations)) {
       let implementation: unknown;
       if (floor === undefined) {
+        if (registration.class.length > 0) {
+          throw new Error(
+            `conceptSet: concept "${name}" requires constructor arguments; use a named floor.`,
+          );
+        }
         implementation = new (registration.class as new () => object)();
       } else {
         const factory = registration.floors?.[floor];

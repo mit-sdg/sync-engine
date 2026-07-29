@@ -8,7 +8,17 @@
  */
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
-import { count, earlier, is, reaction, view, vocabulary, when, where } from "@sync-engine/language";
+import {
+  count,
+  earlier,
+  is,
+  reaction,
+  view,
+  vocabulary,
+  when,
+  where,
+  whether,
+} from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
@@ -32,6 +42,7 @@ interface FileRow {
 
 class FilingConcept {
   files: FileRow[] = [];
+  sharedWithInputs: unknown[] = [];
   add({ id, owner }: { id: string; owner: string }) {
     this.files.push({ id, owner, sharedWith: [] });
     return { id };
@@ -47,6 +58,7 @@ class FilingConcept {
     return this.files.filter((file) => file.id === id);
   }
   _sharedWith({ id }: { id: string }): { person: string }[] {
+    this.sharedWithInputs.push(id);
     return (
       this.files.find((file) => file.id === id)?.sharedWith.map((person) => ({ person })) ?? []
     );
@@ -283,6 +295,29 @@ describe("views: evaluation", () => {
     await Seating.reserve({ person: "b" });
     await Seating.reserve({ person: "c" }); // full now — no seat
     expect(Seating.seated).toEqual(["a", "b"]);
+  });
+
+  test("a blank optional view output stays unbound for a later plain query", async () => {
+    const { reacting, Filing } = setup();
+    const optionalOwner = view("the optional owner of (file)", ({ file }, { owner }, _bindings) =>
+      where(whether(refs.Filing._get({ id: file }).is({ owner }))),
+    );
+    const { file, owner } = $vars;
+    const ops = [
+      whether(optionalOwner({ file }).is({ owner })),
+      refs.Filing._sharedWith({ id: owner }),
+    ];
+
+    expect(
+      await applyWhereOps(new Frames({ [file]: "missing" }), ops, reacting.readEnv()),
+    ).toHaveLength(0);
+    expect(Filing.sharedWithInputs).toEqual([]);
+
+    await Filing.add({ id: "null-owner", owner: null as never });
+    expect(
+      await applyWhereOps(new Frames({ [file]: "null-owner" }), ops, reacting.readEnv()),
+    ).toHaveLength(0);
+    expect(Filing.sharedWithInputs).toEqual([null]);
   });
 
   test("two different definitions of one sentence are rejected", () => {

@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
-import { reaction, vocabulary, when } from "@sync-engine/language";
+import { reaction, vocabulary, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
@@ -108,6 +108,40 @@ describe("lowering: chains become reactions", () => {
     ]);
   });
 
+  test("a later stage can use bindings opened by its own portable where", async () => {
+    const first = setup();
+    await first.List.add({ value: 7 });
+    first.reacting.register({
+      StageRead: reaction(({ kind, value }: Vars) =>
+        when(refs.Button.clicked({ kind }).responds())
+          .then(refs.Deciding.decide({ kind: "fixed" }))
+          .then(
+            where(refs.List._items({ kind } as never).is({ value })).then(
+              refs.Recorder.record({ tag: value }),
+            ),
+          ),
+      ),
+    });
+
+    const exported: AppIR = JSON.parse(JSON.stringify(first.reacting.exportReactions()));
+    expect(exported.unlowered).toEqual([]);
+    expect(exported.reactions[1]?.where).toMatchObject([
+      { op: "earlier", when: { input: { kind: { $var: "kind" } } } },
+      {
+        op: "find",
+        query: { concept: "List", query: "_items" },
+        in: { kind: { $var: "kind" } },
+        out: { value: { $var: "value" } },
+      },
+    ]);
+
+    const second = setup();
+    await second.List.add({ value: 7 });
+    second.reacting.registerReactions(exported.reactions);
+    await second.Button.clicked({ kind: "go" });
+    expect(second.Recorder.order).toEqual([7]);
+  });
+
   test(".named() overrides a derived reaction name", () => {
     const { reacting } = setup();
     reacting.register({
@@ -184,6 +218,19 @@ describe("then-input strictness", () => {
         ),
       }),
     ).toThrow("a function");
+  });
+
+  test("literal undefined in a then pattern is rejected before encoding", () => {
+    const { reacting } = setup();
+    expect(() =>
+      reacting.register({
+        Undefined: reaction((_vars: Vars) =>
+          when(refs.Button.clicked({ kind: "u" }).responds()).then(
+            refs.Recorder.record({ tag: undefined as never }),
+          ),
+        ),
+      }),
+    ).toThrow(/literal undefined.*portable patterns.*omit the key/s);
   });
 
   test("nested literals and variables stay legal", () => {

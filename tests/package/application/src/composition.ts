@@ -4,6 +4,12 @@ import { concepts } from "./concept-set.ts";
 
 const { Mitigating, Rooming } = concepts;
 
+// @ts-expect-error Action response patterns accept only declared output fields.
+Rooming.open({ name: "type-check" }).responds({ typo: Symbol("room") });
+
+// @ts-expect-error Action response fields retain the implementation's declared output types.
+Rooming.open({ name: "type-check" }).responds({ room: 1 });
+
 export const RoomStartsWithInvestigation = reaction(({ room }) =>
   when(Rooming.open({}).responds({ room })).then(
     Mitigating.choose({ room, mitigation: "investigate" }),

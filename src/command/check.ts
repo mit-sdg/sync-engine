@@ -250,19 +250,34 @@ const usage = `sync-engine check [--concepts <path...>] [--config path] [--fail-
   Defaults to src/concepts.`;
 
 export async function checkCommand(args: readonly string[]): Promise<void> {
-  const conceptsIndex = args.indexOf("--concepts");
-  let conceptRoots = ["src/concepts"];
-  if (conceptsIndex !== -1) {
-    const supplied = args.slice(conceptsIndex + 1);
-    const nextOption = supplied.findIndex((value) => value.startsWith("--"));
-    conceptRoots = nextOption === -1 ? supplied : supplied.slice(0, nextOption);
-    if (conceptRoots.length === 0) throw new Error(usage);
-  }
-  const configIndex = args.indexOf("--config");
-  const configPath = configIndex === -1 ? undefined : args.at(configIndex + 1);
-  if (configIndex !== -1 && (configPath === undefined || configPath.startsWith("--"))) {
+  let conceptRoots: string[] | undefined;
+  let configPath: string | undefined;
+  let failOnWarnings = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--concepts" && conceptRoots === undefined) {
+      conceptRoots = [];
+      while (args[index + 1] !== undefined && !args[index + 1].startsWith("-")) {
+        conceptRoots.push(args[index + 1]);
+        index += 1;
+      }
+      if (conceptRoots.length === 0) throw new Error(usage);
+      continue;
+    }
+    if (argument === "--config" && configPath === undefined) {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("-")) throw new Error(usage);
+      configPath = value;
+      index += 1;
+      continue;
+    }
+    if (argument === "--fail-on-warnings" && !failOnWarnings) {
+      failOnWarnings = true;
+      continue;
+    }
     throw new Error(usage);
   }
+  conceptRoots ??= ["src/concepts"];
 
   const root = process.cwd();
   const directories = await conceptDirectories(conceptRoots, root);
@@ -291,7 +306,7 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
     for (const diagnostic of diagnostics) {
       console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
     }
-    const policy = args.includes("--fail-on-warnings") ? "warnings" : "errors";
+    const policy = failOnWarnings ? "warnings" : "errors";
     if (diagnosticsFail(diagnostics, policy)) {
       throw new Error(`Application diagnostic check failed with policy "${policy}".`);
     }

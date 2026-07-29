@@ -64,4 +64,81 @@ describe("concept instrumentation", () => {
       'Action "Counter.increment": expected actionId to be a string; received object.',
     );
   });
+
+  test("returned matching retains the input snapshot recorded with the ask", async () => {
+    class OpaqueDate extends Date {
+      override getTime(): number {
+        throw new Error("opaque date must not be coerced");
+      }
+    }
+
+    class Mutating {
+      seen?: string;
+
+      change(input: {
+        nested: { value: string };
+        when: Date;
+        whenAlias: Date;
+        opaque: Map<string, string>;
+        opaqueDate: OpaqueDate;
+      }) {
+        this.seen = input.nested.value;
+        input.nested.value = "changed-by-action";
+        input.when.setUTCFullYear(2040);
+        return {};
+      }
+    }
+    const actions = new ActionConcept();
+    const requested = Promise.withResolvers<void>();
+    const matchedInputs: Record<string, unknown>[] = [];
+    let reactions = 0;
+    const state: InstrumentationState = {
+      actions,
+      boundActionsByConcept: new WeakMap(),
+      queryCaches: new WeakMap(),
+      scheduler: new ActionScheduler(),
+      rawConceptsByInstrumented: new WeakMap(),
+      concepts: new Set(),
+      registerConcept: () => {},
+      react: async (record) => {
+        matchedInputs.push(actions._matchingRecord(record).input);
+        if (reactions++ === 0) await requested.promise;
+      },
+      emit: () => {},
+    };
+    const raw = new Mutating();
+    const concept = instrumentConcept(state, raw);
+    const opaque = new Map([["key", "original"]]);
+    const when = new Date("2025-01-01T00:00:00.000Z");
+    const opaqueDate = new OpaqueDate("2026-01-01T00:00:00.000Z");
+    const input = {
+      nested: { value: "original" },
+      when,
+      whenAlias: when,
+      opaque,
+      opaqueDate,
+    };
+
+    const result = concept.change(input);
+    input.nested.value = "changed-by-caller";
+    requested.resolve();
+    await result;
+
+    expect(raw.seen).toBe("changed-by-caller");
+    expect(matchedInputs).toHaveLength(2);
+    expect(matchedInputs[0]).toBe(matchedInputs[1]);
+    expect(matchedInputs[1]).toMatchObject({ nested: { value: "original" } });
+    expect((matchedInputs[1]!.when as Date).toISOString()).toBe("2025-01-01T00:00:00.000Z");
+    expect(matchedInputs[1]!.when).toBe(matchedInputs[1]!.whenAlias);
+    expect(matchedInputs[1]!.when).not.toBe(when);
+    expect(matchedInputs[1]?.opaque).toBe(opaque);
+    expect(matchedInputs[1]?.opaqueDate).toBe(opaqueDate);
+    expect([...actions.actions.values()][0]?.input).toEqual({
+      nested: { value: "original" },
+      opaque: {},
+      opaqueDate: "[unreadable]",
+      when: "2025-01-01T00:00:00.000Z",
+      whenAlias: "[circular]",
+    });
+  });
 });
