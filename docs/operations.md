@@ -5,6 +5,21 @@ sync-engine is suitable for an application. It applies to the current beta
 implementation. [Execution semantics](semantics.md) defines the lower-level
 runtime contract.
 
+## Deployment fit at a glance
+
+| Requirement                                     | Engine contract                                       | Required owner or action                                                          |
+| ----------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Serialize actions on one concept instance       | Yes, within one assembly                              | Use concept storage for cross-process coordination                                |
+| Transaction across several actions or concepts  | No                                                    | Put the atomic decision in one owning concept action and storage transaction      |
+| Persist concept state and recover after restart | No                                                    | Concept implementation and host recovery policy                                   |
+| Validate endpoint values at runtime             | Explicit endpoint hooks only                          | Application-supplied input and successful-output validators                       |
+| Bound engine-owned work                         | Optional `ExecutionLimits`                            | Configure limits; keep host connection, rate, and queue limits                    |
+| Cancel work after acceptance                    | No                                                    | Design idempotency and recovery for work that outlives the caller                 |
+| Serve a public JSON boundary                    | Fetch handler with a production profile or HTTP floor | Host supplies TLS, listener, CORS policy, traffic controls, and process lifecycle |
+
+Use sync-engine only when the application and host can own every requirement in
+the final column.
+
 ## Appropriate use
 
 Use sync-engine when independently implemented concepts benefit from explicit,

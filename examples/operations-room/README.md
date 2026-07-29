@@ -72,7 +72,8 @@ bun run artifacts:check
 Run `bun run artifacts:pin` only after an intentional composition or contract
 change. Review both generated diffs.
 
-The progressive authoring path is [Connect independent
-behaviors](../../docs/guide/reactions.md), [Views and
+The authoring case study starts with [Define one
+behavior](../../docs/guide/concepts.md), then continues through [Connect
+independent behaviors](../../docs/guide/reactions.md), [Views and
 formers](../../docs/guide/views-and-formers.md), then [Application
 boundary](../../docs/guide/application-boundary.md).

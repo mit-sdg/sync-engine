@@ -1,27 +1,46 @@
 # Documentation
 
-This index routes application authors, API consumers, operators, and
-contributors to the document that owns each subject. Pages under `guide/` are a
-progressive authoring path. Reference pages define contracts; they do not repeat
-the tutorials.
+This index routes application authors, client authors, operators, and
+contributors to the page that answers each kind of question. The guides explain
+representative use. The reference pages define the observable contracts.
 
-## Start an application
+## Understand the application model
+
+Read [How sync-engine applications fit together](overview.md) for the roles of
+concepts, composition, assembly, gateways, clients, generated contracts, and
+occurrence evidence. Use the [Glossary](glossary.md) when a term has a narrower
+meaning than it does in ordinary TypeScript or HTTP code.
+
+## Build an application
 
 Read these pages in order:
 
 1. [Getting started](guide/getting-started.md) scaffolds and runs one complete
-   concept, composition, assembly, and client path.
-2. [Define one behavior](guide/concepts.md) specifies, implements, tests, and
-   registers a concept.
+   Note Keeper application.
+2. [Define one behavior](guide/concepts.md) begins an Operations Room case study
+   by specifying, implementing, testing, and registering its Alerting concept.
 3. [Connect independent behaviors](guide/reactions.md) adds consequences,
-   reads, fan-out, sibling paths, and chains.
+   current-state reads, fan-out, independent paths, and chains to that case
+   study.
 4. [Views and formers](guide/views-and-formers.md) names policy and constructs
-   result trees.
+   current result trees across the Operations Room concepts.
 5. [Application boundary](guide/application-boundary.md) declares endpoints,
    assembles the application, generates the wire, and calls a typed client.
 
-The guides are introductory. [Execution semantics](semantics.md) is the
-authoritative contract when a guide omits an edge case.
+The first page is a standalone tutorial. The remaining pages inspect one larger
+shipped example; they do not modify the generated Note Keeper project. The
+guides are introductory. [Execution semantics](semantics.md) is authoritative
+when a guide simplifies a runtime rule.
+
+## Call an existing application
+
+Client code needs the generated wire type and the `client` package, not concept
+or assembly imports. Start with [Call the typed
+client](guide/application-boundary.md#call-the-typed-client), then use the
+[`client` API reference](public-surface.md#client) for local, HTTP, and custom
+transport constructors. The [Production HTTP
+example](../examples/production-http/README.md) shows the projected public
+contract used by an HTTP client.
 
 ## Look up a contract
 
@@ -38,16 +57,18 @@ authoritative contract when a guide omits an edge case.
 
 ## Find an example
 
-- [Advanced recipes](advanced-recipes.md) demonstrates explicit restart
-  recovery and an inbound CLI over a real application endpoint.
-- [Example book](book.md) places small read constructions beside generated
-  read-back and representative errors.
-- [Reading Circle](../examples/reading-circle/README.md) is the shortest complete
-  multi-concept application.
-- [Operations Room](../examples/operations-room/README.md) demonstrates
-  selectable reaction packs, replaceable policy, and staged formers.
-- [Production HTTP](../examples/production-http/README.md) separates registered
-  public-error projection from optional same-origin cookie credentials.
+- [Persistence, restart, and recovery](advanced-recipes.md) separates durable
+  concept state, occurrence evidence, process-local derived state, and explicit
+  recovery.
+- [Read construction cookbook](book.md) places small read constructions beside
+  generated read-back and representative errors.
+
+| Application                                              | Use it for                                                                                                      |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [Note Keeper](guide/getting-started.md)                  | The smallest scaffolded lifecycle: one concept, two endpoints, a gateway, and a local client                    |
+| [Reading Circle](../examples/reading-circle/README.md)   | The shortest complete multi-concept application and the vocabulary used by the cookbook                         |
+| [Operations Room](../examples/operations-room/README.md) | Selectable reaction packs, replaceable policy, implementation overrides, staged formers, and a nested dashboard |
+| [Production HTTP](../examples/production-http/README.md) | Public-error projection, runtime validators, limits, correlation, and optional same-origin cookie credentials   |
 
 All applications are independently installable. Their generated Markdown and
 TypeScript files are pinned outputs from their assemblies.
@@ -73,3 +94,10 @@ TypeScript files are pinned outputs from their assemblies.
   records dependency rules.
 - [Contributor release procedure](releasing.md) describes release preparation,
   publication, verification, and bad-release response.
+
+## Agent index
+
+[`llms.txt`](llms.txt) is the compact index for coding agents and other
+automated tools using sync-engine. It records supported imports, the authoring
+sequence, commands, examples, contract boundaries, and the order in which to
+resolve conflicting guidance.

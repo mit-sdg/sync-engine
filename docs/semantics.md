@@ -3,7 +3,7 @@
 This page defines the observable execution contract for actions, reactions,
 reads, formed results, and application boundaries in the current 1.0 beta.
 The [documentation index](./index.md) points to the authoring guides, the
-[example book](./book.md) demonstrates representative constructions, and the
+[read construction cookbook](./book.md) demonstrates representative constructions, and the
 [Public API](./public-surface.md) lists the exports.
 
 | Category                   | Contract                                                                                                                                        |
@@ -13,14 +13,6 @@ The [documentation index](./index.md) points to the authoring guides, the
 | Application responsibility | Value validation, domain invariants, concept-state persistence, idempotency, and cross-process coordination                                     |
 | Host responsibility        | Connection and workload limits, TLS, process lifecycle, resource closure, and deployment recovery                                               |
 | Not provided               | Multi-action transactions, rollback, accepted-work cancellation, replay, restart recovery, distributed serialization, or exactly-once execution |
-
-A relation's declaration, when present, controls how a plain line reads it. The
-declaration determines whether the line always supplies a row, may drop the
-current match, or continues once per row. An undeclared query may answer one
-record or an array and is treated as potentially many. `no`, `whether`, and
-`.is.not` add explicit absence or inequality behavior. `form`, the selection
-folds, and the producer's declaration control the result shape. A `then(...)`
-group states independent siblings; later groups state temporal dependence.
 
 ## Contract index
 
@@ -33,8 +25,12 @@ group states independent siblings; later groups state temporal dependence.
 | Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                            |
 | Query promises, caching, and equality       | [Queries](#queries)                                                                     |
 | Views and formed results                    | [Views and formers](#views-and-formers)                                                 |
+| Placement of race-sensitive decisions       | [Decisions that must not race](#decisions-that-must-not-race)                           |
 | Sibling and endpoint settlement             | [Sibling paths and endpoint settlement](#sibling-paths-and-endpoint-settlement)         |
-| Gateway, client, validation, and HTTP       | [Boundary, gateway, and client](#boundary-gateway-and-client)                           |
+| Gateway and client result model             | [Result model and gateway](#result-model-and-gateway)                                   |
+| Runtime input and output validation         | [Runtime validation](#runtime-validation)                                               |
+| Production HTTP projection                  | [Production HTTP profile](#production-http-profile)                                     |
+| Cookie credential binding                   | [Cookie credential floor](#cookie-credential-floor)                                     |
 | Generated caller contracts                  | [Generated wire](#generated-wire)                                                       |
 | Deployment and resource limits              | [Operational limits](#operational-limits)                                               |
 | Interpreter failure delivery                | [Failures between action asks](#failures-between-action-asks)                           |
@@ -246,7 +242,7 @@ views. It also generates a read-back for every reaction. The read-back identifie
 paths, stages, opened and tested names, fan-out, and dropped cases.
 `inspectAssembly(assemble(...)).readBack` returns the application's complete
 read-back as one string.
-[The example book](./book.md) quotes these read-backs entry by entry.
+[The read construction cookbook](./book.md) quotes these read-backs entry by entry.
 
 ## Queries
 
@@ -397,13 +393,18 @@ settles with opaque `INTERNAL_ERROR`. A fault-free unanswered invocation waits
 30 seconds by default and then returns `TIMED_OUT`; `InvokeOptions.timeoutMs`
 overrides that wait. Public endpoints should provide explicit coverage or
 fallback branches rather than use timeout as an authored outcome.
-[Cancellation](#cancellation) owns what timeout and abort do with a pending
-call. The current package does not analyze or enforce branch disjointness or
-endpoint coverage.
+[Cancellation](#cancellation) defines what timeout and abort do with a pending
+call. Runtime execution does not enforce branch disjointness or endpoint
+coverage. `applicationDiagnostics(...)` can warn about a limited set of
+duplicate answer conditions and missing unconditional fallbacks. Those warnings
+remain advisory unless a repository runs `sync-engine check --fail-on-warnings`
+with an application config.
 
 ## Boundary, gateway, and client
 
-The [application-boundary guide](./guide/application-boundary.md) owns the
+### Result model and gateway
+
+The [application-boundary guide](./guide/application-boundary.md) shows the
 authoring path from assembly through the fixed gateway and generated client.
 Semantically, `assemble` gives an application its own boundary and occurrence
 log. The log records what happened in that assembly; it is not concept state.
@@ -416,11 +417,13 @@ The local and HTTP clients resolve to the same simple shape: the endpoint's
 success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
 boundary answer keeps domain errors and framework errors distinct. Every HTTP
 handler owns method checks, JSON parsing, a one-mebibyte request-body limit, and
-status mapping. Client, invocation, and CLI adapters omit exception text when
+status mapping. Client and invocation adapters omit exception text when
 an unknown thrown value becomes a framework error. A top-level `error` field in
 an authored response denotes a domain failure, so a successful endpoint result
 cannot use `error` as an ordinary top-level data field. See the exact
 [cancellation boundary](#cancellation).
+
+### Limits and operational observation
 
 An opt-in `ExecutionLimits` profile bounds active root flows, pending requests,
 actions and firings per flow, evaluation rows, and caller deadlines. Profile
@@ -449,6 +452,8 @@ Observer callbacks are synchronous bounded handoff: the engine catches throws
 and never awaits observer work, while queueing, exporting, and network I/O
 remain host responsibilities.
 
+### Correlation and route paths
+
 HTTP handlers may resolve an inbound correlation id and project the effective
 value in a response header. Accepted identifiers are non-empty,
 control-character-free ByteStrings of at most 128 code units without leading or
@@ -469,6 +474,8 @@ valid when URL handling preserves it. `/` is a valid endpoint path and means no
 prefix when used as a base path. A trailing base-path slash is accepted and
 removed before routing, so `/api/` and `/api` declare the same base.
 
+### Production HTTP profile
+
 `productionHttpProfile(...)` declares a public origin and optional base path.
 The handler form carrying that profile and the assembly is the production
 credential-free policy. It accepts JSON `POST` requests, preserves ordinary
@@ -480,6 +487,8 @@ failure becomes the same opaque internal response. Diagnostic detail never
 crosses this policy. The declared origin identifies public deployment and
 enforces the production HTTPS check; the credential-free profile does not use
 an inbound `Origin` header as an authorization or CORS decision.
+
+### Cookie credential floor
 
 An HTTP floor may additionally bind one logical credential input to a cookie.
 The application declares the credential name and input, the endpoint that
@@ -507,7 +516,9 @@ it does not answer CORS preflights or emit CORS headers.
 The floor adds no implicit `/api` route alias; serving below `/api` requires an
 explicit `basePath: "/api"` declaration.
 
-**Runtime validation boundary.** Gateway admission and the assembled invoker
+### Runtime validation
+
+Gateway admission and the assembled invoker
 validate the route and request's outer shape. The input must be a non-null,
 non-array object and contain every required own key. Extra keys remain. Defaults
 are shallow and apply only when a key is absent; a present value is never
@@ -527,6 +538,8 @@ than runtime validation. Optional concept State sections are uninterpreted human
 notation; they do not contribute to endpoint contracts or validators, and no
 schema is inferred from concept specifications.
 
+### Endpoint input contracts
+
 Absent an explicit endpoint input contract, assembly derives required keys from
 portable endpoint IR as the intersection of non-reserved keys mentioned by
 every exported `receive(...)` pattern for that path. Local endpoint behavior is
@@ -535,11 +548,15 @@ one endpoint declaration may supply an explicit contract for a path. Assembly
 rejects an explicit contract when omitting its optional keys cannot match any
 receive alternative after defaults are applied.
 
+### Production transport requirements
+
 Production profiles and floors reject a non-HTTPS public origin when
 `NODE_ENV=production`. Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
 `Domain`. An HTTPS origin uses a `Secure` cookie whose name has the `__Host-`
 prefix. Deployment responsibilities are listed under [Boundary
 operations](#boundary-operations).
+
+### JSON projection
 
 For JSON-representable values, both clients expose the same projected data. The
 local client serializes and parses input and output before returning it. Dates
@@ -580,9 +597,9 @@ and expiry fields from the issuing route's output. Both contracts share the
 generated type helpers and vocabulary anchor. A descriptor cannot supply both
 HTTP fields.
 
-These are TypeScript guarantees. Input admission is stated under
-[Boundary, gateway, and client](#boundary-gateway-and-client); output validation
-limits are stated under [Boundary operations](#boundary-operations).
+These are TypeScript guarantees. [Runtime validation](#runtime-validation)
+defines input admission and explicit successful-output validation. Neither is
+inferred from the generated type.
 
 ## Operational limits
 
@@ -791,5 +808,7 @@ origin that is not HTTPS. A production host must set that environment value.
 The Fetch handler does not provide CORS policy, TLS termination, HSTS,
 trusted-proxy handling, reverse-proxy policy, or authentication; deployment and
 application code must supply them. Generated wire contracts typecheck callers,
-but the gateway does not validate returned values against generated output
-types or derive a runtime validator from concept specifications.
+but the gateway does not automatically validate returned values against
+generated output types or derive a runtime validator from concept
+specifications. An endpoint's explicit successful-output validator runs at the
+assembled invoker as described under [Runtime validation](#runtime-validation).

@@ -1,12 +1,10 @@
 # Application boundary
 
-An endpoint specializes the reaction frame at the application boundary. It
-gives an outside caller a stable path into the operations room, with an input
-contract, correlation, and a response from the authored design.
-
-This page assembles the room, declares one endpoint, places the gateway in front
-of it, and calls the result through a generated TypeScript contract. It assumes
-the concepts, reactions, views, and formers from the preceding guides.
+An endpoint gives an outside caller a named route into composed behavior. This
+case-study guide assembles Operations Room, follows one endpoint through the
+standard gateway, generates its TypeScript contract, and calls it through a
+typed client. It assumes the concepts, reactions, views, and formers from the
+preceding guides.
 
 ## Run the shipped path
 
@@ -29,10 +27,12 @@ deployment layouts.
 
 ## Assemble one application
 
-`assemble` installs one vocabulary and one composition. The vocabulary names
-the concepts and their refusals. The composition collects the room boundary
-declarations, the selected reaction modules, one policy module, and the shared
-contribution boundary declarations that make this particular application.
+`assemble` installs one vocabulary, one concrete instance of each concept, and
+one composition. Operations Room's composition collects room endpoints,
+selected reaction packs, one contribution policy, and the policy-parameterized
+contribution endpoints.
+
+### Select example options
 
 An override supplies a ready-made concept object for one name while keeping the
 rest of the selected implementation set. The helper derives that partial shape
@@ -95,20 +95,18 @@ export function identities(...values: string[]): () => string {
 }
 ```
 
-Ordinary assembly can leave `instances` empty. The other options select
+Ordinary assembly can leave `instances` empty. Operations Room exposes
+`instances` for test or host substitution. Its other options select
 composition: the same concept classes can run with or without the two reaction
 packs, or with a different contribution policy.
 
 Each call creates a new application. Changing an option and running again does
 not replace reactions inside an application that is already running.
 
-Assembly draws a hard portability line at this boundary. Endpoint reactions and
-all other ordinary reactions, views, and formers must be canonical
-JSON-round-trippable definitions that can be registered against the same named
-vocabulary. Closures, `custom` operations, object-identity patterns, raw
-transforms, and whole unlowered reactions are local and cannot occur in an
-ordinary assembly. Assembly validates this before returning the application's
-route set.
+Assembly validates that all installed reactions, views, formers, and endpoints
+are portable before returning the application's route set. [Portable and local
+behavior](../semantics.md#portable-and-local-behavior) defines that boundary and
+the `advanced` escape hatches.
 
 ## Receive, ask, respond
 
@@ -156,22 +154,18 @@ An endpoint can also answer differently by case. `receive(...)` supplies the
 outside-request trigger to the same labeled sibling tree ordinary reactions
 use. Every matching branch runs, and labels establish provenance rather than
 priority or exclusivity. If several branches answer, the boundary accepts one
-response and refuses another with `NOT_PENDING`. [The example
-book](../book.md#12--an-endpoint-uses-the-same-sibling-shape) shows this boundary
-specialization, and [Execution semantics](../semantics.md#sibling-paths-and-endpoint-settlement)
-defines its lowering and settlement.
+response and refuses another with `NOT_PENDING`. [The read construction
+cookbook](../book.md#12--an-endpoint-uses-the-same-sibling-shape) shows this
+boundary specialization, and [Execution
+semantics](../semantics.md#sibling-paths-and-endpoint-settlement) defines its
+lowering and settlement.
 
 Cover every admitted case on a public endpoint with an answer or an explicit
-fallback branch. For a direct invoker without an execution profile, a
-fault-free invocation that no branch answers waits 30 seconds by default and
-then returns `TIMED_OUT`. A profile uses its maximum request duration as the
-default. If the interpreter fails while matching or advancing a path and no
-sibling answers, the flow settles promptly with opaque `INTERNAL_ERROR`; an
-answer already delivered still wins. A direct `Invoker` caller can set
-`InvokeOptions.timeoutMs` or supply an abort `signal`; neither operation cancels
-work already forwarded into the application. Gateway and application invokers
-start separate timeout durations, so a gateway call can exceed one configured
-duration.
+fallback branch. A fault-free request that no branch answers remains pending
+until its deadline and returns `TIMED_OUT`. Timeout and abort stop the caller's
+wait without cancelling accepted work. [Endpoint
+settlement](../semantics.md#sibling-paths-and-endpoint-settlement) and
+[cancellation](../semantics.md#cancellation) define the complete behavior.
 
 ## Put the standard gateway in front
 
@@ -200,7 +194,11 @@ portable reaction data. Generation is all-or-nothing: any local definition
 fails assembly with its owner rather than being omitted from the contract. One
 application descriptor names the assembly and the application;
 the artifact paths and type names follow from the title and the config's own
-location, and each may be overridden:
+location, and each may be overridden.
+
+### Configure generation
+
+The minimal descriptor supplies the assembly function and application title:
 
 _Source: [`examples/operations-room/generated.config.ts`](../../examples/operations-room/generated.config.ts)_
 
@@ -236,9 +234,11 @@ credential-free `httpProfile` or its cookie-bound `httpFloor` in this
 descriptor, so the generated module carries both the logical application
 contract and its projected HTTP form. A floor projection also removes the
 credential input and consumed issue outputs. [Execution
-semantics](../semantics.md#boundary-gateway-and-client) owns the fixed cookie
+semantics](../semantics.md#boundary-gateway-and-client) defines the fixed cookie
 and HTTP behavior; the [public API](../public-surface.md#generated-descriptor)
 lists every descriptor field and default.
+
+### Read the generated contract
 
 The generated route records its admitted input, success body, application-derived
 error union, and input-admission error. Here the
@@ -273,7 +273,7 @@ The `sync-engine artifacts` command always uses the vocabulary anchor and
 strict leaf resolution. Direct callers of `renderWireTypes(...)` must select
 `strictLeaves: true` and supply a vocabulary anchor when unresolved `Json`
 leaves must be rejected.
-[Generated wire](../semantics.md#generated-wire) owns the complete derivation
+[Generated wire](../semantics.md#generated-wire) defines the complete derivation
 and JSON-projection rules.
 
 Keep the generated module in source control and publish it with the application
@@ -283,6 +283,8 @@ declarations beside the wire. The import is type-only and does not add concept
 instances or engine code to the browser bundle. Before publishing, regenerate
 the files, review the wire diff, and typecheck a consumer against the packed
 package.
+
+## Add runtime validation
 
 The generated contract is a compile-time guarantee, not a runtime schema.
 Standard admission checks that input is an object and required keys are present.
@@ -304,8 +306,8 @@ endpoint("/rooms/create", createRoom, {
 The input validator runs after shallow defaults and before the application ask.
 The output validator protects successful results; a violation is retained as
 integrity evidence and leaves the invoker as opaque `INTERNAL_ERROR`.
-[Execution semantics](../semantics.md#boundary-gateway-and-client) defines the
-complete admission boundary.
+[Runtime validation](../semantics.md#runtime-validation) defines the complete
+admission and output-validation boundary.
 
 ## Call the typed client
 
@@ -325,10 +327,35 @@ export async function loadRoomDashboard(client: OperationsRoomClient, room: stri
 }
 ```
 
+Each client call resolves to the endpoint's success JSON or an error envelope.
+The generated route contributes its application and admission errors;
+`Client<Wire>` also includes generic framework errors such as `TIMED_OUT`,
+`INTERNAL_ERROR`, and transport failures. Checking for `error` narrows the
+TypeScript union before success fields are read. The [client
+API](../public-surface.md#client) names the constructors and options; [boundary
+result semantics](../semantics.md#boundary-gateway-and-client) defines error
+delivery and JSON projection.
+
+## Use production HTTP
+
 Reading Circle and Operations Room stop at the standard gateway. They do not
 present the raw logical-envelope HTTP adapter as a public deployment boundary.
 A public JSON host chooses a production profile and supplies the assembly so
 registered category metadata is available:
+
+The example aliases the profile constructor because its local profile value
+uses the same descriptive name:
+
+_Source: [`examples/production-http/src/edge.ts`](../../examples/production-http/src/edge.ts)_
+
+```ts
+import {
+  createGateway,
+  createHttpHandler,
+  httpFloor,
+  productionHttpProfile as defineProductionHttpProfile,
+} from "@mit-sdg/sync-engine/boundary";
+```
 
 _Source: [`examples/production-http/src/edge.ts`](../../examples/production-http/src/edge.ts)_
 
@@ -370,15 +397,7 @@ export function createProductionHttpClient(options: HttpClientOptions = {}): Pro
 }
 ```
 
-Each client call resolves to the endpoint's success JSON or an error envelope.
-The generated route contributes its application and admission errors; `Client<Wire>`
-also includes generic framework errors such as `TIMED_OUT`, `INTERNAL_ERROR`,
-and transport failures. Checking for `error` narrows the TypeScript union before
-success fields are read. The [public API](../public-surface.md#client) names the client options;
-[execution semantics](../semantics.md#boundary-gateway-and-client) owns the
-result, transport, and framework-error guarantees.
-
-## Organize host-owned deployment code
+## Keep deployment ownership explicit
 
 The shipped examples keep the assembly in one file. Their application-owned
 source and generated outputs follow this layout:
@@ -395,42 +414,18 @@ source and generated outputs follow this layout:
 | `generated/`          | Pinned assembled read-back and wire contract                                   |
 | `generated.config.ts` | Assembly and output metadata for checking or pinning generated artifacts       |
 
-When deployment owns several resource sets, make those choices visible in one
-assembly folder:
+A larger host may split assembly, concept-floor selection, HTTP policy, and
+process lifecycle into separate files. The ownership does not change: assembly
+installs an implementation map but does not call a concept floor's `close()`;
+the HTTP handler is a Fetch adapter, not a listener or complete server; and the
+host owns process signals and resource closure.
 
-| Location                        | Contents                                                             |
-| ------------------------------- | -------------------------------------------------------------------- |
-| `src/assembly/application.ts`   | The stable join of the concept set and explicit composition manifest |
-| `src/assembly/concept-floor.ts` | Complete named implementation sets, shared resources, and `close()`  |
-| `src/assembly/http-profile.ts`  | Public origin, base path, and public-error transport policy          |
-| `src/assembly/http-floor.ts`    | Optional same-origin cookie binding                                  |
-| `src/assembly/process.ts`       | Process startup and shutdown ownership                               |
-| `src/assembly/README.md`        | Configuration router and the application's floor boundary            |
-
-An implementation is one concrete concept object. An override replaces one
-implementation after selecting a complete floor and is suitable for test
-substitution, not as another production floor. A concept floor is a named,
-complete implementation map with its shared resources and asynchronous
-`close()`. A production HTTP profile carries public error projection, bounded
-JSON parsing, correlation, and status decoration. An HTTP floor adds one cookie
-credential and same-origin check. Domain authentication, authorization, and
-concept meaning remain in the application. The process creates and owns the
-selected resources, starts the handler, and closes the concept floor during
-shutdown.
-
-In the folder form, ordinary features change the concept set or composition
-manifest. Floor and process files change only with the runtime substrate or
-deployment boundary. These are folder-depth choices, not different authoring
-conventions: source stays under `src/`, while generated artifacts remain
-visibly derived beside it.
-
-Assembly and gateway expose `beginDrain()` and `whenIdle()`, but `close()` is
-not called by assembly and timeout or abort can leave accepted work running
-after the caller stops waiting. The host must stop the listener, begin drain,
-apply its hard deadline, and close resources in order. The folder layout
-identifies ownership; it does not make graceful shutdown automatic.
-[Operational limits](../operations.md) states the host responsibilities and
-unsupported deployment guarantees.
+During shutdown, stop the listener, call `beginDrain()`, await it up to a hard
+host deadline, then close the concept floor and any custom log-store resources.
+Timeout or abort may leave accepted work running after a caller stops waiting,
+so tracking HTTP promises alone does not establish quiescence. [Operational
+limits](../operations.md#timeouts-abort-and-shutdown) defines the required
+sequence and recovery consequence of forced shutdown.
 
 The complete local scenario crosses the same gateway with a generated client
 contract in [`scenario.ts`](../../examples/operations-room/src/scenario.ts).

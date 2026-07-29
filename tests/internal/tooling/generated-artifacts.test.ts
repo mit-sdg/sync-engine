@@ -123,7 +123,7 @@ describe("generated application artifacts", () => {
 
   test("the installed command prints exact, stackless help", () => {
     const root = fileURLToPath(new URL("../../../", import.meta.url));
-    const expected = `Usage: sync-engine <topic> <command>
+    const expected = `Usage: sync-engine <command> [arguments]
 
   sync-engine new <directory>
     Write a runnable project: one concept, its composition, and its config.
@@ -180,13 +180,13 @@ describe("generated application artifacts", () => {
 
       const trailing = run("new", "valid-project", "trailing");
       expect(trailing.status).toBe(1);
-      expect(trailing.stderr).toContain("Usage: sync-engine <topic> <command>");
+      expect(trailing.stderr).toContain("Usage: sync-engine <command> [arguments]");
       expect(existsSync(join(temporary, "valid-project"))).toBe(false);
 
       const helpTrailing = run("--help", "trailing");
       expect(helpTrailing.status).toBe(1);
       expect(helpTrailing.stdout).toBe("");
-      expect(helpTrailing.stderr).toContain("Usage: sync-engine <topic> <command>");
+      expect(helpTrailing.stderr).toContain("Usage: sync-engine <command> [arguments]");
 
       const unknown = run("check", "--unknown");
       expect(unknown.status).toBe(1);

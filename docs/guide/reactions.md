@@ -4,9 +4,10 @@ This guide uses the complete concept set from the [Operations Room
 example](../../examples/operations-room/README.md), including Gathering,
 Selecting, Discussing, and the Alerting concept developed in [Define one
 behavior](concepts.md). It introduces the ordinary public reaction surface: one
-trigger, current-state reads, independent siblings, and temporal chains. The [Example book](../book.md)
-contains close construction variants; [Execution semantics](../semantics.md#reactions)
-defines matching, ordering, and failure behavior.
+trigger, current-state reads, independent paths, and temporal chains. The [Read
+construction cookbook](../book.md) contains close construction variants;
+[Execution semantics](../semantics.md#reactions) defines matching, ordering, and
+failure behavior.
 
 Selecting knows how to keep one current item within a scope. Discussing knows
 how to open a discussion about a subject. Neither concept decides that choosing
@@ -39,12 +40,9 @@ Read it in order: when `Selecting.choose` returns a `selection`, ask
 
 A line ending in `.responds(...)` watches a **returned occurrence**: the action
 succeeded and its state change took effect. The call pattern matches inputs;
-the response pattern binds `selection`.
-The consequence then asks Discussing to open the discussion; Discussing still
-decides whether its own action returns or refuses.
-
-The fixed frame is `when A.action responds … then B.action`. The consequence
-line is the ask; no wrapper changes its posture.
+the response pattern binds `selection`. The consequence asks Discussing to open
+the discussion, and Discussing still decides whether its own action returns or
+refuses.
 
 ## Add one required read
 
@@ -74,76 +72,78 @@ none. The author writes no quantity at the use-site. Here `room` is already
 bound by `when`, so the query reads that room; the fresh `responder` name in
 `.is` opens once for each matching row.
 
-## Group sibling branches
+## Keep independent consequences independent
 
-Separate reactions are independent: if both match one occurrence, both fire.
-When several branches express one reaction, place them together in `then`.
-Every sibling ends in a stable `.named(...)` label. Matching siblings run
-independently; the group makes no disjointness or coverage claim.
+Operations Room has two separate reactions for one returned selection: one
+opens a discussion and one alerts each responder. If both packs are present,
+both reactions match and run. Their source order is not priority.
 
-The [example book](../book.md#11--siblings-on-an-ordinary-reaction) shows a
+When several alternatives express one reaction, place them together in one
+`then(...)` group. Every sibling ends in a stable `.named(...)` label. Each
+matching sibling runs independently; the group does not claim that the
+conditions are exclusive or complete.
+
+The [read construction cookbook](../book.md#11--siblings-on-an-ordinary-reaction) shows a
 shared prefix and an equality split.
 
 ## Chain only after a return
 
-A later `.then(...)` starts after the preceding action on its own path returns:
+A later `.then(...)` starts after the preceding action on its own path returns.
+The contribution endpoint, examined in [Application
+boundary](application-boundary.md), uses that rule to wait for
+`Discussing.respond` before answering the caller:
 
-_Source: [reading-circle.ts](../../examples/reading-circle/src/composition/reading-circle.ts)_
+_Source: [`examples/operations-room/src/composition/contributions.ts`](../../examples/operations-room/src/composition/contributions.ts)_
 
 ```ts
-export const AddResponse = endpoint(
-  "/circles/respond",
-  ({ circle, reading, member, text, selection, discussion, response }) =>
-    receive({ circle, reading, member, text })
+const AddContribution = endpoint(
+  "/rooms/contribute",
+  ({ room, responder, text, selection, discussion, response }) =>
+    receive({ room, responder, text })
       .where(
-        memberMayRespond({ member, circle }),
-        Selecting._current({ scope: circle }).is({ selection, item: reading }),
+        mayContribute({ responder, room }),
+        Selecting._current({ scope: room }).is({ selection }),
         Discussing._openFor({ subject: selection }).is({ discussion }),
       )
-      .then(Discussing.respond({ discussion, author: member, text }).responds({ response }))
+      .then(Discussing.respond({ discussion, author: responder, text }).responds({ response }))
       .then(respond({ response })),
 );
 ```
 
-The second stage can use `response` because the first action returned it. A
-refusal or fault stops this chain. When a sibling group precedes a later
-stage, each sibling continues independently; the later stage does not wait for
-the other siblings. The chained `Discussing.respond(...).responds(...)` stage is
-automatically pinned to the exact ask made by the preceding stage; another
-matching `respond` call cannot advance this path.
+The final stage can use `response` because the preceding action returned it. A
+refusal or fault stops this path. When a sibling group precedes a later stage,
+each sibling continues independently; the later stage does not wait for the
+other siblings. The engine pins a chained response pattern to the exact ask
+from the preceding stage, so another matching `Discussing.respond` call cannot
+advance this path.
 
-A qualified sibling can carry its own chain before its trailing label:
+## Choose the trigger posture
 
-```ts
-where(Gathering._get({ gathering: circle }).is({ host: member }))
-  .then(Selecting.choose({ scope: circle, item: reading }).responds({ selection }))
-  .then(respond({ selection }))
-  .named("host"),
-```
-
-The label names the whole branch. Local stages cannot carry labels, and a
-named branch cannot be extended.
-
-## Condition on an action's outcome
-
-The output pattern in `when` can test a returned value as well as bind one. A
-literal tests the output; a fresh symbol binds it. A top-level action-specific
-`.responds(...)` trigger has no provenance constraint, so any matching call to
-that concept action can trigger it. A chained `.then(Action(...).responds(...))`
-stage is different: lowering pins it to the preceding ask automatically.
-
-`returned(...)` and `refused(...)` are cross-action posture channels. Their
-patterns can bind `concept`, `action`, and `input`; returned payloads use
-`result`, while refused payloads use `refusal` and may expose `message`. The
-optional `by` field pins the channel to the reaction that asked the action.
-Use the action-specific `.responds(...)` and `.refuses(...)` forms when the
-concept and action are already known. A runtime fault is a separate advanced
-channel and never matches `refused(...)`.
+`when(Concept.action(pattern))` watches the ask before the action body runs.
+`.responds(...)` watches a successful return, and `.refuses(...)` watches a
+declared rejection. Output patterns can test literals or bind fresh names. Use
+the action-specific forms when the concept and action are known. The generic
+`returned(...)` and `refused(...)` channels support policies that deliberately
+span actions; their exact payload and provenance options are in the [language
+API](../public-surface.md#language).
 
 Expected domain rejection belongs on the refusal posture. Do not return an
 `{ error: ... }` object from a concept action and expect the engine to treat it
 as a refusal; an ordinary returned object remains a successful result even when
 it has an `error` key.
+
+## Run the composition
+
+From the repository root, run:
+
+```sh
+bun run example:operations
+```
+
+The default assembly includes both reaction packs. Its result contains the
+discussion opened for the selected mitigation and one alert for each responder.
+The [Operations Room README](../../examples/operations-room/README.md) describes
+the deterministic scenario and the options that remove either pack.
 
 ## Keep the reaction in the composition
 

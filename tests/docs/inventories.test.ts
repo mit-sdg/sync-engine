@@ -47,6 +47,36 @@ describe("documented inventories", () => {
     }
   });
 
+  test("the agent index uses absolute GitHub links to the canonical documents", async () => {
+    const agentIndex = await text("docs/llms.txt");
+    const base = "https://raw.githubusercontent.com/mit-sdg/sync-engine/main/";
+    const links = [...agentIndex.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map((match) => match[1]);
+
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((link) => link.startsWith(base) && link.endsWith(".md"))).toBe(true);
+    for (const path of [
+      "SUPPORT.md",
+      "docs/index.md",
+      "docs/overview.md",
+      "docs/public-surface.md",
+      "docs/semantics.md",
+      "docs/operations.md",
+    ]) {
+      expect(links).toContain(`${base}${path}`);
+    }
+  });
+
+  test("exact source paths in the architecture map exist", async () => {
+    const architecture = await text("docs/architecture.md");
+    const paths = [...architecture.matchAll(/`(src\/[^`]+)`/g)]
+      .map((match) => match[1])
+      .filter((path) => !/[<*>,]/.test(path));
+
+    for (const path of new Set(paths)) {
+      await expect(stat(new URL(path, root)), path).resolves.toBeDefined();
+    }
+  });
+
   test("every application example is a documented, self-contained package", async () => {
     const registered = Object.values(applicationExamples);
     const examplesReadme = await text("examples/README.md");

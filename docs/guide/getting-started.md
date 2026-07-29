@@ -1,11 +1,17 @@
 # Getting started
 
-This introductory walkthrough creates and runs the smallest complete
-sync-engine application. Use the versions in the [runtime and toolchain support
-policy](../../SUPPORT.md).
-The walkthrough does not cover every authoring form; use the [Public
-API](../public-surface.md) and [Execution semantics](../semantics.md) as the
-authoritative references.
+This introductory tutorial creates and runs the smallest complete sync-engine
+application. The result is a Note Keeper project with one concept, two
+endpoints, generated contracts, and a local client scenario. The tutorial does
+not cover every authoring form; use the [Public API](../public-surface.md) and
+[Execution semantics](../semantics.md) as the authoritative references.
+
+## Prerequisites
+
+Use a supported Bun release and a shell that can run the commands below. The
+[runtime and toolchain support policy](../../SUPPORT.md#runtime-and-toolchain)
+lists the exact ranges. The scaffold writes its own TypeScript and package
+configuration.
 
 ## Create the project
 
@@ -75,14 +81,14 @@ bunx sync-engine check
 bunx sync-engine artifacts check
 ```
 
-## Follow one request through the project
+## Tour the generated project
 
 `src/concepts/noting/spec.md` is the authored specification. It states the
 concept's purpose and principle, declares action signatures and refusal
 branches, and declares query cardinality. Its optional State section is
-uninterpreted human notation, not a schema or a class/storage conformance
-descriptor. [Concept specification format](../concept-specification.md) defines
-exactly which parts are parsed and checked.
+notation for readers, not a schema. [Concept specification
+format](../concept-specification.md) defines exactly which parts are parsed and
+checked.
 
 `src/concepts/noting/noting.ts` implements the contract as an ordinary class.
 Public methods are actions. Methods prefixed with `_` are queries. The class has
@@ -160,6 +166,23 @@ export function assembleNoteKeeper() {
 `/notes/get`. The local client applies the same JSON serialization boundary as
 the HTTP client; it does not expose richer in-process values.
 
+## Trace the scenario
+
+The `start` script follows one complete boundary lifecycle:
+
+1. `createLocalClient(...)` receives the generated `NoteKeeperWire` type and
+   targets the gateway.
+2. The client calls `/notes/write` with `{ text: "buy milk" }`.
+3. `WriteNote` receives `text`, asks `Noting.write`, and waits for the returned
+   note identifier.
+4. `respond({ note })` settles the endpoint request. The client receives the
+   JSON-projected result.
+5. The client calls `/notes/get` with that identifier. `GetNote` reads the
+   current note and returns the `notePage` former.
+
+The action ask and return are occurrence evidence in this assembly. The note
+itself remains state owned by the Noting instance.
+
 ## Generated artifacts
 
 `generated/note-keeper.md` is the assembled design read-back.
@@ -172,9 +195,12 @@ Generated TypeScript checks typed callers. Gateway admission only checks the
 route, an outer object, and required-key presence. It does not validate
 primitive or nested values by default. Public endpoints can attach explicit
 runtime input and successful-output validators as shown in [Application
-boundary](application-boundary.md#receive-ask-respond).
+boundary](application-boundary.md#add-runtime-validation).
 
-Continue to [Define one behavior](concepts.md). The remaining guide sequence is
-[Connect independent behaviors](reactions.md), [Views and
+The remaining guide changes from the small scaffold to the shipped Operations
+Room case study. Continue to [Define one behavior](concepts.md), then [Connect
+independent behaviors](reactions.md), [Views and
 formers](views-and-formers.md), and [Application
-boundary](application-boundary.md).
+boundary](application-boundary.md). Read [How sync-engine applications fit
+together](../overview.md) first when the distinction between a concept,
+composition, and assembly is not yet clear.

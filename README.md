@@ -5,19 +5,19 @@
 
 sync-engine is a TypeScript library for composing independently implemented
 application behaviors. Each behavior, called a **concept**, owns its state,
-actions, queries, and expected refusals. Application composition connects
-concepts without adding peer imports to their implementations.
+actions, queries, and expected refusals. The application connects concepts in a
+separate composition instead of adding peer imports to their implementations.
 
 Composition has four main parts:
 
-- **reactions** ask for consequences after action outcomes;
+- **reactions** ask for consequences after action asks or outcomes;
 - **views** name shared relations and policy decisions;
 - **formers** build typed result trees from current state;
 - **endpoints** connect outside requests to composed behavior.
 
-The engine validates an assembled composition, executes it, records action
-occurrences, and can generate an assembled read-back and TypeScript wire
-contract.
+The engine validates the composition, instruments the selected concept
+instances, and records action occurrences. Tooling can derive an assembled
+read-back and TypeScript boundary contract from that assembly.
 
 ## Status and requirements
 
@@ -54,7 +54,26 @@ generated-artifact configuration. Continue with [Getting
 started](docs/guide/getting-started.md#run-the-complete-lifecycle) to run and
 inspect it.
 
-## Composition example
+## Documentation
+
+Choose the path that matches the work:
+
+| Task                                                         | Start here                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------- |
+| Understand concepts, composition, assembly, and the boundary | [Application model](docs/overview.md)                |
+| Build and run the generated application                      | [Getting started](docs/guide/getting-started.md)     |
+| Add concepts, reactions, views, formers, and endpoints       | [Authoring path](docs/index.md#build-an-application) |
+| Look up exports, options, and defaults                       | [Public API](docs/public-surface.md)                 |
+| Determine exact runtime behavior                             | [Execution semantics](docs/semantics.md)             |
+| Select a deployment and identify host responsibilities       | [Operational limits](docs/operations.md)             |
+| Inspect complete applications                                | [Example applications](examples/README.md)           |
+
+The [documentation index](docs/index.md) also routes client authors,
+operators, and contributors. Automated tools should begin with
+[`docs/llms.txt`](docs/llms.txt), which records the supported imports, authoring
+sequence, commands, and source-of-truth order.
+
+## How composition works
 
 This reaction belongs to the application, not to either concept. It opens a
 discussion whenever Selecting returns a new selection:
@@ -79,7 +98,7 @@ See [Connect independent behaviors](docs/guide/reactions.md) for the authoring
 rules and [Execution semantics](docs/semantics.md) for ordering and failure
 behavior.
 
-## Contract boundary
+## Expose an application boundary
 
 An endpoint uses the same reaction model to receive an outside request and
 produce one answer:
@@ -99,71 +118,33 @@ export const ChooseMitigation = endpoint(
 );
 ```
 
-An assembly can expose the endpoint through a direct invoker, the standard
-gateway, a local JSON-parity client, or HTTP. Use the production HTTP profile to
-project only registered public error categories without choosing a credential
-mechanism; add the same-origin cookie floor only when the application needs that
-binding. Generated TypeScript describes accepted inputs and possible outputs. It
-does not validate hostile values at runtime; endpoint validator hooks provide
-that separate runtime contract when an application needs it. Validators are
-application-supplied; the engine does not infer them from concept specifications.
+An assembly exposes endpoints through its direct invoker, the standard gateway,
+a local client with JSON parity, or the HTTP adapter. Generated TypeScript
+describes endpoint inputs, successful outputs, and errors for typed callers.
+Applications attach endpoint validators when they also need runtime value
+validation.
 
-Endpoint behavior must be portable: canonical JSON-round-trippable and
-re-registerable against the same named vocabulary. Closures, custom operations,
-object-identity patterns, raw transforms, and whole unlowered definitions are
-local and cannot occur in an ordinary assembly. Manual engines under
-`@mit-sdg/sync-engine/advanced` retain those explicit local escape hatches.
+## Contract boundaries
 
-## Guarantees and non-guarantees
+An application built with `assemble(...)` has these relevant boundaries:
 
-The ordinary assembly provides these guarantees:
+| Property         | Contract                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Action execution | One action body runs at a time per concept instance within one assembly. Different instances and flows may overlap.                           |
+| Evidence         | Each action ask and its return, refusal, or fault is recorded in the selected occurrence store. The store is not concept state.               |
+| Composition      | Assembly validates the registered, portable design before it exposes routes. Generated artifacts fail rather than omit unsupported endpoints. |
+| Caller typing    | Generated contracts typecheck callers. They do not validate runtime values.                                                                   |
+| Cancellation     | Timeout and abort stop the caller's wait. They do not cancel accepted work.                                                                   |
+| Persistence      | The engine does not provide concept-state persistence, occurrence replay, restart recovery, or transactions across actions.                   |
+| Distribution     | The engine does not provide distributed serialization, deduplication, or exactly-once execution.                                              |
 
-- one action body runs at a time per concept instance within one assembly;
-- each action ask and its return, refusal, or fault are recorded;
-- composition is checked before registered behavior executes;
-- local behavior is rejected before any public route is exposed;
-- generated artifacts fail rather than silently omit an endpoint they cannot
-  represent;
-- optional execution profiles bound admission and accepted causal work;
-- assemblies and gateways stop admission and report actual idle state;
-- stable operational events carry route and correlation without application values;
-- handled client and boundary failures resolve as typed result envelopes.
+The optional State section in a concept specification is notation for readers,
+not a runtime schema. See [Concept specification
+format](docs/concept-specification.md#state-notation) for what is parsed,
+[Execution semantics](docs/semantics.md) for the complete runtime contract, and
+[Operational limits](docs/operations.md) before deployment.
 
-The ordinary assembly does not provide transactions across actions, rollback,
-concept-state persistence, occurrence replay, restart recovery, distributed
-serialization, exactly-once execution, or runtime validation of generated
-types. A specification's optional State section is uninterpreted human notation:
-it is not compared with class fields or storage and does not enter manifests,
-read-back, wire contracts, input contracts, or endpoint validators. State
-properties belong in principle, implementation, and backend constraint tests.
-Runtime validation is explicit per endpoint rather than inferred from generated
-types or State notation. Timeout and abort stop waiting; they do not cancel
-accepted work. The default in-memory log retains a bounded inspection window
-rather than every occurrence forever.
-
-See [Execution semantics](docs/semantics.md) for the precise contracts and
-[Operational limits](docs/operations.md) for selection and deployment guidance.
-
-## Documentation
-
-The [documentation index](docs/index.md) separates the material by task.
-
-- [Getting started](docs/guide/getting-started.md) — scaffold and run the
-  smallest complete application.
-- [Authoring guide](docs/index.md#start-an-application) — concepts, reactions, views,
-  formers, and endpoints in dependency order.
-- [Example book](docs/book.md) — small, tested reading constructions and exact
-  registration failures.
-- [Public API](docs/public-surface.md) — package subpaths, exports, signatures,
-  defaults, and error codes.
-- [Concept specification format](docs/concept-specification.md) and [CLI
-  reference](docs/cli.md) — authoritative file and command contracts.
-- [Examples](examples/README.md) — independently installable Reading Circle,
-  Operations Room, and Production HTTP applications.
-- [Support policy](SUPPORT.md) and [security policy](SECURITY.md) — beta
-  compatibility, generated contracts, support windows, and private reporting.
-- [Engine architecture](docs/architecture.md) and [contributing
-  guide](CONTRIBUTING.md) — implementation and repository work.
+## Run the shipped examples
 
 From a source checkout, install dependencies and run all example scenarios:
 

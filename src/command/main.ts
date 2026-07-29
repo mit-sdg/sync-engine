@@ -5,7 +5,7 @@ import { scaffoldProject } from "./scaffold.ts";
 import { checkCommand } from "./check.ts";
 import { describeError } from "@engine/utils/redaction";
 
-const usage = `Usage: sync-engine <topic> <command>
+const usage = `Usage: sync-engine <command> [arguments]
 
   sync-engine new <directory>
     Write a runnable project: one concept, its composition, and its config.

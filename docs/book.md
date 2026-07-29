@@ -1,7 +1,7 @@
-# The example book
+# Read construction cookbook
 
-Use this book to look up a representative reading construction and compare it
-with a close variant. The book is not a complete language register. The [Public
+Use this cookbook to look up a representative reading construction and compare
+it with a close variant. The cookbook is not a complete language register. The [Public
 API](./public-surface.md#language) lists the exported forms, and [Execution
 semantics](./semantics.md#reading-declarations-govern) defines matching and
 cardinality.
@@ -594,7 +594,10 @@ const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
 ```
 
 This version covers found and missing circles because those are the conditions
-the author wrote. Coverage is not analyzed or enforced by the current package.
+the author wrote. Runtime execution does not prove or enforce that coverage.
+Application diagnostics recognize some simple present/absent pairs and can warn
+about missing fallbacks, but the author remains responsible for the endpoint's
+complete cases.
 
 ```
 book.GetCircleName:found

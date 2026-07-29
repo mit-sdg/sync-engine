@@ -1,11 +1,12 @@
-# Advanced recipes
+# Persistence, restart, and recovery
 
-These recipes address host-owned edges after an application already has its
-concepts, composition, and assembly. Start with the [application authoring
-guide](./index.md#start-an-application) for the complete path from a scaffold to
-an HTTP boundary. The
-contracts behind these examples live in [Operational limits](./operations.md)
-and [Execution semantics](./semantics.md).
+This how-to separates durable concept state, occurrence evidence, and recovery
+of process-local derived state. It assumes an application already has concepts,
+composition, and an assembly. Start with the [application authoring
+guide](./index.md#build-an-application) for that lifecycle. [Operational
+limits](./operations.md#persistence-and-restart) and [Execution
+semantics](./semantics.md#logs-concept-implementations-and-restart) define the
+underlying contracts.
 
 The executable examples use only Node APIs and supported package subpaths:
 
@@ -18,7 +19,7 @@ import { FileStore, assemble } from "@mit-sdg/sync-engine/assembly";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 ```
 
-## Persistence, restart, and recovery
+## Ownership
 
 Keep domain state, occurrence evidence, and recovery policy separate. This
 example gives `FileBackedNotes` ownership of durable note state, supplies a
@@ -101,6 +102,19 @@ async function recoverSearchIndex(
   }
 }
 ```
+
+## Recovery sequence
+
+1. Construct the first assembly with separate concept-state and occurrence
+   paths.
+2. Call `Notes.save`. The concept writes its state file, the reaction updates
+   the process-local index, and `FileStore` appends occurrence evidence.
+3. Stop admission and await `application.beginDrain()` before closing resources
+   or constructing a replacement process.
+4. Construct a new assembly. `FileBackedNotes` loads durable state, while the
+   new search index and the `FileStore` in-memory indexes begin empty.
+5. Call `recoverSearchIndex`. The recovery procedure reads durable concept
+   state and invokes the index action explicitly.
 
 A successful `Notes.save` writes `notes.json`, while the assembly records the
 `Notes.save`, `SearchIndex.index`, and reaction evidence in a separate

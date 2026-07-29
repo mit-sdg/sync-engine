@@ -1,0 +1,47 @@
+# sync-engine
+
+> sync-engine is an ESM-only TypeScript library for composing independently implemented stateful behaviors. Concepts own state and behavior; reactions, views, formers, and endpoints connect them at the application level.
+
+The 1.0 release line is beta. Pin an exact package version and read the [support policy](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/SUPPORT.md) before upgrading or deploying it.
+
+## Start here
+
+- [Documentation index](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/index.md) — reader paths by task
+- [Application model](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/overview.md) — concepts, composition, assembly, clients, and occurrence evidence
+- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/guide/getting-started.md) — scaffold and run one complete application
+- [Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/public-surface.md) — supported package subpaths, exports, signatures, and defaults
+- [Execution semantics](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/semantics.md) — authoritative runtime behavior
+- [Operational limits](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/operations.md) — deployment suitability and host responsibilities
+
+## Authoring
+
+- [Define one behavior](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/guide/concepts.md)
+- [Connect independent behaviors](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/guide/reactions.md)
+- [Views and formers](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/guide/views-and-formers.md)
+- [Application boundary](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/guide/application-boundary.md)
+- [Read construction cookbook](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/book.md)
+- [Concept specification format](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/concept-specification.md)
+- [Command-line reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/cli.md)
+- [Glossary](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/glossary.md)
+
+## Examples
+
+- [Reading Circle](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/reading-circle/README.md) — shortest complete multi-concept application
+- [Operations Room](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/operations-room/README.md) — selectable reactions, policy, and staged formers
+- [Production HTTP](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/production-http/README.md) — validation, limits, public errors, correlation, and cookie credentials
+- [Persistence, restart, and recovery](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/advanced-recipes.md) — durable concept state versus occurrence evidence
+
+## Working rules
+
+- Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
+- Keep concept implementations independent of peer concepts and application composition.
+- Treat generated TypeScript as a caller contract, not runtime validation.
+- Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.
+- Change source declarations rather than generated artifacts, then regenerate and review the diff.
+- Use the reference pages for guarantees. Guides, examples, and generated read-back demonstrate particular constructions.
+
+## Repository work
+
+- [Contributing](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/CONTRIBUTING.md)
+- [Repository agent instructions](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/AGENTS.md)
+- [Engine architecture](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/architecture.md)

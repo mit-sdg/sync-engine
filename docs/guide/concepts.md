@@ -8,6 +8,8 @@ TypeScript class, principle test, and registration. The authoritative machine
 grammar and uninterpreted prose boundary are in [Concept specification
 format](../concept-specification.md).
 
+## Start from purpose and principle
+
 The operations room needs alerts that remain open until someone acknowledges
 them. Start with the Purpose and Principle from Alerting's specification:
 
@@ -28,11 +30,12 @@ deployment alert and Jo's alert remain. Trying to acknowledge the first alert
 again is refused because it is no longer open.
 ```
 
-The Purpose says why the behavior matters. The Principle gives named people a
-concrete sequence: raise alerts, keep each recipient's alerts separate,
-acknowledge one, and refuse a repeated acknowledgement.
+The Purpose states the behavior's responsibility. The Principle gives one
+concrete sequence that can become a direct class test: raise alerts, keep each
+recipient's alerts separate, acknowledge one, and refuse a repeated
+acknowledgement.
 
-## Write state notation and declare actions
+## Describe owned state
 
 Alerting owns alerts and two facts about each one. `Person` and `Subject` are
 opaque identities supplied by an application; Alerting neither creates nor
@@ -54,6 +57,8 @@ not compare it with the class's fields or with a floor, database, or other
 storage implementation. Alerting's principle and direct implementation tests,
 plus backend constraint tests for any durable implementation, establish those
 properties instead.
+
+## Declare actions
 
 Its actions state every successful change and the case the concept refuses:
 
@@ -224,28 +229,22 @@ export const alerting = registerConcept({
 });
 ```
 
-Validation occurs at several distinct times:
+`registerConcept` compares the parsed action and query names with callable class
+methods, checks refusal mappings, and compares input names when runtime
+reflection can recover them. `sync-engine check` performs the corresponding
+source comparison for its supported TypeScript method forms. Query result
+containers and promised cardinality are checked when composition reads them.
+The implementation remains responsible for value validation, invariants, and
+storage behavior.
 
-| Time                | Checks                                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `registerConcept`   | Parsed action/query names, declared refusal mappings, and input names recoverable by runtime reflection |
-| `sync-engine check` | Parsed action/query names and input names recoverable from supported TypeScript source forms            |
-| Assembly            | Composition names, binding availability, declaration compatibility, and supported registration forms    |
-| Query read          | Query result container and declared cardinality                                                         |
-| Action execution    | The implementation's own value and domain checks                                                        |
-
-State notation contributes nothing to `ConceptSpec`, metadata, manifests,
-read-back, wire contracts, input contracts, or endpoint validators. Neither
-registration path validates state properties, field types, returned field
-names, uniqueness, invariants, or storage. Query result checks do not validate
-row fields against the prose output list, and no runtime schema is inferred.
-[Concept specification format](../concept-specification.md) records the accepted
-source forms and uninterpreted notation; [Execution
-semantics](../semantics.md#queries) defines read failures.
+[Concept specification format](../concept-specification.md#registerconcept-checks)
+defines the exact registration checks and [Command-line
+reference](../cli.md#sync-engine-check) defines the source check. [Execution
+semantics](../semantics.md#queries) defines query result checks.
 
 The operations room includes that registry once in its explicit concept set.
 The key `Alerting` in that set gives the concept its application name. The set
-derives its vocabulary, public references, ordinary implementations, and
+derives its vocabulary, authoring references, ordinary implementations, and
 complete named floors. Each composition file destructures only the references
 it uses from the set's `concepts` object.
 

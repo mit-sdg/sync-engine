@@ -7,7 +7,7 @@ policy](../SUPPORT.md) and run relative to the current working directory unless
 a path says otherwise.
 
 ```text
-sync-engine <topic> <command>
+sync-engine <command> [arguments]
 ```
 
 `sync-engine`, `sync-engine help`, `sync-engine --help`, and `sync-engine -h`
@@ -17,6 +17,15 @@ message without a stack and sets exit status 1.
 Commands accept only the operands and options shown below. Unknown options,
 repeated options, missing option values, and trailing operands are rejected
 before a command applies defaults, imports configuration, or writes files.
+
+| Command                                | Result                                                                                | Writes files                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `new <directory>`                      | Creates the runnable one-concept scaffold                                             | Yes; never overwrites an intended template file |
+| `check`                                | Compares concept specifications with class source and optionally inspects an assembly | No                                              |
+| `artifacts check`                      | Compares both configured artifacts with the assembly                                  | No                                              |
+| `artifacts pin`                        | Regenerates both configured artifacts                                                 | Yes                                             |
+| `artifacts pin-spec` / `pin-wire`      | Regenerates one configured artifact                                                   | Yes                                             |
+| `artifacts manifest` / `spec` / `wire` | Prints one derived representation to standard output                                  | No                                              |
 
 ## `sync-engine new`
 

@@ -6,6 +6,58 @@ names, inputs and cardinalities, and refusal lines. The resulting `ConceptSpec`
 contains only those machine-readable parts. Other text remains in the authored
 file for readers and is not registration data.
 
+## Complete example
+
+This document declares two actions, one optional query, and one refusal:
+
+````md
+# Noting
+
+## Purpose
+
+Keep short notes for later retrieval.
+
+## Principle
+
+Ada writes a note and reads it by its identifier. After Ada discards the note,
+another discard is refused because the note no longer exists.
+
+## Actions
+
+```actions
+write (text: String) : return (note: Note)
+  then
+    save text
+    return note
+
+discard (note: Note) : return (note: Note)
+  where note not in notes
+  then
+    refuse NOTE_NOT_FOUND "There is no such note."
+  where note in notes
+  then
+    delete note
+    return note
+```
+
+## Queries
+
+```queries
+_get (note: Note) : optional (text: String)
+```
+````
+
+The parser reads the two prose sections, member names, input names, query
+promise, and refusal line. It does not parse the action steps, output fields, or
+type names into a runtime schema.
+
+| Layer                              | Establishes                                                                   |
+| ---------------------------------- | ----------------------------------------------------------------------------- |
+| Specification parser               | Accepted headings, action/query signatures, query promises, and refusal lines |
+| `registerConcept`                  | Agreement with callable runtime methods and refusal mappings                  |
+| `sync-engine check`                | Agreement with supported TypeScript source forms                              |
+| Principle and implementation tests | Behavioral sequence, state changes, returned values, and invariants           |
+
 ## Required sections
 
 The document must contain non-empty `Purpose` and `Principle` sections. The

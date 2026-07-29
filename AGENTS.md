@@ -37,6 +37,7 @@ include them.
 Start with `docs/index.md`. The document owners are:
 
 - Progressive application authoring: `docs/guide/`
+- Application model explanation: `docs/overview.md`
 - Small tested read constructions: `docs/book.md`
 - Exact package exports and API summaries: `docs/public-surface.md`
 - Concept file grammar: `docs/concept-specification.md`
@@ -44,6 +45,7 @@ Start with `docs/index.md`. The document owners are:
 - Execution guarantees: `docs/semantics.md`
 - Deployment selection and limits: `docs/operations.md`
 - Contributor implementation map: `docs/architecture.md`
+- Agent-oriented consumer index: `docs/llms.txt`
 - Vite+ docs: `node_modules/vite-plus/docs/` or https://viteplus.dev/guide/
 
 ### Contributing to the example book

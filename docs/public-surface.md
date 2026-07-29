@@ -17,10 +17,19 @@ manual construction and explicit escape hatches.
 | -------------------------------------------- | ------------------------------------------------------------- |
 | [`@mit-sdg/sync-engine/language`](#language) | Concepts, reactions, views, formers, and their conditions     |
 | [`@mit-sdg/sync-engine/assembly`](#assembly) | Concept registration, assemblies, and occurrence-log stores   |
-| [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, gateways, HTTP, and CLI adapters                   |
+| [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, invocation, gateways, and HTTP adapters            |
 | [`@mit-sdg/sync-engine/client`](#client)     | Local and HTTP clients over a generated contract              |
 | [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation |
 | [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches        |
+
+| Task                                      | Primary APIs                                                |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| Declare reactions and current-state reads | `reaction`, `when`, `view`, `former`, `where`, `each`       |
+| Register and install concepts             | `registerConcept`, `conceptSet`, `assemble`                 |
+| Expose application routes                 | `endpoint`, `receive`, `respond`, `createGateway`           |
+| Call generated routes                     | `createLocalClient`, `createHttpClient`, `createClient`     |
+| Inspect or generate contracts             | `inspectAssembly`, `applicationManifest`, `renderWireTypes` |
+| Construct a manual local engine           | `createEngine` from `advanced`                              |
 
 The public API test compares each inventory below with the corresponding
 package barrel. An export change therefore requires an explicit reference
@@ -66,7 +75,7 @@ publicErrors? }`. `QueryPromise` is `"one" | "optional" | "many"`.
 `Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes;
 bindings are inferred from their declaration callbacks.
 
-For progressive examples, see the [reactions guide](./guide/reactions.md) and
+For worked examples, see the [reactions guide](./guide/reactions.md) and
 [views and formers guide](./guide/views-and-formers.md). The normative matching,
 cardinality, sibling, absence, and production rules live in [Execution
 semantics](./semantics.md#reactions).
@@ -198,8 +207,10 @@ recovery.
 and optional runtime outer-shape contract. `EndpointValidator`,
 `EndpointValidators`, and `ValidationResult` define schema-library-neutral
 input and successful-output checks. The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
-shows the authoring path; [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
-owns settlement.
+shows the endpoint authoring path, and [Add runtime
+validation](./guide/application-boundary.md#add-runtime-validation) shows the
+validator call shape. [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
+defines settlement.
 
 Endpoint paths must begin with `/`. `receive(...)` cannot author the
 framework-owned `path` or `requestId` fields. `respond(...)` cannot author
@@ -318,26 +329,31 @@ non-ByteString, or otherwise invalid result is replaced with a UUID.
 identifier on every response. Invalid header names are rejected at handler
 construction, and response decoration never rejects a handled request.
 
-### Framework Errors
+### Framework errors
 
 `FrameworkErrorCode` is the stable value object; its value union names every
 framework failure a shipped boundary may emit. Controlled admission details may
 accompany an error, but exception text from an unknown failure is omitted.
 
-| Code                       | Ordinary source                                                |
-| -------------------------- | -------------------------------------------------------------- |
-| `INVALID_INPUT`            | Gateway input admission or oversized request body              |
-| `NOT_FOUND`                | Unknown route                                                  |
-| `UNAVAILABLE`              | Overload or draining admission                                 |
-| `TIMED_OUT`                | Invocation wait expired                                        |
-| `ABORTED`                  | Invocation signal aborted                                      |
-| `INTERNAL_ERROR`           | Application, framework, or interpreter fault                   |
-| `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure              |
-| `BAD_JSON`                 | HTTP request or response parsing                               |
-| `BAD_STATUS`               | Unsupported request method or client-side status normalization |
-| `NETWORK_ERROR`            | HTTP client could not complete `fetch`                         |
-| `HEADER_RESOLUTION_FAILED` | HTTP client header provider failed                             |
-| `UNKNOWN_ERROR`            | Unclassified framework envelope                                |
+| Code                       | Ordinary source                                                                |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `INVALID_INPUT`            | Invoker or gateway option, outer-shape, contract, or input-validator admission |
+| `NOT_FOUND`                | Unknown logical route                                                          |
+| `UNAVAILABLE`              | Overload or draining admission                                                 |
+| `TIMED_OUT`                | Invocation wait expired                                                        |
+| `ABORTED`                  | Invocation or client signal aborted                                            |
+| `INTERNAL_ERROR`           | Application, framework, validation, or interpreter fault                       |
+| `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure                              |
+| `BAD_JSON`                 | HTTP client could not read or parse a response body                            |
+| `BAD_STATUS`               | HTTP client received a failing status without an error envelope                |
+| `NETWORK_ERROR`            | HTTP client could not complete `fetch`                                         |
+| `HEADER_RESOLUTION_FAILED` | HTTP client header provider failed                                             |
+| `UNKNOWN_ERROR`            | Unclassified framework envelope                                                |
+
+The production HTTP handler maps malformed requests, unsupported methods, and
+oversized request bodies to its public `INVALID_REQUEST` category. Those
+request-side responses are distinct from the logical framework-code sources in
+this table. See [Production HTTP profile](./semantics.md#production-http-profile).
 
 ## `client`
 
@@ -461,32 +477,36 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. The descriptor is a CLI configuration
 shape rather than an exported package type.
 
-| Field               | Required | Default                                                    |
-| ------------------- | -------- | ---------------------------------------------------------- |
-| `assemble`          | yes      | Function that builds the application                       |
-| `title`             | yes      | Application title used to derive names                     |
-| `close`             | no       | Runs after the generated assembly drains                   |
-| `directory`         | no       | `new URL("./generated/", configUrl)`                       |
-| `specification`     | no       | Slugged title plus `.md`                                   |
-| `wire`              | no       | `"wire.ts"`                                                |
-| `wireName`          | no       | Pascal-cased title plus `Wire`                             |
-| `wireBanner`        | no       | Exact package/version generator banner                     |
-| `httpWireName`      | no       | `${wireName}Http` when an HTTP profile or floor is present |
-| `vocabulary.module` | no       | `new URL("./src/concept-set.ts", configUrl)`               |
-| `vocabulary.export` | no       | `"vocabulary"`                                             |
-| `httpProfile`       | no       | No production HTTP projection                              |
-| `httpFloor`         | no       | No cookie-bound production HTTP projection                 |
+| Field                 | Required | Default                                                            |
+| --------------------- | -------- | ------------------------------------------------------------------ |
+| `assemble`            | yes      | Function that builds the application                               |
+| `title`               | yes      | Application title used to derive names                             |
+| `close`               | no       | Runs after the generated assembly drains                           |
+| `directory`           | no       | `new URL("./generated/", configUrl)`                               |
+| `specification`       | no       | Slugged title plus `.md`                                           |
+| `specificationBanner` | no       | HTML generator comment naming package version, title, and assembly |
+| `wire`                | no       | `"wire.ts"`                                                        |
+| `wireName`            | no       | Pascal-cased title plus `Wire`                                     |
+| `wireBanner`          | no       | Exact package/version generator banner                             |
+| `httpWireName`        | no       | `${wireName}Http` when an HTTP profile or floor is present         |
+| `vocabulary.module`   | no       | `new URL("./src/concept-set.ts", configUrl)`                       |
+| `vocabulary.export`   | no       | `"vocabulary"`                                                     |
+| `httpProfile`         | no       | No production HTTP projection                                      |
+| `httpFloor`           | no       | No cookie-bound production HTTP projection                         |
 
-The default wire banner is
+The default specification banner is
+`<!-- Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit. -->`.
+A custom specification banner receives a second mandatory HTML generator
+comment. The default wire banner is
 `// Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit.`
-A custom banner receives a second mandatory generator line. `httpProfile` and
+A custom wire banner receives a second mandatory generator line. `httpProfile` and
 `httpFloor` are mutually exclusive. Artifact generation always uses the
 vocabulary anchor with strict leaves. With either descriptor, the one wire
 module contains the logical contract and the projected public HTTP contract. A
 floor additionally removes cookie-consumed credential fields. The
 [application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
 shows the application-owned command path; [Generated wire](./semantics.md#generated-wire)
-owns derivation guarantees.
+defines derivation guarantees.
 
 ## `advanced`
 

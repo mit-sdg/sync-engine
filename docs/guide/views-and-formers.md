@@ -16,6 +16,11 @@ names the second question and returns the whole answer as one tree. Both live in
 the composition, where they can read several concepts without teaching those
 concepts about one another.
 
+| Form   | Declares                                                     | Result                                                | Stores data |
+| ------ | ------------------------------------------------------------ | ----------------------------------------------------- | ----------- |
+| View   | A reusable relation or policy over queries and other views   | A predicate or rows with declared cardinality         | No          |
+| Former | A current output tree over queries, views, and other formers | One record, an optional record, a row list, or a fold | No          |
+
 ## Name the policy
 
 The first policy admits anyone who belongs to the gathering. Its negative view
@@ -48,10 +53,10 @@ Changing the policy does not copy or edit that request chain. The [application
 boundary chapter](application-boundary.md#receive-ask-respond) teaches the
 endpoint frame that consumes these views.
 
-The negative view matters because both boundary cases share one path. For an
-existing room, the two views answer opposite permission states: one case keeps
-a permitted responder, and the other returns an explicit denial. The success
-case still requires a current selection and an open discussion.
+The negative view matters because both boundary cases share one endpoint route.
+For an existing room, the two views answer opposite permission states: one case
+keeps a permitted responder, and the other returns an explicit denial. The
+success case still requires a current selection and an open discussion.
 
 ## Change the answer, not the concepts
 
@@ -79,7 +84,7 @@ Assemble again with the host policy and the same input returns `HOST_ONLY`.
 The contribution boundary declarations and all four concept classes stay
 unchanged.
 
-## Build the read in stages
+## Build a result in stages
 
 A former begins with the reads needed to fill one form. `where(...)` opens the
 record's fields; `each(...).form(...)` captures every row for a list. The first
@@ -149,10 +154,17 @@ callable consumer, its result for matches, and its empty-selection value.
 
 A fold over a source that promises at most one row is rejected because the
 source declaration already limits the result. The
-[execution semantics](../semantics.md#views-and-formers) own the complete
+[execution semantics](../semantics.md#views-and-formers) define the complete
 cardinality and absence rules.
 
-## Fold a selection
+## Additional former constructions
+
+The roster and current-mitigation formers above establish the ordinary model.
+The remaining Operations Room declarations show three larger constructions:
+folding selected rows, merging a reusable record fragment, and building the
+complete dashboard.
+
+### Fold a selection
 
 A former can fold a captured selection instead of carrying its rows. This
 operations-room former uses all three folds. `count()` counts responses,
@@ -185,7 +197,7 @@ For an empty selection, `count()` returns `0`, `first(...)` returns `null`, and
 closed comparison such as `is.lt(n, limit)` can test it. `first` and
 `distinct` belong only to former production.
 
-## Merge a reusable fragment
+### Merge a reusable fragment
 
 A fragment is a former whose open slot is filled by another former. The
 responder roster above owns the `responders` shape. The room summary fills its
@@ -211,7 +223,7 @@ drops the host row when absent. Several fragment rows violate the fragment's
 promise and raise a fault. Only a record-rooted fragment can be merged, and
 its keys must not collide with the host.
 
-## Form the complete dashboard
+### Form the complete dashboard
 
 The dashboard needs facts from every concept: room details, responders, the
 current mitigation, its discussion and responses, and each responder's alerts.
