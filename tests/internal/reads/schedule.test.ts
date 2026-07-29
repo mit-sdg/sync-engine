@@ -104,7 +104,7 @@ describe("where scheduling", () => {
       in: { value: { $var: "missing" } },
     };
     expect(() => scheduleBlock([blocked], new Set(), 'Reaction "Blocked"')).toThrow(
-      'conditions cannot be ordered — ok needs "missing", which no line opens',
+      'conditions cannot be ordered — holds ok needs "missing"',
     );
   });
 
@@ -140,7 +140,7 @@ describe("where scheduling", () => {
       out: "result",
     };
     expect(() => scheduleBlock([computeOp], new Set(), 'Reaction "Test"')).toThrow(
-      'conditions cannot be ordered — compute add needs "x", which no line opens',
+      'conditions cannot be ordered — compute add needs "x"',
     );
   });
 
@@ -152,7 +152,7 @@ describe("where scheduling", () => {
       out: "total",
     };
     expect(() => scheduleBlock([countOp], new Set(), 'Reaction "Test"')).toThrow(
-      'conditions cannot be ordered — count Items._items needs "x", which no line opens',
+      'conditions cannot be ordered — count Items._items needs "x"',
     );
   });
 
@@ -165,7 +165,7 @@ describe("where scheduling", () => {
       out: ["y"],
     };
     expect(() => scheduleBlock([customOp], new Set(), 'Reaction "Test"')).toThrow(
-      'conditions cannot be ordered — custom myFn needs "x", which no line opens',
+      'conditions cannot be ordered — custom myFn needs "x"',
     );
   });
 
@@ -178,7 +178,7 @@ describe("where scheduling", () => {
       not: { status: { $var: "freshStatus" } },
     };
     expect(() => scheduleBlock([findOp], new Set(), 'Reaction "Test"')).toThrow(
-      '"freshStatus" is new inside Items._items; no(...) can only test names bound by an earlier plain line.',
+      '"freshStatus" is new inside find Items._items; no(...) can only test names bound by an earlier plain line.',
     );
   });
 

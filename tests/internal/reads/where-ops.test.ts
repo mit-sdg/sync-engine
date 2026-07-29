@@ -297,7 +297,7 @@ describe("where ops: inside a reaction", () => {
             .then(refs.Recorder.record({ tag: id })),
         ),
       }),
-    ).toThrow("no line opens");
+    ).toThrow("the conditions cannot be ordered — find Shelf._byOwner needs");
     expect(() =>
       reacting.register({
         BornInDenial: reaction(({ owner, local }: Vars) =>

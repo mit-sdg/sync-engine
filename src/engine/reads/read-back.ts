@@ -17,7 +17,7 @@ import type {
   ViewOpIR,
   WhereOpIR,
 } from "./ir.ts";
-import { varNamesInPattern } from "./former-analysis.ts";
+import { varNamesInPattern } from "./operation-footprint.ts";
 import { scheduleBlock } from "./schedule.ts";
 import { renderRoles, renderWhereOp } from "./render.ts";
 

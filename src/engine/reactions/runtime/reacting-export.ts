@@ -1,7 +1,7 @@
 import type { Registry } from "@engine/reads/definition-registry";
 import type { AppIR, ConceptInventoryIR, ReactionIR, UnloweredIR } from "@engine/reads/ir";
 import { renderApp as renderAppSpec } from "@engine/reads/render";
-import { serializeApp } from "@engine/reads/application-lowering";
+import { serializeApp } from "@engine/reads/collection";
 import { serializeView } from "@engine/reads/view-lowering";
 import { readBackApp } from "@engine/reads/read-back";
 import { inventoryOf } from "../concepts/introspect.ts";

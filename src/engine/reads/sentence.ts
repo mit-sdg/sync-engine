@@ -47,11 +47,11 @@ export function bindingBag<TVars extends Vars = Vars>(): BindingBag<TVars> {
 export function assertSeparateBags(
   kind: string,
   name: string,
-  bags: ReadonlyArray<readonly [label: string, minted: ReadonlyMap<string, symbol>]>,
+  bags: ReadonlyArray<readonly [label: string, names: Iterable<string>]>,
 ): void {
   const seen = new Map<string, string>();
   for (const [label, minted] of bags) {
-    for (const binding of minted.keys()) {
+    for (const binding of minted) {
       const prior = seen.get(binding);
       if (prior !== undefined) {
         throw new Error(

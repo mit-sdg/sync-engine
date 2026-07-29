@@ -2,12 +2,12 @@
 
 import { Frames, readPatternValue } from "./frames.ts";
 import { applyWhereOps } from "./where-evaluation.ts";
-import { varNamesInPattern } from "./former-analysis.ts";
+import { varNamesInPattern } from "./operation-footprint.ts";
 import { FormerFault } from "./former-nodes.ts";
 import type { FormerRef, FusedFormer } from "./former-nodes.ts";
 import { liveOf } from "./ir.ts";
 import type { ArrangedIR, FormerNodeIR, PatternIR, SpliceIR } from "./ir.ts";
-import type { ReadEnv } from "./env.ts";
+import type { ReadEnv } from "./definition-registry.ts";
 import type { Frame, Mapping } from "@engine/reactions/types";
 import { setOwn } from "@engine/utils/own-property";
 
@@ -57,9 +57,14 @@ function arrange(frames: Frames, ordering: ArrangedIR | undefined): Frame[] {
 const DROP_ROW: unique symbol = Symbol("DROP_ROW");
 const ABSENT: unique symbol = Symbol("ABSENT");
 
-/** The fragment a splice names: its definition-site ref, or the registered one. */
-function fragmentOf(use: SpliceIR, hostName: string, env: ReadEnv): FormerRef {
-  return (liveOf(use) as FormerRef | undefined) ?? env.formerByName(use.fragment, hostName);
+/** A nested former's definition-site ref, or the registered former of the same name. */
+function nestedFormerOf(
+  use: { fragment: string } | { former: string },
+  hostName: string,
+  env: ReadEnv,
+): FormerRef {
+  const name = "fragment" in use ? use.fragment : use.former;
+  return (liveOf(use) as FormerRef | undefined) ?? env.formerByName(name, hostName);
 }
 
 /**
@@ -74,7 +79,7 @@ async function evalSplice(
   env: ReadEnv,
   assertRows?: AssertRows,
 ): Promise<Record<string, unknown> | typeof DROP_ROW> {
-  const fragment = fragmentOf(use, hostName, env);
+  const fragment = nestedFormerOf(use, hostName, env);
   const input = resolveInput(use.in, hostScope);
   if (input === ABSENT) {
     return use.whether ? (blankNode(fragment.body) as Record<string, unknown>) : DROP_ROW;
@@ -96,10 +101,6 @@ function resolveInput(input: PatternIR, frame: Frame): Mapping | typeof ABSENT {
     setOwn(resolved, key, read.value);
   }
   return resolved;
-}
-
-function formerOf(node: Extract<FormerNodeIR, { node: "former" }>, host: string, env: ReadEnv) {
-  return (liveOf(node) as FormerRef | undefined) ?? env.formerByName(node.former, host);
 }
 
 function blankNode(node: FormerNodeIR): unknown {
@@ -173,7 +174,7 @@ async function evalNode(
       return result;
     }
     case "former": {
-      const ref = formerOf(node, formerName, env);
+      const ref = nestedFormerOf(node, formerName, env);
       const input = resolveInput(node.in, frame);
       if (input === ABSENT) return node.whether ? blankNode(ref.body) : DROP_ROW;
       const result = await evaluateFormer(ref, input, env, assertRows);

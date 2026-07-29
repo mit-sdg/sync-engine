@@ -3,21 +3,20 @@
 import { logger } from "@engine/utils/logger";
 import { canonicallyEqual } from "@engine/utils/canonical-json";
 import { NameResolver } from "@engine/reactions/resolving";
-import type { ReactionDeclaration } from "@engine/reactions/types";
+import type { InstrumentedQuery, ReactionDeclaration } from "@engine/reactions/types";
 import { standardComputations } from "./computations.ts";
 import type { ComputationRef } from "./computations.ts";
-import type { ReadEnv } from "./env.ts";
 import {
   fragmentChannelsOfFormer,
   fusedFormersOf,
   viewChannelsOfFormer,
-} from "./former-collection.ts";
+  viewChannelsOfView,
+} from "./collection.ts";
 import { serializeFormer } from "./former-lowering.ts";
 import type { FormerRef } from "./former-nodes.ts";
-import type { FormerIR, ReactionIR, ViewIR, ViewOpIR } from "./ir.ts";
+import type { FormerIR, QueryRefIR, ReactionIR, ViewIR, ViewOpIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
 import type { ReadBackEnv } from "./read-back.ts";
-import { viewChannelsOfView } from "./view-collection.ts";
 import { serializeView } from "./view-lowering.ts";
 import type { AnyWhereOp, WhereOp } from "./where-ops.ts";
 import { AuthoredReferenceResolver } from "./authored-reference-resolution.ts";
@@ -25,6 +24,17 @@ import { ImportedIrBinder, type BoundReaction } from "./imported-ir-binding.ts";
 import { ViewFormerValidator } from "./view-former-validation.ts";
 
 export type { BoundReaction, BoundWhereOp } from "./imported-ir-binding.ts";
+
+export interface ReadEnv {
+  /** The instrumented query a `{ concept, query }` reference names. */
+  query(ref: QueryRefIR, site: string): InstrumentedQuery;
+  /** The installed computation a vocabulary name resolves to. */
+  computation(name: string, site: string): ComputationRef;
+  /** A registered view, by name. */
+  viewByName(name: string, site: string): RelationView;
+  /** A registered former, by sentence. */
+  formerByName(name: string, site: string): FormerRef;
+}
 
 export class Registry {
   private readonly conceptsByName = new Map<string, object>();

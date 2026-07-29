@@ -4,14 +4,15 @@ import type { NameResolver } from "@engine/reactions/resolving";
 import type { ComputationRef } from "./computations.ts";
 import type { FormerRef } from "./former-nodes.ts";
 import { asMarker, liveOf } from "./ir.ts";
-import type { FormerNodeIR, PatternIR, ViewOpIR, WhereOpIR } from "./ir.ts";
+import type { ViewOpIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
-import { varNamesInPattern } from "./former-analysis.ts";
 import { isPlainObject } from "./matchers.ts";
+import { assertFormerBindings } from "./former-bindings.ts";
 import { foldFormerNode } from "./schema.ts";
-import { opNamesIR, scheduleBlock } from "./schedule.ts";
+import { assertNoOrphanedOpens, scheduleBlock } from "./schedule.ts";
 import { walkValueTree } from "./value-tree.ts";
 import { viewLineIR } from "./view-lowering.ts";
+import { assertViewShape } from "./views.ts";
 import type { QueryPromise } from "./query-metadata.ts";
 
 type DefinitionKind = "Former" | "View" | "Reaction";
@@ -32,7 +33,9 @@ export class ViewFormerValidator {
   assertFormable(ref: FormerRef): void {
     if (this.formable.has(ref)) return;
     const site = ref.formerName;
-    this.assertFormerBindings(ref.body, new Set(ref.ins), site);
+    assertFormerBindings(ref.body, new Set(ref.ins), site, {
+      promiseOf: (line, diagnosticSite) => this.lineRefPromise(line, diagnosticSite),
+    });
     foldFormerNode(ref.body, {
       query: (query) =>
         this.definitions.resolver.query(query.concept, query.query, `Former "${site}"`),
@@ -81,7 +84,7 @@ export class ViewFormerValidator {
           );
         }
       }
-      this.lintOpenedNames(scheduled.ordered, scheduled.opens, [...ins, ...outs], `View "${site}"`);
+      assertNoOrphanedOpens(scheduled, [...ins, ...outs], `View "${site}"`);
       for (const op of block) {
         if ((op as { op: string }).op === "earlier") {
           throw new Error(
@@ -97,17 +100,7 @@ export class ViewFormerValidator {
         }
       }
     }
-    if (outs.length === 0 && !ref.holdsPredicate) {
-      throw new Error(`View "${site}": an empty output binding bag must end in holds().`);
-    }
-    if (outs.length > 0 && ref.holdsPredicate) {
-      throw new Error(`View "${site}": holds() requires an empty output binding bag.`);
-    }
-    if (outs.length > 0 && ref.promise === undefined) {
-      throw new Error(
-        `View "${site}": an output view must carry its one, optional, or many promise.`,
-      );
-    }
+    assertViewShape(`View "${site}"`, outs, ref.promise, ref.holdsPredicate);
     this.usableViews.add(ref);
   }
 
@@ -213,88 +206,6 @@ export class ViewFormerValidator {
     });
   }
 
-  private assertFormerBindings(
-    node: FormerNodeIR,
-    inherited: ReadonlySet<string>,
-    site: string,
-  ): void {
-    const requireBound = (pattern: PatternIR, phrase: string, scope: ReadonlySet<string>): void => {
-      for (const name of varNamesInPattern(pattern)) {
-        if (!scope.has(name)) {
-          throw new Error(`Former "${site}": ${phrase} uses "${name}" before it is bound.`);
-        }
-      }
-    };
-    if (node.node === "leaf") {
-      if (!inherited.has(node.var)) {
-        throw new Error(`Former "${site}": leaf "${node.var}" is bound by nothing.`);
-      }
-      return;
-    }
-    if (node.node === "record") {
-      const scheduled = scheduleBlock(node.where ?? [], inherited, `Former "${site}"`);
-      if (node.where !== undefined) node.where.splice(0, node.where.length, ...scheduled.ordered);
-      for (const op of scheduled.ordered) {
-        if (op.op !== "find" && op.op !== "whether") continue;
-        const opens = scheduled.opens.get(op) ?? [];
-        if (opens.length > 0 && this.lineRefPromise(op, `Former "${site}"`) === "many") {
-          throw new Error(
-            `Former "${site}": this record's where may match many rows; ` +
-              "wrap the source in each(...) when the result should contain rows.",
-          );
-        }
-      }
-      for (const child of Object.values(node.entries)) {
-        this.assertFormerBindings(child, scheduled.bound, site);
-      }
-      for (const splice of node.splices ?? []) {
-        requireBound(splice.in, `splice "${splice.fragment}" anchor`, scheduled.bound);
-      }
-      return;
-    }
-    if (node.node === "former") {
-      requireBound(node.in, `former "${node.former}" anchor`, inherited);
-      return;
-    }
-    if (node.from.op !== "find") {
-      throw new Error(
-        `Former "${site}": each(...) starts production from one plain query or view line.`,
-      );
-    }
-    requireBound(node.from.in, "each(...) input", inherited);
-    requireBound(node.from.not ?? {}, "each(...).is.not(...) test", inherited);
-    const scope = new Set(inherited);
-    for (const name of varNamesInPattern(node.from.out)) scope.add(name);
-    const scheduled = scheduleBlock(node.where ?? [], scope, `Former "${site}"`);
-    if (node.where !== undefined) node.where.splice(0, node.where.length, ...scheduled.ordered);
-    const afterWhere = scheduled.bound;
-    if (node.node === "each") this.assertFormerBindings(node.as, afterWhere, site);
-    if (
-      (node.node === "count" || node.node === "first" || node.node === "distinct") &&
-      this.lineRefPromise(node.from, `Former "${site}"`) !== "many"
-    ) {
-      throw new Error(
-        `Former "${site}": the source already promises at most one row; ` +
-          "use a plain line or whether(...), not a fold.",
-      );
-    }
-    if ((node.node === "first" || node.node === "distinct") && !afterWhere.has(node.value)) {
-      throw new Error(
-        `Former "${site}": ${node.node}(...) value "${node.value}" is bound by nothing.`,
-      );
-    }
-    if (
-      (node.node === "each" || node.node === "first") &&
-      node.arranged !== undefined &&
-      "by" in node.arranged &&
-      !afterWhere.has(node.arranged.by)
-    ) {
-      throw new Error(
-        `Former "${site}": arranged(...) value "${node.arranged.by}" is bound by nothing.`,
-      );
-    }
-  }
-
   private lineRefPromise(
     op: Extract<ViewOpIR, { op: "find" | "whether" | "no" }>,
     diagnosticSite: string,
@@ -309,27 +220,5 @@ export class ViewFormerValidator {
       this.definitions.resolver.query(op.query.concept, op.query.query, diagnosticSite)
         .queryPromise ?? "many"
     );
-  }
-
-  private lintOpenedNames(
-    ordered: readonly (WhereOpIR | ViewOpIR)[],
-    opens: ReadonlyMap<WhereOpIR | ViewOpIR, string[]>,
-    extra: readonly string[],
-    site: string,
-  ): void {
-    const counts = new Map<string, number>();
-    const add = (name: string): void => {
-      counts.set(name, (counts.get(name) ?? 0) + 1);
-    };
-    for (const op of ordered) for (const name of opNamesIR(op)) add(name);
-    for (const name of extra) add(name);
-    for (const op of ordered) {
-      if (op.op === "earlier") continue;
-      for (const name of opens.get(op) ?? []) {
-        if ((counts.get(name) ?? 0) <= 1) {
-          throw new Error(`${site}: "${name}" is opened and never used — omit the key instead.`);
-        }
-      }
-    }
   }
 }

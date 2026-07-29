@@ -2,7 +2,7 @@
 
 import { setOwn } from "@engine/utils/own-property";
 import type { ComputationRef } from "@engine/reads/computations";
-import type { ReadEnv } from "@engine/reads/env";
+import type { ReadEnv } from "@engine/reads/definition-registry";
 import { Frames, varKeyOf } from "@engine/reads/frames";
 import { isFusedFormer } from "@engine/reads/former-nodes";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";

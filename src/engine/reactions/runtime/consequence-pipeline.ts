@@ -11,7 +11,7 @@ import {
   isFusedFormer,
 } from "@engine/reads/former-nodes";
 import { formTree } from "@engine/reads/former-evaluation";
-import type { ReadEnv } from "@engine/reads/env";
+import type { ReadEnv } from "@engine/reads/definition-registry";
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
 import { uuid } from "@engine/utils/runtime";

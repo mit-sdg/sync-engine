@@ -1,6 +1,8 @@
 /** Discover executable behavior that cannot travel as portable application data. */
 
 import { asMarker } from "./ir.ts";
+import { isPlainObject } from "./matchers.ts";
+import { walkValueTree } from "./value-tree.ts";
 import type {
   AppIR,
   FormerIR,
@@ -8,7 +10,6 @@ import type {
   ReactionIR,
   TriggerIR,
   UnloweredIR,
-  ValueIR,
   ViewIR,
   ViewOpIR,
   WhereOpIR,
@@ -52,37 +53,13 @@ function compareLocalDefinitions(
   return ordinal(localDefinitionKey(left), localDefinitionKey(right));
 }
 
-function walkValue(value: ValueIR, identity: (label: string) => void): void {
-  if (Array.isArray(value)) {
-    for (const entry of value) walkValue(entry, identity);
-    return;
-  }
-  if (value === null || typeof value !== "object") return;
-  const marker = asMarker(value);
-  if (marker?.tag === "$is") {
-    identity(String(marker.payload));
-    return;
-  }
-  if (marker?.tag === "$former") {
-    const payload = marker.payload as { in?: unknown };
-    if (typeof payload.in === "object" && payload.in !== null) {
-      walkPattern(payload.in as PatternIR, identity);
-    }
-    return;
-  }
-  const entries =
-    marker?.tag === "$lit" && typeof marker.payload === "object" && marker.payload !== null
-      ? Object.values(marker.payload)
-      : Object.values(value);
-  for (const entry of entries) {
-    if (typeof entry === "object" && entry !== null) {
-      walkValue(entry as ValueIR, identity);
-    }
-  }
-}
-
-function walkPattern(pattern: PatternIR, identity: (label: string) => void): void {
-  for (const value of Object.values(pattern)) walkValue(value, identity);
+/** Every object-identity `$is` label a pattern mentions, deep. */
+function identityLabelsIn(value: unknown, identity: (label: string) => void): void {
+  walkValueTree(value, (node) => {
+    if (!isPlainObject(node)) return;
+    const marker = asMarker(node);
+    if (marker?.tag === "$is") identity(String(marker.payload));
+  });
 }
 
 function triggerPatterns(trigger: TriggerIR): PatternIR[] {
@@ -112,7 +89,7 @@ export function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis {
       occurrences.push({ definition, kind, occurrence, reason });
     };
     const pattern = (mapping: PatternIR) =>
-      walkPattern(mapping, (label) =>
+      identityLabelsIn(mapping, (label) =>
         addOccurrence("identity-pattern", `object-identity pattern "${label}"`),
       );
     const trigger = (clause: TriggerIR) => {

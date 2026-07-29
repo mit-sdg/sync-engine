@@ -15,10 +15,11 @@ import type {
   WhereOpIR,
 } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
-import { varNamesInPattern } from "./former-analysis.ts";
+import { varNamesInPattern } from "./operation-footprint.ts";
 import { scheduleBlock } from "./schedule.ts";
 import { walkValueTree } from "./value-tree.ts";
-import { relationViewWith } from "./views.ts";
+import { relationViewWith, assertViewShape } from "./views.ts";
+import { assertSeparateBags } from "./sentence.ts";
 import { viewLineIR } from "./view-lowering.ts";
 import type { EarlierOp } from "./where-ops.ts";
 
@@ -132,17 +133,7 @@ export class ImportedIrBinder {
       ["output", ir.outs],
       ["free", ir.bindings],
     ]);
-    if (ir.outs.length === 0 && ir.holds !== true) {
-      throw new Error(`View "${ir.name}": an empty output binding bag must end in holds().`);
-    }
-    if (ir.outs.length > 0 && ir.holds === true) {
-      throw new Error(`View "${ir.name}": holds() requires an empty output binding bag.`);
-    }
-    if (ir.outs.length > 0 && !["one", "optional", "many"].includes(ir.promise ?? "")) {
-      throw new Error(
-        `View "${ir.name}": an output view must carry its one, optional, or many promise.`,
-      );
-    }
+    assertViewShape(`View "${ir.name}"`, ir.outs, ir.promise, ir.holds === true);
     return relationViewWith(
       ir.name,
       ir.ins,
@@ -216,20 +207,11 @@ export class ImportedIrBinder {
     name: string,
     partitions: ReadonlyArray<readonly [string, unknown]>,
   ): void {
-    const seen = new Map<string, string>();
     for (const [label, value] of partitions) {
       if (!Array.isArray(value) || !value.every((binding) => typeof binding === "string")) {
         throw new Error(`${kind} "${name}": the ${label} binding bag must be an array of names.`);
       }
-      for (const binding of value as string[]) {
-        const prior = seen.get(binding);
-        if (prior !== undefined) {
-          throw new Error(
-            `${kind} "${name}": "${binding}" is declared in both the ${prior} and ${label} binding bags.`,
-          );
-        }
-        seen.set(binding, label);
-      }
     }
+    assertSeparateBags(kind, name, partitions as ReadonlyArray<readonly [string, string[]]>);
   }
 }

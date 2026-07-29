@@ -235,7 +235,7 @@ describe("formers: definition", () => {
         ).form({ author }),
       ),
     ).toThrow(
-      'record conditions are unresolved — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
+      'the conditions cannot be ordered — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
     );
   });
 
@@ -252,7 +252,7 @@ describe("formers: definition", () => {
         }),
       ),
     ).toThrow(
-      'selection conditions are unresolved — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
+      'the conditions cannot be ordered — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
     );
   });
 
@@ -930,7 +930,7 @@ describe("formers: fragments (splice)", () => {
           .form({ node })
           .splicing(whether(summary({ person }))),
       ),
-    ).toThrow("bound by nothing");
+    ).toThrow('splice "the profile summary of (person)" anchor uses "person" before it is bound');
   });
 
   test("several fragment rows fault for either splice posture", async () => {

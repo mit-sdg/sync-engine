@@ -39,6 +39,16 @@ function variablesIn(value: unknown, backing: Backing): Array<string | symbol> {
   return found;
 }
 
+/** Every `{ $var }` name an IR pattern reads through, deep. */
+export function varNamesInPattern(pattern: unknown): string[] {
+  return variablesIn(pattern, "ir") as string[];
+}
+
+/** Every variable an authored pattern reads through, deep. */
+export function symbolsInMapping(mapping: unknown): symbol[] {
+  return variablesIn(mapping, "authored") as symbol[];
+}
+
 export function operationFootprint(
   op: AuthoredOperation,
   backing: "authored",

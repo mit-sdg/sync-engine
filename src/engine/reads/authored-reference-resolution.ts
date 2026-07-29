@@ -10,7 +10,7 @@ import type {
   StepNode,
 } from "@engine/reactions/types";
 import type { ComputationRef } from "./computations.ts";
-import type { ReadEnv } from "./env.ts";
+import type { ReadEnv } from "./definition-registry.ts";
 import { applyWhereOps } from "./where-evaluation.ts";
 import { brandWhereOp } from "./where-ops.ts";
 import type { AnyWhereOp, WhereOp } from "./where-ops.ts";

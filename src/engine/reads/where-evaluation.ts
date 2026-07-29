@@ -3,7 +3,7 @@
 import { isQueryRef } from "@engine/reactions/authoring/references";
 import type { Frame, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import type { ComputationRef } from "./computations.ts";
-import type { ReadEnv } from "./env.ts";
+import type { ReadEnv } from "./definition-registry.ts";
 import { bindInputMapping, expandOutputRows, Frames, readPatternValue } from "./frames.ts";
 import { structurallyEqual } from "./value-equality.ts";
 import { liveOf } from "./ir.ts";
@@ -74,6 +74,18 @@ function requireEnv(env: ReadEnv | undefined, what: string): ReadEnv {
     throw new Error(`${what} resolves by name — evaluate through an assembled engine.`);
   }
   return env;
+}
+
+/** A computation op's definition-site ref, or the registered computation of the same name. */
+function computationOf(
+  op: { computation: string | ComputationRef },
+  env: ReadEnv | undefined,
+): ComputationRef {
+  if (typeof op.computation === "function") return op.computation;
+  return (
+    (liveOf(op) as ComputationRef | undefined) ??
+    requireEnv(env, `computation "${op.computation}"`).computation(op.computation, op.computation)
+  );
 }
 
 function viewOf(op: { view?: RelationView | string }, env: ReadEnv | undefined): RelationView {
@@ -226,26 +238,14 @@ async function applyOp(
           }
           break;
         }
-        const ref =
-          (liveOf(op) as ComputationRef | undefined) ??
-          requireEnv(env, `computation "${op.computation}"`).computation(
-            op.computation,
-            op.computation,
-          );
+        const ref = computationOf(op, env);
         if ((await ref.fn(bindInputMapping(frame, op.in))) === true) {
           pushFrame(result, frame, assertRows);
         }
         break;
       }
       case "compute": {
-        const ref =
-          typeof op.computation === "function"
-            ? op.computation
-            : ((liveOf(op) as ComputationRef | undefined) ??
-              requireEnv(env, `computation "${op.computation}"`).computation(
-                op.computation,
-                op.computation,
-              ));
+        const ref = typeof op.computation === "function" ? op.computation : computationOf(op, env);
         const value = await ref.fn(bindInputMapping(frame, op.in));
         if (op.out in frame && frame[op.out] !== value) break;
         pushFrame(result, { ...frame, [op.out]: value }, assertRows);
