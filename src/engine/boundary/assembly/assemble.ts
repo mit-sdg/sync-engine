@@ -36,7 +36,7 @@ import {
   type RetentionPolicy,
 } from "@engine/reactions/runtime/log-store";
 import { Logging } from "@engine/reactions/runtime/logging";
-import type { EngineObserver } from "@engine/reactions/runtime/observer";
+import type { EngineObserver } from "@engine/reactions/runtime/logging";
 import { OperationalEvents } from "@engine/reactions/runtime/operational";
 import type { OperationalObserver } from "@engine/reactions/runtime/operational";
 import { Reacting } from "@engine/reactions/runtime/reacting";

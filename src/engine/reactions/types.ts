@@ -177,7 +177,6 @@ export interface NamedActionCall<
   TReturn = unknown,
 > extends ActionCall<TAction, TInput, TReturn> {
   readonly [NamedLineBrand]: true;
-  named(name: string): NamedActionCall<TAction, TInput, TReturn>;
 }
 
 /** A callable action line pinned to a successful return. */
@@ -210,7 +209,6 @@ export interface NamedReturnedActionLine<
   TOutput extends Mapping = Mapping,
 > extends ReturnedActionLine<TAction, TInput, TOutput> {
   readonly [NamedLineBrand]: true;
-  named(name: string): NamedReturnedActionLine<TAction, TInput, TOutput>;
 }
 
 /** A callable action line pinned to a declared refusal. */
@@ -243,7 +241,6 @@ export interface NamedRefusedActionLine<
   TRefusal extends Mapping = Mapping,
 > extends RefusedActionLine<TAction, TInput, TRefusal> {
   readonly [NamedLineBrand]: true;
-  named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
 }
 
 /** A callable consequence before it receives a sibling-path label. */

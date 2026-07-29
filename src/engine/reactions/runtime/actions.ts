@@ -319,3 +319,19 @@ export class ActionConcept {
     return this.store.prune();
   }
 }
+
+/** Record an accepted execution-limit breach and return its caller-facing error. */
+export function breachLimit(
+  actions: Pick<ActionConcept, "_recordExecutionLimit">,
+  flow: string,
+  limit: "actions" | "firings" | "rows",
+): Error {
+  actions._recordExecutionLimit(flow, limit);
+  return new Error(
+    limit === "rows"
+      ? "The evaluation exceeded its row limit."
+      : limit === "actions"
+        ? "The flow exceeded its action limit."
+        : "The flow exceeded its firing limit.",
+  );
+}

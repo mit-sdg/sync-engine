@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
-import { TriggerMatcher } from "@sync-engine/internal/reactions/runtime/trigger-matching.ts";
+import { TriggerMatcher } from "@sync-engine/internal/reactions/runtime/matching.ts";
 import type {
   ExecutableReaction,
   InstrumentedAction,

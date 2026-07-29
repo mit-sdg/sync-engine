@@ -2,7 +2,7 @@ import { FrameworkErrorCode } from "@engine/utils/framework-error-codes";
 import { inspect, inspectCustom, uuid } from "@engine/utils/runtime";
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
-import { ActionConcept } from "./actions.ts";
+import { ActionConcept, breachLimit } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
 import { refusalFor } from "../concepts/concept-metadata.ts";
 import { CONCEPT_NAME, conceptNameOf } from "../concepts/introspect.ts";
@@ -54,6 +54,30 @@ export interface InstrumentationState {
   execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
   react(record: ActionRecord, durationMs?: number): Promise<void>;
   emit(record: ActionRecord, durationMs?: number): void;
+}
+
+/**
+ * Run the reaction round that follows a durable landing. A failure there is
+ * logged and observed but can never take ownership of the caller's settled
+ * outcome, so it is swallowed after the evidence exists.
+ */
+export async function reactQuietly(
+  state: Pick<InstrumentationState, "react" | "emit">,
+  record: ActionRecord,
+  durationMs: number | undefined,
+  landing: string,
+  context: Record<string, unknown> = {},
+  emitOnFailure = false,
+): Promise<void> {
+  try {
+    await state.react(record, durationMs);
+  } catch (error) {
+    logger.error(`Reaction body failed after the ${landing} was recorded`, {
+      ...context,
+      error: serializeError(error),
+    });
+    if (emitOnFailure) state.emit(record, durationMs);
+  }
 }
 
 const frameworkErrorCodes = new Set<string>(Object.values(FrameworkErrorCode));
@@ -141,8 +165,7 @@ export function instrumentConcept<T extends object>(
                   const result = await withCache(...args);
                   const count = Array.isArray(result) ? result.length : 1;
                   if (state.execution?.rows(count) === false) {
-                    state.actions._recordExecutionLimit(flowToken, "rows");
-                    throw new Error("The evaluation exceeded its row limit.");
+                    throw breachLimit(state.actions, flowToken, "rows");
                   }
                   return result;
                 } finally {
@@ -212,12 +235,13 @@ export function instrumentConcept<T extends object>(
           return { error: FrameworkErrorCode.UNAVAILABLE };
         }
         if (state.execution?.action(flowToken) === false) {
+          let breach: Error;
           try {
-            state.actions._recordExecutionLimit(flowToken, "actions");
+            breach = breachLimit(state.actions, flowToken, "actions");
           } finally {
             if (directRoot) state.execution?.abandon?.(flowToken);
           }
-          throw new Error("The flow exceeded its action limit.");
+          throw breach;
         }
         invalidate();
 
@@ -242,16 +266,11 @@ export function instrumentConcept<T extends object>(
             onBodySettled: invalidate,
           });
 
-          try {
-            await state.react({ ...record });
-          } catch (error) {
-            logger.error("Reaction body failed after the action ask was recorded", {
-              actionId: id,
-              concept: concept.constructor.name,
-              action: action.name,
-              error: serializeError(error),
-            });
-          }
+          await reactQuietly(state, { ...record }, undefined, "action ask", {
+            actionId: id,
+            concept: concept.constructor.name,
+            action: action.name,
+          });
           reservation.release();
 
           let output: Record<string, unknown>;
@@ -288,34 +307,36 @@ export function instrumentConcept<T extends object>(
                 const durationMs = reservation.durationMs();
                 state.actions.faulted({ id, fault: errorOutputFromThrown(error) });
                 report?.("fault-recorded");
-                try {
-                  await state.react({ ...record }, durationMs);
-                } catch (immediateError) {
-                  logger.error("Reaction body failed after the action fault was recorded", {
+                await reactQuietly(
+                  state,
+                  { ...record },
+                  durationMs,
+                  "action fault",
+                  {
                     actionId: id,
                     concept: concept.constructor.name,
                     action: action.name,
-                    error: serializeError(immediateError),
-                  });
-                  state.emit({ ...record }, durationMs);
-                }
+                  },
+                  true,
+                );
                 throw error;
               }
             }
           }
           const durationMs = reservation.durationMs();
           state.actions.invoked({ id, output, outcome });
-          try {
-            await state.react({ ...record, output }, durationMs);
-          } catch (error) {
-            logger.error("Reaction body failed after the action outcome was recorded", {
+          await reactQuietly(
+            state,
+            { ...record, output },
+            durationMs,
+            "action outcome",
+            {
               actionId: id,
               concept: concept.constructor.name,
               action: action.name,
-              error: serializeError(error),
-            });
-            state.emit({ ...record, output }, durationMs);
-          }
+            },
+            true,
+          );
           return output;
         } finally {
           state.actions._endMatchingInput(flowToken);

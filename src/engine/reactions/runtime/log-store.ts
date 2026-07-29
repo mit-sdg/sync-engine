@@ -243,8 +243,8 @@ export class MemoryStore implements LogStore {
       this.dropRecords(records);
       this.flowIndex.delete(flow);
     }
-    this.dropReactionFailures(flow);
-    this.dropIntegrityFailures(flow);
+    this.dropFlowEntries(this.reactionFailures, flow);
+    this.dropFlowEntries(this.integrityFailures, flow);
     this.activeFlows.delete(flow);
     const position = this.settledFlowOrder.indexOf(flow);
     if (position >= 0) this.settledFlowOrder.splice(position, 1);
@@ -277,7 +277,7 @@ export class MemoryStore implements LogStore {
         evicted += toRemove.length;
         if (keepFrom === 0) {
           this.flowIndex.delete(flow);
-          this.dropReactionFailures(flow);
+          this.dropFlowEntries(this.reactionFailures, flow);
         }
       }
     }
@@ -304,15 +304,9 @@ export class MemoryStore implements LogStore {
     return id !== undefined && (this.consumedIndex.get(id)?.size ?? 0) > 0;
   }
 
-  private dropReactionFailures(flow: string): void {
-    for (let index = this.reactionFailures.length - 1; index >= 0; index--) {
-      if (this.reactionFailures[index]?.flow === flow) this.reactionFailures.splice(index, 1);
-    }
-  }
-
-  private dropIntegrityFailures(flow: string): void {
-    for (let index = this.integrityFailures.length - 1; index >= 0; index--) {
-      if (this.integrityFailures[index]?.flow === flow) this.integrityFailures.splice(index, 1);
+  private dropFlowEntries(list: Array<{ flow: string }>, flow: string): void {
+    for (let index = list.length - 1; index >= 0; index--) {
+      if (list[index]?.flow === flow) list.splice(index, 1);
     }
   }
 

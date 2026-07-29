@@ -7,7 +7,7 @@ export type { Engine } from "../engine/reactions/engine.ts";
 export { faulted } from "../engine/reactions/authoring/channels.ts";
 export { custom } from "../engine/reads/where-ops.ts";
 export { Refuse } from "../engine/reactions/concepts/refuse.ts";
-export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/observer.ts";
+export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/logging.ts";
 
 === dist/assembly/index.d.ts ===
 /** Install a vocabulary and its composition into one coherent running system. */
@@ -1202,7 +1202,7 @@ export declare function faulted(pattern?: Mapping, options?: ChannelOptions): Ch
 export declare function isChannelPattern(value: unknown): value is ChannelPattern;
 
 === dist/engine/reactions/authoring/nodes.d.ts ===
-import type { BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode, UnnamedStepNode } from "../types.ts";
+import type { ActionPattern, BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode, UnnamedStepNode } from "../types.ts";
 import type { WhereOp } from "../../reads/where-ops.ts";
 export declare function brandReactionNode<T extends object>(node: T): T;
 /** Build the callable data line represented by one vocabulary action ref. */
@@ -1210,6 +1210,8 @@ export declare function actionLine(action: InstrumentedAction, input: Mapping): 
 /** Qualify and privately chain one sibling branch. */
 export declare function branchChain(whereOps: readonly WhereOp[], first: UnnamedStepNode): BranchChain;
 export declare function assertReactionNodes(nodes: readonly ThenNode[]): void;
+/** Normalize an authored action reference into an occurrence pattern. */
+export declare function actionPattern(action: InstrumentedAction, input: Mapping, output?: Mapping): ActionPattern;
 
 === dist/engine/reactions/authoring/partitions.d.ts ===
 import type { ReactionDeclaration, ReactionPartition, ReactionResult, ThenNode, TriggerPattern } from "../types.ts";
@@ -1217,11 +1219,6 @@ export declare function isReactionPartition(value: unknown): value is ReactionPa
 export declare function declarationsOf(result: ReactionResult): readonly ReactionDeclaration[];
 /** Build and extend the authored sibling tree as independent flat paths. */
 export declare function siblingTree(patterns: readonly TriggerPattern[], root: Pick<ReactionDeclaration, "where" | "whereOps">, nodes: readonly ThenNode[]): ReactionPartition;
-
-=== dist/engine/reactions/authoring/patterns.d.ts ===
-/** Normalize authored action references into occurrence patterns. */
-import type { ActionPattern, InstrumentedAction, Mapping } from "../types.ts";
-export declare function actionPattern(action: InstrumentedAction, input: Mapping, output?: Mapping): ActionPattern;
 
 === dist/engine/reactions/authoring/public-words.d.ts ===
 import type { ActionCall, ChannelPattern, RefusedActionLine, RefusedTriggerActionLine, ReturnedActionLine, ReturnedTriggerActionLine, TriggerActionLine, WhenBuilder } from "../types.ts";
@@ -1410,25 +1407,20 @@ export declare function isReaction(value: unknown): value is Reaction;
 import type { Vars } from "../types.ts";
 export declare const $vars: Vars;
 
-=== dist/engine/reactions/authoring/where.d.ts ===
-/** Add reaction-branch chaining to a core read/view where block. */
-import type { BranchChain, UnnamedStepNode } from "../types.ts";
-import type { Condition } from "../../reads/where-ops.ts";
+=== dist/engine/reactions/authoring/words.d.ts ===
+import type { Condition, EarlierOp } from "../../reads/where-ops.ts";
 import { type CountOp, type ViewBlock } from "../../reads/views.ts";
+import type { BranchChain, UnnamedStepNode, ChannelPattern, InstrumentedAction, Mapping, StepNode, WhenBuilder } from "../types.ts";
+export { actionPattern } from "./nodes.ts";
+/** Read matching occurrences strictly before a trigger in its causal flow. */
+export declare function earlier(action: InstrumentedAction, input: Mapping, output?: Mapping): EarlierOp;
+export declare function when(channel: ChannelPattern): WhenBuilder;
+export declare function when(line: StepNode): WhenBuilder;
 export interface AuthoredWhereBlock extends ViewBlock {
     then(node: UnnamedStepNode): BranchChain;
 }
 /** State a read conjunction, optionally qualifying one reaction branch with it. */
 export declare function where(...conditions: Array<Condition | CountOp>): AuthoredWhereBlock;
-
-=== dist/engine/reactions/authoring/words.d.ts ===
-import type { EarlierOp } from "../../reads/where-ops.ts";
-import type { ChannelPattern, InstrumentedAction, Mapping, StepNode, WhenBuilder } from "../types.ts";
-export { actionPattern } from "./patterns.ts";
-/** Read matching occurrences strictly before a trigger in its causal flow. */
-export declare function earlier(action: InstrumentedAction, input: Mapping, output?: Mapping): EarlierOp;
-export declare function when(channel: ChannelPattern): WhenBuilder;
-export declare function when(line: StepNode): WhenBuilder;
 
 === dist/engine/reactions/concepts/concept-metadata.d.ts ===
 import type { OutcomeContracts } from "./outcomes.ts";
@@ -1681,7 +1673,7 @@ export declare const landing: unique symbol;
  */
 import type { LogStore } from "./runtime/log-store.ts";
 import type { Logging } from "./runtime/logging.ts";
-import type { EngineObserver } from "./runtime/observer.ts";
+import type { EngineObserver } from "./runtime/logging.ts";
 import type { ReactionMap } from "./types.ts";
 import type { ComputationRef } from "../reads/computations.ts";
 import type { FormerRef, FusedFormer } from "../reads/former-nodes.ts";
@@ -1884,65 +1876,55 @@ export declare class ActionConcept {
     /** Run the store's prune policy and return its reported eviction count. */
     evictConsumedFlows(): number;
 }
+/** Record an accepted execution-limit breach and return its caller-facing error. */
+export declare function breachLimit(actions: Pick<ActionConcept, "_recordExecutionLimit">, flow: string, limit: "actions" | "firings" | "rows"): Error;
 
-=== dist/engine/reactions/runtime/consequence-pipeline.d.ts ===
-/** Form, ask, and settle each consequence in a matched reaction pipeline. */
-import { Frames } from "../../reads/frames.ts";
+=== dist/engine/reactions/runtime/firing-pipeline.d.ts ===
+/**
+ * The staged firing flow: match one landed occurrence against a reaction's
+ * triggers, filter the matched frames through `where`, then form, ask, and
+ * settle each consequence — recording sanitized failures per stage.
+ */
 import { type FormerRef } from "../../reads/former-nodes.ts";
 import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { ActionPattern, ExecutableReaction, Frame } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { type FiringBook } from "./firing.ts";
+import type { ReactionLogger } from "./logging.ts";
+import type { TriggerMatcher } from "./matching.ts";
 type ActionArguments = Record<string | symbol, unknown>;
-export interface CapturedTriggers {
-    flow: string;
-    triggerIds: string[];
-    frameTriggerIds: string[][];
-}
-export declare class ConsequencePipeline {
+export declare class FiringPipeline {
+    private readonly matcher;
     private readonly actions;
     private readonly firingBook;
     private readonly definitions;
+    private readonly reactionLogger;
     private readonly react;
     private readonly assertRows;
     private readonly consumeAction;
-    constructor(actions: ActionConcept, firingBook: FiringBook, definitions: {
+    constructor(matcher: TriggerMatcher, actions: ActionConcept, firingBook: FiringBook, definitions: {
         formerNamed(name: string): FormerRef | undefined;
         readEnv(): ReadEnv;
-    }, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
-    dispatch(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured: CapturedTriggers, triggerIdsByFrame: string[][]): Promise<void>;
+    }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
+    fire(record: ActionRecord, reaction: ExecutableReaction): Promise<void>;
+    private capture;
+    private assertProvenance;
+    private triggerIdsOf;
+    private dispatch;
     matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
     private bindingsOf;
     private runPipelineForFrame;
     private runStepNode;
     private framesWithStepOutput;
+    /** Log a stage failure and record its sanitized interpreter evidence. */
+    private failStage;
     private failStep;
-    private recordStepFailure;
+    private recordConsequence;
     private assertCausalFlow;
     private landFormingFault;
     private resolveFormerInputs;
 }
 export {};
-
-=== dist/engine/reactions/runtime/firing-pipeline.d.ts ===
-/** Match, filter, and hand one eligible reaction to consequence dispatch. */
-import type { ExecutableReaction } from "../types.ts";
-import type { ActionConcept, ActionRecord } from "./actions.ts";
-import type { ConsequencePipeline } from "./consequence-pipeline.ts";
-import type { ReactionLogger } from "./logging.ts";
-import type { TriggerMatcher } from "./trigger-matching.ts";
-export declare class FiringPipeline {
-    private readonly matcher;
-    private readonly consequences;
-    private readonly actions;
-    private readonly reactionLogger;
-    private readonly assertRows;
-    constructor(matcher: TriggerMatcher, consequences: ConsequencePipeline, actions: Pick<ActionConcept, "_recordInterpreterFailure">, reactionLogger: ReactionLogger, assertRows: (flow: string, count: number) => void);
-    fire(record: ActionRecord, reaction: ExecutableReaction): Promise<void>;
-    private capture;
-    private assertProvenance;
-    private triggerIdsOf;
-}
 
 === dist/engine/reactions/runtime/firing.d.ts ===
 import type { FiringRecord, LogStore } from "./log-store.ts";
@@ -2011,6 +1993,12 @@ export interface InstrumentationState {
     react(record: ActionRecord, durationMs?: number): Promise<void>;
     emit(record: ActionRecord, durationMs?: number): void;
 }
+/**
+ * Run the reaction round that follows a durable landing. A failure there is
+ * logged and observed but can never take ownership of the caller's settled
+ * outcome, so it is swallowed after the evidence exists.
+ */
+export declare function reactQuietly(state: Pick<InstrumentationState, "react" | "emit">, record: ActionRecord, durationMs: number | undefined, landing: string, context?: Record<string, unknown>, emitOnFailure?: boolean): Promise<void>;
 /** Classify a thrown value without copying its diagnostic fields. */
 export declare function errorOutputFromThrown(error: unknown): Record<string, unknown>;
 /** Build the stable action/query proxy for one concept instance. */
@@ -2204,8 +2192,7 @@ export declare class MemoryStore implements LogStore {
     prune(): number;
     private enforceWindow;
     private isConsumed;
-    private dropReactionFailures;
-    private dropIntegrityFailures;
+    private dropFlowEntries;
     /**
      * Replace one folded record in the id map and flow array. The previous
      * record object remains unchanged.
@@ -2221,9 +2208,32 @@ export declare class MemoryStore implements LogStore {
 import type { Redactor } from "../../utils/redaction.ts";
 import type { ActionRecord } from "./actions.ts";
 import type { ActionConcept } from "./actions.ts";
-import type { EngineObserver, LogEvent } from "./observer.ts";
-import type { Frame } from "../types.ts";
+import type { ActionOutcome, Frame, Mapping } from "../types.ts";
 import type { Frames } from "../../reads/frames.ts";
+/**
+ * The engine sends observers one {@link LogEvent} after each instrumented
+ * non-query action. The event contains the concept and action names,
+ * field-name-redacted input, output, and outcome when present, asking reaction
+ * when present, flow, duration, and timestamp. Query methods whose names start
+ * with `_` do not emit events. If an observer throws, the engine logs the
+ * exception class and continues to the next observer.
+ */
+export interface LogEvent {
+    concept: string;
+    action: string;
+    input: Mapping;
+    output: Mapping;
+    /** The answering posture, when the action answered (result or refusal). */
+    outcome?: ActionOutcome;
+    /** The reaction that made this ask, if any. */
+    by?: string;
+    flow: string;
+    durationMs: number;
+    ts: number;
+}
+export interface EngineObserver {
+    onAction(ev: LogEvent): void;
+}
 export declare enum Logging {
     OFF = 0,
     TRACE = 1,
@@ -2247,9 +2257,10 @@ export declare class ReactionLogger {
 }
 
 === dist/engine/reactions/runtime/matching.d.ts ===
+import { Frames } from "../../reads/frames.ts";
 import { structurallyEqual } from "../../reads/value-equality.ts";
-import type { ActionRecord } from "./actions.ts";
-import type { ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, Frame, Mapping } from "../types.ts";
+import type { ActionConcept, ActionRecord } from "./actions.ts";
+import type { ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, ExecutableReaction, Frame, Mapping } from "../types.ts";
 /** The posture in which an action outcome landed. */
 export declare function postureOfOutcome(outcome: ActionOutcome): ChannelPosture;
 /** Compare literal values with the same equality used by reads and formers. */
@@ -2269,32 +2280,17 @@ export declare function matchArguments(record: ActionRecord, pattern: ActionPatt
 export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: {
     get(candidate: object): object | undefined;
 }): Frame | undefined;
-
-=== dist/engine/reactions/runtime/observer.d.ts ===
-/**
- * The engine sends observers one {@link LogEvent} after each instrumented
- * non-query action. The event contains the concept and action names,
- * field-name-redacted input, output, and outcome when present, asking reaction
- * when present, flow, duration, and timestamp. Query methods whose names start
- * with `_` do not emit events. If an observer throws, the engine logs the
- * exception class and continues to the next observer.
- */
-import type { ActionOutcome, Mapping } from "../types.ts";
-export interface LogEvent {
-    concept: string;
-    action: string;
-    input: Mapping;
-    output: Mapping;
-    /** The answering posture, when the action answered (result or refusal). */
-    outcome?: ActionOutcome;
-    /** The reaction that made this ask, if any. */
-    by?: string;
-    flow: string;
-    durationMs: number;
-    ts: number;
-}
-export interface EngineObserver {
-    onAction(ev: LogEvent): void;
+export declare class TriggerMatcher {
+    private readonly records;
+    private readonly consumption;
+    private readonly rawConceptOf;
+    private readonly assertRows?;
+    constructor(records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">, consumption: {
+        hasConsumed(recordId: string | undefined, reaction: string): boolean;
+    }, rawConceptOf: (instrumented: object) => object, assertRows?: ((flow: string, count: number) => void) | undefined);
+    match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
+    posture(record: ActionRecord): ChannelPosture | undefined;
+    matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, actionSymbol: symbol): Frame | undefined;
 }
 
 === dist/engine/reactions/runtime/operational.d.ts ===
@@ -2401,7 +2397,7 @@ import type { ActionPattern, Frame, ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { Logging } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
-import type { EngineObserver } from "./observer.ts";
+import type { EngineObserver } from "./logging.ts";
 import type { ExecutionControl } from "./operational.ts";
 type ActionArguments = Record<string | symbol, unknown>;
 export declare class Reacting {
@@ -2413,7 +2409,6 @@ export declare class Reacting {
     private readonly actionScheduler;
     private readonly instrumentation;
     private readonly triggerMatcher;
-    private readonly consequencePipeline;
     private readonly firingPipeline;
     private readonly execution?;
     constructor(actionConcept?: ActionConcept, execution?: ExecutionControl);
@@ -2469,24 +2464,6 @@ export declare class ReactionCatalog {
     candidates(action: InstrumentedAction, posture: ChannelPosture | undefined): Set<ExecutableReaction> | undefined;
     loweredGroups(): Iterable<ReactionIR[]>;
     unloweredEntries(): Iterable<UnloweredIR>;
-}
-
-=== dist/engine/reactions/runtime/trigger-matching.d.ts ===
-/** Join one landed occurrence with an executable reaction's trigger clauses. */
-import { Frames } from "../../reads/frames.ts";
-import type { ActionConcept, ActionRecord } from "./actions.ts";
-import type { ChannelPattern, ChannelPosture, ExecutableReaction, Frame } from "../types.ts";
-export declare class TriggerMatcher {
-    private readonly records;
-    private readonly consumption;
-    private readonly rawConceptOf;
-    private readonly assertRows?;
-    constructor(records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">, consumption: {
-        hasConsumed(recordId: string | undefined, reaction: string): boolean;
-    }, rawConceptOf: (instrumented: object) => object, assertRows?: ((flow: string, count: number) => void) | undefined);
-    match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
-    posture(record: ActionRecord): ChannelPosture | undefined;
-    matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, actionSymbol: symbol): Frame | undefined;
 }
 
 === dist/engine/reactions/types.d.ts ===
@@ -2625,7 +2602,6 @@ type ActionOutputPattern<TReturn> = {
 type ExactActionOutputPattern<TReturn, TOutput extends Mapping> = TOutput & ActionOutputPattern<TReturn> & Record<Exclude<keyof TOutput, ActionOutputKeys<TReturn>>, never>;
 export interface NamedActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TReturn = unknown> extends ActionCall<TAction, TInput, TReturn> {
     readonly [NamedLineBrand]: true;
-    named(name: string): NamedActionCall<TAction, TInput, TReturn>;
 }
 /** A callable action line pinned to a successful return. */
 export interface ReturnedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TOutput extends Mapping = Mapping> extends StepNode {
@@ -2651,7 +2627,6 @@ export interface ReturnedTriggerActionLine<TAction extends InstrumentedAction = 
 }
 export interface NamedReturnedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TOutput extends Mapping = Mapping> extends ReturnedActionLine<TAction, TInput, TOutput> {
     readonly [NamedLineBrand]: true;
-    named(name: string): NamedReturnedActionLine<TAction, TInput, TOutput>;
 }
 /** A callable action line pinned to a declared refusal. */
 export interface RefusedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TRefusal extends Mapping = Mapping> extends StepNode {
@@ -2677,7 +2652,6 @@ export interface RefusedTriggerActionLine<TAction extends InstrumentedAction = I
 }
 export interface NamedRefusedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TRefusal extends Mapping = Mapping> extends RefusedActionLine<TAction, TInput, TRefusal> {
     readonly [NamedLineBrand]: true;
-    named(name: string): NamedRefusedActionLine<TAction, TInput, TRefusal>;
 }
 /** A callable consequence before it receives a sibling-path label. */
 export type UnnamedStepNode = StepNode & {
@@ -4743,7 +4717,7 @@ export { reaction, vocabulary } from "../engine/reactions/authoring/refs.ts";
 export { earlier } from "../engine/reactions/authoring/words.ts";
 export { when } from "../engine/reactions/authoring/public-words.ts";
 export { refused, returned } from "../engine/reactions/authoring/channels.ts";
-export { where } from "../engine/reactions/authoring/where.ts";
+export { where } from "../engine/reactions/authoring/words.ts";
 export { compute, no, whether } from "../engine/reads/where-ops.ts";
 export { is } from "../engine/reads/computations.ts";
 export { count, view } from "../engine/reads/views.ts";

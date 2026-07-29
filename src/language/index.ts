@@ -3,7 +3,7 @@ export { reaction, vocabulary } from "@engine/reactions/authoring/refs";
 export { earlier } from "@engine/reactions/authoring/words";
 export { when } from "@engine/reactions/authoring/public-words";
 export { refused, returned } from "@engine/reactions/authoring/channels";
-export { where } from "@engine/reactions/authoring/where";
+export { where } from "@engine/reactions/authoring/words";
 export { compute, no, whether } from "@engine/reads/where-ops";
 export { is } from "@engine/reads/computations";
 export { count, view } from "@engine/reads/views";

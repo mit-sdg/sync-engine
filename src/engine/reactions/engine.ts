@@ -8,7 +8,7 @@
 import { ActionConcept } from "./runtime/actions.ts";
 import type { LogStore } from "./runtime/log-store.ts";
 import type { Logging } from "./runtime/logging.ts";
-import type { EngineObserver } from "./runtime/observer.ts";
+import type { EngineObserver } from "./runtime/logging.ts";
 import type { ReactionMap } from "./types.ts";
 import type { ComputationRef } from "@engine/reads/computations";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";

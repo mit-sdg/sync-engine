@@ -42,19 +42,18 @@ import type {
   WhereFn,
 } from "../types.ts";
 import { ActionScheduler } from "./action-scheduler.ts";
-import { ActionConcept, type ActionRecord } from "./actions.ts";
-import { ConsequencePipeline } from "./consequence-pipeline.ts";
+import { ActionConcept, breachLimit, type ActionRecord } from "./actions.ts";
 import { FiringBook } from "./firing.ts";
 import { FiringPipeline } from "./firing-pipeline.ts";
 import { ConceptInstrumentation } from "./instrumenting.ts";
 import { Logging, ReactionLogger } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
-import type { EngineObserver } from "./observer.ts";
+import type { EngineObserver } from "./logging.ts";
 import type { ExecutionControl } from "./operational.ts";
 import { ReactionCatalog } from "./reaction-catalog.ts";
 import { exportConcepts, exportReactions, readBack, renderApp } from "./reacting-export.ts";
 import { matchArguments as matchActionArguments } from "./matching.ts";
-import { TriggerMatcher } from "./trigger-matching.ts";
+import { TriggerMatcher } from "./matching.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
@@ -67,7 +66,6 @@ export class Reacting {
   private readonly actionScheduler = new ActionScheduler();
   private readonly instrumentation: ConceptInstrumentation;
   private readonly triggerMatcher: TriggerMatcher;
-  private readonly consequencePipeline: ConsequencePipeline;
   private readonly firingPipeline: FiringPipeline;
   private readonly execution?: ExecutionControl;
 
@@ -78,9 +76,9 @@ export class Reacting {
     this.firingBook = new FiringBook(
       actionConcept.store,
       (flowToken) => {
-        if (this.execution?.firing(flowToken) !== false) return;
-        this.Action._recordExecutionLimit(flowToken, "firings");
-        throw new Error("The flow exceeded its firing limit.");
+        if (this.execution?.firing(flowToken) === false) {
+          throw breachLimit(this.Action, flowToken, "firings");
+        }
       },
       actionConcept.redactor,
     );
@@ -98,20 +96,15 @@ export class Reacting {
       (instrumented) => this.instrumentation.rawConceptOf(instrumented),
       (flowToken, count) => this.assertRows(flowToken, count),
     );
-    this.consequencePipeline = new ConsequencePipeline(
+    this.firingPipeline = new FiringPipeline(
+      this.triggerMatcher,
       actionConcept,
       this.firingBook,
       this.registry,
+      this.reactionLogger,
       (record, durationMs) => this.react(record, durationMs),
       (flowToken, count) => this.assertRows(flowToken, count),
       (flowToken) => this.consumeAction(flowToken),
-    );
-    this.firingPipeline = new FiringPipeline(
-      this.triggerMatcher,
-      this.consequencePipeline,
-      actionConcept,
-      this.reactionLogger,
-      (flowToken, count) => this.assertRows(flowToken, count),
     );
   }
 
@@ -376,7 +369,7 @@ export class Reacting {
     by?: string,
     authoritativeFlow?: string,
   ): ActionArguments {
-    return this.consequencePipeline.matchThen(then, frame, by, authoritativeFlow);
+    return this.firingPipeline.matchThen(then, frame, by, authoritativeFlow);
   }
 
   _getFirings(reaction: string): FiringRecord[] {
@@ -472,14 +465,14 @@ export class Reacting {
   }
 
   private assertRows(flowToken: string, count: number): void {
-    if (this.execution?.rows(count) !== false) return;
-    this.Action._recordExecutionLimit(flowToken, "rows");
-    throw new Error("The evaluation exceeded its row limit.");
+    if (this.execution?.rows(count) === false) throw breachLimit(this.Action, flowToken, "rows");
   }
 
   private consumeAction(flowToken: string): boolean {
-    if (this.execution?.action(flowToken) !== false) return true;
-    this.Action._recordExecutionLimit(flowToken, "actions");
-    return false;
+    if (this.execution?.action(flowToken) === false) {
+      breachLimit(this.Action, flowToken, "actions");
+      return false;
+    }
+    return true;
   }
 }

@@ -3,6 +3,7 @@
 import type { QueryReadLine } from "@engine/reads/lines";
 import type { QueryPromise } from "@engine/reads/query-metadata";
 import type { Mapping, StepNode } from "../types.ts";
+import { brand, hasFuncBrand } from "@engine/reads/brands";
 
 const ActionRefBrand: unique symbol = Symbol("ActionRefBrand");
 const QueryRefBrand: unique symbol = Symbol("QueryRefBrand");
@@ -23,23 +24,18 @@ export interface QueryRef {
   readonly queryPromise?: QueryPromise;
 }
 
-function brandReference<T extends object>(value: T, marker: symbol): T {
-  Object.defineProperty(value, marker, { value: true, enumerable: false });
-  return value;
-}
-
 export function brandActionRef<T extends object>(value: T): T {
-  return brandReference(value, ActionRefBrand);
+  return brand(value, ActionRefBrand);
 }
 
 export function brandQueryRef<T extends object>(value: T): T {
-  return brandReference(value, QueryRefBrand);
+  return brand(value, QueryRefBrand);
 }
 
 export function isActionRef(value: unknown): value is ActionRef {
-  return typeof value === "function" && (value as never)[ActionRefBrand] === true;
+  return hasFuncBrand(value, ActionRefBrand);
 }
 
 export function isQueryRef(value: unknown): value is QueryRef {
-  return typeof value === "function" && (value as never)[QueryRefBrand] === true;
+  return hasFuncBrand(value, QueryRefBrand);
 }
