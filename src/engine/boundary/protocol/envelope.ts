@@ -50,11 +50,6 @@ export function toJsonValue(value: unknown): unknown {
   return JSON.parse(serializeJsonValue(value)) as unknown;
 }
 
-/** Serialize one result exactly as the HTTP boundary carries it. */
-export function serializeEnvelope(result: InvocationResult): string {
-  return serializeJsonValue(toEnvelope(result));
-}
-
 /** Apply the HTTP boundary's JSON projection to an in-process result. */
 export function toJsonEnvelope(result: InvocationResult): unknown {
   return toJsonValue(toEnvelope(result));

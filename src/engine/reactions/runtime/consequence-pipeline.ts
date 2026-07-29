@@ -37,7 +37,6 @@ import type {
 import { ActionConcept, type ActionRecord, normalizeOutcome } from "./actions.ts";
 import { type FiringBook, type FiringBranch, type FiringFill } from "./firing.ts";
 import { errorOutputFromThrown } from "./instrumenting.ts";
-import type { InterpreterFailures } from "./interpreter-failures.ts";
 import type { ReactionFailureRecord } from "./log-store.ts";
 import { unifyOutputPattern } from "./matching.ts";
 
@@ -57,7 +56,6 @@ export class ConsequencePipeline {
       formerNamed(name: string): FormerRef | undefined;
       readEnv(): ReadEnv;
     },
-    private readonly failures: InterpreterFailures,
     private readonly react: (record: ActionRecord, durationMs?: number) => Promise<void>,
     private readonly assertRows: (flow: string, count: number) => void,
     private readonly consumeAction: (flow: string) => boolean,
@@ -78,7 +76,13 @@ export class ConsequencePipeline {
           `Reaction "${reaction.name}": matched bindings could not resolve every trigger occurrence`,
           { error: serializeError(error) },
         );
-        this.failures.record(reaction.name, captured.flow, captured.triggerIds, "trigger", error);
+        this.actions._recordInterpreterFailure(
+          reaction.name,
+          captured.flow,
+          captured.triggerIds,
+          "trigger",
+          error,
+        );
         continue;
       }
       const fill: FiringFill = {
@@ -321,10 +325,17 @@ export class ConsequencePipeline {
     error: unknown,
     actionIdValue?: string,
   ): void {
-    this.failures.record(reaction.name, branch.fill.flow, branch.fill.whenIds, stage, error, {
-      action: actionNameOf(node.action.action as InstrumentedAction),
-      ...(actionIdValue !== undefined ? { actionId: actionIdValue } : {}),
-    });
+    this.actions._recordInterpreterFailure(
+      reaction.name,
+      branch.fill.flow,
+      branch.fill.whenIds,
+      stage,
+      error,
+      {
+        action: actionNameOf(node.action.action as InstrumentedAction),
+        ...(actionIdValue !== undefined ? { actionId: actionIdValue } : {}),
+      },
+    );
   }
 
   private assertCausalFlow(frames: Frames, expected: string): void {

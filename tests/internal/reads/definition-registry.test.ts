@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
-import { DefinitionRegistry } from "@sync-engine/internal/reads/definition-registry.ts";
+import { Registry } from "@sync-engine/internal/reads/definition-registry.ts";
 import type { InstrumentedQuery } from "@sync-engine/internal/reactions/types.ts";
 
 describe("definition registry", () => {
   test("keeps cached read environments live as concept definitions are installed", () => {
-    const definitions = new DefinitionRegistry();
+    const definitions = new Registry();
     const env = definitions.readEnv();
     const first = (() => []) as InstrumentedQuery;
     first.queryName = "_items";
@@ -19,7 +19,7 @@ describe("definition registry", () => {
   });
 
   test("registers imported view and former definitions into the same read environment", () => {
-    const definitions = new DefinitionRegistry();
+    const definitions = new Registry();
     definitions.registerViews([
       {
         name: "anything holds",

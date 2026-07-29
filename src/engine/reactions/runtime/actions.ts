@@ -200,6 +200,27 @@ export class ActionConcept {
     return () => this.flowQuiescenceListeners.delete(listener);
   }
 
+  /** Serialize and record a sanitized failure produced between instrumented action asks. */
+  _recordInterpreterFailure(
+    reaction: string,
+    flow: string,
+    triggerIds: string[],
+    stage: ReactionFailureRecord["stage"],
+    error: unknown,
+    consequence: Pick<ReactionFailureRecord, "action" | "actionId"> = {},
+  ): void {
+    const serialized = serializeError(error);
+    this._recordReactionFailure({
+      reaction,
+      flow,
+      triggerIds,
+      stage,
+      ...consequence,
+      errorClass: typeof serialized.name === "string" ? serialized.name : "Error",
+      at: Date.now(),
+    });
+  }
+
   /** Record durable interpreter evidence and mark its active flow as failed. */
   _recordReactionFailure(failure: ReactionFailureRecord): void {
     const active = this.activeFlowValues.get(failure.flow);

@@ -2,7 +2,6 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   Frames,
   bindInputMapping,
-  distinctFrames,
   expandOutputRows,
   readPatternValue,
   varKeyOf,
@@ -60,11 +59,10 @@ describe("Frames primitives", () => {
     }
   });
 
-  test("array-returning operations remain Frames and distinct keeps first occurrence", () => {
+  test("array-returning operations remain Frames", () => {
     const frames = new Frames({ n: 2 }, { n: 1 }, { n: 1 });
     expect(frames.filter(({ n }) => n > 0)).toBeInstanceOf(Frames);
     expect(frames.slice(1)).toBeInstanceOf(Frames);
     expect(frames.concat({ n: 3 })).toBeInstanceOf(Frames);
-    expect(distinctFrames(frames)).toEqual(new Frames({ n: 2 }, { n: 1 }));
   });
 });

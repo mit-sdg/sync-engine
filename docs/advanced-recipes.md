@@ -14,19 +14,7 @@ import * as fs from "node:fs";
 ```
 
 ```ts
-import { FileStore, MemoryStore, assemble } from "@mit-sdg/sync-engine/assembly";
-import {
-  command,
-  createCliApp,
-  endpoint,
-  fail,
-  ok,
-  parseFail,
-  parseOk,
-  receive,
-  respond,
-} from "@mit-sdg/sync-engine/boundary";
-import type { CliResult } from "@mit-sdg/sync-engine/boundary";
+import { FileStore, assemble } from "@mit-sdg/sync-engine/assembly";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 ```
 
@@ -129,94 +117,3 @@ which reads durable concept state and invokes the derived concept's action.
 audit sink; it is not a transactional production database. A production
 implementation must define atomic writes, schema migration, concurrency,
 durability, and recovery failure handling in its own storage layer and host.
-
-## An inbound application CLI
-
-`command(...)` adapts an application endpoint to arguments and a `CliResult`.
-`createCliApp` receives the invoker from the real assembly, so a valid command
-enters the same endpoint boundary as another in-process adapter. The final
-function is the deliberately small process projection: write the returned
-streams and assign the returned exit code.
-
-```ts
-class GreetingConcept {
-  greet({ name, loud }: { name: string; loud: boolean }): { greeting: string } {
-    const greeting = `Hello, ${name}!`;
-    return { greeting: loud ? greeting.toUpperCase() : greeting };
-  }
-}
-
-const greetingVocabulary = vocabulary({ concepts: { Greeting: GreetingConcept } });
-const { Greeting } = greetingVocabulary.concepts;
-
-const Greet = endpoint("/greet", ({ name, loud, greeting }) =>
-  receive({ name, loud })
-    .then(Greeting.greet({ name, loud }).responds({ greeting }))
-    .then(respond({ greeting })),
-);
-
-const GreetCommand = command<{ name: string; loud: boolean }, { greeting: string }, string>(Greet, {
-  description: "Greet one person.",
-  parse(positionals, options) {
-    if (positionals.length !== 1) return parseFail("Usage: greetings greet NAME [--loud]");
-    return parseOk({ name: positionals[0]!, loud: options.loud === true });
-  },
-  format(result) {
-    if (result.ok) return ok(result.value.greeting);
-    return fail(result.error.kind === "domain" ? result.error.value : result.error.code);
-  },
-});
-
-function assembleGreetingCli() {
-  const occurrenceStore = new MemoryStore("keepAll");
-  const application = assemble({
-    vocabulary: greetingVocabulary,
-    composition: { Greet },
-    logStore: occurrenceStore,
-  });
-  const cli = createCliApp(
-    { greet: GreetCommand },
-    { name: "greetings", version: "1.0.0", invoker: application.invoker },
-  );
-  return { application, cli, occurrenceStore };
-}
-
-interface ProcessTarget {
-  stdout: { write(text: string): unknown };
-  stderr: { write(text: string): unknown };
-  exitCode?: string | number | null;
-}
-
-async function projectCliProcess(
-  cli: { run(args: string[]): Promise<CliResult> },
-  args: string[],
-  target: ProcessTarget = process,
-): Promise<void> {
-  const result = await cli.run(args);
-  if (result.stdout !== "") target.stdout.write(result.stdout);
-  if (result.stderr !== "") target.stderr.write(result.stderr);
-  target.exitCode = result.exitCode;
-}
-```
-
-The successful path parses one positional and the `--loud` flag, invokes
-`/greet`, formats the endpoint result, and projects it to stdout:
-
-```console
-$ greetings greet Ada --loud
-HELLO, ADA!
-```
-
-With no name, `parseFail` returns before the invoker is called. The application
-records no request, concept action, response, or firing occurrence:
-
-```console
-$ greetings greet
-Usage: greetings greet NAME [--loud]
-$ echo $?
-1
-```
-
-This is an inbound CLI for this assembled application. It is distinct from the
-installed maintainer-facing `sync-engine` executable, whose `new`, `check`, and
-`artifacts` commands are documented in the [CLI reference](./cli.md).

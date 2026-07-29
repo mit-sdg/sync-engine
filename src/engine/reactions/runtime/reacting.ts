@@ -20,8 +20,8 @@ import {
   copyReactionLintExtraUses,
   lintReactionOpens,
 } from "@engine/reads/reaction-validation";
-import { Registry } from "@engine/reads/registering";
-import type { BoundReaction, BoundWhereOp } from "@engine/reads/registering";
+import { Registry } from "@engine/reads/definition-registry";
+import type { BoundReaction, BoundWhereOp } from "@engine/reads/definition-registry";
 import { applyWhereOps } from "@engine/reads/where-evaluation";
 import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { RelationView } from "@engine/reads/lines";
@@ -34,8 +34,6 @@ import { actionNameOf, conceptNameOf } from "../concepts/introspect.ts";
 import { flow, landing } from "../context.ts";
 import type {
   ActionPattern,
-  ChannelPattern,
-  ChannelPosture,
   ExecutableReaction,
   Frame,
   InstrumentedAction,
@@ -49,7 +47,6 @@ import { ConsequencePipeline } from "./consequence-pipeline.ts";
 import { FiringBook } from "./firing.ts";
 import { FiringPipeline } from "./firing-pipeline.ts";
 import { ConceptInstrumentation } from "./instrumenting.ts";
-import { InterpreterFailures } from "./interpreter-failures.ts";
 import { Logging, ReactionLogger } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./observer.ts";
@@ -61,18 +58,8 @@ import { TriggerMatcher } from "./trigger-matching.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
-interface FrameProvenance {
-  flow: string;
-  triggerIds: string[];
-  frameTriggerIds: string[][];
-  triggerSignatures?: Set<string>;
-}
-
 export class Reacting {
   public Action: ActionConcept;
-  public reactions: Record<string, ExecutableReaction>;
-  public reactionsByAction: Map<InstrumentedAction, Set<ExecutableReaction>>;
-  public reactionsByChannel: Map<ChannelPosture, Set<ExecutableReaction>>;
   private readonly registry = new Registry();
   private readonly catalog = new ReactionCatalog();
   private readonly reactionLogger: ReactionLogger;
@@ -86,9 +73,6 @@ export class Reacting {
 
   constructor(actionConcept: ActionConcept = new ActionConcept(), execution?: ExecutionControl) {
     this.Action = actionConcept;
-    this.reactions = this.catalog.reactions;
-    this.reactionsByAction = this.catalog.reactionsByAction;
-    this.reactionsByChannel = this.catalog.reactionsByChannel;
     this.execution = execution;
     this.reactionLogger = new ReactionLogger(actionConcept, actionConcept.redactor);
     this.firingBook = new FiringBook(
@@ -100,7 +84,6 @@ export class Reacting {
       },
       actionConcept.redactor,
     );
-    const failures = new InterpreterFailures(actionConcept);
     this.instrumentation = new ConceptInstrumentation({
       actions: actionConcept,
       scheduler: this.actionScheduler,
@@ -119,7 +102,6 @@ export class Reacting {
       actionConcept,
       this.firingBook,
       this.registry,
-      failures,
       (record, durationMs) => this.react(record, durationMs),
       (flowToken, count) => this.assertRows(flowToken, count),
       (flowToken) => this.consumeAction(flowToken),
@@ -127,7 +109,7 @@ export class Reacting {
     this.firingPipeline = new FiringPipeline(
       this.triggerMatcher,
       this.consequencePipeline,
-      failures,
+      actionConcept,
       this.reactionLogger,
       (flowToken, count) => this.assertRows(flowToken, count),
     );
@@ -386,35 +368,6 @@ export class Reacting {
     }
     for (const reaction of candidates) await this.firingPipeline.fire(record, reaction);
     this.reactionLogger.emit(record, durationMs);
-  }
-
-  matchWhen(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]] {
-    return this.triggerMatcher.match(record, reaction);
-  }
-
-  matchChannel(
-    record: ActionRecord,
-    clause: ChannelPattern,
-    frame: Frame,
-    actionSymbol: symbol,
-  ): Frame | undefined {
-    return this.triggerMatcher.matchChannel(record, clause, frame, actionSymbol);
-  }
-
-  addThen(
-    frames: Frames,
-    reaction: ExecutableReaction,
-    actionSymbols: symbol[],
-    captured?: FrameProvenance,
-    validatedTriggerIds?: string[][],
-  ): Promise<void> {
-    return this.firingPipeline.addThen(
-      frames,
-      reaction,
-      actionSymbols,
-      captured,
-      validatedTriggerIds,
-    );
   }
 
   matchThen(

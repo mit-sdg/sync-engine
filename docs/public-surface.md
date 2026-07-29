@@ -182,7 +182,7 @@ recovery.
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `CliApp`, `CliAppOptions`, `CliCommand`, `CliResult`, `CommandInput`, `EmittedFrameworkErrorCode`, `EndpointCliCommand`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ParseResult`, `ParsedArgs`, `ProductionHttpProfile`, `ValidationResult`, `command`, `createCliApp`, `createGateway`, `createHttpHandler`, `endpoint`, `fail`, `httpFloor`, `ok`, `parseArgs`, `parseFail`, `parseOk`, `productionHttpProfile`, `receive`, `respond`
+`ApplicationInterface`, `EmittedFrameworkErrorCode`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ProductionHttpProfile`, `ValidationResult`, `createGateway`, `createHttpHandler`, `endpoint`, `httpFloor`, `productionHttpProfile`, `receive`, `respond`
 
 <!-- register:boundary:end -->
 
@@ -317,28 +317,6 @@ non-ByteString, or otherwise invalid result is replaced with a UUID.
 `responseHeader` optionally projects the effective
 identifier on every response. Invalid header names are rejected at handler
 construction, and response decoration never rejects a handled request.
-
-### CLI
-
-The APIs in this section construct application-specific CLI programs. They are
-separate from the installed `sync-engine` executable, whose commands are
-defined in the [CLI reference](./cli.md). The [inbound application CLI
-recipe](./advanced-recipes.md#an-inbound-application-cli) connects one to a real
-assembled endpoint and projects its result onto a process.
-
-| API                     | Compact signature                                        |
-| ----------------------- | -------------------------------------------------------- |
-| `command`               | `command({ path }, { description?, parse, format })`     |
-| `createCliApp`          | `createCliApp(commands, { name?, version?, invoker? }?)` |
-| `parseArgs`             | `parseArgs(args): ParsedArgs`                            |
-| `parseOk` / `parseFail` | Constructors for `ParseResult`                           |
-| `ok` / `fail`           | Constructors for `CliResult` with exit codes `0` / `1`   |
-
-`CliAppOptions.name` and `.version` default to `""`; `invoker` defaults to
-absent and is required only by endpoint commands. `CliCommand`,
-`EndpointCliCommand`, and `CommandInput` name command contracts.
-Command entries are own properties, and `help`, `--help`, and `-h` are reserved
-for built-in help.
 
 ### Framework Errors
 

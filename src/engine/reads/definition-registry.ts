@@ -24,7 +24,9 @@ import { AuthoredReferenceResolver } from "./authored-reference-resolution.ts";
 import { ImportedIrBinder, type BoundReaction } from "./imported-ir-binding.ts";
 import { ViewFormerValidator } from "./view-former-validation.ts";
 
-export class DefinitionRegistry {
+export type { BoundReaction, BoundWhereOp } from "./imported-ir-binding.ts";
+
+export class Registry {
   private readonly conceptsByName = new Map<string, object>();
   private readonly computationsByName = new Map<string, ComputationRef>();
   private readonly viewsByName = new Map<string, RelationView>();

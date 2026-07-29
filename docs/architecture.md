@@ -201,8 +201,7 @@ Dependency edges point inward toward `protocol/`: invocation, wire, and client
 adapters consume its transport-neutral shapes. `assembly/` composes protocol,
 invocation, wire, reaction, and read capabilities. `gateway/` and `http/` are
 outer adapters that consume those lower layers; lower layers do not depend on
-gateway or HTTP. The standalone `src/engine/boundary/cli-app.ts` likewise adapts
-protocol results and an invoker without inspecting concept state.
+gateway or HTTP.
 
 `src/engine/boundary/assembly/concept-set.ts` turns plain concept registrations
 into a vocabulary, default implementations, floor-specific implementation
@@ -218,10 +217,9 @@ its settlement.
 `src/engine/boundary/invocation/invoke.ts`,
 `src/engine/boundary/gateway/gateway.ts`,
 `src/engine/boundary/http/http.ts`,
-`src/engine/boundary/http/http-profile.ts`,
-`src/engine/boundary/http/http-floor.ts`, and
-`src/engine/boundary/cli-app.ts` route, serialize, or cancel a request, but they
-do not inspect concept state.
+`src/engine/boundary/http/http-profile.ts`, and
+`src/engine/boundary/http/http-floor.ts` route, serialize, or cancel a request,
+but they do not inspect concept state.
 
 ## Hosting and generated artifacts
 

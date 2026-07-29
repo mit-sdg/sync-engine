@@ -1,19 +1,7 @@
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FileStore, MemoryStore, assemble } from "@mit-sdg/sync-engine/assembly";
-import {
-  command,
-  createCliApp,
-  endpoint,
-  fail,
-  ok,
-  parseFail,
-  parseOk,
-  receive,
-  respond,
-} from "@mit-sdg/sync-engine/boundary";
-import type { CliResult } from "@mit-sdg/sync-engine/boundary";
+import { FileStore, assemble } from "@mit-sdg/sync-engine/assembly";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 
@@ -85,65 +73,6 @@ async function recoverSearchIndex(
   }
 }
 
-class GreetingConcept {
-  greet({ name, loud }: { name: string; loud: boolean }): { greeting: string } {
-    const greeting = `Hello, ${name}!`;
-    return { greeting: loud ? greeting.toUpperCase() : greeting };
-  }
-}
-
-const greetingVocabulary = vocabulary({ concepts: { Greeting: GreetingConcept } });
-const { Greeting } = greetingVocabulary.concepts;
-
-const Greet = endpoint("/greet", ({ name, loud, greeting }) =>
-  receive({ name, loud })
-    .then(Greeting.greet({ name, loud }).responds({ greeting }))
-    .then(respond({ greeting })),
-);
-
-const GreetCommand = command<{ name: string; loud: boolean }, { greeting: string }, string>(Greet, {
-  description: "Greet one person.",
-  parse(positionals, options) {
-    if (positionals.length !== 1) return parseFail("Usage: greetings greet NAME [--loud]");
-    return parseOk({ name: positionals[0]!, loud: options.loud === true });
-  },
-  format(result) {
-    if (result.ok) return ok(result.value.greeting);
-    return fail(result.error.kind === "domain" ? result.error.value : result.error.code);
-  },
-});
-
-function assembleGreetingCli() {
-  const occurrenceStore = new MemoryStore("keepAll");
-  const application = assemble({
-    vocabulary: greetingVocabulary,
-    composition: { Greet },
-    logStore: occurrenceStore,
-  });
-  const cli = createCliApp(
-    { greet: GreetCommand },
-    { name: "greetings", version: "1.0.0", invoker: application.invoker },
-  );
-  return { application, cli, occurrenceStore };
-}
-
-interface ProcessTarget {
-  stdout: { write(text: string): unknown };
-  stderr: { write(text: string): unknown };
-  exitCode?: string | number | null;
-}
-
-async function projectCliProcess(
-  cli: { run(args: string[]): Promise<CliResult> },
-  args: string[],
-  target: ProcessTarget = process,
-): Promise<void> {
-  const result = await cli.run(args);
-  if (result.stdout !== "") target.stdout.write(result.stdout);
-  if (result.stderr !== "") target.stderr.write(result.stderr);
-  target.exitCode = result.exitCode;
-}
-
 const temporaryDirectories: string[] = [];
 
 function temporaryDirectory(): string {
@@ -198,37 +127,5 @@ describe("advanced persistence recipe", () => {
       { note: "n1", text: "Durable note" },
     ]);
     expect(restarted.occurrenceStore.actions.size).toBe(1);
-  });
-});
-
-describe("advanced inbound CLI recipe", () => {
-  test("projects a successful real endpoint invocation onto a process", async () => {
-    const { cli, occurrenceStore } = assembleGreetingCli();
-    let stdout = "";
-    let stderr = "";
-    const target: ProcessTarget = {
-      stdout: { write: (text) => (stdout += text) },
-      stderr: { write: (text) => (stderr += text) },
-    };
-
-    await projectCliProcess(cli, ["greet", "Ada", "--loud"], target);
-
-    expect({ stdout, stderr, exitCode: target.exitCode }).toEqual({
-      stdout: "HELLO, ADA!\n",
-      stderr: "",
-      exitCode: 0,
-    });
-    expect(occurrenceStore.actions.size).toBe(3);
-  });
-
-  test("returns parseFail before entering the application or recording an occurrence", async () => {
-    const { cli, occurrenceStore } = assembleGreetingCli();
-
-    await expect(cli.run(["greet"])).resolves.toEqual({
-      stdout: "",
-      stderr: "Usage: greetings greet NAME [--loud]\n",
-      exitCode: 1,
-    });
-    expect(occurrenceStore.actions.size).toBe(0);
   });
 });

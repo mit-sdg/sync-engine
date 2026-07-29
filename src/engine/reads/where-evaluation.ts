@@ -4,13 +4,8 @@ import { isQueryRef } from "@engine/reactions/authoring/references";
 import type { Frame, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import type { ComputationRef } from "./computations.ts";
 import type { ReadEnv } from "./env.ts";
-import {
-  bindInputMapping,
-  expandOutputRows,
-  Frames,
-  readPatternValue,
-  structurallyEqual,
-} from "./frames.ts";
+import { bindInputMapping, expandOutputRows, Frames, readPatternValue } from "./frames.ts";
+import { structurallyEqual } from "./value-equality.ts";
 import { liveOf } from "./ir.ts";
 import type { QueryRefIR, ViewOpIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";

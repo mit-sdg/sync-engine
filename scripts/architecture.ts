@@ -524,12 +524,9 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
 
       const sourceBoundaryArea = nestedArea(sourcePath, "boundary", boundaryAreas);
       const targetBoundaryArea = nestedArea(target, "boundary", boundaryAreas);
-      const isBoundaryBridge =
-        sourceBoundaryArea === "root" && posix.basename(sourcePath) === "cli-app.ts";
       if (
         sourceBoundaryArea !== undefined &&
         targetBoundaryArea !== undefined &&
-        !isBoundaryBridge &&
         boundaryDependencies.get(sourceBoundaryArea)?.has(targetBoundaryArea) !== true
       ) {
         failures.push(

@@ -25,22 +25,3 @@ export { productionHttpProfile } from "@engine/boundary/http/http-profile";
 export type { ProductionHttpProfile } from "@engine/boundary/http/http-profile";
 export { httpFloor } from "@engine/boundary/http/http-floor";
 export type { HttpCredentialBinding, HttpFloor } from "@engine/boundary/http/http-floor";
-export {
-  command,
-  createCliApp,
-  fail,
-  ok,
-  parseArgs,
-  parseFail,
-  parseOk,
-} from "@engine/boundary/cli-app";
-export type {
-  CliApp,
-  CliAppOptions,
-  CliCommand,
-  CliResult,
-  CommandInput,
-  EndpointCliCommand,
-  ParsedArgs,
-  ParseResult,
-} from "@engine/boundary/cli-app";

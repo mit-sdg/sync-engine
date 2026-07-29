@@ -5,9 +5,8 @@ import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
 import { flow } from "../context.ts";
 import type { ExecutableReaction, Frame } from "../types.ts";
-import type { ActionRecord } from "./actions.ts";
+import type { ActionConcept, ActionRecord } from "./actions.ts";
 import type { CapturedTriggers, ConsequencePipeline } from "./consequence-pipeline.ts";
-import type { InterpreterFailures } from "./interpreter-failures.ts";
 import type { ReactionLogger } from "./logging.ts";
 import type { TriggerMatcher } from "./trigger-matching.ts";
 
@@ -19,7 +18,7 @@ export class FiringPipeline {
   constructor(
     private readonly matcher: TriggerMatcher,
     private readonly consequences: ConsequencePipeline,
-    private readonly failures: InterpreterFailures,
+    private readonly actions: Pick<ActionConcept, "_recordInterpreterFailure">,
     private readonly reactionLogger: ReactionLogger,
     private readonly assertRows: (flow: string, count: number) => void,
   ) {}
@@ -34,7 +33,7 @@ export class FiringPipeline {
       logger.error(`Reaction "${reaction.name}": trigger matching failed`, {
         error: serializeError(error),
       });
-      this.failures.record(
+      this.actions._recordInterpreterFailure(
         reaction.name,
         record.flow,
         record.id === undefined ? [] : [record.id],
@@ -62,7 +61,13 @@ export class FiringPipeline {
         logger.error(`Reaction "${reaction.name}": where condition evaluation failed`, {
           error: serializeError(error),
         });
-        this.failures.record(reaction.name, provenance.flow, provenance.triggerIds, "where", error);
+        this.actions._recordInterpreterFailure(
+          reaction.name,
+          provenance.flow,
+          provenance.triggerIds,
+          "where",
+          error,
+        );
         return;
       }
       this.reactionLogger.frames("After processing `where`:", frames);
@@ -79,7 +84,7 @@ export class FiringPipeline {
       logger.error(`Reaction "${reaction.name}": consequence processing failed`, {
         error: serializeError(error),
       });
-      this.failures.record(
+      this.actions._recordInterpreterFailure(
         reaction.name,
         provenance.flow,
         provenance.triggerIds,
@@ -87,29 +92,6 @@ export class FiringPipeline {
         error,
       );
     }
-  }
-
-  async addThen(
-    frames: Frames,
-    reaction: ExecutableReaction,
-    actionSymbols: symbol[],
-    captured?: CapturedTriggers,
-    validatedTriggerIds?: string[][],
-  ): Promise<void> {
-    const provenance =
-      captured ??
-      this.capture(
-        frames,
-        typeof frames[0]?.[flow] === "string" ? frames[0][flow] : "",
-        actionSymbols,
-      );
-    await this.consequences.dispatch(
-      frames,
-      reaction,
-      actionSymbols,
-      provenance,
-      validatedTriggerIds ?? provenance.frameTriggerIds,
-    );
   }
 
   private capture(frames: Frames, flowToken: string, actionSymbols: symbol[]): FrameProvenance {

@@ -43,8 +43,6 @@ export { productionHttpProfile } from "../engine/boundary/http/http-profile.ts";
 export type { ProductionHttpProfile } from "../engine/boundary/http/http-profile.ts";
 export { httpFloor } from "../engine/boundary/http/http-floor.ts";
 export type { HttpCredentialBinding, HttpFloor } from "../engine/boundary/http/http-floor.ts";
-export { command, createCliApp, fail, ok, parseArgs, parseFail, parseOk, } from "../engine/boundary/cli-app.ts";
-export type { CliApp, CliAppOptions, CliCommand, CliResult, CommandInput, EndpointCliCommand, ParsedArgs, ParseResult, } from "../engine/boundary/cli-app.ts";
 
 === dist/client/index.d.ts ===
 /** Consume a generated wire contract, locally or over HTTP. */
@@ -367,64 +365,6 @@ export interface EndpointDeclaration extends EndpointIdentity {
 /** Fail closed when ordinary assembly contains behavior that cannot travel as data. */
 import type { AppIR } from "../../reads/ir.ts";
 export declare function assertApplicationLocality(owner: string, app: AppIR): void;
-
-=== dist/engine/boundary/cli-app.d.ts ===
-import type { Invoker } from "./invocation/invoke.ts";
-import type { ContractShape } from "./protocol/contract-shape.ts";
-import type { InvocationResult } from "./protocol/errors.ts";
-export interface CliResult {
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-}
-export declare function ok(stdout: string): CliResult;
-export declare function fail(stderr: string): CliResult;
-export interface ParsedArgs {
-    positionals: string[];
-    options: Record<string, string | boolean>;
-}
-export declare function parseArgs(args: string[]): ParsedArgs;
-export type ParseResult<T> = {
-    ok: true;
-    value: T;
-} | {
-    ok: false;
-    message: string;
-};
-export declare function parseOk<T>(value: T): ParseResult<T>;
-export declare function parseFail(message: string): ParseResult<never>;
-export interface CliCommand<TInput = Record<string, string | boolean>> {
-    description?: string;
-    parse?(positionals: string[], options: Record<string, string | boolean>): TInput | CliResult;
-    run(input: TInput): Promise<CliResult>;
-}
-export interface EndpointCliCommand<TInput, TOutput, TDomainError> {
-    description?: string;
-    path: string;
-    parse(positionals: string[], options: Record<string, string | boolean>): ParseResult<TInput>;
-    format(result: InvocationResult<TOutput, TDomainError>): CliResult;
-}
-type Commands = Record<string, CliCommand<any> | EndpointCliCommand<any, any, any>>;
-export type CommandInput<TCommands extends Commands, K extends keyof TCommands> = TCommands[K] extends CliCommand<infer I> ? I : TCommands[K] extends EndpointCliCommand<infer I, unknown, unknown> ? I : never;
-export interface CliApp<TCommands extends Commands> {
-    run(args: string[]): Promise<CliResult>;
-    dispatch<K extends keyof TCommands>(command: K, input: CommandInput<TCommands, K>): Promise<CliResult>;
-    help(): string;
-}
-export interface CliAppOptions<C extends ContractShape = ContractShape> {
-    name?: string;
-    version?: string;
-    invoker?: Invoker<C>;
-}
-export declare function createCliApp<TCommands extends Commands, C extends ContractShape = ContractShape>(commands: TCommands, options?: CliAppOptions<C>): CliApp<TCommands>;
-export declare function command<TInput, TOutput, TDomainError>(endpointRef: {
-    path: string;
-}, opts: {
-    description?: string;
-    parse: (positionals: string[], options: Record<string, string | boolean>) => ParseResult<TInput>;
-    format: (result: InvocationResult<TOutput, TDomainError>) => CliResult;
-}): EndpointCliCommand<TInput, TOutput, TDomainError>;
-export {};
 
 === dist/engine/boundary/client/client.d.ts ===
 /**
@@ -909,8 +849,6 @@ export declare function toEnvelope(result: InvocationResult): unknown;
 export declare function serializeJsonValue(value: unknown): string;
 /** Apply the HTTP boundary's JSON projection to an in-process value. */
 export declare function toJsonValue(value: unknown): unknown;
-/** Serialize one result exactly as the HTTP boundary carries it. */
-export declare function serializeEnvelope(result: InvocationResult): string;
 /** Apply the HTTP boundary's JSON projection to an in-process result. */
 export declare function toJsonEnvelope(result: InvocationResult): unknown;
 /**
@@ -1897,6 +1835,8 @@ export declare class ActionConcept {
     _endMatchingInput(flow: string): void;
     /** Observe fully settled causal flows before occurrence retention is applied. */
     _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void;
+    /** Serialize and record a sanitized failure produced between instrumented action asks. */
+    _recordInterpreterFailure(reaction: string, flow: string, triggerIds: string[], stage: ReactionFailureRecord["stage"], error: unknown, consequence?: Pick<ReactionFailureRecord, "action" | "actionId">): void;
     /** Record durable interpreter evidence and mark its active flow as failed. */
     _recordReactionFailure(failure: ReactionFailureRecord): void;
     /** Construct and record an accepted execution-limit breach. */
@@ -1953,7 +1893,6 @@ import type { ReadEnv } from "../../reads/env.ts";
 import type { ActionPattern, ExecutableReaction, Frame } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { type FiringBook } from "./firing.ts";
-import type { InterpreterFailures } from "./interpreter-failures.ts";
 type ActionArguments = Record<string | symbol, unknown>;
 export interface CapturedTriggers {
     flow: string;
@@ -1964,14 +1903,13 @@ export declare class ConsequencePipeline {
     private readonly actions;
     private readonly firingBook;
     private readonly definitions;
-    private readonly failures;
     private readonly react;
     private readonly assertRows;
     private readonly consumeAction;
     constructor(actions: ActionConcept, firingBook: FiringBook, definitions: {
         formerNamed(name: string): FormerRef | undefined;
         readEnv(): ReadEnv;
-    }, failures: InterpreterFailures, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
+    }, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
     dispatch(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured: CapturedTriggers, triggerIdsByFrame: string[][]): Promise<void>;
     matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
     private bindingsOf;
@@ -1988,22 +1926,19 @@ export {};
 
 === dist/engine/reactions/runtime/firing-pipeline.d.ts ===
 /** Match, filter, and hand one eligible reaction to consequence dispatch. */
-import { Frames } from "../../reads/frames.ts";
 import type { ExecutableReaction } from "../types.ts";
-import type { ActionRecord } from "./actions.ts";
-import type { CapturedTriggers, ConsequencePipeline } from "./consequence-pipeline.ts";
-import type { InterpreterFailures } from "./interpreter-failures.ts";
+import type { ActionConcept, ActionRecord } from "./actions.ts";
+import type { ConsequencePipeline } from "./consequence-pipeline.ts";
 import type { ReactionLogger } from "./logging.ts";
 import type { TriggerMatcher } from "./trigger-matching.ts";
 export declare class FiringPipeline {
     private readonly matcher;
     private readonly consequences;
-    private readonly failures;
+    private readonly actions;
     private readonly reactionLogger;
     private readonly assertRows;
-    constructor(matcher: TriggerMatcher, consequences: ConsequencePipeline, failures: InterpreterFailures, reactionLogger: ReactionLogger, assertRows: (flow: string, count: number) => void);
+    constructor(matcher: TriggerMatcher, consequences: ConsequencePipeline, actions: Pick<ActionConcept, "_recordInterpreterFailure">, reactionLogger: ReactionLogger, assertRows: (flow: string, count: number) => void);
     fire(record: ActionRecord, reaction: ExecutableReaction): Promise<void>;
-    addThen(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured?: CapturedTriggers, validatedTriggerIds?: string[][]): Promise<void>;
     private capture;
     private assertProvenance;
     private triggerIdsOf;
@@ -2092,16 +2027,6 @@ export declare class ConceptInstrumentation {
     invalidate(concept: object): void;
     invalidateAll(): void;
     rawConceptOf(instrumented: object): object;
-}
-
-=== dist/engine/reactions/runtime/interpreter-failures.d.ts ===
-/** Record sanitized failures produced between instrumented action asks. */
-import type { ActionConcept } from "./actions.ts";
-import type { ReactionFailureRecord } from "./log-store.ts";
-export declare class InterpreterFailures {
-    private readonly actions;
-    constructor(actions: Pick<ActionConcept, "_recordReactionFailure">);
-    record(reaction: string, flow: string, triggerIds: string[], stage: ReactionFailureRecord["stage"], error: unknown, consequence?: Pick<ReactionFailureRecord, "action" | "actionId">): void;
 }
 
 === dist/engine/reactions/runtime/log-store.d.ts ===
@@ -2468,9 +2393,8 @@ export declare function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T>;
 export {};
 
 === dist/engine/reactions/runtime/reacting-export.d.ts ===
-import type { Registry } from "../../reads/registering.ts";
+import type { Registry } from "../../reads/definition-registry.ts";
 import type { AppIR, ConceptInventoryIR, ReactionIR, UnloweredIR } from "../../reads/ir.ts";
-import type { FusedFormer } from "../../reads/former-nodes.ts";
 export declare function exportReactions(state: {
     loweredReactions: Iterable<ReactionIR[]>;
     unloweredReactions: Iterable<UnloweredIR>;
@@ -2489,36 +2413,23 @@ export declare function renderApp(state: {
     rawConceptOf(instrumented: object): object;
     exportReactions(): AppIR;
 }, title?: string): string;
-export declare function form(state: {
-    registry: Registry;
-}, fused: FusedFormer): Promise<unknown>;
 
 === dist/engine/reactions/runtime/reacting.d.ts ===
 /** Stable internal facade for reaction registration, instrumentation, and execution. */
 import type { ComputationRef } from "../../reads/computations.ts";
 import type { ReadEnv } from "../../reads/env.ts";
-import { Frames } from "../../reads/frames.ts";
 import type { FormerRef, FusedFormer } from "../../reads/former-nodes.ts";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
 import type { RelationView } from "../../reads/lines.ts";
-import type { ActionPattern, ChannelPattern, ChannelPosture, ExecutableReaction, Frame, InstrumentedAction, ReactionMap } from "../types.ts";
+import type { ActionPattern, Frame, ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { Logging } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./observer.ts";
 import type { ExecutionControl } from "./operational.ts";
 type ActionArguments = Record<string | symbol, unknown>;
-interface FrameProvenance {
-    flow: string;
-    triggerIds: string[];
-    frameTriggerIds: string[][];
-    triggerSignatures?: Set<string>;
-}
 export declare class Reacting {
     Action: ActionConcept;
-    reactions: Record<string, ExecutableReaction>;
-    reactionsByAction: Map<InstrumentedAction, Set<ExecutableReaction>>;
-    reactionsByChannel: Map<ChannelPosture, Set<ExecutableReaction>>;
     private readonly registry;
     private readonly catalog;
     private readonly reactionLogger;
@@ -2550,9 +2461,6 @@ export declare class Reacting {
     declareViews(...refs: RelationView[]): void;
     registerFormers(formers: FormerIR[]): void;
     react(record: ActionRecord, durationMs?: number): Promise<void>;
-    matchWhen(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
-    matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, actionSymbol: symbol): Frame | undefined;
-    addThen(frames: Frames, reaction: ExecutableReaction, actionSymbols: symbol[], captured?: FrameProvenance, validatedTriggerIds?: string[][]): Promise<void>;
     matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
     _getFirings(reaction: string): FiringRecord[];
     instrumentConcept<T extends object>(concept: T, name?: string): T;
@@ -2983,7 +2891,8 @@ import type { FormerIR, ReactionIR, ViewIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
 import type { ReadBackEnv } from "./read-back.ts";
 import { type BoundReaction } from "./imported-ir-binding.ts";
-export declare class DefinitionRegistry {
+export type { BoundReaction, BoundWhereOp } from "./imported-ir-binding.ts";
+export declare class Registry {
     private readonly conceptsByName;
     private readonly computationsByName;
     private readonly viewsByName;
@@ -3292,10 +3201,10 @@ export declare function formerRefWith(name: string, ins: readonly string[], inpu
  * intermediate result: `when` matching produces it, `where` transforms it, and
  * `then` consumes it.
  *
- * `Frames` extends `Array` and is wrapped in a `Proxy` so that every standard
- * array method which returns a new array (`map`, `filter`, `flatMap`, `slice`,
- * `concat`, `reverse`, `sort`, `splice`, …) transparently returns a `Frames`
- * again, keeping the fluent API closed over the type.
+ * `Frames` extends `Array`, so every standard array method which returns a new
+ * array (`map`, `filter`, `flatMap`, `slice`, `concat`, `reverse`, `sort`,
+ * `splice`, …) transparently returns a `Frames` again through the default
+ * species constructor, keeping the fluent API closed over the type.
  */
 import type { Frame, Mapping } from "../reactions/types.ts";
 /**
@@ -3352,11 +3261,7 @@ export declare function bindInputMapping(frame: Frame, input: Mapping): Mapping;
  * semantics.
  */
 export declare function expandOutputRows(into: Frames, frame: Frame, rows: unknown[], output: Mapping): void;
-export { structurallyEqual } from "./value-equality.ts";
-/** Keep the first occurrence of each structurally equal frame. */
-export declare function distinctFrames(frames: Frames): Frames;
 export declare class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
-    constructor(...frames: TFrame[]);
 }
 
 === dist/engine/reads/imported-ir-binding.d.ts ===
@@ -4001,40 +3906,6 @@ export declare function readBackView(view: ViewIR, env: ReadBackEnv): string;
 export declare function readBackFormer(former: FormerIR, env: ReadBackEnv): string;
 /** The whole application's read-back: every view, then every reaction. */
 export declare function readBackApp(views: readonly ViewIR[], formers: readonly FormerIR[], reactions: readonly ReactionIR[], unlowered: readonly UnloweredIR[], env: ReadBackEnv): string;
-
-=== dist/engine/reads/registering.d.ts ===
-/** Stable facade over engine-scoped definition registration and IR binding. */
-import type { ReactionDeclaration } from "../reactions/types.ts";
-import type { ComputationRef } from "./computations.ts";
-import type { ReadEnv } from "./env.ts";
-import type { FormerRef } from "./former-nodes.ts";
-import type { FormerIR, ReactionIR, ViewIR } from "./ir.ts";
-import type { RelationView } from "./lines.ts";
-import type { ReadBackEnv } from "./read-back.ts";
-export type { BoundReaction, BoundWhereOp } from "./imported-ir-binding.ts";
-import type { BoundReaction } from "./imported-ir-binding.ts";
-export declare class Registry {
-    private readonly definitions;
-    readonly concepts: Map<string, object>;
-    constructor();
-    registerConcept(name: string, instrumented: object): void;
-    registerComputations(computations: Record<string, ComputationRef>): void;
-    resolveDeclaration(name: string, declaration: ReactionDeclaration): void;
-    indexDeclarationReads(declaration: ReactionDeclaration): void;
-    declareViews(...refs: RelationView[]): void;
-    declareFormers(...refs: FormerRef[]): void;
-    registerViews(views: ViewIR[]): void;
-    registerFormers(formers: FormerIR[]): void;
-    bindReaction(reaction: ReactionIR): BoundReaction;
-    assertFormable(ref: FormerRef): void;
-    assertViewUsable(ref: RelationView): void;
-    formerRefs(): Iterable<FormerRef>;
-    formerNamed(name: string): FormerRef | undefined;
-    viewRefs(): Iterable<RelationView>;
-    viewNamed(name: string): RelationView | undefined;
-    readBackEnv(): ReadBackEnv;
-    readEnv(): ReadEnv;
-}
 
 === dist/engine/reads/render.d.ts ===
 /**
