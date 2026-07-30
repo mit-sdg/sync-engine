@@ -9,7 +9,6 @@ export interface Workspace {
   readonly distDirectory: string;
   readonly buildConfig: string;
   readonly declarationSnapshot?: string;
-  readonly tagPrefix: string;
   readonly verifiedTarball: string;
   readonly buildAfter: readonly string[];
   readonly peerWorkspaceIds: readonly string[];
@@ -32,7 +31,6 @@ export const workspaceCatalog = [
     distDirectory: "dist",
     buildConfig: "tsconfig.build.json",
     declarationSnapshot: "tests/package/declarations.snapshot.txt",
-    tagPrefix: "v",
     verifiedTarball: "package.tgz",
     buildAfter: [],
     peerWorkspaceIds: [],
@@ -64,7 +62,6 @@ export const workspaceCatalog = [
     distDirectory: "dist",
     buildConfig: "tsconfig.build.json",
     declarationSnapshot: "packages/http/tests/declarations.snapshot.txt",
-    tagPrefix: "http-v",
     verifiedTarball: "http-package.tgz",
     buildAfter: ["core"],
     peerWorkspaceIds: ["core"],
@@ -114,8 +111,4 @@ export function workspacePath(root: string, workspace: Workspace, path = ""): st
 
 export function workspaceRepositoryPath(workspace: Workspace, path = ""): string {
   return [workspace.directory, path].filter((part) => part !== "" && part !== ".").join("/");
-}
-
-export function workspaceReleaseTag(workspace: Workspace, version: string): string {
-  return `${workspace.tagPrefix}${version}`;
 }
