@@ -336,33 +336,48 @@ describe("release source facts", () => {
     "id-token: write",
     "name: npm",
     "npm publish ./release/package.tgz --provenance --tag beta --access public",
+    "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
   ])("requires the publish-only fact %s", (fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-publish-fact");
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`missing ${fact}`));
   });
 
-  test.each(["GITHUB_REF_NAME", "GITHUB_SHA", "origin/main", "[1-9]\\d*"])(
-    "requires source validation fact %s",
-    (fact) => {
-      const sources = fixture();
-      sources.set(
-        ".github/workflows/publish.yml",
-        (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
-          fact,
-          "omitted-source-fact",
-        ),
-      );
-      expect(
-        checkRelease(sources).filter((failure) =>
-          failure.endsWith(`source validation is missing ${fact}`),
-        ),
-      ).toEqual([
-        `.github/workflows/publish.yml: verify source validation is missing ${fact}`,
-        `.github/workflows/publish.yml: publish source validation is missing ${fact}`,
-      ]);
-    },
-  );
+  test("requires core to publish before HTTP", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "npm publish ./release/package.tgz --provenance --tag beta --access public\n      - run: sha256sum --check release/http-package.tgz.sha256\n      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+      "npm publish ./release/http-package.tgz --provenance --tag beta --access public\n      - run: sha256sum --check release/http-package.tgz.sha256\n      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: publish must release core before HTTP",
+    );
+  });
+
+  test.each([
+    "GITHUB_REF_NAME",
+    "GITHUB_SHA",
+    "origin/main",
+    "[1-9]\\d*",
+    "`v${core.version}`",
+    "core.version !== http.version",
+  ])("requires source validation fact %s", (fact) => {
+    const sources = fixture();
+    sources.set(
+      ".github/workflows/publish.yml",
+      (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(fact, "omitted-source-fact"),
+    );
+    expect(
+      checkRelease(sources).filter((failure) =>
+        failure.endsWith(`source validation is missing ${fact}`),
+      ),
+    ).toEqual([
+      `.github/workflows/publish.yml: verify source validation is missing ${fact}`,
+      `.github/workflows/publish.yml: publish source validation is missing ${fact}`,
+    ]);
+  });
 
   test("requires a freshly fetched annotated tag at the release commit", () => {
     const sources = fixture();

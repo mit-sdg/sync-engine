@@ -24,11 +24,10 @@ before every tag:
 - Require CODEOWNERS review for workflow, release, support, and security-policy
   files. Apply the rule to administrators and require review of any bypass;
   disable unreviewed administrator or ruleset bypass where the plan permits.
-- Protect the `v1.0.0-beta.*` and `http-v1.0.0-beta.*` tag namespaces against
-  movement, deletion, and creation by unapproved actors.
+- Protect the `v1.0.0-beta.*` tag namespace against movement, deletion, and
+  creation by unapproved actors.
 - Keep the GitHub environment identity `npm`. Restrict it to the
-  `v1.0.0-beta.*` and `http-v1.0.0-beta.*` tag policies, require an independent
-  reviewer, and verify
+  `v1.0.0-beta.*` tag policy, require an independent reviewer, and verify
   `prevent_self_review=true` and `can_admins_bypass=false`.
 - Configure npm trusted publishing for packages `@mit-sdg/sync-engine` and
   `@mit-sdg/sync-engine-http`, GitHub organization `mit-sdg`, repository
@@ -130,13 +129,12 @@ commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
-Publish and verify the core package before publishing the matching HTTP package.
-The HTTP package declares that exact core version as a peer dependency; do not
-publish an HTTP version whose core peer is absent from the registry.
+Each release publishes the core package followed by the matching HTTP package.
+The HTTP package declares that exact core version as a peer dependency, so the
+workflow publishes core first.
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
-   of `origin/main`, then create one annotated `v$VERSION` tag to publish core
-   or `http-v$VERSION` to publish the HTTP companion. Push only that tag. Never
+   of `origin/main`, then create and push one annotated `v$VERSION` tag. Never
    move or reuse a release tag.
 2. Review the triggered **Publish beta** workflow. Its unprivileged `verify` job
    checks exact tag equality, no-leading-zero beta syntax, `origin/main`
@@ -147,9 +145,9 @@ publish an HTTP version whose core peer is absent from the registry.
    The `publish` job is the only job with the `npm` environment and
    `id-token: write`; it checks out the same commit, refetches and verifies the
    live annotated tag and main ancestry, downloads both verified tarballs,
-   selects the tag's artifact, checks its recorded digest, then publishes that
-   tarball with provenance under the `beta` tag. It does not install dependencies
-   or rebuild either package.
+   checks their recorded digests, then publishes core followed by HTTP with
+   provenance under the `beta` tag. It does not install dependencies or rebuild
+   either package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.
    After npm verification, manually create a GitHub prerelease from the same
