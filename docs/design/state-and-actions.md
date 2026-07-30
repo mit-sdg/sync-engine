@@ -3,8 +3,9 @@
 State and actions are designed against each other. State that is shaped wrong
 produces actions that cannot state their own conditions; actions that are shaped
 wrong reveal state the concept is missing or should not own. Work back and forth
-until every precondition reads only this concept's state and every state
-component is reachable by some action.
+until every domain precondition reads this concept's state and inputs, with any
+environmental dependency stated explicitly, and every state component is
+reachable by some action.
 
 ## State
 
@@ -55,35 +56,42 @@ expressed — before implementation.
 
 ### State sufficiency
 
-Every precondition, result, and effect must be expressible from this concept's
-state and the action's inputs.
+Every domain precondition, result, and effect must be expressible from this
+concept's state and the action's inputs, plus any explicitly documented non-peer
+environmental dependency. A clock, an identity source, and a storage transaction
+are examples of dependencies that state notation does not represent.
 
-Read each action branch and check that it names only those two sources.
-`Selecting.clear` refuses when no current selection has that scope; both the
-scope and the current-selection relation are in Selecting's state, so the
-condition is expressible.
+Read each action branch and check that it names those sources. `Selecting.clear`
+refuses when no current selection has that scope; both the scope and the
+current-selection relation are in Selecting's state, so the condition is
+expressible.
 
 When an action needs something the state does not have, choose in this order:
 
 1. **Add the missing state**, when the fact is genuinely this concept's. A token
    concept that must reject expired tokens needs an expiry.
-2. **Pass it as an input**, when the fact belongs to the caller. An action that
-   records who performed something takes the actor as an argument.
-3. **Move the behavior** to the concept that owns the fact, when the decision
+2. **Pass it as an input**, when the caller owns the fact and the input is
+   trustworthy. An action that records who performed something takes the actor
+   as an argument; a public request cannot establish that actor's identity.
+3. **Inject an environmental dependency**, when the environment owns the fact.
+   A session implementation can receive a clock rather than trust a
+   caller-supplied time.
+4. **Move the behavior** to the concept that owns the fact, when the decision
    really belongs there.
-4. **Move the condition into composition**, when it is a cross-concept policy
-   rather than the concept's own rule.
+5. **Move the condition into composition**, when it is a non-critical
+   cross-concept policy rather than the concept's own rule.
 
-Never let one concept read another's state. The fourth option is the one to
-watch: moving an invariant that is genuinely local into a reaction leaves the
-concept unable to protect itself against a caller that asks the action directly.
-See [what does not belong in a
+A concept's specification should not read another concept's state. This design
+rule is not enforced by registration. The fifth option is the one to watch:
+moving an invariant that is genuinely local into a reaction leaves the concept
+unable to protect itself against a caller that asks the action directly. See [what does not belong in a
 reaction](composing-concepts.md#what-does-not-belong-in-a-reaction).
 
 ### State ownership
 
-Each durable fact has exactly one concept that owns its meaning and its mutation
-rules.
+Assign each durable domain fact one concept that owns its meaning and mutation
+rules. This is a design rule, not a check the engine performs. The owner's
+implementation and storage coordination must protect the rule where it matters.
 
 Several concepts may refer to the same identity without sharing ownership. A
 person identifier can appear as Gathering's `member`, Alerting's `recipient`,
@@ -132,19 +140,24 @@ only one application's dashboard needs is not part of the discussion mechanism.
 
 ### Local and cross-concept invariants
 
-A **local invariant** is enforced by one concept inside its own actions.
-Gathering's "at most one membership per gathering and person" is local: `join`
-refuses `ALREADY_JOINED`, and no caller can bypass it.
+A **local invariant** is a rule one concept's implementation enforces through
+its actions. Gathering's "at most one membership per gathering and person" is
+local: `join` refuses `ALREADY_JOINED`. The rule remains protected only while
+all writes use that guard and the implementation supplies any required storage
+coordination.
 
-A **cross-concept invariant** spans owners and can only be maintained by
-composition. "Every current selection has an open discussion" is cross-concept,
-and it is not an invariant in the strict sense: it is false during the interval
-between `Selecting.choose` returning and `Discussing.open` settling, and it stays
-false if the second action refuses.
+A **cross-concept relation** spans separate owners. Composition can initiate
+eventual repair, but it cannot make two actions atomic. A combined concept or a
+storage transaction can enforce a continuously true relation when that is
+required. With the Operations Room discussion pack enabled, a returned
+`Selecting.choose` occurrence asks `Discussing.open`; a fault can leave a
+selection without a discussion. `DISCUSSION_ALREADY_OPEN` instead establishes
+that an open discussion already exists.
 
-Classify each invariant before deciding where to enforce it. A local invariant
-placed in composition is unenforced; a cross-concept invariant described as
-guaranteed is a false claim. [Cross-concept
+Classify each rule before deciding where to enforce it. A local invariant placed
+only in composition is vulnerable to direct calls. A cross-concept relation
+described as guaranteed needs a combined ownership or transactional design.
+[Cross-concept
 invariants](composing-concepts.md#cross-concept-invariants) covers what to state
 about each one.
 
@@ -166,17 +179,37 @@ shipped   choose (scope, item)   makes item the current selection for scope
           clear  (scope)         removes the scope's current selection
 ```
 
-`updateSelection` puts the invariant in the caller's hands: nothing stops two
-selections in one scope from being current, because the rule "at most one" is
-now enforced by whoever passes the flags. `choose` owns the rule — it removes
-the previous current selection and adds the new one in one action — so the
-invariant holds no matter who calls it.
+A naive `updateSelection` implementation that blindly writes `isCurrent` puts
+the invariant in the caller's hands: two selections in one scope can become
+current. An action with that name could still enforce the rule, but `choose`
+makes the intended transition explicit. Its implementation removes the previous
+current selection and adds the new one in one action.
 
 Generic verbs are correct when arbitrary record editing genuinely is the
 purpose. A concept whose reason to exist is that people maintain free-form
 entries should say so in its purpose and offer `update`. The failure is not the
 word; it is a purpose that promises a mechanism and an interface that delivers
 storage.
+
+That permission has a limit, and the limit is visible from outside the concept.
+**Judge an action's name by what a reaction must write to trigger on it.** A
+rule that says `when(Selecting.choose(...).responds(...))` names the event. By
+contrast, this schematic pattern encodes the event in two literal fields:
+
+```text
+when(Composing.set({ part: PARTS.context, path: CONTEXT_PATHS.site }).responds({}))
+```
+
+Runtime matching does compare those literal values. No engine mechanism checks
+that the pair means "the site context was established." Registration validates
+member names, specifications declare refusal codes, and read-back records the
+trigger structure; a refactor can preserve an assembled design while changing
+the intended meaning of a convention-only literal.
+
+The correction is upstream. Generic actions are usually the symptom of a concept
+general enough that no better name exists, which is the
+[reusability ceiling](evaluating-concepts.md#reusability). Give the concept the
+domain it was missing and the action names follow.
 
 Ask, of any candidate CRUD set: why is this data stored, what behavior makes it
 useful, which transitions matter to the people involved, and which invariants
@@ -203,14 +236,18 @@ respond (discussion: Discussion, author: Person, text: String) : return (respons
 ```
 
 Both branches are stated, and the refusal carries a code and a normative
-sentence. Registration requires one distinct error class per declared code, so
-the specification and the implementation cannot drift apart silently.
+sentence. Registration requires one distinct error class per declared code and
+rejects extra mappings. It does not prove that the implementation takes the
+stated branches, throws that class, or returns the specified fields; principle
+and implementation tests establish those parts of the contract.
 
 The distinction is operational, not stylistic. A registered refusal is recorded
-as an outcome that composition can watch with `.refuses(...)` and branch on. An
-unregistered throw is a **fault**: the engine records it against the ask, the ask
-has no outcome, and no reaction can treat it as a domain result. See [actions,
-refusals, and faults](../semantics.md#actions-refusals-and-faults).
+as an outcome that composition can watch with `.refuses(...)` and branch on. The
+advanced `Refuse` marker also produces a refusal, though an undeclared code is
+not a stable ordinary contract. Other throws are **faults**: the engine records
+them against the ask, the ask has no outcome, and ordinary reactions cannot treat
+them as domain results. See [actions, refusals, and
+faults](../semantics.md#actions-refusals-and-faults).
 
 Design refusals as part of the interface. Every condition an ordinary caller can
 hit — the entity does not exist, it is already in that state, the actor is not
@@ -219,11 +256,11 @@ concept did not anticipate.
 
 ### Results
 
-Return an object mapping whenever composition needs the outcome. This is an
-engine constraint with a design consequence: a non-object return is normalized to
-an empty successful result for matching, so a reaction cannot bind fields from a
-scalar. An action returning a bare identifier string cannot feed the next step of
-a chain.
+Return an object mapping whenever composition needs bindable result fields. A
+direct caller receives a scalar return unchanged, but occurrence matching
+normalizes a non-object return to an empty successful result. A reaction cannot
+bind a field from that scalar, although the action can still return and advance a
+later stage.
 
 Return the identities a caller or a reaction will need next. `Gathering.join`
 returns the `membership` it created; `Selecting.choose` returns the `selection`,
@@ -232,27 +269,30 @@ a subject.
 
 ### Queries
 
-Queries read current state and change nothing. Keep them separate from actions,
+Queries should read state without side effects. Keep them separate from actions,
 and give each one a promise — `one`, `optional`, or `many`.
 
-The promise is a behavioral claim that the engine checks on every read: an
-answer outside the declared cardinality raises a fault naming the query. Choose
-it from the domain, not from the current implementation. `_membership` promises
-`one` because every person-gathering pair has a standing; `_openFor` promises
-`optional` because a subject may have no open discussion; `_members` promises
-`many`. Each choice determines whether a reader can drop a case, fan out, or
-neither — see [reading: declarations
+The promise is a behavioral claim that the engine checks when a reaction, view,
+or former reads the query: an answer outside the declared cardinality raises a
+fault naming the query. A direct query root returns the implementation's value
+without this `where`-read validation. Choose the promise from the domain, not
+from the current implementation. `_membership` promises `one` because every
+person-gathering pair has a standing; `_openFor` promises `optional` because a
+subject may have no open discussion; `_members` promises `many`. Each choice
+determines whether a reader can drop a case, fan out, or neither — see [reading: declarations
 govern](../semantics.md#reading-declarations-govern).
 
 Three constraints follow from how queries execute, and each is a design
 constraint rather than an implementation detail:
 
-- **Queries must not have side effects.** They are memoized per instance and
-  argument between invalidation points, so a side effect would occur only on
-  cache misses, at times the author does not control.
+- **Query implementations must not have side effects.** The engine does not
+  enforce purity. It memoizes queries per instance and argument between
+  invalidation points, so a side effect would occur only on cache misses, at
+  times the author does not control.
 - **Queries do not see a transactional snapshot.** A query can overlap an
-  asynchronous action body. Do not design a decision that requires reading two
-  queries consistently.
+  asynchronous action body. Direct state mutation or external storage changes
+  can also remain hidden until cache invalidation. Do not design a decision that
+  requires two queries to be consistent.
 - **Queries do not enter the action queue.** They are not a place to enforce
   anything.
 
@@ -289,23 +329,27 @@ Expiry has no action of its own here: it is enforced on every use and collected
 lazily. That is a design decision worth stating, because the alternative — a
 scheduled sweep — would need a trigger the concept does not own.
 
-Missing lifecycle actions are the most common completeness defect. Accounts that
-cannot be closed, reservations that cannot be cancelled, grants that cannot be
-revoked, and catalogs that cannot be populated all leave the application to
-improvise, usually by writing storage directly.
+A common completeness defect is a missing lifecycle action. Accounts that cannot
+be closed, reservations that cannot be cancelled, grants that cannot be revoked,
+and catalogs that cannot be populated all leave the application to improvise,
+often by writing storage directly.
 
-### Atomicity at the concept boundary
+### Serialization and coordination at the concept boundary
 
-One action is the unit of atomicity available to a design. Within one engine,
-action bodies run one at a time per concept instance, in arrival order. Across
-actions there is nothing: a reaction chain is not a transaction, and an earlier
-state change is not rolled back when a later action refuses or faults.
+Within one engine, action bodies run one at a time per raw concept instance in
+arrival order. The queue awaits same-realm native promises. This is
+serialization, not a transaction: one action does not roll back its writes, make
+storage durable, or coordinate another engine or process. A reaction chain is
+also not a transaction; an earlier state change remains when a later action
+refuses or faults.
 
-This has one direct design consequence. **Any decision that must not race
-belongs inside the action that owns the state** — uniqueness, capacity,
-first-come, and answer-once. Reading a query in a reaction's `where` and then
-asking an action does not make the pair atomic; the state can change in between,
-and the engine provides no as-of-trigger snapshot. See [decisions that must not
+This has one direct design consequence. **A decision that must not race belongs
+inside the action that owns the state** — uniqueness, capacity, first-come, and
+answer-once. When durable state is shared across instances or processes, the
+same decision also needs a storage constraint or transaction. Reading a query in
+a reaction's `where` and then asking an action does not make the pair atomic;
+the state can change in between, and the engine provides no as-of-trigger
+snapshot. See [decisions that must not
 race](../semantics.md#decisions-that-must-not-race).
 
 Gathering follows this: `join` checks for an existing membership and creates one
@@ -325,7 +369,8 @@ Distinguish three ways an effect can be undone, and choose deliberately.
 
 **Reversal** returns the concept to an earlier stage and is part of the
 lifecycle: `clear` reverses `choose`, `leave` reverses `join`, `close` ends what
-`open` began. If users can regret an action, it needs a reversal.
+`open` began. Decide explicitly whether a regrettable action needs this kind of
+reversal, a compensation, or retained history without either.
 
 **Compensation** applies when the effect cannot be erased. A refund compensates
 a charge; it does not undo it, and the ledger keeps both. Model the compensating

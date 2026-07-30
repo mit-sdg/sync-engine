@@ -42,9 +42,8 @@ satisfies it equally, it is decoration.
 _Evidence:_ you can name a plausible design the purpose rejects. Selecting's
 purpose — keep one current item for a shared scope, so everyone working in that
 scope can begin from the same choice — rejects a design that lets a scope have
-two current items, and rejects one that discards the previous selection's
-identity, because the word _current_ implies a distinction between current and
-past.
+two current items. Whether a prior selection's identity is retained is a separate
+state and lifecycle decision.
 
 _Failure:_ "Manage user data." No design is excluded.
 
@@ -85,17 +84,19 @@ _Evidence:_ the checklist in [independence](concepts.md#independence) — the
 purpose names no peer, the state holds identities rather than a peer's data, no
 action calls or inspects a peer, and the lifecycle completes alone. In this
 repository, a concept class that imports a peer concept or a composition file
-fails the check outright.
+fails design review. Registration does not inspect those imports.
 
 _Failure:_ a `Commenting` concept whose `post` action refuses when the target
 article is unpublished. Commenting has no way to know that, so either it stores
 a copy of publication status — duplicating state it does not own — or it reads
 Article's state, which breaks independence.
 
-_Correction:_ move the condition to composition. The endpoint or reaction that
-asks `Commenting.post` reads the publication status through a view and only then
-asks the action. The condition is now visible as policy, and Commenting stays
-usable on targets that have no notion of publication.
+_Correction:_ move a non-critical policy condition to composition. The endpoint
+or reaction that asks `Commenting.post` can read publication status through a
+view and then ask the action. Commenting stays usable on targets that have no
+notion of publication. If the rule must be exact at the moment of posting, the
+owner action and its storage transaction must also enforce the current policy;
+the composition read can only provide an earlier denial.
 
 ### Coherence
 
@@ -160,29 +161,32 @@ inside it.
 
 ### State sufficiency
 
-Every precondition, result, and effect is expressible from this concept's state
-and the action's inputs.
+Every domain precondition, result, and effect is expressible from this concept's
+state and the action's inputs, plus any explicitly documented environmental
+dependency such as a clock or identity source.
 
-_Evidence:_ read each action's `where` branches and confirm each one names only
-this concept's state and the action's arguments.
+_Evidence:_ read each action's `where` branches and confirm each one names this
+concept's state, the action's arguments, or an explicit non-peer dependency that
+can be controlled in tests.
 
 _Failure:_ a `Token` concept whose `validate` action must reject expired tokens,
 with no expiry in its state. The implementation ends up taking the current time
 and a validity window as arguments on every call, or reaching for a peer.
 
-_Correction:_ add the missing state, pass the information explicitly as an
-input, move the behavior to the concept that owns the information, or move the
-condition into a reaction — in that order of preference, since the first two
-keep the decision inside the concept that enforces it. Never let one concept
+_Correction:_ add the missing state; use an explicit trusted input when the
+caller owns the fact; use an injected trusted dependency such as a clock when
+the environment owns it; move the behavior to the concept that owns the fact; or
+move a non-critical cross-concept policy into a reaction. Never let one concept
 read another's state.
 
 ### Lifecycle coverage
 
-Every managed entity can reach the end of its life through an action.
+Each managed entity has the lifecycle stages that apply to it: creation,
+ordinary use, completion, expiry, retention, reversal, or deliberate permanence.
 
 _Evidence:_ for each kind of object in the state, name the action that creates
-it, each action that changes it, and the action that ends it. Gathering:
-memberships are created by `create` and `join` and ended by `leave`.
+it, each action that changes it, and any applicable end or retention rule.
+Gathering memberships are created by `create` and `join` and ended by `leave`.
 
 _Failure:_ accounts can be created but never closed; reservations can be made
 but never cancelled; a temporary grant is issued with no expiry or revocation.
@@ -226,9 +230,10 @@ users can regret has a named reversal (`cancel`, `revoke`, `restore`,
 `acknowledge`); the specification says whether repeating an action is
 meaningful.
 
-_Failure:_ an action that throws for an expected domain condition. In this
-engine an unregistered throw is a **fault**, not a refusal: it leaves the ask
-without an outcome, and composition cannot watch it as a domain result. See
+_Failure:_ an action that throws for an expected domain condition. A throw that
+is neither a registered refusal error nor the advanced `Refuse` marker is a
+**fault**: it leaves the ask without an outcome, and ordinary composition cannot
+watch it as a domain result. See
 [actions, refusals, and
 faults](../semantics.md#actions-refusals-and-faults).
 
@@ -291,6 +296,33 @@ Not every concept must be reusable. An application-specific concept is a
 legitimate outcome when the behavior genuinely exists only here — say it
 explicitly rather than dressing it in generic names.
 
+Use the following as a review heuristic, not a runtime classification.
+Reusability has a ceiling, and passing it can be a more expensive mistake than
+falling short. Aim for a concept reusable across applications **in a domain**,
+not across every domain.
+
+_Evidence:_ name two plausible applications the concept fits and one it clearly
+does not. Gathering fits book clubs and incident rooms and would be nonsense in
+a compiler. A concept that fits every application equally has stopped carrying
+domain meaning.
+
+_Failure:_ a concept whose actions would be equally correct anywhere —
+`set(subject, path, value)`, `merge(layer, rank)`, `record(list, item, score)`.
+These are value types with a purpose sentence attached. The narration is
+frictionless precisely because there is no domain to contradict it.
+
+_Correction:_ ask what the generic thing was standing in for. If a real domain
+mechanism is behind it, name that mechanism and give it the transitions and
+refusals the domain implies. If nothing is behind it, it is a module the concept
+implementations import, not a concept.
+
+Two risks follow from getting this wrong, and both can land outside the concept.
+Its actions can become generic, so composition may recover meaning from literal
+constants in trigger patterns rather than from action names — see [semantic
+actions](state-and-actions.md#semantic-actions). Domain rules that the concept
+could have enforced may also become application obligations. Inspect the actual
+triggers and invariants rather than treating either result as automatic.
+
 ### Familiarity
 
 Where the behavior matches a mechanism people already know, the concept uses
@@ -313,7 +345,8 @@ not many concepts.
 _Evidence:_ take three changes the application is likely to face and name the
 files each would touch. "Alert responders when a mitigation is chosen" touches
 one reaction. "Alerts expire after a day" touches Alerting. "Only the host may
-contribute" swaps one view.
+contribute" swaps the contribution-policy pack, including complementary policy
+views and its denial response.
 
 _Failure:_ a change to who may contribute requires editing Discussing,
 Gathering, and two endpoints.

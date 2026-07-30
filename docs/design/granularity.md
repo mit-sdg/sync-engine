@@ -36,6 +36,12 @@ Weigh evidence rather than counting it. One decisive item — two purposes, or a
 invariant that requires both parts to change atomically — settles the question
 against several weak ones.
 
+Here, "atomically" describes the needed domain transition, not an engine
+transaction. One action serializes its body for one raw concept instance within
+one engine, but does not create rollback, durable atomicity, or cross-process
+coordination. A durable implementation that changes shared state needs the
+appropriate storage transaction or constraint.
+
 | Favors separation                                         | Favors keeping together                                  | Investigate before deciding                                 |
 | --------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
 | Two purposes, each stateable without the other            | One purpose; neither part has a principle alone          | Parts share an identity but no other state                  |
@@ -74,10 +80,12 @@ to know that.
 
 Delete one part. Does the other still provide coherent value?
 
-Remove Alerting from the Operations Room and Selecting, Gathering, and
-Discussing still work — the room simply stops notifying people. Remove
-Discussing from a candidate that fused discussion with response storage and
-nothing is left.
+Reading Circle supplies the concrete removal result: it uses Gathering,
+Selecting, and Discussing without Alerting. The Operations Room can disable the
+alerting reaction pack, but its shipped dashboard also reads Alerting and would
+need a different result shape if the concept were removed. Remove Discussing
+from a candidate that fused discussion with response storage and nothing is
+left.
 
 ### The reuse test
 
@@ -108,10 +116,12 @@ to Alerting. None of them affects who belongs to a room.
 
 Do the parts have different actors, permissions, or trust assumptions?
 
-Hosts create rooms; anyone may join; only the recipient of an alert may
-acknowledge it; only a member may contribute. Four different authorization
-questions, answered against three different facts, is strong evidence that the
-underlying behaviors are separate.
+Creating a room, joining it, acknowledging an alert, and contributing to a
+discussion raise different authorization questions against different facts. That
+is strong evidence that the behaviors are separate. The shipped examples do not
+authenticate caller-supplied identifiers, and `Alerting.acknowledge` does not
+check that its caller is the recipient; treat these as policy questions to decide,
+not as guarantees supplied by the example.
 
 ### The failure test
 
@@ -169,8 +179,8 @@ It is internally consistent and easy to implement. Six tests reject it.
   disjoint groups.
 - **Reuse.** A reading circle needs belonging, a current reading, and a
   discussion, and has no use for alerts.
-- **Authority.** Four different authorization questions against three different
-  facts.
+- **Authority.** The candidate creates distinct authorization questions against
+  several facts. Those questions need separate policy and enforcement decisions.
 - **Failure.** Alerting a responder can fail and be retried without touching the
   selection that caused it.
 
@@ -203,13 +213,15 @@ export const SelectedMitigationAlertsResponders = reaction(({ room, selection, r
 State these costs when proposing the split; they do not reverse the decision,
 but they change what the application must handle.
 
-**Choosing a mitigation and opening its discussion are no longer atomic.**
-`Selecting.choose` returns first, and `Discussing.open` is asked afterwards.
-Between the two there is a room with a current mitigation and no discussion. If
-`Discussing.open` refuses — the shipped concept refuses `DISCUSSION_ALREADY_OPEN`
-when a subject already has an open discussion — or faults, the selection stays.
-Nothing rolls it back; see [ordering and state-read
-timing](../semantics.md#ordering-and-state-read-timing).
+**Choosing a mitigation and opening its discussion are separate actions.** The
+reaction asks `Discussing.open` after the returned `Selecting.choose` occurrence
+lands. An instrumented direct caller's `choose()` promise waits for outcome
+reactions, but another read can still observe a current mitigation before `open`
+settles. If `open` faults, the selection stays and nothing rolls it back. A
+`DISCUSSION_ALREADY_OPEN` refusal means an open discussion already exists, so it
+is not itself a missing-discussion case. The discussion pack is optional, which
+is another reason readers must tolerate no discussion. See [ordering and
+state-read timing](../semantics.md#ordering-and-state-read-timing).
 
 **Every read that spans the gap must handle the window.** The shipped dashboard
 does this deliberately, reading the discussion under `whether(...)` so a room
@@ -257,10 +269,11 @@ create (name: String, host: Person) : return (gathering: Gathering)
     return gathering
 ```
 
-A split turns that into two actions joined by a reaction, and the pair is not
-atomic: if the membership action faults, a hosted gathering exists with no host
-inside it. The invariant "a gathering always contains its host" would become an
-application obligation that the engine cannot enforce.
+A split turns that into two actions joined by a reaction. The engine provides no
+multi-action transaction: if the membership action faults, a hosted gathering
+can exist with no host inside it. Keeping the transition in one action gives it
+one owner and per-instance serialization. Durable or cross-process enforcement
+still requires storage coordination.
 
 Every meaningful action — `create`, `join`, `leave` — spans both proposed
 concepts. That is the combination signal.

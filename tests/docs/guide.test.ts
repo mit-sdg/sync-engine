@@ -20,6 +20,7 @@ const designFiles = [
   "composing-concepts.md",
   "reviewing-a-design.md",
 ];
+const firstPartyRawPrefix = "https://raw.githubusercontent.com/mit-sdg/sync-engine/main/";
 const advancedRecipes = new URL("../../docs/advanced-recipes.md", import.meta.url);
 const excerptDocs = [
   ...guideFiles.map((file) => new URL(file, guideDirectory)),
@@ -241,11 +242,18 @@ describe("guided curriculum", () => {
 
       for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
         const target = match[1];
-        if (/^(?:https?:|mailto:)/.test(target)) continue;
+        const firstPartyRaw = target.startsWith(firstPartyRawPrefix);
+        if (/^(?:https?:|mailto:)/.test(target) && !firstPartyRaw) continue;
         const hashAt = target.indexOf("#");
-        const path = hashAt < 0 ? target : target.slice(0, hashAt);
+        const targetPath = hashAt < 0 ? target : target.slice(0, hashAt);
+        const path = firstPartyRaw ? targetPath.slice(firstPartyRawPrefix.length) : targetPath;
         const fragment = hashAt < 0 ? undefined : decodeURIComponent(target.slice(hashAt + 1));
-        const targetUrl = path.length === 0 ? docUrl : new URL(path, docUrl);
+        const targetUrl =
+          path.length === 0
+            ? docUrl
+            : firstPartyRaw
+              ? new URL(`../../${path}`, import.meta.url)
+              : new URL(path, docUrl);
         await expect(stat(targetUrl), `${docUrl.pathname}: ${target}`).resolves.toBeDefined();
         if (fragment !== undefined) {
           const targetMarkdown = await readFile(targetUrl, "utf8");
