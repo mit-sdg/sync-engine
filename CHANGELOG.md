@@ -25,9 +25,16 @@ HTTP transport support now ships as the independently published
   `@mit-sdg/sync-engine-http/server`, client imports to `/client`, and wire
   projection imports to `/tooling`.
 - Move public domain-error mappings from concept registrations into the reused
-  HTTP policy value's `publicErrors` field.
+  HTTP policy value's `publicErrors` field. Replace `PublicError` members with
+  the corresponding HTTP category strings, such as `"CONFLICT"`.
 - Replace `httpProfile`, `httpFloor`, and `httpWireName` in `generated.config.ts`
   with `projections: [httpWire({ policy, name })]`, then regenerate artifacts.
+- Replace references to HTTP failures on `FrameworkErrorCode` with
+  `HttpClientErrorCode`. Generic clients using the HTTP transport should use
+  `Client<Wire, HttpClientError>` or `createClient<Wire, HttpClientError>(...)`;
+  `createHttpClient<Wire>(...)` supplies that error type directly.
+- `GeneratedApplication` is now exported from the core `/tooling` subpath for
+  typing application-owned generation descriptors.
 
 ### Generated formats
 

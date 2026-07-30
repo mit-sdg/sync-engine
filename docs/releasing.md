@@ -27,7 +27,8 @@ before every tag:
 - Protect the `v1.0.0-beta.*` and `http-v1.0.0-beta.*` tag namespaces against
   movement, deletion, and creation by unapproved actors.
 - Keep the GitHub environment identity `npm`. Restrict it to the
-  `v1.0.0-beta.*` tag policy, require an independent reviewer, and verify
+  `v1.0.0-beta.*` and `http-v1.0.0-beta.*` tag policies, require an independent
+  reviewer, and verify
   `prevent_self_review=true` and `can_admins_bypass=false`.
 - Configure npm trusted publishing for packages `@mit-sdg/sync-engine` and
   `@mit-sdg/sync-engine-http`, GitHub organization `mit-sdg`, repository
@@ -133,6 +134,10 @@ accidental growth. Wait for **CI required** on the final `main`
 commit, then repeat every external-setting check above.
 
 ## Tag and publish
+
+Publish and verify the core package before publishing the matching HTTP package.
+The HTTP package declares that exact core version as a peer dependency; do not
+publish an HTTP version whose core peer is absent from the registry.
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
    of `origin/main`, then create one annotated `v$VERSION` tag to publish core

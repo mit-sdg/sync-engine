@@ -368,6 +368,29 @@ const register = {
   advanced: ["Engine", "EngineObserver", "LogEvent", "Refuse", "createEngine", "custom", "faulted"],
 } as const;
 
+const httpRegister = {
+  client: [
+    "HeadersOption",
+    "HttpClientError",
+    "HttpClientErrorCode",
+    "HttpClientOptions",
+    "createHttpClient",
+    "createHttpTransport",
+  ],
+  server: [
+    "HttpCorrelationOptions",
+    "HttpCredentialBinding",
+    "HttpFloor",
+    "HttpPublicErrorCategory",
+    "HttpPublicErrorPolicy",
+    "ProductionHttpProfile",
+    "createHttpHandler",
+    "httpFloor",
+    "productionHttpProfile",
+  ],
+  tooling: ["HttpWireOptions", "httpWire"],
+} as const;
+
 const packageJson = JSON.parse(
   readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8"),
 ) as { exports: Record<string, unknown> };
@@ -394,6 +417,17 @@ function referenceSubpathBlock(subpath: keyof typeof register): string {
     exports,
     "",
     `<!-- register:${subpath}:end -->`,
+  ].join("\n");
+}
+
+function referenceHttpSubpathBlock(subpath: keyof typeof httpRegister): string {
+  const exports = httpRegister[subpath].map((name) => `\`${name}\``).join(", ");
+  return [
+    `<!-- register:http-${subpath}:start -->`,
+    "",
+    exports,
+    "",
+    `<!-- register:http-${subpath}:end -->`,
   ].join("\n");
 }
 
@@ -458,6 +492,43 @@ describe("public API register", () => {
 
   test("the package exposes exactly the registered public subpaths", () => {
     expect(packageSubpaths.sort()).toEqual(Object.keys(register).sort());
+  });
+
+  test("the HTTP companion barrels and reference have their exact exports", () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const packageRoot = resolve(root, "packages/http");
+    const httpPackage = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as {
+      exports: Record<string, unknown>;
+    };
+    expect(Object.keys(httpPackage.exports).sort()).toEqual(
+      Object.keys(httpRegister)
+        .map((subpath) => `./${subpath}`)
+        .sort(),
+    );
+
+    const reference = readFileSync(resolve(root, "docs/public-surface.md"), "utf8");
+    for (const subpath of Object.keys(httpRegister) as Array<keyof typeof httpRegister>) {
+      const sourceText = readFileSync(resolve(packageRoot, "src", subpath, "index.ts"), "utf8");
+      const source = ts.createSourceFile("index.ts", sourceText, ts.ScriptTarget.Latest, true);
+      expect(source.statements.every(ts.isExportDeclaration), `${subpath} exports only`).toBe(true);
+      const actual = source.statements.flatMap((statement) =>
+        ts.isExportDeclaration(statement) &&
+        statement.exportClause !== undefined &&
+        ts.isNamedExports(statement.exportClause)
+          ? statement.exportClause.elements.map(({ name }) => name.text)
+          : [],
+      );
+      expect(actual.sort(), subpath).toEqual([...httpRegister[subpath]].sort());
+
+      const block = referenceHttpSubpathBlock(subpath);
+      expect(reference, `${subpath} full package path`).toContain(
+        `@mit-sdg/sync-engine-http/${subpath}`,
+      );
+      expect(reference, `${subpath} reference unit`).toContain(block);
+      expect(reference.indexOf(block), `${subpath} reference unit is unique`).toBe(
+        reference.lastIndexOf(block),
+      );
+    }
   });
 
   test("nested public constants and shipped declarations contain no unsupported entrypoints", () => {

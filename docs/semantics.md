@@ -423,6 +423,32 @@ an authored response denotes a domain failure, so a successful endpoint result
 cannot use `error` as an ordinary top-level data field. See the exact
 [cancellation boundary](#cancellation).
 
+The maintained HTTP client resolves its base URL when the client or transport is
+constructed: an explicit nonblank `baseUrl` takes precedence, followed by
+`API_BASE_URL`, then `/api`. Trailing slashes are removed, while `/` means no
+prefix. It sends `POST`, serializes nullish input as `{}`, supplies
+`Content-Type: application/json`, and uses Fetch credentials mode `include` by
+default. A header record or synchronous/asynchronous header provider is merged
+after the initial content type for each request.
+
+The HTTP client reads every response as text. An empty body becomes `{}`; a
+nonempty body must parse as JSON regardless of response `Content-Type`. A
+non-2xx parsed object with an `error` property is returned unchanged. Other
+non-2xx responses become `BAD_STATUS`; unreadable or invalid JSON becomes
+`BAD_JSON`; header-provider failure becomes `HEADER_RESOLUTION_FAILED`; and
+Fetch rejection becomes `NETWORK_ERROR`. Abort before Fetch, while headers are
+pending, or while a body is read becomes the core `ABORTED` result. The header
+provider itself is not cancellable. Neither status handling nor parsing validates
+the result against the generated TypeScript contract.
+
+The HTTP handler accepts only `POST`. An absent `Content-Type` is accepted; a
+present content type must be `application/json`, optionally followed by
+parameters. Routing uses `URL.pathname`, so query parameters do not select a
+different route. Empty request text becomes `{}`. Malformed, unreadable, or
+larger-than-1,048,576-byte bodies become `INVALID_REQUEST`/400. The handler
+checks both declared `Content-Length` and bytes read from the stream. Every
+response uses JSON content type, and every successful invocation uses status 200. Serialization failure becomes opaque `INTERNAL_ERROR`/500.
+
 ### Limits and operational observation
 
 An opt-in `ExecutionLimits` profile bounds active root flows, pending requests,
@@ -513,8 +539,10 @@ response. At runtime, the token must be a string and the expiry must be a valid
 `Date` or a value whose string representation is date-parsable; malformed issue
 output becomes opaque `INTERNAL_ERROR`. Successful clearing endpoints and an
 unauthorized protected request clear the cookie. Responses that issue or clear
-the cookie use `Cache-Control: no-store`. The floor is a same-origin boundary:
-it does not answer CORS preflights or emit CORS headers.
+the cookie use `Cache-Control: no-store`. The floor performs this conditional
+origin check and uses a strict same-site cookie; it does not require an `Origin`
+header, compare the configured origin with `request.url`, answer CORS preflights,
+or emit CORS headers.
 The floor adds no implicit `/api` route alias; serving below `/api` requires an
 explicit `basePath: "/api"` declaration.
 
@@ -600,6 +628,13 @@ from protected routes and the consumed token and expiry fields from the issuing
 route's output. All contracts share generated type helpers and the vocabulary
 anchor. Core records every projector package and version in generated
 provenance.
+
+Projection planning validates all names before rendering. The logical wire,
+every projected wire, each app-wide error type, `Json`, and vocabulary helper
+types must have distinct valid TypeScript identifiers. Provenance package names
+and versions must be nonblank. Core evaluates projectors in declaration order,
+and a projector or validation failure occurs before any artifact comparison or
+write.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 defines input admission and explicit successful-output validation. Neither is

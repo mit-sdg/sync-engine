@@ -2,7 +2,7 @@
 
 ## Public beta surface
 
-The supported public API is exactly these six package subpaths:
+The core package's supported public API is exactly these six package subpaths:
 
 - `@mit-sdg/sync-engine/language`
 - `@mit-sdg/sync-engine/assembly`
@@ -15,7 +15,8 @@ The package root and all deep imports are unsupported. The [Public
 API](docs/public-surface.md) is the exact export register.
 
 `@mit-sdg/sync-engine-http` is an independently published first-party transport
-package with supported `/server`, `/client`, and `/tooling` subpaths. During
+package with exactly these supported subpaths: `/server`, `/client`, and
+`/tooling`. Its root and deep imports are unsupported. During
 beta it requires the exact matching core version as a peer dependency. Core can
 be installed alone for custom transports and server adapters.
 
