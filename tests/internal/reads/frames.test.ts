@@ -45,6 +45,15 @@ describe("Frames primitives", () => {
     expect(result).toEqual(new Frames({ [value]: { nested: 1 } }));
   });
 
+  test("unifies a variable repeated within one output pattern", () => {
+    const value = Symbol("value");
+    const result = new Frames();
+
+    expandOutputRows(result, {}, [{ left: 1, right: 2 }], { left: value, right: value });
+
+    expect(result).toHaveLength(0);
+  });
+
   test("requires own row fields and safely binds Object.prototype names", () => {
     for (const name of ["constructor", "toString", "__proto__"]) {
       const missing = new Frames();

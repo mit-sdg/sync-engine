@@ -202,7 +202,12 @@ export class ViewFormerValidator {
       if (invalid !== undefined) {
         throw new Error(`${kind} "${site}": marker "${marker.tag}" requires ${invalid}.`);
       }
-      return false;
+      if (marker.tag === "$lit") {
+        for (const value of Object.values(marker.payload as Record<string, unknown>)) {
+          this.assertPatternUsable(value, site, kind);
+        }
+      }
+      return marker.tag === "$oneOf";
     });
   }
 

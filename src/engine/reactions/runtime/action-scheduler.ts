@@ -1,16 +1,14 @@
 interface ActionLine {
   done: boolean;
+  reservation: WaitingReservation;
   settled: Promise<void>;
 }
 
 interface WaitingReservation {
+  blockedBy?: WaitingReservation;
   flow: string;
+  released: boolean;
   release(): boolean;
-}
-
-interface ConceptSchedule {
-  line?: ActionLine;
-  waiting: Set<WaitingReservation>;
 }
 
 export interface ActionScheduleRequest<Input, Result> {
@@ -35,7 +33,39 @@ export interface ActionScheduling {
 
 /** Serializes action bodies independently for each raw concept instance. */
 export class ActionScheduler implements ActionScheduling {
-  private readonly schedules = new WeakMap<object, ConceptSchedule>();
+  private readonly schedules = new WeakMap<object, ActionLine>();
+  private readonly reservations = new Set<WeakRef<WaitingReservation>>();
+
+  private blockerOf(reservation: WaitingReservation | undefined): WaitingReservation | undefined {
+    let blocker: WaitingReservation | undefined;
+    for (let current = reservation; current !== undefined; current = current.blockedBy) {
+      if (!current.released) blocker = current;
+    }
+    return blocker;
+  }
+
+  private cycleBreaker(
+    from: string,
+    target: string,
+    visited = new Set<string>(),
+  ): WaitingReservation | undefined {
+    if (visited.has(from)) return undefined;
+    visited.add(from);
+    for (const reference of this.reservations) {
+      const reservation = reference.deref();
+      if (reservation === undefined) {
+        this.reservations.delete(reference);
+        continue;
+      }
+      if (reservation.flow !== from) continue;
+      const blocker = this.blockerOf(reservation.blockedBy);
+      if (blocker === undefined) continue;
+      if (blocker.flow === target) return blocker;
+      const nested = this.cycleBreaker(blocker.flow, target, visited);
+      if (nested !== undefined) return nested;
+    }
+    return undefined;
+  }
 
   reserve<Input, Result>({
     concept,
@@ -44,29 +74,28 @@ export class ActionScheduler implements ActionScheduling {
     input,
     onBodySettled,
   }: ActionScheduleRequest<Input, Result>): ActionReservation<Awaited<Result>> {
-    let schedule = this.schedules.get(concept);
-    if (schedule === undefined) {
-      schedule = { waiting: new Set() };
-      this.schedules.set(concept, schedule);
+    for (const reference of this.reservations) {
+      if (reference.deref() === undefined) this.reservations.delete(reference);
     }
-
-    // A same-flow consequence cannot wait behind the body whose requested
-    // reaction is awaiting it. Release only that flow's earlier slots; other
-    // flows still own their release after their requested reactions finish.
-    const earlierReservations = [...schedule.waiting];
-    if (earlierReservations.some((entry) => entry.flow === flow)) {
-      for (const entry of earlierReservations) {
-        if (entry.flow === flow) entry.release();
-      }
+    const prior = this.schedules.get(concept);
+    for (let earlier = prior?.reservation; earlier !== undefined; earlier = earlier.blockedBy) {
+      if (earlier.flow === flow && !earlier.released) earlier.release();
     }
+    let blockedBy = this.blockerOf(prior?.reservation);
+    const breaker =
+      blockedBy?.flow === flow
+        ? blockedBy
+        : blockedBy === undefined
+          ? undefined
+          : this.cycleBreaker(blockedBy.flow, flow);
+    breaker?.release();
+    blockedBy = this.blockerOf(prior?.reservation);
 
-    let resolveRun = (_value: Awaited<Result> | PromiseLike<Awaited<Result>>): void => {};
-    let rejectRun = (_error: unknown): void => {};
-    const result = new Promise<Awaited<Result>>((resolve, reject) => {
-      resolveRun = resolve;
-      rejectRun = reject;
-    });
-    const prior = schedule.line;
+    const {
+      promise: result,
+      resolve: resolveRun,
+      reject: rejectRun,
+    } = Promise.withResolvers<Awaited<Result>>();
     let predecessorDone = prior?.done ?? true;
     let released = false;
     let bodyStarted = false;
@@ -74,18 +103,13 @@ export class ActionScheduler implements ActionScheduling {
     let line: ActionLine;
 
     const settle = (outcome: "resolve" | "reject", value: unknown): void => {
+      line.done = true;
       try {
         onBodySettled?.();
+        if (outcome === "resolve") resolveRun(value as Awaited<Result>);
+        else rejectRun(value);
       } catch (error) {
-        line.done = true;
         rejectRun(error);
-        return;
-      }
-      line.done = true;
-      if (outcome === "resolve") {
-        resolveRun(value as Awaited<Result>);
-      } else {
-        rejectRun(value);
       }
     };
     const startBody = (): void => {
@@ -99,26 +123,27 @@ export class ActionScheduler implements ActionScheduling {
             (output) => settle("resolve", output),
             (error) => settle("reject", error),
           );
-        } else {
-          settle("resolve", bodyResult);
-        }
+        } else settle("resolve", bodyResult);
       } catch (error) {
         settle("reject", error);
       }
     };
     const reservation: WaitingReservation = {
+      ...(blockedBy === undefined ? {} : { blockedBy }),
       flow,
+      released,
       release: () => {
         if (released) return false;
         released = true;
+        reservation.released = true;
         started ??= performance.now();
-        schedule.waiting.delete(reservation);
         if (prior?.done === true) predecessorDone = true;
         startBody();
         return true;
       },
     };
-    schedule.waiting.add(reservation);
+    const reference = new WeakRef(reservation);
+    this.reservations.add(reference);
 
     if (prior !== undefined && !prior.done) {
       void prior.settled.then(() => {
@@ -130,14 +155,11 @@ export class ActionScheduler implements ActionScheduling {
       () => undefined,
       () => undefined,
     );
-    line = { done: false, settled: tail };
-    schedule.line = line;
+    line = { done: false, reservation, settled: tail };
+    this.schedules.set(concept, line);
     void tail.then(() => {
-      if (schedule.line !== line) return;
-      schedule.line = undefined;
-      if (schedule.waiting.size === 0 && this.schedules.get(concept) === schedule) {
-        this.schedules.delete(concept);
-      }
+      this.reservations.delete(reference);
+      if (this.schedules.get(concept) === line) this.schedules.delete(concept);
     });
 
     return {

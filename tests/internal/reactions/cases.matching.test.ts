@@ -4,6 +4,7 @@ import { Logging } from "@sync-engine/assembly";
 import { earlier, vocabulary, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
+import { oneOf } from "@sync-engine/internal/reads/matchers";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
 import {
@@ -299,5 +300,42 @@ describe("engine: literal pattern values compare structurally", () => {
     await Notification.notify({ message: "probe2", tags: ["x", "z"] } as never);
     const after = (await Notification._getMessages({})).filter((m) => m.message === "matched");
     expect(after).toHaveLength(1);
+  });
+
+  test("registered oneOf candidates preserve marker-shaped objects and dates", async () => {
+    const reacting = new Reacting();
+    reacting.logging = Logging.OFF;
+    const { Notification } = reacting.instrument({
+      Notification: new NotificationConcept(),
+    });
+    const date = new Date("2026-01-01T00:00:00.000Z");
+    reacting.register({
+      MarkerObject: () =>
+        when(
+          mockRefs.Notification.notify({ tags: oneOf({ $var: "literal" }) } as never).responds(),
+        ).then(mockRefs.Notification.notify({ message: "matched-object" })),
+      Date: () =>
+        when(mockRefs.Notification.notify({ tags: oneOf(date) } as never).responds()).then(
+          mockRefs.Notification.notify({ message: "matched-date" }),
+        ),
+      LiteralMarker: () =>
+        when(
+          mockRefs.Notification.notify({
+            tags: oneOf({ $lit: { foo: "bar" } }),
+          } as never).responds(),
+        ).then(mockRefs.Notification.notify({ message: "matched-literal-marker" })),
+    });
+
+    await Notification.notify({ message: "object", tags: { $var: "literal" } } as never);
+    await Notification.notify({ message: "date", tags: new Date(date) } as never);
+    await Notification.notify({
+      message: "literal marker",
+      tags: { $lit: { foo: "bar" } },
+    } as never);
+
+    const messages = (await Notification._getMessages({})).map(({ message }) => message);
+    expect(messages).toContain("matched-object");
+    expect(messages).toContain("matched-date");
+    expect(messages).toContain("matched-literal-marker");
   });
 });

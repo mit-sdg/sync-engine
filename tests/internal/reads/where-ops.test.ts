@@ -178,6 +178,57 @@ describe("where ops: evaluation", () => {
     expect(calls).toEqual([]);
   });
 
+  test("serialized optional bindings suppress dependent reads", async () => {
+    let dependentCalls = 0;
+    const source = Object.assign(() => [], { queryName: "_source" }) as InstrumentedQuery;
+    const dependent = Object.assign(
+      () => {
+        dependentCalls++;
+        return [{}];
+      },
+      { queryName: "_dependent" },
+    ) as InstrumentedQuery;
+    const env = {
+      query: ({ query }: { query: string }) => (query === "_source" ? source : dependent),
+    } as never;
+    const optional = {
+      op: "whether" as const,
+      query: { concept: "Source", query: "_source" },
+      in: {},
+      out: { key: { $var: "key" } },
+    };
+    const dependentRead = (op: "find" | "whether") => ({
+      op,
+      query: { concept: "Dependent", query: "_dependent" },
+      in: { key: { $var: "key" } },
+      out: {},
+    });
+
+    expect(
+      await applyWhereOps(new Frames({}), [optional, dependentRead("whether")], env),
+    ).toHaveLength(1);
+    expect(
+      await applyWhereOps(new Frames({}), [optional, dependentRead("find")], env),
+    ).toHaveLength(0);
+    expect(dependentCalls).toBe(0);
+
+    expect(
+      await applyWhereOps(
+        new Frames({}),
+        [
+          {
+            op: "find",
+            query: { concept: "Dependent", query: "_dependent" },
+            in: { payload: { $lit: { $var: "literal" } } },
+            out: {},
+          },
+        ],
+        env,
+      ),
+    ).toHaveLength(1);
+    expect(dependentCalls).toBe(1);
+  });
+
   test("closed relations admit exactly the rows they hold for", async () => {
     const { n } = $vars;
     const frames = new Frames({ [n]: 1 }, { [n]: 2 }, { [n]: 3 });

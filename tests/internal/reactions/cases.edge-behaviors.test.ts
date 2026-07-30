@@ -9,11 +9,43 @@ import type { Vars } from "@sync-engine/internal/reactions/types";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { bindInputMapping } from "@sync-engine/internal/reads/frames.ts";
+import { flow } from "@sync-engine/internal/reactions/context.ts";
 import { ButtonConcept, ListConcept, mockRefs, RecorderConcept, ThrowingConcept } from "./mocks.ts";
 
 // ── One evaluation per trigger record ─────────────────────────────────────
 
 describe("one evaluation per trigger record", () => {
+  test("does not reconsider a requested guard after the action body", async () => {
+    class StatefulConcept {
+      ready = false;
+      start(_: Record<string, never>) {
+        this.ready = true;
+        return {};
+      }
+      _ready(_: Record<string, never>) {
+        return this.ready ? [{}] : [];
+      }
+    }
+    const refs = vocabulary({ concepts: { Stateful: StatefulConcept } }).concepts;
+    const reacting = new Reacting();
+    reacting.logging = Logging.OFF;
+    const { Stateful, Recorder } = reacting.instrument({
+      Stateful: new StatefulConcept(),
+      Recorder: new RecorderConcept(),
+    });
+    reacting.register({
+      BeforeBody: reaction((_vars: Vars) =>
+        when(refs.Stateful.start({}))
+          .where(refs.Stateful._ready({}).is({}))
+          .then(mockRefs.Recorder.record({ tag: "unexpected" })),
+      ),
+    });
+
+    await Stateful.start({});
+
+    expect(Recorder.order).toEqual([]);
+  });
+
   test("a later action does not reevaluate an earlier trigger in the same flow", async () => {
     const reacting = new Reacting();
     reacting.logging = Logging.OFF;
@@ -41,6 +73,76 @@ describe("one evaluation per trigger record", () => {
 
     await Button.clicked({ kind: "twice" });
     expect(Recorder.order).toEqual([2]);
+  });
+
+  test("does not dispatch a prepared join consumed by recursive reaction processing", async () => {
+    class EventConcept {
+      first(_: Record<string, never>) {
+        return {};
+      }
+      trigger({ kind }: { kind: string }) {
+        return { kind };
+      }
+    }
+    class SinkConcept {
+      hits = 0;
+      note(_: Record<string, never>) {
+        this.hits++;
+        return {};
+      }
+    }
+    const reacting = new Reacting();
+    reacting.logging = Logging.OFF;
+    const { Event, Sink } = reacting.instrument({
+      Event: new EventConcept(),
+      Sink: new SinkConcept(),
+    });
+    reacting.registerReactions([
+      {
+        name: "SpawnNested",
+        when: [
+          {
+            kind: "action",
+            concept: "Event",
+            action: "trigger",
+            posture: "returned",
+            input: { kind: "outer" },
+            output: {},
+          },
+        ],
+        where: [],
+        then: [{ kind: "request", concept: "Event", action: "trigger", input: { kind: "nested" } }],
+      },
+      {
+        name: "Join",
+        when: [
+          {
+            kind: "action",
+            concept: "Event",
+            action: "first",
+            posture: "returned",
+            input: {},
+            output: {},
+          },
+          {
+            kind: "action",
+            concept: "Event",
+            action: "trigger",
+            posture: "returned",
+            input: { kind: "outer" },
+            output: {},
+          },
+        ],
+        where: [],
+        then: [{ kind: "request", concept: "Sink", action: "note", input: {} }],
+      },
+    ]);
+
+    await Event.first({ [flow]: "shared" } as never);
+    await Event.trigger({ kind: "outer", [flow]: "shared" } as never);
+
+    expect(Sink.hits).toBe(1);
+    expect(reacting._getFirings("Join")).toHaveLength(1);
   });
 });
 

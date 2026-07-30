@@ -183,4 +183,62 @@ describe("engine: async concept actions", () => {
 
     expect(raw.order).toEqual(["root", "middle", "leaf"]);
   });
+
+  test("opposite cross-flow requested consequences do not deadlock", async () => {
+    class OrderedConcept {
+      order: string[] = [];
+      ready = false;
+      root(_: Record<string, never>) {
+        this.ready = true;
+        this.order.push("root");
+        return {};
+      }
+      step(_: Record<string, never>) {
+        this.order.push("step");
+        return {};
+      }
+      _ready(_: Record<string, never>) {
+        return this.ready ? [{}] : [];
+      }
+    }
+    class AuditConcept {
+      hits = 0;
+      note(_: Record<string, never>) {
+        this.hits++;
+        return {};
+      }
+    }
+    class AConcept extends OrderedConcept {}
+    class BConcept extends OrderedConcept {}
+    const crossRefs = vocabulary({
+      concepts: { A: AConcept, Audit: AuditConcept, B: BConcept },
+    }).concepts;
+    const reacting = quietReacting();
+    const rawA = new AConcept();
+    const rawB = new BConcept();
+    const rawAudit = new AuditConcept();
+    const { A, B } = reacting.instrument({ A: rawA, Audit: rawAudit, B: rawB });
+    const gate = Promise.withResolvers<void>();
+    let arrivals = 0;
+    const meet = async (frames: Frames) => {
+      arrivals++;
+      if (arrivals === 2) gate.resolve();
+      await gate.promise;
+      return frames;
+    };
+    reacting.register({
+      AToB: () => when(crossRefs.A.root({})).where(meet).then(crossRefs.B.step({})),
+      BToA: () => when(crossRefs.B.root({})).where(meet).then(crossRefs.A.step({})),
+      GuardB: () =>
+        when(crossRefs.B.root({}))
+          .where(crossRefs.B._ready({}).is({}))
+          .then(crossRefs.Audit.note({})),
+    });
+
+    await Promise.all([A.root({}), B.root({})]);
+
+    expect(rawA.order).toEqual(["root", "step"]);
+    expect(rawB.order).toEqual(["root", "step"]);
+    expect(rawAudit.hits).toBe(0);
+  });
 });
