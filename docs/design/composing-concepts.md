@@ -290,14 +290,64 @@ presenting it as a domain concept. A split with no semantic value should be
 undone; see [the reaction-pressure
 test](granularity.md#the-reaction-pressure-test).
 
+### Rules that only sequence
+
+A reaction whose trigger exists only to make one effect happen after another is
+not composition. It is a program counter written in trigger syntax, and it is
+the most common way a design accumulates rules that decide nothing.
+
+The shape is recognizable: each rule triggers on the previous rule's effect, and
+the chain reads as consecutive statements rather than as consequences.
+
+```text
+AttemptsClearContext        when Diagnosing.retract      then Composing.clear
+ClearedContextsSetSite      when Composing.clear         then Composing.set site
+SiteContextsSetCollections  when Composing.set site      then Composing.set collections
+CollectionContextsSetData   when Composing.set collections then Composing.set data
+DataContextsSetUrl          when Composing.set data      then Composing.set url
+```
+
+Ask of each rule what the application decided. Here, nothing: the five effects
+write different parts of one record and do not depend on each other at all. The
+ordering is invented, and inventing it is not free.
+
+- **A false dependency propagates failure.** Every rule in the chain can drop
+  its case. When one condition finds no row, the rest of the chain never runs,
+  and the effects that had nothing to do with that condition are lost with it.
+- **The fix for that is usually a duplicate rule.** A chain that forks on an
+  optional condition needs its tail written twice — once for each branch —
+  and the two copies drift.
+- **Nothing states the order.** A reader has to reconstruct the sequence by
+  matching each rule's effect to the next rule's trigger, across a file.
+
+Collapse the chain. Effects that are independent belong in one `then(...)`
+group as named siblings, with the reads they need in one `where`. Effects that
+genuinely depend on a preceding action's result belong in later `.then(...)`
+stages of the same rule, where the dependency is stated once and the engine pins
+each stage to the exact preceding ask. See [stages, siblings, and separate
+rules](#stages-siblings-and-separate-rules).
+
+When collapsing is impossible because each step reads state that only the
+previous step established, the chain is not the defect — the missing action is.
+One action of the concept that owns that state should perform the transition,
+and one reaction should ask it.
+
 ### Reaction explosion
 
 Many rules between the same two concepts usually indicate one of: conflated
 purposes, a split below a natural boundary, a missing semantic action,
-duplicated state, or a workflow expressed at too fine a grain.
+duplicated state, a workflow expressed at too fine a grain, or the sequencing
+chain above.
 
 There is no numeric threshold. Read each rule and ask what application decision
-it encodes. Rules that encode no decision are the ones to remove.
+it encodes. Rules that encode no decision are the ones to remove — but remove
+them by collapsing them into the rule or action that should have carried the
+work, not by deleting the effect.
+
+One ratio is worth checking on a whole design: how many rules have a single
+`then(...)` and no siblings. A design where nearly every rule is a single
+unconditional effect is sequencing through triggers, whatever its individual
+rules look like.
 
 ### Cycles
 

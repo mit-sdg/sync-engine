@@ -291,6 +291,32 @@ Not every concept must be reusable. An application-specific concept is a
 legitimate outcome when the behavior genuinely exists only here — say it
 explicitly rather than dressing it in generic names.
 
+Reusability also has a ceiling, and passing it is a more expensive mistake than
+falling short. Aim for a concept reusable across applications **in a domain**,
+not across every domain.
+
+_Evidence:_ name two plausible applications the concept fits and one it clearly
+does not. Gathering fits book clubs and incident rooms and would be nonsense in
+a compiler. A concept that fits every application equally has stopped carrying
+domain meaning.
+
+_Failure:_ a concept whose actions would be equally correct anywhere —
+`set(subject, path, value)`, `merge(layer, rank)`, `record(list, item, score)`.
+These are value types with a purpose sentence attached. The narration is
+frictionless precisely because there is no domain to contradict it.
+
+_Correction:_ ask what the generic thing was standing in for. If a real domain
+mechanism is behind it, name that mechanism and give it the transitions and
+refusals the domain implies. If nothing is behind it, it is a module the concept
+implementations import, not a concept.
+
+Two costs follow from getting this wrong, and both land outside the concept.
+Its actions must be generic, so composition recovers meaning from literal
+constants in trigger patterns rather than from action names — see [semantic
+actions](state-and-actions.md#semantic-actions). And every domain rule the
+concept could have enforced becomes an application obligation, spread across
+reactions where no single place states it and no concept test covers it.
+
 ### Familiarity
 
 Where the behavior matches a mechanism people already know, the concept uses

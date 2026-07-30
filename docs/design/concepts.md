@@ -253,20 +253,36 @@ produces a specification with two unrelated modes.
 
 ## A concept is not
 
-| Candidate       | Why it is not automatically a concept                                                                                           | What to do                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Object or class | Classes group data with methods on that data; a concept's behavior spans several kinds of object and the relations between them | Ask which relation the behavior maintains, and let that define the boundary |
-| Domain entity   | An entity is a noun; a concept is a mechanism. `Document` attracts every operation whose input contains a document              | Name the behavior instead: versioning, sharing, commenting                  |
-| Database table  | Tables follow storage and query shape; one concept may own several, and one table may serve none                                | Choose state from what the actions need, then map to storage separately     |
-| Service         | Services are deployment and ownership units and routinely reach into shared data                                                | Keep the concept boundary semantic; a service may host several concepts     |
-| Screen or page  | A screen composes whatever the user needs at once, which is normally several concepts                                           | Build the screen from a former that reads several concepts                  |
-| HTTP endpoint   | An endpoint is an interface to behavior, and its input is shaped by the caller                                                  | Declare the endpoint in composition; keep behavior in concepts              |
-| Workflow        | A workflow sequences behaviors that already exist independently                                                                 | Express the sequence as reactions over independent concepts                 |
+| Candidate       | Why it is not automatically a concept                                                                                                                    | What to do                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Object or class | Classes group data with methods on that data; a concept's behavior spans several kinds of object and the relations between them                          | Ask which relation the behavior maintains, and let that define the boundary               |
+| Domain entity   | An entity is a noun; a concept is a mechanism. `Document` attracts every operation whose input contains a document                                       | Name the behavior instead: versioning, sharing, commenting                                |
+| Database table  | Tables follow storage and query shape; one concept may own several, and one table may serve none                                                         | Choose state from what the actions need, then map to storage separately                   |
+| Service         | Services are deployment and ownership units and routinely reach into shared data                                                                         | Keep the concept boundary semantic; a service may host several concepts                   |
+| Screen or page  | A screen composes whatever the user needs at once, which is normally several concepts                                                                    | Build the screen from a former that reads several concepts                                |
+| HTTP endpoint   | An endpoint is an interface to behavior, and its input is shaped by the caller                                                                           | Declare the endpoint in composition; keep behavior in concepts                            |
+| Workflow        | A workflow sequences behaviors that already exist independently                                                                                          | Express the sequence as reactions over independent concepts                               |
+| Data structure  | A record builder, ordered list, merge, cache, index, glob matcher, or graph is a value type; wrapping it in a purpose sentence does not give it a domain | Keep it as a module the concepts use, or find the domain mechanism it was standing in for |
 
 The Operations Room dashboard makes the screen case concrete: one former reads
 Gathering, Selecting, Discussing, and Alerting to build a single answer, and no
 concept knows a dashboard exists. See [views and
 formers](../guide/views-and-formers.md).
+
+The last row is the hardest to catch, because a data structure can be given a
+plausible purpose and a convincing principle. "Build one record from pieces
+supplied separately, so each contributor can add what it knows" reads like a
+need and narrates a picnic; it describes assigning fields to an object. The
+test that separates them is reach: **a concept is reusable across applications
+in a domain, not across every domain.** Gathering serves book clubs and incident
+rooms and would be wrong in a compiler. A record builder is equally at home
+everywhere, which means it carries no domain meaning for an application to rely
+on. [Reusability](evaluating-concepts.md#reusability) states the criterion and
+the two costs of getting it wrong.
+
+Utility code is not a design failure. `_get`, `_members`, and Gathering's
+membership lookup all rest on ordinary data structures; they are private to the
+implementation, and no reaction has to know they exist.
 
 The instructive failure is the fifth row. A `Project` concept starts as project
 creation, then accumulates membership, task assignment, status reporting, file

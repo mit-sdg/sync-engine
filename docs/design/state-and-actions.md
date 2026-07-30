@@ -178,6 +178,24 @@ entries should say so in its purpose and offer `update`. The failure is not the
 word; it is a purpose that promises a mechanism and an interface that delivers
 storage.
 
+That permission has a limit, and the limit is visible from outside the concept.
+**Judge an action's name by what a reaction must write to trigger on it.** A
+rule that says `when(Selecting.choose(...).responds(...))` names the event. A
+rule that has to write `when(Composing.set({ part: PARTS.context, path:
+CONTEXT_PATHS.site }).responds({}))` does not: the event is "the site context
+was established," and that phrase exists nowhere — it has been encoded as two
+constants in a pattern.
+
+Meaning pushed into constants is meaning nothing checks. Registration compares
+action names, specifications declare refusal codes, and read-back states each
+rule's triggers; none of that reaches a literal that only convention gives
+meaning to. Rename a constant and the design still assembles.
+
+The correction is upstream. Generic actions are usually the symptom of a concept
+general enough that no better name exists, which is the
+[reusability ceiling](evaluating-concepts.md#reusability). Give the concept the
+domain it was missing and the action names follow.
+
 Ask, of any candidate CRUD set: why is this data stored, what behavior makes it
 useful, which transitions matter to the people involved, and which invariants
 distinguish it from an ordinary record. If the answers are thin, the candidate
