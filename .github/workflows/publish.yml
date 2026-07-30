@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v1.0.0-beta.*"
-      - "http-v1.0.0-beta.*"
 
 permissions:
   contents: read
@@ -32,12 +31,7 @@ jobs:
         run: |
           node -e 'const core = require("./package.json");
           const http = require("./packages/http/package.json");
-          const releases = [
-            { tag: `v${core.version}`, version: core.version },
-            { tag: `http-v${http.version}`, version: http.version },
-          ];
-          const expected = releases.find(({ tag }) => tag === process.env.GITHUB_REF_NAME)?.tag;
-          if (process.env.GITHUB_REF_NAME !== expected || !releases.every(({ version }) => /^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(version))) {
+          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || !/^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(core.version)) {
             throw new Error(`Expected a configured beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -100,12 +94,7 @@ jobs:
         run: |
           node -e 'const core = require("./package.json");
           const http = require("./packages/http/package.json");
-          const releases = [
-            { tag: `v${core.version}`, version: core.version },
-            { tag: `http-v${http.version}`, version: http.version },
-          ];
-          const expected = releases.find(({ tag }) => tag === process.env.GITHUB_REF_NAME)?.tag;
-          if (process.env.GITHUB_REF_NAME !== expected || !releases.every(({ version }) => /^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(version))) {
+          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || !/^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(core.version)) {
             throw new Error(`Expected a configured beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -114,22 +103,7 @@ jobs:
           test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - name: Select verified tarball
-        run: |
-          node -e 'const fs = require("node:fs");
-          const core = require("./package.json");
-          const http = require("./packages/http/package.json");
-          const selected = new Map([
-            [`v${core.version}`, "release/package.tgz"],
-            [`http-v${http.version}`, "release/http-package.tgz"],
-          ]).get(process.env.GITHUB_REF_NAME);
-          if (selected === undefined) throw new Error(`No verified artifact for ${process.env.GITHUB_REF_NAME}`);
-          if (selected !== "release/package.tgz") {
-            fs.copyFileSync(selected, "release/package.tgz");
-            fs.writeFileSync(
-              "release/package.tgz.sha256",
-              fs.readFileSync(`${selected}.sha256`, "utf8").replaceAll(selected, "release/package.tgz"),
-            );
-          }'
       - run: sha256sum --check release/package.tgz.sha256
       - run: npm publish ./release/package.tgz --provenance --tag beta --access public
+      - run: sha256sum --check release/http-package.tgz.sha256
+      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public

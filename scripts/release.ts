@@ -1,11 +1,6 @@
 import { createHash } from "node:crypto";
 import { activeWorkflowSource, externalWorkflowActions, workflowUses } from "./workflow.ts";
-import {
-  workspaceById,
-  workspaceCatalog,
-  workspaceReleaseTag,
-  type Workspace,
-} from "./workspaces.ts";
+import { workspaceById, workspaceCatalog, type Workspace } from "./workspaces.ts";
 
 const coreWorkspace = workspaceById("core");
 const publishedWorkspaces: readonly Workspace[] = workspaceCatalog;
@@ -600,9 +595,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const publication = workflowJob(publish, "publish");
   for (const fact of [
     "name: Publish beta",
-    ...publishedWorkspaces.map(
-      (workspace) => `- "${workspaceReleaseTag(workspace, "1.0.0-beta.*")}"`,
-    ),
+    '- "v1.0.0-beta.*"',
     "permissions:\n  contents: read",
   ]) {
     if (!publish.includes(fact)) failures.push(`.github/workflows/publish.yml: missing ${fact}`);
@@ -653,25 +646,27 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   for (const command of [
     "sha256sum --check release/package.tgz.sha256",
     "npm publish ./release/package.tgz --provenance --tag beta --access public",
+    "sha256sum --check release/http-package.tgz.sha256",
+    "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
   ]) {
     if (!hasRunCommand(publication, command)) {
       failures.push(`.github/workflows/publish.yml: publish job is missing ${command}`);
     }
   }
-  for (const workspace of publishedWorkspaces.filter(
-    (workspace) => workspace.id !== coreWorkspace.id,
-  )) {
+  const publishOrder = [
+    "npm publish ./release/package.tgz --provenance --tag beta --access public",
+    "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+  ].map((command) => runCommandPosition(publication, command));
+  if (publishOrder.some((position) => position < 0) || publishOrder[0] >= publishOrder[1]) {
+    failures.push(".github/workflows/publish.yml: publish must release core before HTTP");
+  }
+  for (const workspace of publishedWorkspaces) {
     const tarball = `release/${workspace.verifiedTarball}`;
     if (!publish.includes(tarball)) {
       failures.push(`.github/workflows/publish.yml: artifact flow omits ${tarball}`);
     }
-    if (
-      !publication.includes(workspaceReleaseTag(workspace, "")) ||
-      !publication.includes(tarball)
-    ) {
-      failures.push(
-        `.github/workflows/publish.yml: publish must select ${workspace.id} for its release tag`,
-      );
+    if (!publication.includes(tarball)) {
+      failures.push(`.github/workflows/publish.yml: publish must include ${workspace.id} tarball`);
     }
   }
   for (const forbidden of ["setup-bun@", "bun install", "bun run", "prepack"]) {
@@ -689,7 +684,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     failures.push(".github/workflows/publish.yml: only publish may receive id-token: write");
   }
   const sourceValidation = [
-    ["GITHUB_REF_NAME", "if (process.env.GITHUB_REF_NAME !== expected"],
+    ["GITHUB_REF_NAME", "if (process.env.GITHUB_REF_NAME !=="],
     ["GITHUB_SHA", 'test "$(git rev-parse HEAD)" = "$GITHUB_SHA"'],
     ["origin/main", 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main'],
     ["origin main fetch", "git fetch --no-tags origin main"],
@@ -700,6 +695,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     ["annotated tag", 'test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag'],
     ["live tag commit", 'test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"'],
     ["[1-9]\\d*", "/^1\\.0\\.0-beta\\.(?:0|[1-9]\\d*)$/"],
+    ["`v${core.version}`", "`v${core.version}`"],
+    ["core.version !== http.version", "core.version !== http.version"],
   ] as const;
   for (const [fact, source] of sourceValidation) {
     for (const [jobName, job] of [
@@ -723,11 +720,6 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       if (!job.includes(`./${workspace.packageManifest}`)) {
         failures.push(
           `.github/workflows/publish.yml: ${jobName} source validation is missing ${workspace.packageManifest}`,
-        );
-      }
-      if (!job.includes(workspaceReleaseTag(workspace, ""))) {
-        failures.push(
-          `.github/workflows/publish.yml: ${jobName} source validation is missing ${workspace.id} tag`,
         );
       }
     }
