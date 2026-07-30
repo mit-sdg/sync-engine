@@ -21,7 +21,7 @@ import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
 import { setOwn } from "@engine/utils/own-property";
 
 type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result
-  ? (...args: Args) => Result | Promise<Awaited<Result>>
+  ? (...args: Args) => Result | PromiseLike<Awaited<Result>>
   : Member;
 
 export type ConceptImplementation<C extends ConceptClass> = object & {

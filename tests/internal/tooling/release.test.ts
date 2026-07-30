@@ -51,7 +51,7 @@ function editManifest(
 }
 
 describe("release source facts", () => {
-  test("accepts the beta cutover sources", () => {
+  test("accepts the stable release sources", () => {
     expect(checkRelease(fixture())).toEqual([]);
   });
 
@@ -82,25 +82,58 @@ describe("release source facts", () => {
     expect(() => projectReleaseManifests(sources)).toThrow(/invalid release version/);
   });
 
-  test.each(["1.0.0-alpha.1", "1.0.0-beta.01", "1.0.1-beta.0"])(
-    "rejects invalid beta version %s",
+  test.each([
+    ["root workspace identity", `      "name": "@mit-sdg/sync-engine",`, `      "name": "stale",`],
+    [
+      "HTTP workspace version",
+      `    "packages/http": {\n      "name": "@mit-sdg/sync-engine-http",\n      "version": "1.0.0"`,
+      `    "packages/http": {\n      "name": "@mit-sdg/sync-engine-http",\n      "version": "1.0.1"`,
+    ],
+    [
+      "HTTP peer range",
+      `        "@mit-sdg/sync-engine": "^1.0.0"`,
+      `        "@mit-sdg/sync-engine": "1.0.0"`,
+    ],
+    [
+      "core registry resolution",
+      `    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:",`,
+      `    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@1.0.0",`,
+    ],
+  ] as const)("rejects a stale bun.lock %s", (_name, current, replacement) => {
+    const sources = fixture();
+    replaceSource(sources, "bun.lock", current, replacement);
+    expect(checkRelease(sources)).toContainEqual(expect.stringContaining("bun.lock:"));
+  });
+
+  test.each(["1.0.0-alpha.1", "1.0.0-beta.1", "1.0.01", "2.0.0"])(
+    "rejects invalid stable version %s",
     (version) => {
       const sources = fixture();
       editManifest(sources, "package.json", (manifest) => {
         manifest.version = version;
       });
       expect(checkRelease(sources)).toContainEqual(
-        expect.stringContaining("without leading zeroes"),
+        expect.stringContaining("canonical stable 1.x version"),
       );
     },
   );
 
-  test("rejects a non-beta dist-tag", () => {
+  test("rejects a non-latest dist-tag", () => {
     const sources = fixture();
     editManifest(sources, "package.json", (manifest) => {
-      manifest.publishConfig.tag = "latest";
+      manifest.publishConfig.tag = "beta";
     });
-    expect(checkRelease(sources)).toContain('package.json: publishConfig.tag must be "beta"');
+    expect(checkRelease(sources)).toContain('package.json: publishConfig.tag must be "latest"');
+  });
+
+  test("requires the root workspace override for the HTTP peer", () => {
+    const sources = fixture();
+    editManifest(sources, "package.json", (manifest) => {
+      delete manifest.overrides["@mit-sdg/sync-engine"];
+    });
+    expect(checkRelease(sources)).toContain(
+      "package.json: overrides.@mit-sdg/sync-engine must equal file:.",
+    );
   });
 
   test.each(ownedDependencyManifests)("rejects a stale owned dependency in %s", (path) => {
@@ -128,7 +161,7 @@ describe("release source facts", () => {
       sources,
       "CHANGELOG.md",
       `releases/tag/v${currentVersion}`,
-      "releases/tag/v1.0.0-beta.999",
+      "releases/tag/v1.0.1",
     );
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining("release link"));
   });
@@ -167,7 +200,7 @@ describe("release source facts", () => {
 
   test("rejects a stale exact README evaluation version", () => {
     const sources = fixture();
-    replaceSource(sources, "README.md", `\`@${currentVersion}\``, "`@1.0.0-beta.999`");
+    replaceSource(sources, "README.md", `\`@${currentVersion}\``, "`@1.0.1`");
     expect(checkRelease(sources)).toContain(
       `README.md: exact evaluation version must be @${currentVersion}`,
     );
@@ -228,7 +261,7 @@ describe("release source facts", () => {
   );
 
   test.each([
-    ["SUPPORT.md", "Only the newest beta is supported."],
+    ["SUPPORT.md", "Only the newest stable 1.x release is supported."],
     ["SUPPORT.md", `Node.js \`${packageManifest.engines.node}\``],
     ["SECURITY.md", "security/advisories/new"],
     ["SECURITY.md", "acknowledgement within three business days"],
@@ -333,41 +366,45 @@ describe("release source facts", () => {
 
   test.each([
     "needs: verify",
+    "needs: [verify, publish-core]",
     "id-token: write",
     "name: npm",
-    "npm publish ./release/package.tgz --provenance --tag beta --access public",
-    "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+    "npm publish ./release/package.tgz --provenance --tag latest --access public",
+    "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
   ])("requires the publish-only fact %s", (fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-publish-fact");
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`missing ${fact}`));
   });
 
-  test("requires core to publish before HTTP", () => {
+  test("requires HTTP publication to depend on core publication", () => {
     const sources = fixture();
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "npm publish ./release/package.tgz --provenance --tag beta --access public\n      - run: sha256sum --check release/http-package.tgz.sha256\n      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public",
-      "npm publish ./release/http-package.tgz --provenance --tag beta --access public\n      - run: sha256sum --check release/http-package.tgz.sha256\n      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+      "needs: [verify, publish-core]",
+      "needs: verify",
     );
     expect(checkRelease(sources)).toContain(
-      ".github/workflows/publish.yml: publish must release core before HTTP",
+      ".github/workflows/publish.yml: publish-http job is missing needs: [verify, publish-core]",
     );
   });
 
   test.each([
-    "GITHUB_REF_NAME",
-    "GITHUB_SHA",
-    "origin/main",
-    "[1-9]\\d*",
-    "`v${core.version}`",
-    "core.version !== http.version",
-  ])("requires source validation fact %s", (fact) => {
+    ["GITHUB_REF_NAME", "GITHUB_REF_NAME"],
+    ["GITHUB_SHA", "GITHUB_SHA"],
+    ["origin/main", "origin/main"],
+    ["/^1\\.", "stable 1.x"],
+    ["`v${core.version}`", "`v${core.version}`"],
+    ["core.version !== http.version", "core.version !== http.version"],
+  ])("requires source validation fact %s", (source, fact) => {
     const sources = fixture();
     sources.set(
       ".github/workflows/publish.yml",
-      (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(fact, "omitted-source-fact"),
+      (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
+        source,
+        "omitted-source-fact",
+      ),
     );
     expect(
       checkRelease(sources).filter((failure) =>
@@ -375,7 +412,8 @@ describe("release source facts", () => {
       ),
     ).toEqual([
       `.github/workflows/publish.yml: verify source validation is missing ${fact}`,
-      `.github/workflows/publish.yml: publish source validation is missing ${fact}`,
+      `.github/workflows/publish.yml: publish-core source validation is missing ${fact}`,
+      `.github/workflows/publish.yml: publish-http source validation is missing ${fact}`,
     ]);
   });
 
@@ -423,7 +461,7 @@ describe("release source facts", () => {
       "    # needs: verify",
     );
     expect(checkRelease(dependency)).toContain(
-      ".github/workflows/publish.yml: publish job is missing needs: verify",
+      ".github/workflows/publish.yml: publish-core job is missing needs: verify",
     );
   });
 

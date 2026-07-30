@@ -8,9 +8,9 @@ import {
 } from "@mit-sdg/sync-engine/boundary";
 import type { ContractShape } from "@mit-sdg/sync-engine/client";
 import type { HttpFloor } from "./floor.ts";
-import { credentialProtectedPaths, validateHttpFloor } from "./floor.ts";
+import { credentialProtectedPaths, httpFloor, validateHttpFloor } from "./floor.ts";
 import type { ProductionHttpProfile } from "./policy.ts";
-import { normalizeHttpBasePath, normalizeProductionHttpProfile } from "./policy.ts";
+import { normalizeHttpBasePath, productionHttpProfile } from "./policy.ts";
 import {
   publicErrorStatus,
   publicFrameworkCategoryOf,
@@ -158,15 +158,16 @@ export function createHttpHandler(
   options: FloorHandlerOptions | ProfileHandlerOptions,
 ): (request: Request) => Promise<Response> {
   const binding = bindTransport({ application: options.application, gateway: options.gateway });
-  const floor = "floor" in options ? options.floor : undefined;
+  let floor: HttpFloor | undefined;
+  let profile: ProductionHttpProfile;
+  if ("floor" in options) {
+    floor = httpFloor(options.floor);
+    profile = floor;
+  } else {
+    profile = productionHttpProfile(options.profile);
+  }
   if (floor !== undefined) validateHttpFloor(binding, floor);
   const correlation = normalizeCorrelationOptions(options.correlation);
-  const declaration = "floor" in options ? options.floor : options.profile;
-  const profile = normalizeProductionHttpProfile(
-    declaration,
-    floor === undefined ? "productionHttpProfile" : "httpFloor",
-    floor === undefined ? "" : " for secure cookies",
-  );
   const base = normalizeHttpBasePath(profile.basePath);
   const credential = floor?.credential;
   const secure = new URL(profile.origin).protocol === "https:";

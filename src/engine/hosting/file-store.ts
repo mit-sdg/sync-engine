@@ -1,19 +1,14 @@
 /**
- * Node-specific JSONL auditing composed with the runtime occurrence index.
+ * Node-specific JSONL occurrence auditing.
  *
- * {@link FileStore} delegates matching, consumption, and retention to a fresh
- * in-memory index and independently appends every entry to JSONL. The engine
- * does not load or replay that file on restart.
+ * {@link FileLogSink} appends every accepted entry to JSONL. The engine owns
+ * matching, consumption, and retention and does not load or replay this file.
  */
 
 import { appendFileSync } from "node:fs";
 
 import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
-import {
-  MemoryStore,
-  type LogEntry,
-  type RetentionPolicy,
-} from "@engine/reactions/runtime/log-store";
+import type { LogEntry, LogSink } from "@engine/reactions/runtime/log-store";
 import { createRedactor } from "@engine/utils/redaction";
 
 const fileRedactor = createRedactor();
@@ -80,47 +75,15 @@ function auditEntryOf(entry: LogEntry): AuditEntry {
   }
 }
 
-/** Node-specific append-only audit sink. Existing files are never read. */
-class JsonlAuditSink {
-  constructor(readonly path: string) {}
+/**
+ * A synchronous append-only JSONL occurrence sink. Existing files are never
+ * read or replayed, and retention changes never rewrite them.
+ */
+export class FileLogSink implements LogSink {
+  constructor(public readonly path: string) {}
 
   append(entry: LogEntry): void {
     const line = `${JSON.stringify(auditEntryOf(entry))}\n`;
     appendFileSync(this.path, line);
-  }
-}
-
-/**
- * A {@link MemoryStore} with an append-only JSONL audit sink. The inherited
- * store owns matching, consumption, and retention; the sink records every
- * accepted entry before the in-memory fold.
- * Pruning changes only the index; constructing a new store never
- * replays the file.
- */
-export class FileStore extends MemoryStore {
-  private readonly audit: JsonlAuditSink;
-
-  constructor(
-    public readonly path: string,
-    policy: RetentionPolicy = "keepAll",
-  ) {
-    super(policy);
-    this.audit = new JsonlAuditSink(path);
-  }
-
-  override append(entry: LogEntry): void {
-    this.assertAppendable(entry);
-    this.audit.append(entry);
-    super.append(entry);
-  }
-
-  /** Reject entries the in-memory fold would reject before they reach disk. */
-  private assertAppendable(entry: LogEntry): void {
-    if (entry.kind === "invocation" && entry.record.id === undefined) {
-      throw new Error("Invocation entry requires a record id.");
-    }
-    if ((entry.kind === "outcome" || entry.kind === "fault") && !this.actions.has(entry.id)) {
-      throw new Error(`Action with id ${entry.id} not found.`);
-    }
   }
 }

@@ -3,7 +3,7 @@
 === dist/advanced/index.d.ts ===
 /** Manual engine construction and explicit escape hatches. */
 export { createEngine } from "../engine/reactions/engine.ts";
-export type { Engine } from "../engine/reactions/engine.ts";
+export type { Engine, EngineOptions } from "../engine/reactions/engine.ts";
 export { faulted } from "../engine/reactions/authoring/channels.ts";
 export { custom } from "../engine/reads/where-ops.ts";
 export { Refuse } from "../engine/reactions/concepts/refuse.ts";
@@ -15,13 +15,13 @@ export { assemble } from "../engine/boundary/assembly/assembly-facade.ts";
 export type { Assembly, AssemblyOptions } from "../engine/boundary/assembly/assembly-facade.ts";
 export { conceptFloor, conceptSet, registerConcept } from "../engine/boundary/assembly/concept-set.ts";
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
-export { FileStore } from "../engine/hosting/file-store.ts";
-export { MemoryStore } from "../engine/reactions/runtime/log-store.ts";
+export { FileLogSink } from "../engine/hosting/file-store.ts";
 export { Logging } from "../engine/reactions/runtime/logging.ts";
 export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts";
-export type { OperationalEvent, OperationalObserver, OperationalResultClass, } from "../engine/reactions/runtime/operational.ts";
+export type { OperationalEvent, OperationalObserver, OperationalResultClass, RawFaultReport, RawFaultReporter, } from "../engine/reactions/runtime/operational.ts";
 export type { ActionRefusal } from "../engine/reactions/runtime/instrumenting.ts";
-export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogStore, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
+export type { QueryCacheMode } from "../engine/reactions/runtime/instrumenting.ts";
+export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogSink, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
 
 === dist/boundary/index.d.ts ===
 /** Declare the public requests a composition can receive and answer. */
@@ -46,7 +46,7 @@ export type { ApplicationInterface } from "../engine/boundary/protocol/types.ts"
 /** Consume a generated wire contract, locally or through a transport. */
 export { createClient } from "../engine/boundary/client/client.ts";
 export { createLocalClient } from "../engine/boundary/client/local-client.ts";
-export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client/client.ts";
+export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientResponseValidator, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client/client.ts";
 
 === dist/command/artifacts.d.ts ===
 export declare function artifactsCommand(args: readonly string[]): Promise<void>;
@@ -109,10 +109,10 @@ declare module "*.md" {
  * refuses the second with `NOT_PENDING`, and logs both reaction names.
  */
 import type { ConceptClass, ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
-import type { InstrumentedConcept } from "../../reactions/runtime/instrumenting.ts";
-import { type LogStore, type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
+import type { InstrumentedConcept, QueryCacheMode } from "../../reactions/runtime/instrumenting.ts";
+import { type LogSink, type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import { Logging } from "../../reactions/runtime/logging.ts";
-import type { OperationalObserver } from "../../reactions/runtime/operational.ts";
+import type { OperationalObserver, RawFaultReporter } from "../../reactions/runtime/operational.ts";
 import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
 import type { ComputationFn } from "../../reads/computations.ts";
@@ -189,12 +189,16 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     logging?: Logging;
     /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
     retention?: RetentionPolicy;
-    /** Application-owned occurrence store. It cannot be combined with `retention`. */
-    logStore?: LogStore;
+    /** Query evaluation policy; defaults to flow-local memoization. */
+    queryCache?: QueryCacheMode;
+    /** Synchronous application-owned destination for already-redacted occurrence entries. */
+    logSink?: LogSink;
     /** Opt-in production execution limits. */
     executionLimits?: ExecutionLimits;
     /** Bounded synchronous handoff for stable operational events. */
     observers?: readonly OperationalObserver[];
+    /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
+    rawFaultReporter?: RawFaultReporter;
     /** Additional sensitive field names for this assembly only. */
     redaction?: RedactionPolicy;
 }
@@ -259,7 +263,7 @@ import type { ErrorConstructor, RefusalContracts } from "../../reactions/concept
 import { type ConceptSpec } from "../../reactions/concepts/concept-spec.ts";
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { QueryPromises } from "../../reads/query-metadata.ts";
-type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result ? (...args: Args) => Result | Promise<Awaited<Result>> : Member;
+type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result ? (...args: Args) => Result | PromiseLike<Awaited<Result>> : Member;
 export type ConceptImplementation<C extends ConceptClass> = object & {
     [Name in keyof InstanceType<C> as InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never]: ImplementationMember<InstanceType<C>[Name]>;
 };
@@ -385,19 +389,36 @@ export type ClientError = {
 export interface ClientCallOptions {
     /** Cancels transport and waiting; accepted server work is not rolled back. */
     signal?: AbortSignal;
+    /** Transport-local caller timeout. It does not cancel accepted server work. */
+    timeoutMs?: number;
+    /** Trace token carried when the selected transport supports correlation. */
+    correlationId?: string;
 }
 /** A transport-agnostic request descriptor passed to {@link ClientTransport}. */
 export interface ClientRequest {
     path: string;
     input: unknown;
     signal?: AbortSignal;
+    timeoutMs?: number;
+    correlationId?: string;
 }
 /** A transport function that executes a {@link ClientRequest} and resolves to its result. */
-export type ClientTransport<TError = ClientError> = (request: ClientRequest) => Promise<unknown | TError>;
+export type ClientTransport<TError = ClientError> = (request: ClientRequest) => PromiseLike<unknown | TError>;
+/** Inspect one complete untrusted transport result without transforming it. */
+export type ClientResponseValidator = (value: unknown, context: Readonly<{
+    path: string;
+}>) => {
+    ok: true;
+} | {
+    ok: false;
+    detail?: string;
+};
 /** Options for {@link createClient}. */
 export interface ClientOptions<TError = ClientError> {
     /** Transport function that executes endpoint calls. */
     transport: ClientTransport<TError>;
+    /** Optional synchronous runtime check for each complete transport result. */
+    validateResponse?: ClientResponseValidator;
 }
 type ContractError<C extends ContractShape, P extends keyof C> = C[P] extends {
     error: infer E;
@@ -461,10 +482,11 @@ export declare function createClient<C extends ContractShape, TError = ClientErr
 === dist/engine/boundary/client/local-client.d.ts ===
 import type { ContractShape } from "../protocol/types.ts";
 import type { Invoker } from "../invocation/invoke.ts";
-import type { Client } from "./client.ts";
+import type { Client, ClientResponseValidator } from "./client.ts";
 /** Consume an assembled boundary in process through the ordinary client contract. */
 export declare function createLocalClient<C extends ContractShape>(options: {
     invoker: Invoker<C>;
+    validateResponse?: ClientResponseValidator;
 }): Client<C>;
 
 === dist/engine/boundary/gateway/gateway.d.ts ===
@@ -566,8 +588,10 @@ export declare class Requesting {
     /** Framework-only response channel; application authoring exposes only `respond`. */
     protected respondFramework(args: Record<string, unknown>): Record<string, unknown>;
     register(requestId: string, timeoutMs: number, signal?: AbortSignal, output?: {
-        validator?: EndpointValidator;
-        onInvalid?: (errorClass: "ValidationFailure" | "ValidatorFault") => void;
+        success?: EndpointValidator;
+        domainError?: EndpointValidator;
+        onInvalid?: (phase: "output" | "domain-error", errorClass: "ValidationFailure" | "ValidatorFault") => void;
+        onFault?: (phase: "output" | "domain-error", error: unknown) => void;
     }): Promise<Record<string, unknown>>;
     cancel(requestId: string): void;
 }
@@ -591,11 +615,19 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
     validators?: Readonly<Record<string, EndpointValidators>>;
     /** When supplied, reject paths outside the assembled public route set. */
     routes?: ReadonlySet<string>;
-    /** Record an invalid successful result without exposing validator detail. */
-    onInvalidOutput?: (event: {
+    /** Record an invalid authored result without exposing validator detail. */
+    onInvalidResponse?: (event: {
         path: string;
         requestId: string;
+        phase: "output" | "domain-error";
         errorClass: "ValidationFailure" | "ValidatorFault";
+    }) => void;
+    /** Report a raw validator throw through a privileged host-owned channel. */
+    onValidatorFault?: (event: {
+        path: string;
+        requestId?: string;
+        phase: "input" | "output" | "domain-error";
+        error: unknown;
     }) => void;
     /** Root admission, pending waits, drain state, and actual-flow quiescence. */
     lifecycle?: RuntimeLifecycle;
@@ -803,13 +835,18 @@ export type EndpointValidator = (value: unknown) => ValidationResult;
 export interface EndpointValidators {
     readonly input?: EndpointValidator;
     readonly output?: EndpointValidator;
+    readonly domainError?: EndpointValidator;
 }
 export type RuntimeValidation = {
     ok: true;
 } | {
     ok: false;
     detail?: string;
-    errorClass: "ValidationFailure" | "ValidatorFault";
+    errorClass: "ValidationFailure";
+} | {
+    ok: false;
+    errorClass: "ValidatorFault";
+    fault: unknown;
 };
 export declare function validateRuntimeValue(validator: EndpointValidator, value: unknown): RuntimeValidation;
 export declare function assertEndpointValidators(value: EndpointValidators, path: string): void;
@@ -987,27 +1024,20 @@ export declare function nullableWireLeaves(type: WireType): WireType;
 
 === dist/engine/hosting/file-store.d.ts ===
 /**
- * Node-specific JSONL auditing composed with the runtime occurrence index.
+ * Node-specific JSONL occurrence auditing.
  *
- * {@link FileStore} delegates matching, consumption, and retention to a fresh
- * in-memory index and independently appends every entry to JSONL. The engine
- * does not load or replay that file on restart.
+ * {@link FileLogSink} appends every accepted entry to JSONL. The engine owns
+ * matching, consumption, and retention and does not load or replay this file.
  */
-import { MemoryStore, type LogEntry, type RetentionPolicy } from "../reactions/runtime/log-store.ts";
+import type { LogEntry, LogSink } from "../reactions/runtime/log-store.ts";
 /**
- * A {@link MemoryStore} with an append-only JSONL audit sink. The inherited
- * store owns matching, consumption, and retention; the sink records every
- * accepted entry before the in-memory fold.
- * Pruning changes only the index; constructing a new store never
- * replays the file.
+ * A synchronous append-only JSONL occurrence sink. Existing files are never
+ * read or replayed, and retention changes never rewrite them.
  */
-export declare class FileStore extends MemoryStore {
+export declare class FileLogSink implements LogSink {
     readonly path: string;
-    private readonly audit;
-    constructor(path: string, policy?: RetentionPolicy);
+    constructor(path: string);
     append(entry: LogEntry): void;
-    /** Reject entries the in-memory fold would reject before they reach disk. */
-    private assertAppendable;
 }
 
 === dist/engine/reactions/authoring/channels.d.ts ===
@@ -1130,6 +1160,7 @@ import type { QueryReadLine, SlotPattern } from "../../reads/lines.ts";
 import type { ComputationFn, ComputationRef } from "../../reads/computations.ts";
 import { type ConceptMetadata } from "../concepts/concept-metadata.ts";
 import type { ActionCall, InstrumentedAction, Reaction, TriggerActionLine } from "../types.ts";
+import type { QueryPromise } from "../../reads/query-metadata.ts";
 export { isActionRef, isQueryRef } from "./references.ts";
 export type { ActionRef, QueryRef } from "./references.ts";
 declare const VocabularyClasses: unique symbol;
@@ -1186,12 +1217,19 @@ export type ConceptEntry = ConceptClass | ConceptDeclaration<ConceptClass>;
 type QueryKeys<I> = Extract<keyof I, `_${string}`>;
 type QueryRowIsValid<T> = T extends (...args: never[]) => unknown ? false : T extends readonly unknown[] ? false : T extends object ? true : false;
 type QueryAnswerIsValid<T> = Awaited<T> extends readonly (infer Row)[] ? QueryRowIsValid<Row> : QueryRowIsValid<Awaited<T>>;
-type InvalidQueryKeys<I> = {
-    [K in QueryKeys<I>]: I[K] extends (...args: never[]) => infer Answer ? QueryAnswerIsValid<Answer> extends true ? never : K : K;
+type QueryAnswerMatchesPromise<Answer, Promise> = [Promise] extends [never] ? QueryAnswerIsValid<Answer> : QueryPromise extends Promise ? QueryAnswerIsValid<Answer> : [Promise] extends ["one"] ? Awaited<Answer> extends readonly unknown[] ? false : QueryRowIsValid<Awaited<Answer>> : [Promise] extends ["optional" | "many"] ? Awaited<Answer> extends readonly (infer Row)[] ? QueryRowIsValid<Row> : false : QueryAnswerIsValid<Answer>;
+type DeclaredQueryPromise<Entry, Key extends PropertyKey> = Entry extends {
+    readonly queries: infer Queries;
+} ? Key extends keyof Queries ? Queries[Key] : never : Entry extends {
+    readonly class: infer Class;
+} ? Class extends {
+    readonly queries: infer Queries;
+} ? Key extends keyof Queries ? Queries[Key] : never : never : never;
+type InvalidQueryKeys<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
+    [K in QueryKeys<I>]: I[K] extends (...args: never[]) => infer Answer ? QueryAnswerMatchesPromise<Answer, DeclaredQueryPromise<Entry, K>> extends true ? never : K : K;
 }[QueryKeys<I>];
-type ValidConceptClass<C extends ConceptClass> = InvalidQueryKeys<InstanceType<C>> extends never ? C : never;
-type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass ? ValidConceptClass<E> : E extends ConceptDeclaration<infer C> ? E & {
-    readonly class: ValidConceptClass<C>;
+type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass ? InvalidQueryKeys<E> extends never ? E : never : E extends ConceptDeclaration<infer C> ? E & {
+    readonly class: InvalidQueryKeys<E> extends never ? C : never;
 } : never;
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
     [K in keyof T]: CheckedConceptEntry<T[K]>;
@@ -1220,7 +1258,7 @@ export interface VocabularyDeclaration<TConcepts extends Record<string, ConceptE
  * canonical class. Returns the refs used to author reactions. Assembly also
  * uses the declaration to construct default concept instances.
  */
-export declare function vocabulary<TConcepts extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(declaration: VocabularyDeclaration<TConcepts, TComputations> & {
+export declare function vocabulary<const TConcepts extends Record<string, ConceptEntry>, const TComputations extends Record<string, ComputationFn>>(declaration: VocabularyDeclaration<TConcepts, TComputations> & {
     concepts: CheckedConceptEntries<TConcepts>;
 }): DeclaredVocabulary<TConcepts, TComputations>;
 /** The class map a vocabulary was declared with (how `assemble` constructs). */
@@ -1518,7 +1556,7 @@ export declare const landing: unique symbol;
  * reactions or `ReactionIR`, export or render the application, observe the log,
  * and evaluate formers. Everything else about the interpreter is internal.
  */
-import type { LogStore } from "./runtime/log-store.ts";
+import { type LogSink, type RetentionPolicy } from "./runtime/log-store.ts";
 import type { Logging } from "./runtime/logging.ts";
 import type { EngineObserver } from "./runtime/logging.ts";
 import type { ReactionMap } from "./types.ts";
@@ -1562,8 +1600,12 @@ export interface Engine {
     /** Evaluate a fused former against this engine's concepts, at the moment of asking. */
     form(fused: FusedFormer): Promise<unknown>;
 }
-/** Construct an engine with an optional log store. */
-export declare function createEngine(store?: LogStore): Engine;
+export interface EngineOptions {
+    retention?: RetentionPolicy;
+    logSink?: LogSink;
+}
+/** Construct an engine with an engine-owned occurrence index. */
+export declare function createEngine(options?: EngineOptions): Engine;
 
 === dist/engine/reactions/resolving.d.ts ===
 import type { ComputationRef } from "../reads/computations.ts";
@@ -1613,8 +1655,8 @@ export declare class ActionScheduler implements ActionScheduling {
 /**
  * The **action log** — itself a tiny concept.
  *
- * Every instrumented action invocation appends an entry to a {@link LogStore}.
- * Its outcome arrives as a second entry. The store folds both entries into an
+ * Every instrumented action invocation appends an occurrence entry.
+ * Its outcome arrives as a second entry. The index folds both entries into an
  * indexed action record without modifying the invocation entry. Reactions match
  * recorded occurrences rather than live callbacks. The runtime does not load
  * or replay occurrence files.
@@ -1629,8 +1671,8 @@ export declare class ActionScheduler implements ActionScheduling {
  */
 import type { ActionOutcome } from "../types.ts";
 import type { Redactor } from "../../utils/redaction.ts";
-import { type ActionRecord, type IntegrityFailureRecord, type LogStore, type ReactionFailureRecord } from "./log-store.ts";
-import type { OperationalEvents } from "./operational.ts";
+import { MemoryStore, type ActionRecord, type IntegrityFailureRecord, type ReactionFailureRecord } from "./log-store.ts";
+import { type OperationalEvents, type RawFaultReport, type RawFaultReporter } from "./operational.ts";
 export type { ActionRecord } from "./log-store.ts";
 export interface FlowQuiescence {
     flow: string;
@@ -1649,13 +1691,15 @@ export declare function normalizeOutcome(output: unknown): ActionOutcome;
  * retained action records by id or flow.
  */
 export declare class ActionConcept {
-    readonly store: LogStore;
+    readonly store: MemoryStore;
     readonly operational?: OperationalEvents | undefined;
     readonly redactor: Redactor;
+    private readonly rawFaultReporter?;
     private readonly matchingValues;
     private readonly activeFlowValues;
     private readonly flowQuiescenceListeners;
-    constructor(store?: LogStore, operational?: OperationalEvents | undefined, redactor?: Redactor);
+    constructor(store?: MemoryStore, operational?: OperationalEvents | undefined, redactor?: Redactor, rawFaultReporter?: RawFaultReporter | undefined);
+    _reportRawFault(report: RawFaultReport): void;
     /** Folded view: all retained records, keyed by their unique id. */
     get actions(): Map<string, ActionRecord>;
     /** Folded view: retained records grouped by flow token, in invocation order. */
@@ -1707,9 +1751,10 @@ export declare class ActionConcept {
     /**
      * Append a fault classification for an ask without recording an outcome.
      */
-    faulted({ id, fault }: {
+    faulted({ id, fault, error }: {
         id: string;
         fault: Record<string, unknown>;
+        error?: unknown;
     }): {
         id: string;
     };
@@ -1779,7 +1824,7 @@ export declare class FiringPipeline {
 export {};
 
 === dist/engine/reactions/runtime/firing.d.ts ===
-import type { FiringRecord, LogStore } from "./log-store.ts";
+import type { FiringRecord, MemoryStore } from "./log-store.ts";
 import type { Redactor } from "../../utils/redaction.ts";
 export interface FiringFill {
     reaction: string;
@@ -1799,7 +1844,7 @@ export declare class FiringBook {
     private readonly admit?;
     private readonly redactor;
     private readonly inFlightConsumed;
-    constructor(store: LogStore, admit?: ((flow: string) => void) | undefined, redactor?: Redactor);
+    constructor(store: MemoryStore, admit?: ((flow: string) => void) | undefined, redactor?: Redactor);
     hasConsumed(recordId: string | undefined, reaction: string): boolean;
     newBranch(fill: FiringFill): FiringBranch;
     mark(branch: FiringBranch): void;
@@ -1814,6 +1859,7 @@ import type { ActionRecord } from "./actions.ts";
 import type { AnyAction, InstrumentedAction } from "../types.ts";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import type { ExecutionControl } from "./operational.ts";
+export type QueryCacheMode = "memoize" | "none";
 /** A deliberate refusal returned to the direct caller of an instrumented action. */
 export type ActionRefusal = Readonly<Record<string, unknown>> & {
     readonly error: string;
@@ -1840,6 +1886,8 @@ export interface InstrumentationState {
     scheduler: ActionScheduling;
     rawConceptsByInstrumented: WeakMap<object, object>;
     concepts: Set<WeakRef<object>>;
+    requireDeclaredRefusals?: boolean;
+    queryCache?: QueryCacheMode;
     registerConcept(name: string, instrumented: object): void;
     execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
     react(record: ActionRecord, durationMs?: number): Promise<void>;
@@ -1886,16 +1934,16 @@ export declare class ConceptInstrumentation {
  * reaction. Matching reads that index.
  */
 import type { ActionOutcome, InstrumentedAction } from "../types.ts";
-/** How long a store's in-memory fold retains occurrence records. */
+/** How long an assembly's in-memory occurrence index retains records. */
 export type RetentionPolicy = "keepAll" | "evictConsumed" | {
     window: number;
 };
 export declare function assertRetentionPolicy(policy: RetentionPolicy, site: string): void;
 /**
- * One entry in the action log, as served by a store's folded view.
+ * One entry in the action log, as served by the engine-owned folded view.
  *
- * Consumption is derived from firing entries through
- * {@link LogStore.hasConsumed}; it is not stored on the action record.
+ * Consumption is derived from firing entries in the occurrence index; it is
+ * not stored on the action record.
  */
 export interface ActionRecord {
     id?: string;
@@ -1953,6 +2001,10 @@ export type IntegrityFailureRecord = {
     route: string;
     errorClass: "ValidationFailure" | "ValidatorFault";
 } | {
+    kind: "invalid-domain-error";
+    route: string;
+    errorClass: "ValidationFailure" | "ValidatorFault";
+} | {
     kind: "execution-limit";
     limit: "actions" | "firings" | "rows";
     errorClass: "ExecutionLimitExceeded";
@@ -1991,34 +2043,15 @@ export type LogEntry = {
     id: string;
     fault: Record<string, unknown>;
 };
-/** The runtime occurrence index used for matching, consumption, and retention. */
-export interface LogStore {
-    /** Fold one immutable occurrence entry into the indexed views. */
+/** A synchronous host-owned destination for already-redacted occurrence entries. */
+export interface LogSink {
+    /** Accept one immutable entry before it becomes visible to the engine index. */
     append(entry: LogEntry): void;
-    /** Look up a single action record by id. */
-    byId(id: string): ActionRecord | undefined;
-    /** All action records belonging to a flow, in order (or `undefined` if unknown). */
-    byFlow(flow: string): ActionRecord[] | undefined;
-    /** All recorded firings of a reaction, in order. */
-    firingsByReaction(reaction: string): FiringRecord[];
-    /** Whether a recorded firing of `reaction` has already consumed this record. */
-    hasConsumed(recordId: string, reaction: string): boolean;
-    /** Names of the reactions whose recorded firings consumed this record. */
-    consumedBy(recordId: string): string[];
-    /** Apply the store's retention policy and return the number of removed action records. */
-    prune(): number;
-    /** Observe that the outermost action in a causal flow has settled. */
-    flowSettled?(flow: string): void;
-    /** Drop all records belonging to a flow from the folded views. */
-    evictFlow(flow: string): void;
-    /** Folded view: every retained action record, keyed by id. */
-    readonly actions: Map<string, ActionRecord>;
-    /** Folded view: retained action records grouped by flow token, in invocation order. */
-    readonly flowIndex: Map<string, ActionRecord[]>;
 }
 /** The core in-memory occurrence index. */
-export declare class MemoryStore implements LogStore {
+export declare class MemoryStore {
     readonly policy: RetentionPolicy;
+    private readonly sink?;
     readonly actions: Map<string, ActionRecord>;
     readonly flowIndex: Map<string, ActionRecord[]>;
     /** Recorded firings, grouped by reaction name, in firing order. */
@@ -2031,8 +2064,10 @@ export declare class MemoryStore implements LogStore {
     private consumedIndex;
     private settledFlowOrder;
     private activeFlows;
-    constructor(policy?: RetentionPolicy);
+    constructor(policy?: RetentionPolicy, sink?: LogSink | undefined);
     append(entry: LogEntry): void;
+    private assertAppendable;
+    private fold;
     byId(id: string): ActionRecord | undefined;
     byFlow(flow: string): ActionRecord[] | undefined;
     firingsByReaction(reaction: string): FiringRecord[];
@@ -2198,6 +2233,33 @@ export type OperationalEvent = (EventBase & {
     type: "drain-state";
     state: "draining" | "idle";
 });
+interface RawFaultBase {
+    readonly error: unknown;
+    readonly at: number;
+    readonly flow?: string;
+    readonly route?: string;
+    readonly correlationId?: string;
+}
+/** A privileged, unsanitized host report that is never persisted or made public. */
+export type RawFaultReport = (RawFaultBase & {
+    readonly kind: "action";
+    readonly concept: string;
+    readonly action: string;
+    readonly actionId: string;
+    readonly reaction?: string;
+}) | (RawFaultBase & {
+    readonly kind: "interpreter";
+    readonly reaction: string;
+    readonly stage: ReactionFailureRecord["stage"];
+    readonly action?: string;
+    readonly actionId?: string;
+}) | (RawFaultBase & {
+    readonly kind: "endpoint-validator";
+    readonly phase: "input" | "output" | "domain-error";
+});
+export type RawFaultReporter = (report: RawFaultReport) => void;
+/** Deliver a privileged report without allowing the reporter to affect runtime behavior. */
+export declare function reportRawFault(reporter: RawFaultReporter | undefined, report: RawFaultReport): void;
 export type OperationalObserver = (event: OperationalEvent) => void;
 export interface FlowOperationalContext {
     route: string;
@@ -2247,6 +2309,7 @@ import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
 import type { RelationView } from "../../reads/lines.ts";
 import type { ActionPattern, Frame, ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
+import { type QueryCacheMode } from "./instrumenting.ts";
 import { Logging } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./logging.ts";
@@ -2263,7 +2326,7 @@ export declare class Reacting {
     private readonly triggerMatcher;
     private readonly firingPipeline;
     private readonly execution?;
-    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl);
+    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     get logging(): Logging;
@@ -2390,7 +2453,7 @@ export type ActionOutcome = {
     error: Mapping;
 };
 /** A pure transform over frames — the `where` clause. */
-export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
+export type WhereFn = (frames: Frames) => Frames | PromiseLike<Frames>;
 declare const MatcherBrand: unique symbol;
 declare const NamedLineBrand: unique symbol;
 declare const CompleteInputBrand: unique symbol;
@@ -4349,6 +4412,7 @@ export interface ManifestEndpointV3 {
     validators: {
         input: boolean;
         output: boolean;
+        domainError?: true;
     };
 }
 export interface ApplicationManifestV3 {
@@ -4538,7 +4602,12 @@ export interface GeneratorIdentity {
     version: string;
 }
 export declare const GENERATOR_IDENTITY: GeneratorIdentity;
+export declare function isStableSemVer(value: unknown): value is string;
 export declare function assertCurrentGenerator(identity: unknown, owner: string): asserts identity is GeneratorIdentity;
+
+=== dist/engine/utils/promise-like.d.ts ===
+/** Normalize a structural thenable without adding a microtask for synchronous values. */
+export declare function normalizePromiseLike<T>(value: T): Promise<Awaited<T>> | undefined;
 
 === dist/engine/utils/redaction.d.ts ===
 /**

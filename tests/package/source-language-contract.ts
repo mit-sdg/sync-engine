@@ -48,6 +48,26 @@ class InvalidNestedRows {
   }
 }
 
+class ArrayPromisedAsOne {
+  _answer(_: Record<string, never>): { value: number }[] {
+    return [{ value: 1 }];
+  }
+}
+
+class RecordPromisedAsOptional {
+  _answer(_: Record<string, never>): { value: number } {
+    return { value: 1 };
+  }
+}
+
+class AsyncRecordPromisedAsMany {
+  static readonly queries = { _answer: "many" } as const;
+
+  async _answer(_: Record<string, never>): Promise<{ value: number }> {
+    return { value: 1 };
+  }
+}
+
 const words = vocabulary({
   concepts: {
     OneAnswer: { class: OneAnswer, queries: { _answer: "one" } },
@@ -162,3 +182,16 @@ vocabulary({ concepts: { InvalidCallableAnswer }, computations: {} });
 
 // @ts-expect-error Each member of a many answer must be a record, not another array.
 vocabulary({ concepts: { InvalidNestedRows }, computations: {} });
+
+// @ts-expect-error A one query returns one record, not an array.
+vocabulary({ concepts: { Invalid: { class: ArrayPromisedAsOne, queries: { _answer: "one" } } } });
+
+vocabulary({
+  concepts: {
+    // @ts-expect-error An optional query returns an array containing zero or one record.
+    Invalid: { class: RecordPromisedAsOptional, queries: { _answer: "optional" } },
+  },
+});
+
+// @ts-expect-error A many query returns an array, including when the method is asynchronous.
+vocabulary({ concepts: { Invalid: AsyncRecordPromisedAsMany } });

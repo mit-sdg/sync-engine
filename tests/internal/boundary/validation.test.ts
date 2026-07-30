@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { MemoryStore } from "@sync-engine/assembly";
+import type { LogEntry, LogSink, RawFaultReport } from "@sync-engine/assembly";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { createLocalClient } from "@sync-engine/client";
 import { vocabulary } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
@@ -51,11 +52,21 @@ function setup() {
     },
   );
   const DomainFailure = endpoint("/domain-failure", () => receive({}).then(fail("EXPECTED")), {
-    validators: { output: () => ({ ok: false }) },
+    validators: {
+      output: () => ({ ok: false }),
+      domainError: (value) => (value === "EXPECTED" ? { ok: true } : { ok: false }),
+    },
   });
+  const InvalidDomainFailure = endpoint(
+    "/invalid-domain-failure",
+    () => receive({}).then(fail("WRONG")),
+    {
+      validators: { domainError: (value) => (value === "EXPECTED" ? { ok: true } : { ok: false }) },
+    },
+  );
   const app = assemble({
     vocabulary: vocabulary({ concepts: {}, computations: {} }),
-    composition: { Checked, DomainFailure, InvalidOutput },
+    composition: { Checked, DomainFailure, InvalidDomainFailure, InvalidOutput },
   });
   return { app, gateway: createGateway({ application: app }) };
 }
@@ -124,7 +135,7 @@ describe("endpoint runtime validators", () => {
     );
   });
 
-  test("domain failures bypass successful-output validation", async () => {
+  test("domain failures use their own validator", async () => {
     const { app } = setup();
 
     expect(await app.invoker.invoke("/domain-failure", {})).toEqual({
@@ -132,19 +143,34 @@ describe("endpoint runtime validators", () => {
       error: { kind: "domain", value: "EXPECTED" },
     });
     expect((app.engine.Action.store as MemoryStore).integrityFailures).toEqual([]);
+
+    expect(await app.invoker.invoke("/invalid-domain-failure", {})).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
+    });
+    expect((app.engine.Action.store as MemoryStore).integrityFailures).toEqual([
+      expect.objectContaining({
+        kind: "invalid-domain-error",
+        route: "/invalid-domain-failure",
+        errorClass: "ValidationFailure",
+      }),
+    ]);
   });
 
   test("validator faults fail closed without exposing exception text", async () => {
+    const reports: RawFaultReport[] = [];
+    const validatorFault = new Error("validator secret");
     const Faulting = endpoint("/faulting", () => receive({}).then(respond({ value: "secret" })), {
       validators: {
         output: () => {
-          throw new Error("validator secret");
+          throw validatorFault;
         },
       },
     });
     const app = assemble({
       vocabulary: vocabulary({ concepts: {}, computations: {} }),
       composition: { Faulting },
+      rawFaultReporter: (report) => reports.push(report),
     });
 
     const result = await app.invoker.invoke("/faulting", {});
@@ -156,13 +182,44 @@ describe("endpoint runtime validators", () => {
     expect((app.engine.Action.store as MemoryStore).integrityFailures[0]?.errorClass).toBe(
       "ValidatorFault",
     );
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({
+      kind: "endpoint-validator",
+      error: validatorFault,
+      route: "/faulting",
+      phase: "output",
+      flow: expect.any(String),
+      correlationId: expect.any(String),
+    });
+  });
+
+  test("rejects an accidentally asynchronous validator without leaking a rejection", async () => {
+    const Async = endpoint("/async-validator", () => receive({}).then(respond({ ok: true })), {
+      validators: {
+        output: (() => {
+          const failure = Promise.reject(new Error("async validator secret"));
+          return { then: failure.then.bind(failure) };
+        }) as never,
+      },
+    });
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: {}, computations: {} }),
+      composition: { Async },
+    });
+
+    await expect(app.invoker.invoke("/async-validator", {})).resolves.toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
+    });
+    expect((app.engine.Action.store as MemoryStore).integrityFailures[0]?.errorClass).toBe(
+      "ValidationFailure",
+    );
   });
 
   test("a store failure while recording invalid output cannot strand the caller", async () => {
-    class ThrowingIntegrityStore extends MemoryStore {
-      override append(entry: Parameters<MemoryStore["append"]>[0]): void {
+    class ThrowingIntegritySink implements LogSink {
+      append(entry: LogEntry): void {
         if (entry.kind === "integrity-failure") throw new Error("store unavailable");
-        super.append(entry);
       }
     }
     const Invalid = endpoint("/invalid", () => receive({}).then(respond({ count: "wrong" })), {
@@ -171,7 +228,8 @@ describe("endpoint runtime validators", () => {
     const app = assemble({
       vocabulary: vocabulary({ concepts: {}, computations: {} }),
       composition: { Invalid },
-      logStore: new ThrowingIntegrityStore("keepAll"),
+      logSink: new ThrowingIntegritySink(),
+      retention: "keepAll",
     });
 
     await expect(app.invoker.invoke("/invalid", {}, { timeoutMs: 10 })).resolves.toEqual({
@@ -199,5 +257,18 @@ describe("endpoint runtime validators", () => {
         composition: { A, B },
       }),
     ).toThrow("duplicate input validator for /duplicate");
+
+    const C = endpoint("/duplicate-domain", () => receive({}).then(fail("A")), {
+      validators: { domainError: () => ({ ok: true }) },
+    });
+    const D = endpoint("/duplicate-domain", () => receive({}).then(fail("B")), {
+      validators: { domainError: () => ({ ok: true }) },
+    });
+    expect(() =>
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: { C, D },
+      }),
+    ).toThrow("duplicate domainError validator for /duplicate-domain");
   });
 });

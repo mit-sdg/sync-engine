@@ -20,6 +20,16 @@ import { memoizeQuery } from "@engine/utils/memoize";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
+export type QueryCacheMode = "memoize" | "none";
+
+function uncachedQuery<T extends (...args: never[]) => unknown>(
+  query: T,
+): T & {
+  invalidate(): void;
+} {
+  return Object.assign(query, { invalidate() {} });
+}
+
 /** A deliberate refusal returned to the direct caller of an instrumented action. */
 export type ActionRefusal = Readonly<Record<string, unknown>> & {
   readonly error: string;
@@ -50,6 +60,8 @@ export interface InstrumentationState {
   scheduler: ActionScheduling;
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
+  requireDeclaredRefusals?: boolean;
+  queryCache?: QueryCacheMode;
   registerConcept(name: string, instrumented: object): void;
   execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
   react(record: ActionRecord, durationMs?: number): Promise<void>;
@@ -150,7 +162,8 @@ export function instrumentConcept<T extends object>(
       if (String(property).startsWith("_")) {
         const memoized = boundActions.get(actionKey);
         if (memoized !== undefined) return memoized;
-        const withCache = memoizeQuery(value.bind(concept));
+        const query = value.bind(concept);
+        const withCache = state.queryCache === "none" ? uncachedQuery(query) : memoizeQuery(query);
         const displayName = `${conceptNameOf(concept)}.${String(property)}`;
         const directQuery =
           state.execution?.admitFlow === undefined
@@ -284,12 +297,14 @@ export function instrumentConcept<T extends object>(
               };
             }
           } catch (error) {
-            if (isRefuse(error)) {
+            const declaredRefuse =
+              isRefuse(error) && contract?.refusals?.includes(error.message) === true;
+            if (isRefuse(error) && (!state.requireDeclaredRefusals || declaredRefuse)) {
               output = refusalMapping(error);
               outcome = { kind: "error", error: output };
               warnUndeclaredRefusal(displayName, contract, error.message);
             } else {
-              const refusal = refusalFor(concept, actionName, error);
+              const refusal = isRefuse(error) ? undefined : refusalFor(concept, actionName, error);
               if (refusal?.kind === "misplaced") {
                 logger.error(
                   `${displayName} signalled the refusal "${refusal.code}", which its specification ` +
@@ -305,7 +320,7 @@ export function instrumentConcept<T extends object>(
                 warnUndeclaredRefusal(displayName, contract, refusal.code);
               } else {
                 const durationMs = reservation.durationMs();
-                state.actions.faulted({ id, fault: errorOutputFromThrown(error) });
+                state.actions.faulted({ id, fault: errorOutputFromThrown(error), error });
                 report?.("fault-recorded");
                 await reactQuietly(
                   state,

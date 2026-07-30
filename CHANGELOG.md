@@ -1,9 +1,70 @@
 # Changelog
 
-This project follows semantic versioning. The v1 line is currently beta: public
-subpaths, behavior, and generated formats may change incompatibly between beta
-releases. Pin an exact version, follow the [support policy](SUPPORT.md), and
-review the [operational limits](docs/operations.md) before deployment.
+This project follows semantic versioning. Stable v1 public subpaths, behavior,
+and generated-format compatibility follow the [support policy](SUPPORT.md).
+Review the [operational limits](docs/operations.md) before deployment.
+
+## [1.0.0] - 2026-07-30
+
+The first stable release tightens assembly, validation, persistence, client,
+and transport contracts while keeping application policy and infrastructure
+choices outside the engine.
+
+### Compatibility
+
+- Public API compatibility now follows Semantic Versioning across all supported
+  subpaths, including `/advanced`. Only the newest stable 1.x release is
+  supported.
+- Ordinary `assemble(...)` applications reject undeclared advanced refusal
+  codes. Manual `createEngine(...)` assembly remains open for advanced hosts.
+- Occurrence retention is split from persistence: `MemoryStore` is no longer a
+  public hosting contract, while `LogSink` and `FileLogSink` provide append-only
+  application-owned persistence.
+- Query declarations now statically connect cardinality metadata to result
+  containers. Mutable HTTP and boundary policies are snapshotted when their
+  handlers or projectors are constructed.
+- Promise-compatible extension points accept structural thenables consistently.
+
+### Migration
+
+- Replace public `MemoryStore` or `FileStore` use with a `LogSink`, such as
+  `FileLogSink`, and pass it to `assemble(...)` as `logSink` rather than
+  `logStore`. Use assembly inspection rather than persistence for live runtime
+  occurrence reads.
+- Declare every advanced refusal code used by an ordinarily assembled
+  application. Hosts intentionally assembling engines manually may continue to
+  define refusal policy outside the engine.
+- Update query result types to agree with their declared cardinality and adjust
+  custom client transports to carry `timeoutMs` and `correlationId` when those
+  per-call options are used.
+- Install `@mit-sdg/sync-engine-http@1.0.0` with a compatible stable core 1.x
+  release; its core peer range is now `^1.0.0`.
+
+### Generated formats
+
+- Application manifest format remains version 3. Compatible stable 1.x
+  generators are accepted by format version, and projector provenance requires
+  valid stable Semantic Versioning.
+- Regenerate checked-in artifacts so generator and HTTP projector provenance
+  records `1.0.0`.
+
+### Runtime and security support
+
+- Endpoint success values and declared domain errors can be validated at the
+  invocation boundary. Invalid domain errors become integrity evidence rather
+  than trusted application responses.
+- Privileged `RawFaultReporter` hooks can receive action, interpreter, and
+  validator faults without exposing raw failures to ordinary clients; reporter
+  failures are isolated.
+- Clients can validate successful responses and carry per-call timeout and
+  correlation context. The HTTP client supports caller timeouts and opt-in
+  streaming response-size limits.
+- Query caching is explicit through `"memoize"` and `"none"` modes, allowing
+  applications to disable memoization without replacing engine policy.
+- Stable publication uses immutable annotated tags and verified tarballs,
+  publishes core under `latest`, and publishes HTTP only after core succeeds.
+
+[Release][1.0.0] | [Changes since 1.0.0-beta.3][1.0.0-compare]
 
 ## [1.0.0-beta.3] - 2026-07-30
 
@@ -300,6 +361,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0
+[1.0.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.3...v1.0.0
 [1.0.0-beta.3]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.3
 [1.0.0-beta.3-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.2...v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.2

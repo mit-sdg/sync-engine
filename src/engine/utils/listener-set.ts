@@ -37,10 +37,12 @@ export class ListenerSet<L> {
     for (const listener of [...this.listeners]) {
       try {
         const returned = invoke(listener, event) as unknown;
-        if (returned instanceof Promise) void returned.catch(onError);
+        const promise = normalizePromiseLike(returned);
+        if (promise !== undefined) void promise.catch(onError);
       } catch (error) {
         onError(error);
       }
     }
   }
 }
+import { normalizePromiseLike } from "./promise-like.ts";

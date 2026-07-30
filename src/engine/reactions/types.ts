@@ -72,7 +72,7 @@ export type TriggerPattern = ActionPattern | ChannelPattern;
 export type ActionOutcome = { kind: "result"; value: Mapping } | { kind: "error"; error: Mapping };
 
 /** A pure transform over frames — the `where` clause. */
-export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
+export type WhereFn = (frames: Frames) => Frames | PromiseLike<Frames>;
 
 declare const MatcherBrand: unique symbol;
 declare const NamedLineBrand: unique symbol;

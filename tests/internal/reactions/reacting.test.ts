@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting.ts";
 import { createEngine } from "@sync-engine/internal/reactions/engine.ts";
-import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { each, former, vocabulary, when } from "@sync-engine/language";
 
 describe("Reacting interpreter loop", () => {
@@ -49,8 +48,8 @@ describe("Reacting interpreter loop", () => {
     }
   });
 
-  test("createEngine with a LogStore returns an Engine", () => {
-    const engine = createEngine(new MemoryStore());
+  test("createEngine with occurrence options returns an Engine", () => {
+    const engine = createEngine({ retention: "keepAll", logSink: { append() {} } });
     expect(engine.instrument).instanceOf(Function);
     expect(engine.register).instanceOf(Function);
     expect(engine.logging).toBeDefined();

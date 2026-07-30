@@ -24,10 +24,10 @@ asking reaction.
 ## Assembly
 
 One installed vocabulary, concept implementation set, and composition. An
-assembly owns its execution lifecycle and uses one occurrence store. It creates
-a `MemoryStore` by default; a supplied store remains caller-owned. Creating
-another assembly creates another runtime; it does not reconfigure an existing
-assembly.
+assembly owns its execution lifecycle and an internal `MemoryStore` occurrence
+index governed by its retention policy. An optional application-owned `LogSink`
+receives an audit copy; the sink does not replace the index. Creating another
+assembly creates another runtime; it does not reconfigure an existing assembly.
 
 ## Binding
 
@@ -66,7 +66,8 @@ correlation ID does not deduplicate work and is not an idempotency key.
 
 An application-authored failure value, such as a concept refusal or an endpoint
 response with a top-level `error` field. The invoker distinguishes domain errors
-from framework errors even though a client receives both as error envelopes.
+from framework errors even though a client receives both as error envelopes. An
+endpoint's `domainError` validator checks the value under that top-level field.
 
 ## Endpoint
 
@@ -104,7 +105,7 @@ their own error unions.
 
 An `Invoker` decorator that performs public route admission, forwarding,
 limits, observation, timeout and abort handling, and ordered drain. A gateway
-does not create another reaction engine or occurrence store.
+does not create another reaction engine or occurrence index.
 
 ## HTTP floor
 
@@ -121,8 +122,8 @@ option.
 ## Integrity failure
 
 Evidence that accepted execution violated an engine-owned contract, such as an
-invalid successful endpoint output or an execution-budget breach. An integrity
-failure is distinct from an action fault.
+invalid successful endpoint output, an invalid domain error, or an
+execution-budget breach. An integrity failure is distinct from an action fault.
 
 ## Invoker
 
@@ -137,11 +138,20 @@ its serialized representation, such as a closure or object-identity pattern.
 Ordinary assembly rejects local behavior; manual engines under `advanced` may
 execute it.
 
+## Log sink
+
+An optional synchronous, application-owned destination for validated and
+redacted occurrence entries. The engine calls the sink before folding an entry
+into its internal occurrence index. A sink does not supply matching, retention,
+or replay. `LogSink` has no close method. `FileLogSink` is the supplied
+append-only JSONL implementation.
+
 ## Occurrence
 
 Recorded execution evidence for an action ask, return, refusal, or fault. The
 occurrence log also contains firing, reaction-failure, and integrity-failure
-evidence. Occurrences are not concept state.
+evidence. The engine retains occurrences in its internal index and may copy them
+to a `LogSink`. Occurrences are not concept state.
 
 ## Portable behavior
 
@@ -164,7 +174,16 @@ rather than private refusal codes.
 
 An underscore-prefixed concept operation that reads current state. A registered
 query promises `one`, `optional`, or `many` rows. Queries must not create side
-effects.
+effects. TypeScript links a literal authored promise to the method's return
+container, and runtime evaluation checks the promise. Assembly memoizes queries
+unless `queryCache` is `"none"`.
+
+## Raw fault report
+
+A privileged report containing the original `unknown` value thrown by an action,
+interpreter stage, or endpoint validator. Raw fault reports bypass ordinary
+fault redaction and must be handled as sensitive data. Reporter failure does not
+replace the runtime result.
 
 ## Reaction
 

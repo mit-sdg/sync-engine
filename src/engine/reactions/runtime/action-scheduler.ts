@@ -118,8 +118,9 @@ export class ActionScheduler implements ActionScheduling {
       started ??= performance.now();
       try {
         const bodyResult = body(input);
-        if (bodyResult instanceof Promise) {
-          void bodyResult.then(
+        const promise = normalizePromiseLike(bodyResult);
+        if (promise !== undefined) {
+          void promise.then(
             (output) => settle("resolve", output),
             (error) => settle("reject", error),
           );
@@ -174,3 +175,4 @@ export class ActionScheduler implements ActionScheduling {
     return !this.schedules.has(concept);
   }
 }
+import { normalizePromiseLike } from "@engine/utils/promise-like";

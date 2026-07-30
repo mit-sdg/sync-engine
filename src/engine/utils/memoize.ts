@@ -124,8 +124,9 @@ export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
     if (cache.has(key)) return cache.get(key) as ReturnType<T>;
     const result = fn.call(this, ...args);
     cache.set(key, result);
-    if (result instanceof Promise) {
-      result.catch(() => {
+    const promise = normalizePromiseLike(result);
+    if (promise !== undefined) {
+      void promise.catch(() => {
         if (cache.get(key) === result) cache.delete(key);
       });
     }
@@ -136,3 +137,4 @@ export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
   };
   return wrapper as MemoizedQuery<T>;
 }
+import { normalizePromiseLike } from "./promise-like.ts";

@@ -28,6 +28,7 @@
 
 import type { Prettify } from "../protocol/endpoints.ts";
 import { FrameworkErrorCode, type ContractShape } from "../protocol/types.ts";
+import { validateRuntimeValue } from "../protocol/validation.ts";
 
 export type { ContractShape, DomainErrorValue } from "../protocol/types.ts";
 
@@ -37,6 +38,10 @@ export type ClientError = { error: FrameworkErrorCode; detail?: string };
 export interface ClientCallOptions {
   /** Cancels transport and waiting; accepted server work is not rolled back. */
   signal?: AbortSignal;
+  /** Transport-local caller timeout. It does not cancel accepted server work. */
+  timeoutMs?: number;
+  /** Trace token carried when the selected transport supports correlation. */
+  correlationId?: string;
 }
 
 /** A transport-agnostic request descriptor passed to {@link ClientTransport}. */
@@ -44,17 +49,27 @@ export interface ClientRequest {
   path: string;
   input: unknown;
   signal?: AbortSignal;
+  timeoutMs?: number;
+  correlationId?: string;
 }
 
 /** A transport function that executes a {@link ClientRequest} and resolves to its result. */
 export type ClientTransport<TError = ClientError> = (
   request: ClientRequest,
-) => Promise<unknown | TError>;
+) => PromiseLike<unknown | TError>;
+
+/** Inspect one complete untrusted transport result without transforming it. */
+export type ClientResponseValidator = (
+  value: unknown,
+  context: Readonly<{ path: string }>,
+) => { ok: true } | { ok: false; detail?: string };
 
 /** Options for {@link createClient}. */
 export interface ClientOptions<TError = ClientError> {
   /** Transport function that executes endpoint calls. */
   transport: ClientTransport<TError>;
+  /** Optional synchronous runtime check for each complete transport result. */
+  validateResponse?: ClientResponseValidator;
 }
 
 type ContractError<C extends ContractShape, P extends keyof C> = C[P] extends { error: infer E }
@@ -195,11 +210,23 @@ export function createClient<C extends ContractShape, TError = ClientError>(
 ): Client<C, TError> {
   const call = async (path: string, body: unknown, callOptions?: ClientCallOptions) => {
     try {
-      return await options.transport({
+      const result = await options.transport({
         path,
         input: body ?? {},
         ...(callOptions?.signal === undefined ? {} : { signal: callOptions.signal }),
+        ...(callOptions?.timeoutMs === undefined ? {} : { timeoutMs: callOptions.timeoutMs }),
+        ...(callOptions?.correlationId === undefined
+          ? {}
+          : { correlationId: callOptions.correlationId }),
       });
+      if (options.validateResponse !== undefined) {
+        const validation = validateRuntimeValue(
+          (value) => options.validateResponse?.(value, { path }) ?? { ok: true },
+          result,
+        );
+        if (!validation.ok) return { error: FrameworkErrorCode.TRANSPORT_ERROR };
+      }
+      return result;
     } catch {
       return { error: FrameworkErrorCode.TRANSPORT_ERROR };
     }

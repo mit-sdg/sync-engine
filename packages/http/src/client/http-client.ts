@@ -2,14 +2,22 @@ import { FrameworkErrorCode } from "@mit-sdg/sync-engine/boundary";
 import {
   createClient,
   type Client,
+  type ClientResponseValidator,
   type ClientTransport,
   type ContractShape,
 } from "@mit-sdg/sync-engine/client";
 
+export interface HttpRequestContext {
+  readonly path: string;
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
+  readonly correlationId?: string;
+}
+
 /** A header bag, or a (possibly async) function producing one per request. */
 export type HeadersOption =
   | Record<string, string>
-  | (() => Record<string, string> | Promise<Record<string, string>>);
+  | ((context: HttpRequestContext) => Record<string, string> | PromiseLike<Record<string, string>>);
 
 /** Options for {@link createHttpTransport} and {@link createHttpClient}. */
 export interface HttpClientOptions {
@@ -21,6 +29,10 @@ export interface HttpClientOptions {
   headers?: HeadersOption;
   /** Request credentials mode. Defaults to `include` for cookie-bearing policies. */
   credentials?: "include" | "omit" | "same-origin";
+  /** Optional synchronous runtime check for each complete HTTP result. */
+  validateResponse?: ClientResponseValidator;
+  /** Maximum response-body bytes to buffer. Undefined leaves the response uncapped. */
+  maxResponseBytes?: number;
 }
 
 export const HttpClientErrorCode = {
@@ -28,6 +40,7 @@ export const HttpClientErrorCode = {
   BAD_STATUS: "BAD_STATUS",
   HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED",
   NETWORK_ERROR: "NETWORK_ERROR",
+  RESPONSE_TOO_LARGE: "RESPONSE_TOO_LARGE",
 } as const;
 
 export type HttpClientError = {
@@ -80,15 +93,96 @@ function raceAbort<T>(
 
 async function resolveHeaders(
   option: HeadersOption | undefined,
-  signal: AbortSignal | undefined,
+  context: HttpRequestContext,
 ): Promise<HeaderResolution> {
+  const { signal } = context;
   if (isAborted(signal)) return { aborted: true };
   if (typeof option !== "function") return { aborted: false, headers: option ?? {} };
   return raceAbort(
-    Promise.resolve(option()).then((headers) => ({ aborted: false, headers })),
+    Promise.resolve(option(context)).then((headers) => ({ aborted: false, headers })),
     signal,
     () => ({ aborted: true }),
   );
+}
+
+function normalizeMaxResponseBytes(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    throw new Error("createHttpTransport: maxResponseBytes must be a positive finite integer.");
+  }
+  return value;
+}
+
+type BodyRead = { ok: true; text: string } | { ok: false; tooLarge: true };
+
+async function readResponseBody(
+  response: Response,
+  maxBytes: number | undefined,
+): Promise<BodyRead> {
+  if (maxBytes === undefined) return { ok: true, text: await response.text() };
+  const declared = response.headers.get("Content-Length");
+  if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    return { ok: false, tooLarge: true };
+  }
+  if (response.body === null) return { ok: true, text: "" };
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false, tooLarge: true };
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    text += decoder.decode();
+    return { ok: true, text };
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+interface RequestControl {
+  readonly signal?: AbortSignal;
+  timedOut(): boolean;
+  dispose(): void;
+}
+
+function requestControl(
+  signal: AbortSignal | undefined,
+  timeoutMs: number | undefined,
+): RequestControl {
+  if (timeoutMs === undefined) return { signal, timedOut: () => false, dispose() {} };
+  const controller = new AbortController();
+  let timedOut = false;
+  const abort = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  const timer = controller.signal.aborted
+    ? undefined
+    : setTimeout(() => {
+        timedOut = true;
+        controller.abort(new DOMException("Timed out", "TimeoutError"));
+      }, timeoutMs);
+  return {
+    signal: controller.signal,
+    timedOut: () => timedOut,
+    dispose() {
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+    },
+  };
+}
+
+function interruptedError(control: RequestControl) {
+  return { error: control.timedOut() ? FrameworkErrorCode.TIMED_OUT : FrameworkErrorCode.ABORTED };
 }
 
 async function httpRequest(
@@ -96,62 +190,79 @@ async function httpRequest(
   baseUrl: string,
   headersOption: HeadersOption | undefined,
   credentials: "include" | "omit" | "same-origin" | undefined,
-  path: string,
-  body: unknown,
-  signal?: AbortSignal,
+  maxResponseBytes: number | undefined,
+  request: Parameters<ClientTransport<HttpClientError>>[0],
 ): Promise<unknown | HttpClientError> {
-  let resolvedHeaders: HeaderResolution;
+  const { path, input: body, timeoutMs, correlationId } = request;
+  if (
+    timeoutMs !== undefined &&
+    (!Number.isFinite(timeoutMs) || !Number.isInteger(timeoutMs) || timeoutMs <= 0)
+  ) {
+    return { error: FrameworkErrorCode.INVALID_INPUT };
+  }
+  const control = requestControl(request.signal, timeoutMs);
+  const signal = control.signal;
   try {
-    resolvedHeaders = await resolveHeaders(headersOption, signal);
-  } catch {
-    return { error: HttpClientErrorCode.HEADER_RESOLUTION_FAILED };
-  }
-  if (resolvedHeaders.aborted || isAborted(signal)) {
-    return { error: FrameworkErrorCode.ABORTED };
-  }
+    let resolvedHeaders: HeaderResolution;
+    try {
+      resolvedHeaders = await resolveHeaders(headersOption, {
+        path,
+        signal,
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
+        ...(correlationId === undefined ? {} : { correlationId }),
+      });
+    } catch {
+      return { error: HttpClientErrorCode.HEADER_RESOLUTION_FAILED };
+    }
+    if (resolvedHeaders.aborted || isAborted(signal)) return interruptedError(control);
 
-  let response: Response;
-  try {
-    response = await fetchImpl(baseUrl + path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...resolvedHeaders.headers },
-      body: JSON.stringify(body ?? {}),
-      credentials: credentials ?? "include",
-      signal,
-    });
-  } catch {
-    return {
-      error: isAborted(signal) ? FrameworkErrorCode.ABORTED : HttpClientErrorCode.NETWORK_ERROR,
-    };
-  }
+    let response: Response;
+    try {
+      response = await fetchImpl(baseUrl + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...resolvedHeaders.headers },
+        body: JSON.stringify(body ?? {}),
+        credentials: credentials ?? "include",
+        signal,
+      });
+    } catch {
+      return isAborted(signal)
+        ? interruptedError(control)
+        : { error: HttpClientErrorCode.NETWORK_ERROR };
+    }
 
-  let text: string;
-  try {
-    text = await response.text();
-  } catch {
-    if (isAborted(signal)) return { error: FrameworkErrorCode.ABORTED };
-    return {
-      error: HttpClientErrorCode.BAD_JSON,
-      detail: `Failed to read response body from ${path} (status ${response.status}).`,
-    };
-  }
-  let data: unknown;
-  try {
-    data = text === "" ? {} : JSON.parse(text);
-  } catch {
-    return {
-      error: HttpClientErrorCode.BAD_JSON,
-      detail: `Invalid JSON response from ${path} (status ${response.status}).`,
-    };
-  }
+    let text: string;
+    try {
+      const bodyRead = await readResponseBody(response, maxResponseBytes);
+      if (!bodyRead.ok) return { error: HttpClientErrorCode.RESPONSE_TOO_LARGE };
+      text = bodyRead.text;
+    } catch {
+      if (isAborted(signal)) return interruptedError(control);
+      return {
+        error: HttpClientErrorCode.BAD_JSON,
+        detail: `Failed to read response body from ${path} (status ${response.status}).`,
+      };
+    }
+    let data: unknown;
+    try {
+      data = text === "" ? {} : JSON.parse(text);
+    } catch {
+      return {
+        error: HttpClientErrorCode.BAD_JSON,
+        detail: `Invalid JSON response from ${path} (status ${response.status}).`,
+      };
+    }
 
-  if (!response.ok && (typeof data !== "object" || data === null || !("error" in data))) {
-    return {
-      error: HttpClientErrorCode.BAD_STATUS,
-      detail: `Request to ${path} failed with status ${response.status}.`,
-    };
+    if (!response.ok && (typeof data !== "object" || data === null || !("error" in data))) {
+      return {
+        error: HttpClientErrorCode.BAD_STATUS,
+        detail: `Request to ${path} failed with status ${response.status}.`,
+      };
+    }
+    return data;
+  } finally {
+    control.dispose();
   }
-  return data;
 }
 
 /**
@@ -164,21 +275,19 @@ export function createHttpTransport(
   const baseUrl = resolveBaseUrl(options.baseUrl);
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const credentials = options.credentials;
+  const maxResponseBytes = normalizeMaxResponseBytes(options.maxResponseBytes);
   return (request) =>
-    httpRequest(
-      fetchImpl,
-      baseUrl,
-      options.headers,
-      credentials,
-      request.path,
-      request.input,
-      request.signal,
-    );
+    httpRequest(fetchImpl, baseUrl, options.headers, credentials, maxResponseBytes, request);
 }
 
 /** Convenience composition of `createHttpTransport` and the generic core client. */
 export function createHttpClient<C extends ContractShape>(
   options?: HttpClientOptions,
 ): Client<C, HttpClientError> {
-  return createClient<C, HttpClientError>({ transport: createHttpTransport(options) });
+  return createClient<C, HttpClientError>({
+    transport: createHttpTransport(options),
+    ...(options?.validateResponse === undefined
+      ? {}
+      : { validateResponse: options.validateResponse }),
+  });
 }

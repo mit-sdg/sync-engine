@@ -18,11 +18,11 @@ details are shared. Credit is offered when requested and appropriate.
 
 ## Supported versions
 
-| Version               | Security fixes                                           |
-| --------------------- | -------------------------------------------------------- |
-| Newest `1.0.0-beta.x` | Supported until 30 days after stable `1.0.0` is released |
-| `1.0.0-alpha.x`       | Unsupported as of `1.0.0-beta.0`                         |
-| Earlier versions      | Unsupported                                              |
+| Version                         | Security fixes                   |
+| ------------------------------- | -------------------------------- |
+| Newest stable `1.x`             | Supported                        |
+| `1.0.0-alpha.x`, `1.0.0-beta.x` | Unsupported after stable `1.0.0` |
+| Earlier versions                | Unsupported                      |
 
 Published versions are immutable. Security corrections receive a new package
 version; maintainers do not replace an existing tag or tarball. See the

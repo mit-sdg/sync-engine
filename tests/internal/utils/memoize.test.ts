@@ -147,6 +147,19 @@ describe("query cache", () => {
     expect(second).not.toBe(first);
   });
 
+  test("evicts a rejected PromiseLike without requiring catch", async () => {
+    let calls = 0;
+    const query = memoizeQuery(() => {
+      calls += 1;
+      const failure = Promise.reject(new Error("boom"));
+      return { then: failure.then.bind(failure) } as PromiseLike<never>;
+    });
+
+    await expect(Promise.resolve(query())).rejects.toThrow("boom");
+    await expect(Promise.resolve(query())).rejects.toThrow("boom");
+    expect(calls).toBe(2);
+  });
+
   test("encodes Date values", () => {
     const d1 = new Date(0);
     const d2 = new Date(1);

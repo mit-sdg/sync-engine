@@ -16,7 +16,7 @@ configuration.
 ## Create the project
 
 ```sh
-bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@latest sync-engine new note-keeper
 cd note-keeper
 bun install
 ```
@@ -24,7 +24,7 @@ bun install
 The command writes a project only when none of its template files would be
 overwritten. The generated application has one Noting concept, two endpoints,
 an assembly, a local-gateway scenario, and generated-artifact configuration.
-Pin an exact package version when reproducing an evaluation or deployment.
+Use `@1.0.0` when reproducing the current evaluation or deployment exactly.
 
 ## Generated files
 

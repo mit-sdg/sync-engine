@@ -6,11 +6,13 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import {
   assemble,
   conceptFloor,
-  MemoryStore,
   type ConceptFloor,
+  type LogEntry,
+  type LogSink,
   type OperationalEvent,
 } from "@mit-sdg/sync-engine/assembly";
 import { createGateway, FrameworkErrorCode } from "@mit-sdg/sync-engine/boundary";
+import { inspectAssembly } from "@mit-sdg/sync-engine/tooling";
 import { createHttpHandler } from "@mit-sdg/sync-engine-http/server";
 import {
   Conflict,
@@ -39,6 +41,38 @@ interface EntryRow {
 interface Deferred {
   promise: Promise<void>;
   resolve(): void;
+}
+
+class CapturingLog implements LogSink {
+  readonly entries: LogEntry[] = [];
+
+  append(entry: LogEntry): void {
+    this.entries.push(entry);
+  }
+}
+
+function actionRecords(log: CapturingLog) {
+  const records = new Map<string, Extract<LogEntry, { kind: "invocation" }>["record"]>();
+  for (const entry of log.entries) {
+    if (entry.kind === "invocation" && entry.record.id !== undefined) {
+      records.set(entry.record.id, entry.record);
+    } else if (entry.kind === "outcome") {
+      const prior = records.get(entry.id);
+      if (prior !== undefined) {
+        records.set(entry.id, { ...prior, output: entry.output, outcome: entry.outcome });
+      }
+    } else if (entry.kind === "fault") {
+      const prior = records.get(entry.id);
+      if (prior !== undefined) records.set(entry.id, { ...prior, fault: entry.fault });
+    }
+  }
+  return records;
+}
+
+function firingsByReaction(log: CapturingLog, reaction: string) {
+  return log.entries.flatMap((entry) =>
+    entry.kind === "firing" && entry.firing.reaction === reaction ? [entry.firing] : [],
+  );
 }
 
 function deferred(): Deferred {
@@ -257,7 +291,7 @@ interface Runtime {
   scheduler: ControlledScheduler;
   entries: SqliteEntries;
   effects: LocalEffects;
-  applicationStore: MemoryStore;
+  applicationLog: CapturingLog;
   applicationEvents: OperationalEvent[];
   gatewayEvents: OperationalEvent[];
   databaseCloseCalls: number;
@@ -291,14 +325,15 @@ function createRuntime(
       databaseCloseCalls += 1;
     },
   });
-  const applicationStore = new MemoryStore({ window: RETENTION_WINDOW });
+  const applicationLog = new CapturingLog();
   const applicationEvents: OperationalEvent[] = [];
   const gatewayEvents: OperationalEvent[] = [];
   const application = assemble({
     vocabulary,
     instances: floor.instances,
     composition,
-    logStore: applicationStore,
+    logSink: applicationLog,
+    retention: { window: RETENTION_WINDOW },
     observers: [(event) => applicationEvents.push(event)],
   });
   const gateway = createGateway<MultiInstanceWire>({
@@ -323,7 +358,7 @@ function createRuntime(
     scheduler,
     entries,
     effects,
-    applicationStore,
+    applicationLog,
     applicationEvents,
     gatewayEvents,
     get databaseCloseCalls() {
@@ -363,12 +398,14 @@ function totalRows(database: SqliteEntries): number {
   return database.total();
 }
 
-function hasCorrelation(store: MemoryStore, correlationId: string): boolean {
-  return [...store.actions.values()].some((record) => record.input.correlationId === correlationId);
+function hasCorrelation(log: CapturingLog, correlationId: string): boolean {
+  return [...actionRecords(log).values()].some(
+    (record) => record.input.correlationId === correlationId,
+  );
 }
 
-function ids(store: MemoryStore): Set<string> {
-  return new Set(store.actions.keys());
+function ids(log: CapturingLog): Set<string> {
+  return new Set(actionRecords(log).keys());
 }
 
 function assertDisjoint(left: Set<string>, right: Set<string>, label: string): void {
@@ -396,15 +433,15 @@ async function runScenario(): Promise<void> {
 
     assert.notStrictEqual(first.floor.instances.Entries, second.floor.instances.Entries);
     assert.notStrictEqual(first.scheduler, second.scheduler);
-    assert.notStrictEqual(first.applicationStore, second.applicationStore);
+    assert.notStrictEqual(first.applicationLog, second.applicationLog);
     assert.notDeepEqual(first.floor.resources, second.floor.resources);
     assert((await stat(databasePath)).isFile(), "the transactional store is not file-backed");
 
     assert.equal(totalRows(first.entries), 1, "the restart seed was not durable");
     assert.equal(first.effects.observations.length, 0);
     assert.equal(second.effects.observations.length, 0);
-    assert.equal(first.applicationStore.actions.size, 0);
-    assert.equal(second.applicationStore.actions.size, 0);
+    assert.equal(actionRecords(first.applicationLog).size, 0);
+    assert.equal(actionRecords(second.applicationLog).size, 0);
 
     for (let round = 1; round <= CONTEST_ROUNDS; round += 1) {
       const name = `contested-${round}`;
@@ -453,10 +490,10 @@ async function runScenario(): Promise<void> {
       if (round === 1) {
         assert.equal(first.effects.observations.length, 1);
         assert.equal(second.effects.observations.length, 0);
-        assert.equal(first.applicationStore.firingsByReaction("RecordCreation").length, 1);
-        assert.equal(second.applicationStore.firingsByReaction("RecordCreation").length, 0);
+        assert.equal(firingsByReaction(first.applicationLog, "RecordCreation").length, 1);
+        assert.equal(firingsByReaction(second.applicationLog, "RecordCreation").length, 0);
         assert(
-          [...second.applicationStore.actions.values()].some(
+          [...actionRecords(second.applicationLog).values()].some(
             (record) =>
               record.concept === second.floor.instances.Entries &&
               record.outcome?.kind === "error" &&
@@ -464,10 +501,10 @@ async function runScenario(): Promise<void> {
           ),
           "the storage loser was not recorded as the registered CONFLICT refusal",
         );
-        assert(hasCorrelation(first.applicationStore, firstCorrelation));
-        assert(!hasCorrelation(first.applicationStore, secondCorrelation));
-        assert(hasCorrelation(second.applicationStore, secondCorrelation));
-        assert(!hasCorrelation(second.applicationStore, firstCorrelation));
+        assert(hasCorrelation(first.applicationLog, firstCorrelation));
+        assert(!hasCorrelation(first.applicationLog, secondCorrelation));
+        assert(hasCorrelation(second.applicationLog, secondCorrelation));
+        assert(!hasCorrelation(second.applicationLog, firstCorrelation));
         assert(
           first.gatewayEvents.some(
             (event) => "correlationId" in event && event.correlationId === firstCorrelation,
@@ -478,9 +515,9 @@ async function runScenario(): Promise<void> {
             (event) => "correlationId" in event && event.correlationId === secondCorrelation,
           ),
         );
-        assertDisjoint(ids(first.applicationStore), ids(second.applicationStore), "instance logs");
+        assertDisjoint(ids(first.applicationLog), ids(second.applicationLog), "instance logs");
         assert(
-          [...first.applicationStore.actions.values()].some(
+          [...actionRecords(first.applicationLog).values()].some(
             (record) => record.concept === first.floor.instances.Entries,
           ),
         );
@@ -564,7 +601,7 @@ async function runScenario(): Promise<void> {
     assert.deepEqual(faultResult, { error: "INTERNAL_ERROR" });
     assert.equal(rowCount(first.entries, "operation_id", "committed-before-fault"), 1);
     assert(
-      [...second.applicationStore.actions.values()].some(
+      [...actionRecords(second.applicationLog).values()].some(
         (record) =>
           record.concept === second.floor.instances.Faulting && record.fault !== undefined,
       ),
@@ -585,10 +622,11 @@ async function runScenario(): Promise<void> {
     );
     await within(second.scheduler.entered(retainedOperations[0] ?? ""), "retention body start");
     await waitUntil(
-      () => second.applicationStore.flowIndex.size > RETENTION_WINDOW,
+      () => inspectAssembly(second.application).occurrences.length > RETENTION_WINDOW,
       "active retention overflow",
     );
-    assert(second.applicationStore.flowIndex.size > RETENTION_WINDOW);
+    const activeOccurrences = inspectAssembly(second.application).occurrences.length;
+    assert(activeOccurrences > RETENTION_WINDOW);
     const timedRetention = await within(Promise.all(retainedCalls), "retention caller timeouts");
     assert(
       timedRetention.every((result) => isFrameworkError(result, FrameworkErrorCode.TIMED_OUT)),
@@ -596,7 +634,7 @@ async function runScenario(): Promise<void> {
     );
     for (const operationId of retainedOperations) second.scheduler.release(operationId);
     await within(second.application.whenIdle(), "retention settlement");
-    assert(second.applicationStore.flowIndex.size <= RETENTION_WINDOW);
+    assert(inspectAssembly(second.application).occurrences.length < activeOccurrences);
     for (const operationId of retainedOperations) {
       assert.equal(rowCount(first.entries, "operation_id", operationId), 1);
     }

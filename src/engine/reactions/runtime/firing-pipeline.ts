@@ -18,6 +18,7 @@ import { formTree } from "@engine/reads/former-evaluation";
 import type { ReadEnv } from "@engine/reads/definition-registry";
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
+import { normalizePromiseLike } from "@engine/utils/promise-like";
 import { uuid } from "@engine/utils/runtime";
 import { setOwn } from "@engine/utils/own-property";
 import { actionNameOf } from "../concepts/introspect.ts";
@@ -119,7 +120,8 @@ export class FiringPipeline {
     if (reaction.where !== undefined) {
       try {
         const filtered = reaction.where(frames);
-        frames = filtered instanceof Promise ? await filtered : filtered;
+        const filteredPromise = normalizePromiseLike(filtered);
+        frames = filteredPromise === undefined ? (filtered as Frames) : await filteredPromise;
         if (!(frames instanceof Frames)) {
           throw new TypeError("A reaction where function must return Frames.");
         }
@@ -423,7 +425,9 @@ export class FiringPipeline {
     if (node.transform !== undefined) {
       try {
         const transformed = node.transform(childFrames);
-        childFrames = transformed instanceof Promise ? await transformed : transformed;
+        const transformedPromise = normalizePromiseLike(transformed);
+        childFrames =
+          transformedPromise === undefined ? (transformed as Frames) : await transformedPromise;
         if (!(childFrames instanceof Frames)) {
           throw new TypeError("An ask result transform must return Frames.");
         }
@@ -561,7 +565,7 @@ export class FiringPipeline {
     });
     try {
       this.actions.invoke(record);
-      this.actions.faulted({ id, fault: errorOutputFromThrown(error) });
+      this.actions.faulted({ id, fault: errorOutputFromThrown(error), error });
       branch.fill.produced.push(id);
       await reactQuietly(
         { react: this.react, emit: () => {} },

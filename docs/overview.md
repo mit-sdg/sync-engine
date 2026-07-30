@@ -96,10 +96,11 @@ several concepts. None of these declarations stores domain state.
 
 `assemble(...)` receives one vocabulary, one implementation for each concept,
 and one composition. It validates the registered design, instruments the
-instances, installs reactions and reads, and selects an occurrence store. Each
-call creates separate scheduling, query caches, and admission state. By default,
-each assembly also creates a separate `MemoryStore`; if the host supplies a
-`logStore`, ownership and sharing remain host choices.
+instances, installs reactions and reads, and creates an occurrence index. Each
+call creates separate scheduling, query-cache, admission, and retention state,
+including its own internal `MemoryStore`. The `retention` option governs that
+index. An optional application-owned `LogSink` receives occurrence entries in
+addition to the internal index; `logSink` and `retention` may be used together.
 
 The ordinary assembly accepts portable declarations: definitions that can be
 represented as canonical JSON and registered again against the same named
@@ -140,12 +141,19 @@ categories; an HTTP floor can also remove credential and issuance fields. See
 
 Concept state is the domain state owned by a concept implementation and its
 storage. Occurrence evidence records action asks, outcomes, faults, reaction
-firings, and selected runtime failures inside one assembly. An occurrence store
-does not become concept state merely because it is persistent.
+firings, and selected runtime failures inside one assembly. The engine folds
+that evidence into its internal occurrence index for matching and inspection.
+An audit copy does not become concept state merely because it is persistent.
 
-The supplied `FileStore` appends occurrence evidence, but it does not load old
-entries, restore concept state, replay reactions, or resume requests after a
-restart. Applications that require durable state and recovery must implement
+The optional `LogSink` receives each validated, redacted entry synchronously
+before the engine folds the entry into its index. A sink failure prevents that
+fold. Failure while appending an invocation can prevent the action body from
+running; failure while appending its outcome can occur after the action changed
+concept state. The supplied `FileLogSink` appends JSONL audit output, but the
+engine never reads or replays that file. `FileLogSink` has no close operation;
+the host owns any resources used by a custom sink.
+
+Applications that require durable state and restart recovery must implement
 both in their concept storage and host process. [Persistence, restart, and
 recovery](advanced-recipes.md) demonstrates the separation.
 
@@ -159,8 +167,11 @@ accepted work.
 
 Generated wire contracts provide TypeScript checks for callers using those
 types. They do not validate runtime values. Endpoint validators provide the
-separate runtime input and successful-output checks when an application needs
-them.
+separate runtime input, successful-output, and domain-error checks when an
+application needs them. A configured `rawFaultReporter` is a privileged path
+for original action and interpreter failures and endpoint-validator throws;
+ordinary occurrence evidence, process logs, and framework errors do not expose
+those raw values.
 
 Use [Operational limits](operations.md) to decide whether these boundaries fit
 a deployment. Use [Execution semantics](semantics.md) when correctness depends

@@ -16,7 +16,7 @@
 
 import type { ActionOutcome, InstrumentedAction } from "../types.ts";
 
-/** How long a store's in-memory fold retains occurrence records. */
+/** How long an assembly's in-memory occurrence index retains records. */
 export type RetentionPolicy = "keepAll" | "evictConsumed" | { window: number };
 
 export function assertRetentionPolicy(policy: RetentionPolicy, site: string): void {
@@ -27,10 +27,10 @@ export function assertRetentionPolicy(policy: RetentionPolicy, site: string): vo
 }
 
 /**
- * One entry in the action log, as served by a store's folded view.
+ * One entry in the action log, as served by the engine-owned folded view.
  *
- * Consumption is derived from firing entries through
- * {@link LogStore.hasConsumed}; it is not stored on the action record.
+ * Consumption is derived from firing entries in the occurrence index; it is
+ * not stored on the action record.
  */
 export interface ActionRecord {
   id?: string;
@@ -99,6 +99,11 @@ export type IntegrityFailureRecord = {
       errorClass: "ValidationFailure" | "ValidatorFault";
     }
   | {
+      kind: "invalid-domain-error";
+      route: string;
+      errorClass: "ValidationFailure" | "ValidatorFault";
+    }
+  | {
       kind: "execution-limit";
       limit: "actions" | "firings" | "rows";
       errorClass: "ExecutionLimitExceeded";
@@ -124,34 +129,14 @@ export type LogEntry =
    */
   | { kind: "fault"; at: number; id: string; fault: Record<string, unknown> };
 
-/** The runtime occurrence index used for matching, consumption, and retention. */
-export interface LogStore {
-  /** Fold one immutable occurrence entry into the indexed views. */
+/** A synchronous host-owned destination for already-redacted occurrence entries. */
+export interface LogSink {
+  /** Accept one immutable entry before it becomes visible to the engine index. */
   append(entry: LogEntry): void;
-  /** Look up a single action record by id. */
-  byId(id: string): ActionRecord | undefined;
-  /** All action records belonging to a flow, in order (or `undefined` if unknown). */
-  byFlow(flow: string): ActionRecord[] | undefined;
-  /** All recorded firings of a reaction, in order. */
-  firingsByReaction(reaction: string): FiringRecord[];
-  /** Whether a recorded firing of `reaction` has already consumed this record. */
-  hasConsumed(recordId: string, reaction: string): boolean;
-  /** Names of the reactions whose recorded firings consumed this record. */
-  consumedBy(recordId: string): string[];
-  /** Apply the store's retention policy and return the number of removed action records. */
-  prune(): number;
-  /** Observe that the outermost action in a causal flow has settled. */
-  flowSettled?(flow: string): void;
-  /** Drop all records belonging to a flow from the folded views. */
-  evictFlow(flow: string): void;
-  /** Folded view: every retained action record, keyed by id. */
-  readonly actions: Map<string, ActionRecord>;
-  /** Folded view: retained action records grouped by flow token, in invocation order. */
-  readonly flowIndex: Map<string, ActionRecord[]>;
 }
 
 /** The core in-memory occurrence index. */
-export class MemoryStore implements LogStore {
+export class MemoryStore {
   readonly actions: Map<string, ActionRecord> = new Map();
   readonly flowIndex: Map<string, ActionRecord[]> = new Map();
   /** Recorded firings, grouped by reaction name, in firing order. */
@@ -165,17 +150,33 @@ export class MemoryStore implements LogStore {
   private settledFlowOrder: string[] = [];
   private activeFlows = new Set<string>();
 
-  constructor(public readonly policy: RetentionPolicy = "evictConsumed") {
+  constructor(
+    public readonly policy: RetentionPolicy = "evictConsumed",
+    private readonly sink?: LogSink,
+  ) {
     assertRetentionPolicy(policy, "MemoryStore");
   }
 
   append(entry: LogEntry): void {
+    this.assertAppendable(entry);
+    this.sink?.append(entry);
+    this.fold(entry);
+  }
+
+  private assertAppendable(entry: LogEntry): void {
+    if (entry.kind === "invocation" && entry.record.id === undefined) {
+      throw new Error("Invocation entry requires a record id.");
+    }
+    if ((entry.kind === "outcome" || entry.kind === "fault") && !this.actions.has(entry.id)) {
+      throw new Error(`Action with id ${entry.id} not found.`);
+    }
+  }
+
+  private fold(entry: LogEntry): void {
     switch (entry.kind) {
       case "invocation": {
         const record = entry.record;
-        if (record.id === undefined) {
-          throw new Error("Invocation entry requires a record id.");
-        }
+        if (record.id === undefined) return;
         this.actions.set(record.id, record);
         const partition = this.flowIndex.get(record.flow) ?? [];
         partition.push(record);

@@ -12,6 +12,9 @@ import {
   createHttpHandler,
   httpFloor,
   productionHttpProfile,
+  type HttpFloor,
+  type HttpPublicErrorCategory,
+  type ProductionHttpProfile,
 } from "@mit-sdg/sync-engine-http/server";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 
@@ -198,6 +201,51 @@ describe("HTTP floor", () => {
     const me = projected.endpoints.find(({ path }) => path === "/me");
     expect(JSON.stringify(login?.output)).not.toMatch(/session|expiresAt/);
     expect(JSON.stringify(me?.input)).not.toContain("session");
+  });
+
+  test("snapshots raw mutable policies when handlers and projectors are constructed", async () => {
+    const { application, floor, gateway } = setup();
+    const binding = bindTransport({ application, gateway });
+    const mutableProfile: ProductionHttpProfile = {
+      origin: floor.origin,
+      publicErrors: { UNKNOWN_SESSION: "UNAUTHORIZED" },
+    };
+    const profileProjection = httpWire({
+      policy: mutableProfile,
+      name: "ProfileWire",
+    });
+    (mutableProfile.publicErrors as Record<string, HttpPublicErrorCategory>).UNKNOWN_SESSION =
+      "NOT_FOUND";
+
+    const profileWire = profileProjection.project(binding).wire;
+    const me = profileWire.endpoints.find(({ path }) => path === "/me");
+    expect(me?.errors).toContain("UNAUTHORIZED");
+    expect(me?.errors).not.toContain("NOT_FOUND");
+
+    const mutableFloor: HttpFloor = {
+      origin: floor.origin,
+      publicErrors: { ...floor.publicErrors },
+      credential: {
+        ...floor.credential,
+        issue: { ...floor.credential.issue },
+        clear: [...floor.credential.clear],
+      },
+    };
+    const floorProjection = httpWire({ policy: mutableFloor, name: "FloorWire" });
+    const fetch = createHttpHandler({ application, gateway, floor: mutableFloor });
+    (mutableFloor.credential as { input: string }).input = "changed";
+
+    const floorWire = floorProjection.project(binding).wire;
+    const protectedEndpoint = floorWire.endpoints.find(({ path }) => path === "/me");
+    expect(JSON.stringify(protectedEndpoint?.input)).not.toContain("session");
+    const response = await fetch(
+      new Request("http://learning.test/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+    expect(response.headers.get("Set-Cookie")).toContain("session=secret-session");
   });
 
   test("has no implicit /api alias and requires an explicit base path", async () => {

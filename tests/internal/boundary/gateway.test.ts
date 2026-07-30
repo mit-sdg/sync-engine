@@ -11,6 +11,10 @@ import { createGateway } from "@sync-engine/internal/boundary/gateway/gateway";
 class InvalidMessage extends Error {}
 
 class AnsweringConcept {
+  static readonly outcomes = {
+    reject: { refusals: [FrameworkErrorCode.NOT_FOUND] },
+  } as const;
+
   completed: string[] = [];
 
   echo({ message }: { message: string }) {

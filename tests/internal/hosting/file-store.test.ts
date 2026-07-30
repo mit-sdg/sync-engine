@@ -1,5 +1,5 @@
 /**
- * FileStore composes a live in-memory occurrence index with append-only JSONL
+ * FileLogSink composes with a live in-memory occurrence index for JSONL
  * auditing. The audit is intentionally not replayed into a new runtime index.
  */
 
@@ -15,7 +15,11 @@ import type { Vars } from "@sync-engine/internal/reactions/types";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
-import { FileStore } from "@sync-engine/internal/hosting/file-store.ts";
+import { FileLogSink } from "@sync-engine/internal/hosting/file-store.ts";
+import {
+  MemoryStore,
+  type RetentionPolicy,
+} from "@sync-engine/internal/reactions/runtime/log-store.ts";
 
 type AuditEntry =
   | {
@@ -33,6 +37,15 @@ type AuditEntry =
   | { kind: "fault"; id: string; fault: unknown };
 
 let dir: string;
+
+class FileStore extends MemoryStore {
+  constructor(
+    readonly path: string,
+    policy: RetentionPolicy = "keepAll",
+  ) {
+    super(policy, new FileLogSink(path));
+  }
+}
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "file-store-"));
 });

@@ -3,7 +3,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
 import { Logging } from "@sync-engine/assembly";
-import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
 import type { InvocationResult } from "@sync-engine/boundary";
 import { former, vocabulary, where, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
@@ -26,6 +26,10 @@ const faultSentinels = {
 };
 
 class SeatingConcept {
+  static readonly outcomes = {
+    claim: { refusals: ["SEAT_TAKEN"] },
+  } as const;
+
   private taken = new Set<string>();
 
   claim({ seat }: { seat: string }) {
@@ -42,6 +46,10 @@ class SeatingConcept {
     });
     Object.assign(error, { detail: faultSentinels.detail, code: faultSentinels.code });
     throw error;
+  }
+
+  escape(_: Empty): never {
+    throw new Refuse("UNDECLARED");
   }
 }
 
@@ -64,6 +72,11 @@ function setup() {
     Audit: endpoint("/seats/audit", () =>
       receive()
         .then(Seating.audit({}))
+        .then(respond({ ok: true })),
+    ),
+    Escape: endpoint("/seats/escape", () =>
+      receive()
+        .then(Seating.escape({}))
         .then(respond({ ok: true })),
     ),
   };
@@ -109,6 +122,25 @@ describe("refusalFunnel", () => {
       expect(retained).not.toContain(sentinel);
       expect(publicResult).not.toContain(sentinel);
     }
+  });
+
+  test("treats an undeclared advanced refusal as a fault", async () => {
+    const { reaction, invoker } = setup();
+    const result = await invoker.invoke("/seats/escape", {} as never);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatchObject({
+        kind: "framework",
+        code: FrameworkErrorCode.INTERNAL_ERROR,
+      });
+    }
+    const escaped = [...reaction.Action.actions.values()].find(
+      (record) => actionNameOf(record.action) === "escape",
+    );
+    expect(escaped?.fault).toEqual({ error: FrameworkErrorCode.UNKNOWN_ERROR });
+    expect(escaped?.outcome).toBeUndefined();
+    expect(reaction._getFirings("DeliverRefusalToAsker")).toHaveLength(0);
   });
 
   test("the first refusal answers; a second in the same flow cannot", async () => {

@@ -1,7 +1,12 @@
 import { createClient, createLocalClient } from "@mit-sdg/sync-engine/client";
 import type { ClientError, ClientTransport } from "@mit-sdg/sync-engine/client";
 import { assemble, Logging } from "@mit-sdg/sync-engine/assembly";
-import type { ActionRefusal, AssemblyOptions } from "@mit-sdg/sync-engine/assembly";
+import type {
+  ActionRefusal,
+  AssemblyOptions,
+  LogEntry,
+  LogSink,
+} from "@mit-sdg/sync-engine/assembly";
 import type { GatewayOptions, InvocationResult, Invoker } from "@mit-sdg/sync-engine/boundary";
 import {
   createHttpClient,
@@ -43,11 +48,15 @@ class DirectConcept {
 }
 
 const directVocabulary = vocabulary({ concepts: { Direct: DirectConcept }, computations: {} });
+const occurrenceEntries: LogEntry[] = [];
+const logSink: LogSink = { append: (entry) => occurrenceEntries.push(entry) };
 const directOptions: AssemblyOptions<{ Direct: typeof DirectConcept }, {}> = {
   vocabulary: directVocabulary,
   composition: {},
   initialize: { Direct: ["direct:"] },
   logging: Logging.TRACE,
+  logSink,
+  retention: "keepAll",
 };
 const directAssembly = assemble(directOptions);
 const directAction: Promise<{ value: string } | ActionRefusal> = directAssembly.concepts.Direct.act(
@@ -61,7 +70,7 @@ const httpProfile: ProductionHttpProfile = productionHttpProfile({
   origin: "https://example.test",
   basePath: "/api",
 });
-void [directAction, directQuery, gatewayOptions, httpProfile];
+void [directAction, directQuery, gatewayOptions, httpProfile, occurrenceEntries];
 
 // @ts-expect-error A direct action caller must account for refusal mappings.
 const directSuccessOnly: Promise<{ value: string }> = directAssembly.concepts.Direct.act({

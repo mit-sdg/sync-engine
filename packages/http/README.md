@@ -5,11 +5,15 @@
 generated-wire projection. It does not provide an HTTP listener or web
 framework integration.
 
-This beta requires Node.js 24, ESM, and the exact matching core beta:
+Stable 1.x requires Node.js 24 and ESM. This independently published package
+declares `@mit-sdg/sync-engine@^1.0.0` as its core peer dependency. For an exact
+reproducible installation:
 
 ```sh
-bun add @mit-sdg/sync-engine@1.0.0-beta.3 @mit-sdg/sync-engine-http@1.0.0-beta.3
+bun add @mit-sdg/sync-engine@1.0.0 @mit-sdg/sync-engine-http@1.0.0
 ```
+
+Use `@latest` for the current installation.
 
 The package has no root export. Use only these subpaths:
 

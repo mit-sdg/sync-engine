@@ -13,12 +13,18 @@ export const GENERATOR_IDENTITY: GeneratorIdentity = Object.freeze({
   version: PACKAGE_VERSION,
 });
 
+export function isStableSemVer(value: unknown): value is string {
+  return (
+    typeof value === "string" && /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(value)
+  );
+}
+
 export function assertCurrentGenerator(
   identity: unknown,
   owner: string,
 ): asserts identity is GeneratorIdentity {
   const candidate = identity as Partial<GeneratorIdentity> | undefined;
-  if (candidate?.name !== PACKAGE_NAME || candidate.version !== PACKAGE_VERSION) {
-    throw new Error(`${owner}: requires generator ${PACKAGE_NAME}@${PACKAGE_VERSION}.`);
+  if (candidate?.name !== PACKAGE_NAME || !isStableSemVer(candidate.version)) {
+    throw new Error(`${owner}: requires a stable ${PACKAGE_NAME} generator identity.`);
   }
 }

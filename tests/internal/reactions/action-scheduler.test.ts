@@ -10,6 +10,10 @@ function reserve<Result>(
   return scheduler.reserve({ concept, flow, body, input: undefined });
 }
 
+function thenable<T>(promise: Promise<T>): PromiseLike<T> {
+  return { then: promise.then.bind(promise) };
+}
+
 describe("action scheduler", () => {
   test("keeps arrival order when later requested reactions finish first", async () => {
     const scheduler = new ActionScheduler();
@@ -193,6 +197,58 @@ describe("action scheduler", () => {
     await expect(reservation.result).resolves.toBe(1);
     reservation.release();
     expect(starts).toBe(1);
+  });
+
+  test("holds the serial line until a returned PromiseLike settles", async () => {
+    const scheduler = new ActionScheduler();
+    const concept = {};
+    const gate = Promise.withResolvers<string>();
+    const order: string[] = [];
+    let settled = false;
+    const first = scheduler.reserve({
+      concept,
+      flow: "first",
+      body: () => {
+        order.push("first");
+        return thenable(gate.promise);
+      },
+      input: undefined,
+      onBodySettled: () => {
+        settled = true;
+      },
+    });
+    const second = reserve(scheduler, concept, "second", () => {
+      order.push("second");
+      return "second";
+    });
+
+    first.release();
+    second.release();
+    expect(order).toEqual(["first"]);
+    expect(settled).toBe(false);
+    gate.resolve("first");
+
+    await expect(Promise.all([first.result, second.result])).resolves.toEqual(["first", "second"]);
+    expect(order).toEqual(["first", "second"]);
+    expect(settled).toBe(true);
+  });
+
+  test("preserves synchronous body settlement", async () => {
+    const scheduler = new ActionScheduler();
+    let settled = false;
+    const reservation = scheduler.reserve({
+      concept: {},
+      flow: "sync",
+      body: () => "done",
+      input: undefined,
+      onBodySettled: () => {
+        settled = true;
+      },
+    });
+
+    reservation.release();
+    expect(settled).toBe(true);
+    await expect(reservation.result).resolves.toBe("done");
   });
 
   test("cleans up the final concept line after rejection", async () => {

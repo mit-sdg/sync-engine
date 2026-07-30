@@ -1,8 +1,8 @@
 /**
  * The **action log** — itself a tiny concept.
  *
- * Every instrumented action invocation appends an entry to a {@link LogStore}.
- * Its outcome arrives as a second entry. The store folds both entries into an
+ * Every instrumented action invocation appends an occurrence entry.
+ * Its outcome arrives as a second entry. The index folds both entries into an
  * indexed action record without modifying the invocation entry. Reactions match
  * recorded occurrences rather than live callbacks. The runtime does not load
  * or replay occurrence files.
@@ -23,14 +23,19 @@ import { ListenerSet } from "@engine/utils/listener-set";
 import { snapshotValue } from "@engine/utils/snapshot";
 import type { Redactor } from "@engine/utils/redaction";
 import { logger } from "@engine/utils/logger";
+import { actionNameOf, conceptNameOf } from "../concepts/introspect.ts";
 import {
   MemoryStore,
   type ActionRecord,
   type IntegrityFailureRecord,
-  type LogStore,
   type ReactionFailureRecord,
 } from "./log-store.ts";
-import type { OperationalEvents } from "./operational.ts";
+import {
+  reportRawFault,
+  type OperationalEvents,
+  type RawFaultReport,
+  type RawFaultReporter,
+} from "./operational.ts";
 
 export type { ActionRecord } from "./log-store.ts";
 
@@ -75,10 +80,19 @@ export class ActionConcept {
   private readonly flowQuiescenceListeners = new ListenerSet<(event: FlowQuiescence) => void>();
 
   constructor(
-    public readonly store: LogStore = new MemoryStore(),
+    public readonly store: MemoryStore = new MemoryStore(),
     readonly operational?: OperationalEvents,
     readonly redactor: Redactor = { redact },
+    private readonly rawFaultReporter?: RawFaultReporter,
   ) {}
+
+  _reportRawFault(report: RawFaultReport): void {
+    const context = report.flow === undefined ? undefined : this.operational?.context(report.flow);
+    reportRawFault(
+      this.rawFaultReporter,
+      context === undefined ? report : { ...context, ...report },
+    );
+  }
 
   /** Folded view: all retained records, keyed by their unique id. */
   get actions(): Map<string, ActionRecord> {
@@ -174,6 +188,15 @@ export class ActionConcept {
       ...consequence,
       errorClass: typeof serialized.name === "string" ? serialized.name : "Error",
       at: Date.now(),
+    });
+    this._reportRawFault({
+      kind: "interpreter",
+      error,
+      at: Date.now(),
+      flow,
+      reaction,
+      stage,
+      ...consequence,
     });
   }
 
@@ -284,8 +307,24 @@ export class ActionConcept {
   /**
    * Append a fault classification for an ask without recording an outcome.
    */
-  faulted({ id, fault }: { id: string; fault: Record<string, unknown> }): { id: string } {
-    this.store.append({ kind: "fault", at: Date.now(), id, fault });
+  faulted({ id, fault, error }: { id: string; fault: Record<string, unknown>; error?: unknown }): {
+    id: string;
+  } {
+    const record = this.store.byId(id);
+    const at = Date.now();
+    this.store.append({ kind: "fault", at, id, fault });
+    if (error !== undefined && record !== undefined) {
+      this._reportRawFault({
+        kind: "action",
+        error,
+        at,
+        flow: record.flow,
+        concept: conceptNameOf(record.concept),
+        action: actionNameOf(record.action),
+        actionId: id,
+        ...(record.by === undefined ? {} : { reaction: record.by }),
+      });
+    }
     return { id };
   }
 

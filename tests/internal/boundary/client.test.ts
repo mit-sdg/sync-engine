@@ -44,20 +44,22 @@ describe("createClient (transport-agnostic)", () => {
     });
   });
 
-  test("passes a per-call abort signal to the transport", async () => {
+  test("passes per-call signal, timeout, and correlation to the transport", async () => {
     const transport = fakeTransport({ token: "abc123" });
     const client = createClient<TestApi>({ transport });
     const controller = new AbortController();
 
     await client.auth.login(
       { username: "alice", password: "secret" },
-      { signal: controller.signal },
+      { signal: controller.signal, timeoutMs: 250, correlationId: "trace-1" },
     );
 
     expect(transport).toHaveBeenCalledWith({
       path: "/auth/login",
       input: { username: "alice", password: "secret" },
       signal: controller.signal,
+      timeoutMs: 250,
+      correlationId: "trace-1",
     });
   });
 
@@ -160,6 +162,51 @@ describe("createClient (transport-agnostic)", () => {
     const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({ error: "CUSTOM_ERROR", detail: "something went wrong" });
+  });
+
+  test("accepts structural PromiseLike transport results", async () => {
+    const transport: ClientTransport = () => {
+      const result = Promise.resolve({ token: "x" });
+      return { then: result.then.bind(result) };
+    };
+    const client = createClient<TestApi>({ transport });
+
+    await expect(client.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      token: "x",
+    });
+  });
+
+  test("optionally validates complete transport responses without transforming them", async () => {
+    const response = { token: "x" };
+    const paths: string[] = [];
+    const accepted = createClient<TestApi>({
+      transport: () => Promise.resolve(response),
+      validateResponse(value, { path }) {
+        paths.push(path);
+        return value === response ? { ok: true } : { ok: false };
+      },
+    });
+
+    await expect(accepted.auth.login({ username: "a", password: "b" })).resolves.toBe(response);
+    expect(paths).toEqual(["/auth/login"]);
+
+    const rejected = createClient<TestApi>({
+      transport: () => Promise.resolve(response),
+      validateResponse: () => ({ ok: false }),
+    });
+    await expect(rejected.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      error: "TRANSPORT_ERROR",
+    });
+
+    const faulting = createClient<TestApi>({
+      transport: () => Promise.resolve(response),
+      validateResponse: () => {
+        throw new Error("private response detail");
+      },
+    });
+    await expect(faulting.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      error: "TRANSPORT_ERROR",
+    });
   });
 
   test("no input argument sends {} to transport", async () => {

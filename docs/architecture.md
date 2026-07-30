@@ -60,7 +60,10 @@ per-concept state machine preserves arrival order, releases same-flow reentrant
 work, and removes the final serial line after settlement.
 
 `src/engine/reactions/runtime/log-store.ts` owns the append-only folded
-occurrence indexes. `ActionConcept` in
+occurrence index through the internal `MemoryStore`. Each engine constructs its
+own index. `MemoryStore.append(...)` validates the entry, calls an optional
+application-owned `LogSink` synchronously, and folds only after the sink
+returns. `ActionConcept` in
 `src/engine/reactions/runtime/actions.ts` is the small adapter that appends log
 entries and retains unredacted values only while their causal flow is active.
 
@@ -70,7 +73,8 @@ exported lowered/unlowered definitions, and base registration names. One
 `ConceptInstrumentation` owns one explicit `InstrumentationState` containing
 proxy identities, raw-concept links, weak concept references, and query caches;
 `instrumenting.ts` operates on that persistent state rather than rebuilding it
-for each operation.
+for each operation. Its `QueryCacheMode` selects memoized wrappers by default or
+uncached wrappers for `"none"`.
 
 The interpreter stages likewise have explicit boundaries:
 
@@ -79,7 +83,8 @@ The interpreter stages likewise have explicit boundaries:
 | `TriggerMatcher` | Match the landed record or join records within its flow, including channel exclusions and consumption guards. |
 | `FiringPipeline` | Run trigger and where stages, form consequence inputs, ask actions, match outputs, and record stage failures. |
 | `FiringBook`     | Own in-flight consumption counts and transfer successful marks to durable firing records.                     |
-| `ActionConcept`  | Append action, fault, integrity, and interpreter-failure evidence through the selected `LogStore`.            |
+| `ActionConcept`  | Redact and append action, fault, integrity, and interpreter-failure evidence to the engine-owned index.       |
+| `LogSink`        | Receive each validated, redacted append synchronously before the internal index folds it.                     |
 
 ## Reaction implementation map
 
@@ -187,9 +192,9 @@ and composition that use them:
 | Area       | Main files                                                                                                                                  | Responsibility                                                                                                                                                               |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Protocol   | `src/engine/boundary/protocol/types.ts`, `endpoints.ts`, `admit.ts`, `envelope.ts`, `validation.ts`, `route-path.ts`, `gateway-registry.ts` | Define endpoint inputs, application-facing route facts, admission, result envelopes, validation, canonical paths, and gateway identity without choosing a transport or host. |
-| Invocation | `src/engine/boundary/invocation/invoke.ts`, `funnel.ts`, `lifecycle.ts`                                                                     | Correlate one request with one response, apply cancellation, timeout, limits, and drain behavior, and turn reaction refusals into boundary replies.                          |
+| Invocation | `src/engine/boundary/invocation/invoke.ts`, `funnel.ts`, `lifecycle.ts`                                                                     | Correlate one request with one response, apply timeout and abort settlement, limits, and drain, and turn reaction refusals into boundary replies.                            |
 | Assembly   | `src/engine/boundary/assembly/concept-set.ts`, `assemble.ts`, `locality-validation.ts`, `assembly-facade.ts`, `assembly-registry.ts`        | Turn portable composition into one engine, reject executable-only definitions, then expose the invoker and forms.                                                            |
-| Client     | `src/engine/boundary/client/client.ts`, `local-client.ts`                                                                                   | Expose the typed client independently of a transport and adapt it to a local invoker.                                                                                        |
+| Client     | `src/engine/boundary/client/client.ts`, `local-client.ts`                                                                                   | Build typed calls, carry per-call control and correlation, validate complete responses when configured, and adapt to a local invoker.                                        |
 | Gateway    | `src/engine/boundary/gateway/gateway.ts`, `transport-binding.ts`                                                                            | Decorate an invoker and expose a verified narrow capability for external server adapters.                                                                                    |
 | Wire       | `src/engine/boundary/wire/wire-contracts.ts`, `wire-inference.ts`, `wire-provenance.ts`, `wire-renderer.ts`, `wire-types.ts`                | Derive and render transport-safe contracts from endpoint IR and value provenance.                                                                                            |
 
@@ -203,22 +208,28 @@ into a vocabulary, default implementations, floor-specific implementation
 factories, complete implementation maps, and refusal metadata. A host-created
 `ConceptFloor` descriptor separately groups one such map with resources and a
 `close()` operation. `src/engine/boundary/assembly/assemble.ts` creates one engine,
-instruments its selected instances, collects tagged composition exports, and
-returns the application-facing invoker/form interface. Plain concept actions
+its internal occurrence index, and an optional independent audit sink;
+instruments its selected instances; collects tagged composition exports; and
+returns the application-facing invoker/form interface. It also selects query
+memoization, installs privileged raw-fault reporting, and makes ordinary
+instrumentation reject undeclared advanced refusal codes. Plain concept actions
 may be synchronous, but the assembled `concepts` surface types every action as
 a `Promise`: recording and reaction processing occur before a caller receives
 its settlement.
 
 `src/engine/boundary/invocation/invoke.ts` and
-`src/engine/boundary/gateway/gateway.ts` route, serialize, or cancel a request,
-but they do not inspect concept state. `transport-binding.ts` snapshots only the
-facts an external server adapter needs.
+`src/engine/boundary/gateway/gateway.ts` route, serialize, or end waiting for a
+request, but they do not inspect concept state. Invocation applies the
+endpoint's input, successful-output, and domain-error validators. Validator
+throws pass to the assembly's raw-fault reporter while caller-visible failures
+stay classified. `transport-binding.ts` snapshots only the facts an external
+server adapter needs.
 
 ## Hosting and generated artifacts
 
-`src/engine/hosting/file-store.ts` provides `FileStore`. It composes a fresh
-in-memory occurrence index with a Node-specific append-only JSONL audit sink. It
-does not load an existing file or replay it.
+`src/engine/hosting/file-store.ts` provides `FileLogSink`, a Node-specific
+append-only JSONL audit destination. It does not own the engine's occurrence
+index, load an existing file, replay entries, or expose a close operation.
 
 `src/engine/tooling/inspection.ts` projects one assembly into app IR, concept
 inventories, input contracts, retained occurrence summaries, and diagnostic

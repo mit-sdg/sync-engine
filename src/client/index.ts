@@ -7,6 +7,7 @@ export type {
   ClientError,
   ClientOptions,
   ClientRequest,
+  ClientResponseValidator,
   ClientTransport,
   ContractShape,
   DomainErrorValue,

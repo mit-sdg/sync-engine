@@ -577,13 +577,12 @@ describe("log store: firings are introspectable after a live run", () => {
     expect(reacting.Action._getMatchingRecordCount()).toBe(0);
   });
 
-  test("custom stores receive redacted output entries", async () => {
-    class CapturingStore extends MemoryStore {
+  test("custom sinks receive redacted output entries before indexing", async () => {
+    class CapturingSink {
       readonly entries: LogEntry[] = [];
 
-      override append(entry: LogEntry): void {
+      append(entry: LogEntry): void {
         this.entries.push(entry);
-        super.append(entry);
       }
     }
     class Issuing {
@@ -591,15 +590,55 @@ describe("log store: firings are introspectable after a live run", () => {
         return { sessionToken: "custom-store-session-sentinel" };
       }
     }
-    const store = new CapturingStore();
+    const sink = new CapturingSink();
+    const store = new MemoryStore("evictConsumed", sink);
     const reacting = new Reacting(new ActionConcept(store));
     const Issuer = reacting.instrumentConcept(new Issuing());
 
     expect(await Issuer.issue({})).toEqual({
       sessionToken: "custom-store-session-sentinel",
     });
-    expect(reflectedText(store.entries)).not.toContain("custom-store-session-sentinel");
+    expect(reflectedText(sink.entries)).not.toContain("custom-store-session-sentinel");
     expect(store.actions.values().next().value?.output).toEqual({ sessionToken: "[redacted]" });
+  });
+
+  test("validates entries before the sink and indexes only after a successful append", () => {
+    const seen: LogEntry[] = [];
+    const store = new MemoryStore("keepAll", {
+      append(entry) {
+        expect(store.actions.size).toBe(0);
+        seen.push(entry);
+      },
+    });
+
+    expect(() =>
+      store.append({
+        kind: "outcome",
+        at: 1,
+        id: "missing",
+        output: {},
+        outcome: { kind: "result", value: {} },
+      }),
+    ).toThrow("Action with id missing not found");
+    expect(seen).toEqual([]);
+
+    store.append({ kind: "invocation", at: 1, record: record({ id: "accepted" }) });
+    expect(seen).toHaveLength(1);
+    expect(store.actions.has("accepted")).toBe(true);
+  });
+
+  test("leaves the index unchanged when a sink throws", () => {
+    const failure = new Error("sink unavailable");
+    const store = new MemoryStore("keepAll", {
+      append() {
+        throw failure;
+      },
+    });
+
+    expect(() =>
+      store.append({ kind: "invocation", at: 1, record: record({ id: "rejected" }) }),
+    ).toThrow(failure);
+    expect(store.actions.size).toBe(0);
   });
 });
 

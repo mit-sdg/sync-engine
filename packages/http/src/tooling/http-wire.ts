@@ -6,8 +6,9 @@ import type {
 import type { WireProjectionFacts } from "@mit-sdg/sync-engine/boundary";
 import { HTTP_PACKAGE_NAME, HTTP_PACKAGE_VERSION } from "../package-version.ts";
 import type { HttpFloor } from "../server/floor.ts";
-import { projectHttpWire, validateHttpFloor } from "../server/floor.ts";
+import { httpFloor, projectHttpWire, validateHttpFloor } from "../server/floor.ts";
 import type { ProductionHttpProfile } from "../server/policy.ts";
+import { productionHttpProfile } from "../server/policy.ts";
 import { projectProductionHttpWire } from "../server/public-errors.ts";
 
 export interface HttpWireOptions {
@@ -21,7 +22,9 @@ function isFloor(policy: ProductionHttpProfile | HttpFloor): policy is HttpFloor
 
 /** Derive the browser-visible contract from the same policy used by the handler. */
 export function httpWire(options: HttpWireOptions): WireProjection {
-  const policy = options.policy;
+  const policy = isFloor(options.policy)
+    ? httpFloor(options.policy)
+    : productionHttpProfile(options.policy);
   const name = options.name;
   return Object.freeze({
     provenance: Object.freeze({ name: HTTP_PACKAGE_NAME, version: HTTP_PACKAGE_VERSION }),

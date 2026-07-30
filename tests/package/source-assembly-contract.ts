@@ -1,5 +1,11 @@
 import { assemble, conceptSet, Logging, registerConcept } from "@sync-engine/assembly";
-import type { ActionRefusal, AssemblyOptions, ConceptImplementation } from "@sync-engine/assembly";
+import type {
+  ActionRefusal,
+  AssemblyOptions,
+  ConceptImplementation,
+  LogEntry,
+  LogSink,
+} from "@sync-engine/assembly";
 import type { GatewayOptions } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/language";
 import type { ApplicationManifestV3 } from "@sync-engine/tooling";
@@ -142,11 +148,15 @@ const synchronousVocabulary = vocabulary({
   concepts: { Saving: SynchronousActionConcept },
   computations: {},
 });
+const occurrenceEntries: LogEntry[] = [];
+const logSink: LogSink = { append: (entry) => occurrenceEntries.push(entry) };
 const synchronousOptions: AssemblyOptions<{ Saving: typeof SynchronousActionConcept }, {}> = {
   vocabulary: synchronousVocabulary,
   composition: {},
   initialize: { Saving: ["saved:"] },
   logging: Logging.TRACE,
+  logSink,
+  retention: "keepAll",
 };
 const instrumentedSurface = assemble(synchronousOptions);
 
@@ -156,6 +166,7 @@ const saved: Promise<{ value: string } | ActionRefusal> = instrumentedSurface.co
 void saved;
 const queried: Promise<{ value: string }[]> = instrumentedSurface.concepts.Saving._saved({});
 void queried;
+void occurrenceEntries;
 
 // @ts-expect-error Assembled queries are lifecycle-tracked asynchronous roots.
 const synchronousQuery: { value: string }[] = instrumentedSurface.concepts.Saving._saved({});

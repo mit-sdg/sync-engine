@@ -177,7 +177,7 @@ describe("artifact plans", () => {
     ).toThrow('duplicate generated type name "PingWire"');
   });
 
-  test("rejects a manifest produced by another generator version", () => {
+  test("accepts the manifest format across stable generator versions", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
     const manifest = applicationManifest(
       assemble({
@@ -187,8 +187,10 @@ describe("artifact plans", () => {
     );
     manifest.generator.version = "9.9.9";
 
+    expect(() => planGenerated(manifest, { title: "Ping service" })).not.toThrow();
+    manifest.generator.version = "1.0.0-beta.3";
     expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
-      `requires generator ${PACKAGE_NAME}@${PACKAGE_VERSION}`,
+      `requires a stable ${PACKAGE_NAME} generator identity`,
     );
   });
 

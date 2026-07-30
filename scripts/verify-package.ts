@@ -286,9 +286,10 @@ function assertWorkspacePeers(
 ): void {
   for (const peerId of workspace.peerWorkspaceIds) {
     const peer = workspaceArtifact(artifacts, workspaceById(peerId));
-    if (manifest.peerDependencies?.[peer.workspace.packageName] !== peer.manifest.version) {
+    const expected = `^${peer.manifest.version}`;
+    if (manifest.peerDependencies?.[peer.workspace.packageName] !== expected) {
       throw new Error(
-        `${workspace.id} must declare an exact peer on ${peer.workspace.packageName}@${peer.manifest.version}`,
+        `${workspace.id} must declare peer ${peer.workspace.packageName}@${expected}`,
       );
     }
   }

@@ -166,7 +166,10 @@ describe("raw step transforms", () => {
           conditionOp(refs.List._items({}).is({ value }), "test step transform") as WhereOp,
           custom((item) => `v:${String(item)}`, [value], [tag]),
         ];
-        completion.transform = (frames) => applyWhereOps(frames, completion.transformOps ?? []);
+        completion.transform = (frames) => {
+          const transformed = Promise.resolve(applyWhereOps(frames, completion.transformOps ?? []));
+          return { then: transformed.then.bind(transformed) };
+        };
         return when(refs.Button.clicked({ kind: "fanout" }).responds())
           .then(completion as never)
           .then(refs.Recorder.record({ tag }))

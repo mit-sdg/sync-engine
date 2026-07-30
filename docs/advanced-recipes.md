@@ -15,7 +15,7 @@ import * as fs from "node:fs";
 ```
 
 ```ts
-import { FileStore, assemble } from "@mit-sdg/sync-engine/assembly";
+import { FileLogSink, assemble } from "@mit-sdg/sync-engine/assembly";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 ```
 
@@ -23,15 +23,15 @@ import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 
 Keep domain state, occurrence evidence, and recovery policy separate. This
 example gives `FileBackedNotes` ownership of durable note state, supplies a
-different JSONL path to the assembly's `FileStore`, and derives a process-local
+different JSONL path to the assembly's `FileLogSink`, and derives a process-local
 search index through a reaction.
 
-| Concern             | Owner                                | What survives restart                                   |
-| ------------------- | ------------------------------------ | ------------------------------------------------------- |
-| Occurrence evidence | Assembly host through `FileStore`    | JSONL bytes only; a new store starts with empty indexes |
-| Concept state       | `FileBackedNotes` and its state file | Saved notes, loaded by a fresh concept instance         |
-| Derived state       | `SearchIndexConcept` process         | Nothing automatically                                   |
-| Restart recovery    | Host/application code                | Explicit policy in `recoverSearchIndex`                 |
+| Concern             | Owner                                | What survives restart                               |
+| ------------------- | ------------------------------------ | --------------------------------------------------- |
+| Occurrence evidence | Assembly host through `FileLogSink`  | JSONL bytes only; every assembly owns a fresh index |
+| Concept state       | `FileBackedNotes` and its state file | Saved notes, loaded by a fresh concept instance     |
+| Derived state       | `SearchIndexConcept` process         | Nothing automatically                               |
+| Restart recovery    | Host/application code                | Explicit policy in `recoverSearchIndex`             |
 
 ```ts
 type Note = { note: string; text: string };
@@ -81,7 +81,7 @@ const IndexSavedNote = reaction(({ note, text }) =>
 );
 
 function assembleNotebook(statePath: string, occurrencePath: string) {
-  const occurrenceStore = new FileStore(occurrencePath);
+  const occurrenceSink = new FileLogSink(occurrencePath);
   const application = assemble({
     vocabulary: notebookVocabulary,
     composition: { IndexSavedNote },
@@ -89,9 +89,10 @@ function assembleNotebook(statePath: string, occurrencePath: string) {
       Notes: new FileBackedNotes(statePath),
       SearchIndex: new SearchIndexConcept(),
     },
-    logStore: occurrenceStore,
+    logSink: occurrenceSink,
+    retention: "keepAll",
   });
-  return { application, occurrenceStore };
+  return { application, occurrenceSink };
 }
 
 async function recoverSearchIndex(
@@ -108,11 +109,11 @@ async function recoverSearchIndex(
 1. Construct the first assembly with separate concept-state and occurrence
    paths.
 2. Call `Notes.save`. The concept writes its state file, the reaction updates
-   the process-local index, and `FileStore` appends occurrence evidence.
+   the process-local index, and `FileLogSink` appends occurrence evidence.
 3. Stop admission and await `application.beginDrain()` before closing resources
    or constructing a replacement process.
 4. Construct a new assembly. `FileBackedNotes` loads durable state, while the
-   new search index and the `FileStore` in-memory indexes begin empty.
+   new search index and the assembly's occurrence index begin empty.
 5. Call `recoverSearchIndex`. The recovery procedure reads durable concept
    state and invokes the index action explicitly.
 
@@ -121,13 +122,13 @@ A successful `Notes.save` writes `notes.json`, while the assembly records the
 `occurrences.jsonl`. Drain the old assembly before closing host resources and
 constructing the replacement.
 
-On reconstruction, `FileBackedNotes` loads `notes.json`. A new `FileStore` over
-the existing `occurrences.jsonl` does **not** read that file into its in-memory
-indexes, replay the old reaction, or rebuild the search index. The derived query
+On reconstruction, `FileBackedNotes` loads `notes.json`. A new `FileLogSink` over
+the existing `occurrences.jsonl` does **not** read that file into the assembly's
+index, replay the old reaction, or rebuild the search index. The derived query
 therefore remains empty until the host explicitly calls `recoverSearchIndex`,
 which reads durable concept state and invokes the derived concept's action.
 
-`FileStore` composes a live in-memory occurrence index with an append-only JSONL
-audit sink; it is not a transactional production database. A production
+`FileLogSink` is an append-only JSONL audit sink; it is not a transactional
+production database. A production
 implementation must define atomic writes, schema migration, concurrency,
 durability, and recovery failure handling in its own storage layer and host.

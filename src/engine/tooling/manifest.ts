@@ -16,7 +16,7 @@ export interface ManifestEndpointV3 {
   path: string;
   reactions: string[];
   input: InputContractDecl;
-  validators: { input: boolean; output: boolean };
+  validators: { input: boolean; output: boolean; domainError?: true };
 }
 
 export interface ApplicationManifestV3 {
@@ -137,6 +137,9 @@ export function applicationManifest(
       validators: {
         input: assembled.validators[path]?.input !== undefined,
         output: assembled.validators[path]?.output !== undefined,
+        ...(assembled.validators[path]?.domainError === undefined
+          ? {}
+          : { domainError: true as const }),
       },
     }))
     .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`));

@@ -1,4 +1,4 @@
-import type { FiringRecord, LogStore } from "./log-store.ts";
+import type { FiringRecord, MemoryStore } from "./log-store.ts";
 import { uuid } from "@engine/utils/runtime";
 import { redact } from "@engine/utils/redaction";
 import type { Redactor } from "@engine/utils/redaction";
@@ -22,7 +22,7 @@ export class FiringBook {
   private readonly inFlightConsumed = new Map<string, Map<string, number>>();
 
   constructor(
-    private readonly store: LogStore,
+    private readonly store: MemoryStore,
     private readonly admit?: (flow: string) => void,
     private readonly redactor: Redactor = { redact },
   ) {}

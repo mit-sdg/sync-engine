@@ -1,7 +1,7 @@
 # sync-engine
 
-[![npm beta](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm%20beta)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
-[![HTTP npm beta](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP%20npm%20beta)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
+[![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/latest?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
+[![HTTP npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/latest?label=HTTP%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is a TypeScript library for composing independently implemented
@@ -22,11 +22,10 @@ read-back and TypeScript boundary contract from that assembly.
 
 ## Status and requirements
 
-Version 1 is beta. It is not recommended as a sole production control plane.
-Public APIs, execution behavior, and generated formats may change incompatibly
-between beta releases. Only the newest beta is supported; pin an exact version,
-read the [support policy](SUPPORT.md), and review the [operational
-limits](docs/operations.md) before choosing a deployment.
+Version 1 is stable. The current release is `1.0.0`, published under npm's
+`latest` dist-tag and the annotated git tag `v1.0.0`. Only the newest stable 1.x
+release is supported. Read the [support policy](SUPPORT.md) and review the
+[operational limits](docs/operations.md) before choosing a deployment.
 
 The package is ESM-only. See the [support policy](SUPPORT.md) for current runtime
 and toolchain requirements.
@@ -34,14 +33,14 @@ and toolchain requirements.
 ## Install in an existing project
 
 ```sh
-bun add @mit-sdg/sync-engine@beta
+bun add @mit-sdg/sync-engine@latest
 ```
 
-For the maintained HTTP handler, fetch client, and generated wire projection,
-install the companion alongside the same exact beta:
+For an exactly reproducible installation of the maintained HTTP handler, fetch
+client, and generated wire projection, install both current releases:
 
 ```sh
-bun add @mit-sdg/sync-engine@1.0.0-beta.3 @mit-sdg/sync-engine-http@1.0.0-beta.3
+bun add @mit-sdg/sync-engine@1.0.0 @mit-sdg/sync-engine-http@1.0.0
 ```
 
 ## Packages
@@ -52,21 +51,21 @@ bun add @mit-sdg/sync-engine@1.0.0-beta.3 @mit-sdg/sync-engine-http@1.0.0-beta.3
 | `@mit-sdg/sync-engine-http` | Maintained HTTP handler, fetch client, and generated wire projection   |
 
 Core can be installed alone for local clients and custom transports. The HTTP
-package is independently published and requires the exact matching core beta as
-a peer dependency. Neither package has a root export. Use the supported core
+package is independently published and declares `@mit-sdg/sync-engine@^1.0.0`
+as a peer dependency. Neither package has a root export. Use the supported core
 subpaths and the HTTP package's `/server`, `/client`, and `/tooling` subpaths
 listed in the [Public API](docs/public-surface.md).
 
 ## Create an application
 
 ```sh
-bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@latest sync-engine new note-keeper
 cd note-keeper
 bun install
 ```
 
-For a reproducible evaluation, replace `@beta` with the exact version
-`@1.0.0-beta.3`.
+For a reproducible evaluation, replace `@latest` with the exact version
+`@1.0.0`.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
@@ -175,13 +174,13 @@ bun install
 bun run scenario
 ```
 
-## Upgrading beta versions
+## Upgrading stable versions
 
-Beta releases may make incompatible changes with explicit migration notes.
-Before changing a pinned version, read the [changelog](CHANGELOG.md) and the
-corresponding [GitHub release](https://github.com/mit-sdg/sync-engine/releases).
-Regenerate and review all pinned artifacts; generated clients, servers, and
-tooling must use the same exact package version.
+Stable releases follow Semantic Versioning. Before changing a pinned version,
+read the [changelog](CHANGELOG.md) and the corresponding [GitHub
+release](https://github.com/mit-sdg/sync-engine/releases). Regenerate and review
+all pinned artifacts, keep independently published packages within their
+declared peer ranges, and typecheck their consumers.
 
 ## License
 

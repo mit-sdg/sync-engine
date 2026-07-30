@@ -11,21 +11,23 @@ export type {
   RegisteredConcept,
   RegisteredConceptSet,
 } from "@engine/boundary/assembly/concept-set";
-export { FileStore } from "@engine/hosting/file-store";
-export { MemoryStore } from "@engine/reactions/runtime/log-store";
+export { FileLogSink } from "@engine/hosting/file-store";
 export { Logging } from "@engine/reactions/runtime/logging";
 export type { ExecutionLimits } from "@engine/boundary/invocation/lifecycle";
 export type {
   OperationalEvent,
   OperationalObserver,
   OperationalResultClass,
+  RawFaultReport,
+  RawFaultReporter,
 } from "@engine/reactions/runtime/operational";
 export type { ActionRefusal } from "@engine/reactions/runtime/instrumenting";
+export type { QueryCacheMode } from "@engine/reactions/runtime/instrumenting";
 export type {
   FiringRecord,
   IntegrityFailureRecord,
   LogEntry,
-  LogStore,
+  LogSink,
   ReactionFailureRecord,
   RetentionPolicy,
 } from "@engine/reactions/runtime/log-store";

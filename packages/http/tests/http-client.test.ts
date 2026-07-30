@@ -342,6 +342,46 @@ describe("createHttpClient", () => {
     );
   });
 
+  test("a PromiseLike header provider supplies request headers", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const client = createHttpClient<TestApi>({
+      baseUrl: "http://localhost",
+      fetch,
+      headers: () => {
+        const headers = Promise.resolve({ "X-Trace": "trace-thenable" });
+        return { then: headers.then.bind(headers) };
+      },
+    });
+
+    await client.auth.login({ username: "a", password: "b" });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost/auth/login",
+      expect.objectContaining({
+        headers: {
+          "Content-Type": "application/json",
+          "X-Trace": "trace-thenable",
+        },
+      }),
+    );
+  });
+
+  test("forwards response validation through the HTTP client convenience", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const client = createHttpClient<TestApi>({
+      baseUrl: "http://localhost",
+      fetch,
+      validateResponse: (value, { path }) =>
+        path === "/auth/login" && (value as { token?: unknown }).token === "x"
+          ? { ok: true }
+          : { ok: false },
+    });
+
+    await expect(client.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      token: "x",
+    });
+  });
+
   test("requests include credentials by default", async () => {
     const fetch = mockFetch({ token: "x" });
     const client = makeClient(fetch);
@@ -401,6 +441,90 @@ describe("createHttpClient", () => {
       error: HttpClientErrorCode.BAD_JSON,
       detail: expect.stringContaining("Failed to read"),
     });
+  });
+
+  test("passes correlation and timeout context to the header provider", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const contexts: unknown[] = [];
+    const client = createHttpClient<TestApi>({
+      baseUrl: "http://localhost",
+      fetch,
+      headers: (context) => {
+        contexts.push(context);
+        return { "X-Correlation-Id": context.correlationId ?? "missing" };
+      },
+    });
+
+    await client.auth.login(
+      { username: "a", password: "b" },
+      { timeoutMs: 250, correlationId: "trace-http" },
+    );
+
+    expect(contexts).toEqual([
+      expect.objectContaining({
+        path: "/auth/login",
+        timeoutMs: 250,
+        correlationId: "trace-http",
+        signal: expect.any(AbortSignal),
+      }),
+    ]);
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost/auth/login",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Correlation-Id": "trace-http" }),
+      }),
+    );
+  });
+
+  test("applies a transport-local timeout", async () => {
+    const fetch = vi.fn(
+      (_input: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
+            once: true,
+          });
+        }),
+    ) as unknown as typeof globalThis.fetch;
+    const client = makeClient(fetch);
+
+    await expect(
+      client.auth.login({ username: "a", password: "b" }, { timeoutMs: 5 }),
+    ).resolves.toEqual({ error: FrameworkErrorCode.TIMED_OUT });
+  });
+
+  test("bounds streamed response bodies by bytes and cancels oversized streams", async () => {
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"token":"too-large"}'));
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const fetch = vi.fn(() =>
+      Promise.resolve(new Response(stream)),
+    ) as unknown as typeof globalThis.fetch;
+    const client = makeClient(fetch, { maxResponseBytes: 8 });
+
+    await expect(client.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      error: HttpClientErrorCode.RESPONSE_TOO_LARGE,
+    });
+    expect(canceled).toBe(true);
+  });
+
+  test("rejects an oversized Content-Length and invalid response limits", async () => {
+    const fetch = vi.fn(() =>
+      Promise.resolve(new Response('{"token":"x"}', { headers: { "Content-Length": "100" } })),
+    ) as unknown as typeof globalThis.fetch;
+    const client = makeClient(fetch, { maxResponseBytes: 10 });
+
+    await expect(client.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      error: HttpClientErrorCode.RESPONSE_TOO_LARGE,
+    });
+    expect(() => makeClient(fetch, { maxResponseBytes: 0 })).toThrow(
+      "maxResponseBytes must be a positive finite integer",
+    );
   });
 });
 

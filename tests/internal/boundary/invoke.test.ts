@@ -364,6 +364,26 @@ describe("createLocalClient", () => {
       error: FrameworkErrorCode.ABORTED,
     });
   });
+
+  test("forwards timeout and correlation through local invocation", async () => {
+    let observed: unknown;
+    const invoker = {
+      invoke(path: string, input: unknown, options: unknown) {
+        observed = { path, input, options };
+        return Promise.resolve({ ok: true, value: { echoed: "tracked" } });
+      },
+    };
+    const client = createLocalClient<TestApi>({ invoker: invoker as never });
+
+    await expect(
+      client.echo({ message: "tracked" }, { timeoutMs: 250, correlationId: "trace-local" }),
+    ).resolves.toEqual({ echoed: "tracked" });
+    expect(observed).toEqual({
+      path: "/echo",
+      input: { message: "tracked" },
+      options: { signal: undefined, timeoutMs: 250, correlationId: "trace-local" },
+    });
+  });
 });
 
 describe("createInvoker non-DOMException with aborted signal", () => {

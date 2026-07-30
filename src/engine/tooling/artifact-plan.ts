@@ -6,6 +6,7 @@ import { canonicalDigest } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
 import {
   assertCurrentGenerator,
+  isStableSemVer,
   PACKAGE_NAME,
   PACKAGE_VERSION,
 } from "@engine/utils/package-version";
@@ -132,9 +133,12 @@ export function planGenerated(
     const appWideErrorName =
       projection.render?.appWideErrorName ?? `${projection.name}AppWideError`;
     reserveTypeName(appWideErrorName, "projected app-wide error");
-    if (projection.provenance.name.trim() === "" || projection.provenance.version.trim() === "") {
+    if (
+      projection.provenance.name.trim() === "" ||
+      !isStableSemVer(projection.provenance.version)
+    ) {
       throw new Error(
-        "generated artifacts: projection provenance needs a package name and version.",
+        "generated artifacts: projection provenance needs a package name and stable SemVer version.",
       );
     }
   }

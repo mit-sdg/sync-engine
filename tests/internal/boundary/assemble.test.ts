@@ -8,7 +8,8 @@
  * reaction's name — never a silent tiebreak.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { Logging, MemoryStore } from "@sync-engine/assembly";
+import { Logging } from "@sync-engine/assembly";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { no, reaction, vocabulary, when, where } from "@sync-engine/language";
 import { Frames } from "@sync-engine/internal/reads/frames";
@@ -16,7 +17,12 @@ import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble
 import { wireContracts } from "@sync-engine/tooling";
 
 class CountingConcept {
-  static readonly queries = { _current: "one", _named: "optional", _seen: "many" } as const;
+  // Deliberately broad so this runtime suite can exercise a violated cardinality promise.
+  static readonly queries: Record<string, "one" | "optional" | "many"> = {
+    _current: "one",
+    _named: "optional",
+    _seen: "many",
+  };
   count: number;
   constructor(start = 0) {
     this.count = start;
@@ -55,6 +61,12 @@ const Increment = endpoint("/counter/increment", ({ count }) =>
 );
 
 describe("assemble", () => {
+  test("rejects an unknown query cache mode", () => {
+    expect(() =>
+      assemble({ vocabulary: vocab, composition: { Increment }, queryCache: "ttl" as never }),
+    ).toThrow('queryCache must be "memoize" or "none"');
+  });
+
   test("retains the newest 100 settled flows by default and accepts an override", () => {
     const app = assemble({ vocabulary: vocab, composition: { Increment } });
     const keepAll = assemble({

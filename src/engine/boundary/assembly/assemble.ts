@@ -28,16 +28,16 @@ import { $vars } from "@engine/reactions/authoring/vars";
 import { when } from "@engine/reactions/authoring/words";
 import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metadata";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
-import type { InstrumentedConcept } from "@engine/reactions/runtime/instrumenting";
+import type { InstrumentedConcept, QueryCacheMode } from "@engine/reactions/runtime/instrumenting";
 import {
   MemoryStore,
-  type LogStore,
+  type LogSink,
   type RetentionPolicy,
 } from "@engine/reactions/runtime/log-store";
 import { Logging } from "@engine/reactions/runtime/logging";
 import type { EngineObserver } from "@engine/reactions/runtime/logging";
 import { OperationalEvents } from "@engine/reactions/runtime/operational";
-import type { OperationalObserver } from "@engine/reactions/runtime/operational";
+import type { OperationalObserver, RawFaultReporter } from "@engine/reactions/runtime/operational";
 import { Reacting } from "@engine/reactions/runtime/reacting";
 import type {
   Mapping,
@@ -221,12 +221,16 @@ export interface AssembleBaseOptions<
   logging?: Logging;
   /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
   retention?: RetentionPolicy;
-  /** Application-owned occurrence store. It cannot be combined with `retention`. */
-  logStore?: LogStore;
+  /** Query evaluation policy; defaults to flow-local memoization. */
+  queryCache?: QueryCacheMode;
+  /** Synchronous application-owned destination for already-redacted occurrence entries. */
+  logSink?: LogSink;
   /** Opt-in production execution limits. */
   executionLimits?: ExecutionLimits;
   /** Bounded synchronous handoff for stable operational events. */
   observers?: readonly OperationalObserver[];
+  /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
+  rawFaultReporter?: RawFaultReporter;
   /** Additional sensitive field names for this assembly only. */
   redaction?: RedactionPolicy;
 }
@@ -326,14 +330,19 @@ export function assemble<
 export function assemble<T extends Record<string, ConceptClass>>(
   options: AssembleOptions<T>,
 ): AssembledApp<T> {
-  if (options.logStore !== undefined && options.retention !== undefined) {
-    throw new Error("assemble: logStore and retention cannot both be supplied.");
+  if (options.queryCache !== undefined && !["memoize", "none"].includes(options.queryCache)) {
+    throw new Error('assemble: queryCache must be "memoize" or "none".');
   }
   const operational = new OperationalEvents(options.observers);
   const lifecycle = new RuntimeLifecycle(options.executionLimits, operational);
-  const store = options.logStore ?? new MemoryStore(options.retention ?? { window: 100 });
+  const store = new MemoryStore(options.retention ?? { window: 100 }, options.logSink);
   const redactor = createRedactor(options.redaction);
-  const engine = new Reacting(new ActionConcept(store, operational, redactor), lifecycle);
+  const engine = new Reacting(
+    new ActionConcept(store, operational, redactor, options.rawFaultReporter),
+    lifecycle,
+    true,
+    options.queryCache,
+  );
   engine.logging = options.logging ?? Logging.OFF;
   engine.registerComputations(vocabularyComputations(options.vocabulary));
 
@@ -419,7 +428,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
       }
       if (value.validators !== undefined) {
         let existing = validators[value.path] ?? {};
-        for (const kind of ["input", "output"] as const) {
+        for (const kind of ["input", "output", "domainError"] as const) {
           const validator = value.validators[kind];
           if (validator === undefined) continue;
           if (existing[kind] !== undefined) {
@@ -478,13 +487,23 @@ export function assemble<T extends Record<string, ConceptClass>>(
     validators,
     routes: endpointPaths,
     lifecycle,
-    onInvalidOutput: ({ path, requestId, errorClass }) => {
+    onInvalidResponse: ({ path, requestId, phase, errorClass }) => {
       engine.Action._recordIntegrityFailure({
-        kind: "invalid-output",
+        kind: phase === "output" ? "invalid-output" : "invalid-domain-error",
         flow: requestId,
         route: path,
         errorClass,
         at: Date.now(),
+      });
+    },
+    onValidatorFault: ({ path, requestId, phase, error }) => {
+      engine.Action._reportRawFault({
+        kind: "endpoint-validator",
+        error,
+        at: Date.now(),
+        ...(requestId === undefined ? {} : { flow: requestId }),
+        route: path,
+        phase,
       });
     },
     refresh: () => engine.invalidateAllCaches(),

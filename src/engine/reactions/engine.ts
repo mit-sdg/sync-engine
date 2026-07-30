@@ -6,7 +6,7 @@
  */
 
 import { ActionConcept } from "./runtime/actions.ts";
-import type { LogStore } from "./runtime/log-store.ts";
+import { MemoryStore, type LogSink, type RetentionPolicy } from "./runtime/log-store.ts";
 import type { Logging } from "./runtime/logging.ts";
 import type { EngineObserver } from "./runtime/logging.ts";
 import type { ReactionMap } from "./types.ts";
@@ -58,7 +58,14 @@ export interface Engine {
   form(fused: FusedFormer): Promise<unknown>;
 }
 
-/** Construct an engine with an optional log store. */
-export function createEngine(store?: LogStore): Engine {
-  return new Reacting(new ActionConcept(store));
+export interface EngineOptions {
+  retention?: RetentionPolicy;
+  logSink?: LogSink;
+}
+
+/** Construct an engine with an engine-owned occurrence index. */
+export function createEngine(options: EngineOptions = {}): Engine {
+  return new Reacting(
+    new ActionConcept(new MemoryStore(options.retention ?? "evictConsumed", options.logSink)),
+  );
 }

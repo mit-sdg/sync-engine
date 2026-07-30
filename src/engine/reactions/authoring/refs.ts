@@ -165,21 +165,48 @@ type QueryRowIsValid<T> = T extends (...args: never[]) => unknown
 type QueryAnswerIsValid<T> =
   Awaited<T> extends readonly (infer Row)[] ? QueryRowIsValid<Row> : QueryRowIsValid<Awaited<T>>;
 
-type InvalidQueryKeys<I> = {
+type QueryAnswerMatchesPromise<Answer, Promise> = [Promise] extends [never]
+  ? QueryAnswerIsValid<Answer>
+  : QueryPromise extends Promise
+    ? QueryAnswerIsValid<Answer>
+    : [Promise] extends ["one"]
+      ? Awaited<Answer> extends readonly unknown[]
+        ? false
+        : QueryRowIsValid<Awaited<Answer>>
+      : [Promise] extends ["optional" | "many"]
+        ? Awaited<Answer> extends readonly (infer Row)[]
+          ? QueryRowIsValid<Row>
+          : false
+        : QueryAnswerIsValid<Answer>;
+
+type DeclaredQueryPromise<Entry, Key extends PropertyKey> = Entry extends {
+  readonly queries: infer Queries;
+}
+  ? Key extends keyof Queries
+    ? Queries[Key]
+    : never
+  : Entry extends { readonly class: infer Class }
+    ? Class extends { readonly queries: infer Queries }
+      ? Key extends keyof Queries
+        ? Queries[Key]
+        : never
+      : never
+    : never;
+
+type InvalidQueryKeys<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
   [K in QueryKeys<I>]: I[K] extends (...args: never[]) => infer Answer
-    ? QueryAnswerIsValid<Answer> extends true
+    ? QueryAnswerMatchesPromise<Answer, DeclaredQueryPromise<Entry, K>> extends true
       ? never
       : K
     : K;
 }[QueryKeys<I>];
 
-type ValidConceptClass<C extends ConceptClass> =
-  InvalidQueryKeys<InstanceType<C>> extends never ? C : never;
-
 type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass
-  ? ValidConceptClass<E>
+  ? InvalidQueryKeys<E> extends never
+    ? E
+    : never
   : E extends ConceptDeclaration<infer C>
-    ? E & { readonly class: ValidConceptClass<C> }
+    ? E & { readonly class: InvalidQueryKeys<E> extends never ? C : never }
     : never;
 
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
@@ -316,8 +343,8 @@ function conceptRefProxy(
  * uses the declaration to construct default concept instances.
  */
 export function vocabulary<
-  TConcepts extends Record<string, ConceptEntry>,
-  TComputations extends Record<string, ComputationFn>,
+  const TConcepts extends Record<string, ConceptEntry>,
+  const TComputations extends Record<string, ComputationFn>,
 >(
   declaration: VocabularyDeclaration<TConcepts, TComputations> & {
     concepts: CheckedConceptEntries<TConcepts>;

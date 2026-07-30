@@ -1,12 +1,16 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Logging, MemoryStore } from "@sync-engine/assembly";
+import { Logging } from "@sync-engine/assembly";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
 import { earlier, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
 import { actionNodeId } from "@sync-engine/internal/reactions/concepts/introspect";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";
-import type { LogEntry } from "@sync-engine/internal/reactions/runtime/log-store";
+import {
+  MemoryStore,
+  type LogEntry,
+  type LogSink,
+} from "@sync-engine/internal/reactions/runtime/log-store";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import {
   ButtonConcept,
@@ -361,10 +365,10 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     reacting.register({
       Retained: (_vars: Vars) =>
         when(mockRefs.Button.clicked({ kind: "retained" }).responds())
-          .where(async (frames: Frames) => {
+          .where((frames: Frames) => {
             enteredWhere();
-            await waitForRelease;
-            return frames;
+            const filtered = waitForRelease.then(() => frames);
+            return { then: filtered.then.bind(filtered) };
           })
           .then(mockRefs.Recorder.record({ tag: "kept" })),
     });
@@ -383,13 +387,12 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
   });
 
   test("a consequence ask remains produced when recording its fault fails", async () => {
-    class FaultRejectingStore extends MemoryStore {
-      override append(entry: LogEntry): void {
+    class FaultRejectingSink implements LogSink {
+      append(entry: LogEntry): void {
         if (entry.kind === "fault") throw new Error("fault store unavailable");
-        super.append(entry);
       }
     }
-    const store = new FaultRejectingStore();
+    const store = new MemoryStore("evictConsumed", new FaultRejectingSink());
     const reacting = new Reacting(new ActionConcept(store));
     reacting.logging = Logging.OFF;
     const { Button } = reacting.instrument({

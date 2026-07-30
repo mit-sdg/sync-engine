@@ -45,7 +45,7 @@ import { ActionScheduler } from "./action-scheduler.ts";
 import { ActionConcept, breachLimit, type ActionRecord } from "./actions.ts";
 import { FiringBook } from "./firing.ts";
 import { FiringPipeline } from "./firing-pipeline.ts";
-import { ConceptInstrumentation } from "./instrumenting.ts";
+import { ConceptInstrumentation, type QueryCacheMode } from "./instrumenting.ts";
 import { Logging, ReactionLogger } from "./logging.ts";
 import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./logging.ts";
@@ -69,7 +69,12 @@ export class Reacting {
   private readonly firingPipeline: FiringPipeline;
   private readonly execution?: ExecutionControl;
 
-  constructor(actionConcept: ActionConcept = new ActionConcept(), execution?: ExecutionControl) {
+  constructor(
+    actionConcept: ActionConcept = new ActionConcept(),
+    execution?: ExecutionControl,
+    requireDeclaredRefusals = false,
+    queryCache: QueryCacheMode = "memoize",
+  ) {
     this.Action = actionConcept;
     this.execution = execution;
     this.reactionLogger = new ReactionLogger(actionConcept, actionConcept.redactor);
@@ -86,6 +91,8 @@ export class Reacting {
       actions: actionConcept,
       scheduler: this.actionScheduler,
       execution,
+      requireDeclaredRefusals,
+      queryCache,
       react: (record, durationMs) => this.react(record, durationMs),
       emit: (record, durationMs) => this.reactionLogger.emit(record, durationMs),
       registerConcept: (name, instrumented) => this.registry.registerConcept(name, instrumented),
