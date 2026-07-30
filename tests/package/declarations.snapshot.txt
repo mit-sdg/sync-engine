@@ -1601,6 +1601,9 @@ export interface ActionScheduling {
 /** Serializes action bodies independently for each raw concept instance. */
 export declare class ActionScheduler implements ActionScheduling {
     private readonly schedules;
+    private readonly reservations;
+    private blockerOf;
+    private cycleBreaker;
     reserve<Input, Result>({ concept, flow, body, input, onBodySettled, }: ActionScheduleRequest<Input, Result>): ActionReservation<Awaited<Result>>;
     /** Whether the concept has no reserved or running action body. */
     isIdle(concept: object): boolean;
@@ -1753,11 +1756,13 @@ export declare class FiringPipeline {
         formerNamed(name: string): FormerRef | undefined;
         readEnv(): ReadEnv;
     }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
-    fire(record: ActionRecord, reaction: ExecutableReaction): Promise<void>;
+    fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void>;
+    private prepare;
+    private dispatch;
     private capture;
     private assertProvenance;
     private triggerIdsOf;
-    private dispatch;
+    private dispatchFrames;
     matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
     private bindingsOf;
     private runPipelineForFrame;

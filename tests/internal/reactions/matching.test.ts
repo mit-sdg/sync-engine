@@ -79,8 +79,6 @@ describe("reaction matching", () => {
       action,
       concept,
       input: { key: "value" },
-      output: {},
-      outcome: { kind: "result", value: {} },
       fault: { message: "boom" },
       flow: "flow",
     };
@@ -88,7 +86,7 @@ describe("reaction matching", () => {
       action,
       concept,
       input: { key: "value" },
-      output: {},
+      output: { message: "boom" },
       flow: Symbol("flow"),
       posture: "faulted",
     };
@@ -164,6 +162,13 @@ describe("reaction matching", () => {
     const matcher = oneOf("a", "b");
     expect(unifyPattern({ role: "a" }, { role: matcher }, {})).toBeDefined();
     expect(unifyPattern({ role: "c" }, { role: matcher }, {})).toBeUndefined();
+  });
+
+  test("oneOf candidates use structural equality", () => {
+    expect(unifyPattern({ role: { kind: "a" } }, { role: oneOf({ kind: "a" }) }, {})).toBeDefined();
+    expect(
+      unifyPattern({ role: { kind: "a" } }, { role: { $oneOf: [{ kind: "a" }] } }, {}),
+    ).toBeDefined();
   });
 
   test("unifyPattern matches a record value against a $is marker's live value", () => {

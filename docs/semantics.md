@@ -186,10 +186,12 @@ thenable, including a Promise from another JavaScript realm, is not covered by
 that wait. Supplying one raw instance to several engines creates separate
 queues and query caches and does not serialize those engines. Different concept
 instances and separate root flows can overlap.
-Reactions for one landed occurrence are currently evaluated sequentially, but
-applications must not use that order as semantic priority. No engine-wide lock
-serializes all concepts or all flows, and the guarantee does not extend across
-processes.
+Reactions for one landed occurrence are currently evaluated sequentially. Their
+trigger and `where` stages all finish before any matching consequence is
+dispatched, so one sibling consequence cannot change another sibling's guard.
+Applications must not use evaluation order as semantic priority. No engine-wide
+lock serializes all concepts or all flows, and the guarantee does not extend
+across processes.
 
 ## Reading: declarations govern
 

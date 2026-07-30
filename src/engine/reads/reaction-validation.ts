@@ -83,7 +83,7 @@ function assertDataValue(reactionName: string, action: string, key: string, valu
         "portable patterns cannot represent undefined; omit the key instead.",
     );
   }
-  if (["boolean", "number", "string", "bigint"].includes(typeof value)) return;
+  if (["boolean", "number", "string"].includes(typeof value)) return;
   if (isFusedFormer(value)) return;
   if (Array.isArray(value)) {
     for (const item of value) assertDataValue(reactionName, action, key, item);

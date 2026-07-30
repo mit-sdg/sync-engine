@@ -139,7 +139,7 @@ export function expandOutputRows(
       const rowValue = (row as Record<string, unknown>)[outputKey];
       const key = varKeyOf(pattern);
       if (key !== undefined) {
-        if (Object.hasOwn(frame, key) && !structurallyEqual(frame[key], rowValue)) {
+        if (Object.hasOwn(newFrame, key) && !structurallyEqual(newFrame[key], rowValue)) {
           unifies = false;
           break;
         }

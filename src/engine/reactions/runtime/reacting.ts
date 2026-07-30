@@ -138,7 +138,16 @@ export class Reacting {
 
   register(reactions: ReactionMap): void {
     const prepared = Object.entries(reactions).map(([base, reaction]) => {
-      const leaves = declarationsOf(reaction($vars)).map((raw, index) => {
+      const lowered: Array<{
+        executable: ExecutableReaction;
+        reaction: ReactionIR;
+      }> = [];
+      const unlowered: Array<{
+        definition: ReturnType<typeof serializeUnloweredReaction>;
+        executable: ExecutableReaction;
+      }> = [];
+      const storedByName = new Map<string, string>();
+      declarationsOf(reaction($vars)).forEach((raw, index) => {
         const name = index === 0 ? base : `${base}:${index + 1}`;
         const declaration: ReactionDeclaration = {
           ...raw,
@@ -154,94 +163,92 @@ export class Reacting {
           throw new Error(`Reaction "${base}", path "${path}": ${outcome.reason}.`);
         }
         this.registry.indexDeclarationReads(declaration);
-        return { name, declaration, outcome };
+        if (outcome.reactions !== undefined) {
+          for (const live of outcome.reactions) {
+            const encoded = serializeReaction(live);
+            const serialized = canonicalJson(encoded);
+            const previous = storedByName.get(encoded.name);
+            if (previous !== undefined) {
+              if (previous !== serialized) {
+                throw new Error(
+                  `register: reaction "${base}" produces different entries named "${encoded.name}".`,
+                );
+              }
+              continue;
+            }
+            storedByName.set(encoded.name, serialized);
+            lowered.push({
+              reaction: encoded,
+              executable: this.compileReaction(
+                live.whereFn !== undefined ? live : this.registry.bindReaction(encoded),
+              ),
+            });
+          }
+          return;
+        }
+
+        const ops = [...(declaration.whereOps ?? []), ...(declaration.then[0]?.whereOps ?? [])];
+        const where =
+          ops.length > 0
+            ? (frames: Frames) => this.applyLoweredWhere(frames, ops)
+            : declaration.where;
+        unlowered.push({
+          definition: serializeUnloweredReaction(
+            name,
+            outcome.reason ?? "not lowerable",
+            declaration,
+          ),
+          executable: {
+            name,
+            when: declaration.when,
+            ...(where !== undefined ? { where } : {}),
+            then: declaration.then,
+          },
+        });
       });
-      return { base, leaves };
+      const names = [
+        ...lowered.map(({ reaction }) => reaction.name),
+        ...unlowered.map(({ definition }) => definition.name),
+      ];
+      return { base, lowered, names, unlowered };
     });
 
     const claims = new Map<string, string>();
     for (const family of prepared) {
-      for (const leaf of family.leaves) {
-        const names = leaf.outcome.reactions?.map((reaction) => reaction.name) ?? [leaf.name];
-        for (const name of names) {
-          const claimedBy = claims.get(name);
-          if (claimedBy !== undefined && claimedBy !== family.base) {
-            throw new Error(
-              `register: reactions "${claimedBy}" and "${family.base}" both produce "${name}".`,
-            );
-          }
-          const currentOwner = this.catalog.ownerOf(name);
-          if (currentOwner !== undefined && currentOwner !== family.base) {
-            throw new Error(
-              `register: reaction "${family.base}" produces "${name}", already owned by "${currentOwner}".`,
-            );
-          }
-          claims.set(name, family.base);
+      for (const name of family.names) {
+        const claimedBy = claims.get(name);
+        if (claimedBy !== undefined && claimedBy !== family.base) {
+          throw new Error(
+            `register: reactions "${claimedBy}" and "${family.base}" both produce "${name}".`,
+          );
         }
+        const currentOwner = this.catalog.ownerOf(name);
+        if (currentOwner !== undefined && currentOwner !== family.base) {
+          throw new Error(
+            `register: reaction "${family.base}" produces "${name}", already owned by "${currentOwner}".`,
+          );
+        }
+        claims.set(name, family.base);
       }
     }
 
     for (const family of prepared) this.catalog.unregisterBase(family.base);
     for (const family of prepared) {
-      const stored: ReactionIR[] = [];
-      const executableNames: string[] = [];
-      const storedByName = new Map<string, string>();
-      for (const leaf of family.leaves) {
-        if (leaf.outcome.reactions !== undefined) {
-          const serializedReactions = leaf.outcome.reactions.map((reaction) =>
-            serializeReaction(reaction),
-          );
-          leaf.outcome.reactions.forEach((live, index) => {
-            const reaction = serializedReactions[index];
-            const serialized = canonicalJson(reaction);
-            const previous = storedByName.get(reaction.name);
-            if (previous !== undefined) {
-              if (previous !== serialized) {
-                throw new Error(
-                  `register: reaction "${family.base}" produces different entries named "${reaction.name}".`,
-                );
-              }
-              return;
-            }
-            storedByName.set(reaction.name, serialized);
-            stored.push(reaction);
-            executableNames.push(reaction.name);
-            this.catalog.index(
-              this.compileReaction(
-                live.whereFn !== undefined ? live : this.registry.bindReaction(reaction),
-              ),
-            );
-            if (this.logging !== Logging.OFF) {
-              logger.info(readBackReaction(reaction, this.registry.readBackEnv()));
-            }
-          });
-          continue;
+      for (const entry of family.lowered) {
+        this.catalog.index(entry.executable);
+        if (this.logging !== Logging.OFF) {
+          logger.info(readBackReaction(entry.reaction, this.registry.readBackEnv()));
         }
-
-        this.catalog.markUnlowered(
-          serializeUnloweredReaction(
-            leaf.name,
-            leaf.outcome.reason ?? "not lowerable",
-            leaf.declaration,
-          ),
-        );
-        executableNames.push(leaf.name);
-        const ops = [
-          ...(leaf.declaration.whereOps ?? []),
-          ...(leaf.declaration.then[0]?.whereOps ?? []),
-        ];
-        const where =
-          ops.length > 0
-            ? (frames: Frames) => this.applyLoweredWhere(frames, ops)
-            : leaf.declaration.where;
-        this.catalog.index({
-          name: leaf.name,
-          when: leaf.declaration.when,
-          ...(where !== undefined ? { where } : {}),
-          then: leaf.declaration.then,
-        });
       }
-      this.catalog.finishBase(family.base, executableNames, stored);
+      for (const entry of family.unlowered) {
+        this.catalog.markUnlowered(entry.definition);
+        this.catalog.index(entry.executable);
+      }
+      this.catalog.finishBase(
+        family.base,
+        family.names,
+        family.lowered.map(({ reaction }) => reaction),
+      );
     }
   }
 
@@ -359,7 +366,7 @@ export class Reacting {
       this.reactionLogger.emit(record, durationMs);
       return;
     }
-    for (const reaction of candidates) await this.firingPipeline.fire(record, reaction);
+    await this.firingPipeline.fire(record, candidates);
     this.reactionLogger.emit(record, durationMs);
   }
 

@@ -174,8 +174,9 @@ function passesNot(not: Mapping | undefined, frame: Frame, row: unknown): boolea
 function hasUnboundInput(frame: Frame, input: Mapping): boolean {
   let unbound = false;
   walkValueTree(input, (value) => {
-    if (typeof value !== "symbol") return;
-    if (!readPatternValue(value, frame).bound) unbound = true;
+    const read = readPatternValue(value, frame);
+    if (read.isVariable && !read.bound) unbound = true;
+    return !read.isVariable && read.value === value;
   });
   return unbound;
 }

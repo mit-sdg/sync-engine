@@ -84,6 +84,59 @@ describe("action scheduler", () => {
     expect(order).toEqual(["root", "other", "consequence"]);
   });
 
+  test("breaks a cross-flow wait cycle without dropping an action", async () => {
+    const scheduler = new ActionScheduler();
+    const conceptA = {};
+    const conceptB = {};
+    const order: string[] = [];
+    const aRoot = reserve(scheduler, conceptA, "a", () => {
+      order.push("a.root");
+      return "a.root";
+    });
+    const bRoot = reserve(scheduler, conceptB, "b", () => {
+      order.push("b.root");
+      return "b.root";
+    });
+    const bStep = reserve(scheduler, conceptB, "a", () => {
+      order.push("b.step");
+      return "b.step";
+    });
+    bStep.release();
+    const aStep = reserve(scheduler, conceptA, "b", () => {
+      order.push("a.step");
+      return "a.step";
+    });
+    aStep.release();
+
+    await bStep.result;
+    aRoot.release();
+
+    await expect(Promise.all([aRoot.result, bRoot.result, aStep.result])).resolves.toEqual([
+      "a.root",
+      "b.root",
+      "a.step",
+    ]);
+    expect(order).toEqual(["b.root", "b.step", "a.root", "a.step"]);
+  });
+
+  test("releases a nested same-flow parent behind an interleaved flow", async () => {
+    const scheduler = new ActionScheduler();
+    const concept = {};
+    const order: string[] = [];
+    const root = reserve(scheduler, concept, "a", () => order.push("root"));
+    const other = reserve(scheduler, concept, "b", () => order.push("other"));
+    const parent = reserve(scheduler, concept, "a", () => order.push("parent"));
+    const child = reserve(scheduler, concept, "a", () => order.push("child"));
+
+    child.release();
+    other.release();
+
+    await expect(
+      Promise.all([root.result, other.result, parent.result, child.result]),
+    ).resolves.toEqual([1, 2, 3, 4]);
+    expect(order).toEqual(["root", "other", "parent", "child"]);
+  });
+
   test("continues after successful and rejected predecessors", async () => {
     const scheduler = new ActionScheduler();
     const concept = {};

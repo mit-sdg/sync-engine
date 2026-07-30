@@ -70,16 +70,14 @@ export function projectProductionHttpWire(
   return {
     endpoints: wire.endpoints.map((endpoint) => {
       const errors = new Set<PublicHttpError>();
+      let admissionError = endpoint.inputAdmissionError !== false;
       for (const code of endpoint.errors) {
-        if (code === FrameworkErrorCode.INVALID_INPUT && endpoint.inputAdmissionError !== false) {
+        if (code === FrameworkErrorCode.INVALID_INPUT && admissionError) {
           errors.add(publicFrameworkCategoryOf(code));
+          admissionError = false;
+          continue;
         }
-        if (
-          code !== FrameworkErrorCode.INVALID_INPUT ||
-          (categories !== undefined && Object.hasOwn(categories, code))
-        ) {
-          errors.add(publicCategoryOf(code, categories));
-        }
+        errors.add(registeredPublicCategoryOf(code, categories));
       }
       if (endpoint.openError) errors.add("INTERNAL_ERROR");
       return { ...endpoint, errors: [...errors].sort(), openError: false };

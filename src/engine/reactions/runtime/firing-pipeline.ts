@@ -58,6 +58,14 @@ interface FrameProvenance extends CapturedTriggers {
   triggerSignatures?: Set<string>;
 }
 
+interface PreparedFiring {
+  actionSymbols: symbol[];
+  frameTriggerIds: string[][];
+  frames: Frames;
+  provenance: FrameProvenance;
+  reaction: ExecutableReaction;
+}
+
 export class FiringPipeline {
   constructor(
     private readonly matcher: TriggerMatcher,
@@ -73,7 +81,19 @@ export class FiringPipeline {
     private readonly consumeAction: (flow: string) => boolean,
   ) {}
 
-  async fire(record: ActionRecord, reaction: ExecutableReaction): Promise<void> {
+  async fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void> {
+    const prepared: PreparedFiring[] = [];
+    for (const reaction of reactions) {
+      const firing = await this.prepare(record, reaction);
+      if (firing !== undefined) prepared.push(firing);
+    }
+    for (const firing of prepared) await this.dispatch(firing);
+  }
+
+  private async prepare(
+    record: ActionRecord,
+    reaction: ExecutableReaction,
+  ): Promise<PreparedFiring | undefined> {
     let matched: Frames;
     let actionSymbols: symbol[];
     try {
@@ -88,9 +108,9 @@ export class FiringPipeline {
         "trigger matching failed",
         error,
       );
-      return;
+      return undefined;
     }
-    if (matched.length === 0) return;
+    if (matched.length === 0) return undefined;
 
     this.reactionLogger.frames(`Matched \`reaction\`: ${reaction.name} with \`when\`:`, matched);
     const provenance = this.capture(matched, record.flow, actionSymbols);
@@ -114,12 +134,30 @@ export class FiringPipeline {
           "where condition evaluation failed",
           error,
         );
-        return;
+        return undefined;
       }
       this.reactionLogger.frames("After processing `where`:", frames);
     }
+    return { actionSymbols, frameTriggerIds, frames, provenance, reaction };
+  }
+
+  private async dispatch(prepared: PreparedFiring): Promise<void> {
+    const { actionSymbols, frameTriggerIds, frames, provenance, reaction } = prepared;
+    const active = frames
+      .map((_frame, index) => index)
+      .filter(
+        (index) =>
+          !frameTriggerIds[index]?.some((id) => this.firingBook.hasConsumed(id, reaction.name)),
+      );
+    if (active.length === 0) return;
     try {
-      await this.dispatch(frames, reaction, actionSymbols, provenance, frameTriggerIds);
+      await this.dispatchFrames(
+        new Frames(...active.map((index) => frames[index])),
+        reaction,
+        actionSymbols,
+        provenance,
+        active.map((index) => frameTriggerIds[index]),
+      );
     } catch (error) {
       this.failStage(
         reaction,
@@ -177,7 +215,7 @@ export class FiringPipeline {
     });
   }
 
-  private async dispatch(
+  private async dispatchFrames(
     frames: Frames,
     reaction: ExecutableReaction,
     actionSymbols: symbol[],

@@ -4,6 +4,7 @@ import type { HttpPublicErrorCategory } from "@mit-sdg/sync-engine-http/server";
 import {
   publicCategoryOf,
   publicErrorStatus,
+  projectProductionHttpWire,
   registeredPublicCategoryOf,
 } from "../src/server/public-errors.ts";
 
@@ -47,4 +48,35 @@ describe("HTTP public error projection", () => {
     expect(publicCategoryOf("BROKEN", malformed)).toBe("INTERNAL_ERROR");
     expect(publicErrorStatus("toString" as never)).toBe(500);
   });
+
+  test("keeps unmapped domain errors private in projected wire contracts", () => {
+    const projected = projectProductionHttpWire(
+      {
+        endpoints: [{ errors: ["NOT_FOUND"], inputAdmissionError: false, openError: false }],
+        appWide: [],
+      } as never,
+      { origin: "https://example.test", publicErrors: {} },
+    );
+
+    expect(projected.endpoints[0]?.errors).toEqual(["INTERNAL_ERROR"]);
+  });
+
+  test.each([
+    [["INVALID_INPUT"], false, ["INTERNAL_ERROR"]],
+    [["INVALID_INPUT"], true, ["INVALID_REQUEST"]],
+    [["INVALID_INPUT", "INVALID_INPUT"], true, ["INTERNAL_ERROR", "INVALID_REQUEST"]],
+  ] as const)(
+    "distinguishes domain and admission INVALID_INPUT errors",
+    (errors, admission, expected) => {
+      const projected = projectProductionHttpWire(
+        {
+          endpoints: [{ errors, inputAdmissionError: admission, openError: false }],
+          appWide: [],
+        } as never,
+        { origin: "https://example.test", publicErrors: {} },
+      );
+
+      expect(projected.endpoints[0]?.errors).toEqual(expected);
+    },
+  );
 });

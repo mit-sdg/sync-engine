@@ -231,6 +231,44 @@ describe("then-input strictness", () => {
     ).toThrow(/literal undefined.*portable patterns.*omit the key/s);
   });
 
+  test("a bigint in a then input is rejected as non-portable data", () => {
+    const { reacting } = setup();
+    expect(() =>
+      reacting.register({
+        BigInt: reaction((_vars: Vars) =>
+          when(refs.Button.clicked({ kind: "bigint" }).responds()).then(
+            refs.Recorder.record({ tag: 1n as never }),
+          ),
+        ),
+      }),
+    ).toThrow(/bigint.*registration-time value/s);
+  });
+
+  test("a failed replacement leaves the existing reaction registered", async () => {
+    const { reacting, Button, Recorder } = setup();
+    reacting.register({
+      Replace: reaction((_vars: Vars) =>
+        when(refs.Button.clicked({ kind: "replace" }).responds()).then(
+          refs.Recorder.record({ tag: "old" }),
+        ),
+      ),
+    });
+
+    expect(() =>
+      reacting.register({
+        Replace: reaction((_vars: Vars) =>
+          when(refs.Button.clicked({ kind: "replace" }).responds()).then(
+            refs.Recorder.record({ tag: Number.NaN as never }),
+          ),
+        ),
+      }),
+    ).toThrow("non-finite number");
+    await Button.clicked({ kind: "replace" });
+
+    expect(Recorder.order).toEqual(["old"]);
+    expect(reacting.exportReactions().reactions.map(({ name }) => name)).toContain("Replace");
+  });
+
   test("nested literals and variables stay legal", () => {
     const { reacting } = setup();
     reacting.register({
@@ -327,6 +365,33 @@ describe("round trip: export → JSON → registerReactions", () => {
         },
       ]),
     ).toThrow(/marker .* requires/);
+  });
+
+  test("rejects an imported oneOf candidate whose live value was lost", () => {
+    for (const candidate of [
+      { $is: "literal Date" },
+      { $lit: { $var: { $is: "literal Date" } } },
+    ]) {
+      const { reacting } = setup();
+      expect(() =>
+        reacting.registerReactions([
+          {
+            name: "OpaqueCandidate",
+            when: [
+              {
+                kind: "action",
+                concept: "Button",
+                action: "clicked",
+                input: { kind: { $oneOf: [candidate] } as never },
+                output: {},
+              },
+            ],
+            where: [],
+            then: [{ kind: "request", concept: "Recorder", action: "record", input: { tag: "x" } }],
+          },
+        ]),
+      ).toThrow('marker "$is" requires its definition-site matcher');
+    }
   });
 });
 

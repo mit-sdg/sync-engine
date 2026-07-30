@@ -1,4 +1,4 @@
-import { isMatcher } from "@engine/reads/matchers";
+import { isMatcher, isPlainMapping } from "@engine/reads/matchers";
 import { Frames } from "@engine/reads/frames";
 import { snapshotValue } from "@engine/utils/snapshot";
 import { varKeyOf } from "@engine/reads/frames";
@@ -28,6 +28,19 @@ export const literalEquals = structurallyEqual;
 
 /** Cached regular expressions for serialized `$regexp` markers. */
 const regexpOf = new WeakMap<object, RegExp>();
+
+function literalCandidate(value: unknown, markers = true): unknown {
+  if (Array.isArray(value)) return value.map((item) => literalCandidate(item));
+  if (!isPlainMapping(value)) return value;
+  if (markers) {
+    const marker = asMarker(value);
+    if (marker?.tag === "$lit") return literalCandidate(marker.payload, false);
+    if (marker?.tag === "$is") return liveOf(value) ?? value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, literalCandidate(item)]),
+  );
+}
 
 function testRegExp(pattern: RegExp, recordValue: unknown): boolean {
   if (typeof recordValue !== "string") return false;
@@ -64,7 +77,9 @@ export function unifyPattern(
       continue;
     }
     if (isMatcher(value)) {
-      if (!value.candidates?.some((candidate) => candidate === recordValue)) return undefined;
+      if (!value.candidates?.some((candidate) => literalEquals(candidate, recordValue))) {
+        return undefined;
+      }
       continue;
     }
     const marker =
@@ -72,7 +87,11 @@ export function unifyPattern(
     if (marker !== null) {
       switch (marker.tag) {
         case "$oneOf": {
-          if (!(marker.payload as unknown[]).some((candidate) => candidate === recordValue)) {
+          if (
+            !(marker.payload as unknown[]).some((candidate) =>
+              literalEquals(literalCandidate(candidate), recordValue),
+            )
+          ) {
             return undefined;
           }
           continue;
@@ -123,6 +142,7 @@ export function matchArguments(
   if (record.concept !== pattern.concept || record.action !== pattern.action) return undefined;
   if (pattern.by !== undefined && record.by !== pattern.by) return undefined;
   if (pattern.posture === "requested") {
+    if (record.outcome !== undefined || record.fault !== undefined) return undefined;
     const next = unifyPattern(record.input, pattern.input, frame);
     return next === undefined ? undefined : { ...next, [recordBinding]: record.id };
   }
@@ -142,21 +162,23 @@ export function matchArguments(
   if (pattern.output === undefined) {
     throw new Error(`When pattern: ${String(pattern)} is missing output pattern.`);
   }
-  if (record.outcome === undefined) return undefined;
-  if (Object.keys(pattern.output).length === 0 && record.outcome.kind === "error") return undefined;
+  const outcome =
+    pattern.posture === "faulted"
+      ? ({ kind: "result", value: record.fault ?? {} } as const)
+      : record.outcome;
+  if (outcome === undefined) return undefined;
+  if (Object.keys(pattern.output).length === 0 && outcome.kind === "error") return undefined;
   next =
-    pattern.posture === "refused" && record.outcome.kind === "error"
+    pattern.posture === "refused" && outcome.kind === "error"
       ? unifyPattern(
           {
-            ...record.outcome.error,
-            ...(record.outcome.error.error !== undefined
-              ? { message: record.outcome.error.error }
-              : {}),
+            ...outcome.error,
+            ...(outcome.error.error !== undefined ? { message: outcome.error.error } : {}),
           },
           pattern.output,
           next,
         )
-      : unifyOutputPattern(record.outcome, pattern.output, next);
+      : unifyOutputPattern(outcome, pattern.output, next);
   return next === undefined ? undefined : { ...next, [recordBinding]: record.id };
 }
 
