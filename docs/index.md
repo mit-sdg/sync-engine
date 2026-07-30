@@ -11,6 +11,15 @@ concepts, composition, assembly, gateways, clients, generated contracts, and
 occurrence evidence. Use the [Glossary](glossary.md) when a term has a narrower
 meaning than it does in ordinary TypeScript or HTTP code.
 
+## Decide what the concepts are
+
+[Designing with concepts](design/index.md) is the design document set: how to
+tell a concept from an entity, screen, workflow, or implementation component;
+how to judge a candidate; when to split or combine; what a concept owns; how
+reactions compose concepts without hidden coupling; and how to review a whole
+design. It teaches decisions, not the authoring API — start there when designing
+or reviewing an application, and use the guides below to write what you decided.
+
 ## Build an application
 
 Read these pages in order:

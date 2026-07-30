@@ -13,6 +13,13 @@ The 1.0 release line is beta. Pin an exact package version and read the [support
 - [Execution semantics](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/semantics.md) — authoritative runtime behavior
 - [Operational limits](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/operations.md) — deployment suitability and host responsibilities
 
+## Design
+
+- [Designing with concepts](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/index.md) — what a concept is, and the reading path for the design pages
+- [Choosing granularity](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/granularity.md) — when to split one candidate concept and when to keep responsibilities together
+- [Composing concepts](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/composing-concepts.md) — reaction design, cross-concept invariants, authorization, and failure hazards
+- [Reviewing a design](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/reviewing-a-design.md) — review sequence and pull-request checklist
+
 ## Authoring
 
 - [Define one behavior](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/guide/concepts.md)

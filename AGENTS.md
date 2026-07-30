@@ -36,6 +36,7 @@ include them.
 
 Start with `docs/index.md`. The document owners are:
 
+- Semantic design decisions and design review: `docs/design/`
 - Progressive application authoring: `docs/guide/`
 - Application model explanation: `docs/overview.md`
 - Small tested read constructions: `docs/book.md`
