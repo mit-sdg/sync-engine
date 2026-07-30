@@ -5,6 +5,47 @@ subpaths, behavior, and generated formats may change incompatibly between beta
 releases. Pin an exact version, follow the [support policy](SUPPORT.md), and
 review the [operational limits](docs/operations.md) before deployment.
 
+## [1.0.0-beta.3] - 2026-07-30
+
+This maintenance beta corrects reaction scheduling, matching, registration, and
+HTTP error projection defects found during a runtime audit.
+
+### Compatibility
+
+- Public package exports are unchanged. Trigger and `where` stages for reactions
+  observing one landed occurrence now finish before any matching consequence is
+  dispatched. A sibling consequence can no longer change another sibling's
+  guard result.
+- Consequence inputs containing `bigint` now fail registration. Earlier betas
+  accepted these values but delivered an internal marker object to the action.
+- Serialized `oneOf` candidates now use structural equality and preserve escaped
+  literal data. Imported opaque candidates without their definition-site value
+  fail registration instead of installing an inert trigger.
+
+### Migration
+
+- Replace `bigint` consequence literals with portable JSON data, or derive the
+  value at firing time with a registered computation.
+- Remove any dependency on one reaction consequence changing a sibling
+  reaction's `where` result for the same occurrence. Such ordering was never a
+  supported priority mechanism.
+
+### Generated formats
+
+- None.
+
+### Runtime and security support
+
+- Requested guards no longer run again for outcome landings, and opposite-order
+  requested consequences no longer deadlock concurrent flows.
+- Failed replacement registration leaves the previous reaction family intact.
+  Repeated variables and optional serialized bindings now use the documented
+  unification and blank-propagation rules.
+- Production HTTP wire projection no longer exposes unmapped domain errors that
+  runtime handling reports as `INTERNAL_ERROR`.
+
+[Release][1.0.0-beta.3] | [Changes since 1.0.0-beta.2][1.0.0-beta.3-compare]
+
 ## [1.0.0-beta.2] - 2026-07-30
 
 HTTP transport support now ships as the independently published
@@ -259,6 +300,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.3]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.3
+[1.0.0-beta.3-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.2...v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.2
 [1.0.0-beta.2-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.1
