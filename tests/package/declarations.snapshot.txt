@@ -13,8 +13,8 @@ export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/loggi
 /** Install a vocabulary and its composition into one coherent running system. */
 export { assemble } from "../engine/boundary/assembly/assembly-facade.ts";
 export type { Assembly, AssemblyOptions } from "../engine/boundary/assembly/assembly-facade.ts";
-export { conceptFloor, conceptSet, PublicError, registerConcept, } from "../engine/boundary/assembly/concept-set.ts";
-export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, PublicErrorCategory, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
+export { conceptFloor, conceptSet, registerConcept } from "../engine/boundary/assembly/concept-set.ts";
+export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
 export { FileStore } from "../engine/hosting/file-store.ts";
 export { MemoryStore } from "../engine/reactions/runtime/log-store.ts";
 export { Logging } from "../engine/reactions/runtime/logging.ts";
@@ -36,21 +36,17 @@ export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts
 export type { OperationalEvent, OperationalObserver, OperationalResultClass, } from "../engine/reactions/runtime/operational.ts";
 export { createGateway } from "../engine/boundary/gateway/gateway.ts";
 export type { Gateway, GatewayOptions, GatewayTarget } from "../engine/boundary/gateway/gateway.ts";
+export { assertPortableRoutePath } from "../engine/boundary/protocol/route-path.ts";
+export { bindTransport } from "../engine/boundary/gateway/transport-binding.ts";
+export type { TransportBinding, WireProjectionFacts, } from "../engine/boundary/gateway/transport-binding.ts";
+export { serializeJsonValue } from "../engine/boundary/protocol/envelope.ts";
 export type { ApplicationInterface } from "../engine/boundary/protocol/types.ts";
-export { createHttpHandler } from "../engine/boundary/http/http.ts";
-export type { HttpCorrelationOptions } from "../engine/boundary/http/http.ts";
-export { productionHttpProfile } from "../engine/boundary/http/http-profile.ts";
-export type { ProductionHttpProfile } from "../engine/boundary/http/http-profile.ts";
-export { httpFloor } from "../engine/boundary/http/http-floor.ts";
-export type { HttpCredentialBinding, HttpFloor } from "../engine/boundary/http/http-floor.ts";
 
 === dist/client/index.d.ts ===
-/** Consume a generated wire contract, locally or over HTTP. */
+/** Consume a generated wire contract, locally or through a transport. */
 export { createClient } from "../engine/boundary/client/client.ts";
-export { createHttpClient, createHttpTransport } from "../engine/boundary/client/http-client.ts";
 export { createLocalClient } from "../engine/boundary/client/local-client.ts";
 export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client/client.ts";
-export type { HeadersOption, HttpClientOptions } from "../engine/boundary/client/http-client.ts";
 
 === dist/command/artifacts.d.ts ===
 export declare function artifactsCommand(args: readonly string[]): Promise<void>;
@@ -113,7 +109,6 @@ declare module "*.md" {
  * refuses the second with `NOT_PENDING`, and logs both reaction names.
  */
 import type { ConceptClass, ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
-import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
 import type { InstrumentedConcept } from "../../reactions/runtime/instrumenting.ts";
 import { type LogStore, type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import { Logging } from "../../reactions/runtime/logging.ts";
@@ -220,8 +215,6 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     whenIdle(): Promise<void>;
     /** The public route and admission facts a separate gateway may consume. */
     publicInterface: ApplicationInterface;
-    /** Public boundary categories declared beside concept refusals. */
-    publicErrors: Readonly<Record<string, PublicErrorCategory>>;
     /** Endpoint identity retained even when a reaction has no portable IR. */
     endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
     /** Every authored endpoint declaration, independent of lowering. */
@@ -262,18 +255,10 @@ export declare function assemblyBehind(facade: object): AssembledApp<Record<stri
 
 === dist/engine/boundary/assembly/concept-set.d.ts ===
 import { type ConceptClass, type ConceptClassesOf, type ConceptEntry, type DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
-import type { ErrorConstructor, PublicErrorCategory as MetadataPublicErrorCategory, RefusalContracts } from "../../reactions/concepts/concept-metadata.ts";
+import type { ErrorConstructor, RefusalContracts } from "../../reactions/concepts/concept-metadata.ts";
 import { type ConceptSpec } from "../../reactions/concepts/concept-spec.ts";
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { QueryPromises } from "../../reads/query-metadata.ts";
-export type PublicErrorCategory = MetadataPublicErrorCategory;
-export declare const PublicError: {
-    readonly INVALID_REQUEST: "INVALID_REQUEST";
-    readonly UNAUTHORIZED: "UNAUTHORIZED";
-    readonly FORBIDDEN: "FORBIDDEN";
-    readonly NOT_FOUND: "NOT_FOUND";
-    readonly CONFLICT: "CONFLICT";
-};
 type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result ? (...args: Args) => Result | Promise<Awaited<Result>> : Member;
 export type ConceptImplementation<C extends ConceptClass> = object & {
     [Name in keyof InstanceType<C> as InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never]: ImplementationMember<InstanceType<C>[Name]>;
@@ -301,8 +286,6 @@ export interface ConceptRegistration<C extends ConceptClass, F extends Record<st
     spec: string;
     /** The Error class that signals each refusal code the specification declares. */
     refusals?: Readonly<Record<string, ErrorConstructor>>;
-    /** The boundary category for refusal codes that reach a public caller. */
-    publicErrors?: Readonly<Record<string, PublicErrorCategory>>;
     floors?: F;
 }
 declare const RegistrationBrand: unique symbol;
@@ -322,7 +305,6 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
         principle?: string;
         queries?: QueryPromises;
         refusals?: RefusalContracts;
-        publicErrors?: Record<string, PublicErrorCategory>;
     };
 };
 type VocabularyOf<S extends Record<string, AnyRegistration>> = DeclaredVocabulary<EntriesOf<S>, Record<never, never>>;
@@ -344,7 +326,6 @@ type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> 
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>> {
     vocabulary: VocabularyOf<S>;
     concepts: VocabularyOf<S>["concepts"];
-    publicErrors: Readonly<Record<string, PublicErrorCategory>>;
     implementations(...args: [RequiredConstructorRegistration<S>] extends [never] ? [] : [never]): Implementations<VocabularyOf<S>>;
     implementations<Floor extends CompleteFloorNames<S>>(floor: Floor, context: FloorContext<S, Floor>): Implementations<VocabularyOf<S>>;
 }
@@ -477,63 +458,6 @@ export type Client<C extends ContractShape, TError = ClientError> = IndexedClien
  */
 export declare function createClient<C extends ContractShape, TError = ClientError>(options: ClientOptions<TError>): Client<C, TError>;
 
-=== dist/engine/boundary/client/http-client.d.ts ===
-/**
- * # HTTP transport adapter
- *
- * Wraps the transport-agnostic {@link ./client.ts} core with HTTP-specific
- * behavior: `fetch`, `baseUrl`, headers, credentials, JSON parsing, and error
- * normalization. Use {@link createHttpClient} for the common case or
- * {@link createHttpTransport} to compose the transport with a custom client
- * setup.
- */
-import { type ContractShape } from "../protocol/types.ts";
-import type { Client, ClientTransport } from "./client.ts";
-export type { ClientError } from "./client.ts";
-/** A header bag, or a (possibly async) function producing one per request. */
-export type HeadersOption = Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>);
-/** Options for {@link createHttpTransport} and {@link createHttpClient}. */
-export interface HttpClientOptions {
-    /**
-     * Base URL every request is prefixed with, including the `/api` segment.
-     * Defaults to `API_BASE_URL`, then `/api`.
-     */
-    baseUrl?: string;
-    /**
-     * `fetch` implementation to use. Defaults to the global `fetch`. Useful for
-     * injecting a mock or a server-side polyfill.
-     */
-    fetch?: typeof fetch;
-    /**
-     * Extra headers merged into every request (after `Content-Type`). Provide a
-     * function to compute them per call, e.g. to attach a rotating auth token.
-     */
-    headers?: HeadersOption;
-    /**
-     * Request credentials mode. Defaults to `"include"` so cookies (including
-     * HttpOnly session cookies) are sent automatically. Override with `"omit"`
-     * or `"same-origin"` if needed.
-     */
-    credentials?: "include" | "omit" | "same-origin";
-}
-/**
-
-
- * Creates an HTTP {@link ClientTransport} that uses `fetch` with the given
- * options. The returned transport can be passed directly to
- * {@link createClient}.
- */
-export declare function createHttpTransport(options?: HttpClientOptions): ClientTransport;
-/**
- * Convenience that composes {@link createHttpTransport} with
- * {@link createClient}. Equivalent to:
- *
- * ```ts
- * createClient<C>({ transport: createHttpTransport(options) })
- * ```
- */
-export declare function createHttpClient<C extends ContractShape>(options?: HttpClientOptions): Client<C>;
-
 === dist/engine/boundary/client/local-client.d.ts ===
 import type { ContractShape } from "../protocol/types.ts";
 import type { Invoker } from "../invocation/invoke.ts";
@@ -568,65 +492,32 @@ export interface Gateway<C extends ContractShape> extends Invoker<C> {
 /** Decorate an application invoker with transport-neutral gateway policy and lifecycle. */
 export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
 
-=== dist/engine/boundary/http/http-floor.d.ts ===
+=== dist/engine/boundary/gateway/transport-binding.d.ts ===
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
-import type { WireContractsIR } from "../wire/wire-contracts.ts";
-import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
-import type { ProductionHttpProfile } from "./http-profile.ts";
-export interface HttpCredentialBinding {
-    name: string;
-    input: string;
-    issue: {
-        path: string;
-        output: string;
-        expires: string;
-    };
-    clear: readonly string[];
-}
-export interface HttpFloor extends ProductionHttpProfile {
-    credential: HttpCredentialBinding;
-}
-export declare function httpFloor(declaration: HttpFloor): HttpFloor;
-export declare function credentialProtectedPaths(contracts: Readonly<Record<string, InputContractDecl>>, input: string): Set<string>;
-export declare function validateHttpFloor(application: Assembly<Record<string, new (...args: never[]) => object>>, floor: HttpFloor, wire?: WireContractsIR): void;
-export declare function projectHttpWire(wire: WireContractsIR, contracts: Readonly<Record<string, InputContractDecl>>, categories: Readonly<Record<string, PublicErrorCategory>>, floor: HttpFloor): WireContractsIR;
-
-=== dist/engine/boundary/http/http-profile.d.ts ===
-import type { WireContractsIR } from "../wire/wire-contracts.ts";
-import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
-export { normalizeHttpBasePath } from "../protocol/http-path.ts";
-export interface ProductionHttpProfile {
-    origin: string;
-    basePath?: string;
-}
-export declare function normalizeProductionHttpProfile(declaration: ProductionHttpProfile, label?: string, productionReason?: string): ProductionHttpProfile;
-export declare function productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile;
-export declare function projectProductionHttpWire(wire: WireContractsIR, categories: Readonly<Record<string, PublicErrorCategory>>): WireContractsIR;
-
-=== dist/engine/boundary/http/http.d.ts ===
-import { type ContractShape } from "../protocol/types.ts";
+import type { ContractShape } from "../protocol/types.ts";
 import type { Invoker } from "../invocation/invoke.ts";
-import type { Assembly } from "../assembly/assembly-facade.ts";
-import type { HttpFloor } from "./http-floor.ts";
-import type { ProductionHttpProfile } from "./http-profile.ts";
-export interface HttpCorrelationOptions {
-    resolve(request: Request): string | undefined;
-    responseHeader?: string;
+import { type WireContractsIR } from "../wire/wire-contracts.ts";
+import type { Gateway } from "./gateway.ts";
+type AnyAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
+type Immutable<T> = T extends (...args: never[]) => unknown ? T : T extends readonly (infer Item)[] ? readonly Immutable<Item>[] : T extends object ? {
+    readonly [Key in keyof T]: Immutable<T[Key]>;
+} : T;
+/** Immutable application facts a generated transport projection may inspect. */
+export interface WireProjectionFacts {
+    readonly routes: Immutable<Readonly<Record<string, InputContractDecl>>>;
+    readonly logicalWire: Immutable<WireContractsIR>;
 }
-type FloorHandlerOptions = {
-    gateway: Invoker<ContractShape>;
-    application: Assembly<Record<string, new (...args: never[]) => object>>;
-    floor: HttpFloor;
-    correlation?: HttpCorrelationOptions;
-};
-type ProfileHandlerOptions = {
-    gateway: Invoker<ContractShape>;
-    application: Assembly<Record<string, new (...args: never[]) => object>>;
-    profile: ProductionHttpProfile;
-    correlation?: HttpCorrelationOptions;
-};
-export declare function createHttpHandler(options: FloorHandlerOptions | ProfileHandlerOptions): (request: Request) => Promise<Response>;
+/** A verified server-adapter capability with no access to assembly internals. */
+export interface TransportBinding<C extends ContractShape = ContractShape> extends WireProjectionFacts {
+    readonly invoker: Invoker<C>;
+}
+export declare function wireProjectionFacts(application: AnyAssembly, logicalWire?: WireContractsIR): WireProjectionFacts;
+/** Bind one gateway to its owning application for a transport adapter. */
+export declare function bindTransport<C extends ContractShape = ContractShape>(options: {
+    application: AnyAssembly;
+    gateway: Gateway<C>;
+}): TransportBinding<C>;
 export {};
 
 === dist/engine/boundary/invocation/funnel.d.ts ===
@@ -818,11 +709,11 @@ import { type InvocationResult } from "./types.ts";
  * wrapped in `{ error }`), a framework code as `{ error, detail? }`.
  */
 export declare function toEnvelope(result: InvocationResult): unknown;
-/** Serialize a value with the same JSON rules used by the HTTP boundary. */
+/** Serialize a value with the JSON rules shared by transport adapters. */
 export declare function serializeJsonValue(value: unknown): string;
-/** Apply the HTTP boundary's JSON projection to an in-process value. */
+/** Apply the shared JSON projection to an in-process value. */
 export declare function toJsonValue(value: unknown): unknown;
-/** Apply the HTTP boundary's JSON projection to an in-process result. */
+/** Apply the shared JSON projection to an in-process result. */
 export declare function toJsonEnvelope(result: InvocationResult): unknown;
 /**
  * A respond output read back as an {@link InvocationResult}. Framework
@@ -843,26 +734,9 @@ export declare function rememberGatewayApplication(gateway: object, application:
 export declare function applicationBehindGateway(gateway: object): object | undefined;
 export {};
 
-=== dist/engine/boundary/protocol/http-path.d.ts ===
-/** Require a path whose spelling survives WHATWG URL pathname handling exactly. */
-export declare function assertPortableHttpPath(path: unknown, label: string): asserts path is string;
-/** Normalize the deliberately supported root and trailing-slash base-path forms. */
-export declare function normalizeHttpBasePath(basePath: string | undefined, label?: string): string;
-
-=== dist/engine/boundary/protocol/public-errors.d.ts ===
-import type { PublicErrorCategory } from "../../reactions/concepts/concept-metadata.ts";
-export declare const PUBLIC_ERROR_CATEGORIES: {
-    readonly INVALID_REQUEST: "INVALID_REQUEST";
-    readonly UNAUTHORIZED: "UNAUTHORIZED";
-    readonly FORBIDDEN: "FORBIDDEN";
-    readonly NOT_FOUND: "NOT_FOUND";
-    readonly CONFLICT: "CONFLICT";
-};
-export declare function registeredPublicCategoryOf(code: string, categories: Readonly<Record<string, PublicErrorCategory>>): PublicErrorCategory | "INTERNAL_ERROR";
-export declare function publicFrameworkCategoryOf(code: string): PublicErrorCategory | "INTERNAL_ERROR";
-/** Project a generated error code onto the production HTTP vocabulary. */
-export declare function publicCategoryOf(code: string, categories: Readonly<Record<string, PublicErrorCategory>>): PublicErrorCategory | "INTERNAL_ERROR";
-export declare function publicErrorStatus(category: PublicErrorCategory | "INTERNAL_ERROR"): number;
+=== dist/engine/boundary/protocol/route-path.d.ts ===
+/** Require a path whose spelling survives URL pathname handling exactly. */
+export declare function assertPortableRoutePath(path: unknown, label: string): asserts path is string;
 
 === dist/engine/boundary/protocol/types.d.ts ===
 import type { FrameworkErrorCode as FrameworkErrorCodeValue } from "../../utils/framework-error-codes.ts";
@@ -907,10 +781,6 @@ export declare const FrameworkErrorCode: {
     readonly TIMED_OUT: "TIMED_OUT";
     readonly ABORTED: "ABORTED";
     readonly TRANSPORT_ERROR: "TRANSPORT_ERROR";
-    readonly BAD_STATUS: "BAD_STATUS";
-    readonly NETWORK_ERROR: "NETWORK_ERROR";
-    readonly BAD_JSON: "BAD_JSON";
-    readonly HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED";
 };
 export type FrameworkErrorCode = FrameworkErrorCodeValue;
 export declare function isFrameworkErrorCode(value: unknown): value is FrameworkErrorCodeValue;
@@ -1405,7 +1275,6 @@ export declare function where(...conditions: Array<Condition | CountOp>): Author
 import type { OutcomeContracts } from "./outcomes.ts";
 import type { QueryPromise } from "../../reads/query-metadata.ts";
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
-export type PublicErrorCategory = "INVALID_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT";
 /** One refusal branch: the code it returns, the class that signals it, and its sentence. */
 export interface RefusalBranch {
     code: string;
@@ -1433,7 +1302,6 @@ export interface ConceptMetadata {
     queries?: Readonly<Record<string, QueryPromise>>;
     outcomes?: OutcomeContracts;
     refusals?: RefusalContracts;
-    publicErrors?: Record<string, PublicErrorCategory>;
 }
 export declare function attachConceptMetadata(concept: object, metadata: ConceptMetadata): void;
 export declare function conceptMetadataOf(concept: object): ConceptMetadata | undefined;
@@ -4298,8 +4166,8 @@ export declare function compute(computation: ComputationRef, input: Mapping, out
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
 
 === dist/engine/tooling/artifact-plan.d.ts ===
-import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { ApplicationManifestV3 } from "./manifest.ts";
+import type { PlannedWireProjection } from "./wire-projection.ts";
 export type ArtifactKind = "specification" | "wire" | "manifest";
 export interface ArtifactPlanEntry {
     path: string;
@@ -4322,9 +4190,8 @@ export interface GeneratedPlanOptions {
         export: string;
     };
     strictLeaves?: boolean;
-    /** An HTTP contract already projected by the owning boundary policy. */
-    httpWire?: WireContractsIR;
-    httpWireName?: string;
+    /** Ordered contracts derived from the logical wire by transport packages. */
+    projections?: readonly PlannedWireProjection[];
 }
 export type ArtifactStatus = {
     path: string;
@@ -4371,8 +4238,7 @@ export declare function diagnosticsFail(diagnostics: readonly ApplicationDiagnos
 
 === dist/engine/tooling/generated-artifacts.d.ts ===
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
-import type { HttpFloor } from "../boundary/http/http-floor.ts";
-import type { ProductionHttpProfile } from "../boundary/http/http-profile.ts";
+import type { WireProjection } from "./wire-projection.ts";
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 /**
  * What a project's `generated.config.ts` declares. Only `assemble` and `title`
@@ -4397,8 +4263,6 @@ export interface GeneratedApplication {
     wireName?: string;
     /** The wire contract's banner; defaults to one naming the assembly. */
     wireBanner?: string;
-    /** HTTP-projected contract name; defaults to `${wireName}Http`. */
-    httpWireName?: string;
     /**
      * The module whose export anchors generated wire types to concept
      * signatures; defaults to `src/concept-set.ts` beside the config, exporting
@@ -4408,8 +4272,8 @@ export interface GeneratedApplication {
         module?: URL;
         export?: string;
     };
-    httpProfile?: ProductionHttpProfile;
-    httpFloor?: HttpFloor;
+    /** Ordered transport-specific contracts appended after the logical wire. */
+    projections?: readonly WireProjection[];
 }
 type ResolvedApplication = GeneratedApplication & {
     directory: URL;
@@ -4501,6 +4365,33 @@ export interface ApplicationManifestV3 {
 export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV3;
 export declare function renderApplicationManifest(manifest: ApplicationManifestV3): string;
 
+=== dist/engine/tooling/wire-projection.d.ts ===
+import type { WireProjectionFacts } from "../boundary/gateway/transport-binding.ts";
+import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
+/** Identifies the package that owns one generated wire projection. */
+export interface ProjectionProvenance {
+    readonly name: string;
+    readonly version: string;
+}
+/** Rendering choices owned by core rather than a projection package. */
+export interface ProjectionRenderOptions {
+    readonly appWideErrorName?: string;
+}
+/** A named contract derived from the canonical logical wire. */
+export interface WireProjectionResult {
+    readonly name: string;
+    readonly wire: WireContractsIR;
+    readonly render?: ProjectionRenderOptions;
+}
+/** Extends generated wire output without coupling core to a transport package. */
+export interface WireProjection {
+    readonly provenance: ProjectionProvenance;
+    project(facts: WireProjectionFacts): WireProjectionResult;
+}
+export interface PlannedWireProjection extends WireProjectionResult {
+    readonly provenance: ProjectionProvenance;
+}
+
 === dist/engine/utils/canonical-json.d.ts ===
 export type JsonValue = null | boolean | number | string | JsonValue[] | {
     [key: string]: JsonValue;
@@ -4555,10 +4446,6 @@ export declare const FrameworkErrorCode: {
     readonly TIMED_OUT: "TIMED_OUT";
     readonly ABORTED: "ABORTED";
     readonly TRANSPORT_ERROR: "TRANSPORT_ERROR";
-    readonly BAD_STATUS: "BAD_STATUS";
-    readonly NETWORK_ERROR: "NETWORK_ERROR";
-    readonly BAD_JSON: "BAD_JSON";
-    readonly HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED";
 };
 export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode];
 
@@ -4719,3 +4606,5 @@ export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "..
 export type { WireContractsIR, WireEndpoint, WireOptions, } from "../engine/boundary/wire/wire-contracts.ts";
 export type { WireRenderOptions } from "../engine/boundary/wire/wire-renderer.ts";
 export type { WireType } from "../engine/boundary/wire/wire-types.ts";
+export type { GeneratedApplication } from "../engine/tooling/generated-artifacts.ts";
+export type { PlannedWireProjection, ProjectionProvenance, ProjectionRenderOptions, WireProjection, WireProjectionResult, } from "../engine/tooling/wire-projection.ts";

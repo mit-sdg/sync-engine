@@ -3,11 +3,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, posix, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
-import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
-import type { HttpFloor } from "@engine/boundary/http/http-floor";
-import { projectHttpWire, validateHttpFloor } from "@engine/boundary/http/http-floor";
-import type { ProductionHttpProfile } from "@engine/boundary/http/http-profile";
-import { projectProductionHttpWire } from "@engine/boundary/http/http-profile";
+import { wireProjectionFacts } from "@engine/boundary/gateway/transport-binding";
 import { pascal, slug } from "@engine/utils/case";
 import {
   applyArtifactPlan,
@@ -18,6 +14,7 @@ import {
   planGenerated,
 } from "./artifact-plan.ts";
 import { applicationManifest, type ApplicationManifestV3 } from "./manifest.ts";
+import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 
@@ -44,16 +41,14 @@ export interface GeneratedApplication {
   wireName?: string;
   /** The wire contract's banner; defaults to one naming the assembly. */
   wireBanner?: string;
-  /** HTTP-projected contract name; defaults to `${wireName}Http`. */
-  httpWireName?: string;
   /**
    * The module whose export anchors generated wire types to concept
    * signatures; defaults to `src/concept-set.ts` beside the config, exporting
    * `vocabulary`.
    */
   vocabulary?: { module?: URL; export?: string };
-  httpProfile?: ProductionHttpProfile;
-  httpFloor?: HttpFloor;
+  /** Ordered transport-specific contracts appended after the logical wire. */
+  projections?: readonly WireProjection[];
 }
 
 type ResolvedApplication = GeneratedApplication & {
@@ -88,8 +83,8 @@ export function resolveApplication(
   if (application.close !== undefined && typeof application.close !== "function") {
     throw new Error("generated config: close must release generation resources.");
   }
-  if (application.httpProfile !== undefined && application.httpFloor !== undefined) {
-    throw new Error("generated config: httpProfile and httpFloor are mutually exclusive.");
+  if (application.projections !== undefined && !Array.isArray(application.projections)) {
+    throw new Error("generated config: projections must be an array.");
   }
   const directory = application.directory ?? new URL("./generated/", config);
   const module = application.vocabulary?.module ?? new URL("./src/concept-set.ts", config);
@@ -120,21 +115,17 @@ function completeGeneratedPlan(
   plan: ArtifactPlan;
 } {
   const manifest = applicationManifest(assembled);
-  const facts = assemblyBehind(assembled);
-  const httpWire =
-    application.httpFloor !== undefined
-      ? (() => {
-          validateHttpFloor(assembled, application.httpFloor, manifest.wire);
-          return projectHttpWire(
-            manifest.wire,
-            facts.contracts,
-            facts.publicErrors,
-            application.httpFloor,
-          );
-        })()
-      : application.httpProfile !== undefined
-        ? projectProductionHttpWire(manifest.wire, facts.publicErrors)
-        : undefined;
+  const facts = wireProjectionFacts(assembled, manifest.wire);
+  const projections: PlannedWireProjection[] = (application.projections ?? []).map((projection) => {
+    if (
+      projection === null ||
+      typeof projection !== "object" ||
+      typeof projection.project !== "function"
+    ) {
+      throw new Error("generated config: every projection must provide project(facts).");
+    }
+    return { ...projection.project(facts), provenance: projection.provenance };
+  });
   return {
     manifest,
     plan: planGenerated(manifest, {
@@ -146,8 +137,7 @@ function completeGeneratedPlan(
       wireBanner: application.wireBanner,
       vocabulary: application.vocabularyFrom,
       strictLeaves: true,
-      httpWire,
-      httpWireName: application.httpWireName,
+      projections,
     }),
   };
 }

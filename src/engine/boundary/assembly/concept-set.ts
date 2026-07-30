@@ -8,7 +8,6 @@ import {
 } from "@engine/reactions/authoring/refs";
 import type {
   ErrorConstructor,
-  PublicErrorCategory as MetadataPublicErrorCategory,
   RefusalContracts,
 } from "@engine/reactions/concepts/concept-metadata";
 import {
@@ -19,12 +18,7 @@ import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-
 import { rolesOf } from "@engine/reactions/concepts/introspect";
 import type { ComputationFn } from "@engine/reads/computations";
 import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
-import { PUBLIC_ERROR_CATEGORIES } from "../protocol/public-errors.ts";
 import { setOwn } from "@engine/utils/own-property";
-
-export type PublicErrorCategory = MetadataPublicErrorCategory;
-
-export const PublicError = PUBLIC_ERROR_CATEGORIES;
 
 type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result
   ? (...args: Args) => Result | Promise<Awaited<Result>>
@@ -107,8 +101,6 @@ export interface ConceptRegistration<
   spec: string;
   /** The Error class that signals each refusal code the specification declares. */
   refusals?: Readonly<Record<string, ErrorConstructor>>;
-  /** The boundary category for refusal codes that reach a public caller. */
-  publicErrors?: Readonly<Record<string, PublicErrorCategory>>;
   floors?: F;
 }
 
@@ -226,9 +218,6 @@ function checkRefusals(
     }
     byClass.set(error, code);
   }
-  for (const code of Object.keys(registration.publicErrors ?? {})) {
-    if (!declared.has(code)) fail(`the public error \`${code}\` is not a declared refusal.`);
-  }
 }
 
 export function registerConcept<
@@ -262,7 +251,6 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     principle?: string;
     queries?: QueryPromises;
     refusals?: RefusalContracts;
-    publicErrors?: Record<string, PublicErrorCategory>;
   };
 };
 type VocabularyOf<S extends Record<string, AnyRegistration>> = DeclaredVocabulary<
@@ -321,7 +309,6 @@ type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> 
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>> {
   vocabulary: VocabularyOf<S>;
   concepts: VocabularyOf<S>["concepts"];
-  publicErrors: Readonly<Record<string, PublicErrorCategory>>;
   implementations(
     ...args: [RequiredConstructorRegistration<S>] extends [never] ? [] : [never]
   ): Implementations<VocabularyOf<S>>;
@@ -335,7 +322,6 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
   registrations: S,
 ): RegisteredConceptSet<S> {
   const entries: Record<string, ConceptEntry> = {};
-  const publicErrors: Record<string, PublicErrorCategory> = {};
   for (const [conceptName, registration] of Object.entries(registrations)) {
     const { purpose, principle, actions, queries } = registration.specification;
     const signals = registration.refusals ?? {};
@@ -358,25 +344,12 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
     const promises: Record<string, QueryPromise> = {};
     for (const query of queries) setOwn(promises, query.name, query.promise);
 
-    for (const [code, category] of Object.entries(registration.publicErrors ?? {})) {
-      const prior = Object.hasOwn(publicErrors, code) ? publicErrors[code] : undefined;
-      if (prior !== undefined && prior !== category) {
-        throw new Error(
-          `conceptSet: refusal "${code}" has conflicting public categories "${prior}" and "${category}".`,
-        );
-      }
-      setOwn(publicErrors, code, category);
-    }
-
     setOwn(entries, conceptName, {
       class: registration.class,
       purpose,
       principle,
       ...(queries.length === 0 ? {} : { queries: promises }),
       ...(Object.keys(refusals).length === 0 ? {} : { refusals }),
-      ...(registration.publicErrors === undefined
-        ? {}
-        : { publicErrors: { ...registration.publicErrors } }),
     });
   }
   const declared = vocabulary({ concepts: entries, computations: {} });
@@ -427,7 +400,6 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
   return {
     vocabulary: declared as VocabularyOf<S>,
     concepts: declared.concepts as VocabularyOf<S>["concepts"],
-    publicErrors,
     implementations,
   } as RegisteredConceptSet<S>;
 }

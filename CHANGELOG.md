@@ -5,6 +5,52 @@ subpaths, behavior, and generated formats may change incompatibly between beta
 releases. Pin an exact version, follow the [support policy](SUPPORT.md), and
 review the [operational limits](docs/operations.md) before deployment.
 
+## [1.0.0-beta.2] - 2026-07-30
+
+HTTP transport support now ships as the independently published
+`@mit-sdg/sync-engine-http` first-party package.
+
+### Compatibility
+
+- This intentional beta breaking change removes HTTP handler, profile, floor,
+  fetch client, and HTTP client-error exports from core. Core remains usable
+  without the companion package through `createClient<Wire>({ transport })` and
+  `bindTransport({ application, gateway })`.
+- `@mit-sdg/sync-engine-http` provides `/server`, `/client`, and `/tooling` and
+  requires the exact matching core beta as a peer dependency.
+
+### Migration
+
+- Install both exact packages, move server imports to
+  `@mit-sdg/sync-engine-http/server`, client imports to `/client`, and wire
+  projection imports to `/tooling`.
+- Move public domain-error mappings from concept registrations into the reused
+  HTTP policy value's `publicErrors` field. Replace `PublicError` members with
+  the corresponding HTTP category strings, such as `"CONFLICT"`.
+- Replace `httpProfile`, `httpFloor`, and `httpWireName` in `generated.config.ts`
+  with `projections: [httpWire({ policy, name })]`, then regenerate artifacts.
+- Replace references to HTTP failures on `FrameworkErrorCode` with
+  `HttpClientErrorCode`. Generic clients using the HTTP transport should use
+  `Client<Wire, HttpClientError>` or `createClient<Wire, HttpClientError>(...)`;
+  `createHttpClient<Wire>(...)` supplies that error type directly.
+- `GeneratedApplication` is now exported from the core `/tooling` subpath for
+  typing application-owned generation descriptors.
+
+### Generated formats
+
+- Generated wire provenance now records every projector package and version.
+- Logical wire remains canonical; each projection appends a named transport
+  contract to the same generated module.
+
+### Runtime and security support
+
+- Core has no HTTP runtime or type dependency. The companion policy owns HTTP
+  status, cookies, origin, correlation, fetch, and public-error projection.
+- CI and publication verify both independently packed tarballs before either
+  package can be published.
+
+[Release][1.0.0-beta.2] | [Changes since 1.0.0-beta.1][1.0.0-beta.2-compare]
+
 ## [1.0.0-beta.1] - 2026-07-29
 
 The beta.0 publication attempt did not reach npm because its publish command
@@ -213,6 +259,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.2]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.2
+[1.0.0-beta.2-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.1
 [1.0.0-beta.1-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.0...v1.0.0-beta.1
 [1.0.0-beta.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.0

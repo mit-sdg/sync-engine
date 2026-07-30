@@ -1,4 +1,4 @@
-import { createHttpClient, type HttpClientOptions } from "@mit-sdg/sync-engine/client";
+import { createHttpClient, type HttpClientOptions } from "@mit-sdg/sync-engine-http/client";
 import type { MultiInstanceHttpWire } from "./generated/wire.ts";
 
 export {

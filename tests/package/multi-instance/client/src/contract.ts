@@ -1,13 +1,13 @@
 import {
   assemble,
   conceptSet,
-  PublicError,
   registerConcept,
   type Assembly,
   type RegisteredConcept,
   type RegisteredConceptSet,
 } from "@mit-sdg/sync-engine/assembly";
-import { endpoint, productionHttpProfile, receive, respond } from "@mit-sdg/sync-engine/boundary";
+import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
+import { productionHttpProfile } from "@mit-sdg/sync-engine-http/server";
 import { reaction, when } from "@mit-sdg/sync-engine/language";
 
 const entriesSpecification = `# Entries
@@ -124,7 +124,6 @@ const entries: RegisteredConcept<typeof EntriesContract> = registerConcept({
   class: EntriesContract,
   spec: entriesSpecification,
   refusals: { CONFLICT: Conflict },
-  publicErrors: { CONFLICT: PublicError.CONFLICT },
 });
 const effects: RegisteredConcept<typeof EffectsContract> = registerConcept({
   class: EffectsContract,
@@ -185,6 +184,7 @@ export const composition: Record<string, unknown> = {
 export const multiInstanceHttpProfile = productionHttpProfile({
   origin: "https://multi-instance.test",
   basePath: "/api",
+  publicErrors: { CONFLICT: "CONFLICT" },
 });
 
 export function assembleMultiInstanceContract(): Assembly<{

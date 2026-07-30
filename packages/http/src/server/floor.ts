@@ -1,27 +1,22 @@
-import type { Assembly } from "../assembly/assembly-facade.ts";
-import { assemblyBehind } from "../assembly/assembly-registry.ts";
-import type { InputContractDecl } from "../protocol/endpoints.ts";
-import { wireContracts } from "../wire/wire-contracts.ts";
-import type { WireContractsIR } from "../wire/wire-contracts.ts";
-import type { WireType } from "../wire/wire-types.ts";
-import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
-import type { ProductionHttpProfile } from "./http-profile.ts";
-import { normalizeProductionHttpProfile, projectProductionHttpWire } from "./http-profile.ts";
-import { assertPortableHttpPath } from "../protocol/http-path.ts";
+import { assertPortableRoutePath, type WireProjectionFacts } from "@mit-sdg/sync-engine/boundary";
+import type { InputContractDecl } from "@mit-sdg/sync-engine/boundary";
+import type { WireContractsIR, WireType } from "@mit-sdg/sync-engine/tooling";
+import { projectProductionHttpWire } from "./public-errors.ts";
+import { normalizeProductionHttpProfile, type ProductionHttpProfile } from "./policy.ts";
 
 export interface HttpCredentialBinding {
-  name: string;
-  input: string;
-  issue: {
-    path: string;
-    output: string;
-    expires: string;
+  readonly name: string;
+  readonly input: string;
+  readonly issue: {
+    readonly path: string;
+    readonly output: string;
+    readonly expires: string;
   };
-  clear: readonly string[];
+  readonly clear: readonly string[];
 }
 
 export interface HttpFloor extends ProductionHttpProfile {
-  credential: HttpCredentialBinding;
+  readonly credential: HttpCredentialBinding;
 }
 
 const FIELD_NAME = /^[A-Za-z_$][\w$]*$/;
@@ -38,7 +33,7 @@ export function httpFloor(declaration: HttpFloor): HttpFloor {
     if (!FIELD_NAME.test(value)) throw new Error(`httpFloor: ${seat} "${value}" is not a field.`);
   }
   for (const path of [credential.issue.path, ...credential.clear]) {
-    assertPortableHttpPath(path, "httpFloor: credential endpoint");
+    assertPortableRoutePath(path, "httpFloor: credential endpoint");
   }
   if (new Set(credential.clear).size !== credential.clear.length) {
     throw new Error("httpFloor: credential clearing endpoints must be distinct.");
@@ -76,29 +71,20 @@ export function credentialProtectedPaths(
   );
 }
 
-export function validateHttpFloor(
-  application: Assembly<Record<string, new (...args: never[]) => object>>,
-  floor: HttpFloor,
-  wire?: WireContractsIR,
-): void {
-  const assembled = assemblyBehind(application);
-  const paths = new Set(Object.keys(assembled.publicInterface.routes));
+export function validateHttpFloor(facts: WireProjectionFacts, floor: HttpFloor): void {
+  const routes = facts.routes as Readonly<Record<string, InputContractDecl>>;
+  const paths = new Set(Object.keys(routes));
   for (const path of [floor.credential.issue.path, ...floor.credential.clear]) {
     if (!paths.has(path)) throw new Error(`httpFloor: unknown endpoint path "${path}".`);
   }
-  const protectedPaths = credentialProtectedPaths(assembled.contracts, floor.credential.input);
+  const protectedPaths = credentialProtectedPaths(routes, floor.credential.input);
   if (protectedPaths.size === 0) {
     throw new Error(
       `httpFloor: no endpoint declares credential input "${floor.credential.input}".`,
     );
   }
-  const contracts =
-    wire ??
-    wireContracts(assembled.engine.exportReactions(), {
-      contracts: assembled.contracts,
-      inventories: assembled.engine.exportConcepts(),
-    });
-  const issuing = contracts.endpoints.find(({ path }) => path === floor.credential.issue.path);
+  const wire = facts.logicalWire as unknown as WireContractsIR;
+  const issuing = wire.endpoints.find(({ path }) => path === floor.credential.issue.path);
   const fields = issuing === undefined ? undefined : topLevelFields(issuing.output);
   for (const output of [floor.credential.issue.output, floor.credential.issue.expires]) {
     if (!fields?.has(output)) {
@@ -119,31 +105,26 @@ function omitTopLevel(type: WireType, omitted: ReadonlySet<string>): WireType {
   return type;
 }
 
-export function projectHttpWire(
-  wire: WireContractsIR,
-  contracts: Readonly<Record<string, InputContractDecl>>,
-  categories: Readonly<Record<string, PublicErrorCategory>>,
-  floor: HttpFloor,
-): WireContractsIR {
+export function projectHttpWire(facts: WireProjectionFacts, floor: HttpFloor): WireContractsIR {
+  const wire = structuredClone(facts.logicalWire) as WireContractsIR;
+  const routes = facts.routes as Readonly<Record<string, InputContractDecl>>;
   const credential = floor.credential;
-  const projected = projectProductionHttpWire(wire, categories);
-  const protectedPaths = credentialProtectedPaths(contracts, credential.input);
+  const projected = projectProductionHttpWire(wire, floor);
+  const protectedPaths = credentialProtectedPaths(routes, credential.input);
   return {
-    endpoints: projected.endpoints.map((endpoint) => {
-      return {
-        ...endpoint,
-        input: protectedPaths.has(endpoint.path)
-          ? omitTopLevel(endpoint.input, new Set([credential.input]))
-          : endpoint.input,
-        output:
-          endpoint.path === credential.issue.path
-            ? omitTopLevel(
-                endpoint.output,
-                new Set([credential.issue.output, credential.issue.expires]),
-              )
-            : endpoint.output,
-      };
-    }),
+    endpoints: projected.endpoints.map((endpoint) => ({
+      ...endpoint,
+      input: protectedPaths.has(endpoint.path)
+        ? omitTopLevel(endpoint.input, new Set([credential.input]))
+        : endpoint.input,
+      output:
+        endpoint.path === credential.issue.path
+          ? omitTopLevel(
+              endpoint.output,
+              new Set([credential.issue.output, credential.issue.expires]),
+            )
+          : endpoint.output,
+    })),
     appWide: projected.appWide,
   };
 }

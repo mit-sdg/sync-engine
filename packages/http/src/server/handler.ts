@@ -1,25 +1,23 @@
+import type { Assembly } from "@mit-sdg/sync-engine/assembly";
 import {
+  bindTransport,
   FrameworkErrorCode,
-  type ContractShape,
+  serializeJsonValue,
+  type Gateway,
   type InvocationResult,
-} from "../protocol/types.ts";
-import { serializeJsonValue } from "../protocol/envelope.ts";
-import type { Invoker } from "../invocation/invoke.ts";
-import type { Assembly } from "../assembly/assembly-facade.ts";
-import { assemblyBehind } from "../assembly/assembly-registry.ts";
-import type { HttpFloor } from "./http-floor.ts";
-import { credentialProtectedPaths, validateHttpFloor } from "./http-floor.ts";
-import type { ProductionHttpProfile } from "./http-profile.ts";
-import { normalizeHttpBasePath, normalizeProductionHttpProfile } from "./http-profile.ts";
-import { applicationBehindGateway } from "../protocol/gateway-registry.ts";
-import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
+} from "@mit-sdg/sync-engine/boundary";
+import type { ContractShape } from "@mit-sdg/sync-engine/client";
+import type { HttpFloor } from "./floor.ts";
+import { credentialProtectedPaths, validateHttpFloor } from "./floor.ts";
+import type { ProductionHttpProfile } from "./policy.ts";
+import { normalizeHttpBasePath, normalizeProductionHttpProfile } from "./policy.ts";
 import {
   publicErrorStatus,
   publicFrameworkCategoryOf,
   registeredPublicCategoryOf,
-} from "../protocol/public-errors.ts";
-import { isPlainObject } from "@engine/reads/matchers";
-import { setOwn } from "@engine/utils/own-property";
+} from "./public-errors.ts";
+
+type Application = Assembly<Record<string, new (...args: never[]) => object>>;
 
 function internalErrorResponse(): Response {
   return new Response(`{"error":"${FrameworkErrorCode.INTERNAL_ERROR}"}`, {
@@ -130,30 +128,39 @@ async function readRequestText(request: Request): Promise<RequestTextResult> {
 }
 
 type FloorHandlerOptions = {
-  gateway: Invoker<ContractShape>;
-  application: Assembly<Record<string, new (...args: never[]) => object>>;
+  gateway: Gateway<ContractShape>;
+  application: Application;
   floor: HttpFloor;
   correlation?: HttpCorrelationOptions;
 };
 
 type ProfileHandlerOptions = {
-  gateway: Invoker<ContractShape>;
-  application: Assembly<Record<string, new (...args: never[]) => object>>;
+  gateway: Gateway<ContractShape>;
+  application: Application;
   profile: ProductionHttpProfile;
   correlation?: HttpCorrelationOptions;
 };
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
 export function createHttpHandler(
   options: FloorHandlerOptions | ProfileHandlerOptions,
 ): (request: Request) => Promise<Response> {
-  if ("floor" in options) validateHttpFloor(options.application, options.floor);
-  const assembled = assemblyBehind(options.application);
-  if (applicationBehindGateway(options.gateway) !== options.application) {
-    throw new Error("createHttpHandler: gateway must target the supplied application.");
-  }
-  const correlation = normalizeCorrelationOptions(options.correlation);
-  const categories = assembled.publicErrors;
+  const binding = bindTransport({ application: options.application, gateway: options.gateway });
   const floor = "floor" in options ? options.floor : undefined;
+  if (floor !== undefined) validateHttpFloor(binding, floor);
+  const correlation = normalizeCorrelationOptions(options.correlation);
   const declaration = "floor" in options ? options.floor : options.profile;
   const profile = normalizeProductionHttpProfile(
     declaration,
@@ -168,7 +175,7 @@ export function createHttpHandler(
   const protectedPaths =
     credential === undefined
       ? new Set<string>()
-      : credentialProtectedPaths(assembled.contracts, credential.input);
+      : credentialProtectedPaths(binding.routes, credential.input);
 
   const cookie = (value: string, expires: Date) =>
     `${cookieName}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/; ` +
@@ -220,7 +227,7 @@ export function createHttpHandler(
 
     let result: InvocationResult;
     try {
-      result = await options.gateway.invoke(path, body as never, {
+      result = await binding.invoker.invoke(path, body as never, {
         signal: request.signal,
         correlationId,
       });
@@ -229,7 +236,7 @@ export function createHttpHandler(
     }
     try {
       if (!result.ok) {
-        const failure = publicFailure(result, categories);
+        const failure = publicFailure(result, profile);
         const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";
         return reply(
           publicJson(
@@ -246,16 +253,15 @@ export function createHttpHandler(
         if (!isPlainObject(value)) {
           return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
         }
-        const record = value as Record<string, unknown>;
-        const token = record[credential.issue.output];
-        const sourceExpiry = record[credential.issue.expires];
+        const token = value[credential.issue.output];
+        const sourceExpiry = value[credential.issue.expires];
         const expires =
           sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
         if (typeof token !== "string" || Number.isNaN(expires.getTime())) {
           return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
         }
         const publicValue = Object.fromEntries(
-          Object.entries(record).filter(
+          Object.entries(value).filter(
             ([key]) => key !== credential.issue.output && key !== credential.issue.expires,
           ),
         );
@@ -275,14 +281,14 @@ export function createHttpHandler(
 
 function publicFailure(
   result: Exclude<InvocationResult, { ok: true }>,
-  categories: Readonly<Record<string, PublicErrorCategory>>,
+  profile: ProductionHttpProfile,
 ): { error: string; status: number } {
   const category =
     result.error.kind === "framework"
       ? publicFrameworkCategoryOf(result.error.code)
       : registeredPublicCategoryOf(
           typeof result.error.value === "string" ? result.error.value : "",
-          categories,
+          profile.publicErrors,
         );
   return { error: category, status: publicErrorStatus(category) };
 }

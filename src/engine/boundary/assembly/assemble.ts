@@ -27,7 +27,6 @@ import { declarationsOf } from "@engine/reactions/authoring/partitions";
 import { $vars } from "@engine/reactions/authoring/vars";
 import { when } from "@engine/reactions/authoring/words";
 import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metadata";
-import type { PublicErrorCategory } from "@engine/reactions/concepts/concept-metadata";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
 import type { InstrumentedConcept } from "@engine/reactions/runtime/instrumenting";
 import {
@@ -61,7 +60,7 @@ import { setOwn } from "@engine/utils/own-property";
 import { brand, hasBrand } from "@engine/reads/brands";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
-import { assertPortableHttpPath } from "../protocol/http-path.ts";
+import { assertPortableRoutePath } from "../protocol/route-path.ts";
 import { assertEndpointValidators } from "../protocol/validation.ts";
 import type { EndpointValidators } from "../protocol/validation.ts";
 import { refusalFunnel } from "../invocation/funnel.ts";
@@ -150,7 +149,7 @@ export function endpoint(
   opts?: EndpointOptions,
 ): EndpointDef<ReactionPartition>;
 export function endpoint(path: string, reaction: Reaction, opts?: EndpointOptions): EndpointDef {
-  assertPortableHttpPath(path, "endpoint(...)");
+  assertPortableRoutePath(path, "endpoint(...)");
   if (opts?.validators !== undefined) assertEndpointValidators(opts.validators, path);
   const def = {
     path,
@@ -249,8 +248,6 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   whenIdle(): Promise<void>;
   /** The public route and admission facts a separate gateway may consume. */
   publicInterface: ApplicationInterface;
-  /** Public boundary categories declared beside concept refusals. */
-  publicErrors: Readonly<Record<string, PublicErrorCategory>>;
   /** Endpoint identity retained even when a reaction has no portable IR. */
   endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
   /** Every authored endpoint declaration, independent of lowering. */
@@ -357,22 +354,12 @@ export function assemble<T extends Record<string, ConceptClass>>(
     }
   }
   const concepts: Record<string, object> = {};
-  const publicErrors: Record<string, PublicErrorCategory> = {};
   const metadataByName = vocabularyMetadata(options.vocabulary);
   for (const [name, cls] of Object.entries(classes)) {
     const supplied = options.instances as Record<string, object> | undefined;
     const provided =
       supplied !== undefined && Object.hasOwn(supplied, name) ? supplied[name] : undefined;
     const metadata = Object.hasOwn(metadataByName, name) ? metadataByName[name] : undefined;
-    for (const [code, category] of Object.entries(metadata?.publicErrors ?? {})) {
-      const prior = Object.hasOwn(publicErrors, code) ? publicErrors[code] : undefined;
-      if (prior !== undefined && prior !== category) {
-        throw new Error(
-          `assemble: refusal "${code}" has conflicting public categories "${prior}" and "${category}".`,
-        );
-      }
-      setOwn(publicErrors, code, category);
-    }
     let instance = provided;
     if (instance === undefined) {
       const initialization = options.initialize as Record<string, readonly unknown[]> | undefined;
@@ -522,7 +509,6 @@ export function assemble<T extends Record<string, ConceptClass>>(
     beginDrain: () => lifecycle.beginDrain(),
     whenIdle: () => lifecycle.whenIdle(),
     publicInterface,
-    publicErrors,
     endpointOfReaction,
     endpoints,
     form: (fused) => engine.form(fused),

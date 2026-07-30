@@ -24,12 +24,12 @@ the projected duplicate-name conflict, and end the session.
 
 ## What the example establishes
 
-- `productionHttpProfile(...)` projects registered public categories without
+- `productionHttpProfile(...)` projects policy-owned public categories without
   requiring a credential mechanism.
 - `httpFloor(...)` adds one same-origin `HttpOnly`, `SameSite=Strict` cookie
   binding and removes its logical input/output fields from HTTP.
 - Unauthorized protected requests and successful session ending clear the
-  cookie; issuance and clearing responses are not stored.
+  cookie; issuance and clearing responses carry `Cache-Control: no-store`.
 - Sessioning stores each expiry, issues it thirty minutes from its injected
   clock with `crypto.randomUUID()` credentials, and removes expired credentials
   before refusing them as unauthorized.

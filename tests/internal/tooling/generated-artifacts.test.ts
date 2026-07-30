@@ -6,10 +6,11 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
 import { vocabulary } from "@sync-engine/language";
-import { endpoint, productionHttpProfile, receive, respond } from "@sync-engine/boundary";
+import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
-import { httpFloor } from "@sync-engine/boundary";
+import { httpFloor, productionHttpProfile } from "@mit-sdg/sync-engine-http/server";
+import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import {
   checkGenerated,
   pinGenerated,
@@ -208,15 +209,20 @@ describe("generated application artifacts", () => {
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
           vocabulary: { module: languageModule },
-          httpFloor: httpFloor({
-            origin: "http://localhost:3000",
-            credential: {
-              name: "session",
-              input: "session",
-              issue: { path: "/login", output: "session", expires: "expiresAt" },
-              clear: [],
-            },
-          }),
+          projections: [
+            httpWire({
+              name: "ApplicationWireHttp",
+              policy: httpFloor({
+                origin: "http://localhost:3000",
+                credential: {
+                  name: "session",
+                  input: "session",
+                  issue: { path: "/login", output: "session", expires: "expiresAt" },
+                  clear: [],
+                },
+              }),
+            }),
+          ],
         },
         configUrl,
       ),
@@ -243,7 +249,12 @@ describe("generated application artifacts", () => {
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
           vocabulary: { module: languageModule },
-          httpProfile: productionHttpProfile({ origin: "https://example.test" }),
+          projections: [
+            httpWire({
+              name: "ApplicationWireHttp",
+              policy: productionHttpProfile({ origin: "https://example.test" }),
+            }),
+          ],
         },
         configUrl,
       ),

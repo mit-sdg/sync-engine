@@ -229,11 +229,12 @@ that value as a type, so it adds no server code to a frontend bundle. Use
 inspect one artifact on standard output, and `pin-spec` or `pin-wire` when only
 one artifact should be rewritten.
 
-An application exposing the production public-error policy supplies either its
-credential-free `httpProfile` or its cookie-bound `httpFloor` in this
-descriptor, so the generated module carries both the logical application
-contract and its projected HTTP form. A floor projection also removes the
-credential input and consumed issue outputs. [Execution
+An application exposing a transport-specific public contract supplies an ordered
+`projections` list. The HTTP companion uses
+`httpWire({ policy, name })`, reusing the exact policy object passed to the
+handler, so the generated module carries both the logical application contract
+and its projected HTTP form. A floor projection also removes the credential
+input and consumed issue outputs. [Execution
 semantics](../semantics.md#boundary-gateway-and-client) defines the fixed cookie
 and HTTP behavior; the [public API](../public-surface.md#generated-descriptor)
 lists every descriptor field and default.
@@ -340,8 +341,8 @@ delivery and JSON projection.
 
 Reading Circle and Operations Room stop at the standard gateway. They do not
 present the raw logical-envelope HTTP adapter as a public deployment boundary.
-A public JSON host chooses a production profile and supplies the assembly so
-registered category metadata is available:
+A public JSON host installs the first-party HTTP package, chooses a production
+policy, and maps domain refusal codes in that policy:
 
 The example aliases the profile constructor because its local profile value
 uses the same descriptive name:
@@ -349,12 +350,12 @@ uses the same descriptive name:
 _Source: [`examples/production-http/src/edge.ts`](../../examples/production-http/src/edge.ts)_
 
 ```ts
+import { createGateway } from "@mit-sdg/sync-engine/boundary";
 import {
-  createGateway,
   createHttpHandler,
   httpFloor,
   productionHttpProfile as defineProductionHttpProfile,
-} from "@mit-sdg/sync-engine/boundary";
+} from "@mit-sdg/sync-engine-http/server";
 ```
 
 _Source: [`examples/production-http/src/edge.ts`](../../examples/production-http/src/edge.ts)_
@@ -363,6 +364,7 @@ _Source: [`examples/production-http/src/edge.ts`](../../examples/production-http
 export const productionHttpProfile = defineProductionHttpProfile({
   origin: "https://production-http.test",
   basePath: "/api",
+  publicErrors,
 });
 ```
 
@@ -390,7 +392,7 @@ fields supplied and consumed by the cookie binding:
 _Source: [`examples/production-http/src/client.ts`](../../examples/production-http/src/client.ts)_
 
 ```ts
-export type ProductionHttpClient = Client<ProductionHttpWireHttp>;
+export type ProductionHttpClient = Client<ProductionHttpWireHttp, HttpClientError>;
 
 export function createProductionHttpClient(options: HttpClientOptions = {}): ProductionHttpClient {
   return createHttpClient<ProductionHttpWireHttp>(options);

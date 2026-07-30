@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { httpFloor, productionHttpProfile } from "@mit-sdg/sync-engine/boundary";
+import { httpFloor, productionHttpProfile } from "@mit-sdg/sync-engine-http/server";
 import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
 import { buildProductionHttp } from "../src/edge.ts";
 import { runScenario } from "../src/scenario.ts";

@@ -13,21 +13,24 @@ Most backend files use `language`, `assembly`, and `boundary`; frontend files
 use `client`; generation scripts use `tooling`. `advanced` marks deliberate
 manual construction and explicit escape hatches.
 
-| Package path                                 | Role                                                          |
-| -------------------------------------------- | ------------------------------------------------------------- |
-| [`@mit-sdg/sync-engine/language`](#language) | Concepts, reactions, views, formers, and their conditions     |
-| [`@mit-sdg/sync-engine/assembly`](#assembly) | Concept registration, assemblies, and occurrence-log stores   |
-| [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, invocation, gateways, and HTTP adapters            |
-| [`@mit-sdg/sync-engine/client`](#client)     | Local and HTTP clients over a generated contract              |
-| [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation |
-| [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches        |
+| Package path                                                   | Role                                                          |
+| -------------------------------------------------------------- | ------------------------------------------------------------- |
+| [`@mit-sdg/sync-engine/language`](#language)                   | Concepts, reactions, views, formers, and their conditions     |
+| [`@mit-sdg/sync-engine/assembly`](#assembly)                   | Concept registration, assemblies, and occurrence-log stores   |
+| [`@mit-sdg/sync-engine/boundary`](#boundary)                   | Endpoints, invocation, gateways, and transport binding        |
+| [`@mit-sdg/sync-engine/client`](#client)                       | Local and custom clients over a generated contract            |
+| [`@mit-sdg/sync-engine-http/server`](#http-companion-package)  | First-party HTTP handler and policy                           |
+| [`@mit-sdg/sync-engine-http/client`](#http-companion-package)  | First-party fetch client                                      |
+| [`@mit-sdg/sync-engine-http/tooling`](#http-companion-package) | Generated HTTP wire projection                                |
+| [`@mit-sdg/sync-engine/tooling`](#tooling)                     | Assembly inspection, read-back rendering, and wire generation |
+| [`@mit-sdg/sync-engine/advanced`](#advanced)                   | Manual engine construction and explicit escape hatches        |
 
 | Task                                      | Primary APIs                                                |
 | ----------------------------------------- | ----------------------------------------------------------- |
 | Declare reactions and current-state reads | `reaction`, `when`, `view`, `former`, `where`, `each`       |
 | Register and install concepts             | `registerConcept`, `conceptSet`, `assemble`                 |
 | Expose application routes                 | `endpoint`, `receive`, `respond`, `createGateway`           |
-| Call generated routes                     | `createLocalClient`, `createHttpClient`, `createClient`     |
+| Call generated routes                     | `createLocalClient`, `createClient`, or a transport package |
 | Inspect or generate contracts             | `inspectAssembly`, `applicationManifest`, `renderWireTypes` |
 | Construct a manual local engine           | `createEngine` from `advanced`                              |
 
@@ -70,8 +73,8 @@ call shapes:
 | `.distinct(value)` | First-seen distinct values                                   | `[]`            |
 
 Concept entries accepted by `vocabulary` are either a concept class or
-`{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals?,
-publicErrors? }`. `QueryPromise` is `"one" | "optional" | "many"`.
+`{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals? }`.
+`QueryPromise` is `"one" | "optional" | "many"`.
 `Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes;
 bindings are inferred from their declaration callbacks.
 
@@ -84,7 +87,7 @@ semantics](./semantics.md#reactions).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `PublicError`, `PublicErrorCategory`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -135,25 +138,20 @@ I/O belong behind a host-owned queue. Events carry no action input or output.
 
 ### Registration and floors
 
-| API               | Compact signature                                                     |
-| ----------------- | --------------------------------------------------------------------- |
-| `registerConcept` | `registerConcept({ class, spec, refusals?, publicErrors?, floors? })` |
-| `conceptSet`      | `conceptSet({ ...registeredConcepts })`                               |
-| `conceptFloor`    | `conceptFloor(vocabulary, { name, instances, resources, close })`     |
+| API               | Compact signature                                                 |
+| ----------------- | ----------------------------------------------------------------- |
+| `registerConcept` | `registerConcept({ class, spec, refusals?, floors? })`            |
+| `conceptSet`      | `conceptSet({ ...registeredConcepts })`                           |
+| `conceptFloor`    | `conceptFloor(vocabulary, { name, instances, resources, close })` |
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
-`ConceptFloor` name those descriptors. `PublicError` contains the public HTTP
-categories and `PublicErrorCategory` names their union.
-
-`publicErrors` may categorize only refusal codes declared by the concept
-specification. Floor names must be non-empty, and each supplied floor value
-must be a factory function. A floor name is available through the typed
-`implementations(...)` overload only when every concept supplies it. If an
-incomplete floor is selected by bypassing that type restriction, selection
-fails at runtime. `conceptSet` also rejects conflicting public categories.
-The zero-argument `implementations()` form is available only when every
-canonical class can be constructed without required arguments; otherwise use a
-named floor.
+`ConceptFloor` name those descriptors. Floor names must be non-empty, and each
+supplied floor value must be a factory function. A floor name is available
+through the typed `implementations(...)` overload only when every concept
+supplies it. If an incomplete floor is selected by bypassing that type
+restriction, selection fails at runtime. The zero-argument `implementations()`
+form is available only when every canonical class can be constructed without
+required arguments; otherwise use a named floor.
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`
@@ -191,7 +189,7 @@ recovery.
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `HttpCredentialBinding`, `HttpCorrelationOptions`, `HttpFloor`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ProductionHttpProfile`, `ValidationResult`, `createGateway`, `createHttpHandler`, `endpoint`, `httpFloor`, `productionHttpProfile`, `receive`, `respond`
+`ApplicationInterface`, `TransportBinding`, `WireProjectionFacts`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ValidationResult`, `assertPortableRoutePath`, `bindTransport`, `createGateway`, `endpoint`, `receive`, `respond`, `serializeJsonValue`
 
 <!-- register:boundary:end -->
 
@@ -212,8 +210,12 @@ validation](./guide/application-boundary.md#add-runtime-validation) shows the
 validator call shape. [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
 defines settlement.
 
-Endpoint paths must begin with `/`. `receive(...)` cannot author the
-framework-owned `path` or `requestId` fields. `respond(...)` cannot author
+Endpoint paths must be canonical portable absolute URL pathnames. Queries,
+fragments, scheme-relative paths, dot-segment normalization, malformed percent
+escapes, literal spaces, and literal Unicode are rejected; the declared spelling
+must survive WHATWG pathname handling unchanged. See [Correlation and route
+paths](./semantics.md#correlation-and-route-paths). `receive(...)` cannot author
+the framework-owned `path` or `requestId` fields. `respond(...)` cannot author
 `requestId` or `errorKind`.
 
 Endpoint validators are supplied explicitly by the application. They are not
@@ -285,103 +287,198 @@ promptly as opaque `INTERNAL_ERROR`. See [Failures between action
 asks](./semantics.md#failures-between-action-asks) and
 [Cancellation](./semantics.md#cancellation).
 
-### HTTP
+### Transport binding
 
-| API                     | Compact signature / options                                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------------------------- |
-| `createHttpHandler`     | Profile `({ gateway, application, profile })`; cookie floor `({ gateway, application, floor })`          |
-| `productionHttpProfile` | `productionHttpProfile({ origin, basePath? }): ProductionHttpProfile`                                    |
-| `httpFloor`             | `httpFloor({ origin, basePath?, credential: { name, input, issue: { path, output, expires }, clear } })` |
+| API                       | Compact signature / role                                    |
+| ------------------------- | ----------------------------------------------------------- |
+| `bindTransport`           | `bindTransport({ application, gateway }): TransportBinding` |
+| `assertPortableRoutePath` | Rejects noncanonical public route spellings                 |
+| `serializeJsonValue`      | Shared JSON serialization for a transport adapter           |
 
-`ProductionHttpProfile` is the credential-free production policy. It requires
-an HTTP or HTTPS public origin, accepts an optional normalized base path, and
-uses the assembly's registered public-error categories. `HttpFloor` extends
-that shape with one `HttpCredentialBinding`; `httpFloor` is the narrow
-same-origin cookie preset. Both production forms use the same bounded request,
-JSON, status, category, success-value, and correlation pipeline. The fixed
-request, cookie, projection, and deployment guarantees live in [Execution
-semantics](./semantics.md#boundary-gateway-and-client).
+`bindTransport(...)` verifies that a gateway belongs to the supplied assembly
+and returns only a narrowed invoker plus frozen route and logical-wire facts.
+It never exposes reaction state, mutable assembly registries, or lifecycle
+controls. Same-version duplicate core packages retain the existing global
+identity behavior. A custom server adapter can invoke this capability without
+installing any first-party transport package.
 
-`httpFloor(...)` requires identifier-shaped credential and output field names,
-canonical issue and clear paths, and distinct clear paths. Assembly validation
-requires those paths to exist, at least one endpoint to require the credential
-input, and every top-level alternative of the issue endpoint's successful
-output to expose the token and expiry fields. At runtime, a token that is not a
-string or an expiry that is not a valid `Date` or date-parsable value produces
-opaque `INTERNAL_ERROR`.
+`WireProjectionFacts` is the immutable route and logical-wire input passed to a
+generated projection. It remains transport-neutral; core owns strict leaf
+checks, vocabulary anchoring, rendering, provenance, and atomic artifact
+writes.
 
-Endpoint and base paths must be canonical portable URL pathnames. `/` remains a
-supported endpoint and no-prefix base, and trailing base-path slashes normalize
-away. `HttpFloor` has no implicit `/api` alias; declare `basePath: "/api"` when
-that prefix is part of the deployment URL.
+### HTTP companion package
 
-Every handler form requires a standard gateway targeting the supplied assembly;
-construction rejects unrecognized gateways and gateways for another assembly.
-Gateway execution limits and observers remain configured through `createGateway`.
-Same-version duplicate package copies share this identity through the global
-registry; interoperability across different package versions is not guaranteed.
+Install the maintained companion explicitly:
 
-Every handler form accepts `correlation?: HttpCorrelationOptions`. Its resolver
-maps an inbound request to a non-empty, control-character-free ByteString of at
-most 128 code units, without leading or trailing spaces. A thrown,
-non-ByteString, or otherwise invalid result is replaced with a UUID.
-`responseHeader` optionally projects the effective
-identifier on every response. Invalid header names are rejected at handler
-construction, and response decoration never rejects a handled request.
+```sh
+bun add @mit-sdg/sync-engine@1.0.0-beta.2 @mit-sdg/sync-engine-http@1.0.0-beta.2
+```
+
+During beta the companion declares an exact core peer dependency. It is ESM-only,
+has no root export, and supports these three entrypoints.
+
+#### `@mit-sdg/sync-engine-http/server`
+
+<!-- register:http-server:start -->
+
+`HttpCorrelationOptions`, `HttpCredentialBinding`, `HttpFloor`, `HttpPublicErrorCategory`, `HttpPublicErrorPolicy`, `ProductionHttpProfile`, `createHttpHandler`, `httpFloor`, `productionHttpProfile`
+
+<!-- register:http-server:end -->
+
+```ts
+productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile
+httpFloor(declaration: HttpFloor): HttpFloor
+createHttpHandler(options: {
+  application: Assembly<Record<string, new (...args: never[]) => object>>;
+  gateway: Gateway<ContractShape>;
+  profile: ProductionHttpProfile;
+  correlation?: HttpCorrelationOptions;
+}): (request: Request) => Promise<Response>
+createHttpHandler(options: {
+  application: Assembly<Record<string, new (...args: never[]) => object>>;
+  gateway: Gateway<ContractShape>;
+  floor: HttpFloor;
+  correlation?: HttpCorrelationOptions;
+}): (request: Request) => Promise<Response>
+```
+
+| Profile field  | Required | Meaning                                                        |
+| -------------- | -------- | -------------------------------------------------------------- |
+| `origin`       | yes      | Absolute HTTP or HTTPS origin with no path, query, or fragment |
+| `basePath`     | no       | Portable route prefix; omitted or `/` means no prefix          |
+| `publicErrors` | no       | Domain refusal code to public HTTP category                    |
+
+`HttpPublicErrorCategory` is `INVALID_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`,
+`NOT_FOUND`, or `CONFLICT`. Those categories use status 400, 401, 403, 404, and
+409 respectively. Private and unknown domain refusals use `INTERNAL_ERROR`/500.
+Framework `INVALID_INPUT` uses `INVALID_REQUEST`/400 and framework `NOT_FOUND`
+uses `NOT_FOUND`/404; other framework server failures use
+`INTERNAL_ERROR`/500. Public failure bodies contain only `{ error }`.
+
+`HttpFloor` adds a `credential` field with the following shape:
+
+```ts
+credential: {
+  readonly name: string;
+  readonly input: string;
+  readonly issue: { readonly path: string; readonly output: string; readonly expires: string };
+  readonly clear: readonly string[];
+}
+```
+
+An endpoint is protected only when its input contract lists `credential.input`
+as required. The issue and clear paths must exist, at least one endpoint must be
+protected, and every top-level issue-output alternative must contain the token
+and expiry fields. `createHttpHandler(...)` checks these rules synchronously and
+also rejects a gateway that does not target `application`. The floor checks the
+declared origin only when an inbound `Origin` header is present; it is not a
+CORS implementation.
+
+`HttpCorrelationOptions.resolve(request)` is called synchronously for each
+request. `responseHeader`, when supplied, must be a valid header name. Invalid,
+missing, or faulting resolver results are replaced with a UUID under the rules
+in [Correlation and route paths](./semantics.md#correlation-and-route-paths).
+
+#### `@mit-sdg/sync-engine-http/client`
+
+<!-- register:http-client:start -->
+
+`HeadersOption`, `HttpClientError`, `HttpClientErrorCode`, `HttpClientOptions`, `createHttpClient`, `createHttpTransport`
+
+<!-- register:http-client:end -->
+
+```ts
+createHttpTransport(options?: HttpClientOptions): ClientTransport<HttpClientError>
+createHttpClient<Contract extends ContractShape>(options?: HttpClientOptions): Client<Contract, HttpClientError>
+```
+
+| `HttpClientOptions` field | Default / effect                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `baseUrl`                 | `API_BASE_URL`, then `/api`; `/` selects the origin root; trailing `/` is removed |
+| `fetch`                   | `globalThis.fetch`                                                                |
+| `headers`                 | Record or synchronous/asynchronous provider called once per request               |
+| `credentials`             | `"include"`                                                                       |
+
+The transport sends JSON `POST` requests. Per-request headers are merged after
+the initial `Content-Type: application/json` header and can replace it. An empty
+response body becomes `{}`. A nonempty body must be JSON; response
+`Content-Type` is not consulted. A non-2xx JSON object with an `error` property
+is returned as the server result. A non-2xx response without that envelope uses
+`BAD_STATUS`.
+
+| `HttpClientErrorCode`      | Condition                                             |
+| -------------------------- | ----------------------------------------------------- |
+| `HEADER_RESOLUTION_FAILED` | The per-request header provider threw or rejected     |
+| `NETWORK_ERROR`            | Fetch failed before a response was obtained           |
+| `BAD_JSON`                 | The response body could not be read or parsed as JSON |
+| `BAD_STATUS`               | A non-2xx response lacked a JSON error envelope       |
+
+Abort is a core client condition and resolves as `ABORTED`, not as an
+`HttpClientErrorCode`. Abort can settle while an asynchronous header provider is
+still pending; the package cannot cancel that provider. The client performs no
+runtime validation against the generated contract. In Node.js, the selected
+`fetch` implementation must provide cookie storage if a credential floor
+requires browser-like cookie persistence.
+
+#### `@mit-sdg/sync-engine-http/tooling`
+
+<!-- register:http-tooling:start -->
+
+`HttpWireOptions`, `httpWire`
+
+<!-- register:http-tooling:end -->
+
+```ts
+httpWire(options: { policy: ProductionHttpProfile | HttpFloor; name: string }): WireProjection
+```
+
+Reuse the immutable value returned by `productionHttpProfile(...)` or
+`httpFloor(...)` in `createHttpHandler(...)` and `httpWire(...)`. The projector
+derives public HTTP categories and, for a floor, omits the cookie-provided input
+and consumed issue outputs. A raw mutable policy is structurally accepted but is
+read later when projection runs; mutating it can change generated output.
+
+The package owns POST, JSON, body-size, origin, status, cookie, correlation, and
+fetch behavior. See [Execution semantics](./semantics.md#boundary-gateway-and-client)
+and the [production example](../examples/production-http/README.md).
 
 ### Framework errors
 
-`FrameworkErrorCode` is the stable value object; its value union names every
-framework failure a shipped boundary may emit. Controlled admission details may
+`FrameworkErrorCode` is the stable core value object; its value union names the
+core boundary and client framework failures. Transport packages may add their
+own error unions, such as `HttpClientError`. Controlled admission details may
 accompany an error, but exception text from an unknown failure is omitted.
 
-| Code                       | Ordinary source                                                                |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| `INVALID_INPUT`            | Invoker or gateway option, outer-shape, contract, or input-validator admission |
-| `NOT_FOUND`                | Unknown logical route                                                          |
-| `UNAVAILABLE`              | Overload or draining admission                                                 |
-| `TIMED_OUT`                | Invocation wait expired                                                        |
-| `ABORTED`                  | Invocation or client signal aborted                                            |
-| `INTERNAL_ERROR`           | Application, framework, validation, or interpreter fault                       |
-| `TRANSPORT_ERROR`          | In-process forwarding or custom transport failure                              |
-| `BAD_JSON`                 | HTTP client could not read or parse a response body                            |
-| `BAD_STATUS`               | HTTP client received a failing status without an error envelope                |
-| `NETWORK_ERROR`            | HTTP client could not complete `fetch`                                         |
-| `HEADER_RESOLUTION_FAILED` | HTTP client header provider failed                                             |
-| `UNKNOWN_ERROR`            | Unclassified framework envelope                                                |
-
-The production HTTP handler maps malformed requests, unsupported methods, and
-oversized request bodies to its public `INVALID_REQUEST` category. Those
-request-side responses are distinct from the logical framework-code sources in
-this table. See [Production HTTP profile](./semantics.md#production-http-profile).
+| Code              | Ordinary source                                                                |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `INVALID_INPUT`   | Invoker or gateway option, outer-shape, contract, or input-validator admission |
+| `NOT_FOUND`       | Unknown logical route                                                          |
+| `UNAVAILABLE`     | Overload or draining admission                                                 |
+| `TIMED_OUT`       | Invocation wait expired                                                        |
+| `ABORTED`         | Invocation or client signal aborted                                            |
+| `INTERNAL_ERROR`  | Application, framework, validation, or interpreter fault                       |
+| `TRANSPORT_ERROR` | In-process forwarding or custom transport failure                              |
+| `UNKNOWN_ERROR`   | Unclassified framework envelope                                                |
 
 ## `client`
 
 <!-- register:client:start -->
 
-`Client`, `ClientCallOptions`, `ClientError`, `ClientOptions`, `ClientRequest`, `ClientTransport`, `ContractShape`, `DomainErrorValue`, `HeadersOption`, `HttpClientOptions`, `createClient`, `createHttpClient`, `createHttpTransport`, `createLocalClient`
+`Client`, `ClientCallOptions`, `ClientError`, `ClientOptions`, `ClientRequest`, `ClientTransport`, `ContractShape`, `DomainErrorValue`, `createClient`, `createLocalClient`
 
 <!-- register:client:end -->
 
 ### Constructors
 
-| API                   | Compact signature                                                           |
-| --------------------- | --------------------------------------------------------------------------- |
-| `createHttpClient`    | `createHttpClient<Contract>(options?: HttpClientOptions): Client<Contract>` |
-| `createHttpTransport` | `createHttpTransport(options?: HttpClientOptions): ClientTransport`         |
-| `createLocalClient`   | `createLocalClient<Contract>({ invoker }): Client<Contract>`                |
-| `createClient`        | `createClient<Contract>({ transport }: ClientOptions): Client<Contract>`    |
-
-| `HttpClientOptions` field | Default / effect                                                                   |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `baseUrl`                 | `API_BASE_URL`, then `"/api"`                                                      |
-| `fetch`                   | `globalThis.fetch`                                                                 |
-| `headers`                 | No extra headers; a record or synchronous/asynchronous provider evaluated per call |
-| `credentials`             | `"include"`; also accepts `"omit"` or `"same-origin"`                              |
+| API                 | Compact signature                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `createLocalClient` | `createLocalClient<Contract>({ invoker }): Client<Contract>`                                            |
+| `createClient`      | `createClient<Contract, TransportError = ClientError>({ transport }): Client<Contract, TransportError>` |
 
 `ClientOptions.transport` and `createLocalClient`'s `invoker` are required.
-`HeadersOption`, `ClientTransport`, and `ClientRequest` name those extension
-contracts. Every endpoint call accepts an optional second `ClientCallOptions`
+`ClientTransport` and `ClientRequest` name the extension contract. Every
+endpoint call accepts an optional second `ClientCallOptions`
 argument whose signal cancels transport and waiting, not accepted server work.
 A `Client<Contract>` supports grouped access such as
 `client.rooms.get(input)` and indexed access such as
@@ -395,16 +492,18 @@ transport failures. JSON projection and error delivery are normative in
 [Execution semantics](./semantics.md#boundary-gateway-and-client).
 
 `createClient` replaces a nullish input with `{}`. A transport throw or rejected
-promise resolves as `{ error: "TRANSPORT_ERROR" }`. `createHttpTransport`
-resolves header-provider, network, response-JSON, and unexpected-status failures
-to the corresponding framework codes. Handled transport failures do not reject
-the client call.
+promise resolves as `{ error: "TRANSPORT_ERROR" }`. Transport-specific failures
+are owned by the selected transport package. Pass their error type as the
+second generic, for example
+`createClient<Wire, HttpClientError>({ transport: createHttpTransport() })`;
+`createHttpClient<Wire>(...)` composes the maintained HTTP transport directly.
+Neither form weakens generated endpoint input and output types.
 
 ## `tooling`
 
 <!-- register:tooling:start -->
 
-`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV3`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `ManifestEndpointV3`, `ObservedOccurrence`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `diagnosticsFail`, `inspectAssembly`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
+`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV3`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedApplication`, `ManifestEndpointV3`, `ObservedOccurrence`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `diagnosticsFail`, `inspectAssembly`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
 
 <!-- register:tooling:end -->
 
@@ -474,8 +573,8 @@ a separate public name for that aggregate argument type.
 ### Generated descriptor
 
 The `sync-engine artifacts` command reads the default export of the
-application-owned `generated.config.ts`. The descriptor is a CLI configuration
-shape rather than an exported package type.
+application-owned `generated.config.ts`. `GeneratedApplication` names the
+descriptor type exported from `/tooling`.
 
 | Field                 | Required | Default                                                            |
 | --------------------- | -------- | ------------------------------------------------------------------ |
@@ -488,22 +587,29 @@ shape rather than an exported package type.
 | `wire`                | no       | `"wire.ts"`                                                        |
 | `wireName`            | no       | Pascal-cased title plus `Wire`                                     |
 | `wireBanner`          | no       | Exact package/version generator banner                             |
-| `httpWireName`        | no       | `${wireName}Http` when an HTTP profile or floor is present         |
 | `vocabulary.module`   | no       | `new URL("./src/concept-set.ts", configUrl)`                       |
 | `vocabulary.export`   | no       | `"vocabulary"`                                                     |
-| `httpProfile`         | no       | No production HTTP projection                                      |
-| `httpFloor`           | no       | No cookie-bound production HTTP projection                         |
+| `projections`         | no       | Ordered transport-specific projections                             |
 
 The default specification banner is
 `<!-- Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit. -->`.
 A custom specification banner receives a second mandatory HTML generator
 comment. The default wire banner is
 `// Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit.`
-A custom wire banner receives a second mandatory generator line. `httpProfile` and
-`httpFloor` are mutually exclusive. Artifact generation always uses the
-vocabulary anchor with strict leaves. With either descriptor, the one wire
-module contains the logical contract and the projected public HTTP contract. A
-floor additionally removes cookie-consumed credential fields. The
+A custom wire banner receives a second mandatory generator line. Artifact
+generation always uses the vocabulary anchor with strict leaves. Every
+`WireProjection` receives frozen `WireProjectionFacts` and returns a named
+`WireContractsIR`; core selects the shared preamble, rendering options, ordering,
+strict-leaf checks, and provenance. A projection list can be empty or contain
+multiple transport contracts in one wire module. `projections` must be an array,
+and each entry must provide `project(facts)`. The logical wire name, projected
+wire names, app-wide error names, `Json`, and generated vocabulary-helper names
+must be distinct TypeScript identifiers. Projection provenance must contain a
+nonblank package name and version. Core evaluates projections in declaration
+order and rejects any projection or naming failure before an artifact command
+compares or writes files. The HTTP companion's
+`httpWire({ policy, name })` additionally removes cookie-consumed credential
+fields for a floor. The
 [application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
 shows the application-owned command path; [Generated wire](./semantics.md#generated-wire)
 defines derivation guarantees.

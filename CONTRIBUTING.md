@@ -51,6 +51,8 @@ Do not hand-edit these outputs:
 
 - `tests/package/declarations.snapshot.txt` — update with
   `bun run declarations:pin` after an intentional declaration change;
+- `packages/http/tests/declarations.snapshot.txt` — update with
+  `bun run declarations:pin` after an intentional HTTP-package declaration change;
 - `examples/*/generated/*.md` and `examples/*/generated/wire.ts` — update through
   the owning example's artifact pin command or the repository generation
   script.
@@ -60,11 +62,12 @@ the committed files with fresh output.
 
 ## Public entrypoints
 
-The six files under `src/<subpath>/index.ts` are export-only public barrels.
-Internal engine code imports engine modules rather than public barrels. The
-architecture check enforces dependency direction and rejects unsupported
-entrypoints. Any export change requires corresponding public API and declaration
-updates.
+The six files under `src/<subpath>/index.ts` are export-only core public
+barrels. Workspace packages expose their own export-only public entrypoints and
+may import only supported core subpaths. Internal engine code imports engine
+modules rather than public barrels. The architecture check enforces dependency
+direction and rejects unsupported entrypoints. Any export change requires
+corresponding public API and declaration updates.
 
 ## Documentation examples
 

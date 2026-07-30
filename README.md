@@ -1,6 +1,7 @@
 # sync-engine
 
 [![npm beta](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm%20beta)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
+[![HTTP npm beta](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP%20npm%20beta)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is a TypeScript library for composing independently implemented
@@ -36,6 +37,26 @@ and toolchain requirements.
 bun add @mit-sdg/sync-engine@beta
 ```
 
+For the maintained HTTP handler, fetch client, and generated wire projection,
+install the companion alongside the same exact beta:
+
+```sh
+bun add @mit-sdg/sync-engine@1.0.0-beta.2 @mit-sdg/sync-engine-http@1.0.0-beta.2
+```
+
+## Packages
+
+| Package                     | Role                                                                   |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `@mit-sdg/sync-engine`      | Concepts, composition, assembly, boundaries, clients, tooling, and CLI |
+| `@mit-sdg/sync-engine-http` | Maintained HTTP handler, fetch client, and generated wire projection   |
+
+Core can be installed alone for local clients and custom transports. The HTTP
+package is independently published and requires the exact matching core beta as
+a peer dependency. Neither package has a root export. Use the supported core
+subpaths and the HTTP package's `/server`, `/client`, and `/tooling` subpaths
+listed in the [Public API](docs/public-surface.md).
+
 ## Create an application
 
 ```sh
@@ -45,7 +66,7 @@ bun install
 ```
 
 For a reproducible evaluation, replace `@beta` with the exact version
-`@1.0.0-beta.1`.
+`@1.0.0-beta.2`.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
@@ -119,7 +140,7 @@ export const ChooseMitigation = endpoint(
 ```
 
 An assembly exposes endpoints through its direct invoker, the standard gateway,
-a local client with JSON parity, or the HTTP adapter. Generated TypeScript
+a local client with JSON parity, or a transport adapter. Generated TypeScript
 describes endpoint inputs, successful outputs, and errors for typed callers.
 Applications attach endpoint validators when they also need runtime value
 validation.

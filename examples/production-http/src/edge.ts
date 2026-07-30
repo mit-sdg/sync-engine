@@ -1,9 +1,9 @@
+import { createGateway } from "@mit-sdg/sync-engine/boundary";
 import {
-  createGateway,
   createHttpHandler,
   httpFloor,
   productionHttpProfile as defineProductionHttpProfile,
-} from "@mit-sdg/sync-engine/boundary";
+} from "@mit-sdg/sync-engine-http/server";
 import type { ProductionHttpWire } from "../generated/wire.ts";
 import {
   assembleProductionHttp,
@@ -11,14 +11,21 @@ import {
   type ProductionHttpOverrides,
 } from "./assembly.ts";
 
+const publicErrors = {
+  NAME_TAKEN: "CONFLICT",
+  UNKNOWN_SESSION: "UNAUTHORIZED",
+} as const;
+
 export const productionHttpProfile = defineProductionHttpProfile({
   origin: "https://production-http.test",
   basePath: "/api",
+  publicErrors,
 });
 
 export const productionHttpFloor = httpFloor({
   origin: "https://production-http.test",
   basePath: "/api",
+  publicErrors,
   credential: {
     name: "session",
     input: "session",

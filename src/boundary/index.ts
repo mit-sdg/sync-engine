@@ -18,10 +18,11 @@ export type {
 } from "@engine/reactions/runtime/operational";
 export { createGateway } from "@engine/boundary/gateway/gateway";
 export type { Gateway, GatewayOptions, GatewayTarget } from "@engine/boundary/gateway/gateway";
+export { assertPortableRoutePath } from "@engine/boundary/protocol/route-path";
+export { bindTransport } from "@engine/boundary/gateway/transport-binding";
+export type {
+  TransportBinding,
+  WireProjectionFacts,
+} from "@engine/boundary/gateway/transport-binding";
+export { serializeJsonValue } from "@engine/boundary/protocol/envelope";
 export type { ApplicationInterface } from "@engine/boundary/protocol/types";
-export { createHttpHandler } from "@engine/boundary/http/http";
-export type { HttpCorrelationOptions } from "@engine/boundary/http/http";
-export { productionHttpProfile } from "@engine/boundary/http/http-profile";
-export type { ProductionHttpProfile } from "@engine/boundary/http/http-profile";
-export { httpFloor } from "@engine/boundary/http/http-floor";
-export type { HttpCredentialBinding, HttpFloor } from "@engine/boundary/http/http-floor";

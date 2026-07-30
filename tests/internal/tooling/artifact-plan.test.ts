@@ -105,8 +105,13 @@ describe("artifact plans", () => {
       wireBanner: "// Ping wire",
       vocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
       strictLeaves: true,
-      httpWire: manifest.wire,
-      httpWireName: "PingHttpWire",
+      projections: [
+        {
+          name: "PingProjectedWire",
+          wire: manifest.wire,
+          provenance: { name: "@example/projector", version: "1.0.0" },
+        },
+      ],
     });
 
     expect(plan.entries.map(({ path, kind }) => ({ path, kind }))).toEqual([
@@ -128,7 +133,7 @@ describe("artifact plans", () => {
     expect(wire.startsWith(`// Ping wire\n// Generator: ${PACKAGE_NAME}@${PACKAGE_VERSION}.`)).toBe(
       true,
     );
-    expect(wire).toContain("export type PingHttpWire = {");
+    expect(wire).toContain("export type PingProjectedWire = {");
     expect(wire.match(/export type Json =/g)).toHaveLength(1);
     expect(plan.entries.every(({ content }) => content.includes(PACKAGE_VERSION))).toBe(true);
   });
@@ -145,6 +150,31 @@ describe("artifact plans", () => {
     expect(() => planGenerated(manifest, { title: "Ping", strictLeaves: true })).toThrow(
       "strictLeaves requires a vocabulary type anchor",
     );
+  });
+
+  test("rejects projected names that collide in the generated type namespace", () => {
+    const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: { Ping },
+      }),
+    );
+
+    expect(() =>
+      planGenerated(manifest, {
+        title: "Ping",
+        wireName: "PingWire",
+        projections: [
+          {
+            name: "PingHttpWire",
+            wire: manifest.wire,
+            render: { appWideErrorName: "PingWire" },
+            provenance: { name: "@example/projector", version: "1.0.0" },
+          },
+        ],
+      }),
+    ).toThrow('duplicate generated type name "PingWire"');
   });
 
   test("rejects a manifest produced by another generator version", () => {

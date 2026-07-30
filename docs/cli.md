@@ -116,7 +116,9 @@ Renders both artifacts but writes only the assembled Markdown specification.
 
 ### `pin-wire`
 
-Renders both artifacts but writes only the TypeScript wire contract.
+Renders both artifacts but writes only the TypeScript wire module. The module
+contains the logical contract followed by each configured projection in
+declaration order.
 
 ### `manifest`
 
@@ -134,7 +136,9 @@ distinct computation names.
 
 ### `wire`
 
-Prints the generated TypeScript wire contract.
+Prints the generated TypeScript wire module. It contains one shared preamble,
+the logical contract, each configured projection in declaration order, and a
+banner naming every projector package and version.
 
 `sync-engine check --config generated.config.ts` prints the same structured
 application diagnostics after checking parsed concept action/query declarations
@@ -147,6 +151,12 @@ repository gate.
 Every artifact command imports and assembles the configured application.
 Assembly, import, configuration, or rendering failures therefore fail the
 command before comparison or writing.
+
+Projection failures also occur before comparison or writing. `projections` must
+be an array whose entries provide `project(facts)`. Logical and projected wire
+names, app-wide error names, and generated helper names must be distinct valid
+TypeScript identifiers, and every projector must provide a nonblank package name
+and version as provenance.
 
 After inspection, the command begins assembly drain and waits for idle before
 returning. A descriptor that owns generation-only resources may supply a

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { applicationExamples } from "../examples/register.ts";
 import { checkArchitecture } from "./architecture.ts";
+import { workspaceCatalog } from "./workspaces.ts";
 import { filesBelow } from "../src/command/files-below.ts";
 
 const root = resolve(import.meta.dirname, "..");
@@ -25,7 +26,7 @@ function repositoryPath(path: string): string {
 const repository = repositoryFiles();
 const inspectedTypeScript = (
   await Promise.all(
-    ["src", "tests"].map((directory) =>
+    ["src", "tests", "packages"].map((directory) =>
       existsSync(resolve(root, directory))
         ? filesBelow(resolve(root, directory), (name) => name.endsWith(".ts"))
         : [],
@@ -55,6 +56,9 @@ const directories = new Set(
 );
 const projectDirectories = new Set([
   ...Object.values(applicationExamples).map(({ directory }) => `examples/${directory}/`),
+  ...workspaceCatalog
+    .filter((workspace) => workspace.directory !== ".")
+    .map((workspace) => `${workspace.directory}/`),
   "src/command/scaffold/",
   "tests/package/application/",
   "tests/package/multi-instance/",

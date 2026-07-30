@@ -1,20 +1,19 @@
 import { describe, expect, test } from "vite-plus/test";
-import { assemble, conceptSet, PublicError, registerConcept } from "@sync-engine/assembly";
+import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import {
+  bindTransport,
   createGateway,
-  createHttpHandler,
   endpoint,
-  httpFloor,
-  productionHttpProfile,
   receive,
   respond,
   type OperationalEvent,
-} from "@sync-engine/boundary";
-import { projectHttpWire, validateHttpFloor } from "@sync-engine/internal/boundary/http/http-floor";
-import { projectProductionHttpWire } from "@sync-engine/internal/boundary/http/http-profile";
-import { assemblyBehind } from "@sync-engine/internal/boundary/assembly/assembly-registry";
-import { rememberApplicationInvoker } from "@sync-engine/internal/boundary/protocol/gateway-registry";
-import { wireContracts } from "@sync-engine/internal/boundary/wire/wire-contracts";
+} from "@mit-sdg/sync-engine/boundary";
+import {
+  createHttpHandler,
+  httpFloor,
+  productionHttpProfile,
+} from "@mit-sdg/sync-engine-http/server";
+import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 
 class UnknownSession extends Error {}
 
@@ -76,7 +75,6 @@ function setup() {
       class: Sessioning,
       spec: sessioningSpec,
       refusals: { UNKNOWN_SESSION: UnknownSession },
-      publicErrors: { UNKNOWN_SESSION: PublicError.UNAUTHORIZED },
     }),
   });
   const { Sessioning: Sessions } = set.concepts;
@@ -108,6 +106,7 @@ function setup() {
   const gateway = createGateway({ application });
   const floor = httpFloor({
     origin: "http://learning.test",
+    publicErrors: { UNKNOWN_SESSION: "UNAUTHORIZED" },
     credential: {
       name: "session",
       input: "session",
@@ -117,66 +116,6 @@ function setup() {
   });
   const fetch = createHttpHandler({ application, gateway, floor });
   return { application, fetch, floor, gateway };
-}
-
-function poisonPublicCategories(application: ReturnType<typeof setup>["application"]): void {
-  const categories = assemblyBehind(application).publicErrors as Record<string, string>;
-  Object.setPrototypeOf(categories, { INHERITED_CATEGORY: "FORBIDDEN" });
-  Object.defineProperty(categories, "MALFORMED_CATEGORY", {
-    value: "toString",
-    enumerable: true,
-    configurable: true,
-    writable: true,
-  });
-}
-
-function gatewayWithInvoker(
-  application: ReturnType<typeof setup>["application"],
-  invoker: { invoke: (...args: never[]) => Promise<unknown> },
-) {
-  rememberApplicationInvoker(invoker, application, application.publicInterface);
-  return createGateway({
-    application: { invoker: invoker as never, publicInterface: application.publicInterface },
-  });
-}
-
-async function expectOpaqueRuntimeCodes(
-  application: ReturnType<typeof setup>["application"],
-  handlerFor: (
-    gateway: ReturnType<typeof createGateway>,
-  ) => (request: Request) => Promise<Response>,
-  url: string,
-): Promise<void> {
-  let code = "";
-  const handler = handlerFor(
-    gatewayWithInvoker(application, {
-      invoke: async () => ({
-        ok: false as const,
-        error: { kind: "domain" as const, value: code, detail: "private refusal detail" },
-      }),
-    }),
-  );
-  for (const runtimeCode of [
-    "toString",
-    "constructor",
-    "__proto__",
-    "INHERITED_CATEGORY",
-    "MALFORMED_CATEGORY",
-  ]) {
-    code = runtimeCode;
-    const response = await handler(
-      new Request(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: "session=secret-session",
-        },
-        body: JSON.stringify({ session: "secret-session" }),
-      }),
-    );
-    expect(response.status, runtimeCode).toBe(500);
-    expect(await response.json(), runtimeCode).toEqual({ error: "INTERNAL_ERROR" });
-  }
 }
 
 describe("HTTP floor", () => {
@@ -242,7 +181,7 @@ describe("HTTP floor", () => {
   });
 
   test("enforces the declared origin and projects the browser wire", async () => {
-    const { application, fetch, floor } = setup();
+    const { application, fetch, floor, gateway } = setup();
     const rejected = await fetch(
       new Request("http://learning.test/login", {
         method: "POST",
@@ -252,13 +191,9 @@ describe("HTTP floor", () => {
     );
     expect(rejected.status).toBe(403);
 
-    const assembled = assemblyBehind(application);
-    const raw = wireContracts(assembled.engine.exportReactions(), {
-      contracts: assembled.contracts,
-      inventories: assembled.engine.exportConcepts(),
-    });
-    validateHttpFloor(application, floor, raw);
-    const projected = projectHttpWire(raw, assembled.contracts, assembled.publicErrors, floor);
+    const projected = httpWire({ policy: floor, name: "LearningWireHttp" }).project(
+      bindTransport({ application, gateway }),
+    ).wire;
     const login = projected.endpoints.find(({ path }) => path === "/login");
     const me = projected.endpoints.find(({ path }) => path === "/me");
     expect(JSON.stringify(login?.output)).not.toMatch(/session|expiresAt/);
@@ -287,16 +222,6 @@ describe("HTTP floor", () => {
       }),
     );
     expect(accepted.status).toBe(200);
-  });
-
-  test("fails closed for prototype, inherited, and malformed floor categories", async () => {
-    const { application, floor } = setup();
-    poisonPublicCategories(application);
-    await expectOpaqueRuntimeCodes(
-      application,
-      (gateway) => createHttpHandler({ application, floor, gateway }),
-      "http://learning.test/me",
-    );
   });
 
   test("cancels an oversized streamed body without trusting Content-Length", async () => {
@@ -337,199 +262,9 @@ describe("HTTP floor", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "INVALID_REQUEST" });
   });
-
-  test("maps an unserializable floor result to opaque INTERNAL_ERROR", async () => {
-    const { application, floor } = setup();
-    const value: Record<string, unknown> = {};
-    value.self = value;
-    const fetch = createHttpHandler({
-      application,
-      floor,
-      gateway: gatewayWithInvoker(application, {
-        invoke: async () => ({ ok: true as const, value }),
-      }),
-    });
-
-    const response = await fetch(
-      new Request("http://learning.test/me", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: "session=secret-session",
-        },
-        body: "{}",
-      }),
-    );
-
-    expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
-  });
-
-  test("maps an unexpected gateway rejection to opaque INTERNAL_ERROR", async () => {
-    const { application, floor } = setup();
-    const fetch = createHttpHandler({
-      application,
-      floor,
-      gateway: gatewayWithInvoker(application, {
-        invoke: async () => {
-          throw new Error("private floor failure");
-        },
-      }),
-    });
-
-    const response = await fetch(
-      new Request("http://learning.test/me", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      }),
-    );
-
-    expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
-  });
-
-  test.each([
-    ["credential issue", "/login"],
-    ["credential clear", "/logout"],
-    ["ordinary success", "/me"],
-  ])("contains hostile %s result access as opaque INTERNAL_ERROR", async (_case, path) => {
-    const { application, floor } = setup();
-    const result = {
-      ok: true as const,
-      get value(): unknown {
-        throw new Error("hostile success value");
-      },
-    };
-    const fetch = createHttpHandler({
-      application,
-      floor,
-      gateway: gatewayWithInvoker(application, { invoke: async () => result }),
-      correlation: {
-        resolve: () => "hostile-result",
-        responseHeader: "X-Request-Id",
-      },
-    });
-
-    const response = await fetch(
-      new Request(`http://learning.test${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      }),
-    );
-
-    expect(response.status).toBe(500);
-    expect(response.headers.get("X-Request-Id")).toBe("hostile-result");
-    expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
-  });
-
-  test.each([
-    [
-      "cookie encoding",
-      {
-        session: "\ud800",
-        expiresAt: new Date("2026-07-20T12:00:00.000Z"),
-        user: "maya",
-      },
-    ],
-    [
-      "public projection",
-      new Proxy(
-        {
-          session: "secret-session",
-          expiresAt: new Date("2026-07-20T12:00:00.000Z"),
-          user: "maya",
-        },
-        {
-          ownKeys() {
-            throw new Error("hostile projection");
-          },
-        },
-      ),
-    ],
-  ])("contains credential issue %s failures as opaque INTERNAL_ERROR", async (_case, value) => {
-    const { application, floor } = setup();
-    const fetch = createHttpHandler({
-      application,
-      floor,
-      gateway: gatewayWithInvoker(application, {
-        invoke: async () => ({ ok: true as const, value }),
-      }),
-      correlation: {
-        resolve: () => "hostile-issue",
-        responseHeader: "X-Request-Id",
-      },
-    });
-
-    const response = await fetch(
-      new Request("http://learning.test/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      }),
-    );
-
-    expect(response.status).toBe(500);
-    expect(response.headers.get("X-Request-Id")).toBe("hostile-issue");
-    expect(await response.json()).toEqual({ error: "INTERNAL_ERROR" });
-  });
 });
 
 describe("production HTTP profile", () => {
-  test("projects unregistered and open domain errors exactly like runtime", () => {
-    const projected = projectProductionHttpWire(
-      {
-        endpoints: [
-          {
-            path: "/dynamic",
-            input: { kind: "json" },
-            output: { kind: "json" },
-            errors: ["INVALID_INPUT", "NOT_FOUND"],
-            openError: true,
-          },
-        ],
-        appWide: ["NOT_FOUND"],
-      },
-      {},
-    );
-
-    expect(projected).toMatchObject({
-      endpoints: [
-        {
-          errors: ["INTERNAL_ERROR", "INVALID_REQUEST"],
-          openError: false,
-        },
-      ],
-      appWide: ["INTERNAL_ERROR"],
-    });
-  });
-
-  test("keeps framework and registered domain INVALID_INPUT provenance distinct", () => {
-    const base = {
-      path: "/collision",
-      input: { kind: "json" as const },
-      output: { kind: "json" as const },
-      errors: ["INVALID_INPUT"],
-      openError: false,
-    };
-    const projected = projectProductionHttpWire(
-      {
-        endpoints: [
-          { ...base, inputAdmissionError: true },
-          { ...base, path: "/domain-only", inputAdmissionError: false },
-        ],
-        appWide: [],
-      },
-      { INVALID_INPUT: "CONFLICT" },
-    );
-
-    expect(projected.endpoints.map(({ errors }) => errors)).toEqual([
-      ["CONFLICT", "INVALID_REQUEST"],
-      ["CONFLICT"],
-    ]);
-  });
-
   test("preserves successes and projects registered categories behind a base path", async () => {
     const { application, gateway } = setup();
     const fetch = createHttpHandler({
@@ -538,6 +273,7 @@ describe("production HTTP profile", () => {
       profile: productionHttpProfile({
         origin: "https://learning.test",
         basePath: "/api",
+        publicErrors: { UNKNOWN_SESSION: "UNAUTHORIZED" },
       }),
       correlation: {
         resolve: () => "profile-42",
@@ -566,59 +302,6 @@ describe("production HTTP profile", () => {
     expect(refused.status).toBe(401);
     expect(await refused.json()).toEqual({ error: "UNAUTHORIZED" });
     expect(refused.headers.get("Set-Cookie")).toBeNull();
-  });
-
-  test("keeps private refusals and framework server failures opaque", async () => {
-    const { application } = setup();
-    const profile = productionHttpProfile({ origin: "https://learning.test" });
-    const privateFetch = createHttpHandler({
-      application,
-      profile,
-      gateway: gatewayWithInvoker(application, {
-        invoke: async () => ({
-          ok: false as const,
-          error: { kind: "domain" as const, value: "PRIVATE_REFUSAL" },
-        }),
-      }),
-    });
-    const frameworkFetch = createHttpHandler({
-      application,
-      profile,
-      gateway: gatewayWithInvoker(application, {
-        invoke: async () => ({
-          ok: false as const,
-          error: {
-            kind: "framework" as const,
-            code: "UNAVAILABLE" as const,
-            detail: "private capacity detail",
-          },
-        }),
-      }),
-    });
-    const request = () =>
-      new Request("https://learning.test/me", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session: "secret-session" }),
-      });
-
-    const privateResponse = await privateFetch(request());
-    expect(privateResponse.status).toBe(500);
-    expect(await privateResponse.json()).toEqual({ error: "INTERNAL_ERROR" });
-    const frameworkResponse = await frameworkFetch(request());
-    expect(frameworkResponse.status).toBe(500);
-    expect(await frameworkResponse.json()).toEqual({ error: "INTERNAL_ERROR" });
-  });
-
-  test("fails closed for prototype, inherited, and malformed profile categories", async () => {
-    const { application } = setup();
-    poisonPublicCategories(application);
-    const profile = productionHttpProfile({ origin: "https://learning.test" });
-    await expectOpaqueRuntimeCodes(
-      application,
-      (gateway) => createHttpHandler({ application, profile, gateway }),
-      "https://learning.test/me",
-    );
   });
 
   test.each(["profile", "floor"])(

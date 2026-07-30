@@ -423,6 +423,32 @@ an authored response denotes a domain failure, so a successful endpoint result
 cannot use `error` as an ordinary top-level data field. See the exact
 [cancellation boundary](#cancellation).
 
+The maintained HTTP client resolves its base URL when the client or transport is
+constructed: an explicit nonblank `baseUrl` takes precedence, followed by
+`API_BASE_URL`, then `/api`. Trailing slashes are removed, while `/` means no
+prefix. It sends `POST`, serializes nullish input as `{}`, supplies
+`Content-Type: application/json`, and uses Fetch credentials mode `include` by
+default. A header record or synchronous/asynchronous header provider is merged
+after the initial content type for each request.
+
+The HTTP client reads every response as text. An empty body becomes `{}`; a
+nonempty body must parse as JSON regardless of response `Content-Type`. A
+non-2xx parsed object with an `error` property is returned unchanged. Other
+non-2xx responses become `BAD_STATUS`; unreadable or invalid JSON becomes
+`BAD_JSON`; header-provider failure becomes `HEADER_RESOLUTION_FAILED`; and
+Fetch rejection becomes `NETWORK_ERROR`. Abort before Fetch, while headers are
+pending, or while a body is read becomes the core `ABORTED` result. The header
+provider itself is not cancellable. Neither status handling nor parsing validates
+the result against the generated TypeScript contract.
+
+The HTTP handler accepts only `POST`. An absent `Content-Type` is accepted; a
+present content type must be `application/json`, optionally followed by
+parameters. Routing uses `URL.pathname`, so query parameters do not select a
+different route. Empty request text becomes `{}`. Malformed, unreadable, or
+larger-than-1,048,576-byte bodies become `INVALID_REQUEST`/400. The handler
+checks both declared `Content-Length` and bytes read from the stream. Every
+response uses JSON content type, and every successful invocation uses status 200. Serialization failure becomes opaque `INTERNAL_ERROR`/500.
+
 ### Limits and operational observation
 
 An opt-in `ExecutionLimits` profile bounds active root flows, pending requests,
@@ -454,7 +480,7 @@ remain host responsibilities.
 
 ### Correlation and route paths
 
-HTTP handlers may resolve an inbound correlation id and project the effective
+HTTP handlers in `@mit-sdg/sync-engine-http/server` may resolve an inbound correlation id and project the effective
 value in a response header. Accepted identifiers are non-empty,
 control-character-free ByteStrings of at most 128 code units without leading or
 trailing spaces; invalid, non-ByteString, or faulting resolver results become a fresh UUID. Response
@@ -465,7 +491,8 @@ correlation id, the gateway establishes a fresh UUID once at public entry and
 carries it through gateway and application observation. Correlation does not
 deduplicate work and is not an idempotency key.
 
-Endpoint paths and HTTP base paths are portable absolute URL pathnames. Their
+Endpoint paths are portable absolute URL pathnames. The HTTP companion applies
+the same grammar to its base paths. Their
 declared spelling must survive WHATWG URL pathname handling exactly: queries,
 fragments, scheme-relative paths, literal spaces or Unicode, dot-segment
 normalization (including encoded dot segments), malformed percent escapes, and
@@ -476,26 +503,27 @@ removed before routing, so `/api/` and `/api` declare the same base.
 
 ### Production HTTP profile
 
-`productionHttpProfile(...)` declares a public origin and optional base path.
-The handler form carrying that profile and the assembly is the production
+`productionHttpProfile(...)` in `@mit-sdg/sync-engine-http/server` declares a
+public origin, optional base path, and policy-owned `publicErrors` map. The
+handler form carrying that profile and the assembly is the production
 credential-free policy. It accepts JSON `POST` requests, preserves ordinary
-successful values, and projects domain refusals only through public categories
-registered by the assembly. A private, unknown, non-string, or dynamically open
-domain failure becomes `{ error: "INTERNAL_ERROR" }`. Framework input and route
-failures become `INVALID_REQUEST` and `NOT_FOUND`; every framework server
-failure becomes the same opaque internal response. Diagnostic detail never
-crosses this policy. The declared origin identifies public deployment and
-enforces the production HTTPS check; the credential-free profile does not use
-an inbound `Origin` header as an authorization or CORS decision.
+successful values, and projects only policy-mapped domain refusals. A private,
+unknown, non-string, or dynamically open domain failure becomes
+`{ error: "INTERNAL_ERROR" }`. Framework input and route failures become
+`INVALID_REQUEST` and `NOT_FOUND`; every framework server failure becomes the
+same opaque internal response. Diagnostic detail never crosses this policy. The
+declared origin identifies public deployment and enforces the production HTTPS
+check; the credential-free profile does not use an inbound `Origin` header as an
+authorization or CORS decision.
 
 ### Cookie credential floor
 
 An HTTP floor may additionally bind one logical credential input to a cookie.
-The application declares the credential name and input, the endpoint that
+The policy declares the credential name and input, the endpoint that
 issues it and the returned token and expiry fields, the successful endpoints
 that clear it, and the public origin. Credential and output field names must be
 JavaScript-style identifiers. Issue and clear paths must be canonical portable
-paths, and clear paths must be distinct. Assembly validation requires every
+paths, and clear paths must be distinct. Projection validation requires every
 named path to exist, at least one endpoint to require the credential input, and
 every top-level alternative of the issuing endpoint's successful output to
 contain the token and expiry fields. Any endpoint whose input contract requires
@@ -505,14 +533,16 @@ The fixed floor uses the production profile's request and public-error policy,
 enforces the declared origin when
 an `Origin` header is present, replaces a protected request's credential input
 with the cookie value, and never accepts that value from the body. It projects
-concept refusal codes through the same registered categories. The issuing
+domain refusal codes through the same policy categories. The issuing
 endpoint's token and expiry fields become the cookie and do not enter its HTTP
 response. At runtime, the token must be a string and the expiry must be a valid
 `Date` or a value whose string representation is date-parsable; malformed issue
 output becomes opaque `INTERNAL_ERROR`. Successful clearing endpoints and an
 unauthorized protected request clear the cookie. Responses that issue or clear
-the cookie use `Cache-Control: no-store`. The floor is a same-origin boundary:
-it does not answer CORS preflights or emit CORS headers.
+the cookie use `Cache-Control: no-store`. The floor performs this conditional
+origin check and uses a strict same-site cookie; it does not require an `Origin`
+header, compare the configured origin with `request.url`, answer CORS preflights,
+or emit CORS headers.
 The floor adds no implicit `/api` route alias; serving below `/api` requires an
 explicit `basePath: "/api"` declaration.
 
@@ -562,10 +592,11 @@ For JSON-representable values, both clients expose the same projected data. The
 local client serializes and parses input and output before returning it. Dates
 become strings and undefined object fields disappear. Projection failures do
 not have identical error codes: the local transport normally reports
-`TRANSPORT_ERROR`, while HTTP request serialization can report `NETWORK_ERROR`
-and server response serialization can report `INTERNAL_ERROR`.
+`TRANSPORT_ERROR`, while the HTTP client reports its package-owned
+`HttpClientError` union and server response serialization can report
+`INTERNAL_ERROR`.
 
-The production profile exposes only registered categories and opaque protocol
+The production profile exposes only policy-mapped categories and opaque protocol
 failures. The credential floor adds cookie consumption and issuance to that
 production policy. Both handlers apply the same request limits, JSON projection,
 correlation, and public status mapping.
@@ -584,18 +615,26 @@ contract and uses `Json` for leaves it cannot trace to a signature.
 
 Ordinary assembly rejects every local reaction, view, or former. The error names
 each local owner before a route or artifact plan is exposed. Direct invocation,
-gateway routing, HTTP, and generation therefore share one complete portable
-design instead of silently omitting executable-only behavior.
+gateway routing, transport adapters, and generation therefore share one complete
+portable design instead of silently omitting executable-only behavior.
 
-When a generated application descriptor supplies `httpProfile` or `httpFloor`,
-one module contains both contracts. The contract named by `wireName` retains the
-logical application inputs, outputs, and refusal codes for a local client. A
-second contract, named by `httpWireName` or `${wireName}Http`, carries public
-categories rather than private refusal codes. With `httpFloor`, that contract
-also omits the cookie-bound input from protected routes and the consumed token
-and expiry fields from the issuing route's output. Both contracts share the
-generated type helpers and vocabulary anchor. A descriptor cannot supply both
-HTTP fields.
+When a generated application descriptor supplies ordered `projections`, one
+module contains the logical contract followed by each named transport contract.
+The contract named by `wireName` retains the logical application inputs, outputs,
+and refusal codes for a local or custom client. The HTTP companion's
+`httpWire({ policy, name })` carries public policy categories rather than private
+refusal codes. With `httpFloor`, that contract also omits the cookie-bound input
+from protected routes and the consumed token and expiry fields from the issuing
+route's output. All contracts share generated type helpers and the vocabulary
+anchor. Core records every projector package and version in generated
+provenance.
+
+Projection planning validates all names before rendering. The logical wire,
+every projected wire, each app-wide error type, `Json`, and vocabulary helper
+types must have distinct valid TypeScript identifiers. Provenance package names
+and versions must be nonblank. Core evaluates projectors in declaration order,
+and a projector or validation failure occurs before any artifact comparison or
+write.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 defines input admission and explicit successful-output validation. Neither is

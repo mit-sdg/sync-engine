@@ -10,11 +10,8 @@ import {
   type ConceptFloor,
   type OperationalEvent,
 } from "@mit-sdg/sync-engine/assembly";
-import {
-  createGateway,
-  createHttpHandler,
-  FrameworkErrorCode,
-} from "@mit-sdg/sync-engine/boundary";
+import { createGateway, FrameworkErrorCode } from "@mit-sdg/sync-engine/boundary";
+import { createHttpHandler } from "@mit-sdg/sync-engine-http/server";
 import {
   Conflict,
   composition,

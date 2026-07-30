@@ -31,6 +31,13 @@ The 1.0 release line is beta. Pin an exact package version and read the [support
 - [Production HTTP](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/production-http/README.md) — validation, limits, public errors, correlation, and cookie credentials
 - [Persistence, restart, and recovery](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/advanced-recipes.md) — durable concept state versus occurrence evidence
 
+## HTTP transport
+
+- Install `@mit-sdg/sync-engine-http` at the exact same beta version as `@mit-sdg/sync-engine`.
+- Import handlers and policies from `@mit-sdg/sync-engine-http/server`, fetch clients from `@mit-sdg/sync-engine-http/client`, and `httpWire` from `@mit-sdg/sync-engine-http/tooling`. The companion root and deep imports are unsupported.
+- Put public domain-error mappings on the reused HTTP profile or floor. Generate the public contract with `projections: [httpWire({ policy, name })]`.
+- Core contains no HTTP handler or fetch-client exports. Use `bindTransport` and `createClient` for a custom transport without the companion package.
+
 ## Working rules
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.

@@ -210,12 +210,17 @@ export, retries, and network I/O into host-owned infrastructure.
 
 ## HTTP host responsibilities
 
-Use `productionHttpProfile(...)` for a public JSON boundary that does not need
-engine-managed credentials. It accepts only `POST`, limits each request body to
-1,048,576 bytes, preserves success values, and exposes only registered public
-error categories plus opaque protocol categories. Unknown or private refusals
-and all framework server failures become `INTERNAL_ERROR`. Use `httpFloor(...)`
-only when the application also needs the narrow same-origin cookie binding.
+Install `@mit-sdg/sync-engine-http` and use
+`productionHttpProfile(...)` from `/server` for a public JSON boundary that does
+not need engine-managed credentials. It accepts only `POST`, limits each request
+body to 1,048,576 bytes, preserves success values, and exposes only policy-mapped
+public error categories plus opaque protocol categories. Unknown or private
+refusals become `INTERNAL_ERROR`. Framework `INVALID_INPUT` and `NOT_FOUND`
+become `INVALID_REQUEST` and `NOT_FOUND`; other framework server failures become
+`INTERNAL_ERROR`. Use `httpFloor(...)` only when the application also needs the
+narrow cookie binding with a conditional origin check. Reuse that immutable
+policy value in `httpWire(...)` when
+generating the public client contract.
 
 Both production descriptors require an HTTPS public origin when
 `NODE_ENV=production`, but the Fetch handlers do not terminate TLS. The
@@ -223,6 +228,11 @@ credential floor enforces its configured origin when an `Origin` header is
 present and does not implement CORS preflight. Its cookies are `HttpOnly`,
 `SameSite=Strict`, and `Path=/`; HTTPS cookies are `Secure` and use the
 `__Host-` prefix.
+
+The fetch client defaults to credentials mode `include`, but this does not add a
+cookie jar. Browsers own their cookie storage. A Node.js or custom `fetch`
+implementation must provide cookie persistence when floor-protected calls span
+multiple requests.
 
 Every handler is a Fetch adapter, not a complete server. The host owns CORS,
 connection and request-rate limits, denial-of-service controls, TLS termination,

@@ -1,10 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
+import type { HttpPublicErrorCategory } from "@mit-sdg/sync-engine-http/server";
 import {
   publicCategoryOf,
   publicErrorStatus,
   registeredPublicCategoryOf,
-} from "@sync-engine/internal/boundary/protocol/public-errors";
+} from "../src/server/public-errors.ts";
 
 describe("HTTP public error projection", () => {
   test.each([
@@ -30,7 +31,10 @@ describe("HTTP public error projection", () => {
   });
 
   test("ignores prototype and inherited runtime codes", () => {
-    const inherited = Object.create({ INHERITED: "FORBIDDEN" }) as Record<string, "FORBIDDEN">;
+    const inherited = Object.create({ INHERITED: "FORBIDDEN" }) as Record<
+      string,
+      HttpPublicErrorCategory
+    >;
     for (const code of ["toString", "constructor", "__proto__", "INHERITED"]) {
       expect(registeredPublicCategoryOf(code, inherited)).toBe("INTERNAL_ERROR");
       expect(publicCategoryOf(code, inherited)).toBe("INTERNAL_ERROR");
@@ -38,7 +42,7 @@ describe("HTTP public error projection", () => {
   });
 
   test("fails closed for malformed categories even after invalid runtime casts", () => {
-    const malformed = { BROKEN: "toString" } as unknown as Record<string, "FORBIDDEN">;
+    const malformed = { BROKEN: "toString" } as unknown as Record<string, HttpPublicErrorCategory>;
     expect(registeredPublicCategoryOf("BROKEN", malformed)).toBe("INTERNAL_ERROR");
     expect(publicCategoryOf("BROKEN", malformed)).toBe("INTERNAL_ERROR");
     expect(publicErrorStatus("toString" as never)).toBe(500);

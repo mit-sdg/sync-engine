@@ -2,6 +2,7 @@
 /.github/dependabot.yml @BarishNamazov @eagonmeng
 /.github/CODEOWNERS @BarishNamazov @eagonmeng
 /package.json @BarishNamazov @eagonmeng
+/packages/http/ @BarishNamazov @eagonmeng
 /CHANGELOG.md @BarishNamazov @eagonmeng
 /SUPPORT.md @BarishNamazov @eagonmeng
 /SECURITY.md @BarishNamazov @eagonmeng
@@ -9,3 +10,4 @@
 /scripts/release.ts @BarishNamazov @eagonmeng
 /scripts/check-release.ts @BarishNamazov @eagonmeng
 /scripts/update-release-manifests.ts @BarishNamazov @eagonmeng
+/scripts/workspaces.ts @BarishNamazov @eagonmeng

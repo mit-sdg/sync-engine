@@ -2,7 +2,7 @@
 
 ## Public beta surface
 
-The supported public API is exactly these six package subpaths:
+The core package's supported public API is exactly these six package subpaths:
 
 - `@mit-sdg/sync-engine/language`
 - `@mit-sdg/sync-engine/assembly`
@@ -13,6 +13,12 @@ The supported public API is exactly these six package subpaths:
 
 The package root and all deep imports are unsupported. The [Public
 API](docs/public-surface.md) is the exact export register.
+
+`@mit-sdg/sync-engine-http` is an independently published first-party transport
+package with exactly these supported subpaths: `/server`, `/client`, and
+`/tooling`. Its root and deep imports are unsupported. During
+beta it requires the exact matching core version as a peer dependency. Core can
+be installed alone for custom transports and server adapters.
 
 ## Beta compatibility
 
@@ -34,11 +40,11 @@ explicitly extends it.
 
 ## Generated contracts
 
-Generated Markdown and TypeScript wire files belong to the exact sync-engine
-version that produced them. Regenerate and review all generated files for every
-version change. A generated client, server assembly, and generation tool must
-use the same exact package version; cross-version generated contracts are not
-supported, even when their shapes happen to match.
+Generated Markdown and TypeScript wire files belong to the exact core and
+projector versions that produced them. Regenerate and review all generated files
+for every version change. A generated client, server assembly, and generation
+tool must use the same exact package versions; cross-version generated contracts
+are not supported, even when their shapes happen to match.
 
 `sync-engine.application-manifest` version 3 is a versioned data format. An
 incompatible structural or semantic format change requires a new integer format

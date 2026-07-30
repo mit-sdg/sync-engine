@@ -359,7 +359,7 @@ describe("FileStore: the log survives as JSONL", () => {
         const error = new Error(sentinels.message, { cause: new Error(sentinels.cause) });
         Object.assign(error, {
           detail: sentinels.detail,
-          code: known ? FrameworkErrorCode.NETWORK_ERROR : sentinels.code,
+          code: known ? FrameworkErrorCode.TRANSPORT_ERROR : sentinels.code,
         });
         throw error;
       }
@@ -403,7 +403,7 @@ describe("FileStore: the log survives as JSONL", () => {
 
     expect(matched).toEqual([
       { error: FrameworkErrorCode.UNKNOWN_ERROR },
-      { error: FrameworkErrorCode.NETWORK_ERROR },
+      { error: FrameworkErrorCode.TRANSPORT_ERROR },
     ]);
     const retainedFaults = [...store.actions.values()]
       .filter((record) => record.fault !== undefined)

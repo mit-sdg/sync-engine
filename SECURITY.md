@@ -31,8 +31,9 @@ version; maintainers do not replace an existing tag or tarball. See the
 ## Security boundary
 
 sync-engine owns the behavior explicitly documented for its interpreter,
-assembly, generated contracts, gateway, production HTTP profile, and cookie
-floor. It does not provide authentication policy, domain authorization,
+assembly, generated contracts, and gateway. The independently published
+`@mit-sdg/sync-engine-http` package owns its production profile and cookie
+floor. These packages do not provide authentication policy, domain authorization,
 application input schemas, concept-state confidentiality or durability,
 cross-concept transactions, dependency or host patching, TLS termination,
 trusted-proxy configuration, CORS, HSTS, rate or connection limiting, DDoS

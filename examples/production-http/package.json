@@ -11,7 +11,8 @@
     "check": "vp check && bun run test && bun run artifacts:check"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.1"
+    "@mit-sdg/sync-engine": "1.0.0-beta.2",
+    "@mit-sdg/sync-engine-http": "1.0.0-beta.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v1.0.0-beta.*"
+      - "http-v1.0.0-beta.*"
 
 permissions:
   contents: read
@@ -29,10 +30,15 @@ jobs:
           bun-version: "1.3.14"
       - name: Verify release source
         run: |
-          node -e 'const { version } = require("./package.json");
-          const expected = `v${version}`;
-          if (process.env.GITHUB_REF_NAME !== expected || !/^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(version)) {
-            throw new Error(`Expected beta tag ${expected}; received ${process.env.GITHUB_REF_NAME}`);
+          node -e 'const core = require("./package.json");
+          const http = require("./packages/http/package.json");
+          const releases = [
+            { tag: `v${core.version}`, version: core.version },
+            { tag: `http-v${http.version}`, version: http.version },
+          ];
+          const expected = releases.find(({ tag }) => tag === process.env.GITHUB_REF_NAME)?.tag;
+          if (process.env.GITHUB_REF_NAME !== expected || !releases.every(({ version }) => /^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(version))) {
+            throw new Error(`Expected a configured beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
@@ -49,18 +55,22 @@ jobs:
       - run: bun run declarations:check
       - run: bun run examples:check
       - run: bun run scenario
-      - name: Verify packed artifact
+      - name: Verify packed artifacts
         run: bun run package:check
         env:
           SYNC_ENGINE_VERIFIED_TARBALL: release/package.tgz
+          SYNC_ENGINE_VERIFIED_TARBALLS: release
       - run: bun audit
       - run: sha256sum release/package.tgz > release/package.tgz.sha256
+      - run: sha256sum release/http-package.tgz > release/http-package.tgz.sha256
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: verified-npm-package
           path: |
             release/package.tgz
             release/package.tgz.sha256
+            release/http-package.tgz
+            release/http-package.tgz.sha256
           if-no-files-found: error
           retention-days: 1
 
@@ -73,7 +83,6 @@ jobs:
       id-token: write
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@mit-sdg/sync-engine
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,10 +98,15 @@ jobs:
           path: release
       - name: Recheck release source
         run: |
-          node -e 'const { version } = require("./package.json");
-          const expected = `v${version}`;
-          if (process.env.GITHUB_REF_NAME !== expected || !/^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(version)) {
-            throw new Error(`Expected beta tag ${expected}; received ${process.env.GITHUB_REF_NAME}`);
+          node -e 'const core = require("./package.json");
+          const http = require("./packages/http/package.json");
+          const releases = [
+            { tag: `v${core.version}`, version: core.version },
+            { tag: `http-v${http.version}`, version: http.version },
+          ];
+          const expected = releases.find(({ tag }) => tag === process.env.GITHUB_REF_NAME)?.tag;
+          if (process.env.GITHUB_REF_NAME !== expected || !releases.every(({ version }) => /^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(version))) {
+            throw new Error(`Expected a configured beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
@@ -100,5 +114,22 @@ jobs:
           test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Select verified tarball
+        run: |
+          node -e 'const fs = require("node:fs");
+          const core = require("./package.json");
+          const http = require("./packages/http/package.json");
+          const selected = new Map([
+            [`v${core.version}`, "release/package.tgz"],
+            [`http-v${http.version}`, "release/http-package.tgz"],
+          ]).get(process.env.GITHUB_REF_NAME);
+          if (selected === undefined) throw new Error(`No verified artifact for ${process.env.GITHUB_REF_NAME}`);
+          if (selected !== "release/package.tgz") {
+            fs.copyFileSync(selected, "release/package.tgz");
+            fs.writeFileSync(
+              "release/package.tgz.sha256",
+              fs.readFileSync(`${selected}.sha256`, "utf8").replaceAll(selected, "release/package.tgz"),
+            );
+          }'
       - run: sha256sum --check release/package.tgz.sha256
       - run: npm publish ./release/package.tgz --provenance --tag beta --access public

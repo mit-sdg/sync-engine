@@ -179,7 +179,6 @@ The function performs these checks against the parsed document:
 - action and query names agree in both directions;
 - every declared refusal code has one distinct `Error` class;
 - no extra refusal mapping exists;
-- `publicErrors` names only declared refusal codes;
 - floor names are non-empty and floor values are functions;
 - input names agree when runtime reflection can recover a non-empty,
   top-level destructured parameter.

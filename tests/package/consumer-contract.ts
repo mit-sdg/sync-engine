@@ -1,14 +1,17 @@
-import { createClient, createHttpClient, createLocalClient } from "@mit-sdg/sync-engine/client";
-import type { ClientError } from "@mit-sdg/sync-engine/client";
+import { createClient, createLocalClient } from "@mit-sdg/sync-engine/client";
+import type { ClientError, ClientTransport } from "@mit-sdg/sync-engine/client";
 import { assemble, Logging } from "@mit-sdg/sync-engine/assembly";
 import type { ActionRefusal, AssemblyOptions } from "@mit-sdg/sync-engine/assembly";
-import { productionHttpProfile } from "@mit-sdg/sync-engine/boundary";
-import type {
-  GatewayOptions,
-  InvocationResult,
-  Invoker,
-  ProductionHttpProfile,
-} from "@mit-sdg/sync-engine/boundary";
+import type { GatewayOptions, InvocationResult, Invoker } from "@mit-sdg/sync-engine/boundary";
+import {
+  createHttpClient,
+  createHttpTransport,
+  type HttpClientError,
+} from "@mit-sdg/sync-engine-http/client";
+import {
+  productionHttpProfile,
+  type ProductionHttpProfile,
+} from "@mit-sdg/sync-engine-http/server";
 import { vocabulary } from "@mit-sdg/sync-engine/language";
 import type { ApplicationManifestV3 } from "@mit-sdg/sync-engine/tooling";
 
@@ -77,19 +80,31 @@ type ConsumerApi = {
 type CreateResult =
   | { section: string }
   | { error: "COURSE_NOT_FOUND" | "TITLE_TAKEN" }
-  | ClientError;
+  | ClientError
+  | HttpClientError;
 
 declare const invoker: Invoker<ConsumerApi>;
 
 const local = createLocalClient<ConsumerApi>({ invoker });
 const http = createHttpClient<ConsumerApi>({ baseUrl: "https://example.test/api" });
-const custom = createClient<ConsumerApi>({ transport: async () => ({ section: "S1" }) });
+const directHttp = createClient<ConsumerApi, HttpClientError>({
+  transport: createHttpTransport({ baseUrl: "https://example.test/api" }),
+});
+const userWrittenTransport: ClientTransport = async ({ path, input }) => {
+  if (path !== "/roster/sections/create" || input === null) return { error: "TRANSPORT_ERROR" };
+  return { section: "S1" };
+};
+const custom = createClient<ConsumerApi>({ transport: userWrittenTransport });
 
 const localResult: Promise<CreateResult> = local.roster["sections/create"]({
   course: "C1",
   title: "Morning",
 });
 const httpResult: Promise<CreateResult> = http.roster.sections.create({
+  course: "C1",
+  title: "Morning",
+});
+const directHttpResult: Promise<CreateResult> = directHttp.roster.sections.create({
   course: "C1",
   title: "Morning",
 });
@@ -101,7 +116,7 @@ const invocation: Promise<
   InvocationResult<{ section: string }, "COURSE_NOT_FOUND" | "TITLE_TAKEN">
 > = invoker.invoke("/roster/sections/create", { course: "C1", title: "Morning" });
 
-void [localResult, httpResult, customResult, invocation];
+void [localResult, httpResult, directHttpResult, customResult, invocation];
 
 // @ts-expect-error The generated input contract requires a title.
 void http.roster.sections.create({ course: "C1" });
