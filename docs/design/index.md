@@ -7,27 +7,28 @@ write, implement, and register a concept, and [Execution
 semantics](../semantics.md) defines what the runtime guarantees.
 
 A **concept** is a unit of behavior with its own purpose, state, and actions that
-can be understood without reading any other concept. Concepts never call each
-other and never read each other's state. Everything an application does that
-involves two concepts therefore lives outside both of them, in **composition**.
+can be understood without reading any other concept. In this design model, a
+concept's specified behavior names no peer concept and does not inspect
+peer-owned state. Cross-concept behavior belongs in **composition**. This is a
+design and review constraint; registration does not prevent an arbitrary class
+implementation from importing or calling another class.
 
-Concept design calls a composition rule a **synchronization**, or _sync_.
-sync-engine spells that rule as a **reaction**: `when` an action is asked or
-settles, `where` current state matches, `then` ask further actions. These pages
-use `reaction`, because that is the term used by the code, the
-[glossary](../glossary.md), and the rest of the documentation. Views, formers,
-and endpoints are the other three composition forms; a reaction carries the
-causal rule, and the others name conditions and shape answers for it.
+A **reaction** is the composition rule: `when` an action is asked, returned, or
+refused, `where` current state matches, `then` ask further actions. Views name
+conditions, formers shape answers, and endpoints are boundary-specialized
+reactions. The [glossary](../glossary.md) defines these composition forms and
+[execution semantics](../semantics.md#reactions) defines their runtime behavior.
 
 ## What the decomposition buys
 
 Each of these follows from one rule — a concept names no peer — rather than from
 modularity in general.
 
-- **Unrelated responsibilities cannot reach each other's state.** The only thing
-  two concepts share is an opaque identity. Alerting holds a `recipient` and a
-  `subject`; it cannot read who that person is or what the subject means, so a
-  change to either cannot break it.
+- **Specified domain behavior does not reach peer-owned state.** Alerting holds a
+  `recipient` and a `subject`; it owns no fact about who that person is or what
+  the subject means. The values still need a compatible representation and
+  equality rule, and implementations may use explicit infrastructure such as
+  clocks, identity sources, or storage.
 - **Every cross-behavior dependency has a name and a location.** "Choosing a
   mitigation opens a discussion" is a declaration in composition, not a call
   inside `Selecting.choose`. Reviewers can enumerate the application's policy by
@@ -35,13 +36,14 @@ modularity in general.
 - **Connections change without touching behavior.** Adding responder alerts to
   the Operations Room adds one reaction; Selecting, Gathering, Discussing, and
   Alerting keep the same specifications, classes, and tests.
-- **Concepts are reusable because they carry no collaborators.** Gathering,
-  Selecting, and Discussing appear unchanged in both the reading-circle and
-  operations-room applications, which give their generic identities different
-  meanings.
-- **Each part is testable alone.** A concept is tested by constructing the class
-  and calling it. A reaction is tested by asking its trigger action against an
-  assembly and observing which consequences were asked.
+- **Concepts can be reused because their domain contracts name no peers.**
+  Gathering, Selecting, and Discussing use the same concept designs and
+  implementation shape in the Reading Circle and Operations Room applications,
+  which bind different meanings to their generic identities.
+- **Each part has focused evidence.** A concept can be tested from its declared
+  inputs and explicit infrastructure dependencies. A reaction can be tested by
+  asking its trigger action against an assembly and observing which consequences
+  were asked.
 
 ## What the model does not decide
 
@@ -58,8 +60,8 @@ modularity in general.
   migration from it — see [concept specification
   format](../concept-specification.md#state-notation).
 - **It does not supply distributed correctness.** Uniqueness under concurrency,
-  idempotency across retries, durability, and restart recovery stay with concept
-  implementations and their storage.
+  idempotency across retries, durability, and restart recovery require the
+  owning action, storage constraints or transactions, and host recovery policy.
 - **It does not rescue a purpose nobody needs.** A well-formed concept serving a
   need that does not exist is still the wrong concept.
 
@@ -71,7 +73,7 @@ modularity in general.
 | [Evaluating a concept](evaluating-concepts.md) | Whether a candidate is good, with evidence for each criterion                 |
 | [Choosing granularity](granularity.md)         | Whether to split one candidate into several or keep responsibilities together |
 | [State and actions](state-and-actions.md)      | What a concept stores and which transitions it offers                         |
-| [Composing concepts](composing-concepts.md)    | How reactions connect concepts without hidden coupling                        |
+| [Composing concepts](composing-concepts.md)    | How reactions connect concepts through explicit rules                         |
 | [Reviewing a design](reviewing-a-design.md)    | How to review and revise a whole design, not one concept at a time            |
 
 Read them in that order the first time. When reviewing an existing design, start

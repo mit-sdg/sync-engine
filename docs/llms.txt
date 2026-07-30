@@ -16,7 +16,10 @@ The 1.0 release line is beta. Pin an exact package version and read the [support
 ## Design
 
 - [Designing with concepts](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/index.md) — what a concept is, and the reading path for the design pages
+- [What a concept is](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/concepts.md) — purpose, principle, state, actions, queries, and concept boundaries
+- [Evaluating a concept](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/evaluating-concepts.md) — evidence for purpose, boundary, coverage, authority, and durability
 - [Choosing granularity](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/granularity.md) — when to split one candidate concept and when to keep responsibilities together
+- [State and actions](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/state-and-actions.md) — owned state, semantic actions, query promises, and coordination limits
 - [Composing concepts](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/composing-concepts.md) — reaction design, cross-concept invariants, authorization, and failure hazards
 - [Reviewing a design](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/design/reviewing-a-design.md) — review sequence and pull-request checklist
 

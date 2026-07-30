@@ -65,8 +65,9 @@ gathering does not exist.
 It starts from nothing, performs the setup itself, exercises what distinguishes
 Gathering from a plain list of names — duplicate membership is refused, so
 belonging is a fact and not a count — and ends in a state that fulfills the
-purpose. Every step is an action of Gathering. Nobody posts, votes, or reads
-anything.
+purpose. Every state-changing or refusal step is an action of Gathering; the
+observation that Bo appears among the members is a Gathering query. Nobody posts
+or votes.
 
 That last property is what makes the principle a design test rather than
 documentation. When a principle needs an action that belongs to another concept
@@ -116,8 +117,10 @@ cannot find, visible before the implementation exists.
 
 ## Actions and queries
 
-An **action** performs a meaningful state transition and is recorded by the
-engine. A **query** reads current state and changes nothing.
+An **action** should name a meaningful state transition. A **query** should read
+state without side effects. In an instrumented assembly, a non-underscore member
+is recorded as an action and an underscore-prefixed member is invoked as a cached
+query. Calling a raw class method directly does not add those engine behaviors.
 
 _Source: [`examples/reading-circle/src/concepts/gathering/spec.md`](../../examples/reading-circle/src/concepts/gathering/spec.md)_
 
@@ -136,11 +139,16 @@ join (gathering: Gathering, member: Person) : return (membership: Membership)
 ```
 
 `join` states every branch it can take and what each one returns. Its two
-refusals are part of the contract: `ALREADY_JOINED` is how Gathering enforces
-its own invariant that at most one membership exists per gathering and person.
-A refusal is an expected domain result, not a fault, and composition can watch
-it — see [actions, refusals, and
+refusals are part of the contract: `ALREADY_JOINED` is how Gathering's
+implementation protects its invariant that at most one membership exists per
+gathering and person. A refusal is an expected domain result, not a fault, and
+composition can watch it — see [actions, refusals, and
 faults](../semantics.md#actions-refusals-and-faults).
+
+The specification parser reads the signature and exact `refuse CODE "..."`
+lines. It does not execute or validate the `where`, `then`, effect, or output
+prose. Principle and implementation tests establish those behavioral branches;
+see [what a concept specification checks](../concept-specification.md#complete-example).
 
 Queries carry a promise about how many rows they answer with:
 
@@ -155,10 +163,12 @@ _membership (gathering: Gathering, member: Person) : one (joined: Flag)
 ````
 
 The promise is a design decision, not a type annotation. `_membership` promises
-exactly one row because every person-gathering pair has a standing, true or
-false; reading it never drops a case. `_get` promises at most one row because
-the gathering may not exist; reading it can drop a case. `_members` promises any
-number, so reading it fans a reaction out over the rows. [Reading:
+exactly one source row because every person-gathering pair has a standing, true
+or false. A use site can still drop that row when its output pattern does not
+match — for example, `.is({ joined: true })` drops the false row. `_get` promises
+at most one row because the gathering may not exist; `_members` promises any
+number, so a plain read with a fresh output binding can fan a reaction out over
+the rows. [Reading:
 declarations govern](../semantics.md#reading-declarations-govern) defines what
 each promise does at a use site.
 
@@ -171,11 +181,11 @@ transitions, the preconditions, and the results.
 concept receives, stores, compares for equality, and hands back, with no
 knowledge of what it denotes. The concept never dereferences it.
 
-This is what makes the same class usable in two applications. The Operations
-Room binds the same Gathering to responders in an incident room; the Reading
-Circle binds it to members of a workshop. Selecting takes an opaque `Scope` and
-`Item`; the Operations Room supplies a room and a mitigation, and the Reading
-Circle supplies a circle and a reading.
+This lets the same concept design be used in two applications. The Operations
+Room binds Gathering to responders in an incident room; the Reading Circle binds
+it to members of a workshop. Selecting takes an opaque `Scope` and `Item`; the
+Operations Room supplies a room and a mitigation, and the Reading Circle supplies
+a circle and a reading.
 
 Two concepts referring to the same identity are not sharing state. Alerting's
 `recipient` and Gathering's `member` may both be the same person identifier in
@@ -205,9 +215,10 @@ no engine base class. [Define one behavior](../guide/concepts.md) shows the full
 implementation.
 
 Independence is a property of the specification, not of the runtime. Reactions
-compose independent concepts heavily — a single selection in the Operations Room
-opens a discussion and raises an alert for every responder — and that costs
-Gathering and Alerting nothing, because neither one names the other.
+can compose independent concepts heavily — with the corresponding packs enabled,
+a returned selection asks to open a discussion and asks to alert each responder.
+Those consequence actions can still refuse or fault. Gathering and Alerting do
+not need to name each other for the application to express that policy.
 
 A separate file, class, package, or service does not make a concept
 independent. A `UserService` class in its own module that reads the sessions
@@ -269,22 +280,22 @@ Gathering, Selecting, Discussing, and Alerting to build a single answer, and no
 concept knows a dashboard exists. See [views and
 formers](../guide/views-and-formers.md).
 
-The last row is the hardest to catch, because a data structure can be given a
-plausible purpose and a convincing principle. "Build one record from pieces
-supplied separately, so each contributor can add what it knows" reads like a
-need and narrates a picnic; it describes assigning fields to an object. The
-test that separates them is reach: **a concept is reusable across applications
-in a domain, not across every domain.** Gathering serves book clubs and incident
-rooms and would be wrong in a compiler. A record builder is equally at home
-everywhere, which means it carries no domain meaning for an application to rely
-on. [Reusability](evaluating-concepts.md#reusability) states the criterion and
-the two costs of getting it wrong.
+The data-structure row is the hardest to catch, because a data structure can be
+given a plausible purpose and a convincing principle. "Build one record from
+pieces supplied separately, so each contributor can add what it knows" reads like
+a need and narrates a picnic; it describes assigning fields to an object. Use
+reach as a review heuristic: a concept normally serves applications in a domain,
+not every domain. Gathering serves book clubs and incident rooms and would be
+wrong in a compiler. A record builder is equally at home everywhere, which means
+it carries no domain meaning for an application to rely on.
+[Reusability](evaluating-concepts.md#reusability) develops this distinction.
 
-Utility code is not a design failure. `_get`, `_members`, and Gathering's
-membership lookup all rest on ordinary data structures; they are private to the
-implementation, and no reaction has to know they exist.
+Utility code is not a design failure. Gathering's backing maps and membership
+lookup helper are private implementation details. `_get` and `_members` are
+declared queries, so they are published concept vocabulary that reactions and
+formers may use.
 
-The instructive failure is the fifth row. A `Project` concept starts as project
+The instructive failure is the domain-entity row. A `Project` concept starts as project
 creation, then accumulates membership, task assignment, status reporting, file
 attachment, and archival, because every one of those operations takes a project
 identifier. Sharing an identity is not evidence of shared behavior;
