@@ -53,6 +53,46 @@ Name the reaction after the decision, not the mechanism.
 `ChooseHandler` says nothing, and a reviewer cannot tell whether the rule is
 still wanted.
 
+## Stages, siblings, and separate rules
+
+One set of consequences can be written three ways, and the choice is a design
+decision rather than formatting. It changes how the correlation between steps is
+established, where a failure stops, and whether a reader can tell which parts are
+independent.
+
+**A later `.then(...)` stage** when the next step needs a value the preceding
+action returned, or must not begin until it returned. The engine pins each later
+stage to the exact ask from the preceding one, so the dependency is stated once.
+The alternative — a second reaction triggered on `Discussing.respond` — would
+have to re-find the discussion, the selection, and the original request's inputs
+to reconstruct a correlation the first rule already had. The [`AddResponse`
+endpoint](#request-and-response-flow) is the shape: read the policy and the
+discussion, ask `Discussing.respond`, then answer with what it returned.
+
+The cost is that a chain has more places to end without an answer. A refusal or
+fault stops that path, and no later stage on it runs. See [chain only after a
+return](../guide/reactions.md#chain-only-after-a-return) for the authoring form.
+
+**A separate reaction** when the consequence is an independent decision — one
+that could be added, removed, or replaced without changing the other. The
+Operations Room writes two rules against one `Selecting.choose` for that reason:
+one opens a discussion, the other alerts each responder, and an assembly can
+include either without the other. Chaining them would claim a dependency that
+does not exist, and would let a failure to alert stop the discussion.
+
+**Siblings in one `then(...)` group**, each ending in a stable `.named(...)`
+label, when several alternatives are cases of one decision. They read as one rule
+with branches instead of near-duplicate rules that a reader has to diff. The
+engine lowers them to separate paths and the group carries no priority,
+exclusivity, or coverage claim, so any disjointness is yours to establish and
+state — see [sibling paths and endpoint
+settlement](../semantics.md#sibling-paths-and-endpoint-settlement).
+
+Shape is what makes composition legible, and legibility is reviewable: a rule
+whose decision needs a comment usually wants its condition named as a view or
+wants a better name, and a rule that rebuilds a correlation another rule already
+established usually wants to be a stage of it.
+
 ## Binding and the movement of identities
 
 Names are the wiring. A fresh name in an output pattern opens a binding; reusing
