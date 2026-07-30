@@ -108,18 +108,13 @@ Run the same verification as the publish workflow against the final release
 commit:
 
 ```sh
-bun install --frozen-lockfile
-bun run check
-bun run release:check
-bun run test
-bun run coverage
-bun run build
-bun run declarations:check
-bun run examples:check
-bun run scenario
-bun run package:check
-bun audit
+bun run release:verify
 ```
+
+`release:verify` runs the listed publish gates sequentially in a shell-independent
+Bun script and stops at the first failure. The publish workflow keeps the gates
+as separate steps so GitHub identifies the failing gate and so `package:check`
+can receive the verified-tarball output paths used by the publication jobs.
 
 Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` executes npm's real `prepack` lifecycle for every

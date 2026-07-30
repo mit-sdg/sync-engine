@@ -41,7 +41,7 @@ For the maintained HTTP handler, fetch client, and generated wire projection,
 install the companion alongside the same exact beta:
 
 ```sh
-bun add @mit-sdg/sync-engine@1.0.0-beta.2 @mit-sdg/sync-engine-http@1.0.0-beta.2
+bun add @mit-sdg/sync-engine@1.0.0-beta.3 @mit-sdg/sync-engine-http@1.0.0-beta.3
 ```
 
 ## Packages
@@ -66,7 +66,7 @@ bun install
 ```
 
 For a reproducible evaluation, replace `@beta` with the exact version
-`@1.0.0-beta.2`.
+`@1.0.0-beta.3`.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,

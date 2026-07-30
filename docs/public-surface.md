@@ -312,7 +312,7 @@ writes.
 Install the maintained companion explicitly:
 
 ```sh
-bun add @mit-sdg/sync-engine@1.0.0-beta.2 @mit-sdg/sync-engine-http@1.0.0-beta.2
+bun add @mit-sdg/sync-engine@1.0.0-beta.3 @mit-sdg/sync-engine-http@1.0.0-beta.3
 ```
 
 During beta the companion declares an exact core peer dependency. It is ESM-only,

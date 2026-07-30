@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.2",
-    "@mit-sdg/sync-engine-http": "1.0.0-beta.2",
+    "@mit-sdg/sync-engine": "1.0.0-beta.3",
+    "@mit-sdg/sync-engine-http": "1.0.0-beta.3",
     "@sync-engine-fixture/multi-instance-client": "1.0.0"
   },
   "devDependencies": {
