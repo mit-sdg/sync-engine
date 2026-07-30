@@ -24,7 +24,7 @@ the projected duplicate-name conflict, and end the session.
 
 ## What the example establishes
 
-- `productionHttpProfile(...)` projects registered public categories without
+- `productionHttpProfile(...)` projects policy-owned public categories without
   requiring a credential mechanism.
 - `httpFloor(...)` adds one same-origin `HttpOnly`, `SameSite=Strict` cookie
   binding and removes its logical input/output fields from HTTP.

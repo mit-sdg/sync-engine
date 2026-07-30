@@ -210,12 +210,15 @@ export, retries, and network I/O into host-owned infrastructure.
 
 ## HTTP host responsibilities
 
-Use `productionHttpProfile(...)` for a public JSON boundary that does not need
-engine-managed credentials. It accepts only `POST`, limits each request body to
-1,048,576 bytes, preserves success values, and exposes only registered public
-error categories plus opaque protocol categories. Unknown or private refusals
-and all framework server failures become `INTERNAL_ERROR`. Use `httpFloor(...)`
-only when the application also needs the narrow same-origin cookie binding.
+Install `@mit-sdg/sync-engine-http` and use
+`productionHttpProfile(...)` from `/server` for a public JSON boundary that does
+not need engine-managed credentials. It accepts only `POST`, limits each request
+body to 1,048,576 bytes, preserves success values, and exposes only policy-mapped
+public error categories plus opaque protocol categories. Unknown or private
+refusals and all framework server failures become `INTERNAL_ERROR`. Use
+`httpFloor(...)` only when the application also needs the narrow same-origin
+cookie binding. Reuse that immutable policy value in `httpWire(...)` when
+generating the public client contract.
 
 Both production descriptors require an HTTPS public origin when
 `NODE_ENV=production`, but the Fetch handlers do not terminate TLS. The

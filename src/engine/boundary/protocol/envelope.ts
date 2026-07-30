@@ -36,7 +36,7 @@ export function toEnvelope(result: InvocationResult): unknown {
   };
 }
 
-/** Serialize a value with the same JSON rules used by the HTTP boundary. */
+/** Serialize a value with the JSON rules shared by transport adapters. */
 export function serializeJsonValue(value: unknown): string {
   const serialized = JSON.stringify(value);
   if (serialized === undefined) {
@@ -45,12 +45,12 @@ export function serializeJsonValue(value: unknown): string {
   return serialized;
 }
 
-/** Apply the HTTP boundary's JSON projection to an in-process value. */
+/** Apply the shared JSON projection to an in-process value. */
 export function toJsonValue(value: unknown): unknown {
   return JSON.parse(serializeJsonValue(value)) as unknown;
 }
 
-/** Apply the HTTP boundary's JSON projection to an in-process result. */
+/** Apply the shared JSON projection to an in-process result. */
 export function toJsonEnvelope(result: InvocationResult): unknown {
   return toJsonValue(toEnvelope(result));
 }

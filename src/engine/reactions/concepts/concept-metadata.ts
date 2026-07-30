@@ -3,13 +3,6 @@ import type { QueryPromise } from "@engine/reads/query-metadata";
 
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 
-export type PublicErrorCategory =
-  | "INVALID_REQUEST"
-  | "UNAUTHORIZED"
-  | "FORBIDDEN"
-  | "NOT_FOUND"
-  | "CONFLICT";
-
 /** One refusal branch: the code it returns, the class that signals it, and its sentence. */
 export interface RefusalBranch {
   code: string;
@@ -74,7 +67,6 @@ export interface ConceptMetadata {
   queries?: Readonly<Record<string, QueryPromise>>;
   outcomes?: OutcomeContracts;
   refusals?: RefusalContracts;
-  publicErrors?: Record<string, PublicErrorCategory>;
 }
 
 const metadataByConcept = new WeakMap<object, ConceptMetadata>();

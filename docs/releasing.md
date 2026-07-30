@@ -24,15 +24,15 @@ before every tag:
 - Require CODEOWNERS review for workflow, release, support, and security-policy
   files. Apply the rule to administrators and require review of any bypass;
   disable unreviewed administrator or ruleset bypass where the plan permits.
-- Protect the `v1.0.0-beta.*` tag namespace against movement, deletion, and
-  creation by unapproved actors.
+- Protect the `v1.0.0-beta.*` and `http-v1.0.0-beta.*` tag namespaces against
+  movement, deletion, and creation by unapproved actors.
 - Keep the GitHub environment identity `npm`. Restrict it to the
   `v1.0.0-beta.*` tag policy, require an independent reviewer, and verify
   `prevent_self_review=true` and `can_admins_bypass=false`.
-- Configure npm trusted publishing for package `@mit-sdg/sync-engine`, GitHub
-  organization `mit-sdg`, repository `sync-engine`, workflow
-  `.github/workflows/publish.yml`, and environment `npm`. Verify the publisher
-  identity before every release.
+- Configure npm trusted publishing for packages `@mit-sdg/sync-engine` and
+  `@mit-sdg/sync-engine-http`, GitHub organization `mit-sdg`, repository
+  `sync-engine`, workflow `.github/workflows/publish.yml`, and environment
+  `npm`. Verify each publisher identity before every release.
 - Verify npm package and organization ownership, require 2FA for owners and
   maintainers, remove stale owners, and confirm recovery access is controlled.
   Beta publications use the `beta` dist-tag and must not create or move
@@ -65,6 +65,7 @@ into every owned package dependency location:
 | Location                                            | Owned version fact                        |
 | --------------------------------------------------- | ----------------------------------------- |
 | `package.json`                                      | Published version and `publishConfig.tag` |
+| `packages/http/package.json`                        | HTTP package version and exact core peer  |
 | `examples/reading-circle/package.json`              | Shipped example dependency                |
 | `examples/operations-room/package.json`             | Shipped example dependency                |
 | `examples/production-http/package.json`             | Shipped example dependency                |
@@ -120,21 +121,23 @@ bun audit
 ```
 
 Confirm regeneration leaves no unexplained diff and review the npm pack file
-listing. `package:check` executes npm's real `prepack` lifecycle, inspects the
-tarball and policy links, installs it with npm and Bun, exercises the generated
-scaffold and examples, compiles a separate generated client/backend topology,
-and runs a Node scenario. In the publish workflow it also exports that exact
-verified tarball; the unprivileged job records its digest and transfers both to
-the protected publication job. The package intentionally includes all three
-complete, independently runnable teaching examples; file-count, packed-size,
-and unpacked-size budgets prevent accidental growth. Wait for **CI required** on the final `main`
+listing. `package:check` executes npm's real `prepack` lifecycle for every
+workspace, inspects both tarballs and policy links, installs core alone and both
+packages together, exercises the generated scaffold and examples, compiles a
+separate generated client/backend topology, and runs a Node scenario. In the
+publish workflow it exports both exact verified tarballs; the unprivileged job
+records their digests and transfers them to the protected publication job. The
+core package intentionally includes all three complete, independently runnable
+teaching examples; file-count, packed-size, and unpacked-size budgets prevent
+accidental growth. Wait for **CI required** on the final `main`
 commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
-   of `origin/main`, create one annotated `v$VERSION` tag on that commit, and
-   push only that tag. Never move or reuse a release tag.
+   of `origin/main`, then create one annotated `v$VERSION` tag to publish core
+   or `http-v$VERSION` to publish the HTTP companion. Push only that tag. Never
+   move or reuse a release tag.
 2. Review the triggered **Publish beta** workflow. Its unprivileged `verify` job
    checks exact tag equality, no-leading-zero beta syntax, `origin/main`
    ancestry, release facts, all gates, and the audit. It has no environment and
@@ -143,9 +146,10 @@ commit, then repeat every external-setting check above.
    independent reviewer has repeated the source and external-setting checks.
    The `publish` job is the only job with the `npm` environment and
    `id-token: write`; it checks out the same commit, refetches and verifies the
-   live annotated tag and main ancestry, downloads the verified tarball, checks
-   its recorded digest, then publishes that tarball with provenance under the
-   `beta` tag. It does not install dependencies or rebuild the package.
+   live annotated tag and main ancestry, downloads both verified tarballs,
+   selects the tag's artifact, checks its recorded digest, then publishes that
+   tarball with provenance under the `beta` tag. It does not install dependencies
+   or rebuild either package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.
    After npm verification, manually create a GitHub prerelease from the same
@@ -166,6 +170,8 @@ commit, then repeat every external-setting check above.
 
 - Confirm `npm view @mit-sdg/sync-engine dist-tags versions` shows the new exact
   version under `beta` and that `latest` did not move.
+- For an HTTP tag, confirm `npm view @mit-sdg/sync-engine-http dist-tags versions`
+  shows the matching exact version under `beta` and that `latest` did not move.
 - Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` shows alpha
   and every historical message pointing at the exact beta or `@beta`, never
   `@alpha`.

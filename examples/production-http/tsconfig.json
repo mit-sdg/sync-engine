@@ -14,7 +14,8 @@
     "types": ["node"],
     "paths": {
       "@engine/*": ["../../src/engine/*"],
-      "@mit-sdg/sync-engine/*": ["../../src/*/index.ts"]
+      "@mit-sdg/sync-engine/*": ["../../src/*/index.ts"],
+      "@mit-sdg/sync-engine-http/*": ["../../packages/http/src/*/index.ts"]
     }
   },
   "include": ["src", "tests", "generated.config.ts", "generated", "*.d.ts"]

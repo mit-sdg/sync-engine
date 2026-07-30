@@ -7,10 +7,6 @@ export const FrameworkErrorCode = {
   TIMED_OUT: "TIMED_OUT",
   ABORTED: "ABORTED",
   TRANSPORT_ERROR: "TRANSPORT_ERROR",
-  BAD_STATUS: "BAD_STATUS",
-  NETWORK_ERROR: "NETWORK_ERROR",
-  BAD_JSON: "BAD_JSON",
-  HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED",
 } as const;
 
 export type FrameworkErrorCode = (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode];

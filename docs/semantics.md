@@ -454,7 +454,7 @@ remain host responsibilities.
 
 ### Correlation and route paths
 
-HTTP handlers may resolve an inbound correlation id and project the effective
+HTTP handlers in `@mit-sdg/sync-engine-http/server` may resolve an inbound correlation id and project the effective
 value in a response header. Accepted identifiers are non-empty,
 control-character-free ByteStrings of at most 128 code units without leading or
 trailing spaces; invalid, non-ByteString, or faulting resolver results become a fresh UUID. Response
@@ -465,7 +465,8 @@ correlation id, the gateway establishes a fresh UUID once at public entry and
 carries it through gateway and application observation. Correlation does not
 deduplicate work and is not an idempotency key.
 
-Endpoint paths and HTTP base paths are portable absolute URL pathnames. Their
+Endpoint paths are portable absolute URL pathnames. The HTTP companion applies
+the same grammar to its base paths. Their
 declared spelling must survive WHATWG URL pathname handling exactly: queries,
 fragments, scheme-relative paths, literal spaces or Unicode, dot-segment
 normalization (including encoded dot segments), malformed percent escapes, and
@@ -476,26 +477,27 @@ removed before routing, so `/api/` and `/api` declare the same base.
 
 ### Production HTTP profile
 
-`productionHttpProfile(...)` declares a public origin and optional base path.
-The handler form carrying that profile and the assembly is the production
+`productionHttpProfile(...)` in `@mit-sdg/sync-engine-http/server` declares a
+public origin, optional base path, and policy-owned `publicErrors` map. The
+handler form carrying that profile and the assembly is the production
 credential-free policy. It accepts JSON `POST` requests, preserves ordinary
-successful values, and projects domain refusals only through public categories
-registered by the assembly. A private, unknown, non-string, or dynamically open
-domain failure becomes `{ error: "INTERNAL_ERROR" }`. Framework input and route
-failures become `INVALID_REQUEST` and `NOT_FOUND`; every framework server
-failure becomes the same opaque internal response. Diagnostic detail never
-crosses this policy. The declared origin identifies public deployment and
-enforces the production HTTPS check; the credential-free profile does not use
-an inbound `Origin` header as an authorization or CORS decision.
+successful values, and projects only policy-mapped domain refusals. A private,
+unknown, non-string, or dynamically open domain failure becomes
+`{ error: "INTERNAL_ERROR" }`. Framework input and route failures become
+`INVALID_REQUEST` and `NOT_FOUND`; every framework server failure becomes the
+same opaque internal response. Diagnostic detail never crosses this policy. The
+declared origin identifies public deployment and enforces the production HTTPS
+check; the credential-free profile does not use an inbound `Origin` header as an
+authorization or CORS decision.
 
 ### Cookie credential floor
 
 An HTTP floor may additionally bind one logical credential input to a cookie.
-The application declares the credential name and input, the endpoint that
+The policy declares the credential name and input, the endpoint that
 issues it and the returned token and expiry fields, the successful endpoints
 that clear it, and the public origin. Credential and output field names must be
 JavaScript-style identifiers. Issue and clear paths must be canonical portable
-paths, and clear paths must be distinct. Assembly validation requires every
+paths, and clear paths must be distinct. Projection validation requires every
 named path to exist, at least one endpoint to require the credential input, and
 every top-level alternative of the issuing endpoint's successful output to
 contain the token and expiry fields. Any endpoint whose input contract requires
@@ -505,7 +507,7 @@ The fixed floor uses the production profile's request and public-error policy,
 enforces the declared origin when
 an `Origin` header is present, replaces a protected request's credential input
 with the cookie value, and never accepts that value from the body. It projects
-concept refusal codes through the same registered categories. The issuing
+domain refusal codes through the same policy categories. The issuing
 endpoint's token and expiry fields become the cookie and do not enter its HTTP
 response. At runtime, the token must be a string and the expiry must be a valid
 `Date` or a value whose string representation is date-parsable; malformed issue
@@ -562,10 +564,11 @@ For JSON-representable values, both clients expose the same projected data. The
 local client serializes and parses input and output before returning it. Dates
 become strings and undefined object fields disappear. Projection failures do
 not have identical error codes: the local transport normally reports
-`TRANSPORT_ERROR`, while HTTP request serialization can report `NETWORK_ERROR`
-and server response serialization can report `INTERNAL_ERROR`.
+`TRANSPORT_ERROR`, while the HTTP client reports its package-owned
+`HttpClientError` union and server response serialization can report
+`INTERNAL_ERROR`.
 
-The production profile exposes only registered categories and opaque protocol
+The production profile exposes only policy-mapped categories and opaque protocol
 failures. The credential floor adds cookie consumption and issuance to that
 production policy. Both handlers apply the same request limits, JSON projection,
 correlation, and public status mapping.
@@ -584,18 +587,19 @@ contract and uses `Json` for leaves it cannot trace to a signature.
 
 Ordinary assembly rejects every local reaction, view, or former. The error names
 each local owner before a route or artifact plan is exposed. Direct invocation,
-gateway routing, HTTP, and generation therefore share one complete portable
-design instead of silently omitting executable-only behavior.
+gateway routing, transport adapters, and generation therefore share one complete
+portable design instead of silently omitting executable-only behavior.
 
-When a generated application descriptor supplies `httpProfile` or `httpFloor`,
-one module contains both contracts. The contract named by `wireName` retains the
-logical application inputs, outputs, and refusal codes for a local client. A
-second contract, named by `httpWireName` or `${wireName}Http`, carries public
-categories rather than private refusal codes. With `httpFloor`, that contract
-also omits the cookie-bound input from protected routes and the consumed token
-and expiry fields from the issuing route's output. Both contracts share the
-generated type helpers and vocabulary anchor. A descriptor cannot supply both
-HTTP fields.
+When a generated application descriptor supplies ordered `projections`, one
+module contains the logical contract followed by each named transport contract.
+The contract named by `wireName` retains the logical application inputs, outputs,
+and refusal codes for a local or custom client. The HTTP companion's
+`httpWire({ policy, name })` carries public policy categories rather than private
+refusal codes. With `httpFloor`, that contract also omits the cookie-bound input
+from protected routes and the consumed token and expiry fields from the issuing
+route's output. All contracts share generated type helpers and the vocabulary
+anchor. Core records every projector package and version in generated
+provenance.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 defines input admission and explicit successful-output validation. Neither is

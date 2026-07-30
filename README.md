@@ -36,6 +36,13 @@ and toolchain requirements.
 bun add @mit-sdg/sync-engine@beta
 ```
 
+For the maintained HTTP handler, fetch client, and generated wire projection,
+install the companion alongside the same exact beta:
+
+```sh
+bun add @mit-sdg/sync-engine@1.0.0-beta.2 @mit-sdg/sync-engine-http@1.0.0-beta.2
+```
+
 ## Create an application
 
 ```sh
@@ -45,7 +52,7 @@ bun install
 ```
 
 For a reproducible evaluation, replace `@beta` with the exact version
-`@1.0.0-beta.1`.
+`@1.0.0-beta.2`.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
@@ -119,7 +126,7 @@ export const ChooseMitigation = endpoint(
 ```
 
 An assembly exposes endpoints through its direct invoker, the standard gateway,
-a local client with JSON parity, or the HTTP adapter. Generated TypeScript
+a local client with JSON parity, or a transport adapter. Generated TypeScript
 describes endpoint inputs, successful outputs, and errors for typed callers.
 Applications attach endpoint validators when they also need runtime value
 validation.

@@ -96,8 +96,9 @@ evaluated when asked; the engine does not store its result.
 ## Framework error
 
 A boundary or transport failure classified by `FrameworkErrorCode`, such as
-`INVALID_INPUT`, `TIMED_OUT`, or `NETWORK_ERROR`. Framework errors are separate
-from application-authored domain errors.
+`INVALID_INPUT`, `TIMED_OUT`, or `TRANSPORT_ERROR`. Framework errors are
+separate from application-authored domain errors. Transport packages may add
+their own error unions.
 
 ## Gateway
 

@@ -37,8 +37,9 @@ when a guide simplifies a runtime rule.
 Client code needs the generated wire type and the `client` package, not concept
 or assembly imports. Start with [Call the typed
 client](guide/application-boundary.md#call-the-typed-client), then use the
-[`client` API reference](public-surface.md#client) for local, HTTP, and custom
-transport constructors. The [Production HTTP
+[`client` API reference](public-surface.md#client) for local and custom
+transport constructors, then the [HTTP companion package](public-surface.md#http-companion-package)
+for the maintained fetch transport. The [Production HTTP
 example](../examples/production-http/README.md) shows the projected public
 contract used by an HTTP client.
 

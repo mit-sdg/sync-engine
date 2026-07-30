@@ -1,7 +1,12 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
-import { createHttpClient, createHttpTransport } from "@sync-engine/client";
+import {
+  createHttpClient,
+  createHttpTransport,
+  HttpClientErrorCode,
+} from "@mit-sdg/sync-engine-http/client";
 import type { Client } from "@sync-engine/client";
+import type { HttpClientError } from "@mit-sdg/sync-engine-http/client";
 
 type TestApi = {
   "/auth/login": { input: { username: string; password: string }; output: { token: string } };
@@ -37,7 +42,7 @@ function mockFetchText(text: string, status = 200, ok = true): typeof fetch {
 function makeClient(
   fetch: typeof globalThis.fetch,
   opts?: Record<string, unknown>,
-): Client<TestApi> {
+): Client<TestApi, HttpClientError> {
   return createHttpClient<TestApi>({ baseUrl: "http://localhost", fetch, ...opts });
 }
 
@@ -161,7 +166,7 @@ describe("createHttpClient", () => {
 
     const result = await client.auth.login({ username: "a", password: "b" });
 
-    expect(result).toEqual({ error: FrameworkErrorCode.NETWORK_ERROR });
+    expect(result).toEqual({ error: HttpClientErrorCode.NETWORK_ERROR });
   });
 
   test("an aborted call passes its signal to fetch and returns ABORTED", async () => {
@@ -250,7 +255,7 @@ describe("createHttpClient", () => {
     const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({
-      error: FrameworkErrorCode.BAD_JSON,
+      error: HttpClientErrorCode.BAD_JSON,
       detail: expect.stringContaining("Invalid JSON"),
     });
   });
@@ -262,7 +267,7 @@ describe("createHttpClient", () => {
     const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({
-      error: FrameworkErrorCode.BAD_STATUS,
+      error: HttpClientErrorCode.BAD_STATUS,
       detail: expect.stringContaining("401"),
     });
   });
@@ -292,7 +297,7 @@ describe("createHttpClient", () => {
 
     const result = await client.auth.login({ username: "a", password: "b" });
 
-    expect(result).toEqual({ error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED });
+    expect(result).toEqual({ error: HttpClientErrorCode.HEADER_RESOLUTION_FAILED });
   });
 
   test("object headers are merged with the JSON content type", async () => {
@@ -393,7 +398,7 @@ describe("createHttpClient", () => {
     const result = await client.auth.login({ username: "a", password: "b" });
 
     expect(result).toEqual({
-      error: FrameworkErrorCode.BAD_JSON,
+      error: HttpClientErrorCode.BAD_JSON,
       detail: expect.stringContaining("Failed to read"),
     });
   });

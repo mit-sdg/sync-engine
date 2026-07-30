@@ -270,18 +270,6 @@ function validateConceptMetadata(
       }
     }
   }
-  const declaredCodes = new Set(
-    Object.values(metadata.refusals ?? {}).flatMap((branches) =>
-      branches.map((branch) => branch.code),
-    ),
-  );
-  for (const code of Object.keys(metadata.publicErrors ?? {})) {
-    if (!declaredCodes.has(code)) {
-      throw new Error(
-        `Vocabulary: public error "${conceptName}.${code}" is not a declared refusal.`,
-      );
-    }
-  }
 }
 
 function conceptRefProxy(

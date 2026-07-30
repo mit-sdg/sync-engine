@@ -1,6 +1,17 @@
 import { createHash } from "node:crypto";
 import { activeWorkflowSource, externalWorkflowActions, workflowUses } from "./workflow.ts";
+import {
+  workspaceById,
+  workspaceCatalog,
+  workspaceReleaseTag,
+  type Workspace,
+} from "./workspaces.ts";
 
+const coreWorkspace = workspaceById("core");
+const publishedWorkspaces: readonly Workspace[] = workspaceCatalog;
+export const workspaceReleaseManifests = publishedWorkspaces
+  .filter((workspace) => workspace.id !== coreWorkspace.id)
+  .map((workspace) => workspace.packageManifest);
 const exampleManifests = [
   "examples/reading-circle/package.json",
   "examples/operations-room/package.json",
@@ -16,6 +27,10 @@ export const ownedDependencyManifests = [
   ...bunFixtureManifests,
   ...nodeFixtureManifests,
 ] as const;
+export const releaseManifestPaths = [
+  ...workspaceReleaseManifests,
+  ...ownedDependencyManifests,
+] as const;
 const bunProjectManifests = [...exampleManifests, ...bunFixtureManifests] as const;
 const nodeProjectManifests = [...bunProjectManifests, ...nodeFixtureManifests] as const;
 const typescriptManifests = nodeProjectManifests;
@@ -28,6 +43,7 @@ const sharedDevelopmentDependencies = [
 
 export const releaseSourcePaths = [
   "package.json",
+  ...workspaceReleaseManifests,
   "README.md",
   "CHANGELOG.md",
   "docs/releasing.md",
@@ -40,6 +56,7 @@ export const releaseSourcePaths = [
   ".github/CODEOWNERS",
   ".github/dependabot.yml",
   "scripts/update-release-manifests.ts",
+  "scripts/workspaces.ts",
 ] as const;
 
 const expectedActions = new Map([
@@ -140,6 +157,27 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
   }
   const rootDevelopment = object(root.devDependencies) ?? {};
   const projected = new Map<string, string>();
+  const workspaceVersions = new Map(
+    publishedWorkspaces.map((workspace) => [workspace.packageName, facts.version]),
+  );
+
+  for (const workspace of publishedWorkspaces) {
+    if (workspace.id === coreWorkspace.id) continue;
+    const path = workspace.packageManifest;
+    const manifest = object(JSON.parse(sources.get(path) ?? ""));
+    if (manifest === undefined) throw new Error(`${path} must contain an object`);
+    manifest.version = facts.version;
+    const engines = object(manifest.engines) ?? {};
+    manifest.engines = engines;
+    engines.node = facts.node;
+    const peerDependencies = object(manifest.peerDependencies) ?? {};
+    manifest.peerDependencies = peerDependencies;
+    for (const peerId of workspace.peerWorkspaceIds) {
+      const peer = workspaceById(peerId);
+      peerDependencies[peer.packageName] = workspaceVersions.get(peer.packageName);
+    }
+    projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
 
   for (const path of ownedDependencyManifests) {
     const manifest = object(JSON.parse(sources.get(path) ?? ""));
@@ -151,7 +189,11 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
       throw new Error(`${path} is missing dependencies, devDependencies, or engines`);
     }
 
-    dependencies["@mit-sdg/sync-engine"] = facts.version;
+    dependencies[coreWorkspace.packageName] = facts.version;
+    for (const workspace of publishedWorkspaces) {
+      if (!(workspace.packageName in dependencies)) continue;
+      dependencies[workspace.packageName] = workspaceVersions.get(workspace.packageName);
+    }
     development.typescript = facts.typescript;
     engines.node = facts.node;
     if ((bunProjectManifests as readonly string[]).includes(path)) {
@@ -282,12 +324,48 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   if (object(root?.scripts)?.["release:update"] !== "bun scripts/update-release-manifests.ts") {
     failures.push("package.json: release:update must run bun scripts/update-release-manifests.ts");
   }
+  if (!Array.isArray(root?.workspaces) || !root.workspaces.includes("packages/*")) {
+    failures.push('package.json: workspaces must include "packages/*"');
+  }
+
+  for (const workspace of publishedWorkspaces) {
+    const project = manifest(workspace.packageManifest);
+    if (project?.name !== workspace.packageName) {
+      failures.push(`${workspace.packageManifest}: name must be ${workspace.packageName}`);
+    }
+    if (project?.version !== version) {
+      failures.push(`${workspace.packageManifest}: version must equal ${version}`);
+    }
+    if (workspace.id === coreWorkspace.id) continue;
+    if (object(project?.publishConfig)?.tag !== "beta") {
+      failures.push(`${workspace.packageManifest}: publishConfig.tag must be "beta"`);
+    }
+    if (object(project?.engines)?.node !== facts.node) {
+      failures.push(`${workspace.packageManifest}: engines.node must be ${facts.node}`);
+    }
+    for (const peerId of workspace.peerWorkspaceIds) {
+      const peer = workspaceById(peerId);
+      if (object(project?.peerDependencies)?.[peer.packageName] !== version) {
+        failures.push(
+          `${workspace.packageManifest}: peerDependencies.${peer.packageName} must exactly equal ${version}`,
+        );
+      }
+    }
+  }
 
   if (typeof version === "string") {
     for (const path of ownedDependencyManifests) {
-      const dependency = object(manifest(path)?.dependencies)?.["@mit-sdg/sync-engine"];
-      if (dependency !== version) {
-        failures.push(`${path}: @mit-sdg/sync-engine must equal ${version}`);
+      const dependencies = object(manifest(path)?.dependencies);
+      if (dependencies?.[coreWorkspace.packageName] !== version) {
+        failures.push(`${path}: ${coreWorkspace.packageName} must equal ${version}`);
+      }
+      for (const workspace of publishedWorkspaces) {
+        if (workspace.id === coreWorkspace.id || !(workspace.packageName in (dependencies ?? {}))) {
+          continue;
+        }
+        if (dependencies?.[workspace.packageName] !== version) {
+          failures.push(`${path}: ${workspace.packageName} must equal ${version}`);
+        }
       }
     }
   }
@@ -439,6 +517,9 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "/.github/workflows/",
     "/.github/CODEOWNERS",
     "/package.json",
+    ...publishedWorkspaces
+      .filter((workspace) => workspace.id !== coreWorkspace.id)
+      .map((workspace) => `/${workspace.directory}/`),
     "/CHANGELOG.md",
     "/SUPPORT.md",
     "/SECURITY.md",
@@ -446,6 +527,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "/scripts/release.ts",
     "/scripts/check-release.ts",
     "/scripts/update-release-manifests.ts",
+    "/scripts/workspaces.ts",
   ]) {
     const line = codeowners.split(/\r?\n/).find((candidate) => candidate.startsWith(`${path} `));
     if (line === undefined || !line.includes("@BarishNamazov") || !line.includes("@eagonmeng")) {
@@ -487,6 +569,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const ci = activeWorkflowSource(sources.get(".github/workflows/ci.yml") ?? "");
   for (const fact of [
     "permissions:\n  contents: read",
+    "name: Pack & import both workspaces",
+    "run: bun run package:check",
     "name: Generated artifacts",
     "run: bun run examples:check",
     "name: CI required",
@@ -516,7 +600,9 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const publication = workflowJob(publish, "publish");
   for (const fact of [
     "name: Publish beta",
-    '- "v1.0.0-beta.*"',
+    ...publishedWorkspaces.map(
+      (workspace) => `- "${workspaceReleaseTag(workspace, "1.0.0-beta.*")}"`,
+    ),
     "permissions:\n  contents: read",
   ]) {
     if (!publish.includes(fact)) failures.push(`.github/workflows/publish.yml: missing ${fact}`);
@@ -572,6 +658,22 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       failures.push(`.github/workflows/publish.yml: publish job is missing ${command}`);
     }
   }
+  for (const workspace of publishedWorkspaces.filter(
+    (workspace) => workspace.id !== coreWorkspace.id,
+  )) {
+    const tarball = `release/${workspace.verifiedTarball}`;
+    if (!publish.includes(tarball)) {
+      failures.push(`.github/workflows/publish.yml: artifact flow omits ${tarball}`);
+    }
+    if (
+      !publication.includes(workspaceReleaseTag(workspace, "")) ||
+      !publication.includes(tarball)
+    ) {
+      failures.push(
+        `.github/workflows/publish.yml: publish must select ${workspace.id} for its release tag`,
+      );
+    }
+  }
   for (const forbidden of ["setup-bun@", "bun install", "bun run", "prepack"]) {
     if (publication.includes(forbidden)) {
       failures.push(`.github/workflows/publish.yml: publish job must not rebuild (${forbidden})`);
@@ -611,13 +713,40 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       }
     }
   }
+  for (const workspace of publishedWorkspaces.filter(
+    (workspace) => workspace.id !== coreWorkspace.id,
+  )) {
+    for (const [jobName, job] of [
+      ["verify", verify],
+      ["publish", publication],
+    ] as const) {
+      if (!job.includes(`./${workspace.packageManifest}`)) {
+        failures.push(
+          `.github/workflows/publish.yml: ${jobName} source validation is missing ${workspace.packageManifest}`,
+        );
+      }
+      if (!job.includes(workspaceReleaseTag(workspace, ""))) {
+        failures.push(
+          `.github/workflows/publish.yml: ${jobName} source validation is missing ${workspace.id} tag`,
+        );
+      }
+    }
+  }
   for (const fact of [
     "SYNC_ENGINE_VERIFIED_TARBALL: release/package.tgz",
+    "SYNC_ENGINE_VERIFIED_TARBALLS: release",
     "sha256sum release/package.tgz > release/package.tgz.sha256",
     "name: verified-npm-package",
   ]) {
     if (!publish.includes(fact)) {
       failures.push(`.github/workflows/publish.yml: verified artifact flow is missing ${fact}`);
+    }
+  }
+  for (const workspace of publishedWorkspaces) {
+    const tarball = `release/${workspace.verifiedTarball}`;
+    const checksum = `sha256sum ${tarball} > ${tarball}.sha256`;
+    if (!publish.includes(checksum)) {
+      failures.push(`.github/workflows/publish.yml: verified artifact flow is missing ${checksum}`);
     }
   }
   if (/\bgh\s+release\b/.test(publish)) {

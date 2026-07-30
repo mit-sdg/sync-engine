@@ -1,19 +1,10 @@
-/**
- * # HTTP transport adapter
- *
- * Wraps the transport-agnostic {@link ./client.ts} core with HTTP-specific
- * behavior: `fetch`, `baseUrl`, headers, credentials, JSON parsing, and error
- * normalization. Use {@link createHttpClient} for the common case or
- * {@link createHttpTransport} to compose the transport with a custom client
- * setup.
- */
-
-import { isAborted, raceDeadline } from "@engine/utils/deadline";
-import { FrameworkErrorCode, type ContractShape } from "../protocol/types.ts";
-import type { Client, ClientTransport } from "./client.ts";
-import { createClient } from "./client.ts";
-
-export type { ClientError } from "./client.ts";
+import { FrameworkErrorCode } from "@mit-sdg/sync-engine/boundary";
+import {
+  createClient,
+  type Client,
+  type ClientTransport,
+  type ContractShape,
+} from "@mit-sdg/sync-engine/client";
 
 /** A header bag, or a (possibly async) function producing one per request. */
 export type HeadersOption =
@@ -22,28 +13,27 @@ export type HeadersOption =
 
 /** Options for {@link createHttpTransport} and {@link createHttpClient}. */
 export interface HttpClientOptions {
-  /**
-   * Base URL every request is prefixed with, including the `/api` segment.
-   * Defaults to `API_BASE_URL`, then `/api`.
-   */
+  /** Base URL every request is prefixed with, including an optional API segment. */
   baseUrl?: string;
-  /**
-   * `fetch` implementation to use. Defaults to the global `fetch`. Useful for
-   * injecting a mock or a server-side polyfill.
-   */
+  /** `fetch` implementation to use. Defaults to the global `fetch`. */
   fetch?: typeof fetch;
-  /**
-   * Extra headers merged into every request (after `Content-Type`). Provide a
-   * function to compute them per call, e.g. to attach a rotating auth token.
-   */
+  /** Extra headers merged into every request after `Content-Type`. */
   headers?: HeadersOption;
-  /**
-   * Request credentials mode. Defaults to `"include"` so cookies (including
-   * HttpOnly session cookies) are sent automatically. Override with `"omit"`
-   * or `"same-origin"` if needed.
-   */
+  /** Request credentials mode. Defaults to `include` for cookie-bearing policies. */
   credentials?: "include" | "omit" | "same-origin";
 }
+
+export const HttpClientErrorCode = {
+  BAD_JSON: "BAD_JSON",
+  BAD_STATUS: "BAD_STATUS",
+  HEADER_RESOLUTION_FAILED: "HEADER_RESOLUTION_FAILED",
+  NETWORK_ERROR: "NETWORK_ERROR",
+} as const;
+
+export type HttpClientError = {
+  error: (typeof HttpClientErrorCode)[keyof typeof HttpClientErrorCode];
+  detail?: string;
+};
 
 const FALLBACK_BASE_URL = "/api";
 
@@ -70,23 +60,37 @@ function resolveBaseUrl(baseUrl: string | undefined): string {
 
 type HeaderResolution = { aborted: true } | { aborted: false; headers: Record<string, string> };
 
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
+function raceAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  onAbort: () => T,
+): Promise<T> {
+  if (signal === undefined) return promise;
+  if (signal.aborted) return Promise.resolve(onAbort());
+  return new Promise((resolve, reject) => {
+    const abort = () => resolve(onAbort());
+    signal.addEventListener("abort", abort, { once: true });
+    void promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
 async function resolveHeaders(
   option: HeadersOption | undefined,
   signal: AbortSignal | undefined,
 ): Promise<HeaderResolution> {
   if (isAborted(signal)) return { aborted: true };
   if (typeof option !== "function") return { aborted: false, headers: option ?? {} };
-
-  return raceDeadline<HeaderResolution>(
+  return raceAbort(
     Promise.resolve(option()).then((headers) => ({ aborted: false, headers })),
-    { signal, onAbort: () => ({ aborted: true }) },
+    signal,
+    () => ({ aborted: true }),
   );
 }
 
-/**
- * Builds the HTTP `fetch` invocation for a single client request. Never
- * throws: transport/parse failures become `{ error }` envelopes.
- */
 async function httpRequest(
   fetchImpl: typeof fetch,
   baseUrl: string,
@@ -95,12 +99,12 @@ async function httpRequest(
   path: string,
   body: unknown,
   signal?: AbortSignal,
-): Promise<unknown> {
+): Promise<unknown | HttpClientError> {
   let resolvedHeaders: HeaderResolution;
   try {
     resolvedHeaders = await resolveHeaders(headersOption, signal);
   } catch {
-    return { error: FrameworkErrorCode.HEADER_RESOLUTION_FAILED };
+    return { error: HttpClientErrorCode.HEADER_RESOLUTION_FAILED };
   }
   if (resolvedHeaders.aborted || isAborted(signal)) {
     return { error: FrameworkErrorCode.ABORTED };
@@ -117,7 +121,7 @@ async function httpRequest(
     });
   } catch {
     return {
-      error: isAborted(signal) ? FrameworkErrorCode.ABORTED : FrameworkErrorCode.NETWORK_ERROR,
+      error: isAborted(signal) ? FrameworkErrorCode.ABORTED : HttpClientErrorCode.NETWORK_ERROR,
     };
   }
 
@@ -127,7 +131,7 @@ async function httpRequest(
   } catch {
     if (isAborted(signal)) return { error: FrameworkErrorCode.ABORTED };
     return {
-      error: FrameworkErrorCode.BAD_JSON,
+      error: HttpClientErrorCode.BAD_JSON,
       detail: `Failed to read response body from ${path} (status ${response.status}).`,
     };
   }
@@ -136,14 +140,14 @@ async function httpRequest(
     data = text === "" ? {} : JSON.parse(text);
   } catch {
     return {
-      error: FrameworkErrorCode.BAD_JSON,
+      error: HttpClientErrorCode.BAD_JSON,
       detail: `Invalid JSON response from ${path} (status ${response.status}).`,
     };
   }
 
   if (!response.ok && (typeof data !== "object" || data === null || !("error" in data))) {
     return {
-      error: FrameworkErrorCode.BAD_STATUS,
+      error: HttpClientErrorCode.BAD_STATUS,
       detail: `Request to ${path} failed with status ${response.status}.`,
     };
   }
@@ -151,13 +155,12 @@ async function httpRequest(
 }
 
 /**
-
-
- * Creates an HTTP {@link ClientTransport} that uses `fetch` with the given
- * options. The returned transport can be passed directly to
- * {@link createClient}.
+ * Creates a `fetch` transport for `createClient<Wire, HttpClientError>`, or use
+ * {@link createHttpClient} for that composition.
  */
-export function createHttpTransport(options: HttpClientOptions = {}): ClientTransport {
+export function createHttpTransport(
+  options: HttpClientOptions = {},
+): ClientTransport<HttpClientError> {
   const baseUrl = resolveBaseUrl(options.baseUrl);
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const credentials = options.credentials;
@@ -173,14 +176,9 @@ export function createHttpTransport(options: HttpClientOptions = {}): ClientTran
     );
 }
 
-/**
- * Convenience that composes {@link createHttpTransport} with
- * {@link createClient}. Equivalent to:
- *
- * ```ts
- * createClient<C>({ transport: createHttpTransport(options) })
- * ```
- */
-export function createHttpClient<C extends ContractShape>(options?: HttpClientOptions): Client<C> {
-  return createClient<C>({ transport: createHttpTransport(options) });
+/** Convenience composition of `createHttpTransport` and the generic core client. */
+export function createHttpClient<C extends ContractShape>(
+  options?: HttpClientOptions,
+): Client<C, HttpClientError> {
+  return createClient<C, HttpClientError>({ transport: createHttpTransport(options) });
 }

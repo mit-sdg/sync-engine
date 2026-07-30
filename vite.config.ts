@@ -10,6 +10,10 @@ export default defineConfig({
         find: /^@mit-sdg\/sync-engine\/([^/]+)$/,
         replacement: resolve(import.meta.dirname, "src/$1/index.ts"),
       },
+      {
+        find: /^@mit-sdg\/sync-engine-http\/([^/]+)$/,
+        replacement: resolve(import.meta.dirname, "packages/http/src/$1/index.ts"),
+      },
     ],
     tsconfigPaths: true,
   },
@@ -68,7 +72,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
-    include: ["examples/**/*.test.ts", "tests/**/*.test.ts"],
+    include: ["examples/**/*.test.ts", "packages/*/tests/**/*.test.ts", "tests/**/*.test.ts"],
     exclude: ["tests/package/application/**", "tests/package/multi-instance/**"],
     coverage: {
       thresholds: {

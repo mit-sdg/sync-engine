@@ -1,18 +1,49 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { filesBelow } from "../src/command/files-below.ts";
 import { applicationExamples } from "../examples/register.ts";
+import { filesBelow } from "../src/command/files-below.ts";
+import { workspaceBuildOrder, workspaceById, workspacePath, type Workspace } from "./workspaces.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
-const consumer = resolve(temporary, "consumer");
-const standalone = resolve(temporary, "application");
-const multiInstance = resolve(temporary, "multi-instance");
 const expectedAuthor = "Barish Namazov and Eagon Meng";
-const packageBudgets = { files: 420, packedBytes: 500_000, unpackedBytes: 1_500_000 } as const;
+const coreWorkspace = workspaceById("core");
+
+interface NpmPackResult {
+  filename: string;
+  size: number;
+  unpackedSize: number;
+  files: Array<{ path: string; mode: number }>;
+}
+
+interface PackageManifest {
+  author: string;
+  bin?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  exports: Record<string, { import: string; types: string }>;
+  license: string;
+  name: string;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  version: string;
+}
+
+interface PackedWorkspace {
+  workspace: Workspace;
+  manifest: PackageManifest;
+  packed: NpmPackResult;
+  tarball: string;
+  entries: Set<string>;
+}
+
+interface DependencyManifest {
+  dependencies: Record<string, string>;
+}
 
 function commandEnv(): NodeJS.ProcessEnv {
   return { ...process.env, BUN_INSTALL_CACHE_DIR: resolve(temporary, "cache"), TMPDIR: temporary };
@@ -35,18 +66,31 @@ function requireEntry(entries: Set<string>, path: string): void {
   if (!entries.has(`package/${path}`)) throw new Error(`packed package omits ${path}`);
 }
 
-interface NpmPackResult {
-  filename: string;
-  size: number;
-  unpackedSize: number;
-  files: Array<{ path: string; mode: number }>;
+function requireExecutable(packed: NpmPackResult, path: string): void {
+  // Windows archives do not carry a meaningful POSIX executable bit. The
+  // Linux publication job and every POSIX package check enforce it.
+  if (process.platform === "win32") return;
+  const mode = packed.files.find((file) => file.path === path)?.mode;
+  if (mode === undefined || (mode & 0o100) === 0) {
+    throw new Error(`packed package does not mark ${path} executable`);
+  }
 }
 
-interface DependencyManifest {
-  dependencies: Record<string, string>;
+function portablePath(path: string): string {
+  return path.split(sep).join(posix.sep);
 }
 
-function packWithNpm(cwd = root, destination = temporary): NpmPackResult {
+function tarballSpecifier(from: string, tarball: string): string {
+  return `file:${portablePath(relative(from, tarball))}`;
+}
+
+function packageEntrypoint(workspace: Workspace, entrypoint: string): string {
+  return entrypoint === "."
+    ? workspace.packageName
+    : `${workspace.packageName}/${entrypoint.slice(2)}`;
+}
+
+function packWithNpm(cwd: string, destination: string): NpmPackResult {
   const output = execFileSync(
     "bun",
     ["run", "npm", "pack", "--json", "--loglevel=error", "--pack-destination", destination],
@@ -68,28 +112,6 @@ function packWithNpm(cwd = root, destination = temporary): NpmPackResult {
   return packed;
 }
 
-function requireExecutable(packed: NpmPackResult, path: string): void {
-  // Windows archives do not carry a meaningful POSIX executable bit. The
-  // Linux publication job and every POSIX package check enforce it.
-  if (process.platform === "win32") return;
-  const mode = packed.files.find((file) => file.path === path)?.mode;
-  if (mode === undefined || (mode & 0o100) === 0) {
-    throw new Error(`packed package does not mark ${path} executable`);
-  }
-}
-
-function portablePath(path: string): string {
-  return path.split(sep).join(posix.sep);
-}
-
-function tarballSpecifier(from: string, tarball: string): string {
-  return `file:${portablePath(relative(from, tarball))}`;
-}
-
-async function writePackageManifest(path: string, manifest: DependencyManifest): Promise<void> {
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
-}
-
 function packedPathExists(entries: Set<string>, path: string): boolean {
   const entry = `package/${path.replace(/\/+$/, "")}`;
   return (
@@ -97,6 +119,10 @@ function packedPathExists(entries: Set<string>, path: string): boolean {
     entries.has(`${entry}/`) ||
     [...entries].some((item) => item.startsWith(`${entry}/`))
   );
+}
+
+async function writePackageManifest(path: string, manifest: DependencyManifest): Promise<void> {
+  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 async function verifyPackedDocLinks(entries: Set<string>, installed: string): Promise<void> {
@@ -116,53 +142,83 @@ async function verifyPackedDocLinks(entries: Set<string>, installed: string): Pr
   }
 }
 
-try {
-  const examples = Object.values(applicationExamples).map(({ directory }) => directory);
-  const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
-    author: string;
-    bin: Record<string, string>;
-    exports: Record<string, { import: string; types: string }>;
-    license: string;
-    name: string;
-    version: string;
-  };
-  const packed = packWithNpm();
-  if (packed.files.length > packageBudgets.files) {
+function workspaceArtifact(
+  artifacts: ReadonlyMap<string, PackedWorkspace>,
+  workspace: Workspace,
+): PackedWorkspace {
+  const artifact = artifacts.get(workspace.id);
+  if (artifact === undefined) throw new Error(`No packed artifact for ${workspace.id}`);
+  return artifact;
+}
+
+function workspaceDependencies(
+  manifest: PackageManifest,
+): Array<Record<string, string> | undefined> {
+  return [
+    manifest.dependencies,
+    manifest.devDependencies,
+    manifest.optionalDependencies,
+    manifest.peerDependencies,
+  ];
+}
+
+function rejectForbiddenManifestDependencies(
+  workspace: Workspace,
+  manifest: PackageManifest,
+): void {
+  for (const forbiddenId of workspace.forbiddenWorkspaceIds) {
+    const forbidden = workspaceById(forbiddenId);
+    if (
+      workspaceDependencies(manifest).some(
+        (dependencies) => forbidden.packageName in (dependencies ?? {}),
+      )
+    ) {
+      throw new Error(`${workspace.id} package manifest depends on ${forbidden.packageName}`);
+    }
+  }
+}
+
+async function verifyPackedWorkspace(
+  workspace: Workspace,
+  manifest: PackageManifest,
+  packed: NpmPackResult,
+): Promise<PackedWorkspace> {
+  const budget = workspace.packageBudget;
+  if (packed.files.length > budget.files) {
     throw new Error(
-      `packed package has ${packed.files.length} files; budget is ${packageBudgets.files}`,
+      `${workspace.id} packed package has ${packed.files.length} files; budget is ${budget.files}`,
     );
   }
-  if (packed.size > packageBudgets.packedBytes) {
+  if (packed.size > budget.packedBytes) {
     throw new Error(
-      `packed package is ${packed.size} bytes; budget is ${packageBudgets.packedBytes}`,
+      `${workspace.id} packed package is ${packed.size} bytes; budget is ${budget.packedBytes}`,
     );
   }
-  if (packed.unpackedSize > packageBudgets.unpackedBytes) {
+  if (packed.unpackedSize > budget.unpackedBytes) {
     throw new Error(
-      `unpacked package is ${packed.unpackedSize} bytes; budget is ${packageBudgets.unpackedBytes}`,
+      `${workspace.id} unpacked package is ${packed.unpackedSize} bytes; budget is ${budget.unpackedBytes}`,
     );
   }
-  const expectedFilename = `${packageJson.name.replace(/^@/, "").replaceAll("/", "-")}-${packageJson.version}.tgz`;
+  if (manifest.name !== workspace.packageName) {
+    throw new Error(
+      `${workspace.id} package name is ${manifest.name}; expected ${workspace.packageName}`,
+    );
+  }
+  const expectedFilename = `${manifest.name.replace(/^@/, "").replaceAll("/", "-")}-${manifest.version}.tgz`;
   if (packed.filename !== expectedFilename) {
     throw new Error(`npm packed ${packed.filename}; expected ${expectedFilename}`);
   }
-  const tarball = resolve(temporary, packed.filename);
-
-  async function preparePackageManifest<T extends DependencyManifest = DependencyManifest>(
-    manifestPath: string,
-    versionError: string,
-  ): Promise<T> {
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as T;
-    if (manifest.dependencies["@mit-sdg/sync-engine"] !== packageJson.version) {
-      throw new Error(versionError);
-    }
-    manifest.dependencies["@mit-sdg/sync-engine"] = tarballSpecifier(
-      dirname(manifestPath),
-      tarball,
-    );
-    return manifest;
+  if (manifest.license !== "Apache-2.0") {
+    throw new Error(`${workspace.id} package license is ${manifest.license}; expected Apache-2.0`);
   }
+  if (manifest.author !== expectedAuthor) {
+    throw new Error(
+      `${workspace.id} package author is ${manifest.author}; expected ${expectedAuthor}`,
+    );
+  }
+  rejectForbiddenManifestDependencies(workspace, manifest);
 
+  const tarball = resolve(temporary, packed.filename);
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
   const entries = new Set(listing.trim().split(/\r?\n/));
   if ([...entries].some((entry) => entry.startsWith("package/docs/tmp-"))) {
@@ -171,60 +227,354 @@ try {
   if ([...entries].some((entry) => entry.endsWith(".map"))) {
     throw new Error("packed package contains source maps whose implementation sources are omitted");
   }
-
-  for (const path of await filesBelow(resolve(root, "examples"))) {
-    requireEntry(entries, portablePath(relative(root, path)));
+  for (const path of workspace.requiredPackedFiles) requireEntry(entries, path);
+  if (workspace.copiesExamples) {
+    for (const path of await filesBelow(resolve(root, "examples"))) {
+      requireEntry(entries, portablePath(relative(root, path)));
+    }
   }
-
-  if (packageJson.license !== "Apache-2.0") {
-    throw new Error(`package license is ${packageJson.license}; expected Apache-2.0`);
-  }
-  if (packageJson.author !== expectedAuthor) {
-    throw new Error(`package author is ${packageJson.author}; expected ${expectedAuthor}`);
-  }
-  for (const path of ["LICENSE", "README.md", "SECURITY.md", "SUPPORT.md", "package.json"]) {
-    requireEntry(entries, path);
-  }
-  if (packageJson.bin["sync-engine"] !== "./dist/command/main.js") {
-    throw new Error("package must expose the sync-engine command as ./dist/command/main.js");
-  }
-  const executable = packageJson.bin["sync-engine"].replace(/^\.\//, "");
-  requireEntry(entries, executable);
-  requireExecutable(packed, executable);
-  for (const target of Object.values(packageJson.exports)) {
+  for (const target of Object.values(manifest.exports)) {
     requireEntry(entries, target.import.replace(/^\.\//, ""));
     requireEntry(entries, target.types.replace(/^\.\//, ""));
   }
+  if (workspace.scaffold !== undefined) {
+    const executable = manifest.bin?.["sync-engine"];
+    if (executable !== `./${workspace.scaffold.executable}`) {
+      throw new Error(`package must expose sync-engine as ./${workspace.scaffold.executable}`);
+    }
+    requireEntry(entries, executable.replace(/^\.\//, ""));
+    requireExecutable(packed, executable.replace(/^\.\//, ""));
+  }
+  if (
+    workspace.id === coreWorkspace.id &&
+    [...entries].some((entry) => entry.startsWith("package/packages/http/"))
+  ) {
+    throw new Error("core package contains the HTTP workspace");
+  }
+  return { workspace, manifest, packed, tarball, entries };
+}
 
+async function verifyInstalledWorkspace(
+  artifact: PackedWorkspace,
+  installed: string,
+): Promise<void> {
+  await verifyPackedDocLinks(artifact.entries, installed);
+  for (const path of await filesBelow(
+    resolve(installed, "dist"),
+    (name) => name.endsWith(".js") || name.endsWith(".d.ts"),
+  )) {
+    const source = await readFile(path, "utf8");
+    if (/['"]@(?:engine|root|sync-engine)\//.test(source)) {
+      throw new Error(`${relative(installed, path)} contains a repository-only import alias`);
+    }
+    for (const forbiddenId of artifact.workspace.forbiddenWorkspaceIds) {
+      const forbidden = workspaceById(forbiddenId);
+      if (
+        source.includes(`"${forbidden.packageName}`) ||
+        source.includes(`'${forbidden.packageName}`)
+      ) {
+        throw new Error(`${relative(installed, path)} imports forbidden ${forbidden.packageName}`);
+      }
+    }
+  }
+}
+
+function assertWorkspacePeers(
+  workspace: Workspace,
+  manifest: PackageManifest,
+  artifacts: ReadonlyMap<string, PackedWorkspace>,
+): void {
+  for (const peerId of workspace.peerWorkspaceIds) {
+    const peer = workspaceArtifact(artifacts, workspaceById(peerId));
+    if (manifest.peerDependencies?.[peer.workspace.packageName] !== peer.manifest.version) {
+      throw new Error(
+        `${workspace.id} must declare an exact peer on ${peer.workspace.packageName}@${peer.manifest.version}`,
+      );
+    }
+  }
+}
+
+async function prepareWorkspaceDependencies<T extends DependencyManifest>(
+  manifestPath: string,
+  label: string,
+  artifacts: ReadonlyMap<string, PackedWorkspace>,
+  required: readonly Workspace[] = [coreWorkspace],
+): Promise<T> {
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as T;
+  for (const workspace of required) {
+    const artifact = workspaceArtifact(artifacts, workspace);
+    if (manifest.dependencies?.[workspace.packageName] !== artifact.manifest.version) {
+      throw new Error(
+        `${label} must depend on ${workspace.packageName} ${artifact.manifest.version}`,
+      );
+    }
+  }
+  for (const workspace of workspaceBuildOrder) {
+    const artifact = workspaceArtifact(artifacts, workspace);
+    const dependency = manifest.dependencies?.[workspace.packageName];
+    if (dependency === undefined) continue;
+    if (dependency !== artifact.manifest.version) {
+      throw new Error(
+        `${label} must depend on ${workspace.packageName} ${artifact.manifest.version}`,
+      );
+    }
+    manifest.dependencies[workspace.packageName] = tarballSpecifier(
+      dirname(manifestPath),
+      artifact.tarball,
+    );
+  }
+  return manifest;
+}
+
+function restoreWorkspaceDependencyVersions(
+  manifest: DependencyManifest,
+  artifacts: ReadonlyMap<string, PackedWorkspace>,
+): void {
+  for (const workspace of workspaceBuildOrder) {
+    const artifact = workspaceArtifact(artifacts, workspace);
+    if (manifest.dependencies[workspace.packageName] !== undefined) {
+      manifest.dependencies[workspace.packageName] = artifact.manifest.version;
+    }
+  }
+}
+
+function entrypointImports(artifacts: readonly PackedWorkspace[]): string {
+  return artifacts
+    .flatMap((artifact) =>
+      Object.keys(artifact.manifest.exports).map((entrypoint) => {
+        const specifier = packageEntrypoint(artifact.workspace, entrypoint);
+        return `import type * as ${specifier.replace(/[^a-z]/gi, "_")} from ${JSON.stringify(specifier)};`;
+      }),
+    )
+    .join("\n");
+}
+
+function runtimeEntrypointImports(artifacts: readonly PackedWorkspace[]): string {
+  return `await Promise.all(${JSON.stringify(
+    artifacts.flatMap((artifact) =>
+      Object.keys(artifact.manifest.exports).map((entrypoint) =>
+        packageEntrypoint(artifact.workspace, entrypoint),
+      ),
+    ),
+  )}.map((entrypoint) => import(entrypoint)));\n`;
+}
+
+const coreTransportScenario = `import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
+import { bindTransport, createGateway, endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
+import { createClient } from "@mit-sdg/sync-engine/client";
+
+const fence = String.fromCharCode(96).repeat(3);
+const specification = [
+  "# Noting",
+  "",
+  "## Purpose",
+  "",
+  "Keep short notes.",
+  "",
+  "## Principle",
+  "",
+  "Writing a note returns its identity.",
+  "",
+  "## State",
+  "",
+  fence + "state",
+  "a set of Notes with",
+  "  a text String",
+  fence,
+  "",
+  "## Actions",
+  "",
+  fence + "actions",
+  "write (text: String) : return (note: Note)",
+  "  then",
+  "    add a new note with text",
+  "    return note",
+  fence,
+  "",
+  "## Queries",
+  "",
+  fence + "queries",
+  fence,
+].join("\\n");
+
+class NotingConcept {
+  write(_: { text: string }) {
+    return { note: "note-1" };
+  }
+}
+
+const noting = registerConcept({ class: NotingConcept, spec: specification });
+const notingConcepts = conceptSet({ Noting: noting });
+const { Noting } = notingConcepts.concepts;
+const WriteNote = endpoint("/notes/write", ({ text, note }) =>
+  receive({ text }).then(Noting.write({ text }).responds({ note })).then(respond({ note })),
+);
+
+type ScenarioWire = {
+  "/notes/write": {
+    input: { text: string };
+    output: { note: string };
+    error: { error: "INVALID_INPUT" };
+  };
+};
+
+const application = assemble({
+  vocabulary: notingConcepts.vocabulary,
+  instances: notingConcepts.implementations(),
+  composition: { WriteNote },
+});
+const gateway = createGateway<ScenarioWire>({ application });
+const binding = bindTransport({ application, gateway });
+const client = createClient<ScenarioWire>({
+  transport: async (request) => {
+    const result = await binding.invoker.invoke(request.path as keyof ScenarioWire & string, request.input as never, {
+      signal: request.signal,
+    });
+    return result.ok ? result.value : { error: "TRANSPORT_ERROR" };
+  },
+});
+const written = await client["/notes/write"]({ text: "buy milk" });
+
+if ("error" in written || written.note !== "note-1") {
+  throw new Error("The custom transport/server binding scenario failed.");
+}
+`;
+
+async function writeTypeScriptConfig(
+  path: string,
+  files: string[],
+  options: { emit?: boolean; outDir?: string } = {},
+): Promise<void> {
+  await writeFile(
+    path,
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          lib: ["ESNext", "DOM"],
+          target: "ESNext",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          noEmit: options.emit !== true,
+          ...(options.outDir === undefined ? {} : { outDir: options.outDir }),
+          strict: true,
+          skipLibCheck: false,
+        },
+        files,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+async function verifyCoreOnlyConsumer(
+  artifacts: ReadonlyMap<string, PackedWorkspace>,
+): Promise<string> {
+  const consumer = resolve(temporary, "core-consumer");
+  const core = workspaceArtifact(artifacts, coreWorkspace);
   await mkdir(consumer);
   await writeFile(
     resolve(consumer, "package.json"),
     `${JSON.stringify({
       private: true,
       type: "module",
-      dependencies: { "@mit-sdg/sync-engine": tarballSpecifier(consumer, tarball) },
+      dependencies: { [core.workspace.packageName]: tarballSpecifier(consumer, core.tarball) },
     })}\n`,
   );
   runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], consumer);
 
-  const installed = resolve(consumer, "node_modules/@mit-sdg/sync-engine");
-  await verifyPackedDocLinks(entries, installed);
-  for (const path of await filesBelow(
-    resolve(installed, "dist"),
-    (name) => name.endsWith(".js") || name.endsWith(".d.ts"),
-  )) {
-    const source = await readFile(path, "utf8");
-    if (/["']@(?:engine|sync-engine)\//.test(source)) {
-      throw new Error(`${relative(installed, path)} contains a repository-only import alias`);
+  const installed = resolve(consumer, "node_modules", ...core.workspace.packageName.split("/"));
+  await verifyInstalledWorkspace(core, installed);
+  for (const forbiddenId of core.workspace.forbiddenWorkspaceIds) {
+    const forbidden = workspaceById(forbiddenId);
+    if (existsSync(resolve(consumer, "node_modules", ...forbidden.packageName.split("/")))) {
+      throw new Error(`core-only installation unexpectedly installed ${forbidden.packageName}`);
     }
   }
 
+  await writeFile(resolve(consumer, "all-entrypoints.ts"), entrypointImports([core]));
+  await writeFile(resolve(consumer, "runtime-import.mjs"), runtimeEntrypointImports([core]));
+  await copyFile(
+    resolve(root, "tests/package/node-runtime-scenario.ts"),
+    resolve(consumer, "node-runtime-scenario.ts"),
+  );
+  await writeFile(resolve(consumer, "core-transport-scenario.ts"), coreTransportScenario);
+  await writeTypeScriptConfig(resolve(consumer, "tsconfig.entrypoints.json"), [
+    "all-entrypoints.ts",
+  ]);
+  await writeTypeScriptConfig(
+    resolve(consumer, "tsconfig.runtime.json"),
+    ["node-runtime-scenario.ts", "core-transport-scenario.ts"],
+    { emit: true, outDir: "compiled" },
+  );
+  const tsc = resolve(consumer, "node_modules/typescript/bin/tsc");
+  run("node", [tsc, "--project", "tsconfig.entrypoints.json"], consumer);
+  run("node", [tsc, "--project", "tsconfig.runtime.json"], consumer);
+  run("node", [resolve(consumer, "runtime-import.mjs")], consumer);
+  run("node", [resolve(consumer, "compiled/node-runtime-scenario.js")], consumer);
+  run("node", [resolve(consumer, "compiled/core-transport-scenario.js")], consumer);
+  return consumer;
+}
+
+async function verifyCombinedConsumer(
+  artifacts: ReadonlyMap<string, PackedWorkspace>,
+): Promise<void> {
+  const consumer = resolve(temporary, "combined-consumer");
+  const packed = workspaceBuildOrder.map((workspace) => workspaceArtifact(artifacts, workspace));
+  await mkdir(consumer);
+  await writeFile(
+    resolve(consumer, "package.json"),
+    `${JSON.stringify({
+      private: true,
+      type: "module",
+      dependencies: Object.fromEntries(
+        packed.map((artifact) => [
+          artifact.workspace.packageName,
+          tarballSpecifier(consumer, artifact.tarball),
+        ]),
+      ),
+    })}\n`,
+  );
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], consumer);
+  for (const artifact of packed) {
+    await verifyInstalledWorkspace(
+      artifact,
+      resolve(consumer, "node_modules", ...artifact.workspace.packageName.split("/")),
+    );
+  }
+  await writeFile(resolve(consumer, "all-entrypoints.ts"), entrypointImports(packed));
+  await writeFile(resolve(consumer, "runtime-import.mjs"), runtimeEntrypointImports(packed));
+  await copyFile(
+    resolve(root, "tests/package/consumer-contract.ts"),
+    resolve(consumer, "consumer-contract.ts"),
+  );
+  await writeTypeScriptConfig(resolve(consumer, "tsconfig.json"), [
+    "all-entrypoints.ts",
+    "consumer-contract.ts",
+  ]);
+  run(
+    "node",
+    [resolve(consumer, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.json"],
+    consumer,
+  );
+  run("node", [resolve(consumer, "runtime-import.mjs")], consumer);
+}
+
+async function verifyScaffoldAndExamples(
+  artifacts: ReadonlyMap<string, PackedWorkspace>,
+  coreConsumer: string,
+): Promise<void> {
+  const core = workspaceArtifact(artifacts, coreWorkspace);
+  const installed = resolve(coreConsumer, "node_modules", ...core.workspace.packageName.split("/"));
   const scaffold = resolve(temporary, "scaffold");
-  run("bun", [resolve(installed, packageJson.bin["sync-engine"]), "new", scaffold], temporary);
+  const executable = core.manifest.bin?.["sync-engine"];
+  if (executable === undefined) throw new Error("core package does not provide sync-engine");
+  run("bun", [resolve(installed, executable), "new", scaffold], temporary);
   const scaffoldManifestPath = resolve(scaffold, "package.json");
-  const scaffoldManifest = await preparePackageManifest(
+  const scaffoldManifest = await prepareWorkspaceDependencies(
     scaffoldManifestPath,
-    `packed scaffold must depend on version ${packageJson.version}`,
+    "packed scaffold",
+    artifacts,
   );
   await writePackageManifest(scaffoldManifestPath, scaffoldManifest);
   run("bun", ["install", "--ignore-scripts"], scaffold);
@@ -233,26 +583,25 @@ try {
   run("bun", ["run", "principle"], scaffold);
   run("bun", ["run", "start"], scaffold);
 
-  for (const example of examples) {
-    const isolated = resolve(temporary, example);
-    await cp(resolve(installed, "examples", example), isolated, { recursive: true });
+  for (const { directory } of Object.values(applicationExamples)) {
+    const isolated = resolve(temporary, directory);
+    await cp(resolve(installed, "examples", directory), isolated, { recursive: true });
     const manifestPath = resolve(isolated, "package.json");
-    const manifest = await preparePackageManifest(
-      manifestPath,
-      `${example} must depend on the package version ${packageJson.version}`,
-    );
+    const manifest = await prepareWorkspaceDependencies(manifestPath, directory, artifacts);
     await writePackageManifest(manifestPath, manifest);
     run("bun", ["install", "--ignore-scripts"], isolated);
     run("bun", ["run", "check"], isolated);
     run("bun", ["run", "start"], isolated);
   }
 
+  const standalone = resolve(temporary, "application");
   await cp(resolve(root, "tests/package/application"), standalone, { recursive: true });
   await rename(resolve(standalone, "tsconfig.project.json"), resolve(standalone, "tsconfig.json"));
   const standaloneManifestPath = resolve(standalone, "package.json");
-  const standaloneManifest = await preparePackageManifest(
+  const standaloneManifest = await prepareWorkspaceDependencies(
     standaloneManifestPath,
-    `package application must depend on version ${packageJson.version}`,
+    "package application",
+    artifacts,
   );
   await writePackageManifest(standaloneManifestPath, standaloneManifest);
   run("bun", ["install", "--ignore-scripts"], standalone);
@@ -260,22 +609,32 @@ try {
   run("bun", ["run", "typecheck"], standalone);
   run("bun", ["run", "principle"], standalone);
   run("bun", ["run", "start"], standalone);
+}
 
+async function verifyMultiInstance(artifacts: ReadonlyMap<string, PackedWorkspace>): Promise<void> {
+  const multiInstance = resolve(temporary, "multi-instance");
   await cp(resolve(root, "tests/package/multi-instance"), multiInstance, { recursive: true });
   const clientProject = resolve(multiInstance, "client");
   const backendProject = resolve(multiInstance, "backend");
   const clientManifestPath = resolve(clientProject, "package.json");
-  const clientManifest = await preparePackageManifest<
+  const clientManifest = await prepareWorkspaceDependencies<
     DependencyManifest & { name: string; version: string }
-  >(clientManifestPath, `multi-instance client must depend on version ${packageJson.version}`);
+  >(clientManifestPath, "multi-instance client", artifacts, workspaceBuildOrder);
   await writePackageManifest(clientManifestPath, clientManifest);
   runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], clientProject);
 
-  const installedForClient = resolve(clientProject, "node_modules/@mit-sdg/sync-engine");
+  const core = workspaceArtifact(artifacts, coreWorkspace);
+  const installedCore = resolve(
+    clientProject,
+    "node_modules",
+    ...core.workspace.packageName.split("/"),
+  );
+  const executable = core.manifest.bin?.["sync-engine"];
+  if (executable === undefined) throw new Error("core package does not provide sync-engine");
   run(
     "bun",
     [
-      resolve(installedForClient, packageJson.bin["sync-engine"]),
+      resolve(installedCore, executable),
       "artifacts",
       "pin-wire",
       "--config",
@@ -289,9 +648,7 @@ try {
     clientProject,
   );
 
-  // The packed client names the published engine version. Its temporary
-  // installation used the just-built tarball only to generate and compile it.
-  clientManifest.dependencies["@mit-sdg/sync-engine"] = packageJson.version;
+  restoreWorkspaceDependencyVersions(clientManifest, artifacts);
   await writePackageManifest(clientManifestPath, clientManifest);
   const packedClient = packWithNpm(clientProject, multiInstance);
   const expectedClientFilename = `${clientManifest.name
@@ -325,9 +682,11 @@ try {
   }
 
   const backendManifestPath = resolve(backendProject, "package.json");
-  const backendManifest = await preparePackageManifest(
+  const backendManifest = await prepareWorkspaceDependencies(
     backendManifestPath,
-    `multi-instance backend must depend on version ${packageJson.version}`,
+    "multi-instance backend",
+    artifacts,
+    workspaceBuildOrder,
   );
   if (
     backendManifest.dependencies["@sync-engine-fixture/multi-instance-client"] !==
@@ -347,94 +706,49 @@ try {
     backendProject,
   );
   run("node", [resolve(backendProject, "dist/scenario.js")], backendProject, 30_000);
+}
 
-  await copyFile(
-    resolve(root, "tests/package/node-runtime-scenario.ts"),
-    resolve(consumer, "node-runtime-scenario.ts"),
-  );
-  await writeFile(
-    resolve(consumer, "tsconfig.runtime.json"),
-    `${JSON.stringify({
-      compilerOptions: {
-        lib: ["ESNext", "DOM"],
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        noEmit: false,
-        outDir: "compiled",
-        strict: true,
-        skipLibCheck: false,
-      },
-      files: ["node-runtime-scenario.ts"],
-    })}\n`,
-  );
-  run(
-    "node",
-    [
-      resolve(consumer, "node_modules/typescript/bin/tsc"),
-      "--project",
-      resolve(consumer, "tsconfig.runtime.json"),
-    ],
-    consumer,
-  );
-  run("node", [resolve(consumer, "compiled/node-runtime-scenario.js")], consumer);
-
-  await writeFile(
-    resolve(consumer, "runtime-import.mjs"),
-    `await Promise.all(${JSON.stringify(
-      Object.keys(packageJson.exports).map((entrypoint) =>
-        entrypoint === "." ? "@mit-sdg/sync-engine" : `@mit-sdg/sync-engine/${entrypoint.slice(2)}`,
-      ),
-    )}.map((entrypoint) => import(entrypoint)));\n`,
-  );
-  run("node", [resolve(consumer, "runtime-import.mjs")], consumer);
-
-  await writeFile(
-    resolve(consumer, "all-entrypoints.ts"),
-    Object.keys(packageJson.exports)
-      .map((entrypoint) => {
-        const specifier =
-          entrypoint === "."
-            ? "@mit-sdg/sync-engine"
-            : `@mit-sdg/sync-engine/${entrypoint.slice(2)}`;
-        return `import type * as ${entrypoint.replace(/[^a-z]/gi, "_")} from ${JSON.stringify(specifier)};`;
-      })
-      .join("\n"),
-  );
-  await copyFile(
-    resolve(root, "tests/package/consumer-contract.ts"),
-    resolve(consumer, "contract.ts"),
-  );
-  await writeFile(
-    resolve(consumer, "tsconfig.json"),
-    `${JSON.stringify({
-      compilerOptions: {
-        lib: ["ESNext", "DOM"],
-        target: "ESNext",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        noEmit: true,
-        strict: true,
-        skipLibCheck: false,
-      },
-      files: ["all-entrypoints.ts", "contract.ts"],
-    })}\n`,
-  );
-  run(
-    "bun",
-    [
-      resolve(root, "node_modules/typescript/bin/tsc"),
-      "--project",
-      resolve(consumer, "tsconfig.json"),
-    ],
-    temporary,
-  );
-  const verifiedTarball = process.env.SYNC_ENGINE_VERIFIED_TARBALL;
-  if (verifiedTarball !== undefined) {
-    const destination = resolve(root, verifiedTarball);
-    await mkdir(dirname(destination), { recursive: true });
-    await copyFile(tarball, destination);
+async function copyVerifiedTarballs(
+  artifacts: ReadonlyMap<string, PackedWorkspace>,
+): Promise<void> {
+  const directory = process.env.SYNC_ENGINE_VERIFIED_TARBALLS;
+  if (directory !== undefined) {
+    const destinationDirectory = resolve(root, directory);
+    await mkdir(destinationDirectory, { recursive: true });
+    for (const workspace of workspaceBuildOrder) {
+      const artifact = workspaceArtifact(artifacts, workspace);
+      await copyFile(artifact.tarball, resolve(destinationDirectory, workspace.verifiedTarball));
+    }
   }
+  const legacyDestination = process.env.SYNC_ENGINE_VERIFIED_TARBALL;
+  if (legacyDestination !== undefined) {
+    const destination = resolve(root, legacyDestination);
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(workspaceArtifact(artifacts, coreWorkspace).tarball, destination);
+  }
+}
+
+try {
+  run("bun", ["run", "build"]);
+  const artifacts = new Map<string, PackedWorkspace>();
+  for (const workspace of workspaceBuildOrder) {
+    const manifest = JSON.parse(
+      await readFile(resolve(root, workspace.packageManifest), "utf8"),
+    ) as PackageManifest;
+    const packed = packWithNpm(workspacePath(root, workspace), temporary);
+    const artifact = await verifyPackedWorkspace(workspace, manifest, packed);
+    artifacts.set(workspace.id, artifact);
+  }
+  for (const workspace of workspaceBuildOrder) {
+    const artifact = workspaceArtifact(artifacts, workspace);
+    assertWorkspacePeers(workspace, artifact.manifest, artifacts);
+  }
+
+  const coreConsumer = await verifyCoreOnlyConsumer(artifacts);
+  await verifyCombinedConsumer(artifacts);
+  await verifyMultiInstance(artifacts);
+  await verifyScaffoldAndExamples(artifacts, coreConsumer);
+  await copyVerifiedTarballs(artifacts);
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

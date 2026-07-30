@@ -3,7 +3,6 @@ import {
   assemble as assembleApplication,
   conceptFloor,
   conceptSet,
-  PublicError,
   registerConcept,
 } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
@@ -68,7 +67,6 @@ const cataloging = registerConcept({
   class: Cataloging,
   spec: catalogingSpec,
   refusals: { ITEM_NOT_FOUND: MissingItem },
-  publicErrors: { ITEM_NOT_FOUND: PublicError.NOT_FOUND },
 });
 
 describe("external concept registration", () => {
@@ -107,7 +105,6 @@ describe("external concept registration", () => {
     reported.mockRestore();
     expect(said).toContain("ITEM_NOT_FOUND");
     expect(said).toContain("which its specification declares only on find");
-    expect(application.publicErrors).toEqual({ ITEM_NOT_FOUND: "NOT_FOUND" });
     expect(
       (application.concepts.Cataloging._find as unknown as { queryPromise?: string }).queryPromise,
     ).toBe("optional");
@@ -137,57 +134,6 @@ describe("external concept registration", () => {
       error: "ITEM_NOT_FOUND",
       detail: "There is no such item.",
     });
-  });
-
-  test("retains explicitly registered prototype-named public error codes as own keys", () => {
-    class ToStringRefusal extends Error {}
-    class ConstructorRefusal extends Error {}
-    class ProtoRefusal extends Error {}
-    class Refusing {
-      refuse(_: Record<string, never>) {
-        return {};
-      }
-    }
-    const specialSpec = specFor(`
-## Actions
-
-\`\`\`actions
-refuse () : return ()
-  then
-    refuse toString "A registered toString refusal."
-    refuse constructor "A registered constructor refusal."
-    refuse __proto__ "A registered proto refusal."
-\`\`\`
-`);
-    const refusals = Object.fromEntries([
-      ["toString", ToStringRefusal],
-      ["constructor", ConstructorRefusal],
-      ["__proto__", ProtoRefusal],
-    ]);
-    const publicErrors = Object.fromEntries([
-      ["toString", PublicError.NOT_FOUND],
-      ["constructor", PublicError.CONFLICT],
-      ["__proto__", PublicError.FORBIDDEN],
-    ]);
-    const set = conceptSet({
-      Refusing: registerConcept({
-        class: Refusing,
-        spec: specialSpec,
-        refusals,
-        publicErrors,
-      }),
-    });
-    const application = assemble({ vocabulary: set.vocabulary, composition: {} });
-
-    for (const categories of [set.publicErrors, application.publicErrors]) {
-      expect(Object.hasOwn(categories, "toString")).toBe(true);
-      expect(Object.hasOwn(categories, "constructor")).toBe(true);
-      expect(Object.hasOwn(categories, "__proto__")).toBe(true);
-      expect(categories.toString).toBe("NOT_FOUND");
-      expect(categories.constructor).toBe("CONFLICT");
-      expect(categories.__proto__).toBe("FORBIDDEN");
-      expect(Object.getPrototypeOf(categories)).toBe(Object.prototype);
-    }
   });
 });
 
@@ -315,17 +261,6 @@ describe("parsed declarations and class methods", () => {
         refusals: { ITEM_NOT_FOUND: MissingItem, SHELVED_WRONG: MissingItem },
       }),
     ).toThrow(/share one Error class/);
-  });
-
-  test("a public category for an undeclared refusal fails", () => {
-    expect(() =>
-      registerConcept({
-        class: Cataloging,
-        spec: catalogingSpec,
-        refusals: { ITEM_NOT_FOUND: MissingItem },
-        publicErrors: { ABSENT: PublicError.NOT_FOUND },
-      }),
-    ).toThrow(/public error `ABSENT` is not a declared refusal/);
   });
 });
 

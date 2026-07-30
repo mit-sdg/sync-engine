@@ -20,6 +20,7 @@
       "@examples/reading-circle/*": ["./examples/reading-circle/src/*"],
       "@examples/*": ["./examples/*"],
       "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
+      "@mit-sdg/sync-engine-http/*": ["./packages/http/src/*/index.ts"],
       "@root/*": ["./*"],
       "@scripts/*": ["./scripts/*"],
       "@sync-engine/*": ["./src/*/index.ts"],
@@ -29,6 +30,6 @@
       "@sync-engine/internal/hosting/*": ["./src/engine/hosting/*"]
     }
   },
-  "include": ["examples", "scripts", "src", "tests"],
+  "include": ["examples", "packages", "scripts", "src", "tests"],
   "exclude": ["src/command/scaffold", "tests/package/application", "tests/package/multi-instance"]
 }

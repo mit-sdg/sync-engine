@@ -1,0 +1,50 @@
+{
+  "name": "@mit-sdg/sync-engine-http",
+  "version": "1.0.0-beta.2",
+  "description": "First-party HTTP transport for @mit-sdg/sync-engine",
+  "keywords": [
+    "http",
+    "sync-engine",
+    "transport"
+  ],
+  "homepage": "https://github.com/mit-sdg/sync-engine#readme",
+  "bugs": "https://github.com/mit-sdg/sync-engine/issues",
+  "license": "Apache-2.0",
+  "author": "Barish Namazov and Eagon Meng",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mit-sdg/sync-engine"
+  },
+  "files": [
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./tooling": {
+      "types": "./dist/tooling/index.d.ts",
+      "import": "./dist/tooling/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "peerDependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.2"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

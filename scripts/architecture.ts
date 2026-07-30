@@ -2,6 +2,12 @@ import { createHash } from "node:crypto";
 import { posix } from "node:path";
 import ts from "typescript";
 import { externalWorkflowActions } from "./workflow.ts";
+import {
+  workspaceCatalog,
+  workspaceById,
+  workspaceRepositoryPath,
+  type Workspace,
+} from "./workspaces.ts";
 
 export interface ArchitectureProject {
   /** Text for every repository file plus any untracked source files to inspect. */
@@ -22,6 +28,11 @@ export interface ArchitectureResult {
 
 interface PackageJson {
   exports: Record<string, unknown>;
+}
+
+interface WorkspaceSurface {
+  workspace: Workspace;
+  publicSubpaths: Set<string>;
 }
 
 interface TsConfig {
@@ -51,24 +62,16 @@ const reactionDependencies = new Map([
   ["concepts", new Set(["root", "concepts"])],
   ["runtime", new Set(["root", "authoring", "concepts", "runtime"])],
 ]);
-const boundaryAreas = new Set([
-  "protocol",
-  "invocation",
-  "assembly",
-  "client",
-  "gateway",
-  "http",
-  "wire",
-]);
+const boundaryAreas = new Set(["protocol", "invocation", "assembly", "client", "gateway", "wire"]);
 const boundaryDependencies = new Map([
   ["protocol", new Set(["protocol"])],
   ["invocation", new Set(["invocation", "protocol"])],
   ["wire", new Set(["wire", "protocol"])],
   ["assembly", new Set(["assembly", "protocol", "invocation", "wire"])],
   ["client", new Set(["client", "protocol", "invocation"])],
-  ["gateway", new Set(["gateway", "protocol", "invocation", "assembly", "client"])],
-  ["http", new Set(["http", "protocol", "invocation", "assembly", "client", "wire"])],
+  ["gateway", new Set(["gateway", "protocol", "invocation", "assembly", "client", "wire"])],
 ]);
+const unsupportedBoundaryAreas = new Set(["http"]);
 const unsupportedTopLevelDirectories = new Set([
   "cli",
   "gateway",
@@ -118,6 +121,10 @@ const allowedTestDirectories = new Set([
 
 function normalized(path: string): string {
   return posix.normalize(path.replaceAll("\\", "/")).replace(/^\.\//, "");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function filesBelow(files: ReadonlyMap<string, string>, directory: string): string[] {
@@ -213,6 +220,7 @@ function stronglyConnectedComponents(graph: ReadonlyMap<string, ReadonlySet<stri
 
 export function checkArchitecture(project: ArchitectureProject): ArchitectureResult {
   const files = new Map([...project.files].map(([path, text]) => [normalized(path), text]));
+  const configuredWorkspaces: readonly Workspace[] = workspaceCatalog;
   const repository = (project.repositoryFiles ?? [...files.keys()])
     .map(normalized)
     .filter((path) => files.has(path))
@@ -231,49 +239,61 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     ),
   );
   const failures: string[] = [];
-  const packageJson = JSON.parse(files.get("package.json") ?? "{}") as Partial<PackageJson>;
   const tsconfig = JSON.parse(files.get("tsconfig.json") ?? "{}") as Partial<TsConfig>;
   const pathAliases = tsconfig.compilerOptions?.paths ?? {};
-  const packageExports = packageJson.exports ?? {};
-  const publicSubpaths = new Set<string>();
+  const workspaceSurfaces: WorkspaceSurface[] = [];
+  for (const workspace of configuredWorkspaces) {
+    const manifestSource = files.get(workspace.packageManifest);
+    if (manifestSource === undefined) continue;
+    const packageJson = JSON.parse(manifestSource) as Partial<PackageJson>;
+    const packageExports = packageJson.exports ?? {};
+    const publicSubpaths = new Set<string>();
+    const sourceDirectory = workspaceRepositoryPath(workspace, workspace.sourceDirectory);
 
-  for (const [key, value] of Object.entries(packageExports)) {
-    const match = /^\.\/([a-z0-9-]+)$/.exec(key);
-    if (match === null) {
-      failures.push(`${key}: package export is not a supported one-level public subpath`);
-      continue;
+    for (const [key, value] of Object.entries(packageExports)) {
+      const match = /^\.\/([a-z0-9-]+)$/.exec(key);
+      if (match === null) {
+        failures.push(`${key}: package export is not a supported one-level public subpath`);
+        continue;
+      }
+      const subpath = match[1] ?? "";
+      publicSubpaths.add(subpath);
+      const expectedTypes = `./dist/${subpath}/index.d.ts`;
+      const expectedImport = `./dist/${subpath}/index.js`;
+      if (
+        typeof value !== "object" ||
+        value === null ||
+        (value as Record<string, unknown>).types !== expectedTypes ||
+        (value as Record<string, unknown>).import !== expectedImport
+      ) {
+        failures.push(
+          `${key}: package export must map types to ${expectedTypes} and import to ${expectedImport}`,
+        );
+      }
+      const sourceEntrypoint = `${sourceDirectory}/${subpath}/index.ts`;
+      if (!files.has(sourceEntrypoint)) {
+        failures.push(`${key}: package export has no source entrypoint at ${sourceEntrypoint}`);
+      }
     }
-    const subpath = match[1] ?? "";
-    publicSubpaths.add(subpath);
-    const expectedTypes = `./dist/${subpath}/index.d.ts`;
-    const expectedImport = `./dist/${subpath}/index.js`;
-    if (
-      typeof value !== "object" ||
-      value === null ||
-      (value as Record<string, unknown>).types !== expectedTypes ||
-      (value as Record<string, unknown>).import !== expectedImport
-    ) {
-      failures.push(
-        `${key}: package export must map types to ${expectedTypes} and import to ${expectedImport}`,
-      );
-    }
-    if (!files.has(`src/${subpath}/index.ts`)) {
-      failures.push(`${key}: package export has no source entrypoint at src/${subpath}/index.ts`);
-    }
-  }
 
-  for (const path of files.keys()) {
-    const match = /^src\/([^/]+)\/index\.ts$/.exec(path);
-    const subpath = match?.[1];
-    if (
-      subpath !== undefined &&
-      subpath !== "command" &&
-      subpath !== "engine" &&
-      !publicSubpaths.has(subpath)
-    ) {
-      failures.push(`${path}: public source entrypoint has no matching package export`);
+    for (const path of files.keys()) {
+      const match = new RegExp(`^${escapeRegExp(sourceDirectory)}/([^/]+)/index\\.ts$`).exec(path);
+      const subpath = match?.[1];
+      if (
+        subpath !== undefined &&
+        !workspace.internalSourceDirectories.includes(subpath) &&
+        !publicSubpaths.has(subpath)
+      ) {
+        failures.push(`${path}: public source entrypoint has no matching package export`);
+      }
     }
+    workspaceSurfaces.push({ workspace, publicSubpaths });
   }
+  const coreSurface = workspaceSurfaces.find(({ workspace }) => workspace.id === "core");
+  const workspaceSurfacesById = new Map(
+    workspaceSurfaces.map((surface) => [surface.workspace.id, surface]),
+  );
+  const publicSubpaths = coreSurface?.publicSubpaths ?? new Set<string>();
 
   function modulePath(path: string): string | undefined {
     const candidate = normalized(path);
@@ -368,12 +388,23 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       failures.push(`tests/${directory}/: unsupported test directories must be deleted`);
     }
   }
+  for (const area of unsupportedBoundaryAreas) {
+    if (directories.has(`src/engine/boundary/${area}`)) {
+      failures.push(`src/engine/boundary/${area}/: unsupported boundary areas must be deleted`);
+    }
+  }
 
-  const shippedFiles = [
-    ...filesBelow(files, "src/command").filter((path) => !path.startsWith("src/command/scaffold/")),
-    ...[...publicSubpaths].flatMap((subpath) => filesBelow(files, `src/${subpath}`)),
-    ...filesBelow(files, engineRoot),
-  ];
+  const shippedFiles = workspaceSurfaces.flatMap(({ workspace, publicSubpaths: subpaths }) => {
+    const sourceDirectory = workspaceRepositoryPath(workspace, workspace.sourceDirectory);
+    if (workspace.id !== "core") return filesBelow(files, sourceDirectory);
+    return [
+      ...filesBelow(files, `${sourceDirectory}/command`).filter(
+        (path) => !path.startsWith(`${sourceDirectory}/command/scaffold/`),
+      ),
+      ...[...subpaths].flatMap((subpath) => filesBelow(files, `${sourceDirectory}/${subpath}`)),
+      ...filesBelow(files, `${sourceDirectory}/engine`),
+    ];
+  });
   const uniqueShippedFiles = [...new Set(shippedFiles)].sort();
   for (const [alias, targets] of Object.entries(pathAliases)) {
     for (const target of targets) {
@@ -405,30 +436,39 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     }
   }
 
-  for (const subpath of publicSubpaths) {
-    const directory = `src/${subpath}`;
-    const paths = filesBelow(files, directory);
-    if (paths.some((path) => posix.relative(directory, path) !== "index.ts")) {
-      failures.push(`${subpath}: a public package subpath may contain only index.ts`);
-    }
-    const index = `${directory}/index.ts`;
-    const text = files.get(index);
-    if (text === undefined) continue;
-    const source = sourceFile(index, text);
-    for (const statement of source.statements) {
-      if (!ts.isExportDeclaration(statement)) {
-        failures.push(
-          `${index}:${source.getLineAndCharacterOfPosition(statement.pos).line + 1}: public entrypoints contain exports only`,
-        );
-        continue;
+  for (const { workspace, publicSubpaths: workspacePublicSubpaths } of workspaceSurfaces) {
+    const sourceDirectory = workspaceRepositoryPath(workspace, workspace.sourceDirectory);
+    const publicEntrypoints = new Set(
+      [...workspacePublicSubpaths].map((subpath) => `${sourceDirectory}/${subpath}/index.ts`),
+    );
+    for (const subpath of workspacePublicSubpaths) {
+      const directory = `${sourceDirectory}/${subpath}`;
+      const paths = filesBelow(files, directory);
+      if (
+        workspace.publicSubpathContainsOnlyEntrypoint &&
+        paths.some((path) => posix.relative(directory, path) !== "index.ts")
+      ) {
+        failures.push(`${subpath}: a public package subpath may contain only index.ts`);
       }
-      const specifier = statement.moduleSpecifier;
-      if (specifier === undefined || !ts.isStringLiteral(specifier)) continue;
-      const target = targetOf(index, specifier.text);
-      if (target !== undefined && publicSubpaths.has(top(target))) {
-        failures.push(
-          `${index}: a public entrypoint may not import or re-export another public entrypoint (${specifier.text})`,
-        );
+      const index = `${directory}/index.ts`;
+      const text = files.get(index);
+      if (text === undefined) continue;
+      const source = sourceFile(index, text);
+      for (const statement of source.statements) {
+        if (!ts.isExportDeclaration(statement)) {
+          failures.push(
+            `${index}:${source.getLineAndCharacterOfPosition(statement.pos).line + 1}: public entrypoints contain exports only`,
+          );
+          continue;
+        }
+        const specifier = statement.moduleSpecifier;
+        if (specifier === undefined || !ts.isStringLiteral(specifier)) continue;
+        const target = targetOf(index, specifier.text);
+        if (target !== undefined && publicEntrypoints.has(target)) {
+          failures.push(
+            `${index}: a public entrypoint may not import or re-export another public entrypoint (${specifier.text})`,
+          );
+        }
       }
     }
   }
@@ -475,6 +515,74 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     }
     for (const dependency of sourceDependencies(sourcePath)) {
       checkEngineTargetSpelling(sourcePath, dependency);
+    }
+  }
+
+  const coreSourceDirectory = `${workspaceRepositoryPath(
+    workspaceById("core"),
+    workspaceById("core").sourceDirectory,
+  )}/engine/`;
+  for (const { workspace } of workspaceSurfaces) {
+    if (workspace.id === "core") continue;
+    const sourceDirectory = workspaceRepositoryPath(workspace, workspace.sourceDirectory);
+    for (const sourcePath of filesBelow(files, sourceDirectory)) {
+      for (const dependency of sourceDependencies(sourcePath)) {
+        const reachesCoreInternals =
+          dependency.specifier.startsWith("@engine/") ||
+          dependency.specifier === "src/engine" ||
+          dependency.specifier.includes("/src/engine/") ||
+          dependency.target?.startsWith(coreSourceDirectory) === true;
+        if (reachesCoreInternals) {
+          failures.push(
+            `${sourcePath}: workspace packages may not import core internals (${dependency.specifier})`,
+          );
+          continue;
+        }
+        for (const peerId of workspace.peerWorkspaceIds) {
+          const peer = workspaceById(peerId);
+          if (
+            dependency.specifier !== peer.packageName &&
+            !dependency.specifier.startsWith(`${peer.packageName}/`)
+          ) {
+            continue;
+          }
+          const peerSurface = workspaceSurfacesById.get(peerId);
+          const isPublic = [...(peerSurface?.publicSubpaths ?? [])].some(
+            (subpath) => dependency.specifier === `${peer.packageName}/${subpath}`,
+          );
+          if (!isPublic) {
+            failures.push(
+              `${sourcePath}: ${workspace.id} may import only public ${peer.id} entrypoints (${dependency.specifier})`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  for (const { workspace } of workspaceSurfaces) {
+    if (workspace.forbiddenWorkspaceIds.length === 0) continue;
+    const sourceDirectory = `${workspaceRepositoryPath(workspace, workspace.sourceDirectory)}/`;
+    const workspaceSources = uniqueShippedFiles.filter((path) => path.startsWith(sourceDirectory));
+    for (const sourcePath of workspaceSources) {
+      for (const dependency of sourceDependencies(sourcePath)) {
+        for (const forbiddenId of workspace.forbiddenWorkspaceIds) {
+          const forbidden = workspaceById(forbiddenId);
+          const forbiddenSourceDirectory = `${workspaceRepositoryPath(
+            forbidden,
+            forbidden.sourceDirectory,
+          )}/`;
+          if (
+            dependency.specifier === forbidden.packageName ||
+            dependency.specifier.startsWith(`${forbidden.packageName}/`) ||
+            dependency.target?.startsWith(forbiddenSourceDirectory)
+          ) {
+            failures.push(
+              `${sourcePath}: ${workspace.id} may not depend on ${forbidden.id} (${dependency.specifier})`,
+            );
+          }
+        }
+      }
     }
   }
 
@@ -541,6 +649,21 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     return [...projectDirectories].find((directory) => path.startsWith(directory));
   }
 
+  function isRequiredWorkspaceFile(path: string): boolean {
+    return workspaceCatalog.some((workspace) => {
+      const workspaceRelative =
+        workspace.directory === "."
+          ? path
+          : path.startsWith(`${workspace.directory}/`)
+            ? path.slice(workspace.directory.length + 1)
+            : undefined;
+      return (
+        workspaceRelative !== undefined &&
+        (workspace.requiredPackedFiles as readonly string[]).includes(workspaceRelative)
+      );
+    });
+  }
+
   const hashes = new Map<string, string>();
   for (const path of repository) {
     const parts = path.split("/");
@@ -549,8 +672,14 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     if (content.length === 0) failures.push(`${path}: repository files may not be empty`);
     const hash = createHash("sha256").update(content).digest("hex");
     const duplicate = hashes.get(hash);
+    const isCopiedPackageArtifact =
+      duplicate !== undefined &&
+      posix.basename(path) === posix.basename(duplicate) &&
+      isRequiredWorkspaceFile(path) &&
+      isRequiredWorkspaceFile(duplicate);
     if (
       duplicate !== undefined &&
+      !isCopiedPackageArtifact &&
       (projectDirectoryOf(path) === undefined ||
         projectDirectoryOf(duplicate) === undefined ||
         projectDirectoryOf(path) === projectDirectoryOf(duplicate))
@@ -560,6 +689,21 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       hashes.set(hash, path);
     }
 
+    const workspace = workspaceCatalog.find(
+      (candidate) =>
+        candidate.directory !== "." &&
+        (path === candidate.directory || path.startsWith(`${candidate.directory}/`)),
+    );
+    const workspaceRelative =
+      workspace === undefined ? undefined : posix.relative(workspace.directory, path);
+    const knownWorkspaceFile =
+      workspace !== undefined &&
+      workspaceRelative !== undefined &&
+      (workspace.declarationSnapshot === path ||
+        (workspace.requiredPackedFiles as readonly string[]).includes(workspaceRelative) ||
+        ["tsconfig.json", "tsconfig.build.json"].includes(workspaceRelative) ||
+        (workspaceRelative.startsWith("src/") && workspaceRelative.endsWith(".ts")) ||
+        (workspaceRelative.startsWith("tests/") && workspaceRelative.endsWith(".ts")));
     const known =
       (parts.length === 1 && allowedRootFiles.has(path)) ||
       (head === ".github" &&
@@ -578,7 +722,8 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       (head === "scripts" && parts.length === 2 && path.endsWith(".ts")) ||
       (head === "tests" &&
         ((parts.length === 2 && parts[1] === "public-api.test.ts") ||
-          (parts.length >= 3 && allowedTestDirectories.has(parts[1] ?? ""))));
+          (parts.length >= 3 && allowedTestDirectories.has(parts[1] ?? "")))) ||
+      knownWorkspaceFile;
     if (!known)
       failures.push(`${path}: file is outside the supported top-level and test directories`);
   }
@@ -619,7 +764,10 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
           .filter((target): target is string => target !== undefined && shippedSources.has(target)),
   );
   const entrypoints = [
-    ...[...publicSubpaths].map((subpath) => `src/${subpath}/index.ts`),
+    ...workspaceSurfaces.flatMap(({ workspace, publicSubpaths: subpaths }) => {
+      const sourceDirectory = workspaceRepositoryPath(workspace, workspace.sourceDirectory);
+      return [...subpaths].map((subpath) => `${sourceDirectory}/${subpath}/index.ts`);
+    }),
     ...internalEntrypoints,
     "src/command/main.ts",
   ];
@@ -642,16 +790,16 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
   }
 
   const runtimeGraph = new Map<string, Set<string>>();
-  const engineFiles = filesBelow(files, engineRoot);
-  const engineFileSet = new Set(engineFiles);
-  for (const path of engineFiles) {
+  const runtimeFiles = uniqueShippedFiles;
+  const runtimeFileSet = new Set(runtimeFiles);
+  for (const path of runtimeFiles) {
     runtimeGraph.set(
       path,
       new Set(
         sourceDependencies(path)
           .filter(
             ({ target, typeOnly }) =>
-              !typeOnly && target !== undefined && engineFileSet.has(target),
+              !typeOnly && target !== undefined && runtimeFileSet.has(target),
           )
           .map(({ target }) => target as string),
       ),

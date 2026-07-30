@@ -33,7 +33,7 @@ jobs:
       - run: bun run release:check
 
   build:
-    name: Build & declaration snapshot
+    name: Build workspaces & declaration snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -45,7 +45,7 @@ jobs:
       - run: bun run declarations:check
 
   package:
-    name: Pack & import (${{ matrix.os }}, Node 24)
+    name: Pack & import both workspaces (${{ matrix.os }}, Node 24)
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
@@ -60,7 +60,8 @@ jobs:
         with:
           bun-version: "1.3.14"
       - run: bun install --frozen-lockfile
-      - run: bun run package:check
+      - name: Verify core and HTTP tarballs
+        run: bun run package:check
 
   generated:
     name: Generated artifacts

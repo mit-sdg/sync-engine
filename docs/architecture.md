@@ -33,7 +33,7 @@ registered read operations. `bun run check` enforces the actual import graph.
 | --------- | ----------------------- | ---------------------------------------------------------------------------------------------------- |
 | Reactions | `src/engine/reactions/` | Concept references, reaction declarations, instrumentation, matching, firing, and occurrence storage |
 | Reads     | `src/engine/reads/`     | Query contracts, views, formers, scheduling, evaluation, IR, and rendering                           |
-| Boundary  | `src/engine/boundary/`  | Assembly, invocation, routing, clients, HTTP, endpoint protocol, and wire derivation                 |
+| Boundary  | `src/engine/boundary/`  | Assembly, invocation, routing, clients, transport binding, endpoint protocol, and wire derivation    |
 | Hosting   | `src/engine/hosting/`   | File-backed occurrence auditing                                                                      |
 | Tooling   | `src/engine/tooling/`   | Assembly inspection and pinned generated artifacts                                                   |
 | Utilities | `src/engine/utils/`     | Runtime helpers, case conversion, logging, redaction, and framework-code definitions                 |
@@ -184,21 +184,19 @@ when each concept instance's query caches are invalidated.
 The boundary concern separates transport-neutral contracts from the adapters
 and composition that use them:
 
-| Area       | Main files                                                                                                                                                     | Responsibility                                                                                                                                                                                               |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Protocol   | `src/engine/boundary/protocol/types.ts`, `endpoints.ts`, `admit.ts`, `envelope.ts`, `validation.ts`, `public-errors.ts`, `http-path.ts`, `gateway-registry.ts` | Define endpoint inputs, application-facing route facts, admission, result envelopes, validation, canonical paths, gateway identity, and public error categories without choosing a transport or engine host. |
-| Invocation | `src/engine/boundary/invocation/invoke.ts`, `funnel.ts`, `lifecycle.ts`                                                                                        | Correlate one request with one response, apply cancellation, timeout, limits, and drain behavior, and turn reaction refusals into boundary replies.                                                          |
-| Assembly   | `src/engine/boundary/assembly/concept-set.ts`, `assemble.ts`, `locality-validation.ts`, `assembly-facade.ts`, `assembly-registry.ts`                           | Turn portable composition into one engine, reject executable-only definitions, then expose the invoker and forms.                                                                                            |
-| Client     | `src/engine/boundary/client/client.ts`, `local-client.ts`, `http-client.ts`                                                                                    | Expose the typed client independently of a transport, then adapt it to a local invoker or HTTP.                                                                                                              |
-| Gateway    | `src/engine/boundary/gateway/gateway.ts`                                                                                                                       | Decorate an invoker with route admission, forwarding, limits, observation, and ordered drain.                                                                                                                |
-| HTTP       | `src/engine/boundary/http/http.ts`, `http-profile.ts`, `http-floor.ts`                                                                                         | Adapt invocation to production HTTP, project registered public errors, and optionally bind cookie credentials.                                                                                               |
-| Wire       | `src/engine/boundary/wire/wire-contracts.ts`, `wire-inference.ts`, `wire-provenance.ts`, `wire-renderer.ts`, `wire-types.ts`                                   | Derive and render transport-safe contracts from endpoint IR and value provenance.                                                                                                                            |
+| Area       | Main files                                                                                                                                  | Responsibility                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Protocol   | `src/engine/boundary/protocol/types.ts`, `endpoints.ts`, `admit.ts`, `envelope.ts`, `validation.ts`, `route-path.ts`, `gateway-registry.ts` | Define endpoint inputs, application-facing route facts, admission, result envelopes, validation, canonical paths, and gateway identity without choosing a transport or host. |
+| Invocation | `src/engine/boundary/invocation/invoke.ts`, `funnel.ts`, `lifecycle.ts`                                                                     | Correlate one request with one response, apply cancellation, timeout, limits, and drain behavior, and turn reaction refusals into boundary replies.                          |
+| Assembly   | `src/engine/boundary/assembly/concept-set.ts`, `assemble.ts`, `locality-validation.ts`, `assembly-facade.ts`, `assembly-registry.ts`        | Turn portable composition into one engine, reject executable-only definitions, then expose the invoker and forms.                                                            |
+| Client     | `src/engine/boundary/client/client.ts`, `local-client.ts`                                                                                   | Expose the typed client independently of a transport and adapt it to a local invoker.                                                                                        |
+| Gateway    | `src/engine/boundary/gateway/gateway.ts`, `transport-binding.ts`                                                                            | Decorate an invoker and expose a verified narrow capability for external server adapters.                                                                                    |
+| Wire       | `src/engine/boundary/wire/wire-contracts.ts`, `wire-inference.ts`, `wire-provenance.ts`, `wire-renderer.ts`, `wire-types.ts`                | Derive and render transport-safe contracts from endpoint IR and value provenance.                                                                                            |
 
 Dependency edges point inward toward `protocol/`: invocation, wire, and client
 adapters consume its transport-neutral shapes. `assembly/` composes protocol,
-invocation, wire, reaction, and read capabilities. `gateway/` and `http/` are
-outer adapters that consume those lower layers; lower layers do not depend on
-gateway or HTTP.
+invocation, wire, reaction, and read capabilities. `gateway/` exposes the
+verified server-adapter seam; lower layers do not depend on adapters.
 
 `src/engine/boundary/assembly/concept-set.ts` turns plain concept registrations
 into a vocabulary, default implementations, floor-specific implementation
@@ -211,12 +209,10 @@ may be synchronous, but the assembled `concepts` surface types every action as
 a `Promise`: recording and reaction processing occur before a caller receives
 its settlement.
 
-`src/engine/boundary/invocation/invoke.ts`,
-`src/engine/boundary/gateway/gateway.ts`,
-`src/engine/boundary/http/http.ts`,
-`src/engine/boundary/http/http-profile.ts`, and
-`src/engine/boundary/http/http-floor.ts` route, serialize, or cancel a request,
-but they do not inspect concept state.
+`src/engine/boundary/invocation/invoke.ts` and
+`src/engine/boundary/gateway/gateway.ts` route, serialize, or cancel a request,
+but they do not inspect concept state. `transport-binding.ts` snapshots only the
+facts an external server adapter needs.
 
 ## Hosting and generated artifacts
 
@@ -228,9 +224,8 @@ does not load an existing file or replay it.
 inventories, input contracts, retained occurrence summaries, and diagnostic
 read-back. `manifest.ts` emits manifest V3 and its digest. `artifact-plan.ts` is
 the single specification and wire renderer. `generated-artifacts.ts` resolves a
-project descriptor, derives an optional production HTTP projection while the
-assembly is available, delegates rendering to the planner, and checks or writes
-the two pinned files only after the complete plan succeeds.
+project descriptor, gives its ordered projections immutable logical facts, and
+checks or writes the two pinned files only after the complete plan succeeds.
 
 The installed executable under `src/command/` is an adapter over those
 capabilities. `check.ts` parses supported TypeScript method signatures;
@@ -240,11 +235,13 @@ but engine concerns do not import the command.
 
 ## Public package boundary
 
-Each supported subpath has one export-only file under `src/<subpath>/index.ts`.
-`package.json` exposes exactly those six subpaths and no root barrel. The
-public API test checks exact symbol identity, nested constants, unsupported
-historical names, and package-path reachability. The declaration snapshot and
-packed-consumer fixture separately check the emitted type graph.
+Each supported core subpath has one export-only file under `src/<subpath>/index.ts`.
+The workspace catalog also describes independently packed companion packages
+under `packages/`; each has its own export-only entrypoints, declaration
+snapshot, tarball checks, and exact peer rules. The public API test checks exact
+symbol identity, nested constants, unsupported historical names, and
+package-path reachability. The packed-consumer fixture separately checks the
+emitted type graph.
 
 ## Dependency rules
 

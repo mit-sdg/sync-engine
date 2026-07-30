@@ -215,7 +215,9 @@ describe("guided curriculum", () => {
     ];
     for (const docUrl of docs) {
       const markdown = await readFile(docUrl, "utf8");
-      for (const match of markdown.matchAll(/from\s+["'](@mit-sdg\/sync-engine[^"']*)["']/g)) {
+      for (const match of markdown.matchAll(
+        /from\s+["'](@mit-sdg\/sync-engine(?:\/[^"']+)*)["']/g,
+      )) {
         expect(entrypoints, `${docUrl.pathname}: ${match[1]}`).toContain(match[1]);
       }
       if (

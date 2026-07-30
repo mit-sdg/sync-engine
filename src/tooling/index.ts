@@ -21,3 +21,11 @@ export type {
 } from "@engine/boundary/wire/wire-contracts";
 export type { WireRenderOptions } from "@engine/boundary/wire/wire-renderer";
 export type { WireType } from "@engine/boundary/wire/wire-types";
+export type { GeneratedApplication } from "@engine/tooling/generated-artifacts";
+export type {
+  PlannedWireProjection,
+  ProjectionProvenance,
+  ProjectionRenderOptions,
+  WireProjection,
+  WireProjectionResult,
+} from "@engine/tooling/wire-projection";

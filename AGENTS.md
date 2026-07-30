@@ -68,7 +68,8 @@ the book.
 | `src/command/`                   | Source for the installed `sync-engine` executable                                                                                   |
 | `src/engine/reactions/`          | Reaction capabilities nested under `authoring/`, `concepts/`, and `runtime/`, plus shared concern contracts and facades at the root |
 | `src/engine/reads/`              | Where operations, views, formers, lowering, evaluation, IR, and rendering                                                           |
-| `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, `http/`, and `wire/`             |
+| `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, and `wire/`                      |
+| `packages/http/`                 | Independently published first-party HTTP transport; imports only supported core subpaths                                            |
 | `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
 | `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
 | `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |
@@ -81,7 +82,7 @@ the book.
 | `examples/*/tests/`              | End-to-end coverage colocated with each self-contained example                                                                      |
 | `tests/docs/`                    | Guide source-link and excerpt verification                                                                                          |
 | `tests/internal/utils/`          | Shared utility implementation coverage                                                                                              |
-| `tests/public-api.test.ts`       | Exact export register, public-package-subpath check, and unsupported-entrypoint check                                               |
+| `tests/public-api.test.ts`       | Exact core export register, public-package-subpath check, and unsupported-entrypoint check                                          |
 
 Public entrypoints contain exports only. Code under `src/engine/` imports other
 engine modules rather than a public entrypoint. The architecture check enforces

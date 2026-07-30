@@ -132,6 +132,50 @@ describe("architecture rule fixtures", () => {
     ).toContainEqual(expect.stringContaining("engine index barrels are forbidden"));
   });
 
+  test("rejects a core HTTP boundary area", () => {
+    expect(
+      failures({
+        "src/engine/boundary/http/handler.ts": 'export const handler = "unsupported";\n',
+      }),
+    ).toContainEqual(
+      expect.stringContaining(
+        "src/engine/boundary/http/: unsupported boundary areas must be deleted",
+      ),
+    );
+  });
+
+  test.each([
+    ["@engine/utils/value", "workspace packages may not import core internals"],
+    ["../../../../src/engine/utils/value.ts", "workspace packages may not import core internals"],
+    ["@mit-sdg/sync-engine/boundary/gateway", "http may import only public core entrypoints"],
+  ])("rejects package access outside public core entrypoints: %s", (specifier, expected) => {
+    expect(
+      failures({
+        "packages/http/package.json": JSON.stringify({
+          exports: {
+            "./client": {
+              types: "./dist/client/index.d.ts",
+              import: "./dist/client/index.js",
+            },
+          },
+        }),
+        "packages/http/src/client/index.ts": 'export { value } from "./value.ts";\n',
+        "packages/http/src/client/value.ts":
+          `import { value as coreValue } from "${specifier}";\n` +
+          "export const value = coreValue;\n",
+      }),
+    ).toContainEqual(expect.stringContaining(expected));
+  });
+
+  test("allows copied required workspace artifacts", () => {
+    expect(
+      failures({
+        LICENSE: "shared license\n",
+        "packages/http/LICENSE": "shared license\n",
+      }),
+    ).not.toContainEqual(expect.stringContaining("exact duplicate"));
+  });
+
   test("rejects unreachable shipped source", () => {
     expect(
       failures({
