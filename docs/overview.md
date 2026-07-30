@@ -169,6 +169,8 @@ projection.
 
 ## Continue
 
+- [Designing with concepts](design/index.md) decides what the concepts of an
+  application should be, and how to review a decomposition.
 - [Getting started](guide/getting-started.md) creates and runs the smallest
   complete application.
 - [Define one behavior](guide/concepts.md) begins the larger Operations Room

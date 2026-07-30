@@ -10,9 +10,20 @@ const guideFiles = [
   "application-boundary.md",
   "views-and-formers.md",
 ];
+const designDirectory = new URL("../../docs/design/", import.meta.url);
+const designFiles = [
+  "index.md",
+  "concepts.md",
+  "evaluating-concepts.md",
+  "granularity.md",
+  "state-and-actions.md",
+  "composing-concepts.md",
+  "reviewing-a-design.md",
+];
 const advancedRecipes = new URL("../../docs/advanced-recipes.md", import.meta.url);
 const excerptDocs = [
   ...guideFiles.map((file) => new URL(file, guideDirectory)),
+  ...designFiles.map((file) => new URL(file, designDirectory)),
   advancedRecipes,
   new URL("../../docs/book.md", import.meta.url),
 ];
@@ -212,6 +223,7 @@ describe("guided curriculum", () => {
       new URL("../../examples/operations-room/README.md", import.meta.url),
       new URL("../../examples/reading-circle/README.md", import.meta.url),
       ...guideFiles.map((file) => new URL(file, guideDirectory)),
+      ...designFiles.map((file) => new URL(file, designDirectory)),
     ];
     for (const docUrl of docs) {
       const markdown = await readFile(docUrl, "utf8");

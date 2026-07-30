@@ -82,6 +82,7 @@ Choose the path that matches the work:
 | Task                                                         | Start here                                           |
 | ------------------------------------------------------------ | ---------------------------------------------------- |
 | Understand concepts, composition, assembly, and the boundary | [Application model](docs/overview.md)                |
+| Decide what the concepts are and review a design             | [Designing with concepts](docs/design/index.md)      |
 | Build and run the generated application                      | [Getting started](docs/guide/getting-started.md)     |
 | Add concepts, reactions, views, formers, and endpoints       | [Authoring path](docs/index.md#build-an-application) |
 | Look up exports, options, and defaults                       | [Public API](docs/public-surface.md)                 |
