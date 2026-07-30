@@ -35,6 +35,11 @@ concrete sequence that can become a direct class test: raise alerts, keep each
 recipient's alerts separate, acknowledge one, and refuse a repeated
 acknowledgement.
 
+Both are design decisions before they are text. [What a concept
+is](../design/concepts.md) explains what each section must establish, and
+[evaluating a concept](../design/evaluating-concepts.md) gives the tests a
+purpose and principle should pass before the implementation is worth writing.
+
 ## Describe owned state
 
 Alerting owns alerts and two facts about each one. `Person` and `Subject` are

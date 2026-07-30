@@ -152,5 +152,10 @@ decision as a reaction. In this example, adding alerts changes the composition
 while Selecting, Gathering, Discussing, and Alerting keep the same
 specifications and implementations.
 
+[Composing concepts](../design/composing-concepts.md) covers the design side of
+these rules: what belongs in a reaction and what does not, cross-concept
+invariants, authorization across boundaries, cycles, fan-out, and partial
+failure.
+
 Continue to [Views and formers](views-and-formers.md) to name shared questions
 and shape complete answers before exposing them to callers.
