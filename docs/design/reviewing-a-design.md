@@ -85,20 +85,20 @@ note fan-out and possible cycles, and state the final observable result.
 
 Cover ordinary success and the failures that apply to the application.
 
-| Scenario                      | What it exposes                                                         |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| Ordinary success              | Whether the design does the thing at all                                |
-| Malformed boundary input      | Whether admission validation rejects the request before it becomes work |
-| Expected domain refusal       | Whether an ordinary rejected condition has a stable code                |
-| Unauthorized request          | Whether the denial branch exists and answers                            |
-| Duplicate request             | Whether repetition is meaningful, refused, or silently doubles work     |
-| Domain cancellation or reversal | Whether the reversal exists and what it leaves behind                 |
-| Deletion with dependent state | Which cascades fire, and what happens to state nothing cascades to      |
-| Concurrent actions            | Which decisions race, and whether storage also coordinates them         |
-| Partial failure in a fan-out  | Which effects landed, which did not, and what repairs them              |
-| Retry after timeout           | Whether the repeat is safe, and which concept holds the durable outcome |
-| Timeout or abort              | Which accepted work can continue after the caller stops waiting         |
-| Action or interpreter fault   | How a pending boundary request is settled and what evidence remains     |
+| Scenario                        | What it exposes                                                         |
+| ------------------------------- | ----------------------------------------------------------------------- |
+| Ordinary success                | Whether the design does the thing at all                                |
+| Malformed boundary input        | Whether admission validation rejects the request before it becomes work |
+| Expected domain refusal         | Whether an ordinary rejected condition has a stable code                |
+| Unauthorized request            | Whether the denial branch exists and answers                            |
+| Duplicate request               | Whether repetition is meaningful, refused, or silently doubles work     |
+| Domain cancellation or reversal | Whether the reversal exists and what it leaves behind                   |
+| Deletion with dependent state   | Which cascades fire, and what happens to state nothing cascades to      |
+| Concurrent actions              | Which decisions race, and whether storage also coordinates them         |
+| Partial failure in a fan-out    | Which effects landed, which did not, and what repairs them              |
+| Retry after timeout             | Whether the repeat is safe, and which concept holds the durable outcome |
+| Timeout or abort                | Which accepted work can continue after the caller stops waiting         |
+| Action or interpreter fault     | How a pending boundary request is settled and what evidence remains     |
 
 Trace the interruption at each important step, not only at the start. "The
 selection landed and the discussion did not" is a reachable state, and it is the
