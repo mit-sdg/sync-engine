@@ -6,14 +6,14 @@ generated-wire projection. It does not provide an HTTP listener or web
 framework integration.
 
 Stable 1.x requires Node.js 24 and ESM. This independently published package
-declares `@mit-sdg/sync-engine@^1.0.0` as its core peer dependency. For an exact
-reproducible installation:
+declares a compatible stable core peer dependency. Install both packages with
+the current release:
 
 ```sh
-bun add @mit-sdg/sync-engine@1.0.0 @mit-sdg/sync-engine-http@1.0.0
+bun add @mit-sdg/sync-engine@latest @mit-sdg/sync-engine-http@latest
 ```
 
-Use `@latest` for the current installation.
+For reproducibility, replace `@latest` with pinned compatible versions.
 
 The package has no root export. Use only these subpaths:
 
@@ -138,7 +138,7 @@ Handler calls may overlap, and client header providers may run concurrently.
 The handler and client have no disposal method and do not own application,
 gateway, store, listener, or fetch-agent lifetime.
 
-See the [HTTP API reference](https://github.com/mit-sdg/sync-engine/blob/main/docs/public-surface.md#http-companion-package),
+See the [HTTP API reference](public-surface.md),
 [execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/semantics.md#boundary-gateway-and-client),
 [host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/operations.md#http-host-responsibilities),
 and [complete production example](https://github.com/mit-sdg/sync-engine/tree/main/examples/production-http).

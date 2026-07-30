@@ -188,5 +188,5 @@ projection.
   case study.
 - [Read construction cookbook](book.md) compares small query, view, and former
   constructions.
-- [Public API](public-surface.md) lists every supported package subpath and
-  export.
+- [Core Public API](public-surface.md) lists every supported core package
+  subpath and export.

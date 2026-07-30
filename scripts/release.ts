@@ -41,6 +41,7 @@ export const releaseSourcePaths = [
   "bun.lock",
   ...workspaceReleaseManifests,
   "packages/http/README.md",
+  "packages/http/public-surface.md",
   "README.md",
   "CHANGELOG.md",
   "docs/releasing.md",
@@ -522,20 +523,15 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     }
   }
 
-  const readme = sources.get("README.md") ?? "";
-  if (typeof version === "string" && !readme.includes(`\`@${version}\``)) {
-    failures.push(`README.md: exact evaluation version must be @${version}`);
-  }
-
   const releasing = sources.get("docs/releasing.md") ?? "";
   for (const fact of [
-    "npm deprecate @mit-sdg/sync-engine@1.0.0-alpha.0",
+    "npm deprecate @mit-sdg/sync-engine@$PRERELEASE_VERSION",
     "install @mit-sdg/sync-engine@$VERSION or use @latest",
     "versions deprecated --json",
     "never\n  overwrite an existing tag or tarball",
   ]) {
     if (!releasing.includes(fact)) {
-      failures.push(`docs/releasing.md: missing alpha retirement fact ${fact}`);
+      failures.push(`docs/releasing.md: missing prerelease retirement fact ${fact}`);
     }
   }
 

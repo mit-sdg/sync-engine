@@ -131,7 +131,7 @@ commit, then repeat every external-setting check above.
 
 Core and HTTP are independently published. Each release publishes core first and
 publishes HTTP only after core succeeds. HTTP declares the compatible core peer
-range projected from the release version; for `1.0.0`, that range is `^1.0.0`.
+range projected from the release version.
 The workflow never overwrites an npm version or moves or reuses a release tag or
 tarball.
 
@@ -158,18 +158,18 @@ tarball.
 
 ## Verify the registry
 
-- Retire the unsupported alpha with guidance to the exact stable release or
+- Retire each unsupported prerelease with guidance to the exact stable release or
   `latest`:
 
   ```sh
-  npm deprecate @mit-sdg/sync-engine@1.0.0-alpha.0 "Unsupported; install @mit-sdg/sync-engine@$VERSION or use @latest."
+  npm deprecate @mit-sdg/sync-engine@$PRERELEASE_VERSION "Unsupported; install @mit-sdg/sync-engine@$VERSION or use @latest."
   ```
 
   Review every older version that already has a deprecation message pointing to
   `@alpha` or `@beta` and replace that message with the same exact stable/latest
   guidance. Expand and review the registry version list, then deprecate every
-  exact core and HTTP `1.0.0-beta.x` version with guidance to `1.0.0` or
-  `@latest`; beta support ended when stable `1.0.0` was released. Do not
+  exact core and HTTP prerelease version with guidance to `$VERSION` or
+  `@latest`; prerelease support ended when the stable release was published. Do not
   deprecate a supported stable line or use an unreviewed range. Published
   releases are immutable: never
   overwrite an existing tag or tarball.
@@ -180,7 +180,7 @@ tarball.
   exact independently published version under `latest`.
 - Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` and the
   corresponding HTTP query show alpha and beta versions as unsupported, with
-  every historical message pointing at exact stable `1.0.0` or `@latest`.
+  every historical message pointing at the current stable release or `@latest`.
 - Check the npm package page for GitHub Actions provenance and verify tarball
   integrity, repository, license, executable, policy files, and file metadata.
 - In clean directories, install the exact registry version with npm and Bun,

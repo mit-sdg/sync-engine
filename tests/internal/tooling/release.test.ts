@@ -86,18 +86,18 @@ describe("release source facts", () => {
     ["root workspace identity", `      "name": "@mit-sdg/sync-engine",`, `      "name": "stale",`],
     [
       "HTTP workspace version",
-      `    "packages/http": {\n      "name": "@mit-sdg/sync-engine-http",\n      "version": "1.0.0"`,
+      `    "packages/http": {\n      "name": "@mit-sdg/sync-engine-http",\n      "version": "${currentVersion}"`,
       `    "packages/http": {\n      "name": "@mit-sdg/sync-engine-http",\n      "version": "1.0.1"`,
     ],
     [
       "HTTP peer range",
-      `        "@mit-sdg/sync-engine": "^1.0.0"`,
-      `        "@mit-sdg/sync-engine": "1.0.0"`,
+      `        "@mit-sdg/sync-engine": "^${currentVersion}"`,
+      `        "@mit-sdg/sync-engine": "${currentVersion}"`,
     ],
     [
       "core registry resolution",
       `    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:",`,
-      `    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@1.0.0",`,
+      `    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@${currentVersion}",`,
     ],
   ] as const)("rejects a stale bun.lock %s", (_name, current, replacement) => {
     const sources = fixture();
@@ -196,14 +196,6 @@ describe("release source facts", () => {
       `${sources.get("CHANGELOG.md") ?? ""}\n[future]: https://example.test/future\n`,
     );
     expect(checkRelease(sources)).not.toContainEqual(expect.stringContaining("0.1.0 must remain"));
-  });
-
-  test("rejects a stale exact README evaluation version", () => {
-    const sources = fixture();
-    replaceSource(sources, "README.md", `\`@${currentVersion}\``, "`@1.0.1`");
-    expect(checkRelease(sources)).toContain(
-      `README.md: exact evaluation version must be @${currentVersion}`,
-    );
   });
 
   test.each([

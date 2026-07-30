@@ -24,7 +24,8 @@ bun install
 The command writes a project only when none of its template files would be
 overwritten. The generated application has one Noting concept, two endpoints,
 an assembly, a local-gateway scenario, and generated-artifact configuration.
-Use `@1.0.0` when reproducing the current evaluation or deployment exactly.
+Pin the package selector to a chosen release when reproducing an evaluation or
+deployment exactly.
 
 ## Generated files
 

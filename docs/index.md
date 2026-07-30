@@ -47,15 +47,18 @@ Client code needs the generated wire type and the `client` package, not concept
 or assembly imports. Start with [Call the typed
 client](guide/application-boundary.md#call-the-typed-client), then use the
 [`client` API reference](public-surface.md#client) for local and custom
-transport constructors, then the [HTTP companion package](public-surface.md#http-companion-package)
+transport constructors, then the [HTTP companion package](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
 for the maintained fetch transport. The [Production HTTP
 example](../examples/production-http/README.md) shows the projected public
 contract used by an HTTP client.
 
 ## Look up a contract
 
-- [Public API](public-surface.md) lists every supported package subpath and
-  export, then records signatures, defaults, and directly observable behavior.
+- [Core Public API](public-surface.md) lists every supported core package
+  subpath and export, then records signatures, defaults, and directly observable
+  behavior.
+- [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md) lists the maintained
+  companion's supported subpaths, exports, and transport behavior.
 - [Concept specification format](concept-specification.md) defines `spec.md`,
   registration checks, source checks, and deliberately unchecked prose.
 - [CLI reference](cli.md) defines `sync-engine new`, `check`, and `artifacts`,

@@ -19,6 +19,7 @@
     "LICENSE",
     "NOTICE",
     "README.md",
+    "public-surface.md",
     "dist"
   ],
   "type": "module",

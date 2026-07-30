@@ -519,7 +519,7 @@ describe("public API register", () => {
         .sort(),
     );
 
-    const reference = readFileSync(resolve(root, "docs/public-surface.md"), "utf8");
+    const reference = readFileSync(resolve(root, "packages/http/public-surface.md"), "utf8");
     for (const subpath of Object.keys(httpRegister) as Array<keyof typeof httpRegister>) {
       const sourceText = readFileSync(resolve(packageRoot, "src", subpath, "index.ts"), "utf8");
       const source = ts.createSourceFile("index.ts", sourceText, ts.ScriptTarget.Latest, true);

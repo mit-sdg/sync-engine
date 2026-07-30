@@ -11,30 +11,32 @@ The core package's supported public API is exactly these six package subpaths:
 - `@mit-sdg/sync-engine/tooling`
 - `@mit-sdg/sync-engine/advanced`
 
-The package root and all deep imports are unsupported. The [Public
-API](docs/public-surface.md) is the exact export register.
+The package root and all deep imports are unsupported. The [core Public
+API](docs/public-surface.md) is the exact export register; the HTTP companion's
+[Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
+is its exact export register.
 
 `@mit-sdg/sync-engine-http` is an independently published first-party transport
 package with exactly these supported subpaths: `/server`, `/client`, and
 `/tooling`. Its root and deep imports are unsupported. Its core peer dependency
-is `^1.0.0`. Core can be installed alone for custom transports and server
-adapters.
+accepts compatible stable 1.x releases. Core can be installed alone for custom
+transports and server adapters.
 
 ## Stable compatibility
 
 Stable releases follow Semantic Versioning. All six public core subpaths,
 including `/advanced`, and the three HTTP subpaths follow the same stable SemVer
-policy. The current stable release is `1.0.0`. Every release identifies
-compatibility and migration effects in the [changelog](CHANGELOG.md). Consumers
-should use `@latest` for the current release or pin an exact version for
-reproducibility, and review the changelog before upgrading.
+policy. Every release identifies compatibility and migration effects in the
+[changelog](CHANGELOG.md). Consumers should use `@latest` for the current release
+or pin an exact version for reproducibility, and review the changelog before
+upgrading.
 
 Published versions, tags, and tarballs are immutable. A bad release is not
 replaced or silently corrected; a fix receives a new version with migration
 notes.
 
 Only the newest stable 1.x release is supported. Alpha and beta releases are
-unsupported after stable `1.0.0`.
+unsupported after a stable release.
 
 ## Generated contracts
 

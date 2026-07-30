@@ -40,7 +40,7 @@ Start with `docs/index.md`. The document owners are:
 - Progressive application authoring: `docs/guide/`
 - Application model explanation: `docs/overview.md`
 - Small tested read constructions: `docs/book.md`
-- Exact package exports and API summaries: `docs/public-surface.md`
+- Exact core exports and API summaries: `docs/public-surface.md`; HTTP exports and API summaries: `packages/http/public-surface.md`
 - Concept file grammar: `docs/concept-specification.md`
 - Installed command behavior: `docs/cli.md`
 - Execution guarantees: `docs/semantics.md`

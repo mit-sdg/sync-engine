@@ -22,9 +22,8 @@ read-back and TypeScript boundary contract from that assembly.
 
 ## Status and requirements
 
-Version 1 is stable. The current release is `1.0.0`, published under npm's
-`latest` dist-tag and the annotated git tag `v1.0.0`. Only the newest stable 1.x
-release is supported. Read the [support policy](SUPPORT.md) and review the
+Version 1 is stable. Only the newest stable 1.x release is supported. Read the
+[support policy](SUPPORT.md) and review the
 [operational limits](docs/operations.md) before choosing a deployment.
 
 The package is ESM-only. See the [support policy](SUPPORT.md) for current runtime
@@ -36,25 +35,12 @@ and toolchain requirements.
 bun add @mit-sdg/sync-engine@latest
 ```
 
-For an exactly reproducible installation of the maintained HTTP handler, fetch
-client, and generated wire projection, install both current releases:
-
-```sh
-bun add @mit-sdg/sync-engine@1.0.0 @mit-sdg/sync-engine-http@1.0.0
-```
-
 ## Packages
 
-| Package                     | Role                                                                   |
-| --------------------------- | ---------------------------------------------------------------------- |
-| `@mit-sdg/sync-engine`      | Concepts, composition, assembly, boundaries, clients, tooling, and CLI |
-| `@mit-sdg/sync-engine-http` | Maintained HTTP handler, fetch client, and generated wire projection   |
-
-Core can be installed alone for local clients and custom transports. The HTTP
-package is independently published and declares `@mit-sdg/sync-engine@^1.0.0`
-as a peer dependency. Neither package has a root export. Use the supported core
-subpaths and the HTTP package's `/server`, `/client`, and `/tooling` subpaths
-listed in the [Public API](docs/public-surface.md).
+| Package                                                                                       | Role                                                                   |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `@mit-sdg/sync-engine`                                                                        | Concepts, composition, assembly, boundaries, clients, tooling, and CLI |
+| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http) | Maintained HTTP handler, fetch client, and generated wire projection   |
 
 ## Create an application
 
@@ -64,8 +50,7 @@ cd note-keeper
 bun install
 ```
 
-For a reproducible evaluation, replace `@latest` with the exact version
-`@1.0.0`.
+For a reproducible evaluation, replace `@latest` with a pinned version.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
