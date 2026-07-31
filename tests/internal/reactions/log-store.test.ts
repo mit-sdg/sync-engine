@@ -627,6 +627,49 @@ describe("log store: firings are introspectable after a live run", () => {
     expect(store.actions.has("accepted")).toBe(true);
   });
 
+  test("isolates the index from sink mutation and gives sinks immutable entries", () => {
+    let retained: LogEntry | undefined;
+    class StatefulConcept {
+      state = "original";
+    }
+    function action() {}
+    const concept = new StatefulConcept();
+    const instrumented = Object.assign(function () {}, { action, concept });
+    const store = new MemoryStore("keepAll", {
+      append(entry) {
+        retained = entry;
+        expect(Object.isFrozen(entry)).toBe(true);
+        if (entry.kind !== "invocation") throw new Error("Expected an invocation entry.");
+        expect(Object.isFrozen(entry.record)).toBe(true);
+        expect(Object.isFrozen(entry.record.input)).toBe(true);
+        expect(entry.record.action).not.toBe(instrumented);
+        expect(entry.record.concept).not.toBe(concept);
+        expect(Object.isFrozen(entry.record.action)).toBe(true);
+        expect(Object.isFrozen(entry.record.concept)).toBe(true);
+        expect(() => {
+          entry.record.id = "changed";
+        }).toThrow();
+        expect(() => {
+          entry.record.input.test = false;
+        }).toThrow();
+        expect(() => {
+          (entry.record.concept as { state?: string }).state = "changed";
+        }).toThrow();
+      },
+    });
+
+    store.append({
+      kind: "invocation",
+      at: 1,
+      record: record({ id: "accepted", action: instrumented, concept }),
+    });
+    expect(store.actions.get("accepted")).toEqual(
+      expect.objectContaining({ id: "accepted", input: { test: true } }),
+    );
+    expect(concept.state).toBe("original");
+    expect(retained).toBeDefined();
+  });
+
   test("leaves the index unchanged when a sink throws", () => {
     const failure = new Error("sink unavailable");
     const store = new MemoryStore("keepAll", {

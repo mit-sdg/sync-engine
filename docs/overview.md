@@ -146,12 +146,13 @@ that evidence into its internal occurrence index for matching and inspection.
 An audit copy does not become concept state merely because it is persistent.
 
 The optional `LogSink` receives each validated, redacted entry synchronously
-before the engine folds the entry into its index. A sink failure prevents that
-fold. Failure while appending an invocation can prevent the action body from
-running; failure while appending its outcome can occur after the action changed
-concept state. The supplied `FileLogSink` appends JSONL audit output, but the
-engine never reads or replays that file. `FileLogSink` has no close operation;
-the host owns any resources used by a custom sink.
+before the engine folds the entry into its index. The sink receives a detached,
+deeply immutable snapshot rather than live concept or action identities. A sink
+failure prevents that fold. Failure while appending an invocation can prevent
+the action body from running; failure while appending its outcome can occur after
+the action changed concept state. The supplied `FileLogSink` appends JSONL audit
+output, but the engine never reads or replays that file. `FileLogSink` has no
+close operation; the host owns any resources used by a custom sink.
 
 Applications that require durable state and restart recovery must implement
 both in their concept storage and host process. [Persistence, restart, and

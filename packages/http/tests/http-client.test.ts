@@ -526,6 +526,30 @@ describe("createHttpClient", () => {
       "maxResponseBytes must be a positive finite integer",
     );
   });
+
+  test("does not wait for cancellation of oversized response bodies", async () => {
+    function oversizedResponse(contentLength?: string): Response {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"token":"too-large"}'));
+        },
+        cancel() {
+          return new Promise<void>(() => undefined);
+        },
+      });
+      return new Response(stream, {
+        headers: contentLength === undefined ? undefined : { "Content-Length": contentLength },
+      });
+    }
+
+    for (const response of [oversizedResponse(), oversizedResponse("100")]) {
+      const fetch = vi.fn(() => Promise.resolve(response)) as unknown as typeof globalThis.fetch;
+      const client = makeClient(fetch, { maxResponseBytes: 8 });
+      await expect(
+        client.auth.login({ username: "a", password: "b" }, { timeoutMs: 20 }),
+      ).resolves.toEqual({ error: HttpClientErrorCode.RESPONSE_TOO_LARGE });
+    }
+  });
 });
 
 describe("createHttpTransport", () => {

@@ -78,7 +78,10 @@ const result = await client.names.claim({ name: "Ada" });
 `baseUrl` defaults to `API_BASE_URL`, then `/api`. An explicit `/` means no
 prefix. The client uses `globalThis.fetch`, sends JSON `POST` requests, and uses
 Fetch credentials mode `include` by default. `headers` may be a record or a
-synchronous or asynchronous provider called for each request.
+synchronous or asynchronous provider called for each request. `timeoutMs` and
+`correlationId` may be supplied per call. `maxResponseBytes` places an opt-in
+byte limit on response bodies, and `validateResponse` may validate successful
+values before they reach the caller.
 
 Calls resolve to a success value or error envelope. The HTTP-client errors are:
 
@@ -88,6 +91,7 @@ Calls resolve to a success value or error envelope. The HTTP-client errors are:
 | `NETWORK_ERROR`            | Fetch failed before a response was obtained           |
 | `BAD_JSON`                 | The response body could not be read or parsed as JSON |
 | `BAD_STATUS`               | A non-2xx response lacked a JSON error envelope       |
+| `RESPONSE_TOO_LARGE`       | The response exceeded `maxResponseBytes`              |
 
 Abort resolves as the core `ABORTED` error. An empty response body becomes `{}`.
 A non-2xx JSON object with an `error` property is returned as the server result.
@@ -141,4 +145,6 @@ gateway, store, listener, or fetch-agent lifetime.
 See the [HTTP API reference](public-surface.md),
 [execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/semantics.md#boundary-gateway-and-client),
 [host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/operations.md#http-host-responsibilities),
+[support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md),
+[security policy and private vulnerability reporting](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md),
 and [complete production example](https://github.com/mit-sdg/sync-engine/tree/main/examples/production-http).

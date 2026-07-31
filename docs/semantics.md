@@ -866,10 +866,12 @@ publicly replaceable engine store. Retention may evict indexed entries, so no
 assembly promises to retain every occurrence forever.
 
 An optional application-owned `LogSink` receives each entry synchronously after
-entry validation and redaction but before the internal fold. The sink is an
-audit destination; it does not supply matching, retention, or replay. `logSink`
-and `retention` are independent `AssemblyOptions` and may be used together. A
-sink failure prevents the corresponding fold as described under
+entry validation and redaction but before the internal fold. Its entry is a
+detached, deeply immutable snapshot; invocation concept and action fields retain
+names but not live engine identities. The sink is an audit destination; it does
+not supply matching, retention, or replay. `logSink` and `retention` are
+independent `AssemblyOptions` and may be used together. A sink failure prevents
+the corresponding fold as described under
 [Failures between action asks](#failures-between-action-asks).
 
 Each ordinary assembly creates its own field-name redactor before entries reach

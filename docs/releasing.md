@@ -17,11 +17,12 @@ before every tag:
 - Enable GitHub private vulnerability reporting. Security reports must follow
   `SECURITY.md`, not public issues.
 - Require full-SHA pinning for third-party GitHub Actions. Dependabot may propose
-  GitHub Actions pin updates, but both code owners must review the resolved SHA
-  and upstream release before merge.
+  GitHub Actions pin updates, but two reviewers, including a code owner, must
+  review the resolved SHA and upstream release before merge.
 - Protect `main` with pull-request review and only the stable **CI required**
-  status context. Do not require individual or matrix job names as branch
-  protection contexts.
+  status context. Require two approving reviews, CODEOWNERS review, dismissal of
+  stale approvals, approval after the last push, and administrator enforcement.
+  Do not require individual or matrix job names as branch protection contexts.
 - Require CODEOWNERS review for workflow, release, support, and security-policy
   files. Apply the rule to administrators and require review of any bypass;
   disable unreviewed administrator or ruleset bypass where the plan permits.

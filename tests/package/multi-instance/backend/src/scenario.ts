@@ -69,6 +69,12 @@ function actionRecords(log: CapturingLog) {
   return records;
 }
 
+function recordActionName(
+  record: Extract<LogEntry, { kind: "invocation" }>["record"],
+): string | undefined {
+  return record.action.action?.name.replace(/^bound /, "");
+}
+
 function firingsByReaction(log: CapturingLog, reaction: string) {
   return log.entries.flatMap((entry) =>
     entry.kind === "firing" && entry.firing.reaction === reaction ? [entry.firing] : [],
@@ -495,7 +501,7 @@ async function runScenario(): Promise<void> {
         assert(
           [...actionRecords(second.applicationLog).values()].some(
             (record) =>
-              record.concept === second.floor.instances.Entries &&
+              recordActionName(record) === "create" &&
               record.outcome?.kind === "error" &&
               (record.outcome.error as { error?: unknown }).error === "CONFLICT",
           ),
@@ -518,7 +524,7 @@ async function runScenario(): Promise<void> {
         assertDisjoint(ids(first.applicationLog), ids(second.applicationLog), "instance logs");
         assert(
           [...actionRecords(first.applicationLog).values()].some(
-            (record) => record.concept === first.floor.instances.Entries,
+            (record) => recordActionName(record) === "create",
           ),
         );
       }
@@ -602,8 +608,7 @@ async function runScenario(): Promise<void> {
     assert.equal(rowCount(first.entries, "operation_id", "committed-before-fault"), 1);
     assert(
       [...actionRecords(second.applicationLog).values()].some(
-        (record) =>
-          record.concept === second.floor.instances.Faulting && record.fault !== undefined,
+        (record) => recordActionName(record) === "crash" && record.fault !== undefined,
       ),
       "the later fault was not retained beside the committed entry action",
     );

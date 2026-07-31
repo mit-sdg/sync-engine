@@ -122,7 +122,7 @@ async function readResponseBody(
   if (maxBytes === undefined) return { ok: true, text: await response.text() };
   const declared = response.headers.get("Content-Length");
   if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
-    await response.body?.cancel().catch(() => undefined);
+    void response.body?.cancel().catch(() => undefined);
     return { ok: false, tooLarge: true };
   }
   if (response.body === null) return { ok: true, text: "" };
@@ -137,7 +137,7 @@ async function readResponseBody(
       if (chunk.done) break;
       bytes += chunk.value.byteLength;
       if (bytes > maxBytes) {
-        await reader.cancel().catch(() => undefined);
+        void reader.cancel().catch(() => undefined);
         return { ok: false, tooLarge: true };
       }
       text += decoder.decode(chunk.value, { stream: true });

@@ -233,6 +233,45 @@ describe("action scheduler", () => {
     expect(settled).toBe(true);
   });
 
+  test("reads a PromiseLike then accessor once", async () => {
+    const scheduler = new ActionScheduler();
+    const promise = Promise.resolve("done");
+    let reads = 0;
+    const unstable = Object.defineProperty({}, "then", {
+      get() {
+        reads += 1;
+        if (reads > 1) throw new Error("then read twice");
+        return promise.then.bind(promise);
+      },
+    }) as PromiseLike<string>;
+    const reservation = reserve(scheduler, {}, "accessor", () => unstable);
+
+    reservation.release();
+
+    await expect(reservation.result).resolves.toBe("done");
+    expect(reads).toBe(1);
+  });
+
+  test("assimilates a PromiseLike after the synchronous release", async () => {
+    const scheduler = new ActionScheduler();
+    const order: string[] = [];
+    const thenable = {
+      then(resolve: (value: string) => void) {
+        order.push("then");
+        resolve("done");
+      },
+    };
+    const reservation = reserve(scheduler, {}, "timing", () => thenable);
+
+    order.push("before");
+    reservation.release();
+    order.push("after");
+
+    expect(order).toEqual(["before", "after"]);
+    await expect(reservation.result).resolves.toBe("done");
+    expect(order).toEqual(["before", "after", "then"]);
+  });
+
   test("preserves synchronous body settlement", async () => {
     const scheduler = new ActionScheduler();
     let settled = false;

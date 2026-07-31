@@ -187,10 +187,12 @@ governs its contents.
 
 `LogSink.append(entry)` is the synchronous application-owned audit extension
 point. The engine validates an entry and redacts engine-created mappings, calls
-the sink, and only then folds the entry into the internal index. A sink throw
-therefore prevents the fold. An invocation append failure can prevent the
-action body from running. An outcome append failure can occur after the body
-has changed concept state; the engine does not roll that state back.
+the sink with a detached, deeply immutable snapshot, and only then folds the
+entry into the internal index. Invocation concept and action fields are
+name-preserving representatives, not live engine identities. A sink throw
+therefore prevents the fold. An invocation append failure can prevent the action
+body from running. An outcome append failure can occur after the body has changed
+concept state; the engine does not roll that state back.
 
 `FileLogSink(path)` implements `LogSink` with one append-only JSON audit
 projection per entry. Concept instances and action functions are represented by

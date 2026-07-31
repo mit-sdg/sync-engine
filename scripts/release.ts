@@ -580,7 +580,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   ]) {
     const line = codeowners.split(/\r?\n/).find((candidate) => candidate.startsWith(`${path} `));
     if (line === undefined || !line.includes("@BarishNamazov") || !line.includes("@eagonmeng")) {
-      failures.push(`.github/CODEOWNERS: ${path} must require both release code owners`);
+      failures.push(`.github/CODEOWNERS: ${path} must list both release code owners`);
     }
   }
 

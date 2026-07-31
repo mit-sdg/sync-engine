@@ -163,8 +163,9 @@ httpWire(options: { policy: ProductionHttpProfile | HttpFloor; name: string }): 
 Reuse the immutable value returned by `productionHttpProfile(...)` or
 `httpFloor(...)` in `createHttpHandler(...)` and `httpWire(...)`. The projector
 derives public HTTP categories and, for a floor, omits the cookie-provided input
-and consumed issue outputs. A raw mutable policy is structurally accepted but is
-read later when projection runs; mutating it can change generated output.
+and consumed issue outputs. A raw mutable policy is structurally accepted and
+snapshotted when `httpWire(...)` is constructed; later mutation does not change
+generated output.
 
 The package owns POST, JSON, body-size, origin, status, cookie, correlation, and
 fetch behavior. See [Execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/semantics.md#boundary-gateway-and-client)

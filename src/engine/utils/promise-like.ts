@@ -3,10 +3,20 @@ export function normalizePromiseLike<T>(value: T): Promise<Awaited<T>> | undefin
   if ((typeof value !== "object" || value === null) && typeof value !== "function") {
     return undefined;
   }
+  let then: unknown;
   try {
-    if (typeof (value as { then?: unknown }).then !== "function") return undefined;
+    then = (value as { then?: unknown }).then;
   } catch (error) {
     return Promise.reject(error);
   }
-  return Promise.resolve(value);
+  if (typeof then !== "function") return undefined;
+  return new Promise((resolve, reject) => {
+    queueMicrotask(() => {
+      try {
+        Reflect.apply(then, value, [resolve, reject]);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
 }

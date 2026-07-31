@@ -263,7 +263,7 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`${path}: missing`));
   });
 
-  test("requires both release code owners", () => {
+  test("lists both release code owners", () => {
     const sources = fixture();
     replaceSource(
       sources,
@@ -272,7 +272,7 @@ describe("release source facts", () => {
       "/.github/workflows/ @BarishNamazov",
     );
     expect(checkRelease(sources)).toContain(
-      ".github/CODEOWNERS: /.github/workflows/ must require both release code owners",
+      ".github/CODEOWNERS: /.github/workflows/ must list both release code owners",
     );
   });
 

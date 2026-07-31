@@ -24,7 +24,10 @@ export function assertCurrentGenerator(
   owner: string,
 ): asserts identity is GeneratorIdentity {
   const candidate = identity as Partial<GeneratorIdentity> | undefined;
-  if (candidate?.name !== PACKAGE_NAME || !isStableSemVer(candidate.version)) {
-    throw new Error(`${owner}: requires a stable ${PACKAGE_NAME} generator identity.`);
+  if (
+    candidate?.name !== PACKAGE_NAME ||
+    !/^1\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(candidate.version ?? "")
+  ) {
+    throw new Error(`${owner}: requires a stable 1.x ${PACKAGE_NAME} generator identity.`);
   }
 }

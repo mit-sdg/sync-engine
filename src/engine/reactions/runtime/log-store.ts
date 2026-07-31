@@ -15,6 +15,8 @@
  */
 
 import type { ActionOutcome, InstrumentedAction } from "../types.ts";
+import { actionNameOf, conceptNameOf, CONCEPT_NAME } from "../concepts/introspect.ts";
+import { snapshotValue } from "@engine/utils/snapshot";
 
 /** How long an assembly's in-memory occurrence index retains records. */
 export type RetentionPolicy = "keepAll" | "evictConsumed" | { window: number };
@@ -135,6 +137,31 @@ export interface LogSink {
   append(entry: LogEntry): void;
 }
 
+function freezeSnapshot(value: unknown, seen = new WeakSet<object>()): void {
+  if (value === null || typeof value !== "object" || seen.has(value)) return;
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return;
+  seen.add(value);
+  for (const child of Object.values(value)) freezeSnapshot(child, seen);
+  Object.freeze(value);
+}
+
+function sinkEntry(entry: LogEntry): LogEntry {
+  const snapshot = snapshotValue(entry) as LogEntry;
+  if (entry.kind === "invocation" && snapshot.kind === "invocation") {
+    const rawAction = Object.defineProperty(function () {}, "name", {
+      value: actionNameOf(entry.record.action),
+    });
+    const action = Object.assign(function () {}, { action: Object.freeze(rawAction) });
+    snapshot.record.action = Object.freeze(action);
+    snapshot.record.concept = Object.freeze({
+      [CONCEPT_NAME]: conceptNameOf(entry.record.concept),
+    });
+  }
+  freezeSnapshot(snapshot);
+  return snapshot;
+}
+
 /** The core in-memory occurrence index. */
 export class MemoryStore {
   readonly actions: Map<string, ActionRecord> = new Map();
@@ -159,7 +186,7 @@ export class MemoryStore {
 
   append(entry: LogEntry): void {
     this.assertAppendable(entry);
-    this.sink?.append(entry);
+    if (this.sink !== undefined) this.sink.append(sinkEntry(entry));
     this.fold(entry);
   }
 
