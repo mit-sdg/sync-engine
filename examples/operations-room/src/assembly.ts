@@ -54,5 +54,3 @@ export function assembleOperationsRoom({
     },
   });
 }
-
-export type OperationsRoomApp = ReturnType<typeof assembleOperationsRoom>;

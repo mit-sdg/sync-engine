@@ -23,14 +23,23 @@ import {
 } from "@sync-engine/internal/reactions/concepts/introspect.ts";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 
+let nextRecordId = 1;
+
 function record(overrides: Partial<ActionRecord> = {}): ActionRecord {
   return {
+    id: `record-${nextRecordId++}`,
     action: {} as ActionRecord["action"],
     concept: {},
     input: { test: true },
     flow: "flow-1",
     ...overrides,
   };
+}
+
+function invoke(log: ActionConcept, overrides: Partial<ActionRecord> = {}): string {
+  const entry = record(overrides);
+  log.invoke(entry);
+  return entry.id;
 }
 
 function reflectedText(value: unknown): string {
@@ -58,7 +67,7 @@ function reflectedText(value: unknown): string {
 describe("log store: append and indexed reads", () => {
   test("an invocation entry is served by id and by flow", () => {
     const log = new ActionConcept(new MemoryStore());
-    const { id } = log.invoke(record());
+    const id = invoke(log);
 
     expect(log._getById(id)?.input).toEqual({ test: true });
     expect(log._getByFlow("flow-1")?.length).toBe(1);
@@ -67,8 +76,8 @@ describe("log store: append and indexed reads", () => {
 
   test("records within a flow keep invocation order", () => {
     const log = new ActionConcept(new MemoryStore());
-    const a = log.invoke(record({ input: { n: 1 } })).id;
-    const b = log.invoke(record({ input: { n: 2 } })).id;
+    const a = invoke(log, { input: { n: 1 } });
+    const b = invoke(log, { input: { n: 2 } });
 
     const flow = log._getByFlow("flow-1") ?? [];
     expect(flow.map((r) => r.id)).toEqual([a, b]);
@@ -82,7 +91,7 @@ describe("log store: append and indexed reads", () => {
       newPassword: "new-password-sentinel",
       setupKey: "setup-key-sentinel",
     };
-    const { id } = log.invoke(record({ input: { username: "priya", ...sentinels } }));
+    const id = invoke(log, { input: { username: "priya", ...sentinels } });
 
     expect(log._getById(id)?.input).toEqual({
       username: "priya",
@@ -100,7 +109,7 @@ describe("log store: outcomes fold immutably", () => {
   test("attaching an outcome replaces the record instead of mutating it", () => {
     const store = new MemoryStore();
     const log = new ActionConcept(store);
-    const { id } = log.invoke(record());
+    const id = invoke(log);
 
     const pending = log._getById(id);
     expect(pending?.output).toBeUndefined();
@@ -117,8 +126,8 @@ describe("log store: outcomes fold immutably", () => {
 
   test("the fold replaces the record at its position in the flow view", () => {
     const log = new ActionConcept(new MemoryStore());
-    const first = log.invoke(record({ input: { n: 1 } })).id;
-    const second = log.invoke(record({ input: { n: 2 } })).id;
+    const first = invoke(log, { input: { n: 1 } });
+    const second = invoke(log, { input: { n: 2 } });
 
     log.invoked({ id: first, output: { value: 1 } });
 
@@ -130,7 +139,7 @@ describe("log store: outcomes fold immutably", () => {
 
   test("stored outputs and outcomes redact credential fields", () => {
     const log = new ActionConcept(new MemoryStore());
-    const { id } = log.invoke(record());
+    const id = invoke(log);
     log.invoked({
       id,
       output: {
@@ -278,7 +287,7 @@ describe("log store: firing records", () => {
   test("hasConsumed derives from firing entries", () => {
     const store = new MemoryStore();
     const log = new ActionConcept(store);
-    const { id } = log.invoke(record());
+    const id = invoke(log);
 
     expect(store.hasConsumed(id, "SomeReaction")).toBe(false);
 
@@ -332,7 +341,7 @@ describe("log store: firings are introspectable after a live run", () => {
 
     await Src.emit({ tag: "hello" });
 
-    const firings = reacting._getFirings("Forward");
+    const firings = reacting.Action.store.firingsByReaction("Forward");
     expect(firings.length).toBe(1);
     const firing = firings[0]!;
     expect(firing.bindings).toEqual({ tag: "hello" });
@@ -429,7 +438,7 @@ describe("log store: firings are introspectable after a live run", () => {
     const reflected = reflectedText(retained);
     for (const sentinel of Object.values(credentials)) expect(reflected).not.toContain(sentinel);
     expect(reacting.Action._getMatchingRecordCount()).toBe(0);
-    expect(reacting._getFirings("ForwardCredentials")[0]?.bindings).toEqual({
+    expect(reacting.Action.store.firingsByReaction("ForwardCredentials")[0]?.bindings).toEqual({
       password: "[redacted]",
       oldPassword: "[redacted]",
       newPassword: "[redacted]",

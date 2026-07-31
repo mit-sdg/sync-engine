@@ -122,6 +122,16 @@ function setup() {
 }
 
 describe("HTTP floor", () => {
+  test("rejects one endpoint configured to issue and clear credentials", () => {
+    const { floor } = setup();
+    expect(() =>
+      httpFloor({
+        ...floor,
+        credential: { ...floor.credential, clear: [floor.credential.issue.path] },
+      }),
+    ).toThrowError(new Error('httpFloor: "/login" cannot issue and clear credentials.'));
+  });
+
   test("binds a cookie from the concept-owned expiry and hides consumed fields", async () => {
     const { fetch } = setup();
     const response = await fetch(
@@ -313,6 +323,18 @@ describe("HTTP floor", () => {
 });
 
 describe("production HTTP profile", () => {
+  test("constructs a plain profile handler without reading wire projection facts", () => {
+    const { application, gateway } = setup();
+    Object.defineProperty(application.publicInterface, "routes", {
+      get() {
+        throw new Error("wire projection facts were read");
+      },
+    });
+    const profile = productionHttpProfile({ origin: "https://learning.test" });
+
+    expect(() => createHttpHandler({ application, gateway, profile })).not.toThrow();
+  });
+
   test("preserves successes and projects registered categories behind a base path", async () => {
     const { application, gateway } = setup();
     const fetch = createHttpHandler({

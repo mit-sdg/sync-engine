@@ -23,7 +23,6 @@ type FieldKind =
   | "query" // a { concept, query } reference
   | "pattern" // a PatternIR of ValueIR leaves
   | "varName" // one bound-variable name
-  | "outNames" // a role → variable-name binding map
   | "varNames" // a positional variable-name list
   | "computationName" // an installed calculation, by name
   | "viewName" // a registered view, by sentence
@@ -39,7 +38,7 @@ type FieldKind =
 type FieldTable = Readonly<Record<string, FieldKind>>;
 
 /** The where/view op vocabulary: every reference-carrying field, per op. */
-export const OP_FIELDS: Readonly<Record<string, FieldTable>> = {
+const OP_FIELDS: Readonly<Record<string, FieldTable>> = {
   find: { query: "query", view: "viewName", in: "pattern", out: "pattern", not: "pattern" },
   whether: { query: "query", view: "viewName", in: "pattern", out: "pattern", not: "pattern" },
   no: { query: "query", view: "viewName", in: "pattern", out: "pattern" },
@@ -51,7 +50,7 @@ export const OP_FIELDS: Readonly<Record<string, FieldTable>> = {
 };
 
 /** The former-node vocabulary: every reference-carrying field, per variant. */
-export const FORMER_NODE_FIELDS: Readonly<Record<FormerNodeIR["node"], FieldTable>> = {
+const FORMER_NODE_FIELDS: Readonly<Record<FormerNodeIR["node"], FieldTable>> = {
   leaf: { var: "varName" },
   record: { where: "ops", entries: "nodeMap", splices: "splices" },
   former: { former: "fragmentName", in: "pattern" },
@@ -72,7 +71,7 @@ export const FORMER_NODE_FIELDS: Readonly<Record<FormerNodeIR["node"], FieldTabl
 };
 
 /** The callbacks a fold may register — every one optional, every one a reference kind. */
-export interface IRFold {
+interface IRFold {
   /** Every where/view op, before its fields. */
   op?(op: WhereOpIR | ViewOpIR): void;
   /** Every `{ concept, query }` reference: selections and where reads. */
@@ -102,9 +101,6 @@ function foldField(value: unknown, kind: FieldKind, fold: IRFold): void {
       return;
     case "varName":
       fold.varName?.(value as string);
-      return;
-    case "outNames":
-      for (const name of Object.values(value as Record<string, string>)) fold.varName?.(name);
       return;
     case "varNames":
       for (const name of value as string[]) fold.varName?.(name);

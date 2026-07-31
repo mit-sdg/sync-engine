@@ -35,11 +35,6 @@ for (const [, example] of selected) {
       "--config",
       `${directory}/generated.config.ts`,
     ]);
-  } else if (operation === "test") {
-    run(resolve(root, "node_modules/.bin/vp"), [
-      "test",
-      `examples/${example.directory}/tests/application.test.ts`,
-    ]);
   } else {
     throw new Error(`Unknown example operation: ${operation}.`);
   }

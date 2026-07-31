@@ -13,7 +13,7 @@ import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.t
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { no, reaction, vocabulary, when, where } from "@sync-engine/language";
 import { Frames } from "@sync-engine/internal/reads/frames";
-import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { wireContracts } from "@sync-engine/tooling";
 
 class CountingConcept {
@@ -288,8 +288,8 @@ describe("assemble", () => {
     expect(losses).toEqual(["race.Second"]);
   });
 
-  test("fail() answers with the named error through the domain-error channel", async () => {
-    const Gate = endpoint("/gated", () => receive({}).then(fail("FORBIDDEN")));
+  test("respond answers with the named error through the domain-error channel", async () => {
+    const Gate = endpoint("/gated", () => receive({}).then(respond({ error: "FORBIDDEN" })));
     const app = assemble({ vocabulary: vocab, composition: { Gate } });
     const result = await app.invoker.invoke("/gated", {});
     expect(result).toEqual({ ok: false, error: { kind: "domain", value: "FORBIDDEN" } });

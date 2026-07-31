@@ -12,7 +12,7 @@ export interface EndpointValidators {
   readonly domainError?: EndpointValidator;
 }
 
-export type RuntimeValidation =
+type RuntimeValidation =
   | { ok: true }
   | { ok: false; detail?: string; errorClass: "ValidationFailure" }
   | { ok: false; errorClass: "ValidatorFault"; fault: unknown };

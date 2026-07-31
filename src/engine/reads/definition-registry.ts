@@ -119,6 +119,7 @@ export class Registry {
     };
     fromOps(declaration.whereOps);
     for (const node of declaration.then) {
+      fromOps(node.whereOps);
       fromOps(node.transformOps);
       for (const fused of fusedFormersOf(node.action.input)) this.indexFormer(fused.former);
     }
@@ -159,10 +160,6 @@ export class Registry {
     this.validator.assertFormable(ref);
   }
 
-  assertViewUsable(ref: RelationView): void {
-    this.validator.assertViewUsable(ref);
-  }
-
   formerRefs(): Iterable<FormerRef> {
     return this.formersByName.values();
   }
@@ -175,7 +172,7 @@ export class Registry {
     return this.viewsByName.values();
   }
 
-  viewNamed(name: string): RelationView | undefined {
+  private viewNamed(name: string): RelationView | undefined {
     return this.viewsByName.get(name);
   }
 

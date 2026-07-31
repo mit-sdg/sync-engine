@@ -140,7 +140,7 @@ describe("refusalFunnel", () => {
     );
     expect(escaped?.fault).toEqual({ error: FrameworkErrorCode.UNKNOWN_ERROR });
     expect(escaped?.outcome).toBeUndefined();
-    expect(reaction._getFirings("DeliverRefusalToAsker")).toHaveLength(0);
+    expect(reaction.Action.store.firingsByReaction("DeliverRefusalToAsker")).toHaveLength(0);
   });
 
   test("the first refusal answers; a second in the same flow cannot", async () => {
@@ -160,7 +160,7 @@ describe("refusalFunnel", () => {
     expect(refusals.length).toBe(2);
     // Each refusal starts one delivery reaction. The request boundary returns
     // the first response and refuses later responses with NOT_PENDING.
-    expect(reaction._getFirings("DeliverRefusalToAsker")).toHaveLength(2);
+    expect(reaction.Action.store.firingsByReaction("DeliverRefusalToAsker")).toHaveLength(2);
     const doubleFlow = [...reaction.Action.actions.values()].find(
       (r) => r.input?.path === "/seats/double",
     )?.flow;
@@ -256,7 +256,7 @@ describe("faults while forming response input", () => {
       (r) => actionNameOf(r.action) === "respondFramework" && r.outcome?.kind === "result",
     );
     expect(delivered).toHaveLength(1);
-    expect(reaction._getFirings(FAULT_REACTION)).toHaveLength(1);
+    expect(reaction.Action.store.firingsByReaction(FAULT_REACTION)).toHaveLength(1);
   });
 
   test("the fault reaction skips its own asks — one delivery attempt, no recursion", async () => {
@@ -291,7 +291,7 @@ describe("faults while forming response input", () => {
 
     // The audit fault starts one delivery attempt. The failed response asked
     // by DeliverFaultToAsker does not start another.
-    expect(reaction._getFirings(FAULT_REACTION)).toHaveLength(1);
+    expect(reaction.Action.store.firingsByReaction(FAULT_REACTION)).toHaveLength(1);
     const faultedResponds = [...reaction.Action.actions.values()].filter(
       (r) => actionNameOf(r.action) === "respondFramework" && r.fault !== undefined,
     );

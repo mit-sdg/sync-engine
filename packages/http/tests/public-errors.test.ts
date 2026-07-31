@@ -2,8 +2,8 @@ import { describe, expect, test } from "vite-plus/test";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
 import type { HttpPublicErrorCategory } from "@mit-sdg/sync-engine-http/server";
 import {
-  publicCategoryOf,
   publicErrorStatus,
+  publicFrameworkCategoryOf,
   projectProductionHttpWire,
   registeredPublicCategoryOf,
 } from "../src/server/public-errors.ts";
@@ -22,13 +22,13 @@ describe("HTTP public error projection", () => {
 
   test("projects framework, registered domain, and unknown codes", () => {
     const categories = { SESSION_EXPIRED: "UNAUTHORIZED" } as const;
-    expect(publicCategoryOf(FrameworkErrorCode.INVALID_INPUT, categories)).toBe("INVALID_REQUEST");
-    expect(publicCategoryOf(FrameworkErrorCode.NOT_FOUND, categories)).toBe("NOT_FOUND");
-    expect(publicCategoryOf(FrameworkErrorCode.INTERNAL_ERROR, {})).toBe("INTERNAL_ERROR");
-    expect(publicCategoryOf(FrameworkErrorCode.TIMED_OUT, categories)).toBe("INTERNAL_ERROR");
-    expect(publicCategoryOf("SESSION_EXPIRED", categories)).toBe("UNAUTHORIZED");
-    expect(publicCategoryOf("CONFLICT", categories)).toBe("INTERNAL_ERROR");
-    expect(publicCategoryOf("PRIVATE", categories)).toBe("INTERNAL_ERROR");
+    expect(publicFrameworkCategoryOf(FrameworkErrorCode.INVALID_INPUT)).toBe("INVALID_REQUEST");
+    expect(publicFrameworkCategoryOf(FrameworkErrorCode.NOT_FOUND)).toBe("NOT_FOUND");
+    expect(publicFrameworkCategoryOf(FrameworkErrorCode.INTERNAL_ERROR)).toBe("INTERNAL_ERROR");
+    expect(publicFrameworkCategoryOf(FrameworkErrorCode.TIMED_OUT)).toBe("INTERNAL_ERROR");
+    expect(registeredPublicCategoryOf("SESSION_EXPIRED", categories)).toBe("UNAUTHORIZED");
+    expect(registeredPublicCategoryOf("CONFLICT", categories)).toBe("INTERNAL_ERROR");
+    expect(registeredPublicCategoryOf("PRIVATE", categories)).toBe("INTERNAL_ERROR");
   });
 
   test("ignores prototype and inherited runtime codes", () => {
@@ -38,14 +38,12 @@ describe("HTTP public error projection", () => {
     >;
     for (const code of ["toString", "constructor", "__proto__", "INHERITED"]) {
       expect(registeredPublicCategoryOf(code, inherited)).toBe("INTERNAL_ERROR");
-      expect(publicCategoryOf(code, inherited)).toBe("INTERNAL_ERROR");
     }
   });
 
   test("fails closed for malformed categories even after invalid runtime casts", () => {
     const malformed = { BROKEN: "toString" } as unknown as Record<string, HttpPublicErrorCategory>;
     expect(registeredPublicCategoryOf("BROKEN", malformed)).toBe("INTERNAL_ERROR");
-    expect(publicCategoryOf("BROKEN", malformed)).toBe("INTERNAL_ERROR");
     expect(publicErrorStatus("toString" as never)).toBe(500);
   });
 

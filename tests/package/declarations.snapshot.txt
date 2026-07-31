@@ -118,21 +118,15 @@ import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, V
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
 import type { RedactionPolicy } from "../../utils/redaction.ts";
-import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
+import type { InputContractDecl } from "../protocol/endpoints.ts";
 import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
 import type { EndpointValidators } from "../protocol/validation.ts";
 import type { Invoker } from "../invocation/invoke.ts";
-import { Requesting } from "../invocation/invoke.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
-import type { EndpointDeclaration, EndpointIdentity } from "./endpoint-portability.ts";
+import type { EndpointDeclaration } from "./endpoint-portability.ts";
 export declare function receive(input?: Mapping): WhenBuilder;
 /** Answer the request this reaction was triggered by. */
 export declare function respond(body?: Mapping): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
-    requestId: symbol;
-}, Record<string, unknown>>;
-/** Answer the request with an application-defined error value. */
-export declare function fail(error?: unknown): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
-    error: unknown;
     requestId: symbol;
 }, Record<string, unknown>>;
 export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
@@ -154,11 +148,10 @@ export interface EndpointOptions {
  */
 export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionDeclaration, opts?: EndpointOptions): EndpointDef<ReactionDeclaration>;
 export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionPartition, opts?: EndpointOptions): EndpointDef<ReactionPartition>;
-export declare function isEndpointDef(value: unknown): value is EndpointDef;
-export type ConceptInitializers<T extends Record<string, ConceptClass>> = {
+type ConceptInitializers<T extends Record<string, ConceptClass>> = {
     [K in keyof T]?: ConstructorParameters<T[K]>;
 };
-export type ConceptInstances<T extends Record<string, ConceptClass>> = {
+type ConceptInstances<T extends Record<string, ConceptClass>> = {
     [K in keyof T]?: object;
 };
 type RequiredConstructorName<T extends Record<string, ConceptClass>> = {
@@ -202,13 +195,10 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     /** Additional sensitive field names for this assembly only. */
     redaction?: RedactionPolicy;
 }
-export type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> & RequiredConstructionSources<T>;
+type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> & RequiredConstructionSources<T>;
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
     engine: Reacting;
     invoker: Invoker<ContractShape>;
-    boundary: Requesting;
-    /** The boundary's instrumented actions for framework reactions and adapters. */
-    boundaryActions: RequestBoundaryActions;
     /** The instrumented concepts, by vocabulary name — the canonical class types them. */
     concepts: {
         [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>>;
@@ -219,8 +209,6 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     whenIdle(): Promise<void>;
     /** The public route and admission facts a separate gateway may consume. */
     publicInterface: ApplicationInterface;
-    /** Endpoint identity retained even when a reaction has no portable IR. */
-    endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
     /** Every authored endpoint declaration, independent of lowering. */
     endpoints: readonly EndpointDeclaration[];
     /** Evaluate a fused former against this app's concepts, at the moment of asking. */
@@ -337,11 +325,9 @@ export declare function conceptSet<const S extends Record<string, AnyRegistratio
 export {};
 
 === dist/engine/boundary/assembly/endpoint-portability.d.ts ===
-export interface EndpointIdentity {
+export interface EndpointDeclaration {
     readonly name: string;
     readonly path: string;
-}
-export interface EndpointDeclaration extends EndpointIdentity {
     readonly reactions: readonly string[];
 }
 
@@ -433,14 +419,14 @@ export type Endpoint<C extends ContractShape, P extends keyof C, TError = Client
     C[P]["input"]
 ] extends [Record<string, never>] ? (input?: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>> : (input: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>>;
 /** The indexed surface: `client["/auth/login"](input)`. */
-export type IndexedClient<C extends ContractShape, TError = ClientError> = {
+type IndexedClient<C extends ContractShape, TError = ClientError> = {
     [P in keyof C & string]: Endpoint<C, P, TError>;
 };
 /**
  * The grouped surface: `client.auth.login(input)`. Works for paths of any
  * depth — `/admin/users/roles/assign` becomes `admin.users.roles.assign`.
  */
-export type GroupedClient<C extends ContractShape, TError = ClientError> = Prettify<UnionToIntersection<AllPathChains<C, TError> | RemainderPathChain<keyof C & string, C, TError>>>;
+type GroupedClient<C extends ContractShape, TError = ClientError> = Prettify<UnionToIntersection<AllPathChains<C, TError> | RemainderPathChain<keyof C & string, C, TError>>>;
 /** Flattens an intersection into a single object for readable IntelliSense. */
 type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (value: infer I) => void ? I : never;
 /**
@@ -645,10 +631,9 @@ export interface ExecutionLimits {
     maxRowsPerEvaluation: number;
     maxRequestDurationMs: number;
 }
-export type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
+type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
 /** Resolve one caller timeout against optional host execution limits. */
 export declare function requestTimeout(timeoutMs: number | undefined, limits?: ExecutionLimits): number;
-export declare function assertExecutionLimits(limits: ExecutionLimits): void;
 /** Owns admission and quiescence independently of caller waits and log retention. */
 export declare class RuntimeLifecycle {
     readonly limits?: ExecutionLimits | undefined;
@@ -680,6 +665,7 @@ export declare class RuntimeLifecycle {
     private emitDrainIdle;
 }
 import { OperationalEvents } from "../../reactions/runtime/operational.ts";
+export {};
 
 === dist/engine/boundary/protocol/admit.d.ts ===
 /**
@@ -689,7 +675,7 @@ import { OperationalEvents } from "../../reactions/runtime/operational.ts";
  * same failure detail.
  */
 import type { InputContractDecl } from "./endpoints.ts";
-export type AdmitResult = {
+type AdmitResult = {
     ok: true;
     admitted: Record<string, unknown>;
 } | {
@@ -698,6 +684,7 @@ export type AdmitResult = {
 };
 /** Check `input` against `contract` and name `path` in every failure. */
 export declare function admitInput(contract: InputContractDecl, path: string, input: unknown): AdmitResult;
+export {};
 
 === dist/engine/boundary/protocol/endpoints.d.ts ===
 /**
@@ -736,12 +723,6 @@ export declare function renderInputContracts(contracts: Record<string, InputCont
  * carried beside the response by the request boundary.
  */
 import { type InvocationResult } from "./types.ts";
-/**
- * An {@link InvocationResult} as its flat wire body: the success value bare,
- * a domain value as-is when it already reads as an error envelope (else
- * wrapped in `{ error }`), a framework code as `{ error, detail? }`.
- */
-export declare function toEnvelope(result: InvocationResult): unknown;
 /** Serialize a value with the JSON rules shared by transport adapters. */
 export declare function serializeJsonValue(value: unknown): string;
 /** Apply the shared JSON projection to an in-process value. */
@@ -838,7 +819,7 @@ export interface EndpointValidators {
     readonly output?: EndpointValidator;
     readonly domainError?: EndpointValidator;
 }
-export type RuntimeValidation = {
+type RuntimeValidation = {
     ok: true;
 } | {
     ok: false;
@@ -851,6 +832,7 @@ export type RuntimeValidation = {
 };
 export declare function validateRuntimeValue(validator: EndpointValidator, value: unknown): RuntimeValidation;
 export declare function assertEndpointValidators(value: EndpointValidators, path: string): void;
+export {};
 
 === dist/engine/boundary/wire/wire-contracts.d.ts ===
 /** Derive endpoint contracts from registered application and concept IR. */
@@ -911,30 +893,19 @@ export declare function inferPatternWireType(pattern: PatternIR, formers: Readon
 
 === dist/engine/boundary/wire/wire-provenance.d.ts ===
 /** Endpoint-local type origins derived from registered reaction and read IR. */
-import type { PatternIR, QueryRefIR, ReactionIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR } from "../../reads/ir.ts";
+import type { PatternIR, ReactionIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR } from "../../reads/ir.ts";
 import type { WireOrigin } from "./wire-types.ts";
 export interface ProvenanceCell {
     alternatives: WireOrigin[][];
     maybe: boolean;
-    presenceGroups: Set<string>;
     sites: Set<string>;
 }
 export type ProvenanceEnv = Map<string, ProvenanceCell>;
-export interface ReactionProvenance {
+interface ReactionProvenance {
     env: ProvenanceEnv;
     requestFields: Map<string, ProvenanceCell>;
 }
-type ConceptOrigin = Extract<WireOrigin, {
-    concept: string;
-}>;
 export declare function sharedChildEnv(parent: ProvenanceEnv): ProvenanceEnv;
-export declare function constrainPattern(env: ProvenanceEnv, pattern: PatternIR, origin: ConceptOrigin, site: string, options?: {
-    maybeFresh?: boolean;
-    presenceGroup?: string;
-}): void;
-export declare function applyQueryProvenance(env: ProvenanceEnv, query: QueryRefIR, input: PatternIR, output: PatternIR, posture: "required" | "optional" | "claim", site: string, options?: {
-    propagateInputAbsence?: boolean;
-}): void;
 export declare function applyOpsProvenance(env: ProvenanceEnv, ops: readonly (WhereOpIR | ViewOpIR)[], views: ReadonlyMap<string, ViewIR>, site: string, visiting?: ReadonlySet<string>): void;
 export declare function instantiateEnv(input: PatternIR, caller: ProvenanceEnv): ProvenanceEnv;
 export declare function analyzeReactionProvenance(reaction: ReactionIR, boundary: {
@@ -970,10 +941,23 @@ export interface WireRenderOptions {
     appWideErrorName?: string;
     /** Omit shared imports and helpers when appending another contract. */
     preamble?: boolean;
+    /** Additional contracts appended under this module's shared preamble. */
+    sharedWires?: readonly WireContractsIR[];
 }
+declare const WIRE_HELPERS: {
+    readonly ApplicationVocabulary: "";
+    readonly AtPath: "type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : never : T;";
+    readonly QueryRow: "type QueryRow<T> = T extends readonly (infer Row)[] ? Row : T;";
+    readonly AllOf: "type AllOf<T extends readonly unknown[]> = T extends readonly [infer Head, ...infer Rest] ? Head & AllOf<Rest> : unknown;";
+    readonly OneOf: "type OneOf<T extends readonly unknown[]> = T[number];";
+    readonly Jsonify: "type Jsonify<T> = T extends Date ? string : T extends null | boolean | number | string ? T : T extends (...args: never[]) => unknown ? never : T extends readonly (infer Item)[] ? Jsonify<Item>[] : T extends object ? { [K in keyof T]: Jsonify<T[K]> } : never;";
+};
+type WireHelperName = keyof typeof WIRE_HELPERS;
+export declare function wireHelperNames(wires: readonly WireContractsIR[]): ReadonlySet<WireHelperName>;
 /** Emit the client-pluggable TypeScript contract module for one wire IR. */
 export declare function renderWireTypes(wire: WireContractsIR, moduleName?: string): string;
 export declare function renderWireTypes(wire: WireContractsIR, options?: WireRenderOptions): string;
+export {};
 
 === dist/engine/boundary/wire/wire-types.d.ts ===
 /** The normalized type vocabulary shared by wire derivation and rendering. */
@@ -1064,7 +1048,7 @@ export declare class FileLogSink implements LogSink {
  * cost nothing. `except` lists concepts whose occurrences the channel skips.
  */
 import type { ChannelPattern, Mapping } from "../types.ts";
-export interface ChannelOptions {
+interface ChannelOptions {
     /** Concepts (instances, instrumented proxies, or instrumented actions) to skip. */
     except?: readonly object[];
     /** Reaction names whose own asks the channel skips — the provenance loop-guard. */
@@ -1080,11 +1064,11 @@ export declare function refused(pattern?: Mapping, options?: ChannelOptions): Ch
 export declare function faulted(pattern?: Mapping, options?: ChannelOptions): ChannelPattern;
 /** Whether a value is a channel clause built by this module. */
 export declare function isChannelPattern(value: unknown): value is ChannelPattern;
+export {};
 
 === dist/engine/reactions/authoring/nodes.d.ts ===
 import type { ActionPattern, BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode, UnnamedStepNode } from "../types.ts";
 import type { WhereOp } from "../../reads/where-ops.ts";
-export declare function brandReactionNode<T extends object>(node: T): T;
 /** Build the callable data line represented by one vocabulary action ref. */
 export declare function actionLine(action: InstrumentedAction, input: Mapping): StepNode;
 /** Qualify and privately chain one sibling branch. */
@@ -1095,7 +1079,6 @@ export declare function actionPattern(action: InstrumentedAction, input: Mapping
 
 === dist/engine/reactions/authoring/partitions.d.ts ===
 import type { ReactionDeclaration, ReactionPartition, ReactionResult, ThenNode, TriggerPattern } from "../types.ts";
-export declare function isReactionPartition(value: unknown): value is ReactionPartition;
 export declare function declarationsOf(result: ReactionResult): readonly ReactionDeclaration[];
 /** Build and extend the authored sibling tree as independent flat paths. */
 export declare function siblingTree(patterns: readonly TriggerPattern[], root: Pick<ReactionDeclaration, "where" | "whereOps">, nodes: readonly ThenNode[]): ReactionPartition;
@@ -1180,7 +1163,7 @@ type QueryRow<A> = Awaited<A> extends readonly (infer Row)[] ? Row : Awaited<A>;
  * names a query's answer) resolves to the class's own declared answer; every
  * actual call matches the first overload and answers a line.
  */
-export type QueryLineFn<F> = F extends (input: infer I) => infer A ? {
+type QueryLineFn<F> = F extends (input: infer I) => infer A ? {
     (pattern: SlotPattern<I>): QueryReadLine<QueryRow<A>>;
     (input: I): A;
 } : F;
@@ -1193,7 +1176,7 @@ export type QueryLineFn<F> = F extends (input: infer I) => infer A ? {
 type RequiredInputKeys<I> = {
     [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
 }[keyof I];
-export type ActionLineFn<F> = F extends (input: infer I) => infer A ? {
+type ActionLineFn<F> = F extends (input: infer I) => infer A ? {
     <P extends SlotPattern<I>>(pattern: P): RequiredInputKeys<I> extends keyof P ? ActionCall<F & InstrumentedAction, P, A> : TriggerActionLine<F & InstrumentedAction, P, A>;
     (input: I, anchor: typeof ActionTypeAnchor): A;
 } : F;
@@ -1202,15 +1185,15 @@ export type ActionLineFn<F> = F extends (input: infer I) => infer A ? {
  * actions become callable data lines for `when` and `then`;
  * queries become typed line builders — the callable vocabulary proxy.
  */
-export type ConceptRef<I> = {
+type ConceptRef<I> = {
     readonly [K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
 };
 /** The vocabulary's refs: one `ConceptRef` per declared name. */
-export type VocabularyRefs<T extends Record<string, ConceptClass>> = {
+type VocabularyRefs<T extends Record<string, ConceptClass>> = {
     readonly [K in keyof T]: ConceptRef<InstanceType<T[K]>>;
 };
 /** A concept class plus metadata owned by its vocabulary name. */
-export type ConceptDeclaration<C extends ConceptClass> = ConceptMetadata & {
+type ConceptDeclaration<C extends ConceptClass> = ConceptMetadata & {
     readonly class: C;
     readonly spec?: string;
 };
@@ -1239,7 +1222,7 @@ type ClassOf<E extends ConceptEntry> = E extends ConceptDeclaration<infer C> ? C
 export type ConceptClassesOf<T extends Record<string, ConceptEntry>> = {
     readonly [K in keyof T]: ClassOf<T[K]>;
 };
-export type ComputationRefs<T extends Record<string, ComputationFn>> = {
+type ComputationRefs<T extends Record<string, ComputationFn>> = {
     readonly [K in keyof T]: ComputationRef;
 };
 /** Concept and computation refs grouped by their role. */
@@ -1250,7 +1233,7 @@ export interface DeclaredVocabulary<TConcepts extends Record<string, ConceptEntr
     readonly [VocabularyComputations]: ComputationRefs<TComputations>;
     readonly [VocabularyMetadata]: Record<string, ConceptMetadata>;
 }
-export interface VocabularyDeclaration<TConcepts extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> {
+interface VocabularyDeclaration<TConcepts extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> {
     concepts: TConcepts;
     computations?: TComputations;
 }
@@ -1304,7 +1287,7 @@ export { actionPattern } from "./nodes.ts";
 export declare function earlier(action: InstrumentedAction, input: Mapping, output?: Mapping): EarlierOp;
 export declare function when(channel: ChannelPattern): WhenBuilder;
 export declare function when(line: StepNode): WhenBuilder;
-export interface AuthoredWhereBlock extends ViewBlock {
+interface AuthoredWhereBlock extends ViewBlock {
     then(node: UnnamedStepNode): BranchChain;
 }
 /** State a read conjunction, optionally qualifying one reaction branch with it. */
@@ -1315,7 +1298,7 @@ import type { OutcomeContracts } from "./outcomes.ts";
 import type { QueryPromise } from "../../reads/query-metadata.ts";
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 /** One refusal branch: the code it returns, the class that signals it, and its sentence. */
-export interface RefusalBranch {
+interface RefusalBranch {
     code: string;
     error: ErrorConstructor;
     /** The normative sentence the specification gives this branch. */
@@ -1324,7 +1307,7 @@ export interface RefusalBranch {
 /** Refusal branches admitted for each action, keyed by the action that may signal them. */
 export type RefusalContracts = Record<string, readonly RefusalBranch[]>;
 /** Canonical callable surface retained from the vocabulary's concept class. */
-export interface ConceptProtocol {
+interface ConceptProtocol {
     readonly actions: readonly string[];
     readonly queries: readonly string[];
 }
@@ -1349,7 +1332,7 @@ export declare function conceptMetadataOf(concept: object): ConceptMetadata | un
  * specification declares here, or one it declares only for other actions —
  * which is a specification the implementation has outgrown, not a refusal.
  */
-export type RefusalMatch = {
+type RefusalMatch = {
     kind: "declared";
     code: string;
     message: string;
@@ -1360,6 +1343,7 @@ export type RefusalMatch = {
 };
 /** Match a thrown error against the concept's specified refusal branches. */
 export declare function refusalFor(concept: object, action: string, thrown: unknown): RefusalMatch | undefined;
+export {};
 
 === dist/engine/reactions/concepts/concept-spec.d.ts ===
 /**
@@ -1394,18 +1378,18 @@ export declare function refusalFor(concept: object, action: string, thrown: unkn
  */
 import type { QueryPromise } from "../../reads/query-metadata.ts";
 /** One refusal branch: the code the boundary returns and the sentence it carries. */
-export interface SpecRefusal {
+interface SpecRefusal {
     code: string;
     message: string;
 }
 /** One action the specification declares. */
-export interface SpecAction {
+interface SpecAction {
     name: string;
     inputs: readonly string[];
     refusals: readonly SpecRefusal[];
 }
 /** One query the specification declares, with the row count it promises. */
-export interface SpecQuery {
+interface SpecQuery {
     name: string;
     inputs: readonly string[];
     promise: QueryPromise;
@@ -1423,6 +1407,7 @@ export interface ConceptSpec {
  * section or line, when a parsed part is missing or malformed.
  */
 export declare function parseSpec(markdown: string): ConceptSpec;
+export {};
 
 === dist/engine/reactions/concepts/introspect.d.ts ===
 /**
@@ -1434,7 +1419,7 @@ export declare function parseSpec(markdown: string): ConceptSpec;
  *
  * These helpers import no application concepts or boundaries.
  */
-import type { ActionPattern, InstrumentedAction } from "../types.ts";
+import type { InstrumentedAction } from "../types.ts";
 import type { ConceptInventoryIR } from "../../reads/ir.ts";
 /**
  * An explicit concept name, stamped on an instance when it was instrumented
@@ -1456,11 +1441,6 @@ export declare function conceptNameOf(concept: object): string;
  * Strips the "bound " prefix from bound method names.
  */
 export declare function actionNameOf(action: InstrumentedAction): string;
-/**
- * Stable node identifier for a concept-action pair.
- * e.g. "Authenticating.authenticate"
- */
-export declare function actionNodeId(p: ActionPattern): string;
 /**
  * Observe a method's input roles from its one destructured parameter —
  * `add({ title, priority })` reads as roles `title, priority`. Conventions
@@ -1611,29 +1591,30 @@ export declare function createEngine(options?: EngineOptions): Engine;
 === dist/engine/reactions/resolving.d.ts ===
 import type { ComputationRef } from "../reads/computations.ts";
 import type { InstrumentedQuery, Mapping } from "./types.ts";
-import type { ActionPattern, ActionPosture } from "./types.ts";
+import type { ActionPattern, ActionPosture, ActionTriggerPattern } from "./types.ts";
 /** Resolves vocabulary names against one assembly's installed referents. */
 export declare class NameResolver {
     private readonly definitions;
-    constructor(definitions: Map<string, object> | {
+    constructor(definitions: {
         conceptNamed(name: string): object | undefined;
         computationNamed(name: string): ComputationRef | undefined;
-    }, computations?: Map<string, ComputationRef>);
+    });
     concept(name: string, site: string): object;
-    action(conceptName: string, actionName: string, input: Mapping, output: Mapping | undefined, site: string, posture?: ActionPosture, by?: string): ActionPattern;
+    action(conceptName: string, actionName: string, input: Mapping, output: Mapping, site: string, posture?: ActionPosture, by?: string): ActionTriggerPattern;
+    action(conceptName: string, actionName: string, input: Mapping, output: undefined, site: string, posture?: ActionPosture, by?: string): ActionPattern;
     query(conceptName: string, queryName: string, site: string): InstrumentedQuery;
     computation(name: string, site: string, vocabularyOnly?: boolean): ComputationRef;
 }
 
 === dist/engine/reactions/runtime/action-scheduler.d.ts ===
-export interface ActionScheduleRequest<Input, Result> {
+interface ActionScheduleRequest<Input, Result> {
     concept: object;
     flow: string;
     body(input: Input): Result;
     input: Input;
     onBodySettled?(): void;
 }
-export interface ActionReservation<Result> {
+interface ActionReservation<Result> {
     result: Promise<Result>;
     release(): boolean;
     durationMs(): number;
@@ -1651,6 +1632,7 @@ export declare class ActionScheduler implements ActionScheduling {
     /** Whether the concept has no reserved or running action body. */
     isIdle(concept: object): boolean;
 }
+export {};
 
 === dist/engine/reactions/runtime/actions.d.ts ===
 /**
@@ -1675,7 +1657,7 @@ import type { Redactor } from "../../utils/redaction.ts";
 import { MemoryStore, type ActionRecord, type IntegrityFailureRecord, type ReactionFailureRecord } from "./log-store.ts";
 import { type OperationalEvents, type RawFaultReport, type RawFaultReporter } from "./operational.ts";
 export type { ActionRecord } from "./log-store.ts";
-export interface FlowQuiescence {
+interface FlowQuiescence {
     flow: string;
     interpreterFailed: boolean;
 }
@@ -1707,10 +1689,8 @@ export declare class ActionConcept {
      * Append an invocation. Input values whose field names match the current
      * redaction policy are replaced before the record reaches the store.
      */
-    invoke(record: ActionRecord): {
-        id: string;
-    };
-    /** Snapshot and retain raw input; raw output and outcome are added when the action resolves. */
+    invoke(record: ActionRecord): void;
+    /** Snapshot and retain raw input; the raw outcome is added when the action resolves. */
     _beginMatchingInput({ id, flow, input, }: {
         id: string;
         flow: string;
@@ -1730,39 +1710,30 @@ export declare class ActionConcept {
     }>["limit"]): void;
     /** Record a boundary integrity failure and make the active flow fail closed. */
     _recordIntegrityFailure(failure: IntegrityFailureRecord): void;
-    /** Return a transient record with raw input, output, and outcome while its flow is active. */
+    /** Return a transient record with raw input and outcome while its flow is active. */
     _matchingRecord(record: ActionRecord): ActionRecord;
-    /** Number of action records with raw input, output, or outcome retained for active flows. */
+    /** Number of action records with raw matching values retained for active flows. */
     _getMatchingRecordCount(): number;
     /**
      * Append an action output after redacting matching field names. A supplied
      * `outcome` records its known posture; otherwise the output is recorded as a
-     * successful result. Raw output and outcome remain available to active-flow
-     * matching.
+     * successful result. The raw outcome remains available to active-flow matching.
      */
     invoked({ id, output, outcome, }: {
         id: string;
         output: Record<string, unknown>;
         outcome?: ActionOutcome;
-    }): {
-        id: string;
-    };
+    }): void;
     /**
      * Append a fault classification for an ask without recording an outcome.
      */
-    faulted({ id, fault, error }: {
+    faulted({ id, fault, error, }: {
         id: string;
         fault: Record<string, unknown>;
         error?: unknown;
-    }): {
-        id: string;
-    };
+    }): void;
     /** All records belonging to a flow, in order (or `undefined` if unknown). */
     _getByFlow(flow: string): ActionRecord[] | undefined;
-    /** Records without an outcome, including in-flight and faulted asks. */
-    _getPending(): ActionRecord[];
-    /** Records with a fault classification. */
-    _getFaulted(): ActionRecord[];
     /** Look up a single record by id. */
     _getById(id: string): ActionRecord | undefined;
 }
@@ -1777,12 +1748,11 @@ export declare function breachLimit(actions: Pick<ActionConcept, "_recordExecuti
  */
 import { type FormerRef } from "../../reads/former-nodes.ts";
 import type { ReadEnv } from "../../reads/definition-registry.ts";
-import type { ActionPattern, ExecutableReaction, Frame } from "../types.ts";
+import type { ExecutableReaction } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { type FiringBook } from "./firing.ts";
 import type { ReactionLogger } from "./logging.ts";
 import type { TriggerMatcher } from "./matching.ts";
-type ActionArguments = Record<string | symbol, unknown>;
 export declare class FiringPipeline {
     private readonly matcher;
     private readonly actions;
@@ -1803,7 +1773,7 @@ export declare class FiringPipeline {
     private assertProvenance;
     private triggerIdsOf;
     private dispatchFrames;
-    matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
+    private matchThen;
     private bindingsOf;
     private runPipelineForFrame;
     private runStepNode;
@@ -1816,10 +1786,9 @@ export declare class FiringPipeline {
     private landFormingFault;
     private resolveFormerInputs;
 }
-export {};
 
 === dist/engine/reactions/runtime/firing.d.ts ===
-import type { FiringRecord, MemoryStore } from "./log-store.ts";
+import type { MemoryStore } from "./log-store.ts";
 import type { Redactor } from "../../utils/redaction.ts";
 export interface FiringFill {
     reaction: string;
@@ -1827,10 +1796,6 @@ export interface FiringFill {
     whenIds: string[];
     bindings: Record<string, unknown>;
     produced: string[];
-    branches: FiringBranch[];
-}
-export interface FiringBranch {
-    fill: FiringFill;
     marked: boolean;
 }
 /** Owns the durable and in-flight halves of the double-fire guard. */
@@ -1840,12 +1805,10 @@ export declare class FiringBook {
     private readonly redactor;
     private readonly inFlightConsumed;
     constructor(store: MemoryStore, admit?: ((flow: string) => void) | undefined, redactor?: Redactor);
-    hasConsumed(recordId: string | undefined, reaction: string): boolean;
-    newBranch(fill: FiringFill): FiringBranch;
-    mark(branch: FiringBranch): void;
-    unmark(branch: FiringBranch): void;
+    hasConsumed(recordId: string, reaction: string): boolean;
+    mark(fill: FiringFill): void;
+    unmark(fill: FiringFill): void;
     record(fill: FiringFill): void;
-    firings(reaction: string): FiringRecord[];
 }
 
 === dist/engine/reactions/runtime/instrumenting.d.ts ===
@@ -1898,8 +1861,6 @@ export declare function reactQuietly(state: Pick<InstrumentationState, "react" |
 export declare function errorOutputFromThrown(error: unknown): Record<string, unknown>;
 /** Build the stable action/query proxy for one concept instance. */
 export declare function instrumentConcept<T extends object>(state: InstrumentationState, concept: T, name?: string): T;
-export declare function instrument<T extends Record<string, object>>(state: InstrumentationState, concepts: T): T;
-export declare function instrument<T extends object>(state: InstrumentationState, concept: T): T;
 /** Owns the mutable proxy identities and query caches for one engine. */
 export declare class ConceptInstrumentation {
     private readonly state;
@@ -1907,7 +1868,7 @@ export declare class ConceptInstrumentation {
     instrumentConcept<T extends object>(concept: T, name?: string): T;
     instrument<T extends Record<string, object>>(concepts: T): T;
     instrument<T extends object>(concept: T): T;
-    invalidate(concept: object): void;
+    private invalidate;
     invalidateAll(): void;
     rawConceptOf(instrumented: object): object;
 }
@@ -1933,7 +1894,6 @@ import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
 export type RetentionPolicy = "keepAll" | {
     window: number;
 };
-export declare function assertRetentionPolicy(policy: RetentionPolicy, site: string): void;
 /**
  * One entry in the action log, as served by the engine-owned folded view.
  *
@@ -1941,7 +1901,7 @@ export declare function assertRetentionPolicy(policy: RetentionPolicy, site: str
  * not stored on the action record.
  */
 export interface ActionRecord {
-    id?: string;
+    id: string;
     action: InstrumentedAction;
     concept: object;
     input: Record<string, unknown>;
@@ -2180,7 +2140,7 @@ export declare class ReactionLogger {
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     /** Build an observer event with field-name-redacted input, output, and outcome. */
-    toEvent(record: ActionRecord, durationMs: number): LogEvent;
+    private toEvent;
     /** Call each observer; log an opaque error class when one throws. */
     emit(record: ActionRecord, durationMs?: number): void;
     frames(message: string, frames: Frames<Frame>): void;
@@ -2189,24 +2149,19 @@ export declare class ReactionLogger {
 
 === dist/engine/reactions/runtime/matching.d.ts ===
 import { Frames } from "../../reads/frames.ts";
-import { structurallyEqual } from "../../reads/value-equality.ts";
 import type { ActionConcept, ActionRecord } from "./actions.ts";
-import type { ActionOutcome, ActionPattern, ChannelPattern, ChannelPosture, ExecutableReaction, Frame, Mapping } from "../types.ts";
-/** The posture in which an action outcome landed. */
-export declare function postureOfOutcome(outcome: ActionOutcome): ChannelPosture;
-/** Compare literal values with the same equality used by reads and formers. */
-export declare const literalEquals: typeof structurallyEqual;
+import type { ActionOutcome, ActionTriggerPattern, ChannelPattern, ChannelPosture, ExecutableReaction, Frame, Mapping } from "../types.ts";
 /**
  * Match each stated field against a record and extend the supplied frame.
  * Accepted field patterns are authored variables, `{ $var }`, `RegExp`,
- * authored candidate matchers, `$oneOf`, `$regexp`, `$lit`, and `$is` with a
- * definition-site value. Other values are matched as literals by
- * {@link literalEquals}. Object literals do not bind variables recursively.
+ * `$oneOf`, `$regexp`, `$lit`, and `$is` with a definition-site value. Other
+ * values are matched with the structural equality shared by reads and formers. Object literals do
+ * not bind variables recursively.
  */
 export declare function unifyPattern(recordValues: Record<string, unknown>, pattern: Record<string, unknown>, frame: Frame): Frame | undefined;
 export declare function unifyOutputPattern(outcome: ActionOutcome, pattern: Mapping, frame: Frame): Frame | undefined;
 /** Match action identity, provenance, posture, input, and output for one trigger. */
-export declare function matchArguments(record: ActionRecord, pattern: ActionPattern, frame: Frame, recordBinding: symbol): Frame | undefined;
+export declare function matchArguments(record: ActionRecord, pattern: ActionTriggerPattern, frame: Frame, recordBinding: symbol): Frame | undefined;
 /** Match one record against a posture channel, exclusions, provenance, and payload pattern. */
 export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: {
     get(candidate: object): object | undefined;
@@ -2217,7 +2172,7 @@ export declare class TriggerMatcher {
     private readonly rawConceptOf;
     private readonly assertRows?;
     constructor(records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">, consumption: {
-        hasConsumed(recordId: string | undefined, reaction: string): boolean;
+        hasConsumed(recordId: string, reaction: string): boolean;
     }, rawConceptOf: (instrumented: object) => object, assertRows?: ((flow: string, count: number) => void) | undefined);
     match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
     posture(record: ActionRecord): ChannelPosture | undefined;
@@ -2305,7 +2260,7 @@ export type RawFaultReporter = (report: RawFaultReport) => void;
 /** Deliver a privileged report without allowing the reporter to affect runtime behavior. */
 export declare function reportRawFault(reporter: RawFaultReporter | undefined, report: RawFaultReport): void;
 export type OperationalObserver = (event: OperationalEvent) => void;
-export interface FlowOperationalContext {
+interface FlowOperationalContext {
     route: string;
     correlationId: string;
 }
@@ -2351,14 +2306,12 @@ import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { FormerRef, FusedFormer } from "../../reads/former-nodes.ts";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
 import type { RelationView } from "../../reads/lines.ts";
-import type { ActionPattern, Frame, ReactionMap } from "../types.ts";
+import type { ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { type QueryCacheMode } from "./instrumenting.ts";
 import { Logging } from "./logging.ts";
-import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./logging.ts";
 import type { ExecutionControl } from "./operational.ts";
-type ActionArguments = Record<string | symbol, unknown>;
 export declare class Reacting {
     Action: ActionConcept;
     private readonly registry;
@@ -2376,7 +2329,6 @@ export declare class Reacting {
     get logging(): Logging;
     set logging(level: Logging);
     registerComputations(computations: Record<string, ComputationRef>): void;
-    invalidateCaches(concept: object): void;
     invalidateAllCaches(): void;
     register(reactions: ReactionMap): void;
     readEnv(): ReadEnv;
@@ -2391,8 +2343,6 @@ export declare class Reacting {
     declareViews(...refs: RelationView[]): void;
     registerFormers(formers: FormerIR[]): void;
     react(record: ActionRecord, durationMs?: number): Promise<void>;
-    matchThen(then: ActionPattern, frame: Frame, by?: string, authoritativeFlow?: string): ActionArguments;
-    _getFirings(reaction: string): FiringRecord[];
     instrumentConcept<T extends object>(concept: T, name?: string): T;
     instrument<T extends Record<string, object>>(concepts: T): T;
     instrument<T extends object>(concept: T): T;
@@ -2402,7 +2352,6 @@ export declare class Reacting {
     private assertRows;
     private consumeAction;
 }
-export {};
 
 === dist/engine/reactions/runtime/reaction-catalog.d.ts ===
 /** Own executable reactions, exported definitions, and their trigger indexes. */
@@ -2481,8 +2430,12 @@ export interface ChannelPattern {
     /** Pin to occurrences asked for by one reaction — the ask's provenance. */
     by?: string;
 }
+/** A concrete action trigger always has an output pattern after authoring normalization. */
+export type ActionTriggerPattern = ActionPattern & {
+    output: Mapping;
+};
 /** A `when` clause: one concrete action, or a posture channel. */
-export type TriggerPattern = ActionPattern | ChannelPattern;
+export type TriggerPattern = ActionTriggerPattern | ChannelPattern;
 /**
  * The normalized result of invoking an action: one success kind and one
  * refusal kind. An action that returns nothing
@@ -2498,16 +2451,8 @@ export type ActionOutcome = {
 };
 /** A pure transform over frames — the `where` clause. */
 export type WhereFn = (frames: Frames) => Frames | PromiseLike<Frames>;
-declare const MatcherBrand: unique symbol;
 declare const NamedLineBrand: unique symbol;
 declare const CompleteInputBrand: unique symbol;
-/** A branded value matcher used inside a pattern mapping. */
-export interface Matcher {
-    readonly [MatcherBrand]: true;
-    readonly kind: "oneOf";
-    readonly label: string;
-    readonly candidates?: readonly unknown[];
-}
 /** A dispatch step. */
 export interface StepNode {
     kind: "step";
@@ -2559,7 +2504,7 @@ type ActionOutputPattern<TReturn> = {
     readonly [Key in ActionOutputKeys<TReturn>]?: ActionOutputValue<TReturn, Key> | symbol;
 };
 type ExactActionOutputPattern<TReturn, TOutput extends Mapping> = TOutput & ActionOutputPattern<TReturn> & Record<Exclude<keyof TOutput, ActionOutputKeys<TReturn>>, never>;
-export interface NamedActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TReturn = unknown> extends ActionCall<TAction, TInput, TReturn> {
+interface NamedActionCall<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TReturn = unknown> extends ActionCall<TAction, TInput, TReturn> {
     readonly [NamedLineBrand]: true;
 }
 /** A callable action line pinned to a successful return. */
@@ -2584,7 +2529,7 @@ export interface ReturnedTriggerActionLine<TAction extends InstrumentedAction = 
     linePosture: "returned";
     named(name: string): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
 }
-export interface NamedReturnedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TOutput extends Mapping = Mapping> extends ReturnedActionLine<TAction, TInput, TOutput> {
+interface NamedReturnedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TOutput extends Mapping = Mapping> extends ReturnedActionLine<TAction, TInput, TOutput> {
     readonly [NamedLineBrand]: true;
 }
 /** A callable action line pinned to a declared refusal. */
@@ -2609,7 +2554,7 @@ export interface RefusedTriggerActionLine<TAction extends InstrumentedAction = I
     linePosture: "refused";
     named(name: string): RefusedTriggerActionLine<TAction, TInput, TRefusal>;
 }
-export interface NamedRefusedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TRefusal extends Mapping = Mapping> extends RefusedActionLine<TAction, TInput, TRefusal> {
+interface NamedRefusedActionLine<TAction extends InstrumentedAction = InstrumentedAction, TInput extends Mapping = Mapping, TRefusal extends Mapping = Mapping> extends RefusedActionLine<TAction, TInput, TRefusal> {
     readonly [NamedLineBrand]: true;
 }
 /** A callable consequence before it receives a sibling-path label. */
@@ -2635,8 +2580,8 @@ export interface NamedBranchChain {
 }
 /** Public executable node accepted by `then`. */
 export type ThenNode = StepNode | BranchChain | NamedBranchChain;
-export type ConsequenceNode = ActionCall | ReturnedActionLine | RefusedActionLine | BranchChain | NamedBranchChain;
-export type NamedThenNode = NamedActionCall | NamedReturnedActionLine | NamedRefusedActionLine | NamedBranchChain;
+type ConsequenceNode = ActionCall | ReturnedActionLine | RefusedActionLine | BranchChain | NamedBranchChain;
+type NamedThenNode = NamedActionCall | NamedReturnedActionLine | NamedRefusedActionLine | NamedBranchChain;
 /** The raw object a reaction function returns before it is registered by name. */
 export interface ReactionDeclaration {
     when: TriggerPattern[];
@@ -2733,16 +2678,14 @@ export declare function hasFuncBrand(value: unknown, marker: symbol): value is o
 
 === dist/engine/reads/collection.d.ts ===
 /**
- * Discover view, fragment, and fused-former dependencies, collect them
- * transitively in registration order, and serialize one registered
- * application's reactions, views, and formers.
+ * Discover view, fragment, and fused-former dependencies.
  */
 import type { Mapping } from "../reactions/types.ts";
 import type { FormerRef, FusedFormer } from "./former-nodes.ts";
-import type { AppIR, ReactionIR, UnloweredIR, ViewOpIR } from "./ir.ts";
+import type { ViewOpIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
 /** A named dependency plus its optional definition-site live reference. */
-export interface FormerChannel<T> {
+interface FormerChannel<T> {
     name: string;
     live?: T;
 }
@@ -2756,10 +2699,7 @@ export declare function fusedFormersOf(mapping: Mapping): FusedFormer[];
 export declare function viewChannelsOfView(ref: {
     alternatives: readonly (readonly ViewOpIR[])[];
 }): FormerChannel<RelationView>[];
-/** Every view referenced by reactions and formers, transitively. */
-export declare function collectViews(reactions: Iterable<ReactionIR[]>, formers?: Iterable<FormerRef>, viewOf?: (name: string) => RelationView | undefined): RelationView[];
-/** Serialize one registered application's reactions, views, and formers. */
-export declare function serializeApp(registered: Iterable<ReactionIR[]>, unlowered: Iterable<UnloweredIR>, formers?: Iterable<FormerRef>, viewOf?: (name: string) => RelationView | undefined): AppIR;
+export {};
 
 === dist/engine/reads/computations.d.ts ===
 /**
@@ -2774,7 +2714,7 @@ export declare function serializeApp(registered: Iterable<ReactionIR[]>, unlower
 import type { Mapping } from "../reactions/types.ts";
 /** The runtime shape of a computation: one input mapping in, one value out. */
 export type ComputationFn = (input: Mapping) => unknown | Promise<unknown>;
-export type ComputationSource = "standard" | "vocabulary";
+type ComputationSource = "standard" | "vocabulary";
 /** A named computation ref, callable with an input pattern. */
 export interface ComputationRef {
     (input: Mapping): FusedComputation;
@@ -2790,11 +2730,11 @@ export interface FusedComputation {
 export declare function isFusedComputation(value: unknown): value is FusedComputation;
 /** Construct inert named data. Vocabulary construction is the public owner. */
 export declare function computationRef(name: string, fn: ComputationFn, source: ComputationSource): ComputationRef;
-export declare function lt(left: unknown, right: unknown): FusedComputation;
-export declare function le(left: unknown, right: unknown): FusedComputation;
-export declare function gt(left: unknown, right: unknown): FusedComputation;
-export declare function ge(left: unknown, right: unknown): FusedComputation;
-export declare function among(value: unknown, collection: unknown): FusedComputation;
+declare function lt(left: unknown, right: unknown): FusedComputation;
+declare function le(left: unknown, right: unknown): FusedComputation;
+declare function gt(left: unknown, right: unknown): FusedComputation;
+declare function ge(left: unknown, right: unknown): FusedComputation;
+declare function among(value: unknown, collection: unknown): FusedComputation;
 /** The built-in order and membership relations, read as closed lines. */
 export declare const is: {
     readonly lt: typeof lt;
@@ -2805,6 +2745,7 @@ export declare const is: {
 };
 /** Engine-provided computation refs installed into every engine instance. */
 export declare const standardComputations: readonly ComputationRef[];
+export {};
 
 === dist/engine/reads/definition-registry.d.ts ===
 /** Own the definitions and read environments installed in one engine. */
@@ -2848,11 +2789,10 @@ export declare class Registry {
     registerFormers(formers: FormerIR[]): void;
     bindReaction(reaction: ReactionIR): BoundReaction;
     assertFormable(ref: FormerRef): void;
-    assertViewUsable(ref: RelationView): void;
     formerRefs(): Iterable<FormerRef>;
     formerNamed(name: string): FormerRef | undefined;
     viewRefs(): Iterable<RelationView>;
-    viewNamed(name: string): RelationView | undefined;
+    private viewNamed;
     readBackEnv(): ReadBackEnv;
     readEnv(): ReadEnv;
     private conceptNamed;
@@ -2875,62 +2815,32 @@ export declare class Registry {
  */
 import type { FormerNodeIR, ViewOpIR } from "./ir.ts";
 import type { QueryPromise } from "./query-metadata.ts";
-export interface FormerBindingHooks {
+interface FormerBindingHooks {
     /** Resolve a source line's promise for the fold lints; omit to skip them. */
     promiseOf?(line: Extract<ViewOpIR, {
         op: "find" | "whether" | "no";
     }>, site: string): QueryPromise;
 }
 export declare function assertFormerBindings(node: FormerNodeIR, inherited: ReadonlySet<string>, site: string, hooks?: FormerBindingHooks): void;
+export {};
 
 === dist/engine/reads/former-builders.d.ts ===
 /** Formers name and shape read answers at the edge. */
-import type { Condition, FindOp, WhereOp } from "./where-ops.ts";
+import type { Condition } from "./where-ops.ts";
 import type { ReadLine } from "./lines.ts";
 import type { ViewBlock } from "./views.ts";
 import { type FreeBindings, type InputBindings } from "./sentence.ts";
-import { type Arranged, type CountNode, type DistinctNode, type EachNode, type FirstNode, type FormerEntry, type FormerNode, type FormerRef, type FusedFormer, type LeafNode, type RecordNode, type FormerUse } from "./former-nodes.ts";
-/** The ordering vocabulary: `arranged.oldest`, `arranged.newest`, `arranged.by(v)`. */
-export declare const arranged: {
-    /** Record order, represented by the query's row order. */
-    readonly oldest: Arranged;
-    /** The record's own order, reversed. */
-    readonly newest: Arranged;
-    /** Order on a value the matches carry. */
-    readonly by: (variable: symbol, order?: "ascending" | "descending") => Arranged;
-};
-/** A leaf: a bound variable shown as the value it holds. @internal */
-export declare function leaf(variable: symbol): LeafNode;
+import { type CountNode, type DistinctNode, type EachNode, type FirstNode, type FormerEntry, type FormerNode, type FormerRef, type FusedFormer, type RecordNode, type FormerUse } from "./former-nodes.ts";
 /** A formed object whose flat fragment splices are being stated. */
 export interface FormNode extends RecordNode {
     splicing(...uses: readonly (FusedFormer | FormerUse)[]): FormNode;
 }
 export declare function form(entries: Record<string, FormerEntry>): FormNode;
 export declare function formFrom(block: ViewBlock, entries: Record<string, FormerEntry>): FormNode;
-/** How many matched — the selection consumed by a count instead of carried. @internal */
-export declare function countOf(from: FindOp, options?: {
-    where?: readonly WhereOp[];
-}): CountNode;
-/**
- * One bound value read off the first match, by the comprehension's own
- * ordering: `the createdAt of the first … arranged by createdAt, descending`.
- * An empty selection reads as `null`.
- * @internal
- */
-export declare function firstOf(from: FindOp, options: {
-    where?: readonly WhereOp[];
-    arranged?: Arranged;
-    value: symbol;
-}): FirstNode;
-/** The distinct values of a variable the selection binds, first-seen order. @internal */
-export declare function distinctOf(from: FindOp, options: {
-    where?: readonly WhereOp[];
-    value: symbol;
-}): DistinctNode;
 /** How a captured selection orders itself: a bound variable, or the record's own order. */
 type ArrangedWord = "newest" | "oldest";
 /** The consumers a captured selection may end in — exactly one, always. */
-export interface SelectionConsumers {
+interface SelectionConsumers {
     /** Carry each match as one object. */
     form(entries: Record<string, FormerEntry>): EachFormNode;
     /** How many matched. */
@@ -2940,11 +2850,11 @@ export interface SelectionConsumers {
     /** The distinct values of a variable the selection binds, first-seen order. */
     distinct(value: symbol): DistinctNode;
 }
-export interface EachFormNode extends EachNode {
+interface EachFormNode extends EachNode {
     splicing(...uses: readonly (FusedFormer | FormerUse)[]): EachFormNode;
 }
 /** A captured selection mid-statement: order it, refine it, then consume it. */
-export interface SelectionBuilder extends SelectionConsumers {
+interface SelectionBuilder extends SelectionConsumers {
     /** Refine the selection with condition lines (never `earlier`, never `count`). */
     where(...conditions: readonly Condition[]): SelectionBuilder;
     /** Order the matches: `.arranged(v)`, `.arranged(v, "descending")`, `.arranged("newest")`. */
@@ -3008,7 +2918,7 @@ export type Arranged = {
     readonly order: "ascending" | "descending";
 };
 /** The selection every comprehension-shaped node shares: source line and refinements. */
-export interface Selection {
+interface Selection {
     readonly from: FindOp;
     readonly where: readonly WhereOp[];
 }
@@ -3040,7 +2950,7 @@ export interface DistinctNode extends Selection {
     readonly node: "distinct";
     readonly value: symbol;
 }
-export interface LeafNode {
+interface LeafNode {
     readonly node: "leaf";
     readonly var: symbol;
 }
@@ -3089,6 +2999,7 @@ export declare class FormerFault extends Error {
  * @internal
  */
 export declare function formerRefWith(name: string, ins: readonly string[], inputVars: readonly symbol[], bindings: readonly string[], promise: Exclude<QueryPromise, "many">, body: FormerNodeIR): FormerRef;
+export {};
 
 === dist/engine/reads/frames.d.ts ===
 /**
@@ -3239,23 +3150,13 @@ export type ValueIR = null | boolean | number | string | ValueIR[] | {
 /** A pattern: a mapping of role names to pattern values. */
 export type PatternIR = Record<string, ValueIR>;
 /** The `$`-tags a {@link ValueIR} carries beyond plain data and arrays. */
-export type MarkerTag = "$var" | "$oneOf" | "$regexp" | "$is" | "$former" | "$lit";
+type MarkerTag = "$var" | "$oneOf" | "$regexp" | "$is" | "$former" | "$lit";
 /** Whether `value` is a single-key mapping whose one key is `key` — a marker's spelling. */
 export declare function hasMarkerKey(value: object, key: string): boolean;
 /** Whether a pattern value is the `{ $var }` marker — a variable, by name. */
 export declare function isVarIR(value: unknown): value is {
     $var: string;
 };
-/**
- * The side channel for live values the IR cannot carry: a `custom` op's
- * function, an opaque matcher's predicate, a view or fragment reference
- * captured at its definition site. A symbol-keyed field stores the value, so
- * `JSON.stringify` never sees it — exports stay pure data. A node built by
- * the authoring surface carries it and runs; a node re-registered from JSON
- * lacks it, and whatever required it refuses at registration, exactly as
- * opaque escapes always have.
- */
-export declare const LIVE: unique symbol;
 /** Attach a definition-site live value to an IR node (returns the node). */
 export declare function withLive<T extends object>(node: T, live: unknown): T;
 /** Return the definition-site live value attached to an IR node, if present. */
@@ -3300,7 +3201,7 @@ export type TriggerIR = ActionTriggerIR | ChannelTriggerIR;
  * its registered name — indistinguishable at the use-site, so one field pair
  * carries both (exactly one is present).
  */
-export interface LineRefIR {
+interface LineRefIR {
     query?: {
         concept: string;
         query: string;
@@ -3488,7 +3389,7 @@ export interface AppIR {
     unlowered: UnloweredIR[];
 }
 /** One action as the inventory reports it: its name, observed input roles, declared refusals. */
-export interface ActionInventoryIR {
+interface ActionInventoryIR {
     name: string;
     /** Input roles observed from the implementation's destructuring; absent when unreadable. */
     roles?: string[];
@@ -3496,7 +3397,7 @@ export interface ActionInventoryIR {
     refusals?: string[];
 }
 /** One query (a `_`-prefixed method): a standing question the concept's state answers. */
-export interface QueryInventoryIR {
+interface QueryInventoryIR {
     name: string;
     roles?: string[];
     /** The concept's promised cardinality. */
@@ -3513,6 +3414,7 @@ export interface ConceptInventoryIR {
     actions: ActionInventoryIR[];
     queries: QueryInventoryIR[];
 }
+export {};
 
 === dist/engine/reads/lines.d.ts ===
 /**
@@ -3588,7 +3490,6 @@ export interface ViewReadLine<Row = any> extends LineShape<Row, ViewReadLine<Row
 /** One plain line: query-backed or view-backed, with the same condition shape. */
 export type ReadLine<Row = any> = QueryReadLine<Row> | ViewReadLine<Row>;
 export declare function isReadLine(value: unknown): value is ReadLine;
-export declare function isQueryReadLine(value: unknown): value is QueryReadLine;
 /** Construct a read from a query or view and its input pattern. @internal */
 export declare function lineOf(source: {
     query: (...args: never[]) => unknown;
@@ -3601,22 +3502,22 @@ export {};
 === dist/engine/reads/local-behavior.d.ts ===
 /** Discover executable behavior that cannot travel as portable application data. */
 import type { AppIR } from "./ir.ts";
-export type LocalDefinitionKind = "reaction" | "view" | "former";
-export interface LocalBehaviorDefinition {
+type LocalDefinitionKind = "reaction" | "view" | "former";
+interface LocalBehaviorDefinition {
     kind: LocalDefinitionKind;
     name: string;
 }
 export interface ObservedLocalDefinition extends LocalBehaviorDefinition {
     reasons: readonly string[];
 }
-export type OpaqueOccurrenceKind = "custom" | "identity-pattern" | "unlowered";
-export interface OpaqueOccurrence {
+type OpaqueOccurrenceKind = "custom" | "identity-pattern" | "unlowered";
+interface OpaqueOccurrence {
     definition: LocalBehaviorDefinition;
     kind: OpaqueOccurrenceKind;
     occurrence: number;
     reason: string;
 }
-export interface LocalBehaviorAnalysis {
+interface LocalBehaviorAnalysis {
     localDefinitions: readonly ObservedLocalDefinition[];
     occurrences: readonly OpaqueOccurrence[];
 }
@@ -3626,17 +3527,10 @@ export declare function localDefinitionKey(definition: LocalBehaviorDefinition):
  * contains them; references do not duplicate inventory ownership.
  */
 export declare function analyzeLocalBehavior(app: AppIR): LocalBehaviorAnalysis;
+export {};
 
 === dist/engine/reads/matchers.d.ts ===
-/**
- * Value matchers usable inside `when` patterns: `oneOf(...)` is a closed
- * equality disjunction, serializable as data.
- */
-import type { Matcher, Mapping } from "../reactions/types.ts";
-/** Create an inspectable equality matcher. */
-export declare function oneOf(...candidates: unknown[]): Matcher;
-/** Whether a value is a matcher built by this module. */
-export declare function isMatcher(value: unknown): value is Matcher;
+import type { Mapping } from "../reactions/types.ts";
 /** Convenience guard for pattern walkers: a plain string-keyed mapping. */
 export declare function isPlainMapping(value: unknown): value is Mapping;
 export declare function isPlainObject(value: unknown): value is Record<string, unknown>;
@@ -3651,9 +3545,9 @@ type AuthoredCountOp = {
     readonly in: Mapping;
     readonly out: symbol;
 };
-export type AuthoredOperation = AnyWhereOp | AuthoredCountOp;
-export type IROperation = WhereOpIR | ViewOpIR;
-export interface OperationFootprint<Name extends string | symbol> {
+type AuthoredOperation = AnyWhereOp | AuthoredCountOp;
+type IROperation = WhereOpIR | ViewOpIR;
+interface OperationFootprint<Name extends string | symbol> {
     /** Names read from the operation's primary input. */
     inputs: Name[];
     /** Names that must be bound before the operation can run. */
@@ -3675,8 +3569,8 @@ export {};
 
 === dist/engine/reads/pattern-encoding.d.ts ===
 /** Shared encoding for authored patterns used by reactions, views, and formers. */
-import type { ActionPattern, InstrumentedQuery, Mapping, TriggerPattern } from "../reactions/types.ts";
-import type { ActionTriggerIR, PatternIR, QueryRefIR, TriggerIR, WhereOpIR } from "./ir.ts";
+import type { InstrumentedQuery, Mapping, TriggerPattern } from "../reactions/types.ts";
+import type { PatternIR, QueryRefIR, TriggerIR, WhereOpIR } from "./ir.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
 export declare class PatternVariables {
     private names;
@@ -3685,7 +3579,6 @@ export declare class PatternVariables {
     nameOf(variable: symbol): string;
 }
 export declare function encodePattern(mapping: Mapping | undefined, vars: PatternVariables): PatternIR;
-export declare function encodeActionTrigger(pattern: ActionPattern, vars: PatternVariables): ActionTriggerIR;
 export declare function encodeTrigger(pattern: TriggerPattern, vars: PatternVariables): TriggerIR;
 /** The `{ concept, query }` names a query reference carries, live or static. */
 export declare function queryRefOf(query: InstrumentedQuery): QueryRefIR;
@@ -3699,7 +3592,6 @@ export declare function patternVariables(...mappings: Array<Mapping | undefined>
  * array of records is any number of answers. Anything else is a query fault.
  */
 import type { Frame, InstrumentedQuery, Mapping } from "../reactions/types.ts";
-import type { QueryMetadata } from "./query-metadata.ts";
 /** Give engine-owned evaluations the cached implementation behind a direct-read root. */
 export declare function registerEvaluationQuery(direct: InstrumentedQuery, evaluation: InstrumentedQuery): void;
 /**
@@ -3710,9 +3602,6 @@ export declare function registerEvaluationQuery(direct: InstrumentedQuery, evalu
 export declare class QueryAnswerFault extends Error {
     constructor(message: string);
 }
-/** Query metadata used in cardinality-fault messages. */
-export interface NamedQuery extends QueryMetadata {
-}
 /**
  * A state read ranges only over a concept query — an instrumented,
  * `_`-prefixed method carrying a `queryName`; an arbitrary function is not
@@ -3721,12 +3610,6 @@ export interface NamedQuery extends QueryMetadata {
  * site has more to say).
  */
 export declare function assertConceptQuery(query: unknown, op: string, hint?: string): InstrumentedQuery;
-/**
- * Normalize a query answer into rows. A record becomes one row and an array
- * supplies the rows. Scalars, null, and arrays containing non-record values
- * raise query faults.
- */
-export declare function rowsOfAnswer(value: unknown, query: NamedQuery): unknown[];
 /**
  * Fill a query input pattern from the current frame, invoke the query, and
  * normalize its answer to rows. Each caller decides how to handle an unbound
@@ -3760,7 +3643,7 @@ export interface QueryMetadata {
 import type { ReactionDeclaration, StepNode, TriggerPattern, WhereFn } from "../reactions/types.ts";
 import type { ReactionIR, UnloweredIR } from "./ir.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
-export type LoweredWhereOp = AnyWhereOp;
+type LoweredWhereOp = AnyWhereOp;
 /** One lowered reaction with live references, ready to compile. */
 export interface LoweredReaction {
     name: string;
@@ -3769,7 +3652,7 @@ export interface LoweredReaction {
     whereFn?: WhereFn;
     step: StepNode;
 }
-export interface LowerOutcome {
+interface LowerOutcome {
     reactions?: LoweredReaction[];
     reason?: string;
 }
@@ -3779,11 +3662,10 @@ export declare function lowerReaction(name: string, decl: ReactionDeclaration): 
 export declare function serializeReaction(reaction: LoweredReaction): ReactionIR;
 /** Keep every inspectable dependency fact from a reaction whose whole pipeline stays local. */
 export declare function serializeUnloweredReaction(name: string, reason: string, declaration: ReactionDeclaration): UnloweredIR;
+export {};
 
 === dist/engine/reads/reaction-validation.d.ts ===
 import type { ReactionDeclaration, StepNode } from "../reactions/types.ts";
-export declare function setReactionLintExtraUses(declaration: ReactionDeclaration, uses: readonly symbol[]): ReactionDeclaration;
-export declare function copyReactionLintExtraUses(source: ReactionDeclaration, target: ReactionDeclaration): void;
 export declare function lintReactionOpens(name: string, decl: ReactionDeclaration): void;
 export declare function assertThenInputsAreData(reactionName: string, then: StepNode[]): void;
 
@@ -3803,9 +3685,6 @@ export interface ReadBackEnv {
 }
 /** Generate one reaction's line-by-line read-back. */
 export declare function readBackReaction(reaction: ReactionIR, env: ReadBackEnv): string;
-/** Generate one view's declared promise and inferred body bound. */
-export declare function readBackView(view: ViewIR, env: ReadBackEnv): string;
-export declare function readBackFormer(former: FormerIR, env: ReadBackEnv): string;
 /** The whole application's read-back: every view, then every reaction. */
 export declare function readBackApp(views: readonly ViewIR[], formers: readonly FormerIR[], reactions: readonly ReactionIR[], unlowered: readonly UnloweredIR[], env: ReadBackEnv): string;
 
@@ -3824,33 +3703,18 @@ export declare function readBackApp(views: readonly ViewIR[], formers: readonly 
  * `when` joins occurrences. The renderer emits only ask consequences;
  * attestations and world effects are not implemented.
  */
-import type { AppIR, ConceptInventoryIR, FormerIR, PatternIR, ReactionIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR } from "./ir.ts";
-/** Render one pattern value as it reads inside a role list. */
-export declare function renderValue(value: ValueIR): string;
+import type { AppIR, ConceptInventoryIR, PatternIR, ReactionIR, ViewOpIR, WhereOpIR } from "./ir.ts";
 /** Render a role list: bare names bind, colons rename, and literals test. */
 export declare function renderRoles(pattern: PatternIR): string;
 /** Render one where op — from a reaction or a view block — as its condition sentence. */
 export declare function renderWhereOp(op: WhereOpIR | ViewOpIR): string;
-/**
- * Render one view in a ` ```view `
- * block): the human name with its declared binding partitions, then each where block — one line
- * when the block is a single condition, an indented conjunction otherwise.
- * Stacked blocks are the alternatives; this is where disjunction lives.
- */
-export declare function renderView(view: ViewIR): string;
-/**
- * Render one former in a
- * ` ```former ` block): a complete heading followed by the tree of records,
- * comprehensions, named former reads, and aggregate leaves.
- */
-export declare function renderFormer(formerIR: FormerIR): string;
 /**
  * Render one reaction IR entry in a ` ```reaction ` block. A multi-clause `when` consumes
  * a joint match and prints each additional clause as `and jointly when …`.
  */
 export declare function renderReaction(reaction: ReactionIR): string;
 /** Everything `renderApp` needs, as data. */
-export interface AppSpecIR {
+interface AppSpecIR {
     /** The application's name, used as the document title. */
     title: string;
     /** Inventories of the instrumented concepts, in registration order. */
@@ -3864,6 +3728,7 @@ export interface AppSpecIR {
  * Missing concept prose is labeled rather than omitted.
  */
 export declare function renderApp(spec: AppSpecIR): string;
+export {};
 
 === dist/engine/reads/schedule.d.ts ===
 /**
@@ -3874,14 +3739,8 @@ export declare function renderApp(spec: AppSpecIR): string;
  */
 import type { ViewOpIR, WhereOpIR } from "./ir.ts";
 type AnyOpIR = WhereOpIR | ViewOpIR;
-/** The names an op needs bound before it can evaluate. */
-export declare function opNeedsIR(op: AnyOpIR): string[];
-/** The names an op can open, given what is already bound. */
-export declare function opOpensIR(op: AnyOpIR, bound: ReadonlySet<string>): string[];
-/** Every name an op's patterns mention, opening or not — the lint's counts. */
-export declare function opNamesIR(op: AnyOpIR): string[];
 /** What one scheduled block settled: the order, and each op's opened names. */
-export interface ScheduledBlock<Op extends AnyOpIR> {
+interface ScheduledBlock<Op extends AnyOpIR> {
     ordered: Op[];
     /** Names bound after the block runs. */
     bound: Set<string>;
@@ -3911,15 +3770,8 @@ export {};
  * generation, and matching keep their own variant-specific switches.
  */
 import type { ConsequenceIR, FormerNodeIR, PatternIR, QueryRefIR, ReactionIR, SpliceIR, TriggerIR, ViewIR, ViewOpIR, WhereOpIR } from "./ir.ts";
-/** What one field of a variant holds, as the fold drivers read it. */
-type FieldKind = "query" | "pattern" | "varName" | "outNames" | "varNames" | "computationName" | "viewName" | "fragmentName" | "trigger" | "op" | "ops" | "splices" | "nodeMap" | "node" | "arrangedBy";
-type FieldTable = Readonly<Record<string, FieldKind>>;
-/** The where/view op vocabulary: every reference-carrying field, per op. */
-export declare const OP_FIELDS: Readonly<Record<string, FieldTable>>;
-/** The former-node vocabulary: every reference-carrying field, per variant. */
-export declare const FORMER_NODE_FIELDS: Readonly<Record<FormerNodeIR["node"], FieldTable>>;
 /** The callbacks a fold may register — every one optional, every one a reference kind. */
-export interface IRFold {
+interface IRFold {
     /** Every where/view op, before its fields. */
     op?(op: WhereOpIR | ViewOpIR): void;
     /** Every `{ concept, query }` reference: selections and where reads. */
@@ -3963,7 +3815,7 @@ export interface OutputBindings extends Vars {
 export interface FreeBindings extends Vars {
     readonly [FreeBindingsBrand]: true;
 }
-export interface BindingBag<TVars extends Vars = Vars> {
+interface BindingBag<TVars extends Vars = Vars> {
     readonly vars: TVars;
     readonly minted: Map<string, symbol>;
 }
@@ -3975,7 +3827,7 @@ export declare function bindingBag<TVars extends Vars = Vars>(): BindingBag<TVar
 /** Reject one declared name appearing in two binding partitions. */
 export declare function assertSeparateBags(kind: string, name: string, bags: ReadonlyArray<readonly [label: string, names: Iterable<string>]>): void;
 /** The parts a finished definition needs to become an object-call reference. */
-export interface ObjectRefSpec<Ref, Fused> {
+interface ObjectRefSpec<Ref, Fused> {
     kind: string;
     name: string;
     inputs: readonly string[];
@@ -4163,10 +4015,7 @@ export {};
 import type { ReadEnv } from "./definition-registry.ts";
 import { Frames } from "./frames.ts";
 import type { ViewOpIR } from "./ir.ts";
-import type { ViewOp } from "./views.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
-/** An op as evaluation accepts it: authored (live refs, symbols) or IR (names). */
-export type EvaluableOp = ViewOp | ViewOpIR;
 type AssertRows = (count: number) => void;
 /** Evaluate a where-op list over the working set, one op at a time. */
 export declare function applyWhereOps(frames: Frames, ops: readonly (WhereOp | ViewOpIR | Condition)[], env?: ReadEnv, assertRows?: AssertRows): Promise<Frames>;
@@ -4187,11 +4036,11 @@ export {};
  * closed conditions. Advanced code may use `custom(...)`.
  */
 import type { ComputationRef, FusedComputation } from "./computations.ts";
-import type { ActionPattern, InstrumentedQuery, Mapping } from "../reactions/types.ts";
+import type { ActionTriggerPattern, InstrumentedQuery, Mapping } from "../reactions/types.ts";
 import type { ReadLine, RelationView, ViewReadLine } from "./lines.ts";
 import type { FormerUse, FusedFormer } from "./former-nodes.ts";
 /** The query or view used by one read operation. */
-export interface LineRef {
+interface LineRef {
     readonly query?: InstrumentedQuery;
     readonly view?: RelationView;
 }
@@ -4203,24 +4052,24 @@ export interface FindOp extends LineRef {
     readonly not?: Mapping;
 }
 /** A read that succeeds only when no row matches. */
-export interface NoOp extends LineRef {
+interface NoOp extends LineRef {
     readonly op: "no";
     readonly in: Mapping;
     readonly out: Mapping;
 }
 /** A read that assigns matched outputs or assigns `null` when no row matches. */
-export interface WhetherOp extends LineRef {
+interface WhetherOp extends LineRef {
     readonly op: "whether";
     readonly in: Mapping;
     readonly out: Mapping;
 }
 /** A closed line over a named computation; failing rows are dropped. */
-export interface HoldsOp {
+interface HoldsOp {
     readonly op: "holds";
     readonly fused: FusedComputation;
 }
 /** A vocabulary-owned calculation; exactly one result, bound to one variable. */
-export interface ComputeOp {
+interface ComputeOp {
     readonly op: "compute";
     readonly computation: ComputationRef;
     readonly in: Mapping;
@@ -4244,14 +4093,12 @@ export type WhereOp = FindOp | NoOp | WhetherOp | HoldsOp | ComputeOp | CustomOp
  */
 export interface EarlierOp {
     readonly op: "earlier";
-    readonly pattern: ActionPattern;
+    readonly pattern: ActionTriggerPattern;
 }
 /** A where op as a reaction's `.where(...)` accepts it, including `earlier`. */
 export type AnyWhereOp = WhereOp | EarlierOp;
 /** A condition accepted by `where(...)`: an operation, read line, or named computation. */
 export type Condition = AnyWhereOp | ReadLine | FusedComputation;
-/** Whether a value is a where op built by this module (or `earlier`). */
-export declare function isWhereOp(value: unknown): value is AnyWhereOp;
 /** Brand an op constructed elsewhere (`earlier`, which needs action patterns). */
 export declare function brandWhereOp<T extends object>(op: T): T;
 /**
@@ -4276,21 +4123,21 @@ export declare function compute(computation: ComputationRef, input: Mapping, out
  * per out variable; a single out binds the return value directly).
  */
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
+export {};
 
 === dist/engine/tooling/artifact-plan.d.ts ===
 import type { ApplicationManifestV3 } from "./manifest.ts";
 import type { PlannedWireProjection } from "./wire-projection.ts";
-export type ArtifactKind = "specification" | "wire" | "manifest";
-export interface ArtifactPlanEntry {
+type ArtifactKind = "specification" | "wire";
+interface ArtifactPlanEntry {
     path: string;
     content: string;
     kind: ArtifactKind;
-    digest: string;
 }
 export interface ArtifactPlan {
     entries: ArtifactPlanEntry[];
 }
-export interface GeneratedPlanOptions {
+interface GeneratedPlanOptions {
     title: string;
     specification?: string;
     specificationBanner?: string;
@@ -4313,18 +4160,17 @@ export type ArtifactStatus = {
     path: string;
     kind: ArtifactKind;
     status: "failed";
-    errorClass: string;
 };
 export interface ArtifactFilesystem {
     read(path: string): Promise<string | undefined>;
     /** The adapter must write a same-directory temporary file and rename it. */
     writeAtomic(path: string, content: string): Promise<void>;
 }
-export declare function normalizeArtifactPath(path: string): string;
-export declare function artifactPlan(entries: readonly Omit<ArtifactPlanEntry, "digest">[]): ArtifactPlan;
+export declare function artifactPlan(entries: readonly ArtifactPlanEntry[]): ArtifactPlan;
 export declare function planGenerated(manifest: ApplicationManifestV3, options: GeneratedPlanOptions): ArtifactPlan;
 export declare function checkArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export declare function applyArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
+export {};
 
 === dist/engine/tooling/diagnostics.d.ts ===
 import type { EndpointDeclaration } from "../boundary/assembly/endpoint-portability.ts";
@@ -4506,7 +4352,7 @@ export interface PlannedWireProjection extends WireProjectionResult {
 }
 
 === dist/engine/utils/canonical-json.d.ts ===
-export type JsonValue = null | boolean | number | string | JsonValue[] | {
+type JsonValue = null | boolean | number | string | JsonValue[] | {
     [key: string]: JsonValue;
 };
 /** Validate and copy a value into canonical key order without reordering arrays. */
@@ -4522,6 +4368,7 @@ export declare function canonicalJson(value: unknown): string;
 export declare function canonicallyEqual(left: unknown, right: unknown): boolean;
 /** A deterministic content identifier for canonical design data. */
 export declare function canonicalDigest(value: unknown): string;
+export {};
 
 === dist/engine/utils/case.d.ts ===
 /** `operations-room` → `OperationsRoom` */
@@ -4595,16 +4442,14 @@ export declare class ListenerSet<L> {
 }
 
 === dist/engine/utils/logger.d.ts ===
-import { serializeError } from "./redaction.ts";
-export { serializeError };
-export type LogLevel = "debug" | "info" | "warn" | "error" | "none";
-export interface Logger {
+interface Logger {
     debug(msg: string, meta?: Record<string, unknown>): void;
     info(msg: string, meta?: Record<string, unknown>): void;
     warn(msg: string, meta?: Record<string, unknown>): void;
     error(msg: string, meta?: Record<string, unknown>): void;
 }
 export declare const logger: Logger;
+export {};
 
 === dist/engine/utils/memoize.d.ts ===
 /**
@@ -4614,18 +4459,10 @@ export declare const logger: Logger;
  * body. This module owns only cache identity and rejected-promise eviction.
  */
 type AnyFn = (...args: never[]) => unknown;
-export interface MemoizedQuery<T extends AnyFn> {
+interface MemoizedQuery<T extends AnyFn> {
     (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
     invalidate(): void;
 }
-interface IdentityTable {
-    symbols: Map<symbol, number>;
-    functions: WeakMap<Function, number>;
-    objects: WeakMap<object, number>;
-    next: number;
-}
-/** Build a deterministic key without conflating cyclic, collection, or identity values. */
-export declare function queryCacheKey(args: readonly unknown[], identities?: IdentityTable): string;
 /** Memoize a query until invalidated; a rejected promise is never retained. */
 export declare function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T>;
 export {};
@@ -4661,12 +4498,7 @@ export declare function normalizePromiseLike<T>(value: T): Promise<Awaited<T>> |
  * caller-reviewed diagnostic channel, never as an automatic public envelope.
  */
 export declare function describeError(err: unknown): string;
-export declare function serializeError(err: unknown, depth?: number): Record<string, unknown>;
-/**
- * Default patterns for sensitive field names. These patterns match object
- * keys. They do not inspect string values stored under other field names.
- */
-export declare const UNIVERSAL_SENSITIVE_PATTERNS: readonly RegExp[];
+export declare function serializeError(err: unknown): Record<string, unknown>;
 /**
  * Additional sensitive field names for one application. The default patterns
  * remain active alongside this policy.
@@ -4678,11 +4510,11 @@ export interface RedactionPolicy {
     patterns?: readonly RegExp[];
 }
 export interface Redactor {
-    redact(value: unknown, depth?: number): unknown;
+    redact(value: unknown): unknown;
 }
 /** Create one immutable application-scoped field-name redactor. */
 export declare function createRedactor(policy?: RedactionPolicy): Redactor;
-export declare function redact(obj: unknown, depth?: number): unknown;
+export declare function redact(obj: unknown): unknown;
 
 === dist/engine/utils/runtime.d.ts ===
 /** Node's custom-inspection hook, kept internal to engine instrumentation. */

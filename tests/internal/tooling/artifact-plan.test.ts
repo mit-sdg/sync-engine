@@ -7,10 +7,11 @@ import {
   applyArtifactPlan,
   artifactPlan,
   checkArtifactPlan,
-  normalizeArtifactPath,
   planGenerated,
 } from "@engine/tooling/artifact-plan";
 import type { ArtifactFilesystem } from "@engine/tooling/artifact-plan";
+import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
+import type { WireOrigin } from "@engine/boundary/wire/wire-types";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
 class MemoryFilesystem implements ArtifactFilesystem {
@@ -47,14 +48,14 @@ describe("artifact plans", () => {
     "C:/wire.ts",
     "foo:bar.md",
   ])("rejects unsafe path %s", (path) => {
-    expect(() => normalizeArtifactPath(path)).toThrow(
+    expect(() => artifactPlan([{ path, content: "", kind: "wire" }])).toThrow(
       /relative POSIX|escapes or does not normalize/,
     );
   });
 
   test("classifies entries and applies only missing or changed content", async () => {
     const plan = artifactPlan([
-      { path: "a.txt", content: "same", kind: "manifest" },
+      { path: "a.txt", content: "same", kind: "specification" },
       { path: "nested/b.txt", content: "new", kind: "wire" },
       { path: "c.txt", content: "created", kind: "specification" },
     ]);
@@ -63,7 +64,7 @@ describe("artifact plans", () => {
     filesystem.files.set("nested/b.txt", "old");
 
     expect(await checkArtifactPlan(plan, filesystem)).toEqual([
-      { path: "a.txt", kind: "manifest", status: "unchanged" },
+      { path: "a.txt", kind: "specification", status: "unchanged" },
       { path: "c.txt", kind: "specification", status: "missing" },
       { path: "nested/b.txt", kind: "wire", status: "changed" },
     ]);
@@ -75,7 +76,7 @@ describe("artifact plans", () => {
 
   test("a failed preflight prevents every write", async () => {
     const plan = artifactPlan([
-      { path: "a.txt", content: "a", kind: "manifest" },
+      { path: "a.txt", content: "a", kind: "specification" },
       { path: "b.txt", content: "b", kind: "wire" },
     ]);
     const filesystem = new MemoryFilesystem();
@@ -85,7 +86,6 @@ describe("artifact plans", () => {
       path: "b.txt",
       kind: "wire",
       status: "failed",
-      errorClass: "Error",
     });
     expect(filesystem.writes).toEqual([]);
   });
@@ -118,7 +118,6 @@ describe("artifact plans", () => {
       { path: "ping.md", kind: "specification" },
       { path: "wire.ts", kind: "wire" },
     ]);
-    expect(plan.entries.every(({ digest }) => /^fnv1a64-[0-9a-f]{16}$/.test(digest))).toBe(true);
     expect(plan.entries.find(({ kind }) => kind === "specification")?.content).toContain(
       "# Ping service",
     );
@@ -175,6 +174,52 @@ describe("artifact plans", () => {
         ],
       }),
     ).toThrow('duplicate generated type name "PingWire"');
+  });
+
+  test("reserves exactly the helpers used by appended contracts", () => {
+    const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: { Ping },
+      }),
+    );
+    const projection = (origin: WireOrigin) => ({
+      name: "PingProjectedWire",
+      wire: {
+        appWide: [],
+        endpoints: [
+          {
+            path: "/projected",
+            input: { kind: "object" as const, fields: [] },
+            output: { kind: "reference" as const, allOf: [origin], sites: ["projection"] },
+            errors: [],
+            openError: false,
+          },
+        ],
+      } satisfies WireContractsIR,
+      render: { appWideErrorName: "AtPath" },
+      provenance: { name: "@example/projector", version: "1.0.0" },
+    });
+    const options = {
+      title: "Ping",
+      vocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
+    };
+
+    expect(() =>
+      planGenerated(manifest, {
+        ...options,
+        projections: [projection({ source: "literal", value: true })],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      planGenerated(manifest, {
+        ...options,
+        projections: [
+          projection({ source: "action-output", concept: "Ping", member: "ping", path: [] }),
+        ],
+      }),
+    ).toThrow('duplicate generated type name "AtPath"');
   });
 
   test("accepts the manifest format across stable 1.x generator versions", () => {

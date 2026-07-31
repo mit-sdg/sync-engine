@@ -487,6 +487,12 @@ a separate public name for that aggregate argument type.
 | `strictLeaves`            | `false`; `true` requires an anchor and rejects unresolved `Json` leaves |
 | `appWideErrorName`        | `"AppWideError"`                                                        |
 | `preamble`                | `true`; set `false` when appending another contract to one module       |
+| `sharedWires`             | `[]`; later contracts whose required helpers this preamble must emit    |
+
+A render with `preamble: false` emits no imports or shared helper types. The
+earlier render that emits the module preamble must receive every later
+`preamble: false` contract in `sharedWires`; otherwise `renderWireTypes` can omit
+a helper alias used by a later contract.
 
 ### Generated descriptor
 

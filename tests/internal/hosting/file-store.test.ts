@@ -302,7 +302,9 @@ describe("FileStore: the log survives as JSONL", () => {
       setupKey: "setup-key-sentinel",
     };
 
-    const { id } = log.invoke({
+    const id = "credential-action";
+    log.invoke({
+      id,
       action: (() => {}) as never,
       concept: {},
       input: sentinels,

@@ -12,5 +12,3 @@ export const applicationExamples = {
     generated: ["generated/production-http.md", "generated/wire.ts"],
   },
 } as const;
-
-export type ApplicationExampleName = keyof typeof applicationExamples;

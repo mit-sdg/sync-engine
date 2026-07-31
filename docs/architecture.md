@@ -89,7 +89,7 @@ The interpreter stages likewise have explicit boundaries:
 | ---------------- | ------------------------------------------------------------------------------------------------------------- |
 | `TriggerMatcher` | Match the landed record or join records within its flow, including channel exclusions and consumption guards. |
 | `FiringPipeline` | Run trigger and where stages, form consequence inputs, ask actions, match outputs, and record stage failures. |
-| `FiringBook`     | Own in-flight consumption counts and transfer successful marks to durable firing records.                     |
+| `FiringBook`     | Own in-flight consumption marks/sets and transfer successful marks to durable firing records.                 |
 | `ActionConcept`  | Redact and append action, fault, integrity, and interpreter-failure evidence to the engine-owned index.       |
 | `LogSink`        | Receive each validated, redacted append before the fold and return `undefined` synchronously.                 |
 

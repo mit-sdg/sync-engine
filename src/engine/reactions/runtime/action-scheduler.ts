@@ -11,7 +11,7 @@ interface WaitingReservation {
   release(): boolean;
 }
 
-export interface ActionScheduleRequest<Input, Result> {
+interface ActionScheduleRequest<Input, Result> {
   concept: object;
   flow: string;
   body(input: Input): Result;
@@ -19,7 +19,7 @@ export interface ActionScheduleRequest<Input, Result> {
   onBodySettled?(): void;
 }
 
-export interface ActionReservation<Result> {
+interface ActionReservation<Result> {
   result: Promise<Result>;
   release(): boolean;
   durationMs(): number;

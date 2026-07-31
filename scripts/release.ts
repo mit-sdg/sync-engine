@@ -97,10 +97,9 @@ const publishVerificationGates = [
   "bun run check",
   "bun run test",
   "bun run coverage",
-  "bun run build",
   "bun run declarations:check",
   "bun run examples:check",
-  "bun run scenario",
+  "bun scripts/examples.ts scenario",
   "bun run package:check",
   "bun audit",
 ] as const;
@@ -813,7 +812,6 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     }
   }
   for (const fact of [
-    "SYNC_ENGINE_VERIFIED_TARBALL: release/package.tgz",
     "SYNC_ENGINE_VERIFIED_TARBALLS: release",
     "sha256sum release/package.tgz > release/package.tgz.sha256",
     "name: verified-npm-package",

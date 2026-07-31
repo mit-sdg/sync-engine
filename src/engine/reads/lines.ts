@@ -91,10 +91,6 @@ export function isReadLine(value: unknown): value is ReadLine {
   return hasBrand(value, LineBrand);
 }
 
-export function isQueryReadLine(value: unknown): value is QueryReadLine {
-  return isReadLine(value) && value.query !== undefined;
-}
-
 type LineSource =
   | { query: InstrumentedQuery; view?: never }
   | { query?: never; view: RelationView };

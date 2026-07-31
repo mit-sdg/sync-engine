@@ -30,7 +30,7 @@ export class QueryAnswerFault extends Error {
 }
 
 /** Query metadata used in cardinality-fault messages. */
-export interface NamedQuery extends QueryMetadata {}
+interface NamedQuery extends QueryMetadata {}
 
 /**
  * A state read ranges only over a concept query — an instrumented,
@@ -63,7 +63,7 @@ function describe(value: unknown): string {
  * supplies the rows. Scalars, null, and arrays containing non-record values
  * raise query faults.
  */
-export function rowsOfAnswer(value: unknown, query: NamedQuery): unknown[] {
+function rowsOfAnswer(value: unknown, query: NamedQuery): unknown[] {
   const label = labelOf(query);
   if (query.queryPromise === "one") {
     if (value !== null && typeof value === "object" && !Array.isArray(value)) return [value];

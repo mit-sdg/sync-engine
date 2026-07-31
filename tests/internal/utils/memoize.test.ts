@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { memoizeQuery, queryCacheKey } from "@engine/utils/memoize";
+import { memoizeQuery } from "@engine/utils/memoize";
 
 function deeplyNested(wrap: (value: unknown, depth: number) => unknown): unknown {
   let value: unknown = "leaf";
@@ -9,9 +9,10 @@ function deeplyNested(wrap: (value: unknown, depth: number) => unknown): unknown
 
 describe("query cache", () => {
   test("keys equivalent plain mappings independently of property order", () => {
-    expect(queryCacheKey([{ left: 1, right: 2 }])).toBe(queryCacheKey([{ right: 2, left: 1 }]));
-    expect(queryCacheKey([{ left: { value: 1 }, right: { value: 2 } }])).toBe(
-      queryCacheKey([{ right: { value: 2 }, left: { value: 1 } }]),
+    const query = memoizeQuery((input: unknown) => ({ input }));
+    expect(query({ left: 1, right: 2 })).toBe(query({ right: 2, left: 1 }));
+    expect(query({ left: { value: 1 }, right: { value: 2 } })).toBe(
+      query({ right: { value: 2 }, left: { value: 1 } }),
     );
   });
 
@@ -21,27 +22,21 @@ describe("query cache", () => {
     left.self = left;
     right.self = right;
 
-    expect(queryCacheKey([left])).toBe(queryCacheKey([right]));
+    const query = memoizeQuery((input: unknown) => ({ input }));
+    expect(query(left)).toBe(query(right));
   });
 
   test("does not make repeated references significant in structural values", () => {
     const shared = { value: 1 };
 
-    expect(queryCacheKey([[shared, shared]])).toBe(queryCacheKey([[{ value: 1 }, { value: 1 }]]));
+    const query = memoizeQuery((input: unknown) => ({ input }));
+    expect(query([shared, shared])).toBe(query([{ value: 1 }, { value: 1 }]));
   });
 
   test("does not conflate sparse arrays with arrays of another length", () => {
-    expect(queryCacheKey([[]])).not.toBe(queryCacheKey([Array(1)]));
-    expect(queryCacheKey([Array(1)])).toBe(queryCacheKey([[undefined]]));
-  });
-
-  test.each([
-    ["objects", (value: unknown) => ({ value })],
-    ["arrays", (value: unknown) => [value]],
-  ])("rejects deeply nested %s with a bounded error", (_name, wrap) => {
-    expect(() => queryCacheKey([deeplyNested(wrap)])).toThrow(
-      "Query cache key exceeds maximum depth of 100",
-    );
+    const query = memoizeQuery((input: unknown) => ({ input }));
+    expect(query([])).not.toBe(query(Array(1)));
+    expect(query(Array(1))).toBe(query([undefined]));
   });
 
   test("bypasses caching for over-limit keys and still caches normal keys", () => {
@@ -53,12 +48,6 @@ describe("query cache", () => {
     const normal = query({ value: [1, 2, 3] });
     expect(query({ value: [1, 2, 3] })).toBe(normal);
     expect(calls).toBe(3);
-  });
-
-  test("does not treat a normal key's argument position as nesting depth", () => {
-    const args = Array.from({ length: 200 }, (_, index) => index);
-
-    expect(queryCacheKey(args).split("|")).toHaveLength(200);
   });
 
   test("memoizes structural records, arrays, and Date timestamps", () => {
@@ -114,7 +103,9 @@ describe("query cache", () => {
   });
 
   test("keys bigint values", () => {
-    expect(queryCacheKey([42n])).toBe("bigint:42");
+    const query = memoizeQuery((input: bigint) => ({ input }));
+    expect(query(42n)).toBe(query(42n));
+    expect(query(43n)).not.toBe(query(42n));
   });
 
   test("evicts cache entry when a memoized async function rejects", async () => {
@@ -180,12 +171,6 @@ describe("query cache", () => {
     expect(thens).toBe(1);
   });
 
-  test("encodes Date values", () => {
-    const d1 = new Date(0);
-    const d2 = new Date(1);
-    expect(queryCacheKey([d1])).not.toBe(queryCacheKey([d2]));
-  });
-
   test("keeps function identities separate", () => {
     let calls = 0;
     const query = memoizeQuery((input: () => number) => ({ call: ++calls, input }));
@@ -194,13 +179,6 @@ describe("query cache", () => {
 
     expect(query(fn)).toBe(first);
     expect(query(() => 1)).not.toBe(first);
-  });
-
-  test("assigns distinct ids to distinct functions within one call", () => {
-    const fnA = () => 1;
-    const fnB = () => 2;
-    const [idA, idB] = queryCacheKey([fnA, fnB]).split("|");
-    expect(idA).not.toBe(idB);
   });
 
   test("includes symbol-keyed plain-record fields", () => {

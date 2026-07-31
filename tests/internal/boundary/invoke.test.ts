@@ -7,7 +7,7 @@ import { createInvoker, Requesting } from "@sync-engine/internal/boundary/invoca
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
 import type { InvocationResult } from "@sync-engine/boundary";
-import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 
 type TestApi = {
   "/echo": { input: { message: string }; output: { echoed: string } };
@@ -31,7 +31,9 @@ function setup() {
     Echo: endpoint("/echo", ({ message }: Vars) =>
       receive({ message }).then(respond({ echoed: message })),
     ),
-    Err: endpoint("/err", ({ kind }: Vars) => receive({ kind }).then(fail({ code: kind }))),
+    Err: endpoint("/err", ({ kind }: Vars) =>
+      receive({ kind }).then(respond({ error: { code: kind } })),
+    ),
     Unanswered: endpoint("/unanswered", () => receive({}).then(Completing.complete({}))),
   };
   const app = assemble({
@@ -85,7 +87,7 @@ describe("createInvoker", () => {
     ).toBe(false);
   });
 
-  test("returns domain error from fail()", async () => {
+  test("returns an authored domain error", async () => {
     const { invoker } = setup();
 
     const result = (await invoker.invoke("/err", { kind: "INVALID" } as never)) as InvocationResult<
@@ -104,7 +106,7 @@ describe("createInvoker", () => {
 
   test("an authored domain value cannot forge framework classification", async () => {
     const Forge = endpoint("/forge", () =>
-      receive().then(fail({ error: "DOMAIN", errorKind: "framework" })),
+      receive().then(respond({ error: { error: "DOMAIN", errorKind: "framework" } })),
     );
     const app = assemble({
       vocabulary: vocabulary({ concepts: {}, computations: {} }),

@@ -65,7 +65,8 @@ export function bindTransport<C extends ContractShape = ContractShape>(options: 
   if (applicationBehindGateway(options.gateway) !== options.application) {
     throw new Error("bindTransport: gateway must target the supplied application.");
   }
-  const facts = wireProjectionFacts(options.application);
+  let projection: WireProjectionFacts | undefined;
+  const facts = () => (projection ??= wireProjectionFacts(options.application));
   const invoker: Invoker<C> = Object.freeze({
     invoke<P extends keyof C & string>(
       path: P,
@@ -75,5 +76,13 @@ export function bindTransport<C extends ContractShape = ContractShape>(options: 
       return options.gateway.invoke(path, input, invokeOptions);
     },
   });
-  return Object.freeze({ ...facts, invoker });
+  return Object.freeze({
+    get routes() {
+      return facts().routes;
+    },
+    get logicalWire() {
+      return facts().logicalWire;
+    },
+    invoker,
+  });
 }

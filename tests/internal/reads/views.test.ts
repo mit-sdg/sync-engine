@@ -22,7 +22,7 @@ import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
 import type { AppIR } from "@sync-engine/internal/reads/ir";
-import { renderApp, renderReaction, renderView } from "@sync-engine/internal/reads/render";
+import { renderApp, renderReaction } from "@sync-engine/internal/reads/render";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { custom } from "@sync-engine/internal/reads/where-ops";
 import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
@@ -419,6 +419,27 @@ describe("views: IR and round trip", () => {
     expect(reExported.reactions).toEqual(exported.reactions);
   });
 
+  test("a view referenced only by a branch condition survives export and re-registration", () => {
+    const first = setup();
+    const mayRead = mayReadView();
+    first.reacting.register({
+      BranchRead: reaction(({ file, requester }: Vars) =>
+        when(refs.Filing.open({ id: file, requester }).responds()).then(
+          where(mayRead({ requester, file })).then(refs.Recorder.record({ tag: requester })),
+        ),
+      ),
+    });
+
+    const exported: AppIR = JSON.parse(JSON.stringify(first.reacting.exportReactions()));
+    expect(exported.views.map(({ name }) => name)).toEqual(["(requester) may read (file)"]);
+
+    const second = setup();
+    second.reacting.registerViews(exported.views);
+    second.reacting.registerReactions(exported.reactions);
+    second.reacting.registerReactions(exported.reactions);
+    expect(JSON.parse(JSON.stringify(second.reacting.exportReactions()))).toEqual(exported);
+  });
+
   test("a reaction asking an unregistered view is rejected", () => {
     const { reacting } = setup();
     expect(() =>
@@ -476,11 +497,13 @@ describe("views: rendering", () => {
       ),
     });
     const app = reacting.exportReactions();
-    expect(renderView(app.views[0])).toBe(
+    expect(renderApp({ title: "Reads", concepts: [], app })).toContain(
       [
+        "```view",
         "(requester) may read (file) — inputs (requester, file); outputs (); bindings ()",
         "  where Filing._get (id: file) has (owner: requester)",
         "  where Filing._sharedWith (id: file) has (person: requester)",
+        "```",
       ].join("\n"),
     );
     expect(renderReaction(app.reactions[0])).toContain(
@@ -499,8 +522,8 @@ describe("views: rendering", () => {
       ),
     });
     const app = reacting.exportReactions();
-    expect(renderView(app.views[0])).toContain("filled is the count of Seating._seated ()");
     const spec = renderApp({ title: "Seats", concepts: [], app });
+    expect(spec).toContain("filled is the count of Seating._seated ()");
     expect(spec).toContain("## Views");
     expect(spec).toContain("```view\n(venue) has room");
   });

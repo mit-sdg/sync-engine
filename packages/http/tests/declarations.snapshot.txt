@@ -125,12 +125,12 @@ export declare function productionHttpProfile(declaration: ProductionHttpProfile
 === packages/http/dist/server/public-errors.d.ts ===
 import type { WireContractsIR } from "@mit-sdg/sync-engine/tooling";
 import type { HttpPublicErrorCategory, ProductionHttpProfile } from "./policy.ts";
-export type PublicHttpError = HttpPublicErrorCategory | "INTERNAL_ERROR";
+type PublicHttpError = HttpPublicErrorCategory | "INTERNAL_ERROR";
 export declare function registeredPublicCategoryOf(code: string, categories: Readonly<Record<string, HttpPublicErrorCategory>> | undefined): PublicHttpError;
 export declare function publicFrameworkCategoryOf(code: string): PublicHttpError;
-export declare function publicCategoryOf(code: string, categories: Readonly<Record<string, HttpPublicErrorCategory>> | undefined): PublicHttpError;
 export declare function publicErrorStatus(category: PublicHttpError): number;
 export declare function projectProductionHttpWire(wire: WireContractsIR, profile: ProductionHttpProfile): WireContractsIR;
+export {};
 
 === packages/http/dist/tooling/http-wire.d.ts ===
 import type { WireProjection } from "@mit-sdg/sync-engine/tooling";

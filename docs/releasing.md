@@ -125,20 +125,24 @@ bun run release:verify
 ```
 
 `release:verify` runs the listed publish gates sequentially in a shell-independent
-Bun script and stops at the first failure. The publish workflow keeps the gates
-as separate steps so GitHub identifies the failing gate and so `package:check`
-can receive the verified-tarball output paths used by the publication jobs.
+Bun script and stops at the first failure. `declarations:check` performs the
+shared build; the release-only scenario gate reuses it, while the public
+`bun run scenario` command remains self-contained. The publish workflow keeps
+the gates as separate steps so GitHub identifies the failing gate and so
+`package:check` can receive the verified-tarball output directory used by the
+publication jobs.
 
 Confirm regeneration leaves no unexplained diff and review the npm pack file
-listing. `package:check` executes npm's real `prepack` lifecycle for every
-workspace, inspects both tarballs and policy links, installs core alone and both
-packages together, exercises the generated scaffold and examples, compiles a
-separate generated client/backend topology, and runs a Node scenario. In the
-publish workflow it exports both exact verified tarballs; the unprivileged job
-records their digests and transfers them to the protected publication job. The
-core package intentionally includes all three complete, independently runnable
-teaching examples; file-count, packed-size, and unpacked-size budgets prevent
-accidental growth. Wait for **CI required** on the final `main`
+listing. `package:check` invokes npm's real pack lifecycle for each workspace;
+the root package's `prepack` performs their shared build. The check inspects both
+tarballs and policy links, installs core alone and both packages together,
+exercises the generated scaffold and examples, compiles a separate generated
+client/backend topology, and runs a Node scenario. In the publish workflow it
+exports both exact verified tarballs; the unprivileged job records their digests
+and transfers them to the protected publication job. The core package
+intentionally includes all three complete, independently runnable teaching
+examples; file-count, packed-size, and unpacked-size budgets prevent accidental
+growth. Wait for **CI required** on the final `main`
 commit, then repeat every external-setting check above.
 
 ## Tag and publish

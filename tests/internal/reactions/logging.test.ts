@@ -31,7 +31,7 @@ describe("reaction logging", () => {
     const logging = new ReactionLogger(new ActionConcept());
     logging.level = Logging.VERBOSE;
     expect(() =>
-      logging.action({ concept, action: save, input: { title: "A" }, flow: "flow" }),
+      logging.action({ id: "verbose", concept, action: save, input: { title: "A" }, flow: "flow" }),
     ).not.toThrow();
   });
 
@@ -45,7 +45,7 @@ describe("reaction logging", () => {
     const logging = new ReactionLogger(new ActionConcept());
     logging.level = Logging.TRACE;
     expect(() =>
-      logging.action({ concept, action: save, input: { title: "A" }, flow: "flow" }),
+      logging.action({ id: "trace", concept, action: save, input: { title: "A" }, flow: "flow" }),
     ).not.toThrow();
   });
 });

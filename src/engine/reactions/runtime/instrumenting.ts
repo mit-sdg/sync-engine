@@ -377,12 +377,9 @@ export function instrumentConcept<T extends object>(
   return instrumentedConcept;
 }
 
-export function instrument<T extends Record<string, object>>(
-  state: InstrumentationState,
-  concepts: T,
-): T;
-export function instrument<T extends object>(state: InstrumentationState, concept: T): T;
-export function instrument(
+function instrument<T extends Record<string, object>>(state: InstrumentationState, concepts: T): T;
+function instrument<T extends object>(state: InstrumentationState, concept: T): T;
+function instrument(
   state: InstrumentationState,
   concepts: Record<string, object> | object,
 ): Record<string, object> | object {
@@ -429,7 +426,7 @@ export class ConceptInstrumentation {
     return instrument(this.state, concepts);
   }
 
-  invalidate(concept: object): void {
+  private invalidate(concept: object): void {
     const raw = this.rawConceptOf(concept);
     this.state.queryCaches.get(raw)?.forEach((cache) => cache.invalidate());
   }

@@ -22,7 +22,7 @@ import { snapshotValue } from "@engine/utils/snapshot";
 /** How long an assembly's in-memory occurrence index retains records. */
 export type RetentionPolicy = "keepAll" | { window: number };
 
-export function assertRetentionPolicy(policy: RetentionPolicy, site: string): void {
+function assertRetentionPolicy(policy: RetentionPolicy, site: string): void {
   if (policy === "keepAll") return;
   if (typeof policy === "string") {
     throw new Error(`${site}: retention must be "keepAll" or a window policy.`);
@@ -39,7 +39,7 @@ export function assertRetentionPolicy(policy: RetentionPolicy, site: string): vo
  * not stored on the action record.
  */
 export interface ActionRecord {
-  id?: string;
+  id: string;
   action: InstrumentedAction;
   concept: object;
   input: Record<string, unknown>;
@@ -263,9 +263,6 @@ export class MemoryStore {
   }
 
   private assertAppendable(entry: StoreEntry): void {
-    if (entry.kind === "invocation" && entry.record.id === undefined) {
-      throw new Error("Invocation entry requires a record id.");
-    }
     if ((entry.kind === "outcome" || entry.kind === "fault") && !this.actions.has(entry.id)) {
       throw new Error(`Action with id ${entry.id} not found.`);
     }
@@ -275,7 +272,6 @@ export class MemoryStore {
     switch (entry.kind) {
       case "invocation": {
         const record = entry.record;
-        if (record.id === undefined) return;
         this.actions.set(record.id, record);
         const partition = this.flowIndex.get(record.flow) ?? [];
         partition.push(record);
@@ -352,18 +348,15 @@ export class MemoryStore {
     this.enforceWindow();
   }
 
-  private enforceWindow(): number {
-    if (typeof this.policy === "string") return 0;
-    let evicted = 0;
+  private enforceWindow(): void {
+    if (typeof this.policy === "string") return;
     const candidates = this.settledFlowOrder.slice(
       0,
       Math.max(0, this.settledFlowOrder.length - this.policy.window),
     );
     for (const flow of candidates) {
-      evicted += this.flowIndex.get(flow)?.length ?? 0;
       this.evictFlow(flow);
     }
-    return evicted;
   }
 
   private dropFlowEntries(list: Array<{ flow: string }>, flow: string): void {
@@ -393,16 +386,14 @@ export class MemoryStore {
   /** Drop each record from both the id map and the derived consumed index. */
   private dropRecords(records: Iterable<ActionRecord>): void {
     for (const record of records) {
-      this.actions.delete(record.id ?? "");
-      this.consumedIndex.delete(record.id ?? "");
+      this.actions.delete(record.id);
+      this.consumedIndex.delete(record.id);
     }
   }
 
   /** Remove firings whose consumed occurrences are all evicted and rebuild retained consumption. */
   private dropFiringsFor(records: Iterable<ActionRecord>): void {
-    const ids = new Set(
-      [...records].flatMap((record) => (record.id === undefined ? [] : [record.id])),
-    );
+    const ids = new Set([...records].map((record) => record.id));
     if (ids.size === 0) return;
 
     for (const [reaction, firings] of this.firings) {

@@ -19,7 +19,7 @@ import type {
   ValueIR,
   WhereOpIR,
 } from "./ir.ts";
-import { isMatcher, isPlainMapping } from "./matchers.ts";
+import { isPlainMapping } from "./matchers.ts";
 import { walkValueTree } from "./value-tree.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
 import { setOwn } from "@engine/utils/own-property";
@@ -68,12 +68,6 @@ function encodeValue(value: unknown, vars: PatternVariables): ValueIR {
     return { $former: { name: value.former.formerName, in: encodePattern(value.in, vars) } };
   }
   if (value instanceof RegExp) return { $regexp: { source: value.source, flags: value.flags } };
-  if (isMatcher(value)) {
-    if (value.kind === "oneOf") {
-      return { $oneOf: (value.candidates ?? []).map((candidate) => encodeValue(candidate, vars)) };
-    }
-    return withLive({ $is: value.label }, value);
-  }
   if (Array.isArray(value)) return value.map((item) => encodeValue(item, vars));
   if (isPlainMapping(value)) {
     const encoded: Record<string, ValueIR> = {};
@@ -103,10 +97,7 @@ function exceptNames(clause: ChannelPattern): string[] {
   return [...new Set(names)];
 }
 
-export function encodeActionTrigger(
-  pattern: ActionPattern,
-  vars: PatternVariables,
-): ActionTriggerIR {
+function encodeActionTrigger(pattern: ActionPattern, vars: PatternVariables): ActionTriggerIR {
   return {
     kind: "action",
     concept: conceptNameOf(pattern.concept),

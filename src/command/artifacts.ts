@@ -29,7 +29,7 @@ export async function artifactsCommand(args: readonly string[]): Promise<void> {
     return;
   }
 
-  if (action === undefined || !ACTIONS.has(action)) throw new Error(usage);
+  if (!ACTIONS.has(action)) throw new Error(usage);
   if (
     options.length !== 0 &&
     (options.length !== 2 || options[0] !== "--config" || options[1].startsWith("-"))

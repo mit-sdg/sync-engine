@@ -15,6 +15,48 @@ export interface WireRenderOptions {
   appWideErrorName?: string;
   /** Omit shared imports and helpers when appending another contract. */
   preamble?: boolean;
+  /** Additional contracts appended under this module's shared preamble. */
+  sharedWires?: readonly WireContractsIR[];
+}
+
+const WIRE_HELPERS = {
+  ApplicationVocabulary: "",
+  AtPath:
+    "type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : never : T;",
+  QueryRow: "type QueryRow<T> = T extends readonly (infer Row)[] ? Row : T;",
+  AllOf:
+    "type AllOf<T extends readonly unknown[]> = T extends readonly [infer Head, ...infer Rest] ? Head & AllOf<Rest> : unknown;",
+  OneOf: "type OneOf<T extends readonly unknown[]> = T[number];",
+  Jsonify:
+    "type Jsonify<T> = T extends Date ? string : T extends null | boolean | number | string ? T : T extends (...args: never[]) => unknown ? never : T extends readonly (infer Item)[] ? Jsonify<Item>[] : T extends object ? { [K in keyof T]: Jsonify<T[K]> } : never;",
+} as const;
+
+type WireHelperName = keyof typeof WIRE_HELPERS;
+
+export function wireHelperNames(wires: readonly WireContractsIR[]): ReadonlySet<WireHelperName> {
+  const helpers = new Set<WireHelperName>();
+  const visit = (type: WireType): void => {
+    if (type.kind === "reference") {
+      helpers.add("Jsonify");
+      if (type.allOf.length !== 1) helpers.add("AllOf");
+      if (type.allOf.some(({ source }) => source !== "literal" && source !== "number")) {
+        helpers.add("ApplicationVocabulary");
+        helpers.add("AtPath");
+      }
+      if (type.allOf.some(({ source }) => source === "query-output")) helpers.add("QueryRow");
+    } else if (type.kind === "union") {
+      if (type.of.filter(({ kind }) => kind === "reference").length > 1) helpers.add("OneOf");
+      type.of.forEach(visit);
+    } else if (type.kind === "object") {
+      type.fields.forEach(({ type: field }) => visit(field));
+    } else if (type.kind === "array") {
+      visit(type.of);
+    }
+  };
+  for (const { endpoints } of wires) {
+    for (const { input, output } of endpoints) [input, output].forEach(visit);
+  }
+  return helpers;
 }
 
 function originType(origin: WireOrigin): string {
@@ -98,6 +140,9 @@ export function renderWireTypes(
   const moduleName = options.moduleName ?? "WireContracts";
   const appWideErrorName = options.appWideErrorName ?? "AppWideError";
   const anchored = options.vocabulary !== undefined;
+  const helpers: ReadonlySet<WireHelperName> = anchored
+    ? wireHelperNames([wire, ...(options.sharedWires ?? [])])
+    : new Set();
   if (options.strictLeaves === true) {
     if (!anchored) {
       throw new Error("renderWireTypes: strictLeaves requires a vocabulary type anchor.");
@@ -124,17 +169,18 @@ export function renderWireTypes(
       "",
     );
   }
-  if (options.preamble !== false && options.vocabulary !== undefined) {
-    lines.push(
-      `import type { ${options.vocabulary.export} as ApplicationVocabulary } from ${JSON.stringify(options.vocabulary.from)};`,
-      "",
-      "type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : never : T;",
-      "type QueryRow<T> = T extends readonly (infer Row)[] ? Row : T;",
-      "type AllOf<T extends readonly unknown[]> = T extends readonly [infer Head, ...infer Rest] ? Head & AllOf<Rest> : unknown;",
-      "type OneOf<T extends readonly unknown[]> = T[number];",
-      "type Jsonify<T> = T extends Date ? string : T extends null | boolean | number | string ? T : T extends (...args: never[]) => unknown ? never : T extends readonly (infer Item)[] ? Jsonify<Item>[] : T extends object ? { [K in keyof T]: Jsonify<T[K]> } : never;",
-      "",
-    );
+  if (options.preamble !== false && options.vocabulary !== undefined && helpers.size > 0) {
+    if (helpers.has("ApplicationVocabulary")) {
+      lines.push(
+        `import type { ${options.vocabulary.export} as ApplicationVocabulary } from ${JSON.stringify(options.vocabulary.from)};`,
+        "",
+      );
+    }
+    for (const name of Object.keys(WIRE_HELPERS) as WireHelperName[]) {
+      const definition = WIRE_HELPERS[name];
+      if (helpers.has(name) && definition !== "") lines.push(definition);
+    }
+    lines.push("");
   }
   if (options.preamble !== false) {
     lines.push(

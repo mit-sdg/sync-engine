@@ -18,7 +18,6 @@ function mockFetch(body: Record<string, unknown>): typeof fetch {
     ok: true,
     status: 200,
     text: () => Promise.resolve(JSON.stringify(body)),
-    json: () => Promise.resolve(body),
   };
   return vi.fn(() => Promise.resolve(response as unknown as Response)) as unknown as typeof fetch;
 }
@@ -28,13 +27,6 @@ function mockFetchText(text: string, status = 200, ok = true): typeof fetch {
     ok,
     status,
     text: () => Promise.resolve(text),
-    json: () => {
-      try {
-        return Promise.resolve(JSON.parse(text));
-      } catch {
-        return Promise.reject(new Error("Invalid JSON"));
-      }
-    },
   };
   return vi.fn(() => Promise.resolve(response as unknown as Response)) as unknown as typeof fetch;
 }

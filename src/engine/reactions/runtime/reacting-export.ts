@@ -1,7 +1,7 @@
 import type { Registry } from "@engine/reads/definition-registry";
 import type { AppIR, ConceptInventoryIR, ReactionIR, UnloweredIR } from "@engine/reads/ir";
 import { renderApp as renderAppSpec } from "@engine/reads/render";
-import { serializeApp } from "@engine/reads/collection";
+import { serializeFormer } from "@engine/reads/former-lowering";
 import { serializeView } from "@engine/reads/view-lowering";
 import { readBackApp } from "@engine/reads/read-back";
 import { inventoryOf } from "../concepts/introspect.ts";
@@ -11,15 +11,11 @@ export function exportReactions(state: {
   unloweredReactions: Iterable<UnloweredIR>;
   registry: Registry;
 }): AppIR {
-  const app = serializeApp(
-    state.loweredReactions,
-    state.unloweredReactions,
-    state.registry.formerRefs(),
-    (name) => state.registry.viewNamed(name),
-  );
   return {
-    ...app,
+    reactions: [...state.loweredReactions].flat(),
     views: [...state.registry.viewRefs()].map((ref) => serializeView(ref)),
+    formers: [...state.registry.formerRefs()].map((ref) => serializeFormer(ref)),
+    unlowered: [...state.unloweredReactions],
   };
 }
 
@@ -37,9 +33,8 @@ export function exportConcepts(state: {
 
 export function readBack(state: { registry: Registry; exportReactions(): AppIR }): string {
   const app = state.exportReactions();
-  const views = [...state.registry.viewRefs()].map((ref) => serializeView(ref));
   return readBackApp(
-    views,
+    app.views,
     app.formers,
     app.reactions,
     app.unlowered,

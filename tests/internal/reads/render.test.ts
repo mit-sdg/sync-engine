@@ -11,7 +11,7 @@ import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
 import type { ReactionIR, WhereOpIR } from "@sync-engine/internal/reads/ir";
 import { renderReaction, renderWhereOp } from "@sync-engine/internal/reads/render";
-import { inventoryOf, rolesOf } from "@sync-engine/internal/reactions/concepts/introspect";
+import { inventoryOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import type { StepNode } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, CounterConcept, mockRefs } from "../reactions/mocks.ts";
@@ -356,13 +356,6 @@ describe("inventoryOf", () => {
       ],
     });
     expect(inventory.actions.map(({ name }) => name)).not.toContain("freshID");
-  });
-
-  test("rolesOf declines to guess", () => {
-    expect(rolesOf(({ a, b }: { a: string; b: string }) => [a, b])).toEqual(["a", "b"]);
-    expect(rolesOf((_: object) => 0)).toEqual([]);
-    // Nested destructuring and positional parameters are not guessed at.
-    expect(rolesOf((value: string) => value)).toBeUndefined();
   });
 });
 

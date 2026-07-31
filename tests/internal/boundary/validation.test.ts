@@ -12,7 +12,7 @@ import {
   receive,
   respond,
 } from "@sync-engine/boundary";
-import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 
 type CheckedContract = {
   "/checked": {
@@ -51,15 +51,19 @@ function setup() {
       },
     },
   );
-  const DomainFailure = endpoint("/domain-failure", () => receive({}).then(fail("EXPECTED")), {
-    validators: {
-      output: () => ({ ok: false }),
-      domainError: (value) => (value === "EXPECTED" ? { ok: true } : { ok: false }),
+  const DomainFailure = endpoint(
+    "/domain-failure",
+    () => receive({}).then(respond({ error: "EXPECTED" })),
+    {
+      validators: {
+        output: () => ({ ok: false }),
+        domainError: (value) => (value === "EXPECTED" ? { ok: true } : { ok: false }),
+      },
     },
-  });
+  );
   const InvalidDomainFailure = endpoint(
     "/invalid-domain-failure",
-    () => receive({}).then(fail("WRONG")),
+    () => receive({}).then(respond({ error: "WRONG" })),
     {
       validators: { domainError: (value) => (value === "EXPECTED" ? { ok: true } : { ok: false }) },
     },
@@ -233,13 +237,17 @@ describe("endpoint runtime validators", () => {
   test("a domain-error validator fault retains flow correlation context", async () => {
     const reports: RawFaultReport[] = [];
     const validatorFault = new Error("domain validator secret");
-    const FaultingDomain = endpoint("/faulting-domain", () => receive({}).then(fail("NOPE")), {
-      validators: {
-        domainError: () => {
-          throw validatorFault;
+    const FaultingDomain = endpoint(
+      "/faulting-domain",
+      () => receive({}).then(respond({ error: "NOPE" })),
+      {
+        validators: {
+          domainError: () => {
+            throw validatorFault;
+          },
         },
       },
-    });
+    );
     const app = assemble({
       vocabulary: vocabulary({ concepts: {}, computations: {} }),
       composition: { FaultingDomain },
@@ -329,10 +337,10 @@ describe("endpoint runtime validators", () => {
       }),
     ).toThrow("duplicate input validator for /duplicate");
 
-    const C = endpoint("/duplicate-domain", () => receive({}).then(fail("A")), {
+    const C = endpoint("/duplicate-domain", () => receive({}).then(respond({ error: "A" })), {
       validators: { domainError: () => ({ ok: true }) },
     });
-    const D = endpoint("/duplicate-domain", () => receive({}).then(fail("B")), {
+    const D = endpoint("/duplicate-domain", () => receive({}).then(respond({ error: "B" })), {
       validators: { domainError: () => ({ ok: true }) },
     });
     expect(() =>

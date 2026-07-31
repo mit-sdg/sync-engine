@@ -12,7 +12,7 @@ import { varNamesInPattern } from "./operation-footprint.ts";
 import type { QueryPromise } from "./query-metadata.ts";
 import { scheduleBlock } from "./schedule.ts";
 
-export interface FormerBindingHooks {
+interface FormerBindingHooks {
   /** Resolve a source line's promise for the fold lints; omit to skip them. */
   promiseOf?(
     line: Extract<ViewOpIR, { op: "find" | "whether" | "no" }>,

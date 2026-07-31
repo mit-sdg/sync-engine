@@ -5,7 +5,7 @@
  *   src/concept-set.ts         — vocabulary and implementations
  *   src/composition/reading-circle.ts — reactions, views, formers, endpoints
  *   src/assembly.ts            — the assemble() call
- *   src/edge.ts                — gateway and HTTP wiring
+ *   src/edge.ts                — local gateway construction
  */
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
 import { deterministicImplementations } from "./concept-set.ts";

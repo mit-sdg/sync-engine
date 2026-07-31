@@ -22,7 +22,6 @@ function inputUnbound(input: PatternIR, frame: Frame): boolean {
 
 /** The selection's surviving row-frames, in order: rows unified, conditions applied. */
 async function selectFrames(
-  formerName: string,
   selection: SelectionIR,
   frame: Frame,
   env: ReadEnv,
@@ -182,10 +181,7 @@ async function evalNode(
       return result;
     }
     case "each": {
-      const selected = arrange(
-        await selectFrames(formerName, node, frame, env, assertRows),
-        node.arranged,
-      );
+      const selected = arrange(await selectFrames(node, frame, env, assertRows), node.arranged);
       const items: unknown[] = [];
       for (const rowFrame of selected) {
         const item = await evalNode(formerName, node.as, rowFrame, env, assertRows);
@@ -196,18 +192,15 @@ async function evalNode(
       return items;
     }
     case "count":
-      return (await selectFrames(formerName, node, frame, env, assertRows)).length;
+      return (await selectFrames(node, frame, env, assertRows)).length;
     case "first": {
-      const selected = arrange(
-        await selectFrames(formerName, node, frame, env, assertRows),
-        node.arranged,
-      );
+      const selected = arrange(await selectFrames(node, frame, env, assertRows), node.arranged);
       if (selected.length === 0) return null;
       const value = selected[0][node.value];
       return value === undefined ? null : value;
     }
     case "distinct": {
-      const selected = await selectFrames(formerName, node, frame, env, assertRows);
+      const selected = await selectFrames(node, frame, env, assertRows);
       const seen = new Set<unknown>();
       const values: unknown[] = [];
       for (const rowFrame of selected) {

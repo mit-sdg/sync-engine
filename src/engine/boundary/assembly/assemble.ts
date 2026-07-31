@@ -76,7 +76,7 @@ import {
   assertInputContractsMatchReceivePatterns,
   deriveInputContracts,
 } from "../wire/wire-contracts.ts";
-import type { EndpointDeclaration, EndpointIdentity } from "./endpoint-portability.ts";
+import type { EndpointDeclaration } from "./endpoint-portability.ts";
 import { assertApplicationLocality } from "./locality-validation.ts";
 import { validateConceptImplementation } from "./concept-set.ts";
 
@@ -108,11 +108,6 @@ export function respond(body: Mapping = {}) {
     }
   }
   return Boundary.respond({ ...body, requestId: requestIdVar });
-}
-
-/** Answer the request with an application-defined error value. */
-export function fail(error: unknown = {}) {
-  return Boundary.respond({ error, requestId: requestIdVar });
 }
 
 // ── endpoint — one path, one reaction, and an optional input contract ──────
@@ -161,7 +156,7 @@ export function endpoint(path: string, reaction: Reaction, opts?: EndpointOption
   return def;
 }
 
-export function isEndpointDef(value: unknown): value is EndpointDef {
+function isEndpointDef(value: unknown): value is EndpointDef {
   return hasBrand(value, EndpointBrand);
 }
 
@@ -178,11 +173,11 @@ function pinToPath(decl: ReactionDeclaration, path: string): ReactionDeclaration
 
 // ── assemble ────────────────────────────────────────────────────────────────
 
-export type ConceptInitializers<T extends Record<string, ConceptClass>> = {
+type ConceptInitializers<T extends Record<string, ConceptClass>> = {
   [K in keyof T]?: ConstructorParameters<T[K]>;
 };
 
-export type ConceptInstances<T extends Record<string, ConceptClass>> = {
+type ConceptInstances<T extends Record<string, ConceptClass>> = {
   [K in keyof T]?: object;
 };
 
@@ -235,15 +230,12 @@ export interface AssembleBaseOptions<
   redaction?: RedactionPolicy;
 }
 
-export type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> &
+type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> &
   RequiredConstructionSources<T>;
 
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
   engine: Reacting;
   invoker: Invoker<ContractShape>;
-  boundary: Requesting;
-  /** The boundary's instrumented actions for framework reactions and adapters. */
-  boundaryActions: RequestBoundaryActions;
   /** The instrumented concepts, by vocabulary name — the canonical class types them. */
   concepts: { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> };
   contracts: Record<string, InputContractDecl>;
@@ -252,8 +244,6 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   whenIdle(): Promise<void>;
   /** The public route and admission facts a separate gateway may consume. */
   publicInterface: ApplicationInterface;
-  /** Endpoint identity retained even when a reaction has no portable IR. */
-  endpointOfReaction: ReadonlyMap<string, EndpointIdentity>;
   /** Every authored endpoint declaration, independent of lowering. */
   endpoints: readonly EndpointDeclaration[];
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
@@ -393,7 +383,6 @@ export function assemble<T extends Record<string, ConceptClass>>(
   const reactions: Record<string, Reaction> = {};
   const contracts: Record<string, InputContractDecl> = {};
   const validators: Record<string, EndpointValidators> = {};
-  const endpointOfReaction = new Map<string, EndpointIdentity>();
   const endpoints: EndpointDeclaration[] = [];
   const views: RelationView[] = [];
   const formers: FormerRef[] = [];
@@ -409,11 +398,9 @@ export function assemble<T extends Record<string, ConceptClass>>(
       const declared = value.reaction($vars);
       const declarations = declarationsOf(declared);
       declarations.forEach((entry) => pinToPath(entry, value.path));
-      const reactionNames = declarations.map((_, index) => {
-        const reactionName = index === 0 ? name : `${name}:${index + 1}`;
-        endpointOfReaction.set(reactionName, { name, path: value.path });
-        return reactionName;
-      });
+      const reactionNames = declarations.map((_, index) =>
+        index === 0 ? name : `${name}:${index + 1}`,
+      );
       endpoints.push({ name, path: value.path, reactions: reactionNames });
       if (Object.hasOwn(reactions, name))
         throw new Error(`assemble: two reactions named "${name}".`);
@@ -521,15 +508,12 @@ export function assemble<T extends Record<string, ConceptClass>>(
   return {
     engine,
     invoker,
-    boundary,
-    boundaryActions: instrumentedBoundary as unknown as RequestBoundaryActions,
     concepts: concepts as { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> },
     contracts,
     validators,
     beginDrain: () => lifecycle.beginDrain(),
     whenIdle: () => lifecycle.whenIdle(),
     publicInterface,
-    endpointOfReaction,
     endpoints,
     form: (fused) => engine.form(fused),
   };

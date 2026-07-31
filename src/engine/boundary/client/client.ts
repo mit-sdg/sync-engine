@@ -94,7 +94,7 @@ export type Endpoint<C extends ContractShape, P extends keyof C, TError = Client
   : (input: C[P]["input"], options?: ClientCallOptions) => Promise<EndpointResult<C, P, TError>>;
 
 /** The indexed surface: `client["/auth/login"](input)`. */
-export type IndexedClient<C extends ContractShape, TError = ClientError> = {
+type IndexedClient<C extends ContractShape, TError = ClientError> = {
   [P in keyof C & string]: Endpoint<C, P, TError>;
 };
 
@@ -102,7 +102,7 @@ export type IndexedClient<C extends ContractShape, TError = ClientError> = {
  * The grouped surface: `client.auth.login(input)`. Works for paths of any
  * depth — `/admin/users/roles/assign` becomes `admin.users.roles.assign`.
  */
-export type GroupedClient<C extends ContractShape, TError = ClientError> = Prettify<
+type GroupedClient<C extends ContractShape, TError = ClientError> = Prettify<
   UnionToIntersection<AllPathChains<C, TError> | RemainderPathChain<keyof C & string, C, TError>>
 >;
 
@@ -182,9 +182,7 @@ function makeProxy(
   segments: string[],
   call: (path: string, body: unknown, options?: ClientCallOptions) => Promise<unknown>,
 ): unknown {
-  const fn = (body: unknown, options?: ClientCallOptions) =>
-    call(buildPath(segments), body, options);
-  return new Proxy(fn, {
+  return new Proxy(() => undefined, {
     get(_target, prop) {
       // The root client must not be thenable, but nested `then` is a valid
       // endpoint path segment (for example, `/auth/then`).

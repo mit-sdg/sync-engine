@@ -31,7 +31,8 @@ describe("reaction catalog", () => {
     catalog.unregisterBase("Observe");
     expect(catalog.ownerOf("Observe")).toBeUndefined();
     expect(catalog.reactions.Observe).toBeUndefined();
-    expect(catalog.reactionsByAction.get(action)).toEqual(new Set());
-    expect(catalog.reactionsByChannel.get("returned")).toEqual(new Set());
+    expect(catalog.reactionsByAction.has(action)).toBe(false);
+    expect(catalog.reactionsByChannel.has("returned")).toBe(false);
+    expect(catalog.candidates(action, "returned")).toBeUndefined();
   });
 });

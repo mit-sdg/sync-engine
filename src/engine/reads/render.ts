@@ -36,7 +36,7 @@ import { asMarker, hasMarkerKey } from "./ir.ts";
 // ── Values and role lists ──────────────────────────────────────────────────
 
 /** Render one pattern value as it reads inside a role list. */
-export function renderValue(value: ValueIR): string {
+function renderValue(value: ValueIR): string {
   if (value === null) return "null";
   if (typeof value === "boolean" || typeof value === "number") return String(value);
   if (typeof value === "string") return JSON.stringify(value);
@@ -204,7 +204,7 @@ export function renderWhereOp(op: WhereOpIR | ViewOpIR): string {
  * when the block is a single condition, an indented conjunction otherwise.
  * Stacked blocks are the alternatives; this is where disjunction lives.
  */
-export function renderView(view: ViewIR): string {
+function renderView(view: ViewIR): string {
   const promiseWords = { one: "exactly one", optional: "at most one", many: "any number of" };
   const named = `${view.name} — inputs (${view.ins.join(", ")}); outputs (${view.outs.join(", ")}); bindings (${view.bindings.join(", ")})`;
   const heading =
@@ -306,7 +306,7 @@ function renderFormerNode(node: FormerNodeIR, indent: number): string[] {
  * ` ```former ` block): a complete heading followed by the tree of records,
  * comprehensions, named former reads, and aggregate leaves.
  */
-export function renderFormer(formerIR: FormerIR): string {
+function renderFormer(formerIR: FormerIR): string {
   const declaration = `inputs (${formerIR.ins.join(", ")}); bindings (${formerIR.bindings.join(", ")})`;
   const heading = `Former ${JSON.stringify(formerIR.name)} — ${declaration}; promises ${
     formerIR.promise === "optional" ? "at most one record" : "exactly one record"
@@ -343,7 +343,7 @@ export function renderReaction(reaction: ReactionIR): string {
 // ── The application spec ───────────────────────────────────────────────────
 
 /** Everything `renderApp` needs, as data. */
-export interface AppSpecIR {
+interface AppSpecIR {
   /** The application's name, used as the document title. */
   title: string;
   /** Inventories of the instrumented concepts, in registration order. */

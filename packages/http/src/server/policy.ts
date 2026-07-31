@@ -27,7 +27,6 @@ const PUBLIC_ERROR_CATEGORIES = new Set<HttpPublicErrorCategory>([
 export function normalizeHttpBasePath(basePath: string | undefined, label = "basePath"): string {
   if (basePath === undefined || basePath === "") return "";
   assertPortableRoutePath(basePath, label);
-  if (basePath === "/") return "";
   return basePath.replace(/\/+$/, "");
 }
 
@@ -38,7 +37,7 @@ function normalizePublicErrors(
   if (declaration.publicErrors === undefined) return undefined;
   const categories: Record<string, HttpPublicErrorCategory> = {};
   for (const [code, category] of Object.entries(declaration.publicErrors)) {
-    if (typeof code !== "string" || code === "") {
+    if (code === "") {
       throw new Error(`${label}: public error codes must be non-empty strings.`);
     }
     if (!PUBLIC_ERROR_CATEGORIES.has(category as HttpPublicErrorCategory)) {

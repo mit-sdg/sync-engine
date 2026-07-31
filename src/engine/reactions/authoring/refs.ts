@@ -100,7 +100,7 @@ type QueryRow<A> = Awaited<A> extends readonly (infer Row)[] ? Row : Awaited<A>;
  * names a query's answer) resolves to the class's own declared answer; every
  * actual call matches the first overload and answers a line.
  */
-export type QueryLineFn<F> = F extends (input: infer I) => infer A
+type QueryLineFn<F> = F extends (input: infer I) => infer A
   ? {
       (pattern: SlotPattern<I>): QueryReadLine<QueryRow<A>>;
       (input: I): A;
@@ -117,7 +117,7 @@ type RequiredInputKeys<I> = {
   [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
 }[keyof I];
 
-export type ActionLineFn<F> = F extends (input: infer I) => infer A
+type ActionLineFn<F> = F extends (input: infer I) => infer A
   ? {
       <P extends SlotPattern<I>>(
         pattern: P,
@@ -133,19 +133,19 @@ export type ActionLineFn<F> = F extends (input: infer I) => infer A
  * actions become callable data lines for `when` and `then`;
  * queries become typed line builders — the callable vocabulary proxy.
  */
-export type ConceptRef<I> = {
+type ConceptRef<I> = {
   readonly [K in keyof I as I[K] extends (...args: never[]) => unknown
     ? K
     : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
 };
 
 /** The vocabulary's refs: one `ConceptRef` per declared name. */
-export type VocabularyRefs<T extends Record<string, ConceptClass>> = {
+type VocabularyRefs<T extends Record<string, ConceptClass>> = {
   readonly [K in keyof T]: ConceptRef<InstanceType<T[K]>>;
 };
 
 /** A concept class plus metadata owned by its vocabulary name. */
-export type ConceptDeclaration<C extends ConceptClass> = ConceptMetadata & {
+type ConceptDeclaration<C extends ConceptClass> = ConceptMetadata & {
   readonly class: C;
   readonly spec?: string;
 };
@@ -220,7 +220,7 @@ export type ConceptClassesOf<T extends Record<string, ConceptEntry>> = {
   readonly [K in keyof T]: ClassOf<T[K]>;
 };
 
-export type ComputationRefs<T extends Record<string, ComputationFn>> = {
+type ComputationRefs<T extends Record<string, ComputationFn>> = {
   readonly [K in keyof T]: ComputationRef;
 };
 
@@ -236,7 +236,7 @@ export interface DeclaredVocabulary<
   readonly [VocabularyMetadata]: Record<string, ConceptMetadata>;
 }
 
-export interface VocabularyDeclaration<
+interface VocabularyDeclaration<
   TConcepts extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 > {

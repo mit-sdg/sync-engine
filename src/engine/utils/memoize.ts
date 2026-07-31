@@ -16,7 +16,7 @@ class QueryCacheKeyDepthError extends Error {
   }
 }
 
-export interface MemoizedQuery<T extends AnyFn> {
+interface MemoizedQuery<T extends AnyFn> {
   (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
   invalidate(): void;
 }
@@ -33,7 +33,7 @@ function identityTable(): IdentityTable {
 }
 
 /** Build a deterministic key without conflating cyclic, collection, or identity values. */
-export function queryCacheKey(args: readonly unknown[], identities = identityTable()): string {
+function queryCacheKey(args: readonly unknown[], identities = identityTable()): string {
   const active = new Map<object, number>();
   let nextReference = 1;
 

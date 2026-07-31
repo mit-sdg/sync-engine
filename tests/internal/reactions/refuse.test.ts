@@ -109,7 +109,9 @@ describe("faults during action instrumentation", () => {
     const records = [...reacting.Action.actions.values()];
     expect(records[0]?.outcome).toBeUndefined();
     expect(records[0]?.fault).toMatchObject({ error: "UNKNOWN_ERROR" });
-    expect(reacting.Action._getPending()).toHaveLength(1);
+    expect(
+      [...reacting.Action.store.actions.values()].filter(({ outcome }) => outcome === undefined),
+    ).toHaveLength(1);
   });
 
   test("reports the original action fault only through the privileged reporter", async () => {
@@ -163,9 +165,11 @@ describe("faults during action instrumentation", () => {
     // The pipeline stopped at the fault; the firing retains the faulted
     // ask on its produced list, and the trigger stays consumed.
     expect(Recorder.order).toEqual([]);
-    const firings = reacting._getFirings("FaultyPipeline");
+    const firings = reacting.Action.store.firingsByReaction("FaultyPipeline");
     expect(firings).toHaveLength(1);
-    const faulted = reacting.Action._getFaulted();
+    const faulted = [...reacting.Action.store.actions.values()].filter(
+      ({ fault }) => fault !== undefined,
+    );
     expect(faulted).toHaveLength(1);
     expect(firings[0]?.produced).toContain(faulted[0]?.id);
   });

@@ -1,4 +1,4 @@
-import { isQueryReadLine, lineOf } from "@sync-engine/internal/reads/lines";
+import { lineOf } from "@sync-engine/internal/reads/lines";
 /**
  * Query and view conditions. These tests cover output binding and matching,
  * `no`, `whether`, declared row counts, view outputs, former result shapes,
@@ -109,14 +109,6 @@ function build() {
 // ── The condition line types ──────────────────────────────────────────────
 
 describe("the condition line types", () => {
-  test("isQueryReadLine tells query-backed lines from view-backed lines", () => {
-    const { post } = $vars;
-    const qLine = lineOf({ query: Posting._getPost }, { post });
-    expect(isQueryReadLine(qLine)).toBe(true);
-    expect(isQueryReadLine(authorOf({ post }))).toBe(false);
-    expect(isQueryReadLine({})).toBe(false);
-  });
-
   test(".is() and .is.not() reject non-object patterns", () => {
     const { post } = $vars;
     const line = Posting._getPost({ post });

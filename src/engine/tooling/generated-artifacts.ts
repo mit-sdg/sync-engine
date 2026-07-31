@@ -154,7 +154,6 @@ export async function inspectGenerated<T>(
     try {
       if (assembled !== undefined) {
         await assembled.beginDrain();
-        await assembled.whenIdle();
       }
     } finally {
       await application.close?.();

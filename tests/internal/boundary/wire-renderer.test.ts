@@ -14,6 +14,53 @@ function reference(...allOf: WireOrigin[]): WireType {
   return { kind: "reference", allOf, sites: ["renderer fixture"] };
 }
 
+function wireWithOutput(output: WireType): WireContractsIR {
+  return {
+    appWide: [],
+    endpoints: [
+      {
+        path: "/value",
+        input: { kind: "object", fields: [] },
+        output,
+        errors: [],
+        openError: false,
+      },
+    ],
+  };
+}
+
+async function typecheck(sources: Record<string, string>): Promise<void> {
+  const temporary = await mkdtemp(join(tmpdir(), "sync-engine-wire-renderer-"));
+  try {
+    await Promise.all([
+      ...Object.entries(sources).map(([path, source]) => writeFile(join(temporary, path), source)),
+      writeFile(
+        join(temporary, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            noUnusedLocals: true,
+            noEmit: true,
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            allowImportingTsExtensions: true,
+            skipLibCheck: true,
+          },
+          files: Object.keys(sources),
+        }),
+      ),
+    ]);
+    const { stdout, stderr } = await execFileAsync(process.execPath, [
+      resolve("node_modules/typescript/bin/tsc"),
+      "-p",
+      join(temporary, "tsconfig.json"),
+    ]);
+    expect(`${stdout}${stderr}`).toBe("");
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+}
+
 const renderedFixture: WireContractsIR = {
   appWide: ["INVALID_SESSION"],
   endpoints: [
@@ -274,6 +321,84 @@ describe("wire TypeScript renderer", () => {
     expect(anchored).toContain(
       'Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Ledger"]["_labelOf"]>>>, ["label"]>> | null',
     );
+    expect(anchored).not.toContain("type OneOf<");
+  });
+
+  test("emits exactly the helpers used by sparse and appended contracts", async () => {
+    const vocabulary = { from: "./vocabulary.ts", export: "vocabulary" };
+    const empty = renderWireTypes(wireWithOutput(reference()), {
+      moduleName: "EmptyWire",
+      vocabulary,
+    });
+    const literal = renderWireTypes(
+      wireWithOutput({
+        kind: "union",
+        of: [
+          { kind: "literal", value: null },
+          {
+            kind: "union",
+            of: [
+              reference({ source: "literal", value: "left" }),
+              reference({ source: "literal", value: "right" }),
+            ],
+          },
+        ],
+      }),
+      { moduleName: "LiteralWire", vocabulary },
+    );
+    const number = renderWireTypes(wireWithOutput(reference({ source: "number" })), {
+      moduleName: "NumberWire",
+      vocabulary,
+    });
+    const appendedWire = wireWithOutput(
+      reference({
+        source: "query-output",
+        concept: "Ledger",
+        member: "rows",
+        path: ["value"],
+      }),
+    );
+    const preamble = renderWireTypes(wireWithOutput({ kind: "literal", value: true }), {
+      moduleName: "LogicalWire",
+      vocabulary,
+      sharedWires: [appendedWire],
+    });
+    const appended = renderWireTypes(appendedWire, {
+      moduleName: "AppendedWire",
+      appWideErrorName: "AppendedAppWideError",
+      vocabulary,
+      preamble: false,
+    });
+
+    expect(empty).toContain("type AllOf<");
+    expect(empty).toContain("type Jsonify<");
+    expect(empty).not.toContain("ApplicationVocabulary");
+    expect(empty).not.toContain("type AtPath<");
+    expect(literal).toContain("type OneOf<");
+    expect(literal).toContain("type Jsonify<");
+    expect(literal).not.toContain("ApplicationVocabulary");
+    expect(literal).not.toContain("type AtPath<");
+    expect(literal).not.toContain("type AllOf<");
+    expect(number).toContain("type Jsonify<");
+    expect(number).not.toContain("ApplicationVocabulary");
+    expect(number).not.toContain("type AtPath<");
+    expect(number).not.toContain("type AllOf<");
+    expect(number).not.toContain("type OneOf<");
+    expect(preamble).toContain("ApplicationVocabulary");
+    expect(preamble).toContain("type AtPath<");
+    expect(preamble).toContain("type QueryRow<");
+
+    await typecheck({
+      "empty.ts": empty,
+      "literal.ts": literal,
+      "number.ts": number,
+      "appended.ts": `${preamble}\n${appended}`,
+      "vocabulary.ts": `
+export declare const vocabulary: {
+  concepts: { Ledger: { rows(input: Record<string, never>): readonly { value: string }[] } };
+};
+`,
+    });
   });
 
   test("strict rendering rejects a hand-built unresolved leaf", () => {
@@ -318,13 +443,11 @@ describe("wire TypeScript renderer", () => {
   });
 
   test("the anchored module typechecks exact client-facing leaves", async () => {
-    const temporary = await mkdtemp(join(tmpdir(), "sync-engine-wire-renderer-"));
-    try {
-      const wire = renderWireTypes(anchoredFixture, {
-        vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
-        strictLeaves: true,
-      });
-      const vocabulary = `
+    const wire = renderWireTypes(anchoredFixture, {
+      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+      strictLeaves: true,
+    });
+    const vocabulary = `
 export class LedgerConcept {
   add(_: { item: string; amount: number }): { entry: string } {
     return { entry: "entry" };
@@ -344,7 +467,7 @@ export class LedgerConcept {
 }
 export declare const vocabulary: { concepts: { Ledger: LedgerConcept } };
 `;
-      const consumer = `
+    const consumer = `
 import type { WireContracts } from "./wire.ts";
 
 const input: WireContracts["/ledger/add"]["input"] = { item: "item", amount: 3 };
@@ -369,34 +492,6 @@ void wrongInput;
 void wrongOutput;
 void conflict;
 `;
-      await Promise.all([
-        writeFile(join(temporary, "wire.ts"), wire),
-        writeFile(join(temporary, "vocabulary.ts"), vocabulary),
-        writeFile(join(temporary, "consumer.ts"), consumer),
-        writeFile(
-          join(temporary, "tsconfig.json"),
-          JSON.stringify({
-            compilerOptions: {
-              strict: true,
-              noEmit: true,
-              module: "ESNext",
-              moduleResolution: "Bundler",
-              allowImportingTsExtensions: true,
-              skipLibCheck: true,
-            },
-            files: ["consumer.ts", "vocabulary.ts", "wire.ts"],
-          }),
-        ),
-      ]);
-      const tsc = resolve("node_modules/typescript/bin/tsc");
-      const { stdout, stderr } = await execFileAsync(process.execPath, [
-        tsc,
-        "-p",
-        join(temporary, "tsconfig.json"),
-      ]);
-      expect(`${stdout}${stderr}`).toBe("");
-    } finally {
-      await rm(temporary, { recursive: true, force: true });
-    }
+    await typecheck({ "wire.ts": wire, "vocabulary.ts": vocabulary, "consumer.ts": consumer });
   });
 });

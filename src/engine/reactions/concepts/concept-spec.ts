@@ -32,20 +32,20 @@
 import type { QueryPromise } from "@engine/reads/query-metadata";
 
 /** One refusal branch: the code the boundary returns and the sentence it carries. */
-export interface SpecRefusal {
+interface SpecRefusal {
   code: string;
   message: string;
 }
 
 /** One action the specification declares. */
-export interface SpecAction {
+interface SpecAction {
   name: string;
   inputs: readonly string[];
   refusals: readonly SpecRefusal[];
 }
 
 /** One query the specification declares, with the row count it promises. */
-export interface SpecQuery {
+interface SpecQuery {
   name: string;
   inputs: readonly string[];
   promise: QueryPromise;

@@ -75,12 +75,13 @@ credential: {
 ```
 
 An endpoint is protected only when its input contract lists `credential.input`
-as required. The issue and clear paths must exist, at least one endpoint must be
-protected, and every top-level issue-output alternative must contain the token
-and expiry fields. `createHttpHandler(...)` checks these rules synchronously and
-also rejects a gateway that does not target `application`. The floor checks the
-declared origin only when an inbound `Origin` header is present; it is not a
-CORS implementation.
+as required. The paths in `credential.clear` must be distinct, and
+`credential.issue.path` must not also appear in `credential.clear`. The issue and
+clear paths must exist, at least one endpoint must be protected, and every
+top-level issue-output alternative must contain the token and expiry fields.
+`createHttpHandler(...)` checks these rules synchronously and also rejects a
+gateway that does not target `application`. The floor checks the declared origin
+only when an inbound `Origin` header is present; it is not a CORS implementation.
 
 `HttpCorrelationOptions.resolve(request)` is called synchronously for each
 request. `responseHeader`, when supplied, must be a valid header name. Invalid,

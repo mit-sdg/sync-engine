@@ -5,8 +5,14 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
 import { reaction, vocabulary, when } from "@sync-engine/language";
-import type { Vars } from "@sync-engine/internal/reactions/types";
+import type { StepNode, Vars } from "@sync-engine/internal/reactions/types";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
+import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";
+import {
+  type LogEntry,
+  type LogSink,
+  MemoryStore,
+} from "@sync-engine/internal/reactions/runtime/log-store";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { bindInputMapping } from "@sync-engine/internal/reads/frames.ts";
 import { flow } from "@sync-engine/internal/reactions/context.ts";
@@ -142,7 +148,7 @@ describe("one evaluation per trigger record", () => {
     await Event.trigger({ kind: "outer", [flow]: "shared" } as never);
 
     expect(Sink.hits).toBe(1);
-    expect(reacting._getFirings("Join")).toHaveLength(1);
+    expect(reacting.Action.store.firingsByReaction("Join")).toHaveLength(1);
   });
 });
 
@@ -190,8 +196,8 @@ describe("sibling reactions consume when-records independently", () => {
     const actions = [...reacting.Action.actions.values()];
     const whenAction = actions.find((a) => a.action === Button.clicked);
 
-    const first = reacting._getFirings("OverwriteA");
-    const second = reacting._getFirings("OverwriteB");
+    const first = reacting.Action.store.firingsByReaction("OverwriteA");
+    const second = reacting.Action.store.firingsByReaction("OverwriteB");
     expect(first.length).toBe(1);
     expect(second.length).toBe(1);
     expect(first[0]?.consumed).toContain(whenAction?.id);
@@ -231,9 +237,50 @@ describe("sibling reactions consume when-records independently", () => {
 
     const actions = [...reacting.Action.actions.values()];
     const whenAction = actions.find((a) => a.input?.kind === "par-mixed");
-    const firings = reacting._getFirings("GoodBranch");
+    const firings = reacting.Action.store.firingsByReaction("GoodBranch");
     expect(firings.length).toBe(1);
     expect(firings[0]?.consumed).toContain(whenAction?.id);
+  });
+});
+
+describe("multi-step firing marks", () => {
+  test("a rejected second ask preserves the first ask and firing", async () => {
+    class RejectSecondAsk implements LogSink {
+      append(entry: LogEntry): undefined {
+        if (entry.kind === "invocation" && entry.record.input.tag === "second") {
+          throw new Error("second ask append failed");
+        }
+      }
+    }
+    const store = new MemoryStore("keepAll", new RejectSecondAsk());
+    const reacting = new Reacting(new ActionConcept(store));
+    reacting.logging = Logging.OFF;
+    const { Button, Recorder } = reacting.instrument({
+      Button: new ButtonConcept(),
+      Recorder: new RecorderConcept(),
+    });
+    reacting.register({
+      PreserveEarlierAsk: (_vars: Vars) => {
+        const first = mockRefs.Recorder.record({ tag: "first" }) as StepNode;
+        first.transform = (frames) => frames;
+        return when(mockRefs.Button.clicked({ kind: "mark-preservation" }).responds())
+          .then(first as never)
+          .then(mockRefs.Recorder.record({ tag: "second" }));
+      },
+    });
+
+    await Button.clicked({ kind: "mark-preservation" });
+
+    expect(Recorder.order).toEqual(["first"]);
+    const records = [...store.actions.values()];
+    const trigger = records.find((record) => record.input.kind === "mark-preservation");
+    const firstAsk = records.find((record) => record.input.tag === "first");
+    if (trigger === undefined || firstAsk === undefined) throw new Error("expected recorded asks");
+    expect(firstAsk.by).toBe("PreserveEarlierAsk");
+    expect(store.firingsByReaction("PreserveEarlierAsk")).toEqual([
+      expect.objectContaining({ consumed: [trigger.id], produced: [firstAsk.id] }),
+    ]);
+    expect(store.hasConsumed(trigger.id, "PreserveEarlierAsk")).toBe(true);
   });
 });
 
@@ -284,21 +331,22 @@ describe("missing bindings in query inputs", () => {
   });
 });
 
-// ── Log records are observable in an incomplete state ───────────────────
+// ── Invocation records are exposed before output and outcome ─────────────
 
-describe("log records are briefly incomplete between append and commit", () => {
-  test("does not expose a record without output or outcome to readers", () => {
+describe("invocation records are exposed before output and outcome", () => {
+  test("exposes a record before output or outcome is appended", () => {
     const reacting = new Reacting();
     const log = reacting.Action;
 
     const record = {
+      id: "test-action",
       action: {} as any,
       concept: {},
       input: { test: true },
-      consumed: new Map(),
       flow: "test-flow",
     };
-    const { id } = log.invoke(record);
+    log.invoke(record);
+    const { id } = record;
 
     const stored = log._getById(id);
     // invoke() appends the record immediately. invoked() attaches output and

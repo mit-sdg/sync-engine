@@ -29,16 +29,11 @@ export function raceDeadline<T>(
     };
     const abort = () =>
       finish(() => resolve(options.onAbort === undefined ? (undefined as T) : options.onAbort()));
+    const onTimeout = options.onTimeout;
     const timer =
-      options.timeoutMs === undefined || options.onTimeout === undefined
+      options.timeoutMs === undefined || onTimeout === undefined
         ? undefined
-        : setTimeout(
-            () =>
-              finish(() =>
-                resolve(options.onTimeout === undefined ? (undefined as T) : options.onTimeout()),
-              ),
-            options.timeoutMs,
-          );
+        : setTimeout(() => finish(() => resolve(onTimeout())), options.timeoutMs);
     options.signal?.addEventListener("abort", abort, { once: true });
     if (isAborted(options.signal)) abort();
     void pending.then(

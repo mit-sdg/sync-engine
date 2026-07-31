@@ -1,7 +1,12 @@
 /** Bind portable read and reaction IR to one engine's installed definitions. */
 
 import type { NameResolver } from "@engine/reactions/resolving";
-import type { ActionPattern, StepNode, TriggerPattern, WhereFn } from "@engine/reactions/types";
+import type {
+  ActionTriggerPattern,
+  StepNode,
+  TriggerPattern,
+  WhereFn,
+} from "@engine/reactions/types";
 import { formerRefWith } from "./former-nodes.ts";
 import type { FormerRef } from "./former-nodes.ts";
 import { hasMarkerKey, liveOf } from "./ir.ts";
@@ -160,7 +165,7 @@ export class ImportedIrBinder {
     );
   }
 
-  private bindActionTrigger(clause: ActionTriggerIR, reactionName: string): ActionPattern {
+  private bindActionTrigger(clause: ActionTriggerIR, reactionName: string): ActionTriggerPattern {
     this.definitions.assertPatternUsable(clause.input, reactionName, "Reaction");
     this.definitions.assertPatternUsable(clause.output, reactionName, "Reaction");
     return this.definitions.resolver.action(

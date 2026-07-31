@@ -27,7 +27,6 @@ import {
   isFormerNode,
   isFusedFormer,
   isFormerUse,
-  type LeafNode,
   type RecordNode,
   contributedKeys,
   type FormerUse,
@@ -37,21 +36,6 @@ import type { Mapping } from "@engine/reactions/types";
 import { assertFormerBindings } from "./former-bindings.ts";
 import { operationFootprint, symbolsInMapping } from "./operation-footprint.ts";
 import { lowerFormerBody } from "./former-lowering.ts";
-
-/** The ordering vocabulary: `arranged.oldest`, `arranged.newest`, `arranged.by(v)`. */
-export const arranged = {
-  /** Record order, represented by the query's row order. */
-  oldest: { order: "oldest" } as Arranged,
-  /** The record's own order, reversed. */
-  newest: { order: "newest" } as Arranged,
-  /** Order on a value the matches carry. */
-  by(variable: symbol, order: "ascending" | "descending" = "ascending"): Arranged {
-    if (typeof variable !== "symbol") {
-      throw new Error("arranged.by(variable) orders on a bound variable.");
-    }
-    return { by: variable, order };
-  },
-} as const;
 
 // ── Builders ───────────────────────────────────────────────────────────────
 
@@ -76,12 +60,6 @@ function assertSelectionWhere(
     ops.push(conditionOp(item, `${op}(...)`) as WhereOp);
   }
   return ops;
-}
-
-/** A leaf: a bound variable shown as the value it holds. @internal */
-export function leaf(variable: symbol): LeafNode {
-  if (typeof variable !== "symbol") throw new Error("leaf(variable) takes a bound variable.");
-  return brandNode({ node: "leaf" as const, var: variable });
 }
 
 /** A formed object whose flat fragment splices are being stated. */
@@ -176,7 +154,7 @@ function buildEach(
 }
 
 /** How many matched — the selection consumed by a count instead of carried. @internal */
-export function countOf(from: FindOp, options: { where?: readonly WhereOp[] } = {}): CountNode {
+function countOf(from: FindOp, options: { where?: readonly WhereOp[] } = {}): CountNode {
   return brandNode({
     node: "count" as const,
     from,
@@ -190,7 +168,7 @@ export function countOf(from: FindOp, options: { where?: readonly WhereOp[] } = 
  * An empty selection reads as `null`.
  * @internal
  */
-export function firstOf(
+function firstOf(
   from: FindOp,
   options: { where?: readonly WhereOp[]; arranged?: Arranged; value: symbol },
 ): FirstNode {
@@ -207,7 +185,7 @@ export function firstOf(
 }
 
 /** The distinct values of a variable the selection binds, first-seen order. @internal */
-export function distinctOf(
+function distinctOf(
   from: FindOp,
   options: { where?: readonly WhereOp[]; value: symbol },
 ): DistinctNode {
@@ -227,8 +205,15 @@ export function distinctOf(
 /** How a captured selection orders itself: a bound variable, or the record's own order. */
 type ArrangedWord = "newest" | "oldest";
 
+function arrangedBy(variable: symbol, order: "ascending" | "descending"): Arranged {
+  if (typeof variable !== "symbol") {
+    throw new Error("arranged(variable) orders on a bound variable.");
+  }
+  return { by: variable, order };
+}
+
 /** The consumers a captured selection may end in — exactly one, always. */
-export interface SelectionConsumers {
+interface SelectionConsumers {
   /** Carry each match as one object. */
   form(entries: Record<string, FormerEntry>): EachFormNode;
   /** How many matched. */
@@ -239,12 +224,12 @@ export interface SelectionConsumers {
   distinct(value: symbol): DistinctNode;
 }
 
-export interface EachFormNode extends EachNode {
+interface EachFormNode extends EachNode {
   splicing(...uses: readonly (FusedFormer | FormerUse)[]): EachFormNode;
 }
 
 /** A captured selection mid-statement: order it, refine it, then consume it. */
-export interface SelectionBuilder extends SelectionConsumers {
+interface SelectionBuilder extends SelectionConsumers {
   /** Refine the selection with condition lines (never `earlier`, never `count`). */
   where(...conditions: readonly Condition[]): SelectionBuilder;
   /** Order the matches: `.arranged(v)`, `.arranged(v, "descending")`, `.arranged("newest")`. */
@@ -265,7 +250,7 @@ function parseArranged(first: symbol | ArrangedWord, order?: "ascending" | "desc
     }
     return { order: first };
   }
-  return arranged.by(first, order ?? "ascending");
+  return arrangedBy(first, order ?? "ascending");
 }
 
 function consumersOf(spec: SelectionSpec): SelectionConsumers {

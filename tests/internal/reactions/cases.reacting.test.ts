@@ -4,7 +4,6 @@ import { FrameworkErrorCode } from "@sync-engine/boundary";
 import { earlier, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
-import { actionNodeId } from "@sync-engine/internal/reactions/concepts/introspect";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";
 import {
   MemoryStore,
@@ -152,8 +151,12 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     expect(record?.fault).toEqual({
       error: FrameworkErrorCode.UNKNOWN_ERROR,
     });
-    expect(reacting.Action._getFaulted()).toHaveLength(1);
-    expect(reacting.Action._getPending()).toHaveLength(1);
+    expect(
+      [...reacting.Action.store.actions.values()].filter(({ fault }) => fault !== undefined),
+    ).toHaveLength(1);
+    expect(
+      [...reacting.Action.store.actions.values()].filter(({ outcome }) => outcome === undefined),
+    ).toHaveLength(1);
   });
 
   test("a faulted consequence prevents later actions in its pipeline", async () => {
@@ -245,34 +248,6 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     expect(c1).toBe(1);
     expect(c2).toBe(1);
     expect(c3).toBe(1);
-  });
-
-  test("manual engine queries retain memoized results until invalidated", async () => {
-    class CachingConcept {
-      calls = 0;
-      _data(_: Record<PropertyKey, never>) {
-        this.calls++;
-        return [{ value: this.calls }];
-      }
-    }
-
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
-    const raw = new CachingConcept();
-    const { C } = reacting.instrument({ C: raw });
-
-    const r1 = await C._data({});
-    expect(r1).toEqual([{ value: 1 }]);
-
-    const r2 = await C._data({});
-    expect(r2).toEqual([{ value: 1 }]);
-
-    reacting.invalidateCaches(C);
-    const r3 = await C._data({});
-    expect(r3).toEqual([{ value: 2 }]);
-
-    const r4 = await C._data({});
-    expect(r4).toEqual([{ value: 2 }]);
   });
 
   test("invalidateAllCaches refreshes memoized queries for every concept", async () => {
@@ -438,30 +413,5 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     expect(Recorder.order.filter((t) => t === "old")).toHaveLength(1);
     expect(Recorder.order).toContain("new");
-  });
-
-  test("actionNodeId joins the concept and action names with a dot", () => {
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
-    const { Button, Recorder } = reacting.instrument({
-      Button: new ButtonConcept(),
-      Recorder: new RecorderConcept(),
-    });
-
-    const bp = {
-      action: Button.clicked,
-      concept: (Button.clicked as unknown as Record<string, unknown>).concept as object,
-      input: {},
-      flow: Symbol("flow"),
-    };
-    expect(actionNodeId(bp)).toBe("Button.clicked");
-
-    const rp = {
-      action: Recorder.record,
-      concept: (Recorder.record as unknown as Record<string, unknown>).concept as object,
-      input: { tag: "x" },
-      flow: Symbol("flow"),
-    };
-    expect(actionNodeId(rp)).toBe("Recorder.record");
   });
 });

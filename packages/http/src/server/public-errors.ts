@@ -2,7 +2,7 @@ import { FrameworkErrorCode } from "@mit-sdg/sync-engine/boundary";
 import type { WireContractsIR } from "@mit-sdg/sync-engine/tooling";
 import type { HttpPublicErrorCategory, ProductionHttpProfile } from "./policy.ts";
 
-export type PublicHttpError = HttpPublicErrorCategory | "INTERNAL_ERROR";
+type PublicHttpError = HttpPublicErrorCategory | "INTERNAL_ERROR";
 
 function isPublicErrorCategory(value: unknown): value is HttpPublicErrorCategory {
   return (
@@ -32,15 +32,6 @@ export function publicFrameworkCategoryOf(code: string): PublicHttpError {
     default:
       return "INTERNAL_ERROR";
   }
-}
-
-export function publicCategoryOf(
-  code: string,
-  categories: Readonly<Record<string, HttpPublicErrorCategory>> | undefined,
-): PublicHttpError {
-  return categories !== undefined && Object.hasOwn(categories, code)
-    ? registeredPublicCategoryOf(code, categories)
-    : publicFrameworkCategoryOf(code);
 }
 
 export function publicErrorStatus(category: PublicHttpError): number {

@@ -345,20 +345,20 @@ describe("release source facts", () => {
     );
   });
 
-  test("requires every publish verification gate", () => {
+  test("requires the publish scenario gate to reuse the existing build", () => {
     const sources = fixture();
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "bun run coverage",
-      "bun run omitted-coverage",
+      "bun scripts/examples.ts scenario",
+      "bun run scenario",
     );
     expect(
       checkRelease(sources).filter((failure) =>
         failure.startsWith(".github/workflows/publish.yml: verify"),
       ),
     ).toEqual([
-      ".github/workflows/publish.yml: verify job must run bun run coverage",
+      ".github/workflows/publish.yml: verify job must run bun scripts/examples.ts scenario",
       ".github/workflows/publish.yml: verify gates must remain in reviewed order",
     ]);
   });

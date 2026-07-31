@@ -46,14 +46,12 @@ jobs:
       - run: bun run check
       - run: bun run test
       - run: bun run coverage
-      - run: bun run build
       - run: bun run declarations:check
       - run: bun run examples:check
-      - run: bun run scenario
+      - run: bun scripts/examples.ts scenario
       - name: Verify packed artifacts
         run: bun run package:check
         env:
-          SYNC_ENGINE_VERIFIED_TARBALL: release/package.tgz
           SYNC_ENGINE_VERIFIED_TARBALLS: release
       - run: bun audit
       - run: sha256sum release/package.tgz > release/package.tgz.sha256

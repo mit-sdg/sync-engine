@@ -12,17 +12,16 @@ describe("firing bookkeeping", () => {
       whenIds: ["ask"],
       bindings: { item: "a" },
       produced: ["notification"],
-      branches: [],
+      marked: false,
     };
-    const branch = book.newBranch(fill);
-    book.mark(branch);
+    book.mark(fill);
     expect(book.hasConsumed("ask", "Notify")).toBe(true);
     book.record(fill);
     expect(store.hasConsumed("ask", "Notify")).toBe(true);
-    expect(book.firings("Notify")[0]).toMatchObject({ consumed: ["ask"] });
+    expect(store.firingsByReaction("Notify")[0]).toMatchObject({ consumed: ["ask"] });
   });
 
-  test("unmark decrements count instead of deleting when multiple branches share the same id+reaction", () => {
+  test("mark is idempotent", () => {
     const store = new MemoryStore();
     const book = new FiringBook(store);
     const fill: FiringFill = {
@@ -31,18 +30,16 @@ describe("firing bookkeeping", () => {
       whenIds: ["ask"],
       bindings: { item: "a" },
       produced: [],
-      branches: [],
+      marked: false,
     };
-    const branch1 = book.newBranch(fill);
-    const branch2 = book.newBranch(fill);
-    book.mark(branch1);
-    book.mark(branch2);
+    book.mark(fill);
+    book.mark(fill);
     expect(book.hasConsumed("ask", "Notify")).toBe(true);
-    book.unmark(branch1);
-    expect(book.hasConsumed("ask", "Notify")).toBe(true);
+    book.unmark(fill);
+    expect(book.hasConsumed("ask", "Notify")).toBe(false);
   });
 
-  test("record releases every in-flight mark when appending the firing throws", () => {
+  test("record releases the in-flight mark when appending the firing throws", () => {
     const failure = new Error("append failed");
     const store = new MemoryStore();
     store.append = () => {
@@ -55,16 +52,12 @@ describe("firing bookkeeping", () => {
       whenIds: ["ask"],
       bindings: { item: "a" },
       produced: [],
-      branches: [],
+      marked: false,
     };
-    const branch1 = book.newBranch(fill);
-    const branch2 = book.newBranch(fill);
-    book.mark(branch1);
-    book.mark(branch2);
+    book.mark(fill);
 
     expect(() => book.record(fill)).toThrow(failure);
-    expect(branch1.marked).toBe(false);
-    expect(branch2.marked).toBe(false);
+    expect(fill.marked).toBe(false);
     expect(book.hasConsumed("ask", "Notify")).toBe(false);
   });
 });

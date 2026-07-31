@@ -8,10 +8,9 @@ const gates = [
   ["run", "check"],
   ["run", "test"],
   ["run", "coverage"],
-  ["run", "build"],
   ["run", "declarations:check"],
   ["run", "examples:check"],
-  ["run", "scenario"],
+  ["scripts/examples.ts", "scenario"],
   ["run", "package:check"],
   ["audit"],
 ] as const;

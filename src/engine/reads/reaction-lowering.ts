@@ -2,7 +2,7 @@
 
 import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import type {
-  ActionPattern,
+  ActionTriggerPattern,
   ReactionDeclaration,
   StepNode,
   ThenNode,
@@ -21,7 +21,7 @@ import {
 import type { AnyWhereOp } from "./where-ops.ts";
 import { operationFootprint } from "./operation-footprint.ts";
 
-export type LoweredWhereOp = AnyWhereOp;
+type LoweredWhereOp = AnyWhereOp;
 
 /** One lowered reaction with live references, ready to compile. */
 export interface LoweredReaction {
@@ -32,7 +32,7 @@ export interface LoweredReaction {
   step: StepNode;
 }
 
-export interface LowerOutcome {
+interface LowerOutcome {
   reactions?: LoweredReaction[];
   reason?: string;
 }
@@ -54,7 +54,7 @@ function isPlainStep(node: ThenNode): node is StepNode {
   return node.kind === "step" && node.transform === undefined;
 }
 
-function returnedTrigger(step: StepNode, by: string): ActionPattern {
+function returnedTrigger(step: StepNode, by: string): ActionTriggerPattern {
   return {
     ...step.action,
     output: step.action.output ?? {},
@@ -110,7 +110,7 @@ function lowerChainStep(
 
   settleStepOps();
 
-  const sources: Array<TriggerPattern | ActionPattern> = [
+  const sources: TriggerPattern[] = [
     ...chain.slice(0, i - 1).map((prior, j) => returnedTrigger(prior, names[j])),
     ...decl.when,
   ];

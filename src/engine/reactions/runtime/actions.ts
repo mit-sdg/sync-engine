@@ -17,7 +17,6 @@
  */
 
 import type { ActionOutcome } from "../types.ts";
-import { uuid } from "@engine/utils/runtime";
 import { redact, serializeError } from "@engine/utils/redaction";
 import { ListenerSet } from "@engine/utils/listener-set";
 import { snapshotValue } from "@engine/utils/snapshot";
@@ -41,7 +40,6 @@ export type { ActionRecord } from "./log-store.ts";
 
 interface MatchingRecordValues {
   input: Record<string, unknown>;
-  output?: Record<string, unknown>;
   outcome?: ActionOutcome;
 }
 
@@ -51,7 +49,7 @@ interface ActiveFlowValues {
   interpreterFailed: boolean;
 }
 
-export interface FlowQuiescence {
+interface FlowQuiescence {
   flow: string;
   interpreterFailed: boolean;
 }
@@ -103,21 +101,18 @@ export class ActionConcept {
    * Append an invocation. Input values whose field names match the current
    * redaction policy are replaced before the record reaches the store.
    */
-  invoke(record: ActionRecord): { id: string } {
-    const id = record.id ?? uuid();
+  invoke(record: ActionRecord): void {
     this.store.append({
       kind: "invocation",
       at: Date.now(),
       record: {
         ...record,
-        id,
         input: this.redactor.redact(record.input) as Record<string, unknown>,
       },
     });
-    return { id };
   }
 
-  /** Snapshot and retain raw input; raw output and outcome are added when the action resolves. */
+  /** Snapshot and retain raw input; the raw outcome is added when the action resolves. */
   _beginMatchingInput({
     id,
     flow,
@@ -255,13 +250,13 @@ export class ActionConcept {
     }
   }
 
-  /** Return a transient record with raw input, output, and outcome while its flow is active. */
+  /** Return a transient record with raw input and outcome while its flow is active. */
   _matchingRecord(record: ActionRecord): ActionRecord {
-    const values = record.id === undefined ? undefined : this.matchingValues.get(record.id);
+    const values = this.matchingValues.get(record.id);
     return values === undefined ? record : { ...record, ...values };
   }
 
-  /** Number of action records with raw input, output, or outcome retained for active flows. */
+  /** Number of action records with raw matching values retained for active flows. */
   _getMatchingRecordCount(): number {
     return this.matchingValues.size;
   }
@@ -269,8 +264,7 @@ export class ActionConcept {
   /**
    * Append an action output after redacting matching field names. A supplied
    * `outcome` records its known posture; otherwise the output is recorded as a
-   * successful result. Raw output and outcome remain available to active-flow
-   * matching.
+   * successful result. The raw outcome remains available to active-flow matching.
    */
   invoked({
     id,
@@ -280,13 +274,10 @@ export class ActionConcept {
     id: string;
     output: Record<string, unknown>;
     outcome?: ActionOutcome;
-  }): {
-    id: string;
-  } {
+  }): void {
     const resolvedOutcome = outcome ?? normalizeOutcome(output);
     const matching = this.matchingValues.get(id);
     if (matching !== undefined) {
-      matching.output = output;
       matching.outcome = resolvedOutcome;
     }
     this.store.append({
@@ -296,15 +287,20 @@ export class ActionConcept {
       output: this.redactor.redact(output) as Record<string, unknown>,
       outcome: this.redactor.redact(resolvedOutcome) as ActionOutcome,
     });
-    return { id };
   }
 
   /**
    * Append a fault classification for an ask without recording an outcome.
    */
-  faulted({ id, fault, error }: { id: string; fault: Record<string, unknown>; error?: unknown }): {
+  faulted({
+    id,
+    fault,
+    error,
+  }: {
     id: string;
-  } {
+    fault: Record<string, unknown>;
+    error?: unknown;
+  }): void {
     const record = this.store.byId(id);
     const at = Date.now();
     this.store.append({ kind: "fault", at, id, fault });
@@ -320,22 +316,11 @@ export class ActionConcept {
         ...(record.by === undefined ? {} : { reaction: record.by }),
       });
     }
-    return { id };
   }
 
   /** All records belonging to a flow, in order (or `undefined` if unknown). */
   _getByFlow(flow: string): ActionRecord[] | undefined {
     return this.store.byFlow(flow);
-  }
-
-  /** Records without an outcome, including in-flight and faulted asks. */
-  _getPending(): ActionRecord[] {
-    return [...this.store.actions.values()].filter((record) => record.outcome === undefined);
-  }
-
-  /** Records with a fault classification. */
-  _getFaulted(): ActionRecord[] {
-    return [...this.store.actions.values()].filter((record) => record.fault !== undefined);
   }
 
   /** Look up a single record by id. */

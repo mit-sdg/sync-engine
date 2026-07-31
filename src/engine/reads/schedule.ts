@@ -11,23 +11,23 @@ import { operationFootprint } from "./operation-footprint.ts";
 type AnyOpIR = WhereOpIR | ViewOpIR;
 
 /** The names an op needs bound before it can evaluate. */
-export function opNeedsIR(op: AnyOpIR): string[] {
+function opNeedsIR(op: AnyOpIR): string[] {
   return operationFootprint(op, "ir").requires;
 }
 
 /** The names an op can open, given what is already bound. */
-export function opOpensIR(op: AnyOpIR, bound: ReadonlySet<string>): string[] {
+function opOpensIR(op: AnyOpIR, bound: ReadonlySet<string>): string[] {
   const produced = operationFootprint(op, "ir").produces;
   return [...new Set(produced.filter((name) => !bound.has(name)))];
 }
 
 /** Every name an op's patterns mention, opening or not — the lint's counts. */
-export function opNamesIR(op: AnyOpIR): string[] {
+function opNamesIR(op: AnyOpIR): string[] {
   return operationFootprint(op, "ir").mentions;
 }
 
 /** What one scheduled block settled: the order, and each op's opened names. */
-export interface ScheduledBlock<Op extends AnyOpIR> {
+interface ScheduledBlock<Op extends AnyOpIR> {
   ordered: Op[];
   /** Names bound after the block runs. */
   bound: Set<string>;

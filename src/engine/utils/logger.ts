@@ -1,8 +1,6 @@
-import { redact, serializeError } from "./redaction.ts";
+import { redact } from "./redaction.ts";
 
-export { serializeError };
-
-export type LogLevel = "debug" | "info" | "warn" | "error" | "none";
+type LogLevel = "debug" | "info" | "warn" | "error" | "none";
 
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 10,
@@ -23,7 +21,7 @@ function safeJSON(value: unknown): string {
   }
 }
 
-export interface Logger {
+interface Logger {
   debug(msg: string, meta?: Record<string, unknown>): void;
   info(msg: string, meta?: Record<string, unknown>): void;
   warn(msg: string, meta?: Record<string, unknown>): void;

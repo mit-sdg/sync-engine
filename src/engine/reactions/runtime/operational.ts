@@ -121,7 +121,7 @@ export function reportRawFault(
 
 export type OperationalObserver = (event: OperationalEvent) => void;
 
-export interface FlowOperationalContext {
+interface FlowOperationalContext {
   route: string;
   correlationId: string;
 }

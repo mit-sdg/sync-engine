@@ -1,4 +1,4 @@
-import { isMatcher, isPlainMapping } from "@engine/reads/matchers";
+import { isPlainMapping } from "@engine/reads/matchers";
 import { Frames } from "@engine/reads/frames";
 import { snapshotValue } from "@engine/utils/snapshot";
 import { varKeyOf } from "@engine/reads/frames";
@@ -9,7 +9,7 @@ import type { ActionConcept, ActionRecord } from "./actions.ts";
 import { flow, landing } from "../context.ts";
 import type {
   ActionOutcome,
-  ActionPattern,
+  ActionTriggerPattern,
   ChannelPattern,
   ChannelPosture,
   ExecutableReaction,
@@ -19,12 +19,9 @@ import type {
 } from "../types.ts";
 
 /** The posture in which an action outcome landed. */
-export function postureOfOutcome(outcome: ActionOutcome): ChannelPosture {
+function postureOfOutcome(outcome: ActionOutcome): ChannelPosture {
   return outcome.kind === "result" ? "returned" : "refused";
 }
-
-/** Compare literal values with the same equality used by reads and formers. */
-export const literalEquals = structurallyEqual;
 
 /** Cached regular expressions for serialized `$regexp` markers. */
 const regexpOf = new WeakMap<object, RegExp>();
@@ -53,9 +50,9 @@ function testRegExp(pattern: RegExp, recordValue: unknown): boolean {
 /**
  * Match each stated field against a record and extend the supplied frame.
  * Accepted field patterns are authored variables, `{ $var }`, `RegExp`,
- * authored candidate matchers, `$oneOf`, `$regexp`, `$lit`, and `$is` with a
- * definition-site value. Other values are matched as literals by
- * {@link literalEquals}. Object literals do not bind variables recursively.
+ * `$oneOf`, `$regexp`, `$lit`, and `$is` with a definition-site value. Other
+ * values are matched with the structural equality shared by reads and formers. Object literals do
+ * not bind variables recursively.
  */
 export function unifyPattern(
   recordValues: Record<string, unknown>,
@@ -69,17 +66,11 @@ export function unifyPattern(
     const recordValue = recordValues[key];
     if (variable !== undefined) {
       if (!Object.hasOwn(next, variable)) next = { ...next, [variable]: recordValue };
-      else if (!literalEquals(next[variable], recordValue)) return undefined;
+      else if (!structurallyEqual(next[variable], recordValue)) return undefined;
       continue;
     }
     if (value instanceof RegExp) {
       if (!testRegExp(value, recordValue)) return undefined;
-      continue;
-    }
-    if (isMatcher(value)) {
-      if (!value.candidates?.some((candidate) => literalEquals(candidate, recordValue))) {
-        return undefined;
-      }
       continue;
     }
     const marker =
@@ -89,7 +80,7 @@ export function unifyPattern(
         case "$oneOf": {
           if (
             !(marker.payload as unknown[]).some((candidate) =>
-              literalEquals(literalCandidate(candidate), recordValue),
+              structurallyEqual(literalCandidate(candidate), recordValue),
             )
           ) {
             return undefined;
@@ -108,18 +99,18 @@ export function unifyPattern(
         }
         case "$is": {
           const live = liveOf(value as object);
-          if (live === undefined || !literalEquals(recordValue, live)) return undefined;
+          if (live === undefined || !structurallyEqual(recordValue, live)) return undefined;
           continue;
         }
         case "$lit": {
-          if (!literalEquals(recordValue, marker.payload)) return undefined;
+          if (!structurallyEqual(recordValue, marker.payload)) return undefined;
           continue;
         }
         default:
           break;
       }
     }
-    if (!literalEquals(recordValue, value)) return undefined;
+    if (!structurallyEqual(recordValue, value)) return undefined;
   }
   return next;
 }
@@ -135,7 +126,7 @@ export function unifyOutputPattern(
 /** Match action identity, provenance, posture, input, and output for one trigger. */
 export function matchArguments(
   record: ActionRecord,
-  pattern: ActionPattern,
+  pattern: ActionTriggerPattern,
   frame: Frame,
   recordBinding: symbol,
 ): Frame | undefined {
@@ -159,9 +150,6 @@ export function matchArguments(
 
   let next = unifyPattern(record.input, pattern.input, frame);
   if (next === undefined) return undefined;
-  if (pattern.output === undefined) {
-    throw new Error(`When pattern: ${String(pattern)} is missing output pattern.`);
-  }
   const outcome =
     pattern.posture === "faulted"
       ? ({ kind: "result", value: record.fault ?? {} } as const)
@@ -258,7 +246,7 @@ export class TriggerMatcher {
   constructor(
     private readonly records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">,
     private readonly consumption: {
-      hasConsumed(recordId: string | undefined, reaction: string): boolean;
+      hasConsumed(recordId: string, reaction: string): boolean;
     },
     private readonly rawConceptOf: (instrumented: object) => object,
     private readonly assertRows?: (flow: string, count: number) => void,
@@ -267,9 +255,7 @@ export class TriggerMatcher {
   match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]] {
     const snapshots = new WeakMap<object, unknown>();
     const landed = snapshotRecord(
-      this.records._matchingRecord(
-        (record.id !== undefined ? this.records._getById(record.id) : undefined) ?? record,
-      ),
+      this.records._matchingRecord(this.records._getById(record.id) ?? record),
       snapshots,
     );
     const seed = { [flow]: record.flow, [landing]: record.id } as Frame;
@@ -300,7 +286,7 @@ export class TriggerMatcher {
       for (const [frame, parentConsumed] of framesWithConsumed) {
         for (const candidate of flowActions) {
           if (this.consumption.hasConsumed(candidate.id, reaction.name)) continue;
-          if (candidate.id !== undefined && parentConsumed.has(candidate.id)) continue;
+          if (parentConsumed.has(candidate.id)) continue;
           const matchingCandidate = snapshotRecord(
             this.records._matchingRecord(candidate),
             snapshots,
@@ -311,7 +297,7 @@ export class TriggerMatcher {
               : matchArguments(matchingCandidate, clause, frame, actionSymbol);
           if (matched === undefined) continue;
           const childConsumed = new Set(parentConsumed);
-          if (candidate.id !== undefined) childConsumed.add(candidate.id);
+          childConsumed.add(candidate.id);
           this.assertRows?.(record.flow, next.length + 1);
           next.push([matched, childConsumed]);
         }
@@ -322,7 +308,7 @@ export class TriggerMatcher {
   }
 
   posture(record: ActionRecord): ChannelPosture | undefined {
-    const stored = record.id !== undefined ? this.records._getById(record.id) : undefined;
+    const stored = this.records._getById(record.id);
     const fault = stored?.fault ?? record.fault;
     const outcome = stored?.outcome ?? record.outcome;
     return fault !== undefined

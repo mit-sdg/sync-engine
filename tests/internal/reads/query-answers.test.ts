@@ -1,7 +1,6 @@
 /** Query answers and the optional promises that narrow their cardinality. */
 import { describe, expect, test } from "vite-plus/test";
 import { each, former, vocabulary, where } from "@sync-engine/language";
-import { rowsOfAnswer } from "@sync-engine/internal/reads/queries";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { quietReacting } from "../../utils/reacting.ts";
 
@@ -132,27 +131,5 @@ describe("query answers", () => {
 
     expect(await reacting.form(single({}))).toEqual([{ value: 1 }]);
     expect(await reacting.form(rows({}))).toEqual([{ value: 1 }, { value: 2 }]);
-  });
-});
-
-describe("query answer normalization", () => {
-  test("accepts record answers and arrays of record answers", () => {
-    expect(rowsOfAnswer({ a: 1 }, {})).toEqual([{ a: 1 }]);
-    expect(rowsOfAnswer([{ a: 1 }, { a: 2 }], {})).toEqual([{ a: 1 }, { a: 2 }]);
-    expect(rowsOfAnswer([], {})).toEqual([]);
-  });
-
-  test("enforces the optional promise", () => {
-    expect(rowsOfAnswer([], { queryPromise: "optional" })).toEqual([]);
-    expect(rowsOfAnswer([{ a: 1 }], { queryPromise: "optional" })).toEqual([{ a: 1 }]);
-    expect(() => rowsOfAnswer([{ a: 1 }, { a: 2 }], { queryPromise: "optional" })).toThrow(
-      "at most one",
-    );
-  });
-
-  test("rejects other answer shapes", () => {
-    expect(() => rowsOfAnswer(null, {})).toThrow("null");
-    expect(() => rowsOfAnswer(undefined, {})).toThrow("undefined");
-    expect(() => rowsOfAnswer([1], {})).toThrow("row 1 is number");
   });
 });

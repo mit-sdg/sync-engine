@@ -15,7 +15,7 @@ import { brand, hasBrand } from "@engine/reads/brands";
 
 const NodeBrand: unique symbol = Symbol("NodeBrand");
 
-export function brandReactionNode<T extends object>(node: T): T {
+function brandReactionNode<T extends object>(node: T): T {
   return brand(node, NodeBrand);
 }
 

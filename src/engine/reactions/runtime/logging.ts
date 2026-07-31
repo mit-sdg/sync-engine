@@ -60,8 +60,8 @@ export class ReactionLogger {
   }
 
   /** Build an observer event with field-name-redacted input, output, and outcome. */
-  toEvent(record: ActionRecord, durationMs: number): LogEvent {
-    const stored = record.id === undefined ? undefined : this.actions._getById(record.id);
+  private toEvent(record: ActionRecord, durationMs: number): LogEvent {
+    const stored = this.actions._getById(record.id);
     const sourceOutcome = stored?.outcome ?? record.outcome;
     const outcome =
       sourceOutcome === undefined

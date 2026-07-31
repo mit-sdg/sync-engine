@@ -40,7 +40,7 @@ import type {
   StepNode,
 } from "../types.ts";
 import { ActionConcept, type ActionRecord, normalizeOutcome } from "./actions.ts";
-import { type FiringBook, type FiringBranch, type FiringFill } from "./firing.ts";
+import { type FiringBook, type FiringFill } from "./firing.ts";
 import { errorOutputFromThrown, reactQuietly } from "./instrumenting.ts";
 import type { ReactionFailureRecord } from "./log-store.ts";
 import type { ReactionLogger } from "./logging.ts";
@@ -104,7 +104,7 @@ export class FiringPipeline {
       this.failStage(
         reaction,
         record.flow,
-        record.id === undefined ? [] : [record.id],
+        [record.id],
         "trigger",
         "trigger matching failed",
         error,
@@ -149,7 +149,7 @@ export class FiringPipeline {
       .map((_frame, index) => index)
       .filter(
         (index) =>
-          !frameTriggerIds[index]?.some((id) => this.firingBook.hasConsumed(id, reaction.name)),
+          !frameTriggerIds[index]!.some((id) => this.firingBook.hasConsumed(id, reaction.name)),
       );
     if (active.length === 0) return;
     try {
@@ -158,7 +158,7 @@ export class FiringPipeline {
         reaction,
         actionSymbols,
         provenance,
-        active.map((index) => frameTriggerIds[index]),
+        active.map((index) => frameTriggerIds[index]!),
       );
     } catch (error) {
       this.failStage(
@@ -225,41 +225,20 @@ export class FiringPipeline {
     triggerIdsByFrame: string[][],
   ): Promise<void> {
     for (const [index, frame] of frames.entries()) {
-      const whenIds = triggerIdsByFrame[index];
-      if (whenIds === undefined) {
-        const error = new Error("Matched frame has no captured trigger occurrences.");
-        logger.warn(
-          `Reaction "${reaction.name}": matched bindings could not resolve every trigger occurrence`,
-          { error: serializeError(error) },
-        );
-        this.actions._recordInterpreterFailure(
-          reaction.name,
-          captured.flow,
-          captured.triggerIds,
-          "trigger",
-          error,
-        );
-        continue;
-      }
       const fill: FiringFill = {
         reaction: reaction.name,
         flow: captured.flow,
-        whenIds,
+        whenIds: triggerIdsByFrame[index]!,
         bindings: this.bindingsOf(frame, actionSymbols),
         produced: [],
-        branches: [],
+        marked: false,
       };
-      await this.runPipelineForFrame(
-        frame,
-        reaction.then,
-        reaction,
-        this.firingBook.newBranch(fill),
-      );
+      await this.runPipelineForFrame(frame, reaction.then, reaction, fill);
       this.firingBook.record(fill);
     }
   }
 
-  matchThen(
+  private matchThen(
     then: ActionPattern,
     frame: Frame,
     by?: string,
@@ -318,35 +297,34 @@ export class FiringPipeline {
     frame: Frame,
     nodes: StepNode[],
     reaction: ExecutableReaction,
-    branch: FiringBranch,
-  ): Promise<Frames> {
+    fill: FiringFill,
+  ): Promise<void> {
     let current = new Frames(frame);
     for (const node of nodes) {
       const next: Frame[] = [];
       for (const currentFrame of current) {
-        next.push(...(await this.runStepNode(currentFrame, node, reaction, branch)));
+        next.push(...(await this.runStepNode(currentFrame, node, reaction, fill)));
       }
       current = new Frames(...next);
-      this.assertRows(branch.fill.flow, current.length);
+      this.assertRows(fill.flow, current.length);
       if (current.length === 0) break;
     }
-    return current;
   }
 
   private async runStepNode(
     frame: Frame,
     node: StepNode,
     reaction: ExecutableReaction,
-    branch: FiringBranch,
+    fill: FiringFill,
   ): Promise<Frames> {
     let matched: ActionArguments;
     try {
-      matched = this.matchThen(node.action, frame, reaction.name, branch.fill.flow);
+      matched = this.matchThen(node.action, frame, reaction.name, fill.flow);
     } catch (error) {
       return this.failStep(
         reaction,
         node,
-        branch,
+        fill,
         "consequence-input",
         "consequence input could not be formed from the matched bindings",
         error,
@@ -356,12 +334,13 @@ export class FiringPipeline {
     try {
       matched = await this.resolveFormerInputs(matched);
     } catch (error) {
-      return this.landFormingFault(matched, node, reaction, branch, error);
+      return this.landFormingFault(matched, node, reaction, fill, error);
     }
     const id = matched[actionId];
     if (typeof id !== "string") throw new Error("Action produced from `then` is missing an id.");
 
-    this.firingBook.mark(branch);
+    const previouslyMarked = fill.marked;
+    this.firingBook.mark(fill);
     let output: Record<string, unknown>;
     let settlement: ActionSettlement | undefined;
     matched[actionSettlement] = (next: ActionSettlement) => {
@@ -372,7 +351,7 @@ export class FiringPipeline {
       output = (await runThen(matched)) as Record<string, unknown>;
     } catch (error) {
       if (settlement !== undefined) {
-        branch.fill.produced.push(id);
+        fill.produced.push(id);
         logger.error(
           settlement === "fault-recorded"
             ? "Consequence action faulted"
@@ -384,7 +363,7 @@ export class FiringPipeline {
           },
         );
         if (settlement !== "fault-recorded") {
-          this.recordConsequence(node, branch, "consequence-dispatch", error, id);
+          this.recordConsequence(node, fill, "consequence-dispatch", error, id);
         }
         return new Frames();
       }
@@ -393,11 +372,11 @@ export class FiringPipeline {
         actionId: id,
         error: serializeError(error),
       });
-      this.recordConsequence(node, branch, "consequence-dispatch", error, id);
-      this.firingBook.unmark(branch);
+      this.recordConsequence(node, fill, "consequence-dispatch", error, id);
+      if (!previouslyMarked) this.firingBook.unmark(fill);
       return new Frames();
     }
-    branch.fill.produced.push(id);
+    fill.produced.push(id);
 
     const stored = this.actions._getById(id);
     const outcome =
@@ -413,7 +392,7 @@ export class FiringPipeline {
       return this.failStep(
         reaction,
         node,
-        branch,
+        fill,
         "consequence-output",
         "consequence output matching failed",
         error,
@@ -431,12 +410,12 @@ export class FiringPipeline {
         if (!(childFrames instanceof Frames)) {
           throw new TypeError("An ask result transform must return Frames.");
         }
-        this.assertCausalFlow(childFrames, branch.fill.flow);
+        this.assertCausalFlow(childFrames, fill.flow);
       } catch (error) {
         return this.failStep(
           reaction,
           node,
-          branch,
+          fill,
           "result-transform",
           "ask result condition failed",
           error,
@@ -452,8 +431,7 @@ export class FiringPipeline {
     pattern: ActionPattern,
     outcome: ActionOutcome,
   ): Frames {
-    if (pattern.output === undefined) return new Frames({ ...frame });
-    const extended = unifyOutputPattern(outcome, pattern.output, frame);
+    const extended = unifyOutputPattern(outcome, pattern.output ?? {}, frame);
     return extended === undefined ? new Frames() : new Frames(extended);
   }
 
@@ -484,13 +462,13 @@ export class FiringPipeline {
   private failStep(
     reaction: ExecutableReaction,
     node: StepNode,
-    branch: FiringBranch,
+    fill: FiringFill,
     stage: ReactionFailureRecord["stage"],
     message: string,
     error: unknown,
     actionIdValue?: string,
   ): Frames {
-    this.failStage(reaction, branch.fill.flow, branch.fill.whenIds, stage, message, error, {
+    this.failStage(reaction, fill.flow, fill.whenIds, stage, message, error, {
       action: actionNameOf(node.action.action as InstrumentedAction),
       ...(actionIdValue !== undefined ? { actionId: actionIdValue } : {}),
     });
@@ -499,22 +477,15 @@ export class FiringPipeline {
 
   private recordConsequence(
     node: StepNode,
-    branch: FiringBranch,
+    fill: FiringFill,
     stage: ReactionFailureRecord["stage"],
     error: unknown,
     actionIdValue?: string,
   ): void {
-    this.actions._recordInterpreterFailure(
-      branch.fill.reaction,
-      branch.fill.flow,
-      branch.fill.whenIds,
-      stage,
-      error,
-      {
-        action: actionNameOf(node.action.action as InstrumentedAction),
-        ...(actionIdValue !== undefined ? { actionId: actionIdValue } : {}),
-      },
-    );
+    this.actions._recordInterpreterFailure(fill.reaction, fill.flow, fill.whenIds, stage, error, {
+      action: actionNameOf(node.action.action as InstrumentedAction),
+      ...(actionIdValue !== undefined ? { actionId: actionIdValue } : {}),
+    });
   }
 
   private assertCausalFlow(frames: Frames, expected: string): void {
@@ -529,7 +500,7 @@ export class FiringPipeline {
     matched: ActionArguments,
     node: StepNode,
     reaction: ExecutableReaction,
-    branch: FiringBranch,
+    fill: FiringFill,
     error: unknown,
   ): Promise<Frames> {
     const { [flow]: flowToken, [actionId]: id, [byAskingReaction]: askedBy, ...rest } = matched;
@@ -557,7 +528,7 @@ export class FiringPipeline {
       flow: flowToken,
       ...(typeof askedBy === "string" ? { by: askedBy } : {}),
     };
-    this.firingBook.mark(branch);
+    this.firingBook.mark(fill);
     record.input = this.actions._beginMatchingInput({
       id,
       flow: flowToken,
@@ -566,7 +537,7 @@ export class FiringPipeline {
     try {
       this.actions.invoke(record);
       this.actions.faulted({ id, fault: errorOutputFromThrown(error), error });
-      branch.fill.produced.push(id);
+      fill.produced.push(id);
       await reactQuietly(
         { react: this.react, emit: () => {} },
         { ...record },

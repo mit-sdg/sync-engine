@@ -7,10 +7,10 @@ import { walkValueTree } from "./value-tree.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
 
 type AuthoredCountOp = { readonly op: "count"; readonly in: Mapping; readonly out: symbol };
-export type AuthoredOperation = AnyWhereOp | AuthoredCountOp;
-export type IROperation = WhereOpIR | ViewOpIR;
+type AuthoredOperation = AnyWhereOp | AuthoredCountOp;
+type IROperation = WhereOpIR | ViewOpIR;
 
-export interface OperationFootprint<Name extends string | symbol> {
+interface OperationFootprint<Name extends string | symbol> {
   /** Names read from the operation's primary input. */
   inputs: Name[];
   /** Names that must be bound before the operation can run. */

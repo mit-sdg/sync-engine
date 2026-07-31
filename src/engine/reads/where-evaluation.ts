@@ -17,7 +17,7 @@ import type { Condition, CustomOp, WhereOp } from "./where-ops.ts";
 import { setOwn } from "@engine/utils/own-property";
 
 /** An op as evaluation accepts it: authored (live refs, symbols) or IR (names). */
-export type EvaluableOp = ViewOp | ViewOpIR;
+type EvaluableOp = ViewOp | ViewOpIR;
 type AssertRows = (count: number) => void;
 
 function pushFrame(into: Frames, frame: Frame, assertRows?: AssertRows): void {

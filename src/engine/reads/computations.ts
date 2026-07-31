@@ -14,7 +14,7 @@ import { brand, hasBrand } from "./brands.ts";
 /** The runtime shape of a computation: one input mapping in, one value out. */
 export type ComputationFn = (input: Mapping) => unknown | Promise<unknown>;
 
-export type ComputationSource = "standard" | "vocabulary";
+type ComputationSource = "standard" | "vocabulary";
 
 /** A named computation ref, callable with an input pattern. */
 export interface ComputationRef {
@@ -81,19 +81,19 @@ const amongRef = computationRef(
   "standard",
 );
 
-export function lt(left: unknown, right: unknown): FusedComputation {
+function lt(left: unknown, right: unknown): FusedComputation {
   return ltRef({ left, right });
 }
-export function le(left: unknown, right: unknown): FusedComputation {
+function le(left: unknown, right: unknown): FusedComputation {
   return leRef({ left, right });
 }
-export function gt(left: unknown, right: unknown): FusedComputation {
+function gt(left: unknown, right: unknown): FusedComputation {
   return gtRef({ left, right });
 }
-export function ge(left: unknown, right: unknown): FusedComputation {
+function ge(left: unknown, right: unknown): FusedComputation {
   return geRef({ left, right });
 }
-export function among(value: unknown, collection: unknown): FusedComputation {
+function among(value: unknown, collection: unknown): FusedComputation {
   return amongRef({ value, collection });
 }
 

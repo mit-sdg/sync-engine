@@ -9,7 +9,7 @@
  *   src/composition/host-may-contribute.ts   — policy: host-only contributions
  *   src/composition/responders-may-contribute.ts — policy: any-responder contributions
  *   src/assembly.ts                   — the assemble() call with selectable options
- *   src/edge.ts                       — gateway and HTTP wiring
+ *   src/edge.ts                       — local gateway construction
  */
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
 import { deterministicImplementations } from "./concept-set.ts";

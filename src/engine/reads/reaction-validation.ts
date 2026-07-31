@@ -1,27 +1,9 @@
 import { actionNameOf, conceptNameOf } from "@engine/reactions/concepts/introspect";
 import type { ReactionDeclaration, StepNode } from "@engine/reactions/types";
 import { isFusedFormer } from "./former-nodes.ts";
-import { isMatcher, isPlainMapping } from "./matchers.ts";
+import { isPlainMapping } from "./matchers.ts";
 import { walkValueTree } from "./value-tree.ts";
 import { operationFootprint } from "./operation-footprint.ts";
-
-const extraUses = new WeakMap<ReactionDeclaration, readonly symbol[]>();
-
-export function setReactionLintExtraUses(
-  declaration: ReactionDeclaration,
-  uses: readonly symbol[],
-): ReactionDeclaration {
-  extraUses.set(declaration, uses);
-  return declaration;
-}
-
-export function copyReactionLintExtraUses(
-  source: ReactionDeclaration,
-  target: ReactionDeclaration,
-): void {
-  const uses = extraUses.get(source);
-  if (uses !== undefined) extraUses.set(target, uses);
-}
 
 function countSymbols(value: unknown, counts: Map<symbol, number>): void {
   walkValueTree(value, (node) => {
@@ -50,9 +32,6 @@ export function lintReactionOpens(name: string, decl: ReactionDeclaration): void
       countSymbols(operationFootprint(op, "authored").mentions, counts);
     }
   }
-  for (const variable of extraUses.get(decl) ?? []) {
-    counts.set(variable, (counts.get(variable) ?? 0) + 1);
-  }
   for (const op of ops) {
     if (op.op !== "find" && op.op !== "whether") continue;
     for (const variable of new Set(operationFootprint(op, "authored").produces)) {
@@ -68,7 +47,6 @@ export function lintReactionOpens(name: string, decl: ReactionDeclaration): void
 function describeValue(value: unknown): string {
   if (typeof value === "function") return "a function";
   if (value instanceof RegExp) return "a RegExp";
-  if (isMatcher(value)) return `a matcher (${value.label})`;
   if (value instanceof Date) return "a Date";
   if (value !== null && typeof value === "object")
     return `a ${value.constructor?.name ?? "non-plain"} instance`;

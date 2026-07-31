@@ -34,7 +34,7 @@ export type ValueIR =
 export type PatternIR = Record<string, ValueIR>;
 
 /** The `$`-tags a {@link ValueIR} carries beyond plain data and arrays. */
-export type MarkerTag = "$var" | "$oneOf" | "$regexp" | "$is" | "$former" | "$lit";
+type MarkerTag = "$var" | "$oneOf" | "$regexp" | "$is" | "$former" | "$lit";
 
 const MARKER_TAGS: readonly MarkerTag[] = ["$var", "$oneOf", "$regexp", "$is", "$former", "$lit"];
 
@@ -62,7 +62,7 @@ export function isVarIR(value: unknown): value is { $var: string } {
  * lacks it, and whatever required it refuses at registration, exactly as
  * opaque escapes always have.
  */
-export const LIVE: unique symbol = Symbol("live");
+const LIVE: unique symbol = Symbol("live");
 
 /** Attach a definition-site live value to an IR node (returns the node). */
 export function withLive<T extends object>(node: T, live: unknown): T {
@@ -121,7 +121,7 @@ export type TriggerIR = ActionTriggerIR | ChannelTriggerIR;
  * its registered name — indistinguishable at the use-site, so one field pair
  * carries both (exactly one is present).
  */
-export interface LineRefIR {
+interface LineRefIR {
   query?: { concept: string; query: string };
   view?: string;
 }
@@ -292,7 +292,7 @@ export interface AppIR {
 }
 
 /** One action as the inventory reports it: its name, observed input roles, declared refusals. */
-export interface ActionInventoryIR {
+interface ActionInventoryIR {
   name: string;
   /** Input roles observed from the implementation's destructuring; absent when unreadable. */
   roles?: string[];
@@ -301,7 +301,7 @@ export interface ActionInventoryIR {
 }
 
 /** One query (a `_`-prefixed method): a standing question the concept's state answers. */
-export interface QueryInventoryIR {
+interface QueryInventoryIR {
   name: string;
   roles?: string[];
   /** The concept's promised cardinality. */
