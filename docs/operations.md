@@ -45,20 +45,24 @@ Public subpaths, including `/advanced`, and documented behavior follow Semantic
 Versioning. Use `@latest` for the current release or pin an exact stable version
 for reproducibility. Review the changelog, regenerate artifacts, and typecheck a
 packed consumer before upgrading. Generated assembly compatibility is governed
-by the application manifest format and stable package SemVer; stable 1.x
-generators and projectors are accepted under that policy. The [support
-policy](../SUPPORT.md) defines the version and format rules.
+by the application manifest format and stable package SemVer. Core generator
+identities must name `@mit-sdg/sync-engine` at a stable 1.x version. Projector
+provenance may name any nonblank package at any valid stable SemVer version; it
+is not restricted to 1.x. The [support policy](../SUPPORT.md) defines the
+version and format rules.
 
 ## Concurrency and atomicity
 
-One action body runs at a time per concept instance within one engine. The
-queue awaits native Promises from the same JavaScript realm, including ordinary
-`async` methods; arbitrary thenables are outside that guarantee. Different
-concept instances and separate root flows may overlap. Sharing one raw instance
-between assemblies creates separate queues and query caches. Two processes
-using the same external storage are not serialized by the engine. The concept
-implementation and storage layer must provide any cross-process locking,
-transactions, isolation, and conflict handling.
+One action body runs at a time per concept instance within one engine. The queue
+awaits native promises and structural `PromiseLike` values, including promises
+from another JavaScript realm. A structural thenable is an object or function
+with a callable `then` property. A throwing `then` accessor, or a `then` call
+that throws before settlement, faults the action. A thenable that never settles
+holds the serial line. Different concept instances and separate root flows may
+overlap. Sharing one raw instance between assemblies creates separate queues and
+query caches. Two processes using the same external storage are not serialized
+by the engine. The concept implementation and storage layer must provide any
+cross-process locking, transactions, isolation, and conflict handling.
 
 Queries and read evaluation do not enter the action queue. They can overlap an
 asynchronous action body and other queries, and they do not receive a
@@ -66,7 +70,10 @@ transactional or as-of-action snapshot. Query implementations must be
 side-effect-free. The storage layer must provide any read/write isolation the
 application requires. Assembly defaults to `queryCache: "memoize"`;
 `queryCache: "none"` disables memoization and makes repeated reads execute the
-query implementation independently.
+query implementation independently. In `"memoize"` mode, a structural thenable
+is normalized and cached once, equivalent reads share that normalized promise,
+and rejection evicts the entry. A thenable that never settles remains cached
+until invalidation.
 
 A reaction chain is not a transaction. If an early consequence changes state
 and a later consequence refuses or faults, the earlier change remains. Put
@@ -113,10 +120,14 @@ forwards cancellation into accepted concept work or rolls back completed
 actions. A timed-out flow can continue consuming queue, query, reaction, and
 storage resources within its flow budgets.
 
-The HTTP client implements `timeoutMs` by aborting its local Fetch operation.
-The HTTP protocol adds no cancellation message for accepted server work. The
-server handler passes the host-provided `Request.signal` to its invoker, but
-that signal still ends waiting rather than rolling back concept actions.
+The HTTP client implements `timeoutMs` by aborting its local Fetch operation. It
+accepts positive finite integers through `2_147_483_647` milliseconds; a larger
+or otherwise invalid value returns core `INVALID_INPUT` before Fetch. This
+transport-local ceiling is separate from gateway and application defaults and
+configured maximum request durations. The HTTP protocol adds no cancellation
+message for accepted server work. The server handler passes the host-provided
+`Request.signal` to its invoker, but that signal still ends waiting rather than
+rolling back concept actions.
 
 Tracking HTTP promises is insufficient because a timed-out request can outlive
 its transport wait. A host can stop accepting new requests and apply a hard
@@ -205,16 +216,19 @@ documented concurrency and durability behavior when those properties matter.
 ## Retention and memory
 
 Ordinary assembly uses an internal occurrence index with a default window of the
-100 most recent settled flows. Automatic window enforcement does not evict an
-active flow, so active work may exceed the configured window.
+100 most recent settled flows. `RetentionPolicy` accepts `"keepAll"` or a
+non-negative finite-integer `{ window: number }`. Manual `createEngine(...)`
+defaults to `"keepAll"`; configure a window explicitly when its retained index
+must be bounded by settled-flow count.
 
-`"keepAll"` retains all indexed evidence for the engine lifetime.
-`"evictConsumed"` does not prune on flow settlement, and the stable assembly and
-manual-engine facades expose no explicit prune call. It therefore does not by
-itself provide a memory bound. Increasing a window or using `"keepAll"`
-increases memory use. No hard retained-byte limit is provided. `logSink` and
-`retention` are independent and may be configured together; retention never
-removes previously emitted sink output.
+Window enforcement runs automatically only after a causal flow settles and does
+not evict active flows. Active work can therefore exceed a configured window
+until settlement. `{ window: 0 }` removes a flow after it settles. `"keepAll"`
+retains all indexed evidence for the engine lifetime. There is no manual prune
+operation. Increasing a window or using `"keepAll"` increases memory use. No
+hard retained-byte limit is provided. `logSink` and `retention` are independent
+and may be configured together; retention never removes previously emitted sink
+output.
 
 ## Operational observation
 
@@ -272,11 +286,20 @@ application responsibilities to the engine.
 ## Logs and sensitive values
 
 An optional `LogSink` receives every validated, redacted occurrence entry
-synchronously before the internal index folds it. A sink throw prevents that
-fold. An invocation append failure can prevent the action body from running; an
-outcome append failure can occur after the body changed state. The engine does
-not retry the append or roll back concept state. Custom sink availability and
-recovery are host responsibilities.
+synchronously before the internal index folds it. `append` must return
+`undefined` synchronously. A throw or any other return value, including a
+promise or structural thenable, fails the append before the fold. An invocation
+append failure can prevent the action body from running; an outcome append
+failure can occur after the body changed state. The engine does not retry the
+append or roll back concept state. Custom sink availability and recovery are
+host responsibilities.
+
+Sink-entry isolation is structural rather than universal. Arrays and plain
+records are copied and frozen; invocation identities are replaced by frozen
+name-bearing representatives; and `Date` values are copied. Opaque leaves such
+as class instances, `Map`, `Set`, and function values retain their runtime
+identity and are not recursively frozen. Treat opaque leaves as read-only
+sensitive values.
 
 Assembly-scoped field-name redaction runs before occurrence entries reach the
 internal index, a `LogSink`, observers, or inspection. Each assembly creates its

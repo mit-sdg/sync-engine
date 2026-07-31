@@ -193,14 +193,13 @@ describe("FileStore: the log survives as JSONL", () => {
     expect(JSON.stringify(failures)).not.toContain("private diagnostic");
   });
 
-  test("keepAll never prunes; the fold retains everything", async () => {
+  test("keepAll retains everything", async () => {
     const store = new FileStore(join(dir, "log.jsonl"), "keepAll");
     const { Source } = engineOn(store);
 
     await Source.emit({ tag: "a" });
     await Source.emit({ tag: "b" });
 
-    expect(store.prune()).toBe(0);
     expect(store.actions.size).toBe(4);
   });
 

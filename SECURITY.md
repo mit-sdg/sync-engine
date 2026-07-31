@@ -45,3 +45,9 @@ untrusted values, enforce domain invariants in owning concepts, configure
 public error projection and redaction, bound engine and host workloads, and
 protect logs and custom observers as sensitive sinks. The [operational
 limits](docs/operations.md) describe these responsibilities in detail.
+
+`rawFaultReporter` is an unsanitized privileged sink. It receives original
+values thrown by actions, interpreter stages, and endpoint validators without
+the redaction applied to ordinary evidence and process logs. Restrict who can
+configure or read this sink, apply an explicit scrubbing and retention policy,
+and do not expose its reports through public errors or ordinary logs.

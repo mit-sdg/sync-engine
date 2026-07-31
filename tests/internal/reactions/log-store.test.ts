@@ -1,9 +1,8 @@
 /**
- * Contract tests for log-store implementations.
+ * Contract tests for the engine-owned occurrence index.
  *
- * These pin the behavior any {@link LogStore} must provide: append-only
- * writes, immutable records (an outcome is a fold, not a mutation), indexed
- * reads, firing records, and eviction as a prune policy.
+ * These pin append-only writes, immutable records (an outcome is a fold, not a
+ * mutation), indexed reads, firing records, and automatic window retention.
  */
 
 import { describe, expect, test } from "vite-plus/test";
@@ -18,6 +17,10 @@ import {
   type FiringRecord,
   type LogEntry,
 } from "@sync-engine/internal/reactions/runtime/log-store.ts";
+import {
+  actionNameOf,
+  conceptNameOf,
+} from "@sync-engine/internal/reactions/concepts/introspect.ts";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 
 function record(overrides: Partial<ActionRecord> = {}): ActionRecord {
@@ -28,22 +31,6 @@ function record(overrides: Partial<ActionRecord> = {}): ActionRecord {
     flow: "flow-1",
     ...overrides,
   };
-}
-
-function appendFiring(store: MemoryStore, id: string, reaction: string, consumed: string[]): void {
-  store.append({
-    kind: "firing",
-    at: Date.now(),
-    firing: {
-      id,
-      reaction,
-      flow: "flow-1",
-      bindings: {},
-      consumed,
-      produced: [],
-      at: Date.now(),
-    },
-  });
 }
 
 function reflectedText(value: unknown): string {
@@ -237,28 +224,15 @@ describe("log store: window retention", () => {
     expect(store.reactionFailures.map((failure) => failure.flow)).toEqual(["second-flow"]);
   });
 
-  test("evicts a flow's interpreter failures with its last consumed record", () => {
-    const store = new MemoryStore("evictConsumed");
-    const log = new ActionConcept(store);
-    const { id } = log.invoke(record());
-    log._recordReactionFailure({
-      reaction: "Broken",
-      flow: "flow-1",
-      triggerIds: [id],
-      stage: "where",
-      errorClass: "Error",
-      at: Date.now(),
-    });
-    appendFiring(store, "firing", "Consumer", [id]);
-
-    expect(store.prune()).toBe(1);
-    expect(store.reactionFailures).toEqual([]);
-  });
-
   test("rejects invalid windows", () => {
     for (const window of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => new MemoryStore({ window })).toThrow(
         "MemoryStore: window must be a non-negative finite integer.",
+      );
+    }
+    for (const policy of ["evictConsumed", "unknown"]) {
+      expect(() => new MemoryStore(policy as never)).toThrow(
+        'MemoryStore: retention must be "keepAll" or a window policy.',
       );
     }
   });
@@ -581,7 +555,7 @@ describe("log store: firings are introspectable after a live run", () => {
     class CapturingSink {
       readonly entries: LogEntry[] = [];
 
-      append(entry: LogEntry): void {
+      append(entry: LogEntry): undefined {
         this.entries.push(entry);
       }
     }
@@ -591,7 +565,7 @@ describe("log store: firings are introspectable after a live run", () => {
       }
     }
     const sink = new CapturingSink();
-    const store = new MemoryStore("evictConsumed", sink);
+    const store = new MemoryStore("keepAll", sink);
     const reacting = new Reacting(new ActionConcept(store));
     const Issuer = reacting.instrumentConcept(new Issuing());
 
@@ -644,13 +618,20 @@ describe("log store: firings are introspectable after a live run", () => {
         expect(Object.isFrozen(entry.record.input)).toBe(true);
         expect(entry.record.action).not.toBe(instrumented);
         expect(entry.record.concept).not.toBe(concept);
+        expect(entry.record.action.name).toBe("action");
+        expect(entry.record.concept.name).toBe("Stateful");
+        expect(actionNameOf(entry.record.action)).toBe("action");
+        expect(conceptNameOf(entry.record.concept)).toBe("Stateful");
         expect(Object.isFrozen(entry.record.action)).toBe(true);
         expect(Object.isFrozen(entry.record.concept)).toBe(true);
+        const nested = entry.record.input.nested as { values: unknown[] };
+        expect(Object.isFrozen(nested)).toBe(true);
+        expect(Object.isFrozen(nested.values)).toBe(true);
         expect(() => {
-          entry.record.id = "changed";
+          (entry.record as { id?: string }).id = "changed";
         }).toThrow();
         expect(() => {
-          entry.record.input.test = false;
+          (entry.record.input as Record<string, unknown>).test = false;
         }).toThrow();
         expect(() => {
           (entry.record.concept as { state?: string }).state = "changed";
@@ -661,10 +642,18 @@ describe("log store: firings are introspectable after a live run", () => {
     store.append({
       kind: "invocation",
       at: 1,
-      record: record({ id: "accepted", action: instrumented, concept }),
+      record: record({
+        id: "accepted",
+        action: instrumented,
+        concept,
+        input: { test: true, nested: { values: [1] } },
+      }),
     });
     expect(store.actions.get("accepted")).toEqual(
-      expect.objectContaining({ id: "accepted", input: { test: true } }),
+      expect.objectContaining({
+        id: "accepted",
+        input: { test: true, nested: { values: [1] } },
+      }),
     );
     expect(concept.state).toBe("original");
     expect(retained).toBeDefined();
@@ -683,96 +672,54 @@ describe("log store: firings are introspectable after a live run", () => {
     ).toThrow(failure);
     expect(store.actions.size).toBe(0);
   });
-});
 
-describe("log store: eviction is a prune policy", () => {
-  test("evictFlow drops a flow from both views", () => {
-    const log = new ActionConcept(new MemoryStore());
-    const { id } = log.invoke(record());
-
-    log.evictFlow("flow-1");
-
-    expect(log._getById(id)).toBeUndefined();
-    expect(log._getByFlow("flow-1")).toBeUndefined();
-  });
-
-  test("prune evicts trailing records consumed by their reactions", () => {
-    const store = new MemoryStore();
-    const log = new ActionConcept(store);
-    const kept = log.invoke(record({ input: { n: 1 } })).id;
-    const consumed = log.invoke(record({ input: { n: 2 } })).id;
-    store.append({
-      kind: "firing",
-      at: Date.now(),
-      firing: {
-        id: "f1",
-        reaction: "SomeReaction",
-        flow: "flow-1",
-        bindings: {},
-        consumed: [consumed],
-        produced: ["produced"],
-        at: Date.now(),
-      },
+  test("rejects a non-undefined sink return before folding", () => {
+    const store = new MemoryStore("keepAll", {
+      append: (() => 1) as never,
     });
 
-    const evicted = log.evictConsumedFlows();
-
-    expect(evicted).toBe(1);
-    expect(log._getById(consumed)).toBeUndefined();
-    expect(log._getById(kept)).toBeDefined();
+    expect(() =>
+      store.append({ kind: "invocation", at: 1, record: record({ id: "rejected" }) }),
+    ).toThrow("LogSink.append must return undefined synchronously.");
+    expect(store.actions.size).toBe(0);
   });
 
-  test("pruning [a, gap, b] preserves a multi-trigger firing's evidence for a", () => {
-    const store = new MemoryStore();
-    const log = new ActionConcept(store);
-    for (const id of ["a", "gap", "b"]) log.invoke(record({ id }));
-    appendFiring(store, "pair-firing", "Pair", ["a", "b"]);
+  test("rejects a native Promise return and consumes its rejection", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const store = new MemoryStore("keepAll", {
+        append: (() => Promise.reject(new Error("sink rejected"))) as never,
+      });
 
-    expect(store.prune()).toBe(1);
-
-    expect(log._getByFlow("flow-1")?.map(({ id }) => id)).toEqual(["a", "gap"]);
-    expect(store.hasConsumed("a", "Pair")).toBe(true);
-    expect(store.hasConsumed("b", "Pair")).toBe(false);
-    expect(store.firingsByReaction("Pair")).toMatchObject([
-      { id: "pair-firing", consumed: ["a", "b"] },
-    ]);
+      expect(() =>
+        store.append({ kind: "invocation", at: 1, record: record({ id: "rejected" }) }),
+      ).toThrow("LogSink.append must return undefined synchronously.");
+      expect(store.actions.size).toBe(0);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
   });
 
-  test("repeated pruning preserves evidence through successive partial firing eviction", () => {
-    const store = new MemoryStore();
-    const log = new ActionConcept(store);
-    for (const id of ["a", "gap-1", "b", "gap-2", "c"]) log.invoke(record({ id }));
-    appendFiring(store, "triple-firing", "Triple", ["a", "b", "c"]);
+  test("rejects a structural thenable return and consumes its rejection", async () => {
+    let thenCalled = false;
+    const store = new MemoryStore("keepAll", {
+      append: (() => ({
+        then(_resolve: (value: unknown) => void, reject: (reason: unknown) => void) {
+          thenCalled = true;
+          reject(new Error("structural sink rejected"));
+        },
+      })) as never,
+    });
 
-    expect(store.prune()).toBe(1);
-    appendFiring(store, "gap-firing", "Gap", ["gap-2"]);
-    expect(store.prune()).toBe(2);
-    expect(store.prune()).toBe(0);
-
-    expect(log._getByFlow("flow-1")?.map(({ id }) => id)).toEqual(["a", "gap-1"]);
-    expect(store.hasConsumed("a", "Triple")).toBe(true);
-    expect(store.hasConsumed("b", "Triple")).toBe(false);
-    expect(store.hasConsumed("c", "Triple")).toBe(false);
-    expect(store.firingsByReaction("Triple")).toHaveLength(1);
-  });
-
-  test("mixed retained and evicted consumption keeps only firings with retained evidence", () => {
-    const store = new MemoryStore();
-    const log = new ActionConcept(store);
-    for (const id of ["a", "gap", "b"]) log.invoke(record({ id }));
-    appendFiring(store, "pair-firing", "Pair", ["a", "b"]);
-    appendFiring(store, "tail-firing", "Tail", ["b"]);
-
-    expect(store.prune()).toBe(1);
-
-    expect(store.firingsByReaction("Pair")).toHaveLength(1);
-    expect(store.firingsByReaction("Tail")).toEqual([]);
-    expect(store.consumedBy("a")).toEqual(["Pair"]);
-    expect(store.consumedBy("b")).toEqual([]);
-
-    appendFiring(store, "gap-firing", "Gap", ["gap"]);
-    expect(store.prune()).toBe(2);
-    expect(store.firingsByReaction("Pair")).toEqual([]);
-    expect(store.consumedBy("a")).toEqual([]);
+    expect(() =>
+      store.append({ kind: "invocation", at: 1, record: record({ id: "rejected" }) }),
+    ).toThrow("LogSink.append must return undefined synchronously.");
+    expect(store.actions.size).toBe(0);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(thenCalled).toBe(true);
   });
 });

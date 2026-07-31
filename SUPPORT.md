@@ -38,6 +38,10 @@ notes.
 Only the newest stable 1.x release is supported. Alpha and beta releases are
 unsupported after a stable release.
 
+The stable `RetentionPolicy` surface contains only `"keepAll"` and
+`{ window: number }`. The prerelease `"evictConsumed"` policy and manual pruning
+interfaces are not part of the stable compatibility surface.
+
 ## Generated contracts
 
 Generated Markdown and TypeScript wire files record the exact core generator and

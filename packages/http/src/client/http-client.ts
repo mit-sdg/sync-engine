@@ -49,6 +49,7 @@ export type HttpClientError = {
 };
 
 const FALLBACK_BASE_URL = "/api";
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 function cleanBaseUrl(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -83,12 +84,45 @@ function raceAbort<T>(
   onAbort: () => T,
 ): Promise<T> {
   if (signal === undefined) return promise;
-  if (signal.aborted) return Promise.resolve(onAbort());
+  if (signal.aborted) {
+    void promise.catch(() => undefined);
+    try {
+      return Promise.resolve(onAbort());
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
   return new Promise((resolve, reject) => {
-    const abort = () => resolve(onAbort());
+    const dispose = () => signal.removeEventListener("abort", abort);
+    const abort = () => {
+      dispose();
+      try {
+        resolve(onAbort());
+      } catch (error) {
+        reject(error);
+      }
+    };
     signal.addEventListener("abort", abort, { once: true });
-    void promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    void promise.then(
+      (value) => {
+        dispose();
+        resolve(value);
+      },
+      (error) => {
+        dispose();
+        reject(error);
+      },
+    );
   });
+}
+
+function cancelResponseBody(response: Response, reason?: unknown): void {
+  try {
+    const cancellation = response.body?.cancel(reason);
+    if (cancellation !== undefined) void cancellation.catch(() => undefined);
+  } catch {
+    // Cancellation is best-effort after the caller has already stopped waiting.
+  }
 }
 
 async function resolveHeaders(
@@ -113,17 +147,27 @@ function normalizeMaxResponseBytes(value: number | undefined): number | undefine
   return value;
 }
 
-type BodyRead = { ok: true; text: string } | { ok: false; tooLarge: true };
+type BodyRead = { ok: true; text: string } | { ok: false } | { aborted: true };
 
 async function readResponseBody(
   response: Response,
   maxBytes: number | undefined,
+  signal: AbortSignal | undefined,
 ): Promise<BodyRead> {
-  if (maxBytes === undefined) return { ok: true, text: await response.text() };
+  if (maxBytes === undefined) {
+    return raceAbort(
+      Promise.resolve(response.text()).then((text) => ({ ok: true as const, text })),
+      signal,
+      () => {
+        cancelResponseBody(response, signal?.reason);
+        return { aborted: true as const };
+      },
+    );
+  }
   const declared = response.headers.get("Content-Length");
   if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
-    void response.body?.cancel().catch(() => undefined);
-    return { ok: false, tooLarge: true };
+    cancelResponseBody(response);
+    return { ok: false };
   }
   if (response.body === null) return { ok: true, text: "" };
 
@@ -133,12 +177,23 @@ async function readResponseBody(
   let text = "";
   try {
     while (true) {
-      const chunk = await reader.read();
+      const next = await raceAbort<
+        { aborted: false; chunk: Awaited<ReturnType<typeof reader.read>> } | { aborted: true }
+      >(
+        reader.read().then((chunk) => ({ aborted: false as const, chunk })),
+        signal,
+        () => ({ aborted: true as const }),
+      );
+      if (next.aborted) {
+        void reader.cancel(signal?.reason).catch(() => undefined);
+        return { aborted: true };
+      }
+      const { chunk } = next;
       if (chunk.done) break;
       bytes += chunk.value.byteLength;
       if (bytes > maxBytes) {
         void reader.cancel().catch(() => undefined);
-        return { ok: false, tooLarge: true };
+        return { ok: false };
       }
       text += decoder.decode(chunk.value, { stream: true });
     }
@@ -161,19 +216,28 @@ function requestControl(
 ): RequestControl {
   if (timeoutMs === undefined) return { signal, timedOut: () => false, dispose() {} };
   const controller = new AbortController();
-  let timedOut = false;
-  const abort = () => controller.abort(signal?.reason);
-  if (signal?.aborted) abort();
-  else signal?.addEventListener("abort", abort, { once: true });
-  const timer = controller.signal.aborted
-    ? undefined
-    : setTimeout(() => {
-        timedOut = true;
-        controller.abort(new DOMException("Timed out", "TimeoutError"));
-      }, timeoutMs);
+  let interruption: "aborted" | "timed-out" | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const abort = () => {
+    if (interruption !== undefined) return;
+    interruption = "aborted";
+    if (timer !== undefined) clearTimeout(timer);
+    controller.abort(signal?.reason);
+  };
+  if (signal?.aborted) {
+    abort();
+  } else {
+    signal?.addEventListener("abort", abort, { once: true });
+    timer = setTimeout(() => {
+      if (interruption !== undefined) return;
+      interruption = "timed-out";
+      signal?.removeEventListener("abort", abort);
+      controller.abort(new DOMException("Timed out", "TimeoutError"));
+    }, timeoutMs);
+  }
   return {
     signal: controller.signal,
-    timedOut: () => timedOut,
+    timedOut: () => interruption === "timed-out",
     dispose() {
       if (timer !== undefined) clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
@@ -196,7 +260,10 @@ async function httpRequest(
   const { path, input: body, timeoutMs, correlationId } = request;
   if (
     timeoutMs !== undefined &&
-    (!Number.isFinite(timeoutMs) || !Number.isInteger(timeoutMs) || timeoutMs <= 0)
+    (!Number.isFinite(timeoutMs) ||
+      !Number.isInteger(timeoutMs) ||
+      timeoutMs <= 0 ||
+      timeoutMs > MAX_TIMER_DELAY_MS)
   ) {
     return { error: FrameworkErrorCode.INVALID_INPUT };
   }
@@ -218,22 +285,40 @@ async function httpRequest(
 
     let response: Response;
     try {
-      response = await fetchImpl(baseUrl + path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...resolvedHeaders.headers },
-        body: JSON.stringify(body ?? {}),
-        credentials: credentials ?? "include",
+      const pendingFetch = Promise.resolve(
+        fetchImpl(baseUrl + path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...resolvedHeaders.headers },
+          body: JSON.stringify(body ?? {}),
+          credentials: credentials ?? "include",
+          signal,
+        }),
+      );
+      const fetched = await raceAbort<{ aborted: false; response: Response } | { aborted: true }>(
+        pendingFetch.then((value) => ({ aborted: false as const, response: value })),
         signal,
-      });
+        () => ({ aborted: true as const }),
+      );
+      if (fetched.aborted) {
+        void pendingFetch.then(
+          (lateResponse) => cancelResponseBody(lateResponse, signal?.reason),
+          () => undefined,
+        );
+        return interruptedError(control);
+      }
+      response = fetched.response;
     } catch {
       return isAborted(signal)
         ? interruptedError(control)
         : { error: HttpClientErrorCode.NETWORK_ERROR };
     }
+    if (isAborted(signal)) return interruptedError(control);
 
     let text: string;
     try {
-      const bodyRead = await readResponseBody(response, maxResponseBytes);
+      const bodyRead = await readResponseBody(response, maxResponseBytes, signal);
+      if ("aborted" in bodyRead) return interruptedError(control);
+      if (isAborted(signal)) return interruptedError(control);
       if (!bodyRead.ok) return { error: HttpClientErrorCode.RESPONSE_TOO_LARGE };
       text = bodyRead.text;
     } catch {

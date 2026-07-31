@@ -149,7 +149,11 @@ const synchronousVocabulary = vocabulary({
   computations: {},
 });
 const occurrenceEntries: LogEntry[] = [];
-const logSink: LogSink = { append: (entry) => occurrenceEntries.push(entry) };
+const logSink: LogSink = {
+  append(entry) {
+    occurrenceEntries.push(entry);
+  },
+};
 const synchronousOptions: AssemblyOptions<{ Saving: typeof SynchronousActionConcept }, {}> = {
   vocabulary: synchronousVocabulary,
   composition: {},

@@ -98,9 +98,11 @@ several concepts. None of these declarations stores domain state.
 and one composition. It validates the registered design, instruments the
 instances, installs reactions and reads, and creates an occurrence index. Each
 call creates separate scheduling, query-cache, admission, and retention state,
-including its own internal `MemoryStore`. The `retention` option governs that
-index. An optional application-owned `LogSink` receives occurrence entries in
-addition to the internal index; `logSink` and `retention` may be used together.
+including its own internal `MemoryStore`. Ordinary assembly retains the 100 most
+recent settled flows by default; `retention` may select another window or
+`"keepAll"`. Windows are enforced only after flow settlement. An optional
+application-owned `LogSink` receives occurrence entries in addition to the
+internal index; `logSink` and `retention` may be used together.
 
 The ordinary assembly accepts portable declarations: definitions that can be
 represented as canonical JSON and registered again against the same named
@@ -146,13 +148,19 @@ that evidence into its internal occurrence index for matching and inspection.
 An audit copy does not become concept state merely because it is persistent.
 
 The optional `LogSink` receives each validated, redacted entry synchronously
-before the engine folds the entry into its index. The sink receives a detached,
-deeply immutable snapshot rather than live concept or action identities. A sink
-failure prevents that fold. Failure while appending an invocation can prevent
-the action body from running; failure while appending its outcome can occur after
-the action changed concept state. The supplied `FileLogSink` appends JSONL audit
-output, but the engine never reads or replays that file. `FileLogSink` has no
-close operation; the host owns any resources used by a custom sink.
+before the engine folds the entry into its index. The snapshot is structurally
+detached: arrays and plain records are copied and frozen, and invocation concept
+and action identities become frozen name-bearing representatives. `Date` values
+are copied. Opaque leaves such as class instances, `Map`, `Set`, and functions
+retain their runtime identity and are not recursively frozen. A
+sink must treat those opaque leaves as read-only sensitive values. `append` must
+return `undefined` synchronously; a throw or any returned value, including a
+promise or structural thenable, prevents the fold. Failure while appending an
+invocation can prevent the action body from running; failure while appending its
+outcome can occur after the action changed concept state. The supplied
+`FileLogSink` appends JSONL audit output, but the engine never reads or replays
+that file. `FileLogSink` has no close operation; the host owns any resources used
+by a custom sink.
 
 Applications that require durable state and restart recovery must implement
 both in their concept storage and host process. [Persistence, restart, and

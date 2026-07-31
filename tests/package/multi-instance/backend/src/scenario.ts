@@ -46,7 +46,7 @@ interface Deferred {
 class CapturingLog implements LogSink {
   readonly entries: LogEntry[] = [];
 
-  append(entry: LogEntry): void {
+  append(entry: LogEntry): undefined {
     this.entries.push(entry);
   }
 }

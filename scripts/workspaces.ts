@@ -74,8 +74,6 @@ export const workspaceCatalog = [
   },
 ] as const satisfies readonly Workspace[];
 
-export type WorkspaceId = (typeof workspaceCatalog)[number]["id"];
-
 export function workspaceById(id: string): Workspace {
   const workspace = workspaceCatalog.find((candidate) => candidate.id === id);
   if (workspace === undefined) throw new Error(`Unknown workspace: ${id}`);

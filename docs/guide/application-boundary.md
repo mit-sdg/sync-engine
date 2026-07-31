@@ -293,19 +293,27 @@ For untyped or hostile callers, attach schema-library-neutral validators to the
 endpoint:
 
 ```typescript
-endpoint("/rooms/create", createRoom, {
+endpoint("/rooms/join", joinRoom, {
   validators: {
     input: (value) =>
-      isCreateRoomInput(value)
+      isJoinRoomInput(value)
         ? { ok: true }
-        : { ok: false, detail: "host and name must be strings" },
-    output: (value) => (isCreateRoomOutput(value) ? { ok: true } : { ok: false }),
+        : { ok: false, detail: "room and responder must be strings" },
+    output: (value) => (isJoinRoomOutput(value) ? { ok: true } : { ok: false }),
+    domainError: (value) =>
+      value === "GATHERING_NOT_FOUND" || value === "ALREADY_JOINED"
+        ? { ok: true }
+        : { ok: false, detail: "unexpected join refusal" },
   },
 });
 ```
 
 The input validator runs after shallow defaults and before the application ask.
-The output validator protects successful results; a violation is retained as
+The output validator receives the complete successful result. The `domainError`
+validator receives only the value under an authored response's top-level
+`error` field, such as `ALREADY_JOINED`, and does not run for framework errors.
+Validators must return synchronously and do not transform values; a promise-like
+return fails validation. An invalid output or domain-error value causes
 integrity evidence and leaves the invoker as opaque `INTERNAL_ERROR`.
 [Runtime validation](../semantics.md#runtime-validation) defines the complete
 admission and output-validation boundary.
@@ -423,7 +431,7 @@ the HTTP handler is a Fetch adapter, not a listener or complete server; and the
 host owns process signals and resource closure.
 
 During shutdown, stop the listener, call `beginDrain()`, await it up to a hard
-host deadline, then close the concept floor and any custom log-store resources.
+host deadline, then close the concept floor and any custom log-sink resources.
 Timeout or abort may leave accepted work running after a caller stops waiting,
 so tracking HTTP promises alone does not establish quiescence. [Operational
 limits](../operations.md#timeouts-abort-and-shutdown) defines the required

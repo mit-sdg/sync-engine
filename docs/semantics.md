@@ -183,12 +183,16 @@ ordinary action body is released. Same-concept requested consequences use an
 internal reservation release to make progress without changing body-arrival
 order.
 
-One action body runs at a time per raw concept instance within one engine. An
-`async` method returns a native `Promise`, which the queue awaits. An arbitrary
-thenable, including a Promise from another JavaScript realm, is not covered by
-that wait. Supplying one raw instance to several engines creates separate
-queues and query caches and does not serialize those engines. Different concept
-instances and separate root flows can overlap.
+One action body runs at a time per raw concept instance within one engine. The
+queue awaits a structural `PromiseLike`: any returned object or function whose
+`then` property is callable. This includes native promises from another
+JavaScript realm and non-native thenables. The queue reads `then` once and
+invokes it in a microtask. A throwing `then` accessor, or a `then` call that
+throws before settlement, faults the action. A thenable that never settles holds
+the serial line just as a never-settling promise does. Supplying one raw instance
+to several engines creates separate queues and query caches and does not
+serialize those engines. Different concept instances and separate root flows
+can overlap.
 Reactions for one landed occurrence are currently evaluated sequentially. Their
 trigger and `where` stages all finish before any matching consequence is
 dispatched, so one sibling consequence cannot change another sibling's guard.
@@ -272,13 +276,16 @@ actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
 caches before dispatch. `queryCache: "none"` disables this memoization; repeated
 reads execute the query implementation independently.
-A rejected native `Promise` from the same JavaScript realm is removed from the
-cache. Arbitrary thenables are cached as ordinary values. Direct state mutation
-or an external database change that bypasses an instrumented action can remain
-hidden until the next invalidation; a query call is not guaranteed to execute
-its implementation on every read. Cache-key construction traverses at most 100
-nested levels. A call with a deeper argument still executes but bypasses
-memoization for that call.
+A structural thenable returned by a memoized query is normalized to one native
+promise before that promise is cached. Equivalent reads reuse the normalized
+promise, so the original thenable's `then` is invoked once. Rejection, including
+a throw while reading `then` or before the `then` call settles, evicts the entry;
+a later equivalent read executes the query again. A thenable that never settles
+remains cached until invalidation. Direct state mutation or an external database
+change that bypasses an instrumented action can remain hidden until the next
+invalidation; a query call is not guaranteed to execute its implementation on
+every read. Cache-key construction traverses at most 100 nested levels. A call
+with a deeper argument still executes but bypasses memoization for that call.
 Cache arguments follow read equality: arrays and plain records are structural,
 `Date` values use their timestamps, and maps, sets, class instances, regular
 expressions, functions, symbols, and other opaque values use identity.
@@ -460,8 +467,12 @@ non-2xx responses become `BAD_STATUS`; unreadable or invalid JSON becomes
 Fetch rejection becomes `NETWORK_ERROR`. Abort before Fetch, while headers are
 pending, or while a body is read becomes the core `ABORTED` result. The header
 provider itself is not cancellable. `timeoutMs` is a positive finite integer for
-the HTTP transport; expiry aborts local Fetch waiting and returns `TIMED_OUT`.
-An invalid timeout returns `INVALID_INPUT`.
+the HTTP transport and cannot exceed `2_147_483_647` milliseconds, the reliable
+Node timer maximum. Expiry aborts local Fetch waiting and returns `TIMED_OUT`.
+An invalid or larger timeout returns core `INVALID_INPUT` before header
+resolution or Fetch. This ceiling governs only the transport-local timer. The
+standard HTTP client does not turn it into a gateway or application deadline;
+those layers apply their own defaults and configured `ExecutionLimits`.
 
 `maxResponseBytes`, when supplied, is a positive finite integer. The HTTP client
 rejects a larger declared `Content-Length` before buffering and counts streamed
@@ -675,15 +686,17 @@ provenance.
 Projection planning validates all names before rendering. The logical wire,
 every projected wire, each app-wide error type, `Json`, and vocabulary helper
 types must have distinct valid TypeScript identifiers. Provenance package names
-and versions must be nonblank. Core evaluates projectors in declaration order,
-and a projector or validation failure occurs before any artifact comparison or
-write.
+must be nonblank, and provenance versions must be valid stable SemVer. Core
+evaluates projectors in declaration order, and a projector or validation failure
+occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
 format and stable package SemVer. Artifact planning requires
 `sync-engine.application-manifest` version 3, a stable core generator identity,
-and stable-SemVer projector provenance. Stable 1.x generators and projectors are
-accepted; prerelease identities are not.
+and stable-SemVer projector provenance. The core generator identity must name
+`@mit-sdg/sync-engine` at a stable 1.x version. Projector provenance accepts any
+nonblank package name with any valid stable SemVer version; projector versions
+are not restricted to 1.x. Prerelease identities are not accepted.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 defines input admission and explicit input, successful-output, and domain-error
@@ -760,10 +773,10 @@ priority and do not form a join; each path advances when its own preceding ask
 returns. Applications must not use evaluation order as a priority mechanism.
 
 Action bodies run one at a time per concept instance within one engine, in
-arrival order. The queue awaits same-realm native Promises, including ordinary
-`async` methods; arbitrary thenables are outside that guarantee. Sharing one raw
-instance between engines does not share a queue or query cache. This is an
-in-process guarantee. A concept's implementation and storage must supply any
+arrival order. The queue awaits native promises and structural thenables as
+described under [Execution and concurrency](#execution-and-concurrency). Sharing
+one raw instance between engines does not share a queue or query cache. This is
+an in-process guarantee. A concept's implementation and storage must supply any
 atomicity or coordination required across processes. A reaction consequence
 chain is not a database transaction:
 earlier actions are not rolled back when a later action refuses or faults.
@@ -820,11 +833,13 @@ Concepts should represent expected rejection with registered refusals and
 explicit policy alternatives.
 
 A `LogSink` failure is outside this interpreter-failure path. The sink runs
-synchronously before the internal occurrence fold. A sink failure prevents that
-fold. An invocation append failure can prevent an action body from running. An
-outcome append failure can occur after the action body has already changed
-concept state; the engine does not roll that state back. Custom sinks must
-define their own failure, durability, retry, and resource-lifecycle behavior.
+synchronously before the internal occurrence fold and must return `undefined`.
+A throw or any returned value, including a promise or structural thenable, fails
+the append before the fold. An invocation append failure can prevent an action
+body from running. An outcome append failure can occur after the action body has
+already changed concept state; the engine does not roll that state back. Custom
+sinks must define their own failure, durability, retry, and resource-lifecycle
+behavior.
 
 ### Cancellation
 
@@ -862,16 +877,21 @@ Concept state is separate from the assembly's occurrence evidence. Every engine
 owns a process-local internal `MemoryStore` that folds invocation, outcome,
 fault, firing, reaction-failure, and integrity-failure entries into indexes for
 matching and inspection. `MemoryStore` is an implementation detail, not a
-publicly replaceable engine store. Retention may evict indexed entries, so no
-assembly promises to retain every occurrence forever.
+publicly replaceable engine store. An assembly configured with a window may
+evict indexed entries and does not promise to retain every occurrence forever.
 
 An optional application-owned `LogSink` receives each entry synchronously after
-entry validation and redaction but before the internal fold. Its entry is a
-detached, deeply immutable snapshot; invocation concept and action fields retain
-names but not live engine identities. The sink is an audit destination; it does
-not supply matching, retention, or replay. `logSink` and `retention` are
-independent `AssemblyOptions` and may be used together. A sink failure prevents
-the corresponding fold as described under
+entry validation and redaction but before the internal fold. Arrays and plain
+records in the entry are recursively copied and frozen. Invocation concept and
+action identities are replaced by frozen name-bearing representatives, and
+`Date` values are copied. Opaque leaves such as class instances, `Map`, `Set`,
+and functions retain their ordinary runtime representation and
+identity; the snapshot does not recursively freeze them. A sink must treat
+opaque leaves as read-only sensitive values. `LogSink.append` must return
+`undefined` synchronously. The sink is an audit destination; it does not supply
+matching, retention, or replay. `logSink` and `retention` are independent
+`AssemblyOptions` and may be used together. A sink failure prevents the
+corresponding fold as described under
 [Failures between action asks](#failures-between-action-asks).
 
 Each ordinary assembly creates its own field-name redactor before entries reach
@@ -891,15 +911,16 @@ be treated as a sensitive sink. Reporter failure is caught and does not replace
 the action or invocation result.
 
 Ordinary `assemble(...)` defaults to retaining the 100 most recent settled
-causal flows. Its `retention` option can select another window, `"keepAll"`, or
-`"evictConsumed"`. `createEngine(options?)` accepts `retention` and `logSink`,
-defaults retention to `"evictConsumed"`, and does not accept an occurrence-store
+causal flows. `RetentionPolicy` is `"keepAll" | { window: number }`; the window
+must be a finite, non-negative integer. An ordinary assembly may select another
+window or `"keepAll"`.
+`createEngine(options?)` accepts the same `retention` and `logSink` options,
+defaults retention to `"keepAll"`, and does not accept an occurrence-store
 argument.
-Automatic window enforcement does not evict an active flow, so active flows may
-temporarily exceed a window. `"keepAll"` retains indexed evidence for the engine
-lifetime. `"evictConsumed"` does not prune on flow settlement, and the stable
-assembly and engine facades expose no explicit prune operation; it therefore
-does not by itself impose a memory bound.
+Window enforcement runs automatically only after a causal flow settles. It does
+not evict an active flow, so active flows may temporarily exceed the window.
+`{ window: 0 }` evicts a flow after settlement; `"keepAll"` retains indexed
+evidence for the engine lifetime. No public manual prune operation is available.
 
 `FileLogSink(path)` is the supplied Node-specific sink. It appends one JSONL
 audit projection per entry. The engine never reads or replays that file, and

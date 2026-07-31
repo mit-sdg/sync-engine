@@ -59,13 +59,20 @@ action-body reservation and execution to `action-scheduler.ts`, whose isolated
 per-concept state machine preserves arrival order, releases same-flow reentrant
 work, and removes the final serial line after settlement.
 
-`src/engine/reactions/runtime/log-store.ts` owns the append-only folded
+`src/engine/reactions/runtime/log-store.ts` owns the append-driven folded
 occurrence index through the internal `MemoryStore`. Each engine constructs its
-own index. `MemoryStore.append(...)` validates the entry, calls an optional
-application-owned `LogSink` synchronously, and folds only after the sink
-returns. `ActionConcept` in
-`src/engine/reactions/runtime/actions.ts` is the small adapter that appends log
-entries and retains unredacted values only while their causal flow is active.
+own index and defaults to `"keepAll"`; ordinary assembly supplies its default
+`{ window: 100 }` policy explicitly. A window is enforced automatically after a
+flow settles. `MemoryStore.append(...)` validates the entry, calls an optional
+application-owned `LogSink` synchronously, and folds only when the sink returns
+`undefined`. Before the call, `snapshotValue(...)` copies arrays, plain records,
+and `Date` values. Invocation identities become frozen name-bearing
+representatives, and the structural arrays and records are frozen. Opaque leaves
+retain their runtime identity and are not recursively frozen. Any other sink
+return value or a throw prevents the fold.
+`ActionConcept` in `src/engine/reactions/runtime/actions.ts` is the small adapter
+that appends log entries and retains unredacted values only while their causal
+flow is active.
 
 `Reacting` remains the internal host facade, but it owns no reaction catalog.
 `reaction-catalog.ts` exclusively owns executable reactions, trigger indexes,
@@ -84,7 +91,7 @@ The interpreter stages likewise have explicit boundaries:
 | `FiringPipeline` | Run trigger and where stages, form consequence inputs, ask actions, match outputs, and record stage failures. |
 | `FiringBook`     | Own in-flight consumption counts and transfer successful marks to durable firing records.                     |
 | `ActionConcept`  | Redact and append action, fault, integrity, and interpreter-failure evidence to the engine-owned index.       |
-| `LogSink`        | Receive each validated, redacted append synchronously before the internal index folds it.                     |
+| `LogSink`        | Receive each validated, redacted append before the fold and return `undefined` synchronously.                 |
 
 ## Reaction implementation map
 

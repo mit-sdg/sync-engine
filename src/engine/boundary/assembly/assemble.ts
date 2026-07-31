@@ -496,12 +496,13 @@ export function assemble<T extends Record<string, ConceptClass>>(
         at: Date.now(),
       });
     },
-    onValidatorFault: ({ path, requestId, phase, error }) => {
+    onValidatorFault: ({ path, requestId, correlationId, phase, error }) => {
       engine.Action._reportRawFault({
         kind: "endpoint-validator",
         error,
         at: Date.now(),
         ...(requestId === undefined ? {} : { flow: requestId }),
+        ...(correlationId === undefined ? {} : { correlationId }),
         route: path,
         phase,
       });

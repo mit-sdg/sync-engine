@@ -593,7 +593,11 @@ describe("assembly execution lifecycle", () => {
 
   test("ordinary assembly keeps indexing while forwarding entries to an application sink", async () => {
     const entries: LogEntry[] = [];
-    const sink: LogSink = { append: (entry) => entries.push(entry) };
+    const sink: LogSink = {
+      append(entry) {
+        entries.push(entry);
+      },
+    };
     const Answer = endpoint("/answer", () => receive().then(respond({ ok: true })));
     const app = assemble({
       vocabulary: vocabulary({ concepts: {}, computations: {} }),

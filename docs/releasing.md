@@ -59,8 +59,15 @@ intended dist-tag. Stable versions have the canonical form `1.x.y` and use
 ### Version surfaces
 
 Treat the root `package.json` version, engines, TypeScript dependency, and
-`packageManager` as canonical. Run `bun run release:update` to project those facts
-into every owned package dependency location:
+`packageManager` as canonical. Run these commands in order:
+
+```sh
+bun run release:update
+bun install
+```
+
+`release:update` projects the canonical facts into every owned package
+dependency location:
 
 | Location                                            | Owned version fact                            |
 | --------------------------------------------------- | --------------------------------------------- |
@@ -74,8 +81,12 @@ into every owned package dependency location:
 | `tests/package/multi-instance/backend/package.json` | Independent backend dependency                |
 
 The scaffold keeps placeholders and generation reads the canonical root facts.
-`bun run release:check` rejects stale projections; review and commit every
-updated manifest rather than rewriting package metadata during publication.
+The following `bun install` regenerates `bun.lock` from the projected manifests.
+Review the lockfile and manifest diffs together. `bun run release:check` rejects
+stale projections; review and commit every updated manifest and `bun.lock`
+rather than rewriting package metadata during publication. Run frozen
+verification only after the lockfile is current; `bun run release:verify` begins
+with `bun install --frozen-lockfile`.
 
 ### Changelog
 
@@ -98,9 +109,11 @@ workflow source facts.
 Regenerate declarations with `bun run declarations:pin` and example outputs
 with `bun scripts/examples.ts pin`. Review every generated diff as a public
 contract change. Generated assembly compatibility is governed by the manifest
-format and stable package SemVer. Stable 1.x generators and projectors are
-accepted by the artifact policy, but regeneration remains required so the
-checked-in outputs and provenance reflect the release.
+format and stable package SemVer. The artifact policy accepts stable 1.x core
+generator identities and projector provenance with a nonblank package name and
+any valid stable SemVer version. Projector versions are not restricted to 1.x;
+prerelease generator and projector versions are rejected. Regeneration remains
+required so the checked-in outputs and provenance reflect the release.
 
 ## Final gates
 

@@ -66,6 +66,6 @@ export interface EngineOptions {
 /** Construct an engine with an engine-owned occurrence index. */
 export function createEngine(options: EngineOptions = {}): Engine {
   return new Reacting(
-    new ActionConcept(new MemoryStore(options.retention ?? "evictConsumed", options.logSink)),
+    new ActionConcept(new MemoryStore(options.retention ?? "keepAll", options.logSink)),
   );
 }

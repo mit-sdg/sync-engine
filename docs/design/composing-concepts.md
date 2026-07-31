@@ -486,8 +486,8 @@ either order is acceptable — including the case where one fails.
 Action bodies targeting the same raw concept instance run one at a time within
 one engine. There is no engine-wide serialization: different concepts and flows
 can overlap, and separate engines or processes do not share a queue. The queue
-awaits same-realm native promises. Queries do not enter the action queue and can
-overlap an asynchronous action body.
+awaits native promises and structural `PromiseLike` values. Queries do not enter
+the action queue and can overlap an asynchronous action body.
 
 A reaction's read is therefore a snapshot of nothing: it was true when it was
 read. Every rule of the form "read a fact, then act on it" has a window. Where

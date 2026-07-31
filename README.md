@@ -134,15 +134,16 @@ validation.
 
 An application built with `assemble(...)` has these relevant boundaries:
 
-| Property         | Contract                                                                                                                                      |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Action execution | One action body runs at a time per concept instance within one assembly. Different instances and flows may overlap.                           |
-| Evidence         | Each action ask and its return, refusal, or fault is recorded in the selected occurrence store. The store is not concept state.               |
-| Composition      | Assembly validates the registered, portable design before it exposes routes. Generated artifacts fail rather than omit unsupported endpoints. |
-| Caller typing    | Generated contracts typecheck callers. They do not validate runtime values.                                                                   |
-| Cancellation     | Timeout and abort stop the caller's wait. They do not cancel accepted work.                                                                   |
-| Persistence      | The engine does not provide concept-state persistence, occurrence replay, restart recovery, or transactions across actions.                   |
-| Distribution     | The engine does not provide distributed serialization, deduplication, or exactly-once execution.                                              |
+| Property         | Contract                                                                                                                                                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Action execution | One action body runs at a time per concept instance within one assembly. Different instances and flows may overlap.                                                                                                           |
+| Evidence         | Each action ask and its return, refusal, or fault is recorded in an engine-owned occurrence index. An optional `LogSink` receives redacted audit entries and must return `undefined` synchronously. Neither is concept state. |
+| Retention        | Ordinary assembly retains the 100 most recent settled flows by default. Configure `{ window: number }` or `"keepAll"`; window enforcement runs after flow settlement.                                                         |
+| Composition      | Assembly validates the registered, portable design before it exposes routes. Generated artifacts fail rather than omit unsupported endpoints.                                                                                 |
+| Caller typing    | Generated contracts typecheck callers. They do not validate runtime values.                                                                                                                                                   |
+| Cancellation     | Timeout and abort stop the caller's wait. They do not cancel accepted work.                                                                                                                                                   |
+| Persistence      | The engine does not provide concept-state persistence, occurrence replay, restart recovery, or transactions across actions.                                                                                                   |
+| Distribution     | The engine does not provide distributed serialization, deduplication, or exactly-once execution.                                                                                                                              |
 
 The optional State section in a concept specification is notation for readers,
 not a runtime schema. See [Concept specification

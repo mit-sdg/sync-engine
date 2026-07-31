@@ -80,8 +80,14 @@ prefix. The client uses `globalThis.fetch`, sends JSON `POST` requests, and uses
 Fetch credentials mode `include` by default. `headers` may be a record or a
 synchronous or asynchronous provider called for each request. `timeoutMs` and
 `correlationId` may be supplied per call. `maxResponseBytes` places an opt-in
-byte limit on response bodies, and `validateResponse` may validate successful
-values before they reach the caller.
+byte limit on response bodies, and `validateResponse` may validate the complete
+parsed success-or-error result before it reaches the caller.
+
+`timeoutMs` must be a positive finite integer no greater than `2_147_483_647`
+milliseconds. A value outside that range returns core `INVALID_INPUT` before
+header resolution or Fetch. This timer limits only the client's local Fetch
+wait; gateway and application deadlines use their own defaults and configured
+limits.
 
 Calls resolve to a success value or error envelope. The HTTP-client errors are:
 

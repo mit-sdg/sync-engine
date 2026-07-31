@@ -14,15 +14,19 @@
  * reaction. Matching reads that index.
  */
 
-import type { ActionOutcome, InstrumentedAction } from "../types.ts";
+import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
 import { actionNameOf, conceptNameOf, CONCEPT_NAME } from "../concepts/introspect.ts";
+import { normalizePromiseLike } from "@engine/utils/promise-like";
 import { snapshotValue } from "@engine/utils/snapshot";
 
 /** How long an assembly's in-memory occurrence index retains records. */
-export type RetentionPolicy = "keepAll" | "evictConsumed" | { window: number };
+export type RetentionPolicy = "keepAll" | { window: number };
 
 export function assertRetentionPolicy(policy: RetentionPolicy, site: string): void {
-  if (typeof policy === "string") return;
+  if (policy === "keepAll") return;
+  if (typeof policy === "string") {
+    throw new Error(`${site}: retention must be "keepAll" or a window policy.`);
+  }
   if (!Number.isFinite(policy.window) || !Number.isInteger(policy.window) || policy.window < 0) {
     throw new Error(`${site}: window must be a non-negative finite integer.`);
   }
@@ -90,7 +94,7 @@ export interface ReactionFailureRecord {
   at: number;
 }
 
-/** Opaque evidence that a successful endpoint value violated its reviewed runtime contract. */
+/** Opaque evidence that an authored endpoint result violated its reviewed runtime contract. */
 export type IntegrityFailureRecord = {
   flow: string;
   at: number;
@@ -112,8 +116,7 @@ export type IntegrityFailureRecord = {
     }
 );
 
-/** An entry appended to the log. Engine-created mappings are field-name redacted. */
-export type LogEntry =
+type StoreEntry =
   | { kind: "invocation"; at: number; record: ActionRecord }
   | {
       kind: "outcome";
@@ -131,10 +134,67 @@ export type LogEntry =
    */
   | { kind: "fault"; at: number; id: string; fault: Record<string, unknown> };
 
+type DeepReadonly<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends readonly unknown[]
+    ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+    : T extends object
+      ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+      : T;
+
+/** A detached action representative. It carries a name but no live engine identity. */
+interface LoggedAction {
+  readonly name: string;
+  readonly action: AnyAction & { readonly name: string };
+  (...args: never[]): unknown;
+}
+
+/** A detached concept representative. It carries a name but no live engine identity. */
+interface LoggedConcept {
+  readonly name: string;
+}
+
+type LoggedActionRecord = DeepReadonly<Omit<ActionRecord, "action" | "concept">> & {
+  readonly action: LoggedAction;
+  readonly concept: LoggedConcept;
+};
+
+/**
+ * A structurally readonly entry handed to a {@link LogSink}. Arrays and plain
+ * records are detached and frozen; opaque leaf values retain their normal
+ * runtime representation. Engine-created mappings are field-name redacted.
+ */
+export type LogEntry =
+  | { readonly kind: "invocation"; readonly at: number; readonly record: LoggedActionRecord }
+  | {
+      readonly kind: "outcome";
+      readonly at: number;
+      readonly id: string;
+      readonly output: DeepReadonly<Record<string, unknown>>;
+      readonly outcome: DeepReadonly<ActionOutcome>;
+    }
+  | { readonly kind: "firing"; readonly at: number; readonly firing: DeepReadonly<FiringRecord> }
+  | {
+      readonly kind: "reaction-failure";
+      readonly at: number;
+      readonly failure: DeepReadonly<ReactionFailureRecord>;
+    }
+  | {
+      readonly kind: "integrity-failure";
+      readonly at: number;
+      readonly failure: DeepReadonly<IntegrityFailureRecord>;
+    }
+  | {
+      readonly kind: "fault";
+      readonly at: number;
+      readonly id: string;
+      readonly fault: DeepReadonly<Record<string, unknown>>;
+    };
+
 /** A synchronous host-owned destination for already-redacted occurrence entries. */
 export interface LogSink {
   /** Accept one immutable entry before it becomes visible to the engine index. */
-  append(entry: LogEntry): void;
+  append(entry: LogEntry): undefined;
 }
 
 function freezeSnapshot(value: unknown, seen = new WeakSet<object>()): void {
@@ -146,20 +206,26 @@ function freezeSnapshot(value: unknown, seen = new WeakSet<object>()): void {
   Object.freeze(value);
 }
 
-function sinkEntry(entry: LogEntry): LogEntry {
-  const snapshot = snapshotValue(entry) as LogEntry;
+function sinkEntry(entry: StoreEntry): LogEntry {
+  const snapshot = snapshotValue(entry) as StoreEntry;
   if (entry.kind === "invocation" && snapshot.kind === "invocation") {
+    const actionName = actionNameOf(entry.record.action);
     const rawAction = Object.defineProperty(function () {}, "name", {
-      value: actionNameOf(entry.record.action),
+      value: actionName,
     });
-    const action = Object.assign(function () {}, { action: Object.freeze(rawAction) });
+    const representative = Object.defineProperty(function () {}, "name", {
+      value: actionName,
+    });
+    const action = Object.assign(representative, { action: Object.freeze(rawAction) });
     snapshot.record.action = Object.freeze(action);
+    const conceptName = conceptNameOf(entry.record.concept);
     snapshot.record.concept = Object.freeze({
-      [CONCEPT_NAME]: conceptNameOf(entry.record.concept),
+      name: conceptName,
+      [CONCEPT_NAME]: conceptName,
     });
   }
   freezeSnapshot(snapshot);
-  return snapshot;
+  return snapshot as unknown as LogEntry;
 }
 
 /** The core in-memory occurrence index. */
@@ -175,22 +241,28 @@ export class MemoryStore {
   /** Derived index folded from firing entries: record id → reactions that consumed it. */
   private consumedIndex: Map<string, Set<string>> = new Map();
   private settledFlowOrder: string[] = [];
-  private activeFlows = new Set<string>();
 
   constructor(
-    public readonly policy: RetentionPolicy = "evictConsumed",
+    public readonly policy: RetentionPolicy = "keepAll",
     private readonly sink?: LogSink,
   ) {
     assertRetentionPolicy(policy, "MemoryStore");
   }
 
-  append(entry: LogEntry): void {
+  append(entry: StoreEntry): void {
     this.assertAppendable(entry);
-    if (this.sink !== undefined) this.sink.append(sinkEntry(entry));
+    if (this.sink !== undefined) {
+      const returned: unknown = this.sink.append(sinkEntry(entry));
+      if (returned !== undefined) {
+        const pending = normalizePromiseLike(returned);
+        if (pending !== undefined) void pending.catch(() => undefined);
+        throw new TypeError("LogSink.append must return undefined synchronously.");
+      }
+    }
     this.fold(entry);
   }
 
-  private assertAppendable(entry: LogEntry): void {
+  private assertAppendable(entry: StoreEntry): void {
     if (entry.kind === "invocation" && entry.record.id === undefined) {
       throw new Error("Invocation entry requires a record id.");
     }
@@ -199,7 +271,7 @@ export class MemoryStore {
     }
   }
 
-  private fold(entry: LogEntry): void {
+  private fold(entry: StoreEntry): void {
     switch (entry.kind) {
       case "invocation": {
         const record = entry.record;
@@ -211,7 +283,6 @@ export class MemoryStore {
         if (typeof this.policy === "object") {
           const settledPosition = this.settledFlowOrder.indexOf(record.flow);
           if (settledPosition >= 0) this.settledFlowOrder.splice(settledPosition, 1);
-          this.activeFlows.add(record.flow);
         }
         return;
       }
@@ -260,11 +331,7 @@ export class MemoryStore {
     return this.consumedIndex.get(recordId)?.has(reaction) ?? false;
   }
 
-  consumedBy(recordId: string): string[] {
-    return [...(this.consumedIndex.get(recordId) ?? [])];
-  }
-
-  evictFlow(flow: string): void {
+  private evictFlow(flow: string): void {
     const records = this.flowIndex.get(flow);
     if (records) {
       this.dropFiringsFor(records);
@@ -273,43 +340,16 @@ export class MemoryStore {
     }
     this.dropFlowEntries(this.reactionFailures, flow);
     this.dropFlowEntries(this.integrityFailures, flow);
-    this.activeFlows.delete(flow);
     const position = this.settledFlowOrder.indexOf(flow);
     if (position >= 0) this.settledFlowOrder.splice(position, 1);
   }
 
   flowSettled(flow: string): void {
-    this.activeFlows.delete(flow);
     if (!this.flowIndex.has(flow)) return;
     const previousPosition = this.settledFlowOrder.indexOf(flow);
     if (previousPosition >= 0) this.settledFlowOrder.splice(previousPosition, 1);
     this.settledFlowOrder.push(flow);
     this.enforceWindow();
-  }
-
-  /** Apply the configured retention policy and return the removed record count. */
-  prune(): number {
-    if (this.policy === "keepAll") return 0;
-    if (typeof this.policy === "object") return this.enforceWindow();
-
-    let evicted = 0;
-    for (const [flow, records] of this.flowIndex) {
-      let keepFrom = records.length;
-      while (keepFrom > 0 && this.isConsumed(records[keepFrom - 1])) {
-        keepFrom--;
-      }
-      if (keepFrom < records.length) {
-        const toRemove = records.splice(keepFrom);
-        this.dropFiringsFor(toRemove);
-        this.dropRecords(toRemove);
-        evicted += toRemove.length;
-        if (keepFrom === 0) {
-          this.flowIndex.delete(flow);
-          this.dropFlowEntries(this.reactionFailures, flow);
-        }
-      }
-    }
-    return evicted;
   }
 
   private enforceWindow(): number {
@@ -320,16 +360,10 @@ export class MemoryStore {
       Math.max(0, this.settledFlowOrder.length - this.policy.window),
     );
     for (const flow of candidates) {
-      if (this.activeFlows.has(flow)) continue;
       evicted += this.flowIndex.get(flow)?.length ?? 0;
       this.evictFlow(flow);
     }
     return evicted;
-  }
-
-  private isConsumed(record: ActionRecord | undefined): boolean {
-    const id = record?.id;
-    return id !== undefined && (this.consumedIndex.get(id)?.size ?? 0) > 0;
   }
 
   private dropFlowEntries(list: Array<{ flow: string }>, flow: string): void {

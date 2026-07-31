@@ -82,7 +82,7 @@ function auditEntryOf(entry: LogEntry): AuditEntry {
 export class FileLogSink implements LogSink {
   constructor(public readonly path: string) {}
 
-  append(entry: LogEntry): void {
+  append(entry: LogEntry): undefined {
     const line = `${JSON.stringify(auditEntryOf(entry))}\n`;
     appendFileSync(this.path, line);
   }

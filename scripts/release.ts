@@ -4,7 +4,7 @@ import { workspaceById, workspaceCatalog, type Workspace } from "./workspaces.ts
 
 const coreWorkspace = workspaceById("core");
 const publishedWorkspaces: readonly Workspace[] = workspaceCatalog;
-export const workspaceReleaseManifests = publishedWorkspaces
+const workspaceReleaseManifests = publishedWorkspaces
   .filter((workspace) => workspace.id !== coreWorkspace.id)
   .map((workspace) => workspace.packageManifest);
 const exampleManifests = [
@@ -134,7 +134,10 @@ function releaseFacts(root: JsonObject | undefined): ReleaseFacts {
 }
 
 function stableOneVersion(value: string | undefined): value is string {
-  return /^1\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(value ?? "");
+  const match = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value ?? "");
+  return (
+    match !== null && match.slice(1).every((component) => Number.isSafeInteger(Number(component)))
+  );
 }
 
 function compatiblePeer(version: string): string {
@@ -482,9 +485,6 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     if (heading === null) {
       failures.push(`CHANGELOG.md: missing dated current entry for ${version}`);
     } else {
-      if (version === "1.0.0-beta.0" && heading[1] !== "2026-07-28") {
-        failures.push("CHANGELOG.md: 1.0.0-beta.0 must be dated 2026-07-28");
-      }
       const start = (heading.index ?? 0) + heading[0].length;
       const following = changelog.slice(start);
       const next = /^## \[([^\]]+)\] - \d{4}-\d{2}-\d{2}$/m.exec(following);
@@ -700,28 +700,41 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       }
     }
   }
-  for (const [name, job, commands] of [
+  for (const [name, job, checksum, publication] of [
     [
       "publish-core",
       publishCore,
-      [
-        "sha256sum --check release/package.tgz.sha256",
-        "npm publish ./release/package.tgz --provenance --tag latest --access public",
-      ],
+      "sha256sum --check release/package.tgz.sha256",
+      "npm publish ./release/package.tgz --provenance --tag latest --access public",
     ],
     [
       "publish-http",
       publishHttp,
-      [
-        "sha256sum --check release/http-package.tgz.sha256",
-        "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
-      ],
+      "sha256sum --check release/http-package.tgz.sha256",
+      "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
     ],
   ] as const) {
-    for (const command of commands) {
-      if (!hasRunCommand(job, command)) {
-        failures.push(`.github/workflows/publish.yml: ${name} job is missing ${command}`);
-      }
+    const checksumPosition = runCommandPosition(job, checksum);
+    const publicationPosition = runCommandPosition(job, publication);
+    if (checksumPosition < 0) {
+      failures.push(`.github/workflows/publish.yml: ${name} job is missing ${checksum}`);
+    }
+    if (publicationPosition < 0) {
+      failures.push(`.github/workflows/publish.yml: ${name} job is missing ${publication}`);
+    }
+    if (
+      checksumPosition >= 0 &&
+      publicationPosition >= 0 &&
+      checksumPosition >= publicationPosition
+    ) {
+      failures.push(
+        `.github/workflows/publish.yml: ${name} checksum verification must precede npm publish`,
+      );
+    }
+    if ((job.match(/\bnpm\s+publish\b/g) ?? []).length !== 1) {
+      failures.push(
+        `.github/workflows/publish.yml: ${name} job must contain exactly one npm publish command`,
+      );
     }
   }
   for (const workspace of publishedWorkspaces) {
@@ -766,7 +779,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     ],
     ["annotated tag", 'test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag'],
     ["live tag commit", 'test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"'],
-    ["stable 1.x", "/^1\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)$/"],
+    ["stable 1.x", "/^1\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/"],
+    ["safe numeric components", "Number.isSafeInteger(Number(component))"],
     ["`v${core.version}`", "`v${core.version}`"],
     ["core.version !== http.version", "core.version !== http.version"],
   ] as const;

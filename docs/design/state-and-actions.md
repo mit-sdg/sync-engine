@@ -337,11 +337,11 @@ often by writing storage directly.
 ### Serialization and coordination at the concept boundary
 
 Within one engine, action bodies run one at a time per raw concept instance in
-arrival order. The queue awaits same-realm native promises. This is
-serialization, not a transaction: one action does not roll back its writes, make
-storage durable, or coordinate another engine or process. A reaction chain is
-also not a transaction; an earlier state change remains when a later action
-refuses or faults.
+arrival order. The queue awaits native promises and structural `PromiseLike`
+values. This is serialization, not a transaction: one action does not roll back
+its writes, make storage durable, or coordinate another engine or process. A
+reaction chain is also not a transaction; an earlier state change remains when
+a later action refuses or faults.
 
 This has one direct design consequence. **A decision that must not race belongs
 inside the action that owns the state** — uniqueness, capacity, first-come, and

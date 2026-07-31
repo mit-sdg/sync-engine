@@ -195,8 +195,8 @@ diff; do not edit generated files directly.
 Generated TypeScript checks typed callers. Gateway admission only checks the
 route, an outer object, and required-key presence. It does not validate
 primitive or nested values by default. Public endpoints can attach explicit
-runtime input and successful-output validators as shown in [Application
-boundary](application-boundary.md#add-runtime-validation).
+runtime input, successful-output, and domain-error validators as shown in
+[Application boundary](application-boundary.md#add-runtime-validation).
 
 The remaining guide changes from the small scaffold to the shipped Operations
 Room case study. Continue to [Define one behavior](concepts.md), then [Connect

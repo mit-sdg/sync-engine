@@ -74,13 +74,16 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toEqual([]);
   });
 
-  test("refuses to project an invalid canonical version", () => {
-    const sources = fixture();
-    editManifest(sources, "package.json", (manifest) => {
-      manifest.version = "invalid";
-    });
-    expect(() => projectReleaseManifests(sources)).toThrow(/invalid release version/);
-  });
+  test.each(["invalid", "1.9007199254740992.0", "1.0.9007199254740992"])(
+    "refuses to project invalid canonical version %s",
+    (version) => {
+      const sources = fixture();
+      editManifest(sources, "package.json", (manifest) => {
+        manifest.version = version;
+      });
+      expect(() => projectReleaseManifests(sources)).toThrow(/invalid release version/);
+    },
+  );
 
   test.each([
     ["root workspace identity", `      "name": "@mit-sdg/sync-engine",`, `      "name": "stale",`],
@@ -105,18 +108,22 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining("bun.lock:"));
   });
 
-  test.each(["1.0.0-alpha.1", "1.0.0-beta.1", "1.0.01", "2.0.0"])(
-    "rejects invalid stable version %s",
-    (version) => {
-      const sources = fixture();
-      editManifest(sources, "package.json", (manifest) => {
-        manifest.version = version;
-      });
-      expect(checkRelease(sources)).toContainEqual(
-        expect.stringContaining("canonical stable 1.x version"),
-      );
-    },
-  );
+  test.each([
+    "1.0.0-alpha.1",
+    "1.0.0-beta.1",
+    "1.0.01",
+    "1.9007199254740992.0",
+    "1.0.9007199254740992",
+    "2.0.0",
+  ])("rejects invalid stable version %s", (version) => {
+    const sources = fixture();
+    editManifest(sources, "package.json", (manifest) => {
+      manifest.version = version;
+    });
+    expect(checkRelease(sources)).toContainEqual(
+      expect.stringContaining("canonical stable 1.x version"),
+    );
+  });
 
   test("rejects a non-latest dist-tag", () => {
     const sources = fixture();
@@ -369,6 +376,52 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`missing ${fact}`));
   });
 
+  test.each([
+    [
+      "publish-core",
+      "sha256sum --check release/package.tgz.sha256",
+      "npm publish ./release/package.tgz --provenance --tag latest --access public",
+    ],
+    [
+      "publish-http",
+      "sha256sum --check release/http-package.tgz.sha256",
+      "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+    ],
+  ] as const)(
+    "requires checksum verification before publication in %s",
+    (name, checksum, publish) => {
+      const sources = fixture();
+      replaceSource(
+        sources,
+        ".github/workflows/publish.yml",
+        `      - run: ${checksum}\n      - run: ${publish}`,
+        `      - run: ${publish}\n      - run: ${checksum}`,
+      );
+      expect(checkRelease(sources)).toContain(
+        `.github/workflows/publish.yml: ${name} checksum verification must precede npm publish`,
+      );
+    },
+  );
+
+  test.each([
+    ["publish-core", "npm publish ./release/package.tgz --provenance --tag latest --access public"],
+    [
+      "publish-http",
+      "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+    ],
+  ] as const)("rejects an extra npm publish command in %s", (name, publish) => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      `      - run: ${publish}`,
+      `      - run: ${publish}\n      - run: npm publish ./release/unreviewed.tgz --access public`,
+    );
+    expect(checkRelease(sources)).toContain(
+      `.github/workflows/publish.yml: ${name} job must contain exactly one npm publish command`,
+    );
+  });
+
   test("requires HTTP publication to depend on core publication", () => {
     const sources = fixture();
     replaceSource(
@@ -387,6 +440,7 @@ describe("release source facts", () => {
     ["GITHUB_SHA", "GITHUB_SHA"],
     ["origin/main", "origin/main"],
     ["/^1\\.", "stable 1.x"],
+    ["Number.isSafeInteger(Number(component))", "safe numeric components"],
     ["`v${core.version}`", "`v${core.version}`"],
     ["core.version !== http.version", "core.version !== http.version"],
   ])("requires source validation fact %s", (source, fact) => {

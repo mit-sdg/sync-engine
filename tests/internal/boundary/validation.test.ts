@@ -108,6 +108,43 @@ describe("endpoint runtime validators", () => {
     });
   });
 
+  test("an input-validator fault carries a caller-supplied correlation id", async () => {
+    const reports: RawFaultReport[] = [];
+    const validatorFault = new Error("input validator secret");
+    const FaultingInput = endpoint("/faulting-input", () => receive({}).then(respond({})), {
+      validators: {
+        input: () => {
+          throw validatorFault;
+        },
+      },
+    });
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: {}, computations: {} }),
+      composition: { FaultingInput },
+      rawFaultReporter: (report) => reports.push(report),
+    });
+
+    await expect(
+      app.invoker.invoke("/faulting-input", {}, { correlationId: "trace-input" }),
+    ).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({
+        kind: "framework",
+        code: FrameworkErrorCode.INVALID_INPUT,
+      }),
+    });
+    expect(reports).toEqual([
+      expect.objectContaining({
+        kind: "endpoint-validator",
+        error: validatorFault,
+        route: "/faulting-input",
+        phase: "input",
+        correlationId: "trace-input",
+      }),
+    ]);
+    expect(reports[0]).not.toHaveProperty("flow");
+  });
+
   test("invalid successful output records integrity evidence and fails opaquely", async () => {
     const { app, gateway } = setup();
     const local = createLocalClient<CheckedContract>({ invoker: app.invoker as never });
@@ -173,7 +210,7 @@ describe("endpoint runtime validators", () => {
       rawFaultReporter: (report) => reports.push(report),
     });
 
-    const result = await app.invoker.invoke("/faulting", {});
+    const result = await app.invoker.invoke("/faulting", {}, { correlationId: "trace-output" });
     expect(result).toEqual({
       ok: false,
       error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
@@ -189,8 +226,42 @@ describe("endpoint runtime validators", () => {
       route: "/faulting",
       phase: "output",
       flow: expect.any(String),
-      correlationId: expect.any(String),
+      correlationId: "trace-output",
     });
+  });
+
+  test("a domain-error validator fault retains flow correlation context", async () => {
+    const reports: RawFaultReport[] = [];
+    const validatorFault = new Error("domain validator secret");
+    const FaultingDomain = endpoint("/faulting-domain", () => receive({}).then(fail("NOPE")), {
+      validators: {
+        domainError: () => {
+          throw validatorFault;
+        },
+      },
+    });
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: {}, computations: {} }),
+      composition: { FaultingDomain },
+      rawFaultReporter: (report) => reports.push(report),
+    });
+
+    await expect(
+      app.invoker.invoke("/faulting-domain", {}, { correlationId: "trace-domain" }),
+    ).resolves.toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.INTERNAL_ERROR },
+    });
+    expect(reports).toEqual([
+      expect.objectContaining({
+        kind: "endpoint-validator",
+        error: validatorFault,
+        route: "/faulting-domain",
+        phase: "domain-error",
+        flow: expect.any(String),
+        correlationId: "trace-domain",
+      }),
+    ]);
   });
 
   test("rejects an accidentally asynchronous validator without leaking a rejection", async () => {
@@ -218,7 +289,7 @@ describe("endpoint runtime validators", () => {
 
   test("a store failure while recording invalid output cannot strand the caller", async () => {
     class ThrowingIntegritySink implements LogSink {
-      append(entry: LogEntry): void {
+      append(entry: LogEntry): undefined {
         if (entry.kind === "integrity-failure") throw new Error("store unavailable");
       }
     }

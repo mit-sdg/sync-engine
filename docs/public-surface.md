@@ -99,23 +99,26 @@ semantics](./semantics.md#reactions).
 assemble(options: AssemblyOptions): Assembly
 ```
 
-| `AssemblyOptions` field | Required    | Default / effect                                                                                        |
-| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
-| `vocabulary`            | yes         | Declared application vocabulary                                                                         |
-| `composition`           | yes         | Reactions, endpoints, views, and formers to register                                                    |
-| `initialize`            | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them |
-| `instances`             | no          | Ready implementations by concept name; each overrides `initialize`                                      |
-| `logging`               | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                   |
-| `retention`             | no          | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"`                         |
-| `queryCache`            | no          | `"memoize"`; `"none"` disables query-result memoization                                                 |
-| `logSink`               | no          | No external sink; receives each validated, redacted entry synchronously before the internal fold        |
-| `executionLimits`       | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                 |
-| `observers`             | no          | No operational observers                                                                                |
-| `rawFaultReporter`      | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                            |
-| `redaction`             | no          | Universal sensitive-field patterns only                                                                 |
+| `AssemblyOptions` field | Required    | Default / effect                                                                                             |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `vocabulary`            | yes         | Declared application vocabulary                                                                              |
+| `composition`           | yes         | Reactions, endpoints, views, and formers to register                                                         |
+| `initialize`            | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
+| `instances`             | no          | Ready implementations by concept name; each overrides `initialize`                                           |
+| `logging`               | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
+| `retention`             | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
+| `queryCache`            | no          | `"memoize"`; `"none"` disables query-result memoization                                                      |
+| `logSink`               | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
+| `executionLimits`       | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
+| `observers`             | no          | No operational observers                                                                                     |
+| `rawFaultReporter`      | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
+| `redaction`             | no          | Universal sensitive-field patterns only                                                                      |
 
-A retention window must be a finite, non-negative integer. `{ window: 0 }`
-allows an active flow to complete before automatic eviction.
+`RetentionPolicy` is `"keepAll" | { window: number }`. A retention window must
+be a finite, non-negative integer. Window enforcement runs automatically only
+after a causal flow settles. `{ window: 0 }` therefore allows an active flow to
+complete before evicting it. The public assembly and engine surfaces expose no
+manual prune operation.
 Every assembly owns an internal occurrence index. `logSink` does not replace
 that index, and `logSink` may be combined with any `retention` policy.
 
@@ -187,12 +190,19 @@ governs its contents.
 
 `LogSink.append(entry)` is the synchronous application-owned audit extension
 point. The engine validates an entry and redacts engine-created mappings, calls
-the sink with a detached, deeply immutable snapshot, and only then folds the
-entry into the internal index. Invocation concept and action fields are
-name-preserving representatives, not live engine identities. A sink throw
-therefore prevents the fold. An invocation append failure can prevent the action
-body from running. An outcome append failure can occur after the body has changed
-concept state; the engine does not roll that state back.
+the sink with a structural snapshot, and only then folds the entry into the
+internal index. Arrays and plain records are recursively copied and frozen.
+Invocation concept and action fields are frozen, name-preserving
+representatives rather than live engine identities. `Date` values are copied.
+Opaque leaves such as class instances, `Map`, `Set`, and functions
+retain their runtime representation and identity. The snapshot does not
+recursively freeze opaque leaves. The sink must treat opaque leaves as read-only
+sensitive values; structural readonly types do not make those leaves immutable.
+`append` must return `undefined` synchronously. A throw or any other return
+value, including a promise or structural thenable, fails the append before the
+fold. An invocation append failure can prevent the action body from running. An
+outcome append failure can occur after the body has changed concept state; the
+engine does not roll that state back.
 
 `FileLogSink(path)` implements `LogSink` with one append-only JSON audit
 projection per entry. Concept instances and action functions are represented by
@@ -513,9 +523,12 @@ multiple transport contracts in one wire module. `projections` must be an array,
 and each entry must provide `project(facts)`. The logical wire name, projected
 wire names, app-wide error names, `Json`, and generated vocabulary-helper names
 must be distinct TypeScript identifiers. Projection provenance must contain a
-nonblank package name and version. Core evaluates projections in declaration
-order and rejects any projection or naming failure before an artifact command
-compares or writes files. The HTTP companion's
+nonblank package name and a valid stable SemVer version. Projector versions are
+not restricted to 1.x. Artifact planning separately requires the manifest's
+core generator identity to name `@mit-sdg/sync-engine` at a stable 1.x version;
+neither generator nor projector provenance accepts a prerelease version. Core
+evaluates projections in declaration order and rejects any projection or naming
+failure before an artifact command compares or writes files. The HTTP companion's
 `httpWire({ policy, name })` additionally removes cookie-consumed credential
 fields for a floor. The
 [application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
@@ -546,8 +559,9 @@ observation contracts. `Refuse` is the low-level refusal marker. Its `message`
 becomes the refusal's `error` field and takes precedence over an `error` field in
 its optional data.
 `EngineOptions` accepts `retention` and `logSink`; the default retention policy
-is `"evictConsumed"`. The engine still owns its internal occurrence index, and
-the optional sink receives a synchronous audit copy.
+is `"keepAll"`. The engine still owns its internal occurrence index. The optional
+sink receives a synchronous audit copy and must return `undefined` from each
+`append` call.
 
 A manually created engine accepts an undeclared `Refuse` code as a refusal. It
 warns when an explicit refusal contract omits that code. Ordinary

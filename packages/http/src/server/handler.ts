@@ -87,9 +87,7 @@ function withCorrelation(
   return response;
 }
 
-type RequestTextResult =
-  | { ok: true; text: string }
-  | { ok: false; reason: "too_large" | "unreadable" };
+type RequestTextResult = { ok: true; text: string } | { ok: false };
 
 function cancelStream(stream: ReadableStream<Uint8Array> | null): void {
   if (stream !== null) void stream.cancel().catch(() => undefined);
@@ -99,7 +97,7 @@ async function readRequestText(request: Request): Promise<RequestTextResult> {
   const declared = request.headers.get("Content-Length");
   if (declared !== null && Number(declared) > MAX_BODY_BYTES) {
     cancelStream(request.body);
-    return { ok: false, reason: "too_large" };
+    return { ok: false };
   }
   if (request.body === null) return { ok: true, text: "" };
 
@@ -114,14 +112,14 @@ async function readRequestText(request: Request): Promise<RequestTextResult> {
       bytes += value.byteLength;
       if (bytes > MAX_BODY_BYTES) {
         void reader.cancel().catch(() => undefined);
-        return { ok: false, reason: "too_large" };
+        return { ok: false };
       }
       parts.push(decoder.decode(value, { stream: true }));
     }
     parts.push(decoder.decode());
     return { ok: true, text: parts.join("") };
   } catch {
-    return { ok: false, reason: "unreadable" };
+    return { ok: false };
   } finally {
     reader.releaseLock();
   }

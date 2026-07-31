@@ -120,7 +120,11 @@ is returned as the server result. A non-2xx response without that envelope uses
 `timeoutMs`, and `correlationId` when present. The package does not create a
 correlation header; a header provider must project `correlationId` explicitly.
 `timeoutMs` is local to the HTTP transport and aborts its Fetch wait when it
-expires. An invalid timeout resolves as core `INVALID_INPUT`; an invalid
+expires. It must be a positive finite integer no greater than `2_147_483_647`
+milliseconds, the reliable Node timer maximum. A value outside that range
+resolves as core `INVALID_INPUT` before header resolution or Fetch. This ceiling
+does not configure or relax gateway and application invocation limits; those
+layers apply their own defaults and configured maximums. An invalid
 `maxResponseBytes` throws while constructing the client or transport.
 
 | `HttpClientErrorCode`      | Condition                                             |

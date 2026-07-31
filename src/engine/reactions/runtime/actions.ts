@@ -99,11 +99,6 @@ export class ActionConcept {
     return this.store.actions;
   }
 
-  /** Folded view: retained records grouped by flow token, in invocation order. */
-  get flowIndex(): Map<string, ActionRecord[]> {
-    return this.store.flowIndex;
-  }
-
   /**
    * Append an invocation. Input values whose field names match the current
    * redaction policy are replaced before the record reaches the store.
@@ -162,7 +157,7 @@ export class ActionConcept {
           error: serializeError(error),
         }),
     );
-    this.store.flowSettled?.(flow);
+    this.store.flowSettled(flow);
   }
 
   /** Observe fully settled causal flows before occurrence retention is applied. */
@@ -346,16 +341,6 @@ export class ActionConcept {
   /** Look up a single record by id. */
   _getById(id: string): ActionRecord | undefined {
     return this.store.byId(id);
-  }
-
-  /** Evict all records belonging to a flow from the folded views. */
-  evictFlow(flow: string): void {
-    this.store.evictFlow(flow);
-  }
-
-  /** Run the store's prune policy and return its reported eviction count. */
-  evictConsumedFlows(): number {
-    return this.store.prune();
   }
 }
 

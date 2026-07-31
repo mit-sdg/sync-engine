@@ -5,7 +5,7 @@ import { renderApp } from "@engine/reads/render";
 import { canonicalDigest } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
 import {
-  assertCurrentGenerator,
+  assertCompatibleGenerator,
   isStableSemVer,
   PACKAGE_NAME,
   PACKAGE_VERSION,
@@ -97,7 +97,7 @@ export function planGenerated(
   if (manifest.format !== "sync-engine.application-manifest" || manifest.version !== 3) {
     throw new Error("generated artifacts: requires an application manifest at version 3.");
   }
-  assertCurrentGenerator(manifest.generator, "generated artifacts");
+  assertCompatibleGenerator(manifest.generator, "generated artifacts");
   assertApplicationLocality("generated artifacts", manifest.application);
   const specification = options.specification ?? "application.md";
   const wire = options.wire ?? "wire.ts";

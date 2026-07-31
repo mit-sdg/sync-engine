@@ -25,9 +25,10 @@ asking reaction.
 
 One installed vocabulary, concept implementation set, and composition. An
 assembly owns its execution lifecycle and an internal `MemoryStore` occurrence
-index governed by its retention policy. An optional application-owned `LogSink`
-receives an audit copy; the sink does not replace the index. Creating another
-assembly creates another runtime; it does not reconfigure an existing assembly.
+index governed by `"keepAll"` or a settled-flow window. An optional
+application-owned `LogSink` receives an audit copy; the sink does not replace
+the index. Creating another assembly creates another runtime; it does not
+reconfigure an existing assembly.
 
 ## Binding
 
@@ -142,9 +143,14 @@ execute it.
 
 An optional synchronous, application-owned destination for validated and
 redacted occurrence entries. The engine calls the sink before folding an entry
-into its internal occurrence index. A sink does not supply matching, retention,
-or replay. `LogSink` has no close method. `FileLogSink` is the supplied
-append-only JSONL implementation.
+into its internal occurrence index. `LogSink.append` must return `undefined`
+synchronously; a throw or any other return value fails before the fold. A sink
+entry copies and freezes arrays and plain records and replaces invocation
+identities with frozen name-bearing representatives. Opaque leaves retain their
+runtime identity and are not recursively frozen; sinks must treat them as
+read-only sensitive values. A sink does not supply matching, retention, or
+replay. `LogSink` has no close method. `FileLogSink` is the supplied append-only
+JSONL implementation.
 
 ## Occurrence
 

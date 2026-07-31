@@ -4,7 +4,7 @@ This project follows semantic versioning. Stable v1 public subpaths, behavior,
 and generated-format compatibility follow the [support policy](SUPPORT.md).
 Review the [operational limits](docs/operations.md) before deployment.
 
-## [1.0.0] - 2026-07-30
+## [1.0.0] - 2026-07-31
 
 The first stable release tightens assembly, validation, persistence, client,
 and transport contracts while keeping application policy and infrastructure
@@ -17,9 +17,10 @@ choices outside the engine.
   supported.
 - Ordinary `assemble(...)` applications reject undeclared advanced refusal
   codes. Manual `createEngine(...)` assembly remains open for advanced hosts.
-- Occurrence retention is split from persistence: `MemoryStore` is no longer a
-  public hosting contract, while `LogSink` and `FileLogSink` provide append-only
-  application-owned persistence.
+- Occurrence retention is split from audit export: `MemoryStore` is no longer a
+  public hosting contract, `LogSink` is the synchronous application-owned audit
+  extension, and `FileLogSink` provides append-only JSONL output.
+  `RetentionPolicy` now contains only `"keepAll"` and `{ window: number }`.
 - Query declarations now statically connect cardinality metadata to result
   containers. Mutable HTTP and boundary policies are snapshotted when their
   handlers or projectors are constructed.
@@ -27,10 +28,23 @@ choices outside the engine.
 
 ### Migration
 
-- Replace public `MemoryStore` or `FileStore` use with a `LogSink`, such as
+- `createEngine(store?: LogStore)` is now
+  `createEngine(options?: EngineOptions)`. Occurrence stores are no longer
+  replaceable; every engine owns its internal occurrence index. Pass
+  `{ retention, logSink }` to configure retention and an audit destination.
+  Replace public `MemoryStore` or `FileStore` use with a `LogSink`, such as
   `FileLogSink`, and pass it to `assemble(...)` as `logSink` rather than
-  `logStore`. Use assembly inspection rather than persistence for live runtime
-  occurrence reads.
+  `logStore`. Capture complete, redacted audit evidence through `LogSink`.
+  `inspectAssembly(...).occurrences` is only a redacted summary of action
+  occurrences still retained by the internal index; it is not an audit stream.
+- Replace beta `retention: "evictConsumed"` with `{ window: number }` for a
+  bounded number of settled flows or `"keepAll"` for no automatic eviction.
+  Ordinary `assemble(...)` defaults to `{ window: 100 }`; `createEngine(...)`
+  defaults to `"keepAll"`. Window enforcement runs automatically only after a
+  flow settles. Stable v1 exposes no manual prune operation.
+- A custom `LogSink.append(entry)` must return `undefined` synchronously. A
+  throw or any returned value, including a promise or structural thenable,
+  fails the append before the internal index folds the entry.
 - Declare every advanced refusal code used by an ordinarily assembled
   application. Hosts intentionally assembling engines manually may continue to
   define refusal policy outside the engine.
@@ -56,9 +70,9 @@ choices outside the engine.
 - Privileged `RawFaultReporter` hooks can receive action, interpreter, and
   validator faults without exposing raw failures to ordinary clients; reporter
   failures are isolated.
-- Clients can validate successful responses and carry per-call timeout and
-  correlation context. The HTTP client supports caller timeouts and opt-in
-  streaming response-size limits.
+- Clients can validate complete success-or-error responses and carry per-call
+  timeout and correlation context. The HTTP client supports caller timeouts and
+  opt-in streaming response-size limits.
 - Query caching is explicit through `"memoize"` and `"none"` modes, allowing
   applications to disable memoization without replacing engine policy.
 - Stable publication uses immutable annotated tags and verified tarballs,

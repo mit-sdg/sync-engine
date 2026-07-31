@@ -13,7 +13,6 @@ import { requestTimeout, RuntimeLifecycle } from "./lifecycle.ts";
 
 interface PendingRequest {
   resolve: (value: Record<string, unknown>) => void;
-  reject: (reason: unknown) => void;
   timer: ReturnType<typeof setTimeout>;
   signal?: AbortSignal;
   signalListener?: () => void;
@@ -190,7 +189,6 @@ export class Requesting {
 
       requests.set(requestId, {
         resolve,
-        reject,
         timer,
         signal,
         signalListener,
@@ -254,6 +252,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
   onValidatorFault?: (event: {
     path: string;
     requestId?: string;
+    correlationId?: string;
     phase: "input" | "output" | "domain-error";
     error: unknown;
   }) => void;
@@ -324,7 +323,12 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
           const validation = validateRuntimeValue(inputValidator, input);
           if (!validation.ok) {
             if (validation.errorClass === "ValidatorFault") {
-              onValidatorFault?.({ path, phase: "input", error: validation.fault });
+              onValidatorFault?.({
+                path,
+                phase: "input",
+                error: validation.fault,
+                ...(correlationId === undefined ? {} : { correlationId }),
+              });
             }
             return settle(
               frameworkError(

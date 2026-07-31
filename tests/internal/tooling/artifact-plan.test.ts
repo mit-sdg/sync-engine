@@ -196,6 +196,41 @@ describe("artifact plans", () => {
     expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
       `requires a stable 1.x ${PACKAGE_NAME} generator identity`,
     );
+    for (const version of ["1.9007199254740992.0", "1.9.9+build.1"]) {
+      manifest.generator.version = version;
+      expect(() => planGenerated(manifest, { title: "Ping service" })).not.toThrow();
+    }
+  });
+
+  test("accepts stable projector SemVer across majors and rejects invalid provenance", () => {
+    const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: { Ping },
+      }),
+    );
+    const projection = {
+      name: "PingProjectedWire",
+      wire: manifest.wire,
+      provenance: { name: "@example/projector", version: "2.0.0" },
+    };
+
+    expect(() =>
+      planGenerated(manifest, { title: "Ping service", projections: [projection] }),
+    ).not.toThrow();
+    for (const version of ["2.9007199254740992.0", "2.0.0+build.1"]) {
+      projection.provenance.version = version;
+      expect(() =>
+        planGenerated(manifest, { title: "Ping service", projections: [projection] }),
+      ).not.toThrow();
+    }
+    for (const version of ["2.0.0-beta.1", "2.0.0+bad metadata"]) {
+      projection.provenance.version = version;
+      expect(() =>
+        planGenerated(manifest, { title: "Ping service", projections: [projection] }),
+      ).toThrow("projection provenance needs a package name and stable SemVer version");
+    }
   });
 
   test("rejects forged non-portable manifest data", () => {

@@ -626,6 +626,7 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
     onValidatorFault?: (event: {
         path: string;
         requestId?: string;
+        correlationId?: string;
         phase: "input" | "output" | "domain-error";
         error: unknown;
     }) => void;
@@ -1037,7 +1038,7 @@ import type { LogEntry, LogSink } from "../reactions/runtime/log-store.ts";
 export declare class FileLogSink implements LogSink {
     readonly path: string;
     constructor(path: string);
-    append(entry: LogEntry): void;
+    append(entry: LogEntry): undefined;
 }
 
 === dist/engine/reactions/authoring/channels.d.ts ===
@@ -1702,8 +1703,6 @@ export declare class ActionConcept {
     _reportRawFault(report: RawFaultReport): void;
     /** Folded view: all retained records, keyed by their unique id. */
     get actions(): Map<string, ActionRecord>;
-    /** Folded view: retained records grouped by flow token, in invocation order. */
-    get flowIndex(): Map<string, ActionRecord[]>;
     /**
      * Append an invocation. Input values whose field names match the current
      * redaction policy are replaced before the record reaches the store.
@@ -1766,10 +1765,6 @@ export declare class ActionConcept {
     _getFaulted(): ActionRecord[];
     /** Look up a single record by id. */
     _getById(id: string): ActionRecord | undefined;
-    /** Evict all records belonging to a flow from the folded views. */
-    evictFlow(flow: string): void;
-    /** Run the store's prune policy and return its reported eviction count. */
-    evictConsumedFlows(): number;
 }
 /** Record an accepted execution-limit breach and return its caller-facing error. */
 export declare function breachLimit(actions: Pick<ActionConcept, "_recordExecutionLimit">, flow: string, limit: "actions" | "firings" | "rows"): Error;
@@ -1933,9 +1928,9 @@ export declare class ConceptInstrumentation {
  * The runtime folds these entries into an occurrence index by id, flow, and
  * reaction. Matching reads that index.
  */
-import type { ActionOutcome, InstrumentedAction } from "../types.ts";
+import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
 /** How long an assembly's in-memory occurrence index retains records. */
-export type RetentionPolicy = "keepAll" | "evictConsumed" | {
+export type RetentionPolicy = "keepAll" | {
     window: number;
 };
 export declare function assertRetentionPolicy(policy: RetentionPolicy, site: string): void;
@@ -1992,7 +1987,7 @@ export interface ReactionFailureRecord {
     errorClass: string;
     at: number;
 }
-/** Opaque evidence that a successful endpoint value violated its reviewed runtime contract. */
+/** Opaque evidence that an authored endpoint result violated its reviewed runtime contract. */
 export type IntegrityFailureRecord = {
     flow: string;
     at: number;
@@ -2009,8 +2004,7 @@ export type IntegrityFailureRecord = {
     limit: "actions" | "firings" | "rows";
     errorClass: "ExecutionLimitExceeded";
 });
-/** An entry appended to the log. Engine-created mappings are field-name redacted. */
-export type LogEntry = {
+type StoreEntry = {
     kind: "invocation";
     at: number;
     record: ActionRecord;
@@ -2043,10 +2037,64 @@ export type LogEntry = {
     id: string;
     fault: Record<string, unknown>;
 };
+type DeepReadonly<T> = T extends (...args: never[]) => unknown ? T : T extends readonly unknown[] ? {
+    readonly [K in keyof T]: DeepReadonly<T[K]>;
+} : T extends object ? {
+    readonly [K in keyof T]: DeepReadonly<T[K]>;
+} : T;
+/** A detached action representative. It carries a name but no live engine identity. */
+interface LoggedAction {
+    readonly name: string;
+    readonly action: AnyAction & {
+        readonly name: string;
+    };
+    (...args: never[]): unknown;
+}
+/** A detached concept representative. It carries a name but no live engine identity. */
+interface LoggedConcept {
+    readonly name: string;
+}
+type LoggedActionRecord = DeepReadonly<Omit<ActionRecord, "action" | "concept">> & {
+    readonly action: LoggedAction;
+    readonly concept: LoggedConcept;
+};
+/**
+ * A structurally readonly entry handed to a {@link LogSink}. Arrays and plain
+ * records are detached and frozen; opaque leaf values retain their normal
+ * runtime representation. Engine-created mappings are field-name redacted.
+ */
+export type LogEntry = {
+    readonly kind: "invocation";
+    readonly at: number;
+    readonly record: LoggedActionRecord;
+} | {
+    readonly kind: "outcome";
+    readonly at: number;
+    readonly id: string;
+    readonly output: DeepReadonly<Record<string, unknown>>;
+    readonly outcome: DeepReadonly<ActionOutcome>;
+} | {
+    readonly kind: "firing";
+    readonly at: number;
+    readonly firing: DeepReadonly<FiringRecord>;
+} | {
+    readonly kind: "reaction-failure";
+    readonly at: number;
+    readonly failure: DeepReadonly<ReactionFailureRecord>;
+} | {
+    readonly kind: "integrity-failure";
+    readonly at: number;
+    readonly failure: DeepReadonly<IntegrityFailureRecord>;
+} | {
+    readonly kind: "fault";
+    readonly at: number;
+    readonly id: string;
+    readonly fault: DeepReadonly<Record<string, unknown>>;
+};
 /** A synchronous host-owned destination for already-redacted occurrence entries. */
 export interface LogSink {
     /** Accept one immutable entry before it becomes visible to the engine index. */
-    append(entry: LogEntry): void;
+    append(entry: LogEntry): undefined;
 }
 /** The core in-memory occurrence index. */
 export declare class MemoryStore {
@@ -2063,22 +2111,17 @@ export declare class MemoryStore {
     /** Derived index folded from firing entries: record id → reactions that consumed it. */
     private consumedIndex;
     private settledFlowOrder;
-    private activeFlows;
     constructor(policy?: RetentionPolicy, sink?: LogSink | undefined);
-    append(entry: LogEntry): void;
+    append(entry: StoreEntry): void;
     private assertAppendable;
     private fold;
     byId(id: string): ActionRecord | undefined;
     byFlow(flow: string): ActionRecord[] | undefined;
     firingsByReaction(reaction: string): FiringRecord[];
     hasConsumed(recordId: string, reaction: string): boolean;
-    consumedBy(recordId: string): string[];
-    evictFlow(flow: string): void;
+    private evictFlow;
     flowSettled(flow: string): void;
-    /** Apply the configured retention policy and return the removed record count. */
-    prune(): number;
     private enforceWindow;
-    private isConsumed;
     private dropFlowEntries;
     /**
      * Replace one folded record in the id map and flow array. The previous
@@ -2090,6 +2133,7 @@ export declare class MemoryStore {
     /** Remove firings whose consumed occurrences are all evicted and rebuild retained consumption. */
     private dropFiringsFor;
 }
+export {};
 
 === dist/engine/reactions/runtime/logging.d.ts ===
 import type { Redactor } from "../../utils/redaction.ts";
@@ -4603,7 +4647,7 @@ export interface GeneratorIdentity {
 }
 export declare const GENERATOR_IDENTITY: GeneratorIdentity;
 export declare function isStableSemVer(value: unknown): value is string;
-export declare function assertCurrentGenerator(identity: unknown, owner: string): asserts identity is GeneratorIdentity;
+export declare function assertCompatibleGenerator(identity: unknown, owner: string): asserts identity is GeneratorIdentity;
 
 === dist/engine/utils/promise-like.d.ts ===
 /** Normalize a structural thenable without adding a microtask for synchronous values. */

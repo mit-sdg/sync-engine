@@ -346,8 +346,8 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     ]);
   });
 
-  test("retention cannot invalidate trigger ids captured before an async where", async () => {
-    const store = new MemoryStore();
+  test("window retention waits for an async where before evicting its flow", async () => {
+    const store = new MemoryStore({ window: 0 });
     const reacting = new Reacting(new ActionConcept(store));
     reacting.logging = Logging.OFF;
     const { Button, Recorder } = reacting.instrument({
@@ -375,24 +375,21 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     const pending = Button.clicked({ kind: "retained" });
     await entered;
-    const activeFlow = [...store.flowIndex.keys()][0];
-    expect(activeFlow).toBeDefined();
-    if (activeFlow === undefined) throw new Error("expected an active flow");
-    store.evictFlow(activeFlow);
+    expect(store.flowIndex.size).toBe(1);
     releaseWhere();
     await pending;
 
     expect(Recorder.order).toEqual(["kept"]);
-    expect(store.firings.get("Retained")?.[0]?.consumed).toHaveLength(1);
+    expect(store.flowIndex.size).toBe(0);
   });
 
   test("a consequence ask remains produced when recording its fault fails", async () => {
     class FaultRejectingSink implements LogSink {
-      append(entry: LogEntry): void {
+      append(entry: LogEntry): undefined {
         if (entry.kind === "fault") throw new Error("fault store unavailable");
       }
     }
-    const store = new MemoryStore("evictConsumed", new FaultRejectingSink());
+    const store = new MemoryStore("keepAll", new FaultRejectingSink());
     const reacting = new Reacting(new ActionConcept(store));
     reacting.logging = Logging.OFF;
     const { Button } = reacting.instrument({

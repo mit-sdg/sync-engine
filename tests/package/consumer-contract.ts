@@ -49,7 +49,32 @@ class DirectConcept {
 
 const directVocabulary = vocabulary({ concepts: { Direct: DirectConcept }, computations: {} });
 const occurrenceEntries: LogEntry[] = [];
-const logSink: LogSink = { append: (entry) => occurrenceEntries.push(entry) };
+const logSink: LogSink = {
+  append(entry) {
+    occurrenceEntries.push(entry);
+  },
+};
+const accidentallyAsyncLogSink: LogSink = {
+  // @ts-expect-error A log sink must finish before the entry is folded.
+  async append(_entry) {},
+};
+class AccidentallyAsyncLogSink implements LogSink {
+  // @ts-expect-error Class implementations must also finish synchronously.
+  async append(_entry: LogEntry) {}
+}
+declare const occurrenceEntry: LogEntry;
+if (occurrenceEntry.kind === "invocation") {
+  const actionName: string = occurrenceEntry.record.action.name;
+  const conceptName: string = occurrenceEntry.record.concept.name;
+  void [actionName, conceptName];
+  // @ts-expect-error Sink entries are immutable snapshots.
+  occurrenceEntry.record.input.changed = true;
+}
+if (occurrenceEntry.kind === "firing") {
+  // @ts-expect-error Nested sink-entry arrays are immutable snapshots.
+  occurrenceEntry.firing.consumed.push("another-id");
+}
+void [accidentallyAsyncLogSink, AccidentallyAsyncLogSink];
 const directOptions: AssemblyOptions<{ Direct: typeof DirectConcept }, {}> = {
   vocabulary: directVocabulary,
   composition: {},
