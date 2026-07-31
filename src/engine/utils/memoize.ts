@@ -123,13 +123,16 @@ export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
     }
     if (cache.has(key)) return cache.get(key) as ReturnType<T>;
     const result = fn.call(this, ...args);
-    cache.set(key, result);
     const promise = normalizePromiseLike(result);
     if (promise !== undefined) {
+      // Cache the normalized promise so structural thenables execute only once.
+      cache.set(key, promise);
       void promise.catch(() => {
-        if (cache.get(key) === result) cache.delete(key);
+        if (cache.get(key) === promise) cache.delete(key);
       });
+      return promise as ReturnType<T>;
     }
+    cache.set(key, result);
     return result as ReturnType<T>;
   };
   wrapper.invalidate = () => {

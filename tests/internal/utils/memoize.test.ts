@@ -160,6 +160,26 @@ describe("query cache", () => {
     expect(calls).toBe(2);
   });
 
+  test("normalizes a memoized lazy PromiseLike only once", async () => {
+    let calls = 0;
+    let thens = 0;
+    const query = memoizeQuery(() => {
+      calls += 1;
+      return {
+        then(resolve: (value: string) => void) {
+          thens += 1;
+          resolve("value");
+        },
+      } as PromiseLike<string>;
+    });
+
+    const first = query();
+    expect(await first).toBe("value");
+    expect(query()).toBe(first);
+    expect(calls).toBe(1);
+    expect(thens).toBe(1);
+  });
+
   test("encodes Date values", () => {
     const d1 = new Date(0);
     const d2 = new Date(1);
