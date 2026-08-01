@@ -71,10 +71,11 @@ call shapes:
 | `.first(value)`    | Value from the first selected row after optional arrangement | `null`          |
 | `.distinct(value)` | First-seen distinct values                                   | `[]`            |
 
-`count` requires the query's complete input mapping and rejects undeclared
-fields recursively. If the query reference has a union type, an input valid for
-only one union member is rejected; the input argument does not narrow the query
-union.
+The TypeScript contract for `count` requires one non-union query reference and
+its complete input mapping, with undeclared fields rejected recursively. A
+union-typed query reference is rejected outright so the input argument cannot
+select or mask one possible query; choose one concrete query before calling
+`count`.
 
 Concept entries accepted by `vocabulary` are either a concept class or
 `{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals? }`.

@@ -200,6 +200,12 @@ const disjointCountQuery = chooseQuery ? Looking._answer : Looking._nested;
 count(disjointCountQuery, { key: "present" }, countResult);
 // @ts-expect-error A union query cannot be counted with only its second input contract.
 count(disjointCountQuery, { filter: { key: "present", limit: 1 } }, countResult);
+count(
+  // @ts-expect-error A merged mapping is not exact for either member of a union query.
+  disjointCountQuery,
+  { key: "present", filter: { key: "present", limit: 1 } },
+  countResult,
+);
 const incompatibleCountQuery = chooseQuery ? Looking._answer : Looking._numberKey;
 // @ts-expect-error A union query with incompatible input slots has no safe string input.
 count(incompatibleCountQuery, { key: "present" }, countResult);

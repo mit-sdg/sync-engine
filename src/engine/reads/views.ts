@@ -125,12 +125,19 @@ type QueryInput<Query> = [Query] extends [never]
       : Mapping
     : Mapping;
 
+type IsUnion<Value, Whole = Value> = Value extends unknown
+  ? [Whole] extends [Value]
+    ? false
+    : true
+  : never;
+type SingleQuery<Query> = true extends IsUnion<Query> ? never : Query;
+
 export function count<
-  Query extends InstrumentedQuery | ((...args: never[]) => unknown),
+  const Query extends InstrumentedQuery | ((...args: never[]) => unknown),
   const Input extends InputPattern<QueryInput<NoInfer<Query>>>,
   Out extends symbol,
 >(
-  query: Query,
+  query: SingleQuery<Query>,
   input: ExactPattern<QueryInput<NoInfer<Query>>, Input>,
   out: Out,
 ): CountOp<FactsFromPattern<QueryInput<NoInfer<Query>>, Input> | FactFromVariable<number, Out>> {

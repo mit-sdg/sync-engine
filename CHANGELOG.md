@@ -66,9 +66,9 @@ output shapes.
 - Callable binding selectors now reject non-string names passed through
   JavaScript or `any`, using the existing error for missing or empty names.
 - TypeScript now requires `count(...)` to receive the query's complete input
-  mapping and rejects extra fields at every nested level. An input valid for
-  only one member of a union-typed query reference is rejected; the input does
-  not narrow the query union.
+  mapping and rejects extra fields at every nested level. It rejects a
+  union-typed query reference outright so the input argument cannot select or
+  mask one possible query; choose one concrete query before calling `count`.
 - A selection `.first(...)` or `.distinct(...)` value widened to plain `symbol`
   remains an unconstrained result leaf instead of making `symbol` the result
   type. An explicit `Former` annotation can supply that leaf's type.
