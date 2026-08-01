@@ -6,6 +6,7 @@ import {
   type ClientTransport,
   type ContractShape,
 } from "@mit-sdg/sync-engine/client";
+import { type CappedTextRead, cancelReadable, raceAbort, readCappedUtf8Stream } from "../stream.ts";
 
 export interface HttpRequestContext {
   readonly path: string;
@@ -78,53 +79,6 @@ function isAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true;
 }
 
-function raceAbort<T>(
-  promise: Promise<T>,
-  signal: AbortSignal | undefined,
-  onAbort: () => T,
-): Promise<T> {
-  if (signal === undefined) return promise;
-  if (signal.aborted) {
-    void promise.catch(() => undefined);
-    try {
-      return Promise.resolve(onAbort());
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  }
-  return new Promise((resolve, reject) => {
-    const dispose = () => signal.removeEventListener("abort", abort);
-    const abort = () => {
-      dispose();
-      try {
-        resolve(onAbort());
-      } catch (error) {
-        reject(error);
-      }
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    void promise.then(
-      (value) => {
-        dispose();
-        resolve(value);
-      },
-      (error) => {
-        dispose();
-        reject(error);
-      },
-    );
-  });
-}
-
-function cancelResponseBody(response: Response, reason?: unknown): void {
-  try {
-    const cancellation = response.body?.cancel(reason);
-    if (cancellation !== undefined) void cancellation.catch(() => undefined);
-  } catch {
-    // Cancellation is best-effort after the caller has already stopped waiting.
-  }
-}
-
 async function resolveHeaders(
   option: HeadersOption | undefined,
   context: HttpRequestContext,
@@ -147,61 +101,24 @@ function normalizeMaxResponseBytes(value: number | undefined): number | undefine
   return value;
 }
 
-type BodyRead = { ok: true; text: string } | { ok: false } | { aborted: true };
-
 async function readResponseBody(
   response: Response,
   maxBytes: number | undefined,
   signal: AbortSignal | undefined,
-): Promise<BodyRead> {
+): Promise<CappedTextRead> {
   if (maxBytes === undefined) {
     return raceAbort(
       Promise.resolve(response.text()).then((text) => ({ ok: true as const, text })),
       signal,
       () => {
-        cancelResponseBody(response, signal?.reason);
+        cancelReadable(response.body, signal?.reason);
         return { aborted: true as const };
       },
     );
   }
   const declared = response.headers.get("Content-Length");
-  if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
-    cancelResponseBody(response);
-    return { ok: false };
-  }
-  if (response.body === null) return { ok: true, text: "" };
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let bytes = 0;
-  let text = "";
-  try {
-    while (true) {
-      const next = await raceAbort<
-        { aborted: false; chunk: Awaited<ReturnType<typeof reader.read>> } | { aborted: true }
-      >(
-        reader.read().then((chunk) => ({ aborted: false as const, chunk })),
-        signal,
-        () => ({ aborted: true as const }),
-      );
-      if (next.aborted) {
-        void reader.cancel(signal?.reason).catch(() => undefined);
-        return { aborted: true };
-      }
-      const { chunk } = next;
-      if (chunk.done) break;
-      bytes += chunk.value.byteLength;
-      if (bytes > maxBytes) {
-        void reader.cancel().catch(() => undefined);
-        return { ok: false };
-      }
-      text += decoder.decode(chunk.value, { stream: true });
-    }
-    text += decoder.decode();
-    return { ok: true, text };
-  } finally {
-    reader.releaseLock();
-  }
+  const declaredBytes = declared !== null && /^\d+$/.test(declared) ? Number(declared) : undefined;
+  return readCappedUtf8Stream(response.body, maxBytes, declaredBytes, signal);
 }
 
 interface RequestControl {
@@ -301,7 +218,7 @@ async function httpRequest(
       );
       if (fetched.aborted) {
         void pendingFetch.then(
-          (lateResponse) => cancelResponseBody(lateResponse, signal?.reason),
+          (lateResponse) => cancelReadable(lateResponse.body, signal?.reason),
           () => undefined,
         );
         return interruptedError(control);

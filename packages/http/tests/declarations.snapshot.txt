@@ -132,6 +132,23 @@ export declare function publicErrorStatus(category: PublicHttpError): number;
 export declare function projectProductionHttpWire(wire: WireContractsIR, profile: ProductionHttpProfile): WireContractsIR;
 export {};
 
+=== packages/http/dist/stream.d.ts ===
+export type CappedTextRead = {
+    ok: true;
+    text: string;
+} | {
+    ok: false;
+} | {
+    aborted: true;
+};
+type Cancelable = {
+    cancel(reason?: unknown): Promise<void>;
+};
+export declare function cancelReadable(readable: Cancelable | null, reason?: unknown): void;
+export declare function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined, onAbort: () => T): Promise<T>;
+export declare function readCappedUtf8Stream(stream: ReadableStream<Uint8Array> | null, maxBytes: number, declaredBytes?: number, signal?: AbortSignal): Promise<CappedTextRead>;
+export {};
+
 === packages/http/dist/tooling/http-wire.d.ts ===
 import type { WireProjection } from "@mit-sdg/sync-engine/tooling";
 import type { HttpFloor } from "../server/floor.ts";

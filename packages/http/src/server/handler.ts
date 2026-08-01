@@ -16,6 +16,7 @@ import {
   publicFrameworkCategoryOf,
   registeredPublicCategoryOf,
 } from "./public-errors.ts";
+import { readCappedUtf8Stream } from "../stream.ts";
 
 type Application = Assembly<Record<string, new (...args: never[]) => object>>;
 
@@ -89,39 +90,17 @@ function withCorrelation(
 
 type RequestTextResult = { ok: true; text: string } | { ok: false };
 
-function cancelStream(stream: ReadableStream<Uint8Array> | null): void {
-  if (stream !== null) void stream.cancel().catch(() => undefined);
-}
-
 async function readRequestText(request: Request): Promise<RequestTextResult> {
   const declared = request.headers.get("Content-Length");
-  if (declared !== null && Number(declared) > MAX_BODY_BYTES) {
-    cancelStream(request.body);
-    return { ok: false };
-  }
-  if (request.body === null) return { ok: true, text: "" };
-
-  const reader = request.body.getReader();
-  const decoder = new TextDecoder();
-  const parts: string[] = [];
-  let bytes = 0;
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      bytes += value.byteLength;
-      if (bytes > MAX_BODY_BYTES) {
-        void reader.cancel().catch(() => undefined);
-        return { ok: false };
-      }
-      parts.push(decoder.decode(value, { stream: true }));
-    }
-    parts.push(decoder.decode());
-    return { ok: true, text: parts.join("") };
+    const result = await readCappedUtf8Stream(
+      request.body,
+      MAX_BODY_BYTES,
+      declared === null ? undefined : Number(declared),
+    );
+    return "aborted" in result ? { ok: false } : result;
   } catch {
     return { ok: false };
-  } finally {
-    reader.releaseLock();
   }
 }
 
