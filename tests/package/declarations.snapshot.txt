@@ -2739,7 +2739,7 @@ export type CheckedComputationFns<Fns extends Record<string, ComputationFn>> = {
 };
 type ComputationSource = "standard" | "vocabulary";
 /** A named computation ref, callable with an input pattern. */
-type ComputationInput<Fn extends ComputationFn> = Parameters<Fn> extends [infer Input, ...unknown[]] ? [Input] extends [object] ? Input : Record<string, never> : Record<string, never>;
+export type ComputationInput<Fn extends ComputationFn> = Parameters<Fn> extends [infer Input, ...unknown[]] ? [Input] extends [object] ? Input : Record<string, never> : Record<string, never>;
 export interface ComputationRef<Fn extends ComputationFn = ComputationFn> {
     <const Pattern extends InputPattern<ComputationInput<Fn>>>(input: ExactPattern<ComputationInput<Fn>, Pattern>): FusedComputation<Fn, FactsFromPattern<ComputationInput<Fn>, Pattern>>;
     readonly computationName: string;
@@ -2855,9 +2855,9 @@ import type { ReadLine } from "./lines.ts";
 import type { ViewBlock } from "./views.ts";
 import { type FreeBindings, type InputBindings } from "./sentence.ts";
 import { type CountNode, type DistinctNode, type EachNode, type FirstNode, type FormerEntry, type FormerNode, type FormerRef, type FusedFormer, type RecordNode, type FormerUse } from "./former-nodes.ts";
-import type { ArrayExpression, BlankExpressionOf, BlankOfNode, FactFromVariable, FactsOf, InferredMapping, LogicVariable, NullableExpression, RecordExpression, ResultOfNode, RootOf, ValueExpression, VariableExpression, ExpressionOf } from "./type-inference.ts";
-type EntryExpression<Entry> = Entry extends LogicVariable ? VariableExpression<Entry> : Entry extends FormerNode ? ExpressionOf<Entry> : Entry extends FormerUse<infer Fused, infer IsWhether> ? Fused extends FusedFormer<unknown, infer Present, infer Blank> ? ValueExpression<IsWhether extends true ? Present | Blank : Present> : ValueExpression<unknown> : Entry extends FusedFormer<unknown, infer Present> ? ValueExpression<Present> : ValueExpression<unknown>;
-type EntryBlank<Entry> = Entry extends LogicVariable ? ValueExpression<null> : Entry extends FormerNode ? BlankExpressionOf<Entry> : ValueExpression<null>;
+import type { BlankExpressionOf, BlankOfNode, ExpressionOf, FactFromVariable, FactsOf, LogicVariable, ResultOfNode, RootOf, ShapeFromFacts, ValueExpression } from "./type-inference.ts";
+type EntryExpression<Entry> = Entry extends LogicVariable ? Entry : Entry extends FormerNode ? ExpressionOf<Entry> : Entry extends FormerUse<infer Fused, infer IsWhether> ? Fused extends FusedFormer<unknown, infer Present, infer Blank> ? ValueExpression<IsWhether extends true ? Present | Blank : Present> : ValueExpression<unknown> : Entry extends FusedFormer<unknown, infer Present> ? ValueExpression<Present> : ValueExpression<unknown>;
+type EntryBlank<Entry> = Entry extends LogicVariable ? null : Entry extends FormerNode ? BlankExpressionOf<Entry> : ValueExpression<null>;
 type EntryFacts<Entry> = Entry extends LogicVariable ? FactFromVariable<unknown, Entry> : Entry extends FormerUse<infer Fused> ? FactsOf<Fused> : FactsOf<Entry>;
 type EntryExpressions<Entries extends Record<string, FormerEntry>> = {
     readonly [Key in keyof Entries]: EntryExpression<Entries[Key]>;
@@ -2868,7 +2868,7 @@ type EntryBlanks<Entries extends Record<string, FormerEntry>> = {
 type EntryFactUnion<Entries extends Record<string, FormerEntry>> = {
     [Key in keyof Entries]: EntryFacts<Entries[Key]>;
 }[keyof Entries];
-type RecordEntries<Expression> = Expression extends RecordExpression<infer Entries> ? Entries : Record<string, ValueExpression<unknown>>;
+type RecordEntries<Expression> = Expression extends Record<string, unknown> ? Expression : Record<string, ValueExpression<unknown>>;
 type ValueAt<Value, Key extends PropertyKey> = Value extends unknown ? Key extends keyof Value ? Value[Key] : never : never;
 type StaticEntries<Value> = [Value] extends [object] ? {
     readonly [Key in keyof Value & string]: ValueExpression<ValueAt<Value, Key>>;
@@ -2886,9 +2886,9 @@ type SpliceBlanks<Uses extends readonly (FusedFormer | FormerUse)[]> = UnionToIn
 type SpliceFacts<Uses extends readonly (FusedFormer | FormerUse)[]> = Uses[number] extends infer Use ? Use extends FormerUse<infer Fused> ? FactsOf<Fused> : FactsOf<Use> : never;
 /** A formed object whose flat fragment splices are being stated. */
 export interface FormNode<Expression = any, Blank = any, Facts = any> extends RecordNode<Expression, Blank, Facts> {
-    splicing<const Uses extends readonly (FusedFormer | FormerUse)[]>(...uses: Uses): FormNode<RecordExpression<MergeRecord<RecordEntries<Expression>, SpliceEntries<Uses>>>, RecordExpression<MergeRecord<RecordEntries<Blank>, SpliceBlanks<Uses>>>, Facts | SpliceFacts<Uses>>;
+    splicing<const Uses extends readonly (FusedFormer | FormerUse)[]>(...uses: Uses): FormNode<MergeRecord<RecordEntries<Expression>, SpliceEntries<Uses>>, MergeRecord<RecordEntries<Blank>, SpliceBlanks<Uses>>, Facts | SpliceFacts<Uses>>;
 }
-export type FormNodeOf<Entries extends Record<string, FormerEntry>, Facts = never> = FormNode<RecordExpression<EntryExpressions<Entries>>, RecordExpression<EntryBlanks<Entries>>, Facts | EntryFactUnion<Entries>>;
+export type FormNodeOf<Entries extends Record<string, FormerEntry>, Facts = never> = FormNode<EntryExpressions<Entries>, EntryBlanks<Entries>, Facts | EntryFactUnion<Entries>>;
 export declare function form<const Entries extends Record<string, FormerEntry>>(entries: Entries): FormNodeOf<Entries>;
 export declare function formFrom<Block extends ViewBlock, const Entries extends Record<string, FormerEntry>>(block: Block, entries: Entries): FormNodeOf<Entries, FactsOf<Block>>;
 /** How a captured selection orders itself: a bound variable, or the record's own order. */
@@ -2896,16 +2896,16 @@ type ArrangedWord = "newest" | "oldest";
 /** The consumers a captured selection may end in — exactly one, always. */
 interface SelectionConsumers<Facts = any> {
     /** Carry each match as one object. */
-    form<const Entries extends Record<string, FormerEntry>>(entries: Entries): EachFormNode<RecordExpression<EntryExpressions<Entries>>, RecordExpression<EntryBlanks<Entries>>, Facts | EntryFactUnion<Entries>>;
+    form<const Entries extends Record<string, FormerEntry>>(entries: Entries): EachFormNode<EntryExpressions<Entries>, EntryBlanks<Entries>, Facts | EntryFactUnion<Entries>>;
     /** How many matched. */
     count(): CountNode<Facts>;
     /** One bound value read off the first match, by the selection's ordering. */
-    first<Variable extends symbol>(value: Variable): FirstNode<NullableExpression<VariableExpression<Variable>>, Facts | FactFromVariable<unknown, Variable>>;
+    first<Variable extends symbol>(value: Variable): FirstNode<Variable | null, Facts | FactFromVariable<unknown, Variable>>;
     /** The distinct values of a variable the selection binds, first-seen order. */
-    distinct<Variable extends symbol>(value: Variable): DistinctNode<ArrayExpression<VariableExpression<Variable>>, Facts | FactFromVariable<unknown, Variable>>;
+    distinct<Variable extends symbol>(value: Variable): DistinctNode<Variable[], Facts | FactFromVariable<unknown, Variable>>;
 }
-interface EachFormNode<ItemExpression = any, ItemBlank = any, Facts = any> extends EachNode<ArrayExpression<ItemExpression>, ArrayExpression<ItemBlank>, Facts> {
-    splicing<const Uses extends readonly (FusedFormer | FormerUse)[]>(...uses: Uses): EachFormNode<RecordExpression<MergeRecord<RecordEntries<ItemExpression>, SpliceEntries<Uses>>>, RecordExpression<MergeRecord<RecordEntries<ItemBlank>, SpliceBlanks<Uses>>>, Facts | SpliceFacts<Uses>>;
+interface EachFormNode<ItemExpression = any, ItemBlank = any, Facts = any> extends EachNode<ItemExpression[], ItemBlank[], Facts> {
+    splicing<const Uses extends readonly (FusedFormer | FormerUse)[]>(...uses: Uses): EachFormNode<MergeRecord<RecordEntries<ItemExpression>, SpliceEntries<Uses>>, MergeRecord<RecordEntries<ItemBlank>, SpliceBlanks<Uses>>, Facts | SpliceFacts<Uses>>;
 }
 /** A captured selection mid-statement: order it, refine it, then consume it. */
 interface SelectionBuilder<Facts = any> extends SelectionConsumers<Facts> {
@@ -2927,7 +2927,7 @@ export declare function each<Line extends ReadLine>(line: Line): SelectionBuilde
  * object or captured selection. Put the question this former answers in the
  * doc comment above its definition.
  */
-export declare function former<const Body extends FormerNode>(name: string, build: (inputs: InputBindings, bindings: FreeBindings) => Body): FormerRef<InferredMapping<FactsOf<Body>, "input">, ResultOfNode<Body>, BlankOfNode<Body>, "one", RootOf<Body>>;
+export declare function former<const Body extends FormerNode>(name: string, build: (inputs: InputBindings, bindings: FreeBindings) => Body): FormerRef<ShapeFromFacts<FactsOf<Body>, "input">, ResultOfNode<Body>, BlankOfNode<Body>, "one", RootOf<Body>>;
 export {};
 
 === dist/engine/reads/former-evaluation.d.ts ===
@@ -2964,7 +2964,7 @@ import type { Mapping } from "../reactions/types.ts";
 import type { FormerNodeIR } from "./ir.ts";
 import type { QueryPromise } from "./query-metadata.ts";
 import type { FindOp, WhereOp } from "./where-ops.ts";
-import type { CarriesFacts, CarriesFormedValue, ContractFacts, ExactPattern, FactFromVariable, FactsFromPattern, FormerRoot, InputPattern, TypedFormerNode, ValueExpression, VariableExpression } from "./type-inference.ts";
+import type { CarriesFacts, CarriesFormedValue, ContractFacts, ExactPattern, FactsFromPattern, FormerRoot, InputPattern, TypedFormerNode, ValueExpression } from "./type-inference.ts";
 /** How a comprehension orders what it kept. */
 export type Arranged = {
     readonly order: "oldest" | "newest";
@@ -2993,10 +2993,10 @@ export interface EachNode<Expression = ValueExpression<unknown>, Blank = ValueEx
     readonly arranged?: Arranged;
     readonly as: FormerNode;
 }
-export interface CountNode<Facts = any> extends Selection, TypedFormerNode<ValueExpression<number>, ValueExpression<0>, Facts, "selection"> {
+export interface CountNode<Facts = any> extends Selection, TypedFormerNode<number, 0, Facts, "selection"> {
     readonly node: "count";
 }
-export interface FirstNode<Expression = ValueExpression<unknown>, Facts = any> extends Selection, TypedFormerNode<Expression, ValueExpression<null>, Facts, "selection"> {
+export interface FirstNode<Expression = ValueExpression<unknown>, Facts = any> extends Selection, TypedFormerNode<Expression, null, Facts, "selection"> {
     readonly node: "first";
     readonly arranged?: Arranged;
     readonly value: symbol;
@@ -3005,15 +3005,15 @@ export interface DistinctNode<Expression = ValueExpression<unknown>, Facts = any
     readonly node: "distinct";
     readonly value: symbol;
 }
-interface LeafNode<Variable extends symbol = symbol> extends TypedFormerNode<VariableExpression<Variable>, ValueExpression<null>, FactFromVariable<unknown, Variable>, "selection"> {
+interface LeafNode {
     readonly node: "leaf";
     readonly var: symbol;
 }
-export interface FormerCallNode<Expression = ValueExpression<unknown>, Blank = ValueExpression<unknown>, Facts = any> extends TypedFormerNode<Expression, Blank, Facts, "selection"> {
+export interface FormerCallNode {
     readonly node: "former";
     readonly use: FormerUse;
 }
-export type FormerNode = LeafNode<any> | RecordNode<any, any, any> | FormerCallNode<any, any, any> | EachNode<any, any, any> | CountNode<any> | FirstNode<any, any> | DistinctNode<any, any>;
+export type FormerNode = LeafNode | RecordNode<any, any, any> | FormerCallNode | EachNode<any, any, any> | CountNode<any> | FirstNode<any, any> | DistinctNode<any, any>;
 /** What a record entry accepts: a leaf, a smaller shape, or a named former. */
 export type FormerEntry = symbol | FormerNode | FusedFormer | FormerUse;
 export declare function brandNode<T extends object>(node: T): T;
@@ -3022,7 +3022,6 @@ export declare function isFormerUse(value: unknown): value is FormerUse;
 /** Every key a record-rooted former contributes, including nested contributions. */
 export declare function contributedKeys(ref: FormerRef): string[];
 /** A defined former, callable with its input mapping to produce the fused reference. */
-type ExactInput<Input, Pattern> = ExactPattern<Input, Pattern>;
 type FusedValue<Present, Promise extends Exclude<QueryPromise, "many">> = Promise extends "optional" ? Present | null : Present;
 declare const FormerRefType: unique symbol;
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
@@ -3047,7 +3046,7 @@ export interface FormerRef<Input extends object = AnyFormerInput, Present = unkn
         readonly promise: Promise;
         readonly root: Root;
     };
-    <const Pattern extends InputPattern<Input>>(input: ExactInput<Input, Pattern>): FusedFormer<FusedValue<ContractWitness<Present>, Promise>, ContractWitness<Present>, ContractWitness<Blank>, ContractFacts<FactsFromPattern<Input, Pattern>>, Root>;
+    <const Pattern extends InputPattern<Input>>(input: ExactPattern<Input, Pattern>): FusedFormer<FusedValue<ContractWitness<Present>, Promise>, ContractWitness<Present>, ContractWitness<Blank>, ContractFacts<FactsFromPattern<Input, Pattern>>, Root>;
     readonly formerName: string;
     readonly ins: readonly string[];
     readonly inputVars: readonly symbol[];
@@ -3899,29 +3898,20 @@ export {};
 === dist/engine/reads/sentence.d.ts ===
 /** Binding bags and callable references shared by views and formers. */
 import type { Mapping } from "../reactions/types.ts";
-import type { BindingVariables } from "./type-inference.ts";
+import type { BindingKind, BindingVariables } from "./type-inference.ts";
 /** One independently declared binding bag. */
-declare const InputBindingsBrand: unique symbol;
-declare const OutputBindingsBrand: unique symbol;
-declare const FreeBindingsBrand: unique symbol;
-export type InputBindings = BindingVariables<"input"> & {
-    readonly [InputBindingsBrand]: true;
-};
-export type OutputBindings = BindingVariables<"output"> & {
-    readonly [OutputBindingsBrand]: true;
-};
-export type FreeBindings = BindingVariables<"free"> & {
-    readonly [FreeBindingsBrand]: true;
-};
-interface BindingBag<TBindings> {
-    readonly vars: TBindings;
+export type InputBindings = BindingVariables<"input">;
+export type OutputBindings = BindingVariables<"output">;
+export type FreeBindings = BindingVariables<"free">;
+interface BindingBag<Kind extends BindingKind> {
+    readonly vars: BindingVariables<Kind>;
     readonly minted: Map<string, symbol>;
 }
 /**
  * Create one logic-variable selector. Repeated selection of one name returns
  * the same symbol; separate selectors keep declaration partitions visible.
  */
-export declare function bindingBag<TBindings>(): BindingBag<TBindings>;
+export declare function bindingBag<Kind extends BindingKind>(): BindingBag<Kind>;
 /** Reject one declared name appearing in two binding partitions. */
 export declare function assertSeparateBags(kind: string, name: string, bags: ReadonlyArray<readonly [label: string, names: Iterable<string>]>): void;
 /** The parts a finished definition needs to become an object-call reference. */
@@ -3960,16 +3950,11 @@ export interface BindingFact<Kind extends BindingKind = BindingKind, Name extend
     readonly maybe: Maybe;
 }
 declare const FactsType: unique symbol;
-type BivariantFacts<Facts> = {
-    bivarianceHack(facts: Facts): void;
-}["bivarianceHack"];
 /** Phantom facts carried by authored lines, operations, blocks, and nodes. */
 export interface CarriesFacts<Facts = never> {
-    readonly [FactsType]?: BivariantFacts<Facts>;
+    [FactsType]?(facts: Facts): void;
 }
-export type FactsOf<Value> = Value extends {
-    readonly [FactsType]?: BivariantFacts<infer Facts>;
-} ? Exclude<Facts, undefined> : never;
+export type FactsOf<Value> = Value extends CarriesFacts<infer Facts> ? Facts : never;
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
 declare const UnconstrainedType: unique symbol;
 export interface Unconstrained {
@@ -4022,30 +4007,14 @@ type ExactObject<Shape extends object, Pattern extends object> = Pattern & Recor
 };
 type ExactValue<Shape, Pattern> = Shape extends unknown ? Pattern extends symbol ? Pattern : Shape extends readonly (infer ShapeItem)[] ? Pattern extends readonly (infer PatternItem)[] ? Pattern & readonly ExactValue<ShapeItem, PatternItem>[] : Pattern : Shape extends object ? Pattern extends object ? ExactObject<Shape, Pattern> : Pattern : Pattern : never;
 export type ExactPattern<Shape, Pattern> = ExactValue<Shape, Pattern>;
-/** Result-expression nodes defer variable resolution until all facts are known. */
-declare const VariableExpressionType: unique symbol;
+/** Opaque values in a result expression are not recursively interpreted as formed trees. */
 declare const ValueExpressionType: unique symbol;
-declare const RecordExpressionType: unique symbol;
-declare const ArrayExpressionType: unique symbol;
-declare const NullableExpressionType: unique symbol;
-export interface VariableExpression<Variable extends symbol> {
-    readonly [VariableExpressionType]: Variable;
-}
 export interface ValueExpression<Value> {
     readonly [ValueExpressionType]: Value;
 }
-export interface RecordExpression<Entries extends object> {
-    readonly [RecordExpressionType]: Entries;
-}
-export interface ArrayExpression<Item> {
-    readonly [ArrayExpressionType]: Item;
-}
-export interface NullableExpression<Value> {
-    readonly [NullableExpressionType]: Value;
-}
-export type ResolveExpression<Expression, Facts> = Expression extends VariableExpression<infer Variable> ? ValueOfVariable<Facts, Variable> : Expression extends ValueExpression<infer Value> ? Value : Expression extends RecordExpression<infer Entries> ? {
-    -readonly [Key in keyof Entries]: ResolveExpression<Entries[Key], Facts>;
-} : Expression extends ArrayExpression<infer Item> ? Array<ResolveExpression<Item, Facts>> : Expression extends NullableExpression<infer Value> ? ResolveExpression<Value, Facts> | null : unknown;
+export type ResolveExpression<Expression, Facts> = Expression extends ValueExpression<infer Value> ? Value : Expression extends LogicVariable ? ValueOfVariable<Facts, Expression> : Expression extends readonly (infer Item)[] ? Array<ResolveExpression<Item, Facts>> : Expression extends object ? {
+    -readonly [Key in keyof Expression]: ResolveExpression<Expression[Key], Facts>;
+} : Expression;
 export type FormerRoot = "record" | "selection";
 declare const FormerNodeType: unique symbol;
 /** Phantom expression, blank shape, facts, and root kind carried by a former node. */
@@ -4070,13 +4039,11 @@ export type RootOf<Node> = FormerNodeTypingOf<Node> extends {
 } ? Root : FormerRoot;
 export type ResultOfNode<Node> = ResolveExpression<ExpressionOf<Node>, FactsOf<Node>>;
 export type BlankOfNode<Node> = ResolveExpression<BlankExpressionOf<Node>, FactsOf<Node>>;
-export type InferredMapping<Facts, Kind extends BindingKind> = ShapeFromFacts<Facts, Kind> extends infer Shape extends object ? Shape : Record<string, unknown>;
 declare const FormedValueType: unique symbol;
 /** Covariant phantom value carried by a fused former. */
 export interface CarriesFormedValue<Value = unknown> {
     readonly [FormedValueType]: Value;
 }
-export type FormedValueOf<Value> = Value extends CarriesFormedValue<infer Formed> ? Formed : unknown;
 export {};
 
 === dist/engine/reads/value-equality.d.ts ===
@@ -4282,7 +4249,7 @@ export {};
  * that line would have bound. Built-in comparisons and named computations add
  * closed conditions. Advanced code may use `custom(...)`.
  */
-import type { ComputationFn, ComputationRef, FusedComputation } from "./computations.ts";
+import type { ComputationFn, ComputationInput, ComputationRef, FusedComputation } from "./computations.ts";
 import type { ActionTriggerPattern, InstrumentedQuery, Mapping } from "../reactions/types.ts";
 import type { QueryReadLine, ReadLine, RelationView, ViewReadLine } from "./lines.ts";
 import type { FormerUse, FusedFormer } from "./former-nodes.ts";
@@ -4365,7 +4332,7 @@ export declare function whether<Line extends ViewReadLine>(line: Line): WhetherO
 export declare function whether<Line extends ReadLine>(line: Line): WhetherOp<WhetherFacts<Line>>;
 export declare function whether<Fused extends FusedFormer>(fused: Fused): FormerUse<Fused, true>;
 /** Bind one variable to one calculation declared by the assembled vocabulary. */
-export declare function compute<Fn extends ComputationFn, const Input extends InputPattern<Parameters<Fn> extends [infer Declared, ...unknown[]] ? Declared extends object ? Declared : Record<string, never> : Record<string, never>>, Out extends symbol>(computation: ComputationRef<Fn>, input: ExactPattern<Parameters<Fn> extends [infer Declared, ...unknown[]] ? Declared extends object ? Declared : Record<string, never> : Record<string, never>, Input>, out: Out): ComputeOp<FactsFromPattern<Parameters<Fn> extends [infer Declared, ...unknown[]] ? Declared extends object ? Declared : Record<string, never> : Record<string, never>, Input> | FactFromVariable<Awaited<ReturnType<Fn>>, Out>>;
+export declare function compute<Fn extends ComputationFn, const Input extends InputPattern<ComputationInput<Fn>>, Out extends symbol>(computation: ComputationRef<Fn>, input: ExactPattern<ComputationInput<Fn>, Input>, out: Out): ComputeOp<FactsFromPattern<ComputationInput<Fn>, Input> | FactFromVariable<Awaited<ReturnType<Fn>>, Out>>;
 /**
  * An opaque function with a declared footprint:
  * which variables it reads (positional args) and which it writes (one value

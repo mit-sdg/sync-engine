@@ -35,16 +35,12 @@ export interface BindingFact<
 
 declare const FactsType: unique symbol;
 
-type BivariantFacts<Facts> = { bivarianceHack(facts: Facts): void }["bivarianceHack"];
-
 /** Phantom facts carried by authored lines, operations, blocks, and nodes. */
 export interface CarriesFacts<Facts = never> {
-  readonly [FactsType]?: BivariantFacts<Facts>;
+  [FactsType]?(facts: Facts): void;
 }
 
-export type FactsOf<Value> = Value extends { readonly [FactsType]?: BivariantFacts<infer Facts> }
-  ? Exclude<Facts, undefined>
-  : never;
+export type FactsOf<Value> = Value extends CarriesFacts<infer Facts> ? Facts : never;
 
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
 declare const UnconstrainedType: unique symbol;
@@ -182,45 +178,23 @@ type ExactValue<Shape, Pattern> = Shape extends unknown
 
 export type ExactPattern<Shape, Pattern> = ExactValue<Shape, Pattern>;
 
-/** Result-expression nodes defer variable resolution until all facts are known. */
-declare const VariableExpressionType: unique symbol;
+/** Opaque values in a result expression are not recursively interpreted as formed trees. */
 declare const ValueExpressionType: unique symbol;
-declare const RecordExpressionType: unique symbol;
-declare const ArrayExpressionType: unique symbol;
-declare const NullableExpressionType: unique symbol;
-
-export interface VariableExpression<Variable extends symbol> {
-  readonly [VariableExpressionType]: Variable;
-}
 
 export interface ValueExpression<Value> {
   readonly [ValueExpressionType]: Value;
 }
 
-export interface RecordExpression<Entries extends object> {
-  readonly [RecordExpressionType]: Entries;
-}
-
-export interface ArrayExpression<Item> {
-  readonly [ArrayExpressionType]: Item;
-}
-
-export interface NullableExpression<Value> {
-  readonly [NullableExpressionType]: Value;
-}
-
 export type ResolveExpression<Expression, Facts> =
-  Expression extends VariableExpression<infer Variable>
-    ? ValueOfVariable<Facts, Variable>
-    : Expression extends ValueExpression<infer Value>
-      ? Value
-      : Expression extends RecordExpression<infer Entries>
-        ? { -readonly [Key in keyof Entries]: ResolveExpression<Entries[Key], Facts> }
-        : Expression extends ArrayExpression<infer Item>
-          ? Array<ResolveExpression<Item, Facts>>
-          : Expression extends NullableExpression<infer Value>
-            ? ResolveExpression<Value, Facts> | null
-            : unknown;
+  Expression extends ValueExpression<infer Value>
+    ? Value
+    : Expression extends LogicVariable
+      ? ValueOfVariable<Facts, Expression>
+      : Expression extends readonly (infer Item)[]
+        ? Array<ResolveExpression<Item, Facts>>
+        : Expression extends object
+          ? { -readonly [Key in keyof Expression]: ResolveExpression<Expression[Key], Facts> }
+          : Expression;
 
 export type FormerRoot = "record" | "selection";
 
@@ -270,15 +244,9 @@ export type RootOf<Node> =
 export type ResultOfNode<Node> = ResolveExpression<ExpressionOf<Node>, FactsOf<Node>>;
 export type BlankOfNode<Node> = ResolveExpression<BlankExpressionOf<Node>, FactsOf<Node>>;
 
-export type InferredMapping<Facts, Kind extends BindingKind> =
-  ShapeFromFacts<Facts, Kind> extends infer Shape extends object ? Shape : Record<string, unknown>;
-
 declare const FormedValueType: unique symbol;
 
 /** Covariant phantom value carried by a fused former. */
 export interface CarriesFormedValue<Value = unknown> {
   readonly [FormedValueType]: Value;
 }
-
-export type FormedValueOf<Value> =
-  Value extends CarriesFormedValue<infer Formed> ? Formed : unknown;

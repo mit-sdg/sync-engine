@@ -57,7 +57,7 @@ export type CheckedComputationFns<Fns extends Record<string, ComputationFn>> = {
 type ComputationSource = "standard" | "vocabulary";
 
 /** A named computation ref, callable with an input pattern. */
-type ComputationInput<Fn extends ComputationFn> =
+export type ComputationInput<Fn extends ComputationFn> =
   Parameters<Fn> extends [infer Input, ...unknown[]]
     ? [Input] extends [object]
       ? Input

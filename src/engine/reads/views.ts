@@ -296,9 +296,9 @@ export function view(
     bindings: FreeBindings,
   ) => ViewBlock | readonly ViewBlock[],
 ): RelationView {
-  const inputs = bindingBag<InputBindings>();
-  const outputs = bindingBag<OutputBindings>();
-  const bindings = bindingBag<FreeBindings>();
+  const inputs = bindingBag<"input">();
+  const outputs = bindingBag<"output">();
+  const bindings = bindingBag<"free">();
   const built = build(inputs.vars, outputs.vars, bindings.vars);
 
   const alternatives: ViewOp[][] = hasBrand(built, ViewBlockBrand)

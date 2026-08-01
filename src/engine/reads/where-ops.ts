@@ -12,7 +12,12 @@
  * closed conditions. Advanced code may use `custom(...)`.
  */
 
-import type { ComputationFn, ComputationRef, FusedComputation } from "./computations.ts";
+import type {
+  ComputationFn,
+  ComputationInput,
+  ComputationRef,
+  FusedComputation,
+} from "./computations.ts";
 import { isFusedComputation } from "./computations.ts";
 import type { ActionTriggerPattern, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import { brand, hasBrand, WhereOpBrand } from "./brands.ts";
@@ -206,35 +211,14 @@ export function whether(line: ReadLine | FusedFormer): WhetherOp | FormerUse {
 /** Bind one variable to one calculation declared by the assembled vocabulary. */
 export function compute<
   Fn extends ComputationFn,
-  const Input extends InputPattern<
-    Parameters<Fn> extends [infer Declared, ...unknown[]]
-      ? Declared extends object
-        ? Declared
-        : Record<string, never>
-      : Record<string, never>
-  >,
+  const Input extends InputPattern<ComputationInput<Fn>>,
   Out extends symbol,
 >(
   computation: ComputationRef<Fn>,
-  input: ExactPattern<
-    Parameters<Fn> extends [infer Declared, ...unknown[]]
-      ? Declared extends object
-        ? Declared
-        : Record<string, never>
-      : Record<string, never>,
-    Input
-  >,
+  input: ExactPattern<ComputationInput<Fn>, Input>,
   out: Out,
 ): ComputeOp<
-  | FactsFromPattern<
-      Parameters<Fn> extends [infer Declared, ...unknown[]]
-        ? Declared extends object
-          ? Declared
-          : Record<string, never>
-        : Record<string, never>,
-      Input
-    >
-  | FactFromVariable<Awaited<ReturnType<Fn>>, Out>
+  FactsFromPattern<ComputationInput<Fn>, Input> | FactFromVariable<Awaited<ReturnType<Fn>>, Out>
 > {
   if (typeof computation !== "function" || computation.source !== "vocabulary") {
     throw new Error("compute(...) requires a computation from vocabulary(...).computations.");

@@ -17,13 +17,11 @@ import type {
   CarriesFormedValue,
   ContractFacts,
   ExactPattern,
-  FactFromVariable,
   FactsFromPattern,
   FormerRoot,
   InputPattern,
   TypedFormerNode,
   ValueExpression,
-  VariableExpression,
 } from "./type-inference.ts";
 
 // ── Node shapes ────────────────────────────────────────────────────────────
@@ -71,14 +69,12 @@ export interface EachNode<
 }
 
 export interface CountNode<Facts = any>
-  extends
-    Selection,
-    TypedFormerNode<ValueExpression<number>, ValueExpression<0>, Facts, "selection"> {
+  extends Selection, TypedFormerNode<number, 0, Facts, "selection"> {
   readonly node: "count";
 }
 
 export interface FirstNode<Expression = ValueExpression<unknown>, Facts = any>
-  extends Selection, TypedFormerNode<Expression, ValueExpression<null>, Facts, "selection"> {
+  extends Selection, TypedFormerNode<Expression, null, Facts, "selection"> {
   readonly node: "first";
   readonly arranged?: Arranged;
   readonly value: symbol;
@@ -90,29 +86,20 @@ export interface DistinctNode<Expression = ValueExpression<unknown>, Facts = any
   readonly value: symbol;
 }
 
-interface LeafNode<Variable extends symbol = symbol> extends TypedFormerNode<
-  VariableExpression<Variable>,
-  ValueExpression<null>,
-  FactFromVariable<unknown, Variable>,
-  "selection"
-> {
+interface LeafNode {
   readonly node: "leaf";
   readonly var: symbol;
 }
 
-export interface FormerCallNode<
-  Expression = ValueExpression<unknown>,
-  Blank = ValueExpression<unknown>,
-  Facts = any,
-> extends TypedFormerNode<Expression, Blank, Facts, "selection"> {
+export interface FormerCallNode {
   readonly node: "former";
   readonly use: FormerUse;
 }
 
 export type FormerNode =
-  | LeafNode<any>
+  | LeafNode
   | RecordNode<any, any, any>
-  | FormerCallNode<any, any, any>
+  | FormerCallNode
   | EachNode<any, any, any>
   | CountNode<any>
   | FirstNode<any, any>
@@ -149,7 +136,6 @@ export function contributedKeys(ref: FormerRef): string[] {
 }
 
 /** A defined former, callable with its input mapping to produce the fused reference. */
-type ExactInput<Input, Pattern> = ExactPattern<Input, Pattern>;
 type FusedValue<Present, Promise extends Exclude<QueryPromise, "many">> = Promise extends "optional"
   ? Present | null
   : Present;
@@ -216,7 +202,7 @@ export interface FormerRef<
     readonly root: Root;
   };
   <const Pattern extends InputPattern<Input>>(
-    input: ExactInput<Input, Pattern>,
+    input: ExactPattern<Input, Pattern>,
   ): FusedFormer<
     FusedValue<ContractWitness<Present>, Promise>,
     ContractWitness<Present>,

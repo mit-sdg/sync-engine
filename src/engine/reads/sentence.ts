@@ -2,25 +2,15 @@
 
 import type { Mapping } from "@engine/reactions/types";
 import { isPlainMapping } from "./matchers.ts";
-import type { BindingVariables } from "./type-inference.ts";
+import type { BindingKind, BindingVariables } from "./type-inference.ts";
 
 /** One independently declared binding bag. */
-declare const InputBindingsBrand: unique symbol;
-declare const OutputBindingsBrand: unique symbol;
-declare const FreeBindingsBrand: unique symbol;
+export type InputBindings = BindingVariables<"input">;
+export type OutputBindings = BindingVariables<"output">;
+export type FreeBindings = BindingVariables<"free">;
 
-export type InputBindings = BindingVariables<"input"> & {
-  readonly [InputBindingsBrand]: true;
-};
-export type OutputBindings = BindingVariables<"output"> & {
-  readonly [OutputBindingsBrand]: true;
-};
-export type FreeBindings = BindingVariables<"free"> & {
-  readonly [FreeBindingsBrand]: true;
-};
-
-interface BindingBag<TBindings> {
-  readonly vars: TBindings;
+interface BindingBag<Kind extends BindingKind> {
+  readonly vars: BindingVariables<Kind>;
   readonly minted: Map<string, symbol>;
 }
 
@@ -28,7 +18,7 @@ interface BindingBag<TBindings> {
  * Create one logic-variable selector. Repeated selection of one name returns
  * the same symbol; separate selectors keep declaration partitions visible.
  */
-export function bindingBag<TBindings>(): BindingBag<TBindings> {
+export function bindingBag<Kind extends BindingKind>(): BindingBag<Kind> {
   const minted = new Map<string, symbol>();
   const variable = (name: string): symbol => {
     let existing = minted.get(name);
@@ -45,7 +35,7 @@ export function bindingBag<TBindings>(): BindingBag<TBindings> {
     if (names.length === 1) return variable(names[0]);
     return Object.fromEntries(names.map((name) => [name, variable(name)]));
   };
-  return { vars: vars as TBindings, minted };
+  return { vars: vars as BindingVariables<Kind>, minted };
 }
 
 /** Reject one declared name appearing in two binding partitions. */

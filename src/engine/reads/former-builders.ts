@@ -37,20 +37,16 @@ import { assertFormerBindings } from "./former-bindings.ts";
 import { operationFootprint, symbolsInMapping } from "./operation-footprint.ts";
 import { lowerFormerBody } from "./former-lowering.ts";
 import type {
-  ArrayExpression,
   BlankExpressionOf,
   BlankOfNode,
+  ExpressionOf,
   FactFromVariable,
   FactsOf,
-  InferredMapping,
   LogicVariable,
-  NullableExpression,
-  RecordExpression,
   ResultOfNode,
   RootOf,
+  ShapeFromFacts,
   ValueExpression,
-  VariableExpression,
-  ExpressionOf,
 } from "./type-inference.ts";
 
 // ── Builders ───────────────────────────────────────────────────────────────
@@ -79,7 +75,7 @@ function assertSelectionWhere(
 }
 
 type EntryExpression<Entry> = Entry extends LogicVariable
-  ? VariableExpression<Entry>
+  ? Entry
   : Entry extends FormerNode
     ? ExpressionOf<Entry>
     : Entry extends FormerUse<infer Fused, infer IsWhether>
@@ -91,7 +87,7 @@ type EntryExpression<Entry> = Entry extends LogicVariable
         : ValueExpression<unknown>;
 
 type EntryBlank<Entry> = Entry extends LogicVariable
-  ? ValueExpression<null>
+  ? null
   : Entry extends FormerNode
     ? BlankExpressionOf<Entry>
     : ValueExpression<null>;
@@ -115,8 +111,8 @@ type EntryFactUnion<Entries extends Record<string, FormerEntry>> = {
 }[keyof Entries];
 
 type RecordEntries<Expression> =
-  Expression extends RecordExpression<infer Entries>
-    ? Entries
+  Expression extends Record<string, unknown>
+    ? Expression
     : Record<string, ValueExpression<unknown>>;
 
 type ValueAt<Value, Key extends PropertyKey> = Value extends unknown
@@ -193,15 +189,15 @@ export interface FormNode<Expression = any, Blank = any, Facts = any> extends Re
   splicing<const Uses extends readonly (FusedFormer | FormerUse)[]>(
     ...uses: Uses
   ): FormNode<
-    RecordExpression<MergeRecord<RecordEntries<Expression>, SpliceEntries<Uses>>>,
-    RecordExpression<MergeRecord<RecordEntries<Blank>, SpliceBlanks<Uses>>>,
+    MergeRecord<RecordEntries<Expression>, SpliceEntries<Uses>>,
+    MergeRecord<RecordEntries<Blank>, SpliceBlanks<Uses>>,
     Facts | SpliceFacts<Uses>
   >;
 }
 
 export type FormNodeOf<Entries extends Record<string, FormerEntry>, Facts = never> = FormNode<
-  RecordExpression<EntryExpressions<Entries>>,
-  RecordExpression<EntryBlanks<Entries>>,
+  EntryExpressions<Entries>,
+  EntryBlanks<Entries>,
   Facts | EntryFactUnion<Entries>
 >;
 
@@ -217,14 +213,7 @@ function entryNode<Entry extends FormerEntry>(key: string, value: Entry): Former
   throw new Error(`form(...): entry "${key}" must be a bound name or a formed value.`);
 }
 
-function buildForm<const Entries extends Record<string, FormerEntry>, ConditionFacts = never>(
-  entries: Entries,
-  conditions: readonly WhereOp[],
-): FormNode<
-  RecordExpression<EntryExpressions<Entries>>,
-  RecordExpression<EntryBlanks<Entries>>,
-  ConditionFacts | EntryFactUnion<Entries>
-> {
+function buildForm(entries: Record<string, FormerEntry>, conditions: readonly WhereOp[]): FormNode {
   const entryList: Array<readonly [string, FormerNode]> = [];
   for (const [key, value] of Object.entries(entries ?? {})) {
     entryList.push([key, entryNode(key, value)]);
@@ -236,11 +225,7 @@ function buildForm<const Entries extends Record<string, FormerEntry>, ConditionF
     entries: entryList,
     splices,
   });
-  const chain = node as unknown as FormNode<
-    RecordExpression<EntryExpressions<Entries>>,
-    RecordExpression<EntryBlanks<Entries>>,
-    ConditionFacts | EntryFactUnion<Entries>
-  >;
+  const chain = node as unknown as FormNode;
   Object.defineProperty(node, "splicing", {
     enumerable: false,
     value: (...values: readonly (FusedFormer | FormerUse)[]): FormNode => {
@@ -278,24 +263,24 @@ function buildForm<const Entries extends Record<string, FormerEntry>, ConditionF
 export function form<const Entries extends Record<string, FormerEntry>>(
   entries: Entries,
 ): FormNodeOf<Entries> {
-  return buildForm(entries, []);
+  return buildForm(entries, []) as FormNodeOf<Entries>;
 }
 
 export function formFrom<
   Block extends ViewBlock,
   const Entries extends Record<string, FormerEntry>,
 >(block: Block, entries: Entries): FormNodeOf<Entries, FactsOf<Block>> {
-  return buildForm<Entries, FactsOf<Block>>(
+  return buildForm(
     entries,
     assertSelectionWhere("form", block as readonly WhereOp[]),
-  );
+  ) as FormNodeOf<Entries, FactsOf<Block>>;
 }
 
 /** The comprehension: range, keep, arrange, and carry a smaller former per match. @internal */
-function buildEach<Expression, Blank, Facts>(
+function buildEach(
   from: FindOp,
   options: { where?: readonly WhereOp[]; arranged?: Arranged; as: FormerEntry },
-): EachNode<Expression, Blank, Facts> {
+): EachNode {
   const as =
     typeof options.as === "symbol"
       ? brandNode({ node: "leaf" as const, var: options.as })
@@ -309,19 +294,16 @@ function buildEach<Expression, Blank, Facts>(
     where: assertSelectionWhere("each", options.where),
     ...(options.arranged !== undefined ? { arranged: options.arranged } : {}),
     as,
-  }) as unknown as EachNode<Expression, Blank, Facts>;
+  }) as unknown as EachNode;
 }
 
 /** How many matched — the selection consumed by a count instead of carried. @internal */
-function countOf<Facts>(
-  from: FindOp,
-  options: { where?: readonly WhereOp[] } = {},
-): CountNode<Facts> {
+function countOf(from: FindOp, options: { where?: readonly WhereOp[] } = {}): CountNode {
   return brandNode({
     node: "count" as const,
     from,
     where: assertSelectionWhere(".count", options.where),
-  }) as unknown as CountNode<Facts>;
+  }) as unknown as CountNode;
 }
 
 /**
@@ -330,13 +312,10 @@ function countOf<Facts>(
  * An empty selection reads as `null`.
  * @internal
  */
-function firstOf<Variable extends symbol, Facts>(
+function firstOf(
   from: FindOp,
-  options: { where?: readonly WhereOp[]; arranged?: Arranged; value: Variable },
-): FirstNode<
-  NullableExpression<VariableExpression<Variable>>,
-  Facts | FactFromVariable<unknown, Variable>
-> {
+  options: { where?: readonly WhereOp[]; arranged?: Arranged; value: symbol },
+): FirstNode {
   if (typeof options.value !== "symbol") {
     throw new Error(".first(value) requires a variable bound by the selection.");
   }
@@ -346,20 +325,14 @@ function firstOf<Variable extends symbol, Facts>(
     where: assertSelectionWhere(".first", options.where),
     ...(options.arranged !== undefined ? { arranged: options.arranged } : {}),
     value: options.value,
-  }) as unknown as FirstNode<
-    NullableExpression<VariableExpression<Variable>>,
-    Facts | FactFromVariable<unknown, Variable>
-  >;
+  }) as unknown as FirstNode;
 }
 
 /** The distinct values of a variable the selection binds, first-seen order. @internal */
-function distinctOf<Variable extends symbol, Facts>(
+function distinctOf(
   from: FindOp,
-  options: { where?: readonly WhereOp[]; value: Variable },
-): DistinctNode<
-  ArrayExpression<VariableExpression<Variable>>,
-  Facts | FactFromVariable<unknown, Variable>
-> {
+  options: { where?: readonly WhereOp[]; value: symbol },
+): DistinctNode {
   if (typeof options.value !== "symbol") {
     throw new Error(".distinct(value) requires a variable bound by the selection.");
   }
@@ -368,10 +341,7 @@ function distinctOf<Variable extends symbol, Facts>(
     from,
     where: assertSelectionWhere(".distinct", options.where),
     value: options.value,
-  }) as unknown as DistinctNode<
-    ArrayExpression<VariableExpression<Variable>>,
-    Facts | FactFromVariable<unknown, Variable>
-  >;
+  }) as unknown as DistinctNode;
 }
 
 // ── The selection chain ──────────────────────────────────────────────
@@ -391,39 +361,29 @@ interface SelectionConsumers<Facts = any> {
   /** Carry each match as one object. */
   form<const Entries extends Record<string, FormerEntry>>(
     entries: Entries,
-  ): EachFormNode<
-    RecordExpression<EntryExpressions<Entries>>,
-    RecordExpression<EntryBlanks<Entries>>,
-    Facts | EntryFactUnion<Entries>
-  >;
+  ): EachFormNode<EntryExpressions<Entries>, EntryBlanks<Entries>, Facts | EntryFactUnion<Entries>>;
   /** How many matched. */
   count(): CountNode<Facts>;
   /** One bound value read off the first match, by the selection's ordering. */
   first<Variable extends symbol>(
     value: Variable,
-  ): FirstNode<
-    NullableExpression<VariableExpression<Variable>>,
-    Facts | FactFromVariable<unknown, Variable>
-  >;
+  ): FirstNode<Variable | null, Facts | FactFromVariable<unknown, Variable>>;
   /** The distinct values of a variable the selection binds, first-seen order. */
   distinct<Variable extends symbol>(
     value: Variable,
-  ): DistinctNode<
-    ArrayExpression<VariableExpression<Variable>>,
-    Facts | FactFromVariable<unknown, Variable>
-  >;
+  ): DistinctNode<Variable[], Facts | FactFromVariable<unknown, Variable>>;
 }
 
 interface EachFormNode<ItemExpression = any, ItemBlank = any, Facts = any> extends EachNode<
-  ArrayExpression<ItemExpression>,
-  ArrayExpression<ItemBlank>,
+  ItemExpression[],
+  ItemBlank[],
   Facts
 > {
   splicing<const Uses extends readonly (FusedFormer | FormerUse)[]>(
     ...uses: Uses
   ): EachFormNode<
-    RecordExpression<MergeRecord<RecordEntries<ItemExpression>, SpliceEntries<Uses>>>,
-    RecordExpression<MergeRecord<RecordEntries<ItemBlank>, SpliceBlanks<Uses>>>,
+    MergeRecord<RecordEntries<ItemExpression>, SpliceEntries<Uses>>,
+    MergeRecord<RecordEntries<ItemBlank>, SpliceBlanks<Uses>>,
     Facts | SpliceFacts<Uses>
   >;
 }
@@ -442,11 +402,10 @@ interface SelectionBuilder<Facts = any> extends SelectionConsumers<Facts> {
   arranged(order: ArrangedWord): SelectionBuilder<Facts>;
 }
 
-interface SelectionSpec<Facts = any> {
+interface SelectionSpec {
   readonly from: FindOp;
   readonly where: readonly WhereOp[];
   readonly arranged?: Arranged;
-  readonly _facts?: Facts;
 }
 
 function parseArranged(first: symbol | ArrangedWord, order?: "ascending" | "descending"): Arranged {
@@ -459,15 +418,11 @@ function parseArranged(first: symbol | ArrangedWord, order?: "ascending" | "desc
   return arrangedBy(first, order ?? "ascending");
 }
 
-function consumersOf<Facts>(spec: SelectionSpec<Facts>): SelectionConsumers<Facts> {
+function consumersOf<Facts>(spec: SelectionSpec): SelectionConsumers<Facts> {
   return {
-    form: (entries) => {
+    form: (entries: Record<string, FormerEntry>) => {
       const item = buildForm(entries, []);
-      const node = buildEach<
-        ArrayExpression<ExpressionOf<typeof item>>,
-        ArrayExpression<BlankExpressionOf<typeof item>>,
-        Facts | FactsOf<typeof item>
-      >(spec.from, {
+      const node = buildEach(spec.from, {
         where: spec.where,
         ...(spec.arranged !== undefined ? { arranged: spec.arranged } : {}),
         as: item,
@@ -484,15 +439,15 @@ function consumersOf<Facts>(spec: SelectionSpec<Facts>): SelectionConsumers<Fact
       if (spec.arranged !== undefined) {
         throw new Error(".count() does not use ordering; remove .arranged(...).");
       }
-      return countOf<Facts>(spec.from, { where: spec.where });
+      return countOf(spec.from, { where: spec.where });
     },
-    first: (value) =>
+    first: (value: symbol) =>
       firstOf(spec.from, {
         where: spec.where,
         ...(spec.arranged !== undefined ? { arranged: spec.arranged } : {}),
         value,
       }),
-    distinct: (value) => {
+    distinct: (value: symbol) => {
       if (spec.arranged !== undefined) {
         throw new Error(".distinct(value) uses first-seen order; remove .arranged(...).");
       }
@@ -501,10 +456,10 @@ function consumersOf<Facts>(spec: SelectionSpec<Facts>): SelectionConsumers<Fact
         value,
       });
     },
-  } as SelectionConsumers<Facts>;
+  } as unknown as SelectionConsumers<Facts>;
 }
 
-function builderOf<Facts>(spec: SelectionSpec<Facts>): SelectionBuilder<Facts> {
+function builderOf<Facts>(spec: SelectionSpec): SelectionBuilder<Facts> {
   return {
     where: (...conditions: readonly Condition[]) => {
       if (spec.where.length > 0) {
@@ -521,7 +476,7 @@ function builderOf<Facts>(spec: SelectionSpec<Facts>): SelectionBuilder<Facts> {
       }
       return builderOf({ ...spec, arranged: parseArranged(first, order) });
     }) as SelectionBuilder<Facts>["arranged"],
-    ...consumersOf(spec),
+    ...consumersOf<Facts>(spec),
   } as SelectionBuilder<Facts>;
 }
 
@@ -597,14 +552,14 @@ export function former<const Body extends FormerNode>(
   name: string,
   build: (inputs: InputBindings, bindings: FreeBindings) => Body,
 ): FormerRef<
-  InferredMapping<FactsOf<Body>, "input">,
+  ShapeFromFacts<FactsOf<Body>, "input">,
   ResultOfNode<Body>,
   BlankOfNode<Body>,
   "one",
   RootOf<Body>
 > {
-  const inputs = bindingBag<InputBindings>();
-  const bindings = bindingBag<FreeBindings>();
+  const inputs = bindingBag<"input">();
+  const bindings = bindingBag<"free">();
   const body = build(inputs.vars, bindings.vars);
   if (!isFormerNode(body)) {
     throw new Error(`Former "${name}": the builder must return a former node.`);
@@ -647,7 +602,7 @@ export function former<const Body extends FormerNode>(
     "one",
     lowered,
   ) as unknown as FormerRef<
-    InferredMapping<FactsOf<Body>, "input">,
+    ShapeFromFacts<FactsOf<Body>, "input">,
     ResultOfNode<Body>,
     BlankOfNode<Body>,
     "one",
