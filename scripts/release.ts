@@ -218,6 +218,7 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
       if (!(workspace.packageName in dependencies)) continue;
       dependencies[workspace.packageName] = workspaceVersions.get(workspace.packageName);
     }
+    delete dependencies.typescript;
     development.typescript = facts.typescript;
     engines.node = facts.node;
     if ((bunProjectManifests as readonly string[]).includes(path)) {
@@ -285,15 +286,14 @@ function changelogSection(changelog: string, version: string): string | undefine
 
 export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const failures: string[] = [];
-  const manifests = new Map<string, JsonObject>();
+  const manifests = new Map<string, JsonObject | undefined>();
 
   for (const path of releaseSourcePaths) {
     if (!sources.has(path)) failures.push(`${path}: required release source is missing`);
   }
 
   function manifest(path: string): JsonObject | undefined {
-    const cached = manifests.get(path);
-    if (cached !== undefined) return cached;
+    if (manifests.has(path)) return manifests.get(path);
     const source = sources.get(path);
     if (source === undefined) return undefined;
     try {
@@ -305,6 +305,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       failures.push(
         `${path}: invalid JSON (${error instanceof Error ? error.message : String(error)})`,
       );
+      manifests.set(path, undefined);
       return undefined;
     }
   }
@@ -388,18 +389,25 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     }
   }
 
-  try {
-    for (const [path, expectedSource] of projectReleaseManifests(sources)) {
-      const actual = manifest(path);
-      const expected = object(JSON.parse(expectedSource));
-      if (actual !== undefined && expected !== undefined && !isDeepStrictEqual(actual, expected)) {
-        failures.push(`${path}: release-owned facts are stale; run bun run release:update`);
+  const parsedReleaseManifests = releaseManifestPaths.map((path) => manifest(path));
+  if (parsedReleaseManifests.every((project) => project !== undefined)) {
+    try {
+      for (const [path, expectedSource] of projectReleaseManifests(sources)) {
+        const actual = manifest(path);
+        const expected = object(JSON.parse(expectedSource));
+        if (
+          actual !== undefined &&
+          expected !== undefined &&
+          !isDeepStrictEqual(actual, expected)
+        ) {
+          failures.push(`${path}: release-owned facts are stale; run bun run release:update`);
+        }
       }
+    } catch (error) {
+      failures.push(
+        `release manifests: projection failed (${error instanceof Error ? error.message : String(error)})`,
+      );
     }
-  } catch (error) {
-    failures.push(
-      `release manifests: projection failed (${error instanceof Error ? error.message : String(error)})`,
-    );
   }
 
   const scaffold = manifest(scaffoldManifest);

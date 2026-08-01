@@ -83,6 +83,7 @@ describe("release source facts", () => {
     });
     editManifest(sources, ownedDependencyManifests[0], (manifest) => {
       manifest.dependencies["@mit-sdg/sync-engine"] = "stale";
+      manifest.dependencies.typescript = "stale";
       delete manifest.devDependencies["@types/node"];
       manifest.devDependencies.typescript = "stale";
       manifest.devDependencies.vite = "stale";
@@ -101,8 +102,25 @@ describe("release source facts", () => {
       ),
     );
     const projected = projectReleaseManifests(sources);
+    expect(
+      JSON.parse(projected.get(ownedDependencyManifests[0]) ?? "").dependencies,
+    ).not.toHaveProperty("typescript");
     for (const [path, source] of projected) sources.set(path, source);
     expect(checkRelease(sources)).toEqual([]);
+  });
+
+  test("reports every malformed owned manifest by path", () => {
+    const sources = fixture();
+    const malformed = [releaseManifestPaths[0], ownedDependencyManifests[0]];
+    for (const path of malformed) sources.set(path, "{");
+
+    const failures = checkRelease(sources);
+    for (const path of malformed) {
+      expect(
+        failures.filter((failure) => failure.startsWith(`${path}: invalid JSON`)),
+      ).toHaveLength(1);
+    }
+    expect(failures).not.toContainEqual(expect.stringContaining("projection failed"));
   });
 
   test.each(["invalid", "1.9007199254740992.0", "1.0.9007199254740992"])(
