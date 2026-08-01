@@ -224,10 +224,17 @@ Cover every admitted case on a public endpoint with an answer or explicit
 complementary case branches. An unconditional sibling overlaps every
 conditional branch that can answer. A
 fault-free request that no branch answers remains pending until its deadline and
-returns `TIMED_OUT`. `applicationDiagnostics(...)` traces lowered response paths
-and reports bounded potential overlaps and cases where no non-dropping total
-answer path is recognized. The analysis leaves complementary reads unproved
-because siblings observe separate state snapshots; opaque policy remains the author's responsibility.
+returns `TIMED_OUT`. `applicationDiagnostics(...)` traces causal `by`
+provenance to attribute an eventual response to its request path. Only a
+response that uses the traced request identifier on a direct
+request-to-response answer path contributes to overlap or coverage proof. An
+intermediate action posture makes the path ineligible for either proof.
+On direct paths, the analysis recognizes canonical `receive(...)` shapes,
+disjoint literal request alternatives, non-dropping `whether` lines, and fresh
+computations. It reports bounded potential overlaps and cases where no
+non-dropping total answer path is recognized. Complementary state reads remain
+unproved because siblings observe separate state snapshots; opaque policy
+remains the author's responsibility.
 Timeout and abort stop the caller's wait without cancelling accepted work. [Endpoint
 settlement](../semantics.md#sibling-paths-and-endpoint-settlement) and
 [cancellation](../semantics.md#cancellation) define the complete behavior.

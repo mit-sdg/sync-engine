@@ -166,20 +166,6 @@ describe("application manifest", () => {
     expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
   });
 
-  test("carries an earlier-stage guard to the eventual response", () => {
-    const Guarded = endpoint("/guarded", ({ item }) =>
-      receive({ item })
-        .where(Looking._get({ item }))
-        .then(Looking.open({ item }).responds({ item }))
-        .then(respond({ item })),
-    );
-    const diagnostics = applicationManifest(
-      assemble({ vocabulary: lookup, composition: { Guarded } }),
-    ).diagnostics;
-
-    expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
-  });
-
   test("recognizes a bare existence branch that subsumes a more specific read", () => {
     const Overlap = endpoint("/overlap", ({ item }) =>
       receive({ item }).then(

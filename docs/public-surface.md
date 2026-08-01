@@ -481,16 +481,22 @@ view-alternative, and former-node sequences retain semantics.
 machine-readable advisory surface. `diagnosticsFail` treats error diagnostics as
 failures by default and can promote warnings; informational diagnostics remain
 advisory.
-Endpoint diagnostics trace response paths through lowered `by` provenance.
+Endpoint diagnostics trace causal `by` provenance to attribute an eventual
+response to its request path. Only a response that uses the traced request
+identifier on a direct request-to-response answer path contributes to overlap
+or coverage proof. An intermediate action posture makes the path ineligible for
+either proof. On direct paths, the analyzer recognizes canonical
+`receive(...)` shapes, disjoint literal request alternatives, non-dropping
+`whether` lines, and fresh computations.
 `ENDPOINT_PATH_OVERLAP` reports bounded potential overlaps such as duplicate
 complete guards, an unconditional answer beside a conditional answer, or a bare
 existence branch that subsumes a more specific read. It does not prove that a
 conditional guard is inhabited. `MISSING_ENDPOINT_FALLBACK`
 means no non-dropping total answer path was recognized; it does not imply that
 an unconditional sibling would be a safe ordered fallback. Coverage analysis
-leaves complementary reads unproved because siblings observe separate state snapshots. The
-analysis is conservative and does not prove arbitrary view, computation,
-validator, action-outcome, or concurrent-state logic.
+leaves complementary state reads unproved because siblings observe separate
+state snapshots. The analysis is conservative and does not prove arbitrary
+view, computation, validator, action-outcome, or concurrent-state logic.
 
 The structural argument consumed by `renderApp` has `title: string`,
 `concepts: ConceptInventoryIR[]`, and `app: AppIR`. The package does not export

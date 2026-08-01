@@ -50,14 +50,16 @@ output shapes.
 
 ### Changed
 
-- Endpoint diagnostics trace a response through its causal provenance to the
-  matching request path and request identifier. The analysis recognizes
-  canonical receive shapes, earlier-stage guards, disjoint literal request
-  alternatives, non-dropping `whether` lines, and fresh computations.
+- Endpoint diagnostics trace causal `by` provenance to attribute an eventual
+  response to its request path. Only a response that uses the traced request
+  identifier on a direct request-to-response answer path contributes to overlap
+  or coverage proof. An intermediate action posture makes the path ineligible
+  for either proof.
 - Overlap diagnostics describe structurally possible intersections as
-  potential overlap. Coverage requires a recognized non-dropping answer path;
-  complementary state reads receive no coverage proof because sibling
-  reactions observe separate state snapshots.
+  potential overlap. On direct paths, the analysis recognizes canonical
+  `receive(...)` shapes, disjoint literal request alternatives, non-dropping
+  `whether` lines, and fresh computations. Complementary state reads remain
+  unproved because sibling reactions observe separate state snapshots.
 
 ### Fixed
 

@@ -43,10 +43,7 @@ const ALWAYS_PRESENT_REQUEST_FIELDS = new Set(["path", "requestId", "correlation
 interface AnswerPath {
   name: string;
   request: PatternIR;
-  operations: WhereOpIR[];
-  mayDrop: boolean;
-  actionFilter: boolean;
-  known: boolean;
+  proof?: { operations: readonly WhereOpIR[]; mayDrop: boolean };
 }
 
 function isResponse(reaction: ReactionIR): boolean {
@@ -102,95 +99,57 @@ function openPattern(pattern: PatternIR): boolean {
   return new Set(names).size === names.length;
 }
 
-function operationAnalysis(stages: readonly ReactionIR[]): {
-  operations: WhereOpIR[];
-  mayDrop: boolean;
-} {
-  const operations: WhereOpIR[] = [];
-  const ancestors: ActionTriggerIR[] = [];
-  let mayDrop = false;
-  for (const stage of stages) {
-    const bound = new Set<string>();
-    const trigger = actionTrigger(stage);
-    if (trigger !== undefined) {
-      for (const value of [...Object.values(trigger.input), ...Object.values(trigger.output)]) {
-        addVariables(value, bound);
-      }
-    }
-    for (const operation of stage.where) {
-      if (
-        operation.op === "earlier" &&
-        ancestors.some((ancestor) => structurallyEqual(operation.when, ancestor))
-      ) {
-        for (const value of [
-          ...Object.values(operation.when.input),
-          ...Object.values(operation.when.output),
-        ]) {
-          addVariables(value, bound);
-        }
-        continue;
-      }
-      operations.push(operation);
-      switch (operation.op) {
-        case "whether":
-          for (const value of Object.values(operation.out)) addVariables(value, bound);
-          break;
-        case "compute":
-          if (bound.has(operation.out)) mayDrop = true;
-          bound.add(operation.out);
-          break;
-        case "find":
-          mayDrop = true;
-          for (const value of Object.values(operation.out)) addVariables(value, bound);
-          break;
-        case "earlier":
-          mayDrop = true;
-          for (const value of [
-            ...Object.values(operation.when.input),
-            ...Object.values(operation.when.output),
-          ]) {
-            addVariables(value, bound);
-          }
-          break;
-        case "custom":
-          if (operation.out.some((name) => bound.has(name))) mayDrop = true;
-          for (const name of operation.out) bound.add(name);
-          break;
-        case "holds":
-        case "no":
-          mayDrop = true;
-      }
-    }
-    if (trigger !== undefined) ancestors.push(trigger);
+function operationsMayDrop(trigger: ActionTriggerIR, operations: readonly WhereOpIR[]): boolean {
+  const bound = new Set<string>();
+  for (const value of [...Object.values(trigger.input), ...Object.values(trigger.output)]) {
+    addVariables(value, bound);
   }
-  return { operations, mayDrop };
+  for (const operation of operations) {
+    switch (operation.op) {
+      case "whether":
+        for (const value of Object.values(operation.out)) addVariables(value, bound);
+        break;
+      case "compute":
+        if (bound.has(operation.out)) return true;
+        bound.add(operation.out);
+        break;
+      case "custom":
+        if (operation.out.some((name) => bound.has(name))) return true;
+        for (const name of operation.out) bound.add(name);
+        break;
+      case "find":
+      case "earlier":
+      case "holds":
+      case "no":
+        return true;
+    }
+  }
+  return false;
 }
 
 function traceAnswer(answer: ReactionIR, reactions: ReadonlyMap<string, ReactionIR>): AnswerPath {
-  const stages: ReactionIR[] = [];
   const seen = new Set<string>();
   let current: ReactionIR | undefined = answer;
   let root: ActionTriggerIR | undefined;
-  let known = true;
+  let proofEligible = true;
 
   while (current !== undefined) {
     if (seen.has(current.name)) {
-      known = false;
+      proofEligible = false;
       break;
     }
     seen.add(current.name);
-    stages.unshift(current);
     const trigger = actionTrigger(current);
     if (trigger === undefined) {
-      known = false;
+      proofEligible = false;
       break;
     }
     if (isRequestTrigger(trigger)) {
       root = trigger;
       break;
     }
+    proofEligible = false;
     if (trigger.by === undefined) {
-      known = false;
       break;
     }
     const predecessor = reactions.get(trigger.by);
@@ -200,24 +159,18 @@ function traceAnswer(answer: ReactionIR, reactions: ReadonlyMap<string, Reaction
         ({ concept, action }) => concept === trigger.concept && action === trigger.action,
       )
     ) {
-      known = false;
       break;
     }
     current = predecessor;
   }
 
-  if (root === undefined || !responseCorrelates(answer, root)) known = false;
-  const analyzed = operationAnalysis(stages);
+  if (root === undefined || !responseCorrelates(answer, root)) proofEligible = false;
   return {
     name: answer.name,
     request: root?.input ?? {},
-    operations: analyzed.operations,
-    mayDrop: analyzed.mayDrop,
-    actionFilter: stages.some((stage) => {
-      const trigger = actionTrigger(stage);
-      return trigger !== undefined && !isRequestTrigger(trigger);
-    }),
-    known,
+    ...(proofEligible && root !== undefined
+      ? { proof: { operations: answer.where, mayDrop: operationsMayDrop(root, answer.where) } }
+      : {}),
   };
 }
 
@@ -384,9 +337,7 @@ function requestIsTotal(pattern: PatternIR, required: ReadonlySet<string>): bool
 }
 
 function totalPath(path: AnswerPath, required: ReadonlySet<string>): boolean {
-  return (
-    path.known && requestIsTotal(path.request, required) && !path.mayDrop && !path.actionFilter
-  );
+  return path.proof !== undefined && requestIsTotal(path.request, required) && !path.proof.mayDrop;
 }
 
 function analyzableValue(value: unknown): boolean {
@@ -407,24 +358,26 @@ function analyzableValue(value: unknown): boolean {
 }
 
 function sameGuard(left: AnswerPath, right: AnswerPath): boolean {
+  const leftProof = left.proof;
+  const rightProof = right.proof;
   return (
-    !left.actionFilter &&
-    !right.actionFilter &&
-    !left.operations.some(({ op }) => op === "custom") &&
-    !right.operations.some(({ op }) => op === "custom") &&
+    leftProof !== undefined &&
+    rightProof !== undefined &&
+    !leftProof.operations.some(({ op }) => op === "custom") &&
+    !rightProof.operations.some(({ op }) => op === "custom") &&
     analyzableValue(left.request) &&
-    left.operations.every(analyzableValue) &&
-    right.operations.every(analyzableValue) &&
+    leftProof.operations.every(analyzableValue) &&
+    rightProof.operations.every(analyzableValue) &&
     structurallyEqual(requestGuard(left.request), requestGuard(right.request)) &&
-    structurallyEqual(left.operations, right.operations)
+    structurallyEqual(leftProof.operations, rightProof.operations)
   );
 }
 
 type FindOpIR = Extract<WhereOpIR, { op: "find" | "whether" }> & { op: "find" };
 
 function singleFind(path: AnswerPath): FindOpIR | undefined {
-  if (!path.known || path.actionFilter || path.operations.length !== 1) return undefined;
-  const condition = path.operations[0];
+  if (path.proof === undefined || path.proof.operations.length !== 1) return undefined;
+  const condition = path.proof.operations[0];
   return condition.op === "find" ? (condition as FindOpIR) : undefined;
 }
 
@@ -433,7 +386,11 @@ function overlapReason(
   right: AnswerPath,
   required: ReadonlySet<string>,
 ): string | undefined {
-  if (!left.known || !right.known || requestRelation(left.request, right.request) !== "overlaps") {
+  if (
+    left.proof === undefined ||
+    right.proof === undefined ||
+    requestRelation(left.request, right.request) !== "overlaps"
+  ) {
     return undefined;
   }
   if (totalPath(left, required) || totalPath(right, required)) {

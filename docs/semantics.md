@@ -422,14 +422,20 @@ sibling is not ordered fall-through and overlaps every conditional sibling that
 can answer.
 [Cancellation](#cancellation) defines what timeout and abort do with a pending
 call. Runtime execution does not enforce branch disjointness or endpoint
-coverage. `applicationDiagnostics(...)` traces lowered response paths and can
-identify a bounded set of potential overlaps, distinguish disjoint literal receives,
-and warn when it recognizes no non-dropping total answer path. Complementary
-reads do not prove static coverage because siblings evaluate independently and
-do not share a state snapshot. The analyzer does not prove arbitrary view,
-computation, validator, action-outcome, or concurrent-state logic. Warnings
-remain advisory unless a repository runs `sync-engine check --fail-on-warnings`
-with an application config.
+coverage. `applicationDiagnostics(...)` traces causal `by` provenance to
+attribute an eventual response to its request path. Only a response that uses
+the traced request identifier on a direct request-to-response answer path
+contributes to overlap or coverage proof. An intermediate action posture makes
+the path ineligible for either proof.
+On direct paths, the analyzer recognizes canonical `receive(...)` shapes,
+disjoint literal request alternatives, non-dropping `whether` lines, and fresh
+computations. It can report a bounded set of potential overlaps and warn when
+it recognizes no non-dropping total answer path. Complementary state reads
+remain unproved because siblings evaluate independently and do not share a
+state snapshot. The analyzer does not prove arbitrary view, computation,
+validator, action-outcome, or concurrent-state logic. Warnings remain advisory
+unless a repository runs `sync-engine check --fail-on-warnings` with an
+application config.
 
 ## Boundary, gateway, and client
 
