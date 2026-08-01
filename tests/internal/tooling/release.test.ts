@@ -5,6 +5,7 @@ import {
   checkRelease,
   ownedDependencyManifests,
   projectReleaseManifests,
+  releaseManifestPaths,
   releaseSourcePaths,
 } from "@scripts/release";
 
@@ -75,6 +76,11 @@ describe("release source facts", () => {
 
   test("projects root facts into owned manifests", () => {
     const sources = fixture();
+    editManifest(sources, releaseManifestPaths[0], (manifest) => {
+      manifest.version = "stale";
+      manifest.engines.node = "stale";
+      manifest.peerDependencies["@mit-sdg/sync-engine"] = "stale";
+    });
     editManifest(sources, ownedDependencyManifests[0], (manifest) => {
       manifest.dependencies["@mit-sdg/sync-engine"] = "stale";
       delete manifest.devDependencies["@types/node"];
@@ -87,8 +93,15 @@ describe("release source facts", () => {
       manifest.packageManager = "stale";
     });
 
+    expect(checkRelease(sources)).toEqual(
+      expect.arrayContaining(
+        [releaseManifestPaths[0], ownedDependencyManifests[0]].map(
+          (path) => `${path}: release-owned facts are stale; run bun run release:update`,
+        ),
+      ),
+    );
     const projected = projectReleaseManifests(sources);
-    sources.set(ownedDependencyManifests[0], projected.get(ownedDependencyManifests[0]) ?? "");
+    for (const [path, source] of projected) sources.set(path, source);
     expect(checkRelease(sources)).toEqual([]);
   });
 

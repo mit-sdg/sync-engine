@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { activeWorkflowSource, externalWorkflowActions, workflowUses } from "./workflow.ts";
 import { workspaceById, workspaceCatalog, type Workspace } from "./workspaces.ts";
 
@@ -27,8 +28,6 @@ export const releaseManifestPaths = [
   ...ownedDependencyManifests,
 ] as const;
 const bunProjectManifests = [...exampleManifests, ...bunFixtureManifests] as const;
-const nodeProjectManifests = [...bunProjectManifests, ...nodeFixtureManifests] as const;
-const typescriptManifests = nodeProjectManifests;
 const scaffoldManifest = "src/command/scaffold/package.json";
 const sharedDevelopmentDependencies = [
   ["@types/node", [...exampleManifests, "tests/package/multi-instance/backend/package.json"]],
@@ -383,84 +382,24 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     if (project?.name !== workspace.packageName) {
       failures.push(`${workspace.packageManifest}: name must be ${workspace.packageName}`);
     }
-    if (project?.version !== version) {
-      failures.push(`${workspace.packageManifest}: version must equal ${version}`);
-    }
     if (workspace.id === coreWorkspace.id) continue;
     if (object(project?.publishConfig)?.tag !== "latest") {
       failures.push(`${workspace.packageManifest}: publishConfig.tag must be "latest"`);
     }
-    if (object(project?.engines)?.node !== facts.node) {
-      failures.push(`${workspace.packageManifest}: engines.node must be ${facts.node}`);
-    }
-    for (const peerId of workspace.peerWorkspaceIds) {
-      const peer = workspaceById(peerId);
-      if (
-        typeof version !== "string" ||
-        object(project?.peerDependencies)?.[peer.packageName] !== compatiblePeer(version)
-      ) {
-        failures.push(
-          `${workspace.packageManifest}: peerDependencies.${peer.packageName} must equal ^${version}`,
-        );
-      }
-    }
   }
 
-  if (typeof version === "string") {
-    for (const path of ownedDependencyManifests) {
-      const dependencies = object(manifest(path)?.dependencies);
-      if (dependencies?.[coreWorkspace.packageName] !== version) {
-        failures.push(`${path}: ${coreWorkspace.packageName} must equal ${version}`);
-      }
-      for (const workspace of publishedWorkspaces) {
-        if (workspace.id === coreWorkspace.id || !(workspace.packageName in (dependencies ?? {}))) {
-          continue;
-        }
-        if (dependencies?.[workspace.packageName] !== version) {
-          failures.push(`${path}: ${workspace.packageName} must equal ${version}`);
-        }
+  try {
+    for (const [path, expectedSource] of projectReleaseManifests(sources)) {
+      const actual = manifest(path);
+      const expected = object(JSON.parse(expectedSource));
+      if (actual !== undefined && expected !== undefined && !isDeepStrictEqual(actual, expected)) {
+        failures.push(`${path}: release-owned facts are stale; run bun run release:update`);
       }
     }
-  }
-
-  for (const path of nodeProjectManifests) {
-    const value = object(manifest(path)?.engines)?.node;
-    if (value !== facts.node) {
-      failures.push(`${path}: engines.node must be ${facts.node}`);
-    }
-  }
-  for (const path of bunProjectManifests) {
-    const project = manifest(path);
-    const value = object(project?.engines)?.bun;
-    if (value !== facts.bun) {
-      failures.push(`${path}: engines.bun must be ${facts.bun}`);
-    }
-    if (project?.packageManager !== facts.packageManager) {
-      failures.push(`${path}: packageManager must be ${facts.packageManager}`);
-    }
-  }
-  for (const path of typescriptManifests) {
-    const project = manifest(path);
-    const value =
-      object(project?.dependencies)?.typescript ?? object(project?.devDependencies)?.typescript;
-    if (value !== facts.typescript) {
-      failures.push(`${path}: TypeScript range must be ${facts.typescript}`);
-    }
-  }
-  const rootDevelopment = object(root?.devDependencies);
-  for (const [dependency, paths] of sharedDevelopmentDependencies) {
-    for (const path of paths) {
-      const development = object(manifest(path)?.devDependencies);
-      if (development?.[dependency] !== rootDevelopment?.[dependency]) {
-        failures.push(`${path}: ${dependency} must match package.json`);
-      }
-    }
-  }
-  for (const path of exampleManifests) {
-    const project = manifest(path);
-    if (object(project?.overrides)?.vite !== rootDevelopment?.vite) {
-      failures.push(`${path}: overrides.vite must match package.json devDependencies.vite`);
-    }
+  } catch (error) {
+    failures.push(
+      `release manifests: projection failed (${error instanceof Error ? error.message : String(error)})`,
+    );
   }
 
   const scaffold = manifest(scaffoldManifest);
