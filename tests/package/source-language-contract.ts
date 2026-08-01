@@ -64,6 +64,10 @@ class QueriedConcept {
     return key === "present" ? [{ value: key }] : [];
   }
 
+  _numberKey(_: { key: number }): LookupRow[] {
+    return [];
+  }
+
   _nested(_: { filter: { key: string; limit: number } }): LookupRow[] {
     return [];
   }
@@ -190,6 +194,17 @@ count(Looking._answer, {}, countResult);
 count(Looking._answer, { key: "present", extra: true }, countResult);
 // @ts-expect-error Count applies deep exactness to query inputs.
 count(Looking._nested, { filter: { key: "present", limit: 1, extra: true } }, countResult);
+const chooseQuery = true as boolean;
+const disjointCountQuery = chooseQuery ? Looking._answer : Looking._nested;
+// @ts-expect-error A union query cannot be counted with only its first input contract.
+count(disjointCountQuery, { key: "present" }, countResult);
+// @ts-expect-error A union query cannot be counted with only its second input contract.
+count(disjointCountQuery, { filter: { key: "present", limit: 1 } }, countResult);
+const incompatibleCountQuery = chooseQuery ? Looking._answer : Looking._numberKey;
+// @ts-expect-error A union query with incompatible input slots has no safe string input.
+count(incompatibleCountQuery, { key: "present" }, countResult);
+// @ts-expect-error A union query with incompatible input slots has no safe numeric input.
+count(incompatibleCountQuery, { key: 1 }, countResult);
 
 const comparedLookup = view("a compared lookup", (inputs, _outputs, _bindings) => {
   const key = inputs("key");
@@ -322,6 +337,23 @@ const answerRows = former("all answer rows", (_inputs, bindings) => {
     distinct: each(Listing._answers({}).is({ value })).distinct(value),
   });
 });
+
+const widenedFirst: Former<Record<string, never>, number | null> = former(
+  "the first widened answer",
+  (_inputs, bindings) => {
+    const value: symbol = bindings("value");
+    return each(Listing._answers({}).is({ value })).first(value);
+  },
+);
+const widenedDistinct: Former<Record<string, never>, number[]> = former(
+  "the distinct widened answers",
+  (_inputs, bindings) => {
+    const value: symbol = bindings("value");
+    return each(Listing._answers({}).is({ value })).distinct(value);
+  },
+);
+void widenedFirst;
+void widenedDistinct;
 
 const unionCard = former("a union-valued card", (_inputs, bindings) => {
   const value = bindings("value");

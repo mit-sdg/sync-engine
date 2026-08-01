@@ -194,7 +194,9 @@ export type ResolveExpression<Expression, Facts> =
         ? Array<ResolveExpression<Item, Facts>>
         : Expression extends object
           ? { -readonly [Key in keyof Expression]: ResolveExpression<Expression[Key], Facts> }
-          : Expression;
+          : Expression extends symbol
+            ? unknown
+            : Expression;
 
 export type FormerRoot = "record" | "selection";
 

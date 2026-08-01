@@ -4006,7 +4006,7 @@ export interface ValueExpression<Value> {
 }
 export type ResolveExpression<Expression, Facts> = Expression extends ValueExpression<infer Value> ? Value : Expression extends LogicVariable ? ValueOfVariable<Facts, Expression> : Expression extends readonly (infer Item)[] ? Array<ResolveExpression<Item, Facts>> : Expression extends object ? {
     -readonly [Key in keyof Expression]: ResolveExpression<Expression[Key], Facts>;
-} : Expression;
+} : Expression extends symbol ? unknown : Expression;
 export type FormerRoot = "record" | "selection";
 declare const FormerNodeType: unique symbol;
 /** Phantom expression, blank shape, facts, and root kind carried by a former node. */
@@ -4194,8 +4194,8 @@ export declare function isCountOp(value: unknown): value is CountOp;
  * Bind the number of rows a query matches with `count(query, in, out)`.
  * Counting is available inside views, not in a reaction's `.where(...)`.
  */
-type QueryInput<Query> = [Query] extends [never] ? Mapping : Query extends (input: infer Input, ...args: never[]) => unknown ? [Input] extends [object] ? Input : Mapping : Mapping;
-export declare function count<Query extends InstrumentedQuery | ((...args: never[]) => unknown), const Input extends InputPattern<QueryInput<Query>>, Out extends symbol>(query: Query, input: ExactPattern<QueryInput<Query>, Input>, out: Out): CountOp<FactsFromPattern<QueryInput<Query>, Input> | FactFromVariable<number, Out>>;
+type QueryInput<Query> = [Query] extends [never] ? Mapping : [Query] extends [(input: infer Input, ...args: never[]) => unknown] ? [Input] extends [object] ? Input : Mapping : Mapping;
+export declare function count<Query extends InstrumentedQuery | ((...args: never[]) => unknown), const Input extends InputPattern<QueryInput<NoInfer<Query>>>, Out extends symbol>(query: Query, input: ExactPattern<QueryInput<NoInfer<Query>>, Input>, out: Out): CountOp<FactsFromPattern<QueryInput<NoInfer<Query>>, Input> | FactFromVariable<number, Out>>;
 /**
  * The view shape invariants: empty outputs mean `holds()`; named outputs mean
  * a row promise. Enforced at definition, registration, and IR import.

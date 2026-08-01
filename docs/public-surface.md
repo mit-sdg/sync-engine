@@ -71,6 +71,11 @@ call shapes:
 | `.first(value)`    | Value from the first selected row after optional arrangement | `null`          |
 | `.distinct(value)` | First-seen distinct values                                   | `[]`            |
 
+`count` requires the query's complete input mapping and rejects undeclared
+fields recursively. If the query reference has a union type, an input valid for
+only one union member is rejected; the input argument does not narrow the query
+union.
+
 Concept entries accepted by `vocabulary` are either a concept class or
 `{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals? }`.
 `QueryPromise` is `"one" | "optional" | "many"`.
@@ -84,7 +89,10 @@ as in `inputs("name")`, returns one logic variable; several names, as in
 TypeScript infer view inputs, view outputs, former inputs, and complete former
 results from the concept signatures and formed tree. Authors may instead
 annotate an exported declaration with `RelationView<Input, Output>` or
-`Former<Input, Result>`; known inferred fields must agree with that contract.
+`Former<Input, Result>`; known inferred fields must agree with that contract,
+and the contract supplies otherwise unconstrained result leaves. A value
+widened to plain `symbol` before `.first(...)` or `.distinct(...)` leaves that
+fold's value type unconstrained.
 
 For worked examples, see the [reactions guide](./guide/reactions.md) and
 [views and formers guide](./guide/views-and-formers.md). The normative matching,
