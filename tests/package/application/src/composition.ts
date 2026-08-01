@@ -16,14 +16,14 @@ export const RoomStartsWithInvestigation = reaction(({ room }) =>
   ),
 );
 
-export const roomDashboard = former(
-  "the operations room (room)",
-  ({ room }, { name, mitigation }) =>
-    where(
-      Rooming._get({ room }).is({ name }),
-      Mitigating._current({ room }).is({ mitigation }),
-    ).form({ room, name, mitigation }),
-);
+export const roomDashboard = former("the operations room (room)", (inputs, bindings) => {
+  const room = inputs("room");
+  const { name, mitigation } = bindings("name", "mitigation");
+  return where(
+    Rooming._get({ room }).is({ name }),
+    Mitigating._current({ room }).is({ mitigation }),
+  ).form({ room, name, mitigation });
+});
 
 export const OpenRoom = endpoint("/rooms/open", ({ name, room }) =>
   receive({ name }).then(Rooming.open({ name }).responds({ room })).then(respond({ room })),

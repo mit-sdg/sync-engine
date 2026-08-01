@@ -75,8 +75,8 @@ is normalized and cached once, equivalent reads share that normalized promise,
 and rejection evicts the entry. A thenable that never settles remains cached
 until invalidation.
 
-A reaction chain is not a transaction. If an early consequence changes state
-and a later consequence refuses or faults, the earlier change remains. Put
+Each action in a reaction chain commits independently. If an early consequence
+changes state and a later consequence refuses or faults, the earlier change remains. Put
 uniqueness, capacity, first-writer, and answer-once decisions inside the action
 that owns the relevant state.
 
@@ -124,10 +124,10 @@ The HTTP client implements `timeoutMs` by aborting its local Fetch operation. It
 accepts positive finite integers through `2_147_483_647` milliseconds; a larger
 or otherwise invalid value returns core `INVALID_INPUT` before Fetch. This
 transport-local ceiling is separate from gateway and application defaults and
-configured maximum request durations. The HTTP protocol adds no cancellation
+configured maximum request durations. The HTTP protocol has no cancellation
 message for accepted server work. The server handler passes the host-provided
-`Request.signal` to its invoker, but that signal still ends waiting rather than
-rolling back concept actions.
+`Request.signal` to its invoker, where the signal ends waiting while accepted
+concept work may continue.
 
 Tracking HTTP promises is insufficient because a timed-out request can outlive
 its transport wait. A host can stop accepting new requests and apply a hard
@@ -169,7 +169,7 @@ and invalid domain error values are retained as `invalid-output` or
 `invalid-domain-error` integrity evidence and become opaque `INTERNAL_ERROR`.
 A validator throw is also reported to `rawFaultReporter` when the application
 configures that privileged channel. Output and domain-error evidence retains the
-`ValidatorFault` class, not the thrown value; an input-validator throw returns
+`ValidatorFault` class only; an input-validator throw returns
 `INVALID_INPUT` before the boundary ask. Validators are explicit application
 contracts; the engine does not infer them from generated types or optional,
 uninterpreted concept State notation.
@@ -185,8 +185,8 @@ Manual engines under the `advanced` subpath retain explicit local constructs
 without acquiring an application boundary override.
 
 Ordinary assembly accepts an advanced `Refuse` marker only when the action's
-refusal contract declares its code. An undeclared code is an action fault, not
-a dynamically added domain error. Manual `createEngine(...)` remains open to
+refusal contract declares its code. An undeclared code is an action fault.
+Manual `createEngine(...)` remains open to
 undeclared `Refuse` codes.
 
 Endpoint branches have no priority or exclusivity. If more than one branch
@@ -207,7 +207,8 @@ those boundaries with separate state and evidence files.
 The engine does not restore pending requests, interrupted reaction paths, or
 prior firings after restart. Persist concept state in the concept
 implementation, and design application-specific recovery. An occurrence file
-can support audit or diagnosis; it is not a recovery log.
+can support audit or diagnosis. Recovery must use concept-owned state and an
+application-specific procedure.
 
 `FileLogSink` performs append operations but provides no locking, shared-writer,
 flush, or network-filesystem durability contract. Use a host-owned sink with
@@ -273,7 +274,7 @@ multiple requests. Set `maxResponseBytes` when the client must bound response
 buffering; an exceeded declared or streamed byte count returns
 `RESPONSE_TOO_LARGE`. The default leaves response size uncapped.
 
-Every handler is a Fetch adapter, not a complete server. The host owns CORS,
+Every handler adapts Fetch requests. The host owns CORS,
 connection and request-rate limits, denial-of-service controls, TLS termination,
 HSTS, trusted-proxy and reverse-proxy policy, deployment health, autoscaling,
 listener lifecycle, and authentication integration. Application concepts own
@@ -294,7 +295,7 @@ failure can occur after the body changed state. The engine does not retry the
 append or roll back concept state. Custom sink availability and recovery are
 host responsibilities.
 
-Sink-entry isolation is structural rather than universal. Arrays and plain
+Sink-entry isolation covers structural data. Arrays and plain
 records are copied and frozen; invocation identities are replaced by frozen
 name-bearing representatives; and `Date` values are copied. Opaque leaves such
 as class instances, `Map`, `Set`, and function values retain their runtime

@@ -1,6 +1,6 @@
 import { createClient, createLocalClient } from "@mit-sdg/sync-engine/client";
 import type { ClientError, ClientTransport } from "@mit-sdg/sync-engine/client";
-import { assemble, Logging } from "@mit-sdg/sync-engine/assembly";
+import { assemble, conceptSet, Logging, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import type {
   ActionRefusal,
   AssemblyOptions,
@@ -46,6 +46,14 @@ class DirectConcept {
     return [];
   }
 }
+
+const directSet = conceptSet(
+  { Direct: registerConcept({ class: DirectConcept, spec: "# Concept" }) },
+  { normalize: ({ value }: { value: string }) => value.trim() },
+);
+directSet.computations.normalize({ value: "packed" });
+// @ts-expect-error Packed declarations preserve computation input signatures.
+directSet.computations.normalize({ value: false });
 
 const directVocabulary = vocabulary({ concepts: { Direct: DirectConcept }, computations: {} });
 const occurrenceEntries: LogEntry[] = [];

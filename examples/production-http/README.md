@@ -39,12 +39,12 @@ the projected duplicate-name conflict, and end the session.
   production handler forms.
 - Production configuration rejects an HTTP public origin.
 - The pinned module contains the logical wire and its projected HTTP form.
-- `src/client.ts` binds callers to that projected form rather than the logical
-  cookie fields removed by the HTTP floor.
+- `src/client.ts` binds callers to the projected form, which excludes the
+  logical cookie fields removed by the HTTP floor.
 
-The Fetch handlers are not complete servers. CORS, TLS termination, HSTS,
-trusted proxies, reverse-proxy policy, connection and rate limits, and the
-application's authentication design remain host or application concerns.
+The Fetch handlers adapt requests. The host or application supplies any required
+CORS, TLS termination, HSTS, proxy policy, connection limits, rate limits, and
+authentication.
 
 ## Source map
 

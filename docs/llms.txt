@@ -53,9 +53,11 @@ The stable 1.x release line is supported. Pin an exact package version and read 
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
 - Keep concept implementations independent of peer concepts and application composition.
-- Treat generated TypeScript as a caller contract, not runtime validation.
+- Treat generated TypeScript as a caller contract. Add explicit validators for
+  runtime values.
 - Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.
-- Change source declarations rather than generated artifacts, then regenerate and review the diff.
+- Change source declarations, regenerate artifacts, and review the generated
+  diff.
 - Use the reference pages for guarantees. Guides, examples, and generated read-back demonstrate particular constructions.
 
 ## Repository work

@@ -375,13 +375,16 @@ describe("registration checks", () => {
 
 // ── Views are relations ────────────────────────────────────────────────────
 
-const authorOf = view("the author of (post)", ({ post }, { author }, _bindings) =>
-  where(lineOf({ query: Posting._getPost }, { post }).is({ author })),
-).optional();
+const authorOf = view("the author of (post)", (inputs, outputs, _bindings) => {
+  const post = inputs("post");
+  const author = outputs("author");
+  return where(lineOf({ query: Posting._getPost }, { post }).is({ author }));
+}).optional();
 
-const isUnlocked = view("(post) is unlocked", ({ post }, _outputs, _bindings) =>
-  where(lineOf({ query: Posting._getPost }, { post }).is({ locked: false })),
-).holds();
+const isUnlocked = view("(post) is unlocked", (inputs, _outputs, _bindings) => {
+  const post = inputs("post");
+  return where(lineOf({ query: Posting._getPost }, { post }).is({ locked: false }));
+}).holds();
 
 describe("views as relations", () => {
   test("a view line is indistinguishable from a concept query at the use-site", async () => {
@@ -422,9 +425,11 @@ describe("views as relations", () => {
   });
 
   test("runtime enforcement names a view whose answer violates its promise", async () => {
-    const overclaims = view("the only post of (author)", ({ author }, { post }, _bindings) =>
-      where(lineOf({ query: Posting._byAuthor }, { author }).is({ post })),
-    ).one();
+    const overclaims = view("the only post of (author)", (inputs, outputs, _bindings) => {
+      const author = inputs("author");
+      const post = outputs("post");
+      return where(lineOf({ query: Posting._byAuthor }, { author }).is({ post }));
+    }).one();
     const { engine, Posting: posting } = build();
     await posting.create({ post: "p1", author: "priya" });
     await posting.create({ post: "p2", author: "priya" });
@@ -440,20 +445,29 @@ describe("views as relations", () => {
 
   test("a view output must be bound by the view body", () => {
     expect(() =>
-      view("the author of (post)", ({ post }, { writer }, { author }) => [
-        where(lineOf({ query: Posting._getPost }, { post }).is({ author: writer })),
-        where(lineOf({ query: Posting._getPost }, { post }).is({ author })),
-      ]).optional(),
+      view("the author of (post)", (inputs, outputs, bindings) => {
+        const post = inputs("post");
+        const writer = outputs("writer");
+        const author = bindings("author");
+        return [
+          where(lineOf({ query: Posting._getPost }, { post }).is({ author: writer })),
+          where(lineOf({ query: Posting._getPost }, { post }).is({ author })),
+        ];
+      }).optional(),
     ).toThrow('an alternative never binds output binding "writer"');
     expect(() =>
-      view("the author of (post)", ({ post }, { author: _author }, { post: repeated }) =>
-        where(Posting._getPost({ post }).is({ author: repeated })),
-      ).optional(),
+      view("the author of (post)", (inputs, outputs, bindings) => {
+        const post = inputs("post");
+        const _author = outputs("author");
+        const repeated = bindings("post");
+        return where(Posting._getPost({ post }).is({ author: repeated }));
+      }).optional(),
     ).toThrow('"post" is declared in both the input and free binding bags');
     expect(() =>
-      view("the author of (post)", ({ post }, _outputs, _bindings) =>
-        where(Posting._getPost({ post })),
-      ).optional(),
+      view("the author of (post)", (inputs, _outputs, _bindings) => {
+        const post = inputs("post");
+        return where(Posting._getPost({ post }));
+      }).optional(),
     ).toThrow("optional() requires at least one output binding");
   });
 
@@ -483,8 +497,8 @@ describe("views as relations", () => {
       engine.readEnv(),
     );
     expect(held.length).toBe(1);
-    expect(() => isUnlocked({ posts: post })).toThrow('"posts" is not an input');
-    expect(() => isUnlocked({})).toThrow('required input "post" is missing');
+    expect(() => isUnlocked({ posts: post } as never)).toThrow('"posts" is not an input');
+    expect(() => isUnlocked({} as never)).toThrow('required input "post" is missing');
   });
 
   test("a view with outputs declares its promise — there is no default", () => {
@@ -546,15 +560,23 @@ describe("former result shapes", () => {
     const { engine, Posting: posting } = build();
     await posting.create({ post: "p1", author: "priya" });
 
-    const face = former("the face of (post)", ({ post }, { author }) =>
-      where(lineOf({ query: Posting._getPost }, { post }).is({ author })).form({ author }),
-    );
-    const maybeFace = former("the possible face of (post)", ({ post }, { author }) =>
-      where(whether(lineOf({ query: Posting._getPost }, { post }).is({ author }))).form({ author }),
-    );
-    const presentFace = former("the present face of (post)", ({ post }, { author }) =>
-      where(lineOf({ query: Posting._getPost }, { post }).is({ author })).form({ author }),
-    ).optional();
+    const face = former("the face of (post)", (inputs, bindings) => {
+      const post = inputs("post");
+      const author = bindings("author");
+      return where(lineOf({ query: Posting._getPost }, { post }).is({ author })).form({ author });
+    });
+    const maybeFace = former("the possible face of (post)", (inputs, bindings) => {
+      const post = inputs("post");
+      const author = bindings("author");
+      return where(whether(lineOf({ query: Posting._getPost }, { post }).is({ author }))).form({
+        author,
+      });
+    });
+    const presentFace = former("the present face of (post)", (inputs, bindings) => {
+      const post = inputs("post");
+      const author = bindings("author");
+      return where(lineOf({ query: Posting._getPost }, { post }).is({ author })).form({ author });
+    }).optional();
 
     expect(await engine.form(face({ post: "p1" }))).toEqual({ author: "priya" });
     await expect(engine.form(face({ post: "p9" }))).rejects.toThrow("FORMER_NONE");
@@ -569,9 +591,11 @@ describe("former result shapes", () => {
 
   test("folds reject sources that promise at most one row", async () => {
     const { engine } = build();
-    const possibleAuthor = former("the possible author of (post)", ({ post }, { author }) =>
-      each(lineOf({ query: Posting._getPost }, { post }).is({ author })).first(author),
-    );
+    const possibleAuthor = former("the possible author of (post)", (inputs, bindings) => {
+      const post = inputs("post");
+      const author = bindings("author");
+      return each(lineOf({ query: Posting._getPost }, { post }).is({ author })).first(author);
+    });
     await expect(engine.form(possibleAuthor({ post: "p1" }))).rejects.toThrow(
       "source already promises at most one row",
     );
@@ -579,9 +603,11 @@ describe("former result shapes", () => {
 
   test("a formed record rejects a source that may match many rows", async () => {
     const { engine } = build();
-    const ambiguous = former("an ambiguous author (author)", ({ author }, { post }) =>
-      where(Posting._byAuthor({ author }).is({ post })).form({ post }),
-    );
+    const ambiguous = former("an ambiguous author (author)", (inputs, bindings) => {
+      const author = inputs("author");
+      const post = bindings("post");
+      return where(Posting._byAuthor({ author }).is({ post })).form({ post });
+    });
     await expect(engine.form(ambiguous({ author: "priya" }))).rejects.toThrow(
       "this record's where may match many rows",
     );
@@ -605,11 +631,13 @@ describe("former result shapes", () => {
   test("a query selection schedules orderless refinements, including a derived view", async () => {
     const { engine, Posting: posting } = build();
     await posting.create({ post: "p1", author: "priya" });
-    const selected = former("the posts selected for (wanted)", ({ wanted }, { post, author }) =>
-      each(lineOf({ query: Posting._byAuthor }, { author: wanted }).is({ post }))
+    const selected = former("the posts selected for (wanted)", (inputs, bindings) => {
+      const wanted = inputs("wanted");
+      const { post, author } = bindings("post", "author");
+      return each(lineOf({ query: Posting._byAuthor }, { author: wanted }).is({ post }))
         .where(Posting._byAuthor({ author }).is({ post }), authorOf({ post }).is({ author }))
-        .form({ post, author }),
-    );
+        .form({ post, author });
+    });
 
     expect(await engine.form(selected({ wanted: "priya" }))).toEqual([
       { post: "p1", author: "priya" },
@@ -622,12 +650,16 @@ describe("former result shapes", () => {
   });
 
   test("each captures a view that promises many rows", async () => {
-    const postsBy = view("posts by (author)", ({ author }, { post }, _bindings) =>
-      where(Posting._byAuthor({ author }).is({ post })),
-    ).many();
-    const posts = former("the posts by (author)", ({ author }, { post }) =>
-      each(postsBy({ author }).is({ post })).form({ post }),
-    );
+    const postsBy = view("posts by (author)", (inputs, outputs, _bindings) => {
+      const author = inputs("author");
+      const post = outputs("post");
+      return where(Posting._byAuthor({ author }).is({ post }));
+    }).many();
+    const posts = former("the posts by (author)", (inputs, bindings) => {
+      const author = inputs("author");
+      const post = bindings("post");
+      return each(postsBy({ author }).is({ post })).form({ post });
+    });
     const { engine, Posting: posting } = build();
     await posting.create({ post: "p1", author: "priya" });
     await posting.create({ post: "p2", author: "priya" });

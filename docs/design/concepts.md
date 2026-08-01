@@ -1,10 +1,9 @@
 # What a concept is
 
-A concept is a unit of behavior that serves one purpose, owns the state that
-behavior needs, and can be understood without reading any other concept. It is
-not a noun in the domain, a record in a database, or a module in a package: it
-is a mechanism that someone could recognize and use in more than one
-application.
+A concept is a recognizable mechanism that serves one purpose, owns the state
+that behavior needs, and can be understood without reading any other concept.
+Domain nouns, database records, and package modules define different kinds of
+boundaries.
 
 Gathering, shipped in the [Reading Circle
 example](../../examples/reading-circle/README.md), runs through this page. It is
@@ -25,13 +24,12 @@ _Source: [`examples/reading-circle/src/concepts/gathering/spec.md`](../../exampl
 ## Purpose
 
 Let a host create a named gathering and let people join or leave it, so
-belonging is deliberate and visible rather than inferred from activity.
+belonging is an explicit, visible state.
 ```
 
-Two properties make this a purpose rather than a summary. It names a need —
-belonging should be deliberate and visible — and it does not name the
-application. Nothing in it says reading circle, operations room, book club, or
-incident response, so the same concept can serve all four.
+The purpose states an application-independent need: belonging should be
+deliberate and visible. The same concept can therefore serve a reading circle,
+operations room, book club, or incident-response application.
 
 A purpose fails when it describes the concept's mechanism (`store memberships in
 a set keyed by gathering`), enumerates its actions (`create, join, and leave
@@ -69,11 +67,11 @@ purpose. Every state-changing or refusal step is an action of Gathering; the
 observation that Bo appears among the members is a Gathering query. Nobody posts
 or votes.
 
-That last property is what makes the principle a design test rather than
-documentation. When a principle needs an action that belongs to another concept
-to reach its point, the boundary is wrong: either the scenario is an application
-workflow rather than one concept's behavior, or the concept is missing an action
-it should own. A principle for a `Room` concept that reads "Asha creates a room,
+That last property makes the principle a design test. When a principle needs an
+action that belongs to another concept
+to reach its point, the boundary is wrong: either the scenario describes an
+application workflow, or the concept is missing an action it should own. A
+principle for a `Room` concept that reads "Asha creates a room,
 Bo joins, Asha chooses a mitigation, and the room opens a discussion" is
 describing a whole application; see [splitting a conflated
 candidate](granularity.md#worked-split-one-room-concept-into-four).
@@ -102,7 +100,7 @@ a set of Memberships with
 ````
 
 Two observations decide whether this state is right. First, membership is its
-own set rather than a `members` field on a gathering, because `join` and `leave`
+own set because `join` and `leave`
 create and remove one membership at a time and `_membership` answers about one
 pair. Second, `Person` appears only as an identity. Gathering never stores a
 display name, an email address, or a role, because no action of Gathering reads
@@ -141,8 +139,8 @@ join (gathering: Gathering, member: Person) : return (membership: Membership)
 `join` states every branch it can take and what each one returns. Its two
 refusals are part of the contract: `ALREADY_JOINED` is how Gathering's
 implementation protects its invariant that at most one membership exists per
-gathering and person. A refusal is an expected domain result, not a fault, and
-composition can watch it — see [actions, refusals, and
+gathering and person. A refusal is an expected domain result with a stable code,
+and composition can watch it. Faults follow separate behavior; see [actions, refusals, and
 faults](../semantics.md#actions-refusals-and-faults).
 
 The specification parser reads the signature and exact `refuse CODE "..."`
@@ -162,7 +160,7 @@ _membership (gathering: Gathering, member: Person) : one (joined: Flag)
 ```
 ````
 
-The promise is a design decision, not a type annotation. `_membership` promises
+The promise is a runtime cardinality decision expressed in the design. `_membership` promises
 exactly one source row because every person-gathering pair has a standing, true
 or false. A use site can still drop that row when its output pattern does not
 match — for example, `.is({ joined: true })` drops the false row. `_get` promises
@@ -187,11 +185,11 @@ it to members of a workshop. Selecting takes an opaque `Scope` and `Item`; the
 Operations Room supplies a room and a mitigation, and the Reading Circle supplies
 a circle and a reading.
 
-Two concepts referring to the same identity are not sharing state. Alerting's
-`recipient` and Gathering's `member` may both be the same person identifier in
-one assembly, but Alerting owns no fact about that person and Gathering owns no
-alert. [State ownership](state-and-actions.md#state-ownership) develops the
-distinction.
+Two concepts may refer to the same identity while owning separate state.
+Alerting's `recipient` and Gathering's `member` may both be the same person
+identifier in one assembly. Alerting owns the alert relation; Gathering owns the
+membership relation. [State ownership](state-and-actions.md#state-ownership)
+develops the distinction.
 
 A concept fails this test when it treats an external value as a structure —
 takes a `member` argument and reads `member.email`, or stores a person's
@@ -214,7 +212,7 @@ Gathering satisfies these. Its class imports no peer, no composition file, and
 no engine base class. [Define one behavior](../guide/concepts.md) shows the full
 implementation.
 
-Independence is a property of the specification, not of the runtime. Reactions
+Independence describes the specification. Reactions
 can compose independent concepts heavily — with the corresponding packs enabled,
 a returned selection asks to open a discussion and asks to alert each responder.
 Those consequence actions can still refuse or fault. Gathering and Alerting do
@@ -255,25 +253,25 @@ when it provides the behavior without distortion. A familiar concept brings
 vocabulary users already have, a lifecycle whose stages are known, and failure
 cases someone has already found.
 
-The test is the principle, not the name. Two designs both called `Reservation`
+The principle determines whether two designs describe the same concept. Two designs both called `Reservation`
 are the same concept only if the archetypal scenario matches. A restaurant
 reservation that holds a table until a party arrives and a library reservation
 that queues a person for the next returned copy have different principles,
 different state, and different failure cases; forcing them into one concept
 produces a specification with two unrelated modes.
 
-## A concept is not
+## Candidates with different boundaries
 
-| Candidate       | Why it is not automatically a concept                                                                                                                    | What to do                                                                                |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Object or class | Classes group data with methods on that data; a concept's behavior spans several kinds of object and the relations between them                          | Ask which relation the behavior maintains, and let that define the boundary               |
-| Domain entity   | An entity is a noun; a concept is a mechanism. `Document` attracts every operation whose input contains a document                                       | Name the behavior instead: versioning, sharing, commenting                                |
-| Database table  | Tables follow storage and query shape; one concept may own several, and one table may serve none                                                         | Choose state from what the actions need, then map to storage separately                   |
-| Service         | Services are deployment and ownership units and routinely reach into shared data                                                                         | Keep the concept boundary semantic; a service may host several concepts                   |
-| Screen or page  | A screen composes whatever the user needs at once, which is normally several concepts                                                                    | Build the screen from a former that reads several concepts                                |
-| HTTP endpoint   | An endpoint is an interface to behavior, and its input is shaped by the caller                                                                           | Declare the endpoint in composition; keep behavior in concepts                            |
-| Workflow        | A workflow sequences behaviors that already exist independently                                                                                          | Express the sequence as reactions over independent concepts                               |
-| Data structure  | A record builder, ordered list, merge, cache, index, glob matcher, or graph is a value type; wrapping it in a purpose sentence does not give it a domain | Keep it as a module the concepts use, or find the domain mechanism it was standing in for |
+| Candidate       | Boundary it defines                                                                                               | What to do                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Object or class | Classes group data with methods; a concept's behavior can span several object kinds and their relations           | Ask which relation the behavior maintains, and let that define the boundary          |
+| Domain entity   | An entity is a noun. `Document` attracts every operation whose input contains a document                          | Name the behavior: versioning, sharing, or commenting                                |
+| Database table  | Tables follow storage and query shape; one concept may own several, and some tables serve implementation concerns | Choose state from what the actions need, then map to storage separately              |
+| Service         | Services are deployment and ownership units and routinely reach into shared data                                  | Keep the concept boundary semantic; a service may host several concepts              |
+| Screen or page  | A screen composes the behaviors needed for one interaction                                                        | Build the screen from a former that reads several concepts                           |
+| HTTP endpoint   | An endpoint is a caller-shaped interface to behavior                                                              | Declare the endpoint in composition; keep behavior in concepts                       |
+| Workflow        | A workflow sequences independently complete behaviors                                                             | Express the sequence as reactions over independent concepts                          |
+| Data structure  | Record builders, ordered lists, merges, caches, indexes, glob matchers, and graphs are domain-neutral value types | Keep it as a module the concepts use, or identify the domain mechanism it implements |
 
 The Operations Room dashboard makes the screen case concrete: one former reads
 Gathering, Selecting, Discussing, and Alerting to build a single answer, and no
@@ -290,7 +288,7 @@ wrong in a compiler. A record builder is equally at home everywhere, which means
 it carries no domain meaning for an application to rely on.
 [Reusability](evaluating-concepts.md#reusability) develops this distinction.
 
-Utility code is not a design failure. Gathering's backing maps and membership
+Utility code can remain an implementation detail. Gathering's backing maps and membership
 lookup helper are private implementation details. `_get` and `_members` are
 declared queries, so they are published concept vocabulary that reactions and
 formers may use.
@@ -298,6 +296,6 @@ formers may use.
 The instructive failure is the domain-entity row. A `Project` concept starts as project
 creation, then accumulates membership, task assignment, status reporting, file
 attachment, and archival, because every one of those operations takes a project
-identifier. Sharing an identity is not evidence of shared behavior;
+identifier. Shared identity alone provides no evidence of shared behavior;
 [granularity](granularity.md#evidence-for-and-against-a-split) gives
 the tests that separate them.

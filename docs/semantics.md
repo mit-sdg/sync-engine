@@ -67,7 +67,7 @@ and an unanswered endpoint settles as opaque `INTERNAL_ERROR`. Manual
 runtime warns when an explicit contract exists but omits that code. Applications
 should use declared refusals for stable contracts.
 
-A different throw is a **fault**, not a third action outcome. The engine records
+A different throw is a **fault**. The engine records
 the fault against the ask, leaves that ask without an outcome, and lets the
 throw reach a direct caller. Failure delivery during reaction matching and at
 the application boundary is covered in
@@ -306,8 +306,8 @@ How such a fault is delivered depends on where the read occurs. See
 
 ## Views and formers
 
-A **view** names a match. Its builder receives separate input, output, and free
-binding bags. A predicate view ends in `.holds()`. A view with outputs defaults
+A **view** names a match. Its builder receives separate callable input, output,
+and free-binding selectors. A predicate view ends in `.holds()`. A view with outputs defaults
 to `.many()` and may instead declare `.one()` or `.optional()`. Its human name
 carries no signature or cardinality. At a use-site a view takes one plain
 object input mapping. Every enumerable own key must be declared, and every
@@ -315,13 +315,21 @@ declared input must be present according to the JavaScript `in` operator. The
 view is read exactly like a concept query. Its local bindings do not escape.
 Stacked `where` blocks are alternatives; any matching block can supply a result.
 
+At type time, a callable selector such as `bindings("name")` preserves a binding's literal identity. Query,
+view, and computation slots then infer a view's input/output mapping and a
+former's input/result tree, including aliases, nested formers, optional blanks,
+selections, folds, and splices. `RelationView<Input, Output>` and
+`Former<Input, Result>` annotations state checked explicit contracts. These
+TypeScript facts do not replace the runtime shape, scheduling, cardinality, or
+portability checks.
+
 The engine checks a concept query's declared promise whenever it reads the
 query and checks a view's declared promise whenever it reads the view. The
 read-back states the declaration and the runtime integrity check. The current
 package does not expose inferred-cardinality analysis over exported IR.
 
-A **former** names a formed answer. Its builder receives separate input and
-free binding bags. Its body matches in `where` and produces in `form`, and
+A **former** names a formed answer. Its builder receives separate callable input
+and free-binding selectors. Its body matches in `where` and produces in `form`, and
 production is terminal: nothing in a `where` chooses output. A record former
 promises one answer unless it ends in `.optional()`. A selection-root former
 always produces one result whose shape is determined by `.form`, `.count`,
@@ -356,13 +364,14 @@ is recorded with the fault and remains unanswered. Calling a former directly
 has no action ask to mark, so the evaluation rejects instead. The operational
 fault is a `FormerFault`: `FORMER_NONE` means a former promising one answer
 produced none, and `FORMER_MANY` means a record body produced several matches.
-These faults are not domain refusals. The operational delivery boundary is described under
+These faults use the operational failure path. The delivery boundary is described under
 [Failures between action asks](#failures-between-action-asks).
 
 ## Decisions that must not race
 
 A uniqueness, capacity, first-come, or answer-once decision belongs in the
-action that owns the state, not in a reaction's `where`. The exact execution,
+action that owns the state. A reaction's `where` supplies a current observation.
+The exact execution,
 coordination, and rollback limits live under
 [Ordering and state-read timing](#ordering-and-state-read-timing).
 
@@ -407,12 +416,18 @@ flow becomes quiescent, an answer already delivered remains authoritative. If
 no answer exists and the interpreter failed between action asks, the invocation
 settles with opaque `INTERNAL_ERROR`. A fault-free unanswered invocation waits
 30 seconds by default and then returns `TIMED_OUT`; `InvokeOptions.timeoutMs`
-overrides that wait. Public endpoints should provide explicit coverage or
-fallback branches rather than use timeout as an authored outcome.
+overrides that wait. Public endpoints should provide explicit complementary
+case branches that answer every admitted case. An unconditional
+sibling is not ordered fall-through and overlaps every conditional sibling that
+can answer.
 [Cancellation](#cancellation) defines what timeout and abort do with a pending
 call. Runtime execution does not enforce branch disjointness or endpoint
-coverage. `applicationDiagnostics(...)` can warn about a limited set of
-duplicate answer conditions and missing unconditional fallbacks. Those warnings
+coverage. `applicationDiagnostics(...)` traces lowered response paths and can
+identify a bounded set of potential overlaps, distinguish disjoint literal receives,
+and warn when it recognizes no non-dropping total answer path. Complementary
+reads do not prove static coverage because siblings evaluate independently and
+do not share a state snapshot. The analyzer does not prove arbitrary view,
+computation, validator, action-outcome, or concurrent-state logic. Warnings
 remain advisory unless a repository runs `sync-engine check --fail-on-warnings`
 with an application config.
 
@@ -617,8 +632,8 @@ For output and domain-error throws, ordinary integrity evidence retains only
 the `ValidatorFault` class. An input-validator throw returns `INVALID_INPUT`
 before an occurrence is recorded. Caller-visible errors contain no thrown
 detail, and reporter failure is isolated from validation settlement. The
-generated TypeScript contract remains a static caller check rather than runtime
-validation. Optional concept State sections are
+generated TypeScript contract provides static caller checks. Runtime validation
+requires endpoint validators. Optional concept State sections are
 uninterpreted human notation; they do not contribute to endpoint contracts or
 validators, and no schema is inferred from concept specifications.
 
@@ -670,14 +685,14 @@ contract and uses `Json` for leaves it cannot trace to a signature.
 Ordinary assembly rejects every local reaction, view, or former. The error names
 each local owner before a route or artifact plan is exposed. Direct invocation,
 gateway routing, transport adapters, and generation therefore share one complete
-portable design instead of silently omitting executable-only behavior.
+portable design. Executable-only behavior causes assembly to fail.
 
 When a generated application descriptor supplies ordered `projections`, one
 module contains the logical contract followed by each named transport contract.
 The contract named by `wireName` retains the logical application inputs, outputs,
 and refusal codes for a local or custom client. The HTTP companion's
-`httpWire({ policy, name })` carries public policy categories rather than private
-refusal codes. With `httpFloor`, that contract also omits the cookie-bound input
+`httpWire({ policy, name })` carries public policy categories and excludes
+private refusal codes. With `httpFloor`, that contract also omits the cookie-bound input
 from protected routes and the consumed token and expiry fields from the issuing
 route's output. All contracts share generated type helpers and the vocabulary
 anchor. Core records every projector package and version in generated
@@ -778,8 +793,8 @@ described under [Execution and concurrency](#execution-and-concurrency). Sharing
 one raw instance between engines does not share a queue or query cache. This is
 an in-process guarantee. A concept's implementation and storage must supply any
 atomicity or coordination required across processes. A reaction consequence
-chain is not a database transaction:
-earlier actions are not rolled back when a later action refuses or faults.
+chain commits each action independently. Earlier actions remain committed when a
+later action refuses or faults.
 The runtime provides no retry deduplication or exactly-once guarantee. A retry
 may repeat a completed action or overlap work that continued after timeout.
 
@@ -876,8 +891,8 @@ duration.
 Concept state is separate from the assembly's occurrence evidence. Every engine
 owns a process-local internal `MemoryStore` that folds invocation, outcome,
 fault, firing, reaction-failure, and integrity-failure entries into indexes for
-matching and inspection. `MemoryStore` is an implementation detail, not a
-publicly replaceable engine store. An assembly configured with a window may
+matching and inspection. `MemoryStore` is a private implementation with no
+public replacement interface. An assembly configured with a window may
 evict indexed entries and does not promise to retain every occurrence forever.
 
 An optional application-owned `LogSink` receives each entry synchronously after
@@ -931,7 +946,8 @@ application-defined API.
 An application may persist concept state while leaving occurrence logs in
 memory, or vice versa. The engine does not load prior occurrence files, rebuild
 concept state, resume interrupted reactions, restore pending requests, or
-replay firings. JSONL occurrences are evidence, not restart recovery.
+replay firings. Restart recovery must reconstruct state from concept-owned
+storage and explicit host procedures.
 
 ### Boundary operations
 

@@ -53,19 +53,23 @@ function setup() {
     concepts: { RequestBoundary: Requesting },
   }).concepts;
 
-  const labelOf = view("the label of (item)", ({ item }, { label }, _bindings) =>
-    where(Ledger._labelOf({ item }).is({ label })),
-  ).optional();
+  const labelOf = view("the label of (item)", (inputs, outputs, _bindings) => {
+    const item = inputs("item");
+    const label = outputs("label");
+    return where(Ledger._labelOf({ item }).is({ label }));
+  }).optional();
 
-  const theRows = former("the ledger rows ()", (_inputs, { entry, item, amount, label }) =>
-    each(Ledger._rows({}).is({ entry, item, amount }))
+  const theRows = former("the ledger rows ()", (_inputs, bindings) => {
+    const { entry, item, amount, label } = bindings("entry", "item", "amount", "label");
+    return each(Ledger._rows({}).is({ entry, item, amount }))
       .where(whether(labelOf({ item }).is({ label })))
-      .form({ entry, item, amount, label }),
-  );
+      .form({ entry, item, amount, label });
+  });
 
-  const theLatest = former("the latest entry ()", (_inputs, { entry }) =>
-    each(Ledger._rows({}).is({ entry })).first(entry),
-  );
+  const theLatest = former("the latest entry ()", (_inputs, bindings) => {
+    const entry = bindings("entry");
+    return each(Ledger._rows({}).is({ entry })).first(entry);
+  });
   const composition = {
     LedgerAdd: endpoint(
       "/ledger/add",
@@ -708,6 +712,43 @@ describe("wire contracts", () => {
             { key: "left", type: { kind: "literal", value: "a" } },
             { key: "right", type: { kind: "literal", value: null } },
           ],
+        },
+      ],
+    });
+  });
+
+  test("a directly returned optional former includes null in the wire", () => {
+    const words = vocabulary({
+      concepts: { Ledger: { class: LedgerConcept, queries: { _labelOf: "optional" } } },
+    });
+    const { Ledger } = words.concepts;
+    const optionalLabel = former("the optional label of (item)", (inputs, bindings) => {
+      const item = inputs("item");
+      const label = bindings("label");
+      return where(Ledger._labelOf({ item }).is({ label })).form({ label });
+    }).optional();
+    const GetOptionalLabel = endpoint("/optional-label", ({ item }: Vars) =>
+      receive({ item }).then(respond({ label: optionalLabel({ item }) })),
+    );
+    const application = assemble({
+      vocabulary: words,
+      instances: { Ledger: new LedgerConcept() },
+      composition: { optionalLabel, GetOptionalLabel },
+    });
+    const wire = wireContracts(application.engine.exportReactions());
+
+    expect(wire.endpoints[0]?.output).toMatchObject({
+      kind: "object",
+      fields: [
+        {
+          key: "label",
+          type: {
+            kind: "union",
+            of: [
+              { kind: "object", fields: [{ key: "label", type: { kind: "reference" } }] },
+              { kind: "literal", value: null },
+            ],
+          },
         },
       ],
     });

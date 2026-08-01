@@ -81,7 +81,7 @@ Concept action/query source check passed for N concepts.
 The command fails when no concept directories are found or when any concept
 fails. Parseable concept mismatches are collected and printed as bullets.
 Filesystem, missing-registry, or source-resolution failures can abort the
-command immediately as one stackless error instead of producing the aggregate
+command immediately as one stackless error. These failures bypass the aggregate
 list. The command does not modify files.
 
 ## `sync-engine artifacts`
@@ -107,8 +107,8 @@ Renders and validates both artifacts before its first filesystem effect. The
 command creates configured parent directories, skips byte-identical files, and
 replaces changed files through a same-directory temporary file and rename. It
 does not delete unknown files and is silent on success. Replacement is atomic
-per file, not across both artifacts. A later write failure can leave an earlier
-artifact updated; the command does not roll back completed writes.
+for each file. The pair has no all-or-nothing transaction: a later write failure
+can leave an earlier artifact updated, and completed writes remain in place.
 
 ### `pin-spec`
 
@@ -131,8 +131,8 @@ over those fields. It excludes occurrences and other runtime state.
 
 For a valid assembly, prints assembly counts and the assembled read-back. The
 counts cover registered reactions, views, formers, and serialized `compute`
-operations in the exported IR. The last value counts operation occurrences, not
-distinct computation names.
+operations in the exported IR. The last value counts every operation occurrence,
+including repeated uses of one named computation.
 
 ### `wire`
 
@@ -145,6 +145,15 @@ application diagnostics after checking parsed concept action/query declarations
 against class source. Diagnostics are advisory unless their severity is
 `error`; `--fail-on-warnings` promotes warning diagnostics to a failing
 repository gate.
+
+Endpoint warnings use bounded structural analysis. The checker traces lowered
+response paths through causal `by` provenance, reports potential overlaps,
+distinguishes disjoint literal request alternatives, and warns when it
+recognizes no non-dropping total answer path. It does not treat complementary
+reads as a coverage proof because siblings do not share a state snapshot, and
+it does not prove opaque view, computation, validator, action-outcome, or
+concurrent-state policy. In particular, adding an unconditional sibling does
+not create fall-through; that branch competes with every conditional answer.
 
 ## Artifact failure conditions
 

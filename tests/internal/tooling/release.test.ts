@@ -40,6 +40,24 @@ function replaceSource(
   sources.set(path, source.replace(current, replacement));
 }
 
+function replaceCurrentChangelogEntry(
+  sources: Map<string, string>,
+  current: string,
+  replacement: string,
+): void {
+  const path = "CHANGELOG.md";
+  const source = sources.get(path) ?? "";
+  const start = source.indexOf(`## [${currentVersion}]`);
+  if (start < 0) throw new Error(`${path} has no ${currentVersion} entry`);
+  const end = source.indexOf("\n## [", start + 1);
+  const entry = source.slice(start, end < 0 ? undefined : end);
+  if (!entry.includes(current)) {
+    throw new Error(`${path} ${currentVersion} entry does not contain ${current}`);
+  }
+  const updated = entry.replace(current, replacement);
+  sources.set(path, `${source.slice(0, start)}${updated}${end < 0 ? "" : source.slice(end)}`);
+}
+
 function editManifest(
   sources: Map<string, string>,
   path: string,
@@ -155,7 +173,7 @@ describe("release source facts", () => {
     "rejects a changelog without the %s heading",
     (heading) => {
       const sources = fixture();
-      replaceSource(sources, "CHANGELOG.md", `### ${heading}`, `### Missing ${heading}`);
+      replaceCurrentChangelogEntry(sources, `### ${heading}`, `### Missing ${heading}`);
       expect(checkRelease(sources)).toContain(
         `CHANGELOG.md: ${currentVersion} is missing the ${heading} heading`,
       );

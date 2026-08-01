@@ -9,9 +9,9 @@ reachable by some action.
 
 ## State
 
-### Abstract state, not storage
+### Abstract state
 
-Describe what the concept knows, not how it is stored. State should establish
+Describe what the concept knows. State should establish
 which identities exist, which relationships hold among them, which values change
 behavior, which lifecycle stage each managed entity occupies, and which
 invariants this concept enforces.
@@ -30,8 +30,8 @@ a Current set of Selections
 ```
 ````
 
-`Current` is a subset, not a boolean field, which is how the design says that
-being current is a stage a selection is in — and that a selection which stops
+`Current` is represented as a subset. This representation says that being
+current is a stage a selection is in — and that a selection which stops
 being current still exists and keeps its identity. The prose beside it states
 the invariant the concept owns: at most one current selection per scope.
 
@@ -74,12 +74,11 @@ When an action needs something the state does not have, choose in this order:
    trustworthy. An action that records who performed something takes the actor
    as an argument; a public request cannot establish that actor's identity.
 3. **Inject an environmental dependency**, when the environment owns the fact.
-   A session implementation can receive a clock rather than trust a
-   caller-supplied time.
+   A session implementation can receive a clock from its environment.
 4. **Move the behavior** to the concept that owns the fact, when the decision
    really belongs there.
 5. **Move the condition into composition**, when it is a non-critical
-   cross-concept policy rather than the concept's own rule.
+   cross-concept policy.
 
 A concept's specification should not read another concept's state. This design
 rule is not enforced by registration. The fifth option is the one to watch:
@@ -90,7 +89,7 @@ reaction](composing-concepts.md#what-does-not-belong-in-a-reaction).
 ### State ownership
 
 Assign each durable domain fact one concept that owns its meaning and mutation
-rules. This is a design rule, not a check the engine performs. The owner's
+rules. The engine does not enforce this design rule. The owner's
 implementation and storage coordination must protect the rule where it matters.
 
 Several concepts may refer to the same identity without sharing ownership. A
@@ -124,8 +123,8 @@ Store a derived value only for a reason you can name:
 - **Stored because recomputation would change semantics**, such as a ranking
   frozen at publication.
 
-The Operations Room computes response counts rather than storing them; a former
-folds the rows at read time.
+The Operations Room computes response counts at read time; a former folds the
+rows.
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
@@ -135,8 +134,8 @@ _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/ope
       ).count(),
 ```
 
-Note where that count lives: in composition, not in Discussing. A count that
-only one application's dashboard needs is not part of the discussion mechanism.
+The count lives in composition because only one application's dashboard needs
+it. Discussing owns the discussion mechanism.
 
 ### Local and cross-concept invariants
 
@@ -220,7 +219,7 @@ is state belonging to some other concept.
 
 Each action states the conditions under which it acts and the conditions under
 which it declines. A declined condition that the design anticipates is a
-**refusal** — an expected domain outcome with a stable code, not an error.
+**refusal**: an expected domain outcome with a stable code.
 
 _Source: [`examples/reading-circle/src/concepts/discussing/spec.md`](../../examples/reading-circle/src/concepts/discussing/spec.md)_
 
@@ -241,7 +240,7 @@ rejects extra mappings. It does not prove that the implementation takes the
 stated branches, throws that class, or returns the specified fields; principle
 and implementation tests establish those parts of the contract.
 
-The distinction is operational, not stylistic. A registered refusal is recorded
+The distinction has observable runtime effects. A registered refusal is recorded
 as an outcome that composition can watch with `.refuses(...)` and branch on. The
 advanced `Refuse` marker also produces a refusal, though an undeclared code is
 not a stable ordinary contract. Other throws are **faults**: the engine records
@@ -275,15 +274,14 @@ and give each one a promise — `one`, `optional`, or `many`.
 The promise is a behavioral claim that the engine checks when a reaction, view,
 or former reads the query: an answer outside the declared cardinality raises a
 fault naming the query. A direct query root returns the implementation's value
-without this `where`-read validation. Choose the promise from the domain, not
-from the current implementation. `_membership` promises `one` because every
+without this `where`-read validation. Choose the promise from the domain
+contract. `_membership` promises `one` because every
 person-gathering pair has a standing; `_openFor` promises `optional` because a
 subject may have no open discussion; `_members` promises `many`. Each choice
 determines whether a reader can drop a case, fan out, or neither — see [reading: declarations
 govern](../semantics.md#reading-declarations-govern).
 
-Three constraints follow from how queries execute, and each is a design
-constraint rather than an implementation detail:
+Three design constraints follow from how queries execute:
 
 - **Query implementations must not have side effects.** The engine does not
   enforce purity. It memoizes queries per instance and argument between
@@ -293,8 +291,8 @@ constraint rather than an implementation detail:
   asynchronous action body. Direct state mutation or external storage changes
   can also remain hidden until cache invalidation. Do not design a decision that
   requires two queries to be consistent.
-- **Queries do not enter the action queue.** They are not a place to enforce
-  anything.
+- **Queries execute outside the action queue.** Actions enforce decisions that
+  require serialization.
 
 Do not expose as an action what is really a query. A `getAuthor` action pollutes
 the occurrence record with reads and invites reactions to trigger on lookups.
@@ -338,10 +336,10 @@ often by writing storage directly.
 
 Within one engine, action bodies run one at a time per raw concept instance in
 arrival order. The queue awaits native promises and structural `PromiseLike`
-values. This is serialization, not a transaction: one action does not roll back
-its writes, make storage durable, or coordinate another engine or process. A
-reaction chain is also not a transaction; an earlier state change remains when
-a later action refuses or faults.
+values. This serialization coordinates one concept instance in one engine. Each
+action owns rollback and durability for its writes, and other engines and
+processes require storage coordination. An earlier state change remains when a
+later reaction consequence refuses or faults.
 
 This has one direct design consequence. **A decision that must not race belongs
 inside the action that owns the state** — uniqueness, capacity, first-come, and
@@ -353,8 +351,8 @@ snapshot. See [decisions that must not
 race](../semantics.md#decisions-that-must-not-race).
 
 Gathering follows this: `join` checks for an existing membership and creates one
-in the same action, rather than exposing a `_membership` query for composition
-to check first. The query exists for reads and policy, not for enforcement.
+in the same action. The `_membership` query serves reads and policy; `join`
+enforces membership uniqueness.
 
 The per-instance guarantee is in-process and per-assembly. Sharing one concept
 instance with a second engine does not share its queue, and several application
@@ -374,8 +372,8 @@ reversal, a compensation, or retained history without either.
 
 **Compensation** applies when the effect cannot be erased. A refund compensates
 a charge; it does not undo it, and the ledger keeps both. Model the compensating
-action explicitly rather than deleting the original record, and say in the
-purpose that history is retained.
+action explicitly, retain the original record, and say in the purpose that
+history is retained.
 
 **Idempotent repetition** is neither. Decide, for each action, whether asking it
 twice with the same input is meaningful, and state the answer. `Alerting.raise`

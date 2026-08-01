@@ -20,10 +20,36 @@ import { brand, hasBrand, hasFuncBrand, LineBrand, RelationViewBrand } from "./b
 import type { InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import type { QueryPromise } from "./query-metadata.ts";
 import { isPlainObject } from "./matchers.ts";
+import type {
+  CarriesFacts,
+  ExactPattern,
+  FactsFromPattern,
+  InputPattern,
+  PartialPattern,
+} from "./type-inference.ts";
 
 /** A view declared as a relation: named inputs, promised outputs, a body. */
-export interface RelationView {
-  (pattern: Mapping): ViewReadLine;
+declare const RelationViewType: unique symbol;
+export interface RelationView<
+  // biome-ignore lint/suspicious/noExplicitAny: bare RelationView is the intentionally erased declaration contract.
+  Input extends object = any,
+  // biome-ignore lint/suspicious/noExplicitAny: bare RelationView is the intentionally erased declaration contract.
+  Output extends object = any,
+  Promise extends QueryPromise | undefined = QueryPromise | undefined,
+> {
+  readonly [RelationViewType]: {
+    readonly input: (value: Input) => void;
+    readonly output: Output;
+    readonly promise: Promise;
+  };
+  <const Pattern extends InputPattern<Input>>(
+    pattern: ExactPattern<Input, Pattern>,
+  ): ViewReadLine<
+    Output,
+    FactsFromPattern<Input, Pattern>,
+    never,
+    Promise extends QueryPromise ? Promise : "optional"
+  >;
   readonly viewName: string;
   /** Input names declared by the view's input bag. */
   readonly ins: readonly string[];
@@ -37,10 +63,10 @@ export interface RelationView {
   readonly holdsPredicate: boolean;
   /** The where blocks, as IR — stacked blocks are alternatives. */
   readonly alternatives: readonly (readonly unknown[])[];
-  holds(): RelationView;
-  one(): RelationView;
-  optional(): RelationView;
-  many(): RelationView;
+  holds(): RelationView<Input, Output, undefined>;
+  one(): RelationView<Input, Output, "one">;
+  optional(): RelationView<Input, Output, "optional">;
+  many(): RelationView<Input, Output, "many">;
 }
 
 export function isRelationView(value: unknown): value is RelationView {
@@ -55,37 +81,72 @@ export function brandRelationView<T extends object>(ref: T): T {
  * A pattern over one row shape: each slot takes the row's own type (a literal
  * test), a variable (open or test by unification), or is omitted.
  */
-export type SlotPattern<Row> = { readonly [K in keyof Row]?: Row[K] | symbol };
+export type SlotPattern<Row> = PartialPattern<Row>;
 
-interface LineShape<Row, Self> {
+interface LineShape {
   readonly in: Mapping;
   readonly out: Mapping;
   readonly not: Mapping;
-  /** Match output fields, testing literals or bound variables and binding new variables. */
-  readonly is: {
-    (pattern: SlotPattern<Row>): Self;
-    /** Negated slot tests: each stated slot's value differs from the row's. */
-    not(pattern: SlotPattern<Row>): Self;
-  };
 }
 
 /** A plain line whose source is one concept query. */
 // biome-ignore lint/suspicious/noExplicitAny: `any` keeps every typed line accepted as an untyped condition.
-export interface QueryReadLine<Row = any> extends LineShape<Row, QueryReadLine<Row>> {
+export interface QueryReadLine<
+  Row = any,
+  InputFacts = never,
+  OutputFacts = never,
+  Promise extends QueryPromise = QueryPromise,
+>
+  extends LineShape, CarriesFacts<InputFacts | OutputFacts> {
   readonly query: InstrumentedQuery;
   readonly view?: never;
+  readonly queryPromise?: Promise;
+  /** Match output fields, testing literals or bound variables and binding new variables. */
+  readonly is: {
+    <const Pattern extends SlotPattern<Row>>(
+      pattern: ExactPattern<Row, Pattern>,
+    ): QueryReadLine<Row, InputFacts, OutputFacts | FactsFromPattern<Row, Pattern>, Promise>;
+    /** Negated slot tests: each stated slot's value differs from the row's. */
+    not<const Pattern extends SlotPattern<Row>>(
+      pattern: ExactPattern<Row, Pattern>,
+    ): QueryReadLine<Row, InputFacts, OutputFacts | FactsFromPattern<Row, Pattern>, Promise>;
+  };
 }
 
 /** A plain line whose source is one derived relation view. */
 // biome-ignore lint/suspicious/noExplicitAny: `any` keeps every typed line accepted as an untyped condition.
-export interface ViewReadLine<Row = any> extends LineShape<Row, ViewReadLine<Row>> {
+export interface ViewReadLine<
+  Row = any,
+  InputFacts = never,
+  OutputFacts = never,
+  Promise extends QueryPromise = QueryPromise,
+>
+  extends LineShape, CarriesFacts<InputFacts | OutputFacts> {
   readonly query?: never;
   readonly view: RelationView;
+  readonly viewPromise?: Promise;
+  /** Match output fields, testing literals or bound variables and binding new variables. */
+  readonly is: {
+    <const Pattern extends SlotPattern<Row>>(
+      pattern: ExactPattern<Row, Pattern>,
+    ): ViewReadLine<Row, InputFacts, OutputFacts | FactsFromPattern<Row, Pattern>, Promise>;
+    /** Negated slot tests: each stated slot's value differs from the row's. */
+    not<const Pattern extends SlotPattern<Row>>(
+      pattern: ExactPattern<Row, Pattern>,
+    ): ViewReadLine<Row, InputFacts, OutputFacts | FactsFromPattern<Row, Pattern>, Promise>;
+  };
 }
 
 /** One plain line: query-backed or view-backed, with the same condition shape. */
 // biome-ignore lint/suspicious/noExplicitAny: `any` keeps every typed line accepted as an untyped condition.
-export type ReadLine<Row = any> = QueryReadLine<Row> | ViewReadLine<Row>;
+export type ReadLine<
+  Row = any,
+  InputFacts = any,
+  OutputFacts = any,
+  Promise extends QueryPromise = QueryPromise,
+> =
+  | QueryReadLine<Row, InputFacts, OutputFacts, Promise>
+  | ViewReadLine<Row, InputFacts, OutputFacts, Promise>;
 
 export function isReadLine(value: unknown): value is ReadLine {
   return hasBrand(value, LineBrand);
@@ -131,10 +192,10 @@ function assertPattern(pattern: unknown, operation: string): void {
 }
 
 /** Construct a read from a query or view and its input pattern. @internal */
-export function lineOf(
+export function lineOf<const Input extends Mapping>(
   source: { query: (...args: never[]) => unknown },
-  input: Mapping,
-): QueryReadLine;
+  input: Input,
+): QueryReadLine<any, FactsFromPattern<Mapping, Input>>;
 export function lineOf(source: { view: RelationView }, input: Mapping): ViewReadLine;
 export function lineOf(
   source: LineSource | { query: (...args: never[]) => unknown },

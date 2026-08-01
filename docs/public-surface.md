@@ -41,7 +41,7 @@ update.
 
 <!-- register:language:start -->
 
-`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
+`Condition`, `Former`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -77,8 +77,14 @@ Concept entries accepted by `vocabulary` are either a concept class or
 When a query promise is available as a TypeScript literal, the vocabulary types
 link `"one"` to a record return and `"optional"` or `"many"` to an array of
 records. Runtime evaluation checks the same container and cardinality contract.
-`Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes;
-bindings are inferred from their declaration callbacks.
+`Condition`, `ReadLine`, `RelationView`, and `Former` name reusable declaration
+shapes. View and former builders receive callable binding selectors: one name,
+as in `inputs("name")`, returns one logic variable; several names, as in
+`bindings("first", "second")`, return a keyed object. Literal selectors let
+TypeScript infer view inputs, view outputs, former inputs, and complete former
+results from the concept signatures and formed tree. Authors may instead
+annotate an exported declaration with `RelationView<Input, Output>` or
+`Former<Input, Result>`; known inferred fields must agree with that contract.
 
 For worked examples, see the [reactions guide](./guide/reactions.md) and
 [views and formers guide](./guide/views-and-formers.md). The normative matching,
@@ -125,7 +131,8 @@ that index, and `logSink` may be combined with any `retention` policy.
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
 `whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
 both lifecycle promises resolve when accepted action, query, and former work
-actually settles.
+actually settles. `form(...)` resolves to the supplied former's inferred result;
+an optional record former contributes `null` to that result.
 `ActionRefusal` is the direct-action refusal result.
 `ConceptImplementation`, `Implementations`, and `ImplementationOverrides` name
 complete or partial implementation maps. Assembled non-query actions are
@@ -157,7 +164,7 @@ sensitive host sink.
 | API               | Compact signature                                                 |
 | ----------------- | ----------------------------------------------------------------- |
 | `registerConcept` | `registerConcept({ class, spec, refusals?, floors? })`            |
-| `conceptSet`      | `conceptSet({ ...registeredConcepts })`                           |
+| `conceptSet`      | `conceptSet({ ...registeredConcepts }, computations?)`            |
 | `conceptFloor`    | `conceptFloor(vocabulary, { name, instances, resources, close })` |
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
@@ -168,6 +175,13 @@ supplies it. If an incomplete floor is selected by bypassing that type
 restriction, selection fails at runtime. The zero-argument `implementations()`
 form is available only when every canonical class can be constructed without
 required arguments; otherwise use a named floor.
+
+The optional second `conceptSet` argument is a record of named pure computation
+functions. The returned set exposes vocabulary-owned references under both
+`set.computations` and `set.vocabulary.computations`; their names, inputs, and
+results remain inferred from the supplied functions. Compose raw computation
+records before constructing one set. Refs from separate vocabularies cannot be
+combined.
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`
@@ -183,8 +197,8 @@ machine conformance requires a separately designed backend-neutral descriptor.
 
 ### Occurrence index and log sinks
 
-Every engine owns an internal `MemoryStore` occurrence index. `MemoryStore` is
-an implementation detail, not a public storage extension point. The index is
+Every engine owns an internal `MemoryStore` occurrence index. This private
+implementation is
 the source for reaction matching and retained inspection; `RetentionPolicy`
 governs its contents.
 
@@ -192,8 +206,8 @@ governs its contents.
 point. The engine validates an entry and redacts engine-created mappings, calls
 the sink with a structural snapshot, and only then folds the entry into the
 internal index. Arrays and plain records are recursively copied and frozen.
-Invocation concept and action fields are frozen, name-preserving
-representatives rather than live engine identities. `Date` values are copied.
+Invocation concept and action fields become frozen, name-preserving
+representatives. `Date` values are copied.
 Opaque leaves such as class instances, `Map`, `Set`, and functions
 retain their runtime representation and identity. The snapshot does not
 recursively freeze opaque leaves. The sink must treat opaque leaves as read-only
@@ -239,8 +253,8 @@ recovery.
 and optional runtime outer-shape contract. `EndpointValidator`,
 `EndpointValidators`, and `ValidationResult` define schema-library-neutral
 input, successful-output, and domain-error checks. The domain-error validator
-receives the value of the authored response's top-level `error` field, not the
-complete response envelope. The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
+receives exactly the value of the authored response's top-level `error` field.
+The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
 shows the endpoint authoring path, and [Add runtime
 validation](./guide/application-boundary.md#add-runtime-validation) shows the
 validator call shape. [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
@@ -254,9 +268,8 @@ paths](./semantics.md#correlation-and-route-paths). `receive(...)` cannot author
 the framework-owned `path` or `requestId` fields. `respond(...)` cannot author
 `requestId` or `errorKind`.
 
-Endpoint validators are supplied explicitly by the application. They are not
-derived from generated types or concept State notation, and the engine infers
-no runtime schema from a concept specification.
+Applications supply endpoint validators explicitly. Generated types and concept
+State notation have no runtime schema semantics.
 
 | `InputContractDecl` field | Default / effect                                 |
 | ------------------------- | ------------------------------------------------ |
@@ -313,7 +326,8 @@ invalid value returns `INVALID_INPUT` before work is recorded. Gateway and
 application invokers apply the option as separate durations; it is not one
 absolute deadline shared by both layers.
 
-The gateway is an `Invoker` decorator, not a second reaction engine. Observers
+The gateway decorates the target application's `Invoker` and uses the target's
+reaction engine. Observers
 receive gateway limit and drain events plus exactly one `invocation-settled`
 event for each public `invoke` call after the final result is known. That event uses the
 requested application route and effective correlation id, includes the final
@@ -405,8 +419,8 @@ A `Client<Contract>` supports grouped access such as
 `ContractShape` is the path-to-input/output/error record accepted by every
 constructor. `ClientError` is `{ error: FrameworkErrorCode; detail?:
 string }`; `DomainErrorValue` extracts a generated route's domain error value.
-Calls resolve to success or error envelopes rather than throwing for handled
-transport failures. JSON projection and error delivery are normative in
+Calls resolve handled transport failures as error envelopes. JSON projection
+and error delivery are normative in
 [Execution semantics](./semantics.md#boundary-gateway-and-client).
 
 `createClient` replaces a nullish input with `{}`. A transport throw or rejected
@@ -467,6 +481,16 @@ view-alternative, and former-node sequences retain semantics.
 machine-readable advisory surface. `diagnosticsFail` treats error diagnostics as
 failures by default and can promote warnings; informational diagnostics remain
 advisory.
+Endpoint diagnostics trace response paths through lowered `by` provenance.
+`ENDPOINT_PATH_OVERLAP` reports bounded potential overlaps such as duplicate
+complete guards, an unconditional answer beside a conditional answer, or a bare
+existence branch that subsumes a more specific read. It does not prove that a
+conditional guard is inhabited. `MISSING_ENDPOINT_FALLBACK`
+means no non-dropping total answer path was recognized; it does not imply that
+an unconditional sibling would be a safe ordered fallback. Coverage analysis
+leaves complementary reads unproved because siblings observe separate state snapshots. The
+analysis is conservative and does not prove arbitrary view, computation,
+validator, action-outcome, or concurrent-state logic.
 
 The structural argument consumed by `renderApp` has `title: string`,
 `concepts: ConceptInventoryIR[]`, and `app: AppIR`. The package does not export

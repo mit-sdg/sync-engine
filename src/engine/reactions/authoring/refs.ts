@@ -32,8 +32,15 @@ import { brand, hasFuncBrand } from "@engine/reads/brands";
 import { actionLine } from "./nodes.ts";
 import { lineOf } from "@engine/reads/lines";
 import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
+import type { ExactPattern, FactsFromPattern } from "@engine/reads/type-inference";
+import type { FusedFormer } from "@engine/reads/former-nodes";
+import type { PatternValue } from "@engine/reads/type-inference";
 import { parseSpec } from "../concepts/concept-spec.ts";
-import type { ComputationFn, ComputationRef } from "@engine/reads/computations";
+import type {
+  CheckedComputationFns,
+  ComputationFn,
+  ComputationRef,
+} from "@engine/reads/computations";
 import {
   CONCEPT_PROTOCOL,
   conceptProtocolOf,
@@ -100,9 +107,13 @@ type QueryRow<A> = Awaited<A> extends readonly (infer Row)[] ? Row : Awaited<A>;
  * names a query's answer) resolves to the class's own declared answer; every
  * actual call matches the first overload and answers a line.
  */
-type QueryLineFn<F> = F extends (input: infer I) => infer A
+type ExactSlotPattern<Shape, Pattern> = ExactPattern<Shape, Pattern>;
+
+type QueryLineFn<F, Promise extends QueryPromise> = F extends (input: infer I) => infer A
   ? {
-      (pattern: SlotPattern<I>): QueryReadLine<QueryRow<A>>;
+      <const Pattern extends SlotPattern<I>>(
+        pattern: ExactSlotPattern<I, Pattern>,
+      ): QueryReadLine<QueryRow<A>, FactsFromPattern<I, Pattern>, never, Promise>;
       (input: I): A;
     }
   : F;
@@ -117,9 +128,13 @@ type RequiredInputKeys<I> = {
   [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
 }[keyof I];
 
+type ActionSlotPattern<Input> = {
+  readonly [Key in keyof Input]?: PatternValue<Input[Key]> | FusedFormer<Input[Key]>;
+};
+
 type ActionLineFn<F> = F extends (input: infer I) => infer A
   ? {
-      <P extends SlotPattern<I>>(
+      <P extends ActionSlotPattern<I>>(
         pattern: P,
       ): RequiredInputKeys<I> extends keyof P
         ? ActionCall<F & InstrumentedAction, P, A>
@@ -133,15 +148,24 @@ type ActionLineFn<F> = F extends (input: infer I) => infer A
  * actions become callable data lines for `when` and `then`;
  * queries become typed line builders — the callable vocabulary proxy.
  */
-type ConceptRef<I> = {
+type PromiseOf<Entry, Key extends PropertyKey> =
+  Extract<DeclaredQueryPromise<Entry, Key>, QueryPromise> extends infer Promise
+    ? [Promise] extends [never]
+      ? "many"
+      : Promise extends QueryPromise
+        ? Promise
+        : "many"
+    : "many";
+
+type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
   readonly [K in keyof I as I[K] extends (...args: never[]) => unknown
     ? K
-    : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
+    : never]: K extends `_${string}` ? QueryLineFn<I[K], PromiseOf<Entry, K>> : ActionLineFn<I[K]>;
 };
 
 /** The vocabulary's refs: one `ConceptRef` per declared name. */
-type VocabularyRefs<T extends Record<string, ConceptClass>> = {
-  readonly [K in keyof T]: ConceptRef<InstanceType<T[K]>>;
+type VocabularyRefs<T extends Record<string, ConceptEntry>> = {
+  readonly [K in keyof T]: ConceptRef<T[K]>;
 };
 
 /** A concept class plus metadata owned by its vocabulary name. */
@@ -221,7 +245,7 @@ export type ConceptClassesOf<T extends Record<string, ConceptEntry>> = {
 };
 
 type ComputationRefs<T extends Record<string, ComputationFn>> = {
-  readonly [K in keyof T]: ComputationRef;
+  readonly [K in keyof T]: ComputationRef<T[K]>;
 };
 
 /** Concept and computation refs grouped by their role. */
@@ -229,7 +253,7 @@ export interface DeclaredVocabulary<
   TConcepts extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 > {
-  readonly concepts: VocabularyRefs<ConceptClassesOf<TConcepts>>;
+  readonly concepts: VocabularyRefs<TConcepts>;
   readonly computations: ComputationRefs<TComputations>;
   readonly [VocabularyClasses]: ConceptClassesOf<TConcepts>;
   readonly [VocabularyComputations]: ComputationRefs<TComputations>;
@@ -348,6 +372,7 @@ export function vocabulary<
 >(
   declaration: VocabularyDeclaration<TConcepts, TComputations> & {
     concepts: CheckedConceptEntries<TConcepts>;
+    computations?: CheckedComputationFns<TComputations>;
   },
 ): DeclaredVocabulary<TConcepts, TComputations>;
 export function vocabulary(

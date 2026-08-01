@@ -1,12 +1,23 @@
 import { describe, expect, test } from "vite-plus/test";
-import { no, vocabulary, where } from "@mit-sdg/sync-engine/language";
+import {
+  compute,
+  earlier,
+  is,
+  no,
+  vocabulary,
+  where,
+  whether,
+} from "@mit-sdg/sync-engine/language";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import {
+  applicationDiagnostics,
   applicationManifest,
   diagnosticsFail,
   renderApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
+import type { AppIR, ActionTriggerIR } from "@engine/reads/ir";
+import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
 const words = vocabulary({ concepts: {}, computations: {} });
@@ -40,9 +51,22 @@ class LookingConcept {
   _get(_: { item: string }): { item: string }[] {
     return [];
   }
+
+  _number(_: { value: number }): { value: number }[] {
+    return [];
+  }
+
+  open({ item }: { item: string }) {
+    return { item };
+  }
 }
 
-const lookup = vocabulary({ concepts: { Looking: LookingConcept } });
+const lookup = vocabulary({
+  concepts: { Looking: LookingConcept },
+  computations: {
+    normalize: ({ item }: { item: string }) => item.trim().toLowerCase(),
+  },
+});
 const { Looking } = lookup.concepts;
 
 function lookupApplication(duplicatePositive = false) {
@@ -89,21 +113,496 @@ describe("application manifest", () => {
     expect(diagnosticsFail(manifest.diagnostics, "warnings")).toBe(true);
   });
 
-  test("recognizes an exact existence and absence partition", () => {
-    expect(applicationManifest(lookupApplication()).diagnostics).toEqual([]);
+  test("does not assume sibling reads share one state snapshot", () => {
+    expect(applicationManifest(lookupApplication()).diagnostics.map(({ code }) => code)).toEqual([
+      "MISSING_ENDPOINT_FALLBACK",
+    ]);
   });
 
-  test("reports a duplicate positive branch beside an exhaustive pair", () => {
-    expect(applicationManifest(lookupApplication(true)).diagnostics).toEqual([
-      {
-        severity: "warning",
-        code: "ENDPOINT_PATH_OVERLAP",
-        definition: { kind: "endpoint", name: "Get" },
-        endpoint: { name: "Get", path: "/get" },
-        message:
-          'Endpoint "Get" at "/get" has duplicate find answer conditions; both can respond to the same request.',
-      },
+  test("reports a duplicate positive branch beside an unproved read pair", () => {
+    const diagnostics = applicationManifest(lookupApplication(true)).diagnostics;
+    expect(diagnostics.map(({ code }) => code)).toEqual([
+      "ENDPOINT_PATH_OVERLAP",
+      "MISSING_ENDPOINT_FALLBACK",
     ]);
+    expect(diagnostics[0]).toEqual({
+      severity: "warning",
+      code: "ENDPOINT_PATH_OVERLAP",
+      definition: { kind: "endpoint", name: "Get" },
+      endpoint: { name: "Get", path: "/get" },
+      message:
+        'Endpoint "Get" at "/get" has potentially overlapping answer paths "Get:also-found" and "Get:found": the complete answer guards are identical; all matching paths run.',
+    });
+  });
+
+  test("reports a total branch that competes with a conditional answer", () => {
+    const Race = endpoint("/race", ({ item }) =>
+      receive({ item }).then(
+        where(Looking._get({ item }))
+          .then(respond({ found: true }))
+          .named("found"),
+        respond({ found: false }).named("otherwise"),
+      ),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Race } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["ENDPOINT_PATH_OVERLAP"]);
+    expect(diagnostics[0]?.message).toContain("one answer path is unconditional");
+  });
+
+  test("distinguishes disjoint literal receives but leaves their coverage unproved", () => {
+    const Created = endpoint("/sort", () =>
+      receive({ sort: "created" }).then(respond({ sort: "created" })),
+    );
+    const Activity = endpoint("/sort", () =>
+      receive({ sort: "activity" }).then(respond({ sort: "activity" })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Created, Activity } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("carries an earlier-stage guard to the eventual response", () => {
+    const Guarded = endpoint("/guarded", ({ item }) =>
+      receive({ item })
+        .where(Looking._get({ item }))
+        .then(Looking.open({ item }).responds({ item }))
+        .then(respond({ item })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Guarded } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("recognizes a bare existence branch that subsumes a more specific read", () => {
+    const Overlap = endpoint("/overlap", ({ item }) =>
+      receive({ item }).then(
+        where(Looking._get({ item }).is({ item }))
+          .then(respond({ found: true }))
+          .named("specific"),
+        where(Looking._get({ item }))
+          .then(respond({ found: false }))
+          .named("exists"),
+      ),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Overlap } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual([
+      "ENDPOINT_PATH_OVERLAP",
+      "MISSING_ENDPOINT_FALLBACK",
+    ]);
+    expect(diagnostics[0]?.message).toContain("bare existence read");
+  });
+
+  test("treats whether as non-dropping for endpoint coverage", () => {
+    const Always = endpoint("/always", ({ item, found }) =>
+      receive({ item })
+        .where(whether(Looking._get({ item }).is({ item: found })))
+        .then(respond({ found })),
+    );
+
+    expect(
+      applicationManifest(assemble({ vocabulary: lookup, composition: { Always } })).diagnostics,
+    ).toEqual([]);
+  });
+
+  test("distinguishes fresh computations from computations that can filter", () => {
+    const Fresh = endpoint("/fresh-compute", ({ item, normalized }) =>
+      receive({ item })
+        .where(compute(lookup.computations.normalize, { item }, normalized))
+        .then(respond({ normalized })),
+    );
+    const Filtering = endpoint("/filtering-compute", ({ item }) =>
+      receive({ item })
+        .where(compute(lookup.computations.normalize, { item }, item))
+        .then(respond({ item })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Fresh, Filtering } }),
+    ).diagnostics;
+    const fallbacks = diagnostics.filter(({ code }) => code === "MISSING_ENDPOINT_FALLBACK");
+
+    expect(fallbacks).toHaveLength(1);
+    expect(fallbacks[0]?.endpoint?.path).toBe("/filtering-compute");
+  });
+
+  test("keeps authored earlier reads as endpoint guards", () => {
+    const Guarded = endpoint("/earlier", ({ item }) =>
+      receive({ item }).where(earlier(Looking.open, { item })).then(respond({ item })),
+    );
+
+    expect(
+      applicationManifest(
+        assemble({ vocabulary: lookup, composition: { Guarded } }),
+      ).diagnostics.map(({ code }) => code),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("does not treat the current trigger as an earlier occurrence", () => {
+    const request: ActionTriggerIR = {
+      kind: "action",
+      concept: "RequestBoundary",
+      action: "request",
+      posture: "returned",
+      input: { path: "/manual-earlier", requestId: { $var: "requestId" } },
+      output: {},
+    };
+    const app: AppIR = {
+      reactions: [
+        {
+          name: "ManualEarlier",
+          when: [request],
+          where: [{ op: "earlier", when: request }],
+          then: [
+            {
+              kind: "request",
+              concept: "RequestBoundary",
+              action: "respond",
+              input: { requestId: { $var: "requestId" }, ok: true },
+            },
+          ],
+        },
+      ],
+      views: [],
+      formers: [],
+      unlowered: [],
+    };
+    const wire: WireContractsIR = {
+      endpoints: [
+        {
+          path: "/manual-earlier",
+          input: { kind: "object", fields: [] },
+          output: {
+            kind: "object",
+            fields: [{ key: "ok", type: { kind: "literal", value: true } }],
+          },
+          errors: [],
+          openError: false,
+        },
+      ],
+      appWide: [],
+    };
+
+    expect(
+      applicationDiagnostics(
+        app,
+        [{ name: "ManualEarlier", path: "/manual-earlier", reactions: ["ManualEarlier"] }],
+        wire,
+      ).map(({ code }) => code),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("requires responses to target the traced request id", () => {
+    const variableRequest: ActionTriggerIR = {
+      kind: "action",
+      concept: "RequestBoundary",
+      action: "request",
+      posture: "returned",
+      input: { path: "/malformed-response", requestId: { $var: "requestId" } },
+      output: {},
+    };
+    const literalRequest: ActionTriggerIR = {
+      ...variableRequest,
+      input: { path: "/malformed-response", requestId: "fixed" },
+    };
+    const app: AppIR = {
+      reactions: [
+        {
+          name: "WrongResponseId",
+          when: [variableRequest],
+          where: [],
+          then: [
+            {
+              kind: "request",
+              concept: "RequestBoundary",
+              action: "respond",
+              input: { requestId: "different", ok: true },
+            },
+          ],
+        },
+        {
+          name: "MissingResponseId",
+          when: [variableRequest],
+          where: [],
+          then: [
+            {
+              kind: "request",
+              concept: "RequestBoundary",
+              action: "respond",
+              input: { ok: true },
+            },
+          ],
+        },
+        {
+          name: "LiteralRequestId",
+          when: [literalRequest],
+          where: [],
+          then: [
+            {
+              kind: "request",
+              concept: "RequestBoundary",
+              action: "respond",
+              input: { requestId: "fixed", ok: true },
+            },
+          ],
+        },
+      ],
+      views: [],
+      formers: [],
+      unlowered: [],
+    };
+    const wire: WireContractsIR = {
+      endpoints: [
+        {
+          path: "/malformed-response",
+          input: { kind: "object", fields: [] },
+          output: {
+            kind: "object",
+            fields: [{ key: "ok", type: { kind: "literal", value: true } }],
+          },
+          errors: [],
+          openError: false,
+        },
+      ],
+      appWide: [],
+    };
+
+    expect(
+      applicationDiagnostics(
+        app,
+        [
+          {
+            name: "MalformedResponse",
+            path: "/malformed-response",
+            reactions: ["WrongResponseId", "MissingResponseId", "LiteralRequestId"],
+          },
+        ],
+        wire,
+      ).map(({ code }) => code),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("requires the canonical receive trigger shape for totality", () => {
+    const aliasedRequest: ActionTriggerIR = {
+      kind: "action",
+      concept: "RequestBoundary",
+      action: "request",
+      posture: "returned",
+      input: {
+        path: "/malformed-receive",
+        requestId: { $var: "requestId" },
+        token: { $var: "requestId" },
+      },
+      output: {},
+    };
+    const outputFilteringRequest: ActionTriggerIR = {
+      kind: "action",
+      concept: "RequestBoundary",
+      action: "request",
+      posture: "returned",
+      input: { path: "/malformed-receive", requestId: { $var: "otherRequestId" } },
+      output: { accepted: true },
+    };
+    const app: AppIR = {
+      reactions: [aliasedRequest, outputFilteringRequest].map((request, index) => ({
+        name: `MalformedReceive${index + 1}`,
+        when: [request],
+        where: [],
+        then: [
+          {
+            kind: "request" as const,
+            concept: "RequestBoundary",
+            action: "respond",
+            input: {
+              requestId: request.input.requestId,
+              ok: true,
+            },
+          },
+        ],
+      })),
+      views: [],
+      formers: [],
+      unlowered: [],
+    };
+    const wire: WireContractsIR = {
+      endpoints: [
+        {
+          path: "/malformed-receive",
+          input: {
+            kind: "object",
+            fields: [{ key: "token", type: { kind: "json" } }],
+          },
+          output: {
+            kind: "object",
+            fields: [{ key: "ok", type: { kind: "literal", value: true } }],
+          },
+          errors: [],
+          openError: false,
+        },
+      ],
+      appWide: [],
+    };
+
+    expect(
+      applicationDiagnostics(
+        app,
+        [
+          {
+            name: "MalformedReceive",
+            path: "/malformed-receive",
+            reactions: ["MalformedReceive1", "MalformedReceive2"],
+          },
+        ],
+        wire,
+      ).map(({ code }) => code),
+    ).toContain("MISSING_ENDPOINT_FALLBACK");
+  });
+
+  test("requires a complementary read pair to cover admitted request shapes", () => {
+    const OptionalInput = endpoint(
+      "/optional-input",
+      ({ item }) =>
+        receive({ item }).then(
+          where(Looking._get({ item }))
+            .then(respond({ found: true }))
+            .named("found"),
+          where(no(Looking._get({ item })))
+            .then(respond({ found: false }))
+            .named("missing"),
+        ),
+      { input: { defaults: { item: "default" } } },
+    );
+
+    expect(
+      applicationManifest(
+        assemble({ vocabulary: lookup, composition: { OptionalInput } }),
+      ).diagnostics.map(({ code }) => code),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("attributes answer paths by request path rather than reaction-name prefixes", () => {
+    const Get = endpoint("/get", () => receive().then(respond({ ok: true })));
+    const Shadow = endpoint("/shadow", ({ item }) =>
+      receive({ item }).where(Looking._get({ item })).then(respond({ item })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Get, "Get:shadow": Shadow } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+    expect(diagnostics[0]?.endpoint).toEqual({ name: "Get:shadow", path: "/shadow" });
+  });
+
+  test("does not equate guards whose local variables bind different request fields", () => {
+    const Left = endpoint("/alpha", ({ first, second }) =>
+      receive({ left: first, right: second })
+        .where(Looking._get({ item: first }))
+        .then(respond({ side: "left" })),
+    );
+    const Right = endpoint("/alpha", ({ first, second }) =>
+      receive({ left: second, right: first })
+        .where(Looking._get({ item: first }))
+        .then(respond({ side: "right" })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Left, Right } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("treats caller-controlled correlation literals as request guards", () => {
+    const FirstCorrelation = endpoint("/correlation", () =>
+      receive({ correlationId: "first" }).then(respond({ source: "first" })),
+    );
+    const SecondCorrelation = endpoint("/correlation", () =>
+      receive({ correlationId: "second" }).then(respond({ source: "second" })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({
+        vocabulary: lookup,
+        composition: { FirstCorrelation, SecondCorrelation },
+      }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("does not prove coverage through an intermediate action posture", () => {
+    const Chained = endpoint("/chained", ({ item, opened }) =>
+      receive({ item })
+        .then(Looking.open({ item }).responds({ item: opened }))
+        .then(respond({ opened })),
+    );
+
+    expect(
+      applicationManifest(
+        assemble({ vocabulary: lookup, composition: { Chained } }),
+      ).diagnostics.map(({ code }) => code),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("preserves Object.is number distinctions in endpoint proofs", () => {
+    const NegativeZero = endpoint("/zero", () =>
+      receive({ value: -0 }).then(respond({ value: -0 })),
+    );
+    const PositiveZero = endpoint("/zero", () => receive({ value: 0 }).then(respond({ value: 0 })));
+    const NumberPartition = endpoint("/number-partition", () =>
+      receive().then(
+        where(Looking._number({ value: -0 }))
+          .then(respond({ found: true }))
+          .named("negative-zero"),
+        where(no(Looking._number({ value: 0 })))
+          .then(respond({ found: false }))
+          .named("positive-zero"),
+      ),
+    );
+    const diagnostics = applicationManifest(
+      assemble({
+        vocabulary: lookup,
+        composition: { NegativeZero, PositiveZero, NumberPartition },
+      }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual([
+      "MISSING_ENDPOINT_FALLBACK",
+      "MISSING_ENDPOINT_FALLBACK",
+    ]);
+  });
+
+  test("does not claim overlap with a request constraint of unknown inhabitance", () => {
+    const Always = endpoint("/regexp", () => receive().then(respond({ source: "always" })));
+    const Impossible = endpoint("/regexp", () =>
+      receive({ item: /(?!)/u }).then(respond({ source: "impossible" })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Always, Impossible } }),
+    ).diagnostics;
+
+    expect(diagnostics.some(({ code }) => code === "ENDPOINT_PATH_OVERLAP")).toBe(false);
+  });
+
+  test("describes structurally possible guard overlap as potential", () => {
+    const Always = endpoint("/potential", () => receive().then(respond({ source: "always" })));
+    const Impossible = endpoint("/potential", () =>
+      receive()
+        .where(is.lt(1, 0))
+        .then(respond({ source: "impossible" })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Always, Impossible } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["ENDPOINT_PATH_OVERLAP"]);
+    expect(diagnostics[0]?.message).toContain("potentially overlapping");
   });
 
   test("is JSON-round-trippable and byte-identical for equivalent assembly order", () => {

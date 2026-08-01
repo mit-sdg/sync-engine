@@ -55,7 +55,7 @@ export interface Engine {
   logging: Logging;
 
   /** Evaluate a fused former against this engine's concepts, at the moment of asking. */
-  form(fused: FusedFormer): Promise<unknown>;
+  form<Value>(fused: FusedFormer<Value>): Promise<Value>;
 }
 
 export interface EngineOptions {

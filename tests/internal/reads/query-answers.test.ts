@@ -77,25 +77,31 @@ describe("query answers", () => {
       Balances as unknown as BalancesConcept & { credit: (i: object) => Promise<unknown> }
     ).credit({ owner: "amara", amount: 3 });
 
-    const balance = former("balance (owner)", ({ owner }, { total }) =>
-      where(BalancesReads._balance({ owner }).is({ total })).form({ total }),
-    );
+    const balance = former("balance (owner)", (inputs, bindings) => {
+      const owner = inputs("owner");
+      const total = bindings("total");
+      return where(BalancesReads._balance({ owner }).is({ total })).form({ total });
+    });
     expect(await reacting.form(balance({ owner: "amara" }))).toEqual({ total: 3 });
   });
 
   test("a many query answers an array", async () => {
     const { reacting } = setup(new BalancesConcept(), "Balances");
-    const entries = former("entries (owner)", ({ owner }, { amount }) =>
-      each(BalancesReads._entries({ owner }).is({ amount })).form({ amount }),
-    );
+    const entries = former("entries (owner)", (inputs, bindings) => {
+      const owner = inputs("owner");
+      const amount = bindings("amount");
+      return each(BalancesReads._entries({ owner }).is({ amount })).form({ amount });
+    });
     expect(await reacting.form(entries({ owner: "amara" }))).toEqual([]);
   });
 
   test("an optional query can shape an optional record", async () => {
     const { reacting, concept: Balances } = setup(new BalancesConcept(), "Balances");
-    const latest = former("latest (owner)", ({ owner }, { amount }) =>
-      where(BalancesReads._latest({ owner }).is({ amount })).form({ amount }),
-    ).optional();
+    const latest = former("latest (owner)", (inputs, bindings) => {
+      const owner = inputs("owner");
+      const amount = bindings("amount");
+      return where(BalancesReads._latest({ owner }).is({ amount })).form({ amount });
+    }).optional();
     expect(await reacting.form(latest({ owner: "amara" }))).toBeNull();
     await (
       Balances as unknown as BalancesConcept & { credit: (input: object) => Promise<unknown> }
@@ -105,29 +111,33 @@ describe("query answers", () => {
 
   test("a scalar query answer raises a query fault", async () => {
     const { reacting } = setup(new BrokenConcept(), "Broken");
-    const scalar = former("scalar ()", (_inputs, { value }) =>
-      where(BrokenReads._scalar({}).is({ value })).form({ value }),
-    );
+    const scalar = former("scalar ()", (_inputs, bindings) => {
+      const value = bindings("value");
+      return where(BrokenReads._scalar({}).is({ value })).form({ value });
+    });
     await expect(reacting.form(scalar({}))).rejects.toThrow('promises "one"');
     await expect(reacting.form(scalar({}))).rejects.toThrow("Broken._scalar");
   });
 
   test("every member of a many answer must be a record", async () => {
     const { reacting } = setup(new BrokenConcept(), "Broken");
-    const rows = former("rows ()", (_inputs, { value }) =>
-      each(BrokenReads._mixedRows({}).is({ value })).form({ value }),
-    );
+    const rows = former("rows ()", (_inputs, bindings) => {
+      const value = bindings("value");
+      return each(BrokenReads._mixedRows({}).is({ value })).form({ value });
+    });
     await expect(reacting.form(rows({}))).rejects.toThrow("row 2 is null");
   });
 
   test("an undeclared query accepts one record or an array of records", async () => {
     const { reacting } = setup(new UndeclaredQueriesConcept(), "UndeclaredQueries");
-    const single = former("single rows ()", (_inputs, { value }) =>
-      each(UndeclaredReads._single({}).is({ value })).form({ value }),
-    );
-    const rows = former("rows ()", (_inputs, { value }) =>
-      each(UndeclaredReads._rows({}).is({ value })).form({ value }),
-    );
+    const single = former("single rows ()", (_inputs, bindings) => {
+      const value = bindings("value");
+      return each(UndeclaredReads._single({}).is({ value })).form({ value });
+    });
+    const rows = former("rows ()", (_inputs, bindings) => {
+      const value = bindings("value");
+      return each(UndeclaredReads._rows({}).is({ value })).form({ value });
+    });
 
     expect(await reacting.form(single({}))).toEqual([{ value: 1 }]);
     expect(await reacting.form(rows({}))).toEqual([{ value: 1 }, { value: 2 }]);

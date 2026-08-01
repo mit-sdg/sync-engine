@@ -83,8 +83,8 @@ dependency location:
 The scaffold keeps placeholders and generation reads the canonical root facts.
 The following `bun install` regenerates `bun.lock` from the projected manifests.
 Review the lockfile and manifest diffs together. `bun run release:check` rejects
-stale projections; review and commit every updated manifest and `bun.lock`
-rather than rewriting package metadata during publication. Run frozen
+stale projections; review and commit every updated manifest and `bun.lock`.
+Publication uses that committed package metadata unchanged. Run frozen
 verification only after the lockfile is current; `bun run release:verify` begins
 with `bun install --frozen-lockfile`.
 
@@ -207,7 +207,7 @@ tarball.
 - Run `bunx --package @mit-sdg/sync-engine@$VERSION sync-engine --help` and
   scaffold a project from that exact version. Run its generation, check,
   principle, and scenario commands. Check artifacts from an application-owned
-  copy rather than writing inside `node_modules`.
+  copy and leave `node_modules` unchanged.
 - Reconfirm the npm trusted publisher identity, ownership/2FA, GitHub
   environment controls, protected tag, and private vulnerability reporting
   after publication.

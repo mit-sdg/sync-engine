@@ -80,14 +80,16 @@ describe("portable-only ordinary assembly", () => {
   });
 
   test("rejects opaque views and formers even when no reaction reaches them", () => {
-    const localView = view("(value) passes local code", ({ value }) =>
-      where(custom(accepts, [value], [])),
-    ).holds();
-    const localFormer = former("the local items", (_inputs, { value }) =>
-      each(Working._items({}).is({ value }))
+    const localView = view("(value) passes local code", (inputs) => {
+      const value = inputs("value");
+      return where(custom(accepts, [value], []));
+    }).holds();
+    const localFormer = former("the local items", (_inputs, bindings) => {
+      const value = bindings("value");
+      return each(Working._items({}).is({ value }))
         .where(custom(accepts, [value], []))
-        .form({ value }),
-    );
+        .form({ value });
+    });
 
     expect(() => assemble({ vocabulary: words, composition: { localView, localFormer } })).toThrow(
       "assemble: ordinary assembly accepts portable behavior only:\n" +

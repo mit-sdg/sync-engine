@@ -33,22 +33,23 @@ const ClearedReadingClosesDiscussion = reaction(({ selection, discussion }) =>
     .then(Discussing.close({ discussion })),
 );
 
-const theStandingOf = view(
-  "the standing of (member) in (circle)",
-  ({ member, circle }, { joined }, _bindings) =>
-    where(Gathering._membership({ gathering: circle, member }).is({ joined })),
-).one();
+const theStandingOf = view("the standing of (member) in (circle)", (inputs, outputs, _bindings) => {
+  const { member, circle } = inputs("member", "circle");
+  const joined = outputs("joined");
+  return where(Gathering._membership({ gathering: circle, member }).is({ joined }));
+}).one();
 
-const memberMayRespond = view(
-  "(member) may respond in (circle)",
-  ({ member, circle }, _outputs, _bindings) =>
-    where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
-).holds();
+const memberMayRespond = view("(member) may respond in (circle)", (inputs, _outputs, _bindings) => {
+  const { member, circle } = inputs("member", "circle");
+  return where(Gathering._membership({ gathering: circle, member }).is({ joined: true }));
+}).holds();
 
 const nonmemberMayNotRespond = view(
   "(member) may not respond in (circle)",
-  ({ member, circle }, _outputs, _bindings) =>
-    where(Gathering._membership({ gathering: circle, member }).is({ joined: false })),
+  (inputs, _outputs, _bindings) => {
+    const { member, circle } = inputs("member", "circle");
+    return where(Gathering._membership({ gathering: circle, member }).is({ joined: false }));
+  },
 ).holds();
 
 const HostLeavingDissolvesCircle = reaction(({ circle, host, member }) =>
@@ -66,31 +67,36 @@ const OpenDiscussionOnce = reaction(({ selection }) =>
     .then(Discussing.open({ subject: selection })),
 );
 
-const theOpenDiscussionOf = view(
-  "the open discussion of (circle)",
-  ({ circle }, { discussion }, { selection }) =>
-    where(
-      Selecting._current({ scope: circle }).is({ selection }),
-      Discussing._openFor({ subject: selection }).is({ discussion }),
-    ),
-).optional();
+const theOpenDiscussionOf = view("the open discussion of (circle)", (inputs, outputs, bindings) => {
+  const circle = inputs("circle");
+  const discussion = outputs("discussion");
+  const selection = bindings("selection");
+  return where(
+    Selecting._current({ scope: circle }).is({ selection }),
+    Discussing._openFor({ subject: selection }).is({ discussion }),
+  );
+}).optional();
 
-const theCircleCard = former("the circle card (circle)", ({ circle }, { name, host, reading }) =>
-  where(
+const theCircleCard = former("the circle card (circle)", (inputs, bindings) => {
+  const circle = inputs("circle");
+  const { name, host, reading } = bindings("name", "host", "reading");
+  return where(
     Gathering._get({ gathering: circle }).is({ name, host }),
     whether(Selecting._current({ scope: circle }).is({ item: reading })),
-  ).form({ name, host, reading }),
-);
+  ).form({ name, host, reading });
+});
 
-const theCurrentReadingOf = former("the current reading of (circle)", ({ circle }, { reading }) =>
-  where(Selecting._current({ scope: circle }).is({ item: reading })).form({ reading }),
-).optional();
+const theCurrentReadingOf = former("the current reading of (circle)", (inputs, bindings) => {
+  const circle = inputs("circle");
+  const reading = bindings("reading");
+  return where(Selecting._current({ scope: circle }).is({ item: reading })).form({ reading });
+}).optional();
 
-const theResponseCountOf = former(
-  "the response count of (discussion)",
-  ({ discussion }, { response }) =>
-    each(Discussing._responses({ discussion }).is({ response })).count(),
-);
+const theResponseCountOf = former("the response count of (discussion)", (inputs, bindings) => {
+  const discussion = inputs("discussion");
+  const response = bindings("response");
+  return each(Discussing._responses({ discussion }).is({ response })).count();
+});
 
 const AddResponse = endpoint(
   "/circles/respond",
@@ -149,23 +155,26 @@ const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
   ),
 );
 
-const theCircleActivityOf = former(
-  "the circle activity of (circle)",
-  ({ circle }, { selection, reading, discussion }) =>
-    where(
-      whether(Selecting._current({ scope: circle }).is({ selection, item: reading })),
-      whether(Discussing._openFor({ subject: selection }).is({ discussion })),
-    ).form({ reading, discussion }),
-);
+const theCircleActivityOf = former("the circle activity of (circle)", (inputs, bindings) => {
+  const circle = inputs("circle");
+  const { selection, reading, discussion } = bindings("selection", "reading", "discussion");
+  return where(
+    whether(Selecting._current({ scope: circle }).is({ selection, item: reading })),
+    whether(Discussing._openFor({ subject: selection }).is({ discussion })),
+  ).form({ reading, discussion });
+});
 
 const theRespondedCircleActivityOf = former(
   "the responded circle activity of (circle)",
-  ({ circle }, { selection, reading, discussion }) =>
-    where(
+  (inputs, bindings) => {
+    const circle = inputs("circle");
+    const { selection, reading, discussion } = bindings("selection", "reading", "discussion");
+    return where(
       whether(Selecting._current({ scope: circle }).is({ selection, item: reading })),
       whether(Discussing._openFor({ subject: selection }).is({ discussion })),
       Discussing._responses({ discussion }),
-    ).form({ reading, discussion }),
+    ).form({ reading, discussion });
+  },
 ).optional();
 
 // ── The caught mistakes — registration, evaluation, and live overlap ────────
@@ -193,13 +202,17 @@ const GetCircleNameFirstDraft = endpoint("/circles/name", ({ circle, name }) =>
   ),
 );
 
-const theFirstReadingOf = former("the first reading of (circle)", ({ circle }, { reading }) =>
-  each(Selecting._current({ scope: circle }).is({ item: reading })).first(reading),
-);
+const theFirstReadingOf = former("the first reading of (circle)", (inputs, bindings) => {
+  const circle = inputs("circle");
+  const reading = bindings("reading");
+  return each(Selecting._current({ scope: circle }).is({ item: reading })).first(reading);
+});
 
-const theMemberCard = former("the member card (circle)", ({ circle }, { member }) =>
-  where(Gathering._members({ gathering: circle }).is({ member })).form({ member }),
-);
+const theMemberCard = former("the member card (circle)", (inputs, bindings) => {
+  const circle = inputs("circle");
+  const member = bindings("member");
+  return where(Gathering._members({ gathering: circle }).is({ member })).form({ member });
+});
 
 // ── The pins ────────────────────────────────────────────────────────────────
 

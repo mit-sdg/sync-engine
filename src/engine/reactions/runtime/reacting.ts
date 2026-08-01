@@ -251,7 +251,7 @@ export class Reacting {
     return this.registry.readEnv();
   }
 
-  async form(fused: FusedFormer): Promise<unknown> {
+  async form<Value>(fused: FusedFormer<Value>): Promise<Value> {
     if (!isFusedFormer(fused)) {
       throw new Error(
         "form(...) takes a named former with its input mapping filled, " +

@@ -128,7 +128,6 @@ index, replay the old reaction, or rebuild the search index. The derived query
 therefore remains empty until the host explicitly calls `recoverSearchIndex`,
 which reads durable concept state and invokes the derived concept's action.
 
-`FileLogSink` is an append-only JSONL audit sink; it is not a transactional
-production database. A production
-implementation must define atomic writes, schema migration, concurrency,
-durability, and recovery failure handling in its own storage layer and host.
+`FileLogSink` provides append-only JSONL audit output. Production concept-state
+storage must separately define atomic writes, schema migration, concurrency,
+durability, and recovery failure handling.

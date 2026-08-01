@@ -1,9 +1,8 @@
 # Engine architecture
 
-This explanation maps the implementation for contributors. It describes the
-current source tree, not a stable public module contract. Use the [documentation
-index](./index.md), [Execution semantics](./semantics.md), and [Public
-API](./public-surface.md) for supported behavior.
+This explanation maps the current source tree for contributors. The
+[documentation index](./index.md), [Execution semantics](./semantics.md), and
+[Public API](./public-surface.md) define supported behavior.
 
 ## Concern map
 
@@ -79,8 +78,8 @@ flow is active.
 exported lowered/unlowered definitions, and base registration names. One
 `ConceptInstrumentation` owns one explicit `InstrumentationState` containing
 proxy identities, raw-concept links, weak concept references, and query caches;
-`instrumenting.ts` operates on that persistent state rather than rebuilding it
-for each operation. Its `QueryCacheMode` selects memoized wrappers by default or
+`instrumenting.ts` reuses that persistent state for each operation. Its
+`QueryCacheMode` selects memoized wrappers by default or
 uncached wrappers for `"none"`.
 
 The interpreter stages likewise have explicit boundaries:
@@ -168,12 +167,36 @@ underlying executable constructs. See
 [Sibling paths and endpoint settlement](./semantics.md#sibling-paths-and-endpoint-settlement)
 for the resulting behavior.
 
+### Bindings between lowered reaction stages
+
+A chained declaration lowers to separate reactions. Each later reaction watches
+the exact preceding ask through `by` provenance; values on that action's input
+and matched output therefore travel with the occurrence. `earlier(...)` can
+recover fields from an earlier action or the originating request.
+
+A binding opened by a standing-state read on an earlier stage does not
+automatically travel to a later stage unless an intervening action record also
+carries it. Re-running that read later could observe different state or lose the
+original fan-out correlation, so `reaction-lowering.ts` currently leaves such a
+path unlowered with the reason `needs rows from a state read, which would re-run
+at a later position`. Ordinary assembly then rejects that local path.
+
+Portable read-binding handoff is deferred. A future design must correlate the
+carried values with the exact path, firing, and preceding ask; preserve fan-out
+and optional blanks without another state read; define portable encoding,
+redaction, evidence, and row-budget accounting; round-trip through exported IR;
+and specify failure without implying rollback or restart replay. Until then,
+place the read on the later stage when later-state observation is intended, or
+put a value on an action input/output only when it belongs to that action's
+semantic contract. Race-sensitive multi-step state decisions usually belong in
+one owning concept action.
+
 `Registry` in `src/engine/reads/definition-registry.ts` owns the concept,
 computation, view, and former maps and the cached read environment.
 `AuthoredReferenceResolver` resolves a fresh authored declaration,
 `ViewFormerValidator` owns validation memoization, and `ImportedIrBinder`
-constructs live definitions from portable IR. Each collaborator receives the
-lookups or validation operations it consumes rather than the complete registry.
+constructs live definitions from portable IR. Each collaborator receives only
+the lookups or validation operations it consumes.
 
 ## Reads and values
 
@@ -211,8 +234,9 @@ invocation, wire, reaction, and read capabilities. `gateway/` exposes the
 verified server-adapter seam; lower layers do not depend on adapters.
 
 `src/engine/boundary/assembly/concept-set.ts` turns plain concept registrations
-into a vocabulary, default implementations, floor-specific implementation
-factories, complete implementation maps, and refusal metadata. A host-created
+and optional named computation functions into a vocabulary, typed computation
+references, default implementations, floor-specific implementation factories,
+complete implementation maps, and refusal metadata. A host-created
 `ConceptFloor` descriptor separately groups one such map with resources and a
 `close()` operation. `src/engine/boundary/assembly/assemble.ts` creates one engine,
 its internal occurrence index, and an optional independent audit sink;

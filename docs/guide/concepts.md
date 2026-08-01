@@ -1,8 +1,7 @@
 # Define one behavior
 
 This guide uses the larger [Operations Room
-example](../../examples/operations-room/README.md), not the Note Keeper
-scaffold from [Getting started](getting-started.md). It shows how one of that
+example](../../examples/operations-room/README.md). It shows how one of that
 application's concepts becomes independently testable: specification, plain
 TypeScript class, principle test, and registration. The authoritative machine
 grammar and uninterpreted prose boundary are in [Concept specification
@@ -250,8 +249,10 @@ semantics](../semantics.md#queries) defines query result checks.
 The operations room includes that registry once in its explicit concept set.
 The key `Alerting` in that set gives the concept its application name. The set
 derives its vocabulary, authoring references, ordinary implementations, and
-complete named floors. Each composition file destructures only the references
-it uses from the set's `concepts` object.
+complete named floors. An optional second `conceptSet` record adds named pure
+computations and exposes their inferred references as `set.computations`. Each
+composition file takes only the concept and computation references it uses from
+the set.
 
 Alerting never names Gathering, Selecting, Discussing, an operations room, or
 a reading circle. It owns one lifecycle and refers only to the roles inside

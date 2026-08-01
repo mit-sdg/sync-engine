@@ -247,7 +247,7 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   /** Every authored endpoint declaration, independent of lowering. */
   endpoints: readonly EndpointDeclaration[];
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
-  form(fused: FusedFormer): Promise<unknown>;
+  form<Value>(fused: FusedFormer<Value>): Promise<Value>;
 }
 
 function isFormerRef(value: unknown): value is FormerRef {

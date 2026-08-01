@@ -53,9 +53,10 @@ describe("Reacting interpreter loop", () => {
       }
     }
     const { Reading: ReadingRef } = vocabulary({ concepts: { Reading } }).concepts;
-    const snapshot = former("manual snapshot ()", (_input, { value }) =>
-      each(ReadingRef._rows({}).is({ value })).form({ value }),
-    );
+    const snapshot = former("manual snapshot ()", (_input, bindings) => {
+      const value = bindings("value");
+      return each(ReadingRef._rows({}).is({ value })).form({ value });
+    });
     const engine = createEngine();
     const ReadingConcept = engine.instrumentConcept(new Reading());
 

@@ -51,7 +51,7 @@ Queries (standing questions the state answers):
 ### Gathering
 
 **Purpose.** Let a host create a named gathering and let people join or leave it, so
-belonging is deliberate and visible rather than inferred from activity.
+belonging is an explicit, visible state.
 
 **Principle.** Asha creates Saturday Workshop and becomes its first member. Bo joins and appears
 among its members. When Bo tries to join again, the gathering refuses the

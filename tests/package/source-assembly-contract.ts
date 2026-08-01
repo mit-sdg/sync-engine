@@ -8,6 +8,7 @@ import type {
 } from "@sync-engine/assembly";
 import type { GatewayOptions } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/language";
+import { each, form, former } from "@sync-engine/language";
 import type { ApplicationManifestV3 } from "@sync-engine/tooling";
 
 declare const manifestV3: ApplicationManifestV3;
@@ -35,6 +36,18 @@ class RestConcept {
 const spec = "# Concept";
 const context = { store: "primary" };
 
+interface TextComputationInput {
+  value: string;
+}
+
+class ComputationClassInput {
+  constructor(readonly value: string) {}
+
+  read() {
+    return this.value;
+  }
+}
+
 const complete = conceptSet({
   First: registerConcept({
     class: FirstConcept,
@@ -50,6 +63,65 @@ const complete = conceptSet({
     floors: { mongo: (_: typeof context) => new SecondConcept() },
   }),
 });
+
+const computed = conceptSet(
+  {
+    First: registerConcept({ class: FirstConcept, spec }),
+  },
+  {
+    normalize: ({ value }: TextComputationInput) => value.trim(),
+    size: ({ value }: TextComputationInput) => value.length,
+    constant: (_: Record<string, never>) => 1,
+  },
+);
+computed.computations.normalize({ value: " ready " });
+computed.vocabulary.computations.size({ value: "ready" });
+// @ts-expect-error Computation inputs retain their declared value types.
+computed.computations.normalize({ value: 1 });
+// @ts-expect-error Computation calls require every declared input.
+computed.computations.normalize({});
+// @ts-expect-error Computation calls reject undeclared inputs.
+computed.computations.normalize({ value: "ready", extra: true });
+computed.computations.constant({});
+// @ts-expect-error A zero-input computation does not accept arbitrary keys.
+computed.computations.constant({ extra: true });
+// @ts-expect-error The concept set exposes only its declared computations.
+void computed.computations.missing;
+
+const indexedComputations = vocabulary({
+  concepts: {},
+  computations: {
+    concatenate: (parts: Record<string, string>) => Object.values(parts).join(""),
+    required: (parts: { [key: string]: string; required: string }) => parts.required,
+  },
+});
+indexedComputations.computations.concatenate({ first: "a", second: "b" });
+// @ts-expect-error String-indexed computation inputs retain their value type.
+indexedComputations.computations.concatenate({ first: "a", second: 2 });
+indexedComputations.computations.required({ required: "present" });
+// @ts-expect-error Named required properties survive a string index signature.
+indexedComputations.computations.required({});
+
+// @ts-expect-error Computations receive an object mapping, not a primitive parameter.
+vocabulary({ concepts: {}, computations: { malformed: (value: number) => value } });
+// @ts-expect-error Computation inputs are mappings, not arrays.
+vocabulary({ concepts: {}, computations: { malformed: (value: string[]) => value.length } });
+vocabulary({
+  concepts: {},
+  computations: {
+    // @ts-expect-error Every member of a computation input union must be object-shaped.
+    malformed: (value: { text: string } | number) => String(value),
+  },
+});
+vocabulary({
+  concepts: {},
+  computations: {
+    // @ts-expect-error Computations receive plain mappings, not method-bearing class instances.
+    malformed: (value: ComputationClassInput) => value.read(),
+  },
+});
+// @ts-expect-error conceptSet enforces the same object-shaped computation input contract.
+conceptSet({}, { malformed: (value: number) => value });
 
 complete.implementations();
 complete.implementations("mongo", context);
@@ -163,6 +235,30 @@ const synchronousOptions: AssemblyOptions<{ Saving: typeof SynchronousActionConc
   retention: "keepAll",
 };
 const instrumentedSurface = assemble(synchronousOptions);
+
+const savedValues = former("the saved values", (_inputs, bindings) => {
+  const value = bindings("value");
+  return form({
+    values: each(synchronousVocabulary.concepts.Saving._saved({}).is({ value })).form({ value }),
+    first: each(synchronousVocabulary.concepts.Saving._saved({}).is({ value })).first(value),
+  });
+});
+const formedValues: Promise<{
+  values: { value: string }[];
+  first: string | null;
+}> = instrumentedSurface.form(savedValues({}));
+void formedValues;
+
+const maybeSavedValue = former("the optional saved value", (_inputs, bindings) => {
+  const value = bindings("value");
+  return each(synchronousVocabulary.concepts.Saving._saved({}).is({ value })).first(value);
+});
+const formedMaybe: Promise<string | null> = instrumentedSurface.form(maybeSavedValue({}));
+void formedMaybe;
+
+// @ts-expect-error Direct former evaluation retains the inferred result type.
+const malformedFormed: Promise<{ value: number }> = instrumentedSurface.form(savedValues({}));
+void malformedFormed;
 
 const saved: Promise<{ value: string } | ActionRefusal> = instrumentedSurface.concepts.Saving.save({
   value: "ok",

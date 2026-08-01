@@ -24,20 +24,21 @@ implementation or the interface, and the boundary is a property of the behavior.
 - **Whether two responsibilities appear on the same screen.** The Operations Room
   dashboard reads four concepts at once. Screens compose; that is their job.
 - **Whether one service usually implements both.** Common implementation
-  practice records what teams deploy together, not what varies together.
-- **Whether splitting would require a reaction.** A reaction is the expected cost
-  of a correct split, not an argument against it. What matters is whether the
+  practice records deployment grouping. Concept boundaries follow behavioral
+  variation.
+- **Whether splitting would require a reaction.** A correct split may require a
+  reaction. What matters is whether the
   reaction expresses a real application decision or merely reassembles one
   operation.
 
 ## Evidence for and against a split
 
-Weigh evidence rather than counting it. One decisive item — two purposes, or an
+Evaluate the force of the evidence. One decisive item — two purposes, or an
 invariant that requires both parts to change atomically — settles the question
 against several weak ones.
 
-Here, "atomically" describes the needed domain transition, not an engine
-transaction. One action serializes its body for one raw concept instance within
+Here, "atomically" describes the needed domain transition. The engine supplies
+no transaction. One action serializes its body for one raw concept instance within
 one engine, but does not create rollback, durable atomicity, or cross-process
 coordination. A durable implementation that changes shared state needs the
 appropriate storage transaction or constraint.
@@ -144,8 +145,8 @@ differently, and one of them can be removed by choosing a different pack.
 
 Dense pass-through — a reaction for each action of one concept, mapping
 one-to-one onto the other's actions, with no condition and no decision — is
-evidence the split cut below a natural boundary, or that one side is an adapter
-rather than a concept. Reactions that only exist to reassemble an operation
+evidence the split cut below a natural boundary, or that one side is an
+external-system adapter. Reactions that only exist to reassemble an operation
 users perform as one step point the same way.
 
 Do not use a reaction count as a threshold. One reaction can encode severe
@@ -230,10 +231,10 @@ whose selection has no discussion still forms an answer:
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
-      current: where(
-        whether(Selecting._current({ scope: room }).is({ selection, item: mitigation })), // whether() allows optional matching — the row still exists if no selection is found
-        whether(Discussing._openFor({ subject: selection }).is({ discussion })),
-      ).form({
+    current: where(
+      whether(Selecting._current({ scope: room }).is({ selection, item: mitigation })), // whether() allows optional matching — the row still exists if no selection is found
+      whether(Discussing._openFor({ subject: selection }).is({ discussion })),
+    ).form({
 ```
 
 **Meaning now travels as an identity.** The selection identity becomes
@@ -283,7 +284,7 @@ concepts. That is the combination signal.
 Sometimes a candidate should split eventually and not yet. A trivial part with
 an obvious lifecycle — a room's `status` field today that will become
 open/triaging/resolved with transition rules, permissions, and history — is
-worth splitting when the lifecycle arrives, not before. Record the expectation
+worth splitting when the lifecycle arrives. Record the expectation
 in the concept's specification prose so the next reader knows the boundary is
 provisional, and re-run the purpose and principle tests when a second transition
 appears.

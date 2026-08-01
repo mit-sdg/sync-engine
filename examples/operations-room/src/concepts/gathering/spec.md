@@ -3,7 +3,7 @@
 ## Purpose
 
 Let a host create a named gathering and let people join or leave it, so
-belonging is deliberate and visible rather than inferred from activity.
+belonging is an explicit, visible state.
 
 ## Principle
 

@@ -7,13 +7,15 @@
 sync-engine is a TypeScript library for composing independently implemented
 application behaviors. Each behavior, called a **concept**, owns its state,
 actions, queries, and expected refusals. The application connects concepts in a
-separate composition instead of adding peer imports to their implementations.
+separate composition, leaving their implementations independent of peers.
 
 Composition has four main parts:
 
 - **reactions** ask for consequences after action asks or outcomes;
-- **views** name shared relations and policy decisions;
-- **formers** build typed result trees from current state;
+- **views** name shared relations and policy decisions with inferred input and
+  output types;
+- **formers** build current-state result trees with inferred input and result
+  types;
 - **endpoints** connect outside requests to composed behavior.
 
 The engine validates the composition, instruments the selected concept
@@ -81,7 +83,7 @@ sequence, commands, and source-of-truth order.
 
 ## How composition works
 
-This reaction belongs to the application, not to either concept. It opens a
+This reaction is part of the application composition. It opens a
 discussion whenever Selecting returns a new selection:
 
 ```ts
@@ -95,9 +97,9 @@ export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
 );
 ```
 
-Calling `Selecting.choose(...)` in this declaration creates authoring data; it
-does not invoke the concept. At runtime, the reaction watches a returned
-`Selecting.choose` occurrence, binds `selection` from its result, and asks
+Calling `Selecting.choose(...)` in this declaration records an action reference.
+At runtime, a returned `Selecting.choose` occurrence activates the reaction,
+binds `selection` from the result, and causes the reaction to ask
 `Discussing.open`. Selecting and Discussing remain independently implemented.
 
 See [Connect independent behaviors](docs/guide/reactions.md) for the authoring
@@ -139,15 +141,15 @@ An application built with `assemble(...)` has these relevant boundaries:
 | Action execution | One action body runs at a time per concept instance within one assembly. Different instances and flows may overlap.                                                                                                           |
 | Evidence         | Each action ask and its return, refusal, or fault is recorded in an engine-owned occurrence index. An optional `LogSink` receives redacted audit entries and must return `undefined` synchronously. Neither is concept state. |
 | Retention        | Ordinary assembly retains the 100 most recent settled flows by default. Configure `{ window: number }` or `"keepAll"`; window enforcement runs after flow settlement.                                                         |
-| Composition      | Assembly validates the registered, portable design before it exposes routes. Generated artifacts fail rather than omit unsupported endpoints.                                                                                 |
+| Composition      | Assembly rejects local reactions, views, and formers before exposing routes or generating artifacts.                                                                                                                          |
 | Caller typing    | Generated contracts typecheck callers. They do not validate runtime values.                                                                                                                                                   |
 | Cancellation     | Timeout and abort stop the caller's wait. They do not cancel accepted work.                                                                                                                                                   |
 | Persistence      | The engine does not provide concept-state persistence, occurrence replay, restart recovery, or transactions across actions.                                                                                                   |
 | Distribution     | The engine does not provide distributed serialization, deduplication, or exactly-once execution.                                                                                                                              |
 
-The optional State section in a concept specification is notation for readers,
-not a runtime schema. See [Concept specification
-format](docs/concept-specification.md#state-notation) for what is parsed,
+The optional State section in a concept specification is uninterpreted prose for
+readers. Registration derives no schema or validator from it. See [Concept
+specification format](docs/concept-specification.md#state-notation) for what is parsed,
 [Execution semantics](docs/semantics.md) for the complete runtime contract, and
 [Operational limits](docs/operations.md) before deployment.
 

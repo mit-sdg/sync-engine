@@ -8,6 +8,7 @@ import {
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { applicationManifest, renderApp } from "@sync-engine/tooling";
+import { compute, former, where } from "@sync-engine/language";
 
 class MissingItem extends Error {}
 
@@ -70,6 +71,28 @@ const cataloging = registerConcept({
 });
 
 describe("external concept registration", () => {
+  test("adds typed named computations to a registered concept set", async () => {
+    const set = conceptSet(
+      { Cataloging: cataloging },
+      { normalize: ({ value }: { value: string }) => value.trim().toLowerCase() },
+    );
+    const normalized = former("the normalized (value)", (inputs, bindings) => {
+      const value = inputs("value");
+      const result = bindings("result");
+      return where(compute(set.computations.normalize, { value }, result)).form({ result });
+    });
+    const application = assembleApplication({
+      vocabulary: set.vocabulary,
+      composition: { normalized },
+      instances: set.implementations(),
+    });
+
+    expect(set.computations.normalize).toBe(set.vocabulary.computations.normalize);
+    expect(await application.form(normalized({ value: "  Ready  " }))).toEqual({
+      result: "ready",
+    });
+  });
+
   test("carries the specification's refusal branch into action-aware instrumentation", async () => {
     const set = conceptSet({ Cataloging: cataloging });
     const { Cataloging: Catalog } = set.concepts;

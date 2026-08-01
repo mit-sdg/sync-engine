@@ -4,6 +4,77 @@ This project follows semantic versioning. Stable v1 public subpaths, behavior,
 and generated-format compatibility follow the [support policy](SUPPORT.md).
 Review the [operational limits](docs/operations.md) before deployment.
 
+## Unreleased
+
+This release adds inferred contracts for views, formers, and registered
+computations. It also expands endpoint diagnostics and corrects optional former
+output shapes.
+
+### Breaking changes
+
+- View builders now receive callable `inputs`, `outputs`, and `bindings`
+  selectors. Former builders receive callable `inputs` and `bindings`
+  selectors. Existing builders that destructure callback arguments must select
+  each literal name explicitly:
+
+  ```ts
+  const roomCard = former("the room (room)", (inputs, bindings) => {
+    const room = inputs("room");
+    const { name, host } = bindings("name", "host");
+    return where(Gathering._get({ gathering: room }).is({ name, host })).form({
+      room,
+      name,
+      host,
+    });
+  });
+  ```
+
+  A one-name selector returns one logic variable. A selector with two or more
+  names returns a keyed object. Calling a completed view or former continues to
+  use one object input mapping, such as `roomCard({ room })`.
+
+### Added
+
+- Callable selectors preserve each binding's literal identity. TypeScript uses
+  the concept, view, and computation slots containing those bindings to infer
+  view inputs and outputs, former inputs and result trees, nested formers,
+  optional blanks, selections, folds, splices, and direct
+  `Assembly.form(...)` results.
+- Exported declarations can state checked contracts with
+  `RelationView<Input, Output>` and `Former<Input, Result>` annotations. The
+  annotations verify known inferred fields and supply types for otherwise
+  unconstrained fields.
+- `conceptSet(registrations, computations?)` installs named computations while
+  retaining their names and function signatures on `set.computations` and
+  `set.vocabulary.computations`.
+
+### Changed
+
+- Endpoint diagnostics trace a response through its causal provenance to the
+  matching request path and request identifier. The analysis recognizes
+  canonical receive shapes, earlier-stage guards, disjoint literal request
+  alternatives, non-dropping `whether` lines, and fresh computations.
+- Overlap diagnostics describe structurally possible intersections as
+  potential overlap. Coverage requires a recognized non-dropping answer path;
+  complementary state reads receive no coverage proof because sibling
+  reactions observe separate state snapshots.
+
+### Fixed
+
+- A generated endpoint result includes `null` when the endpoint directly
+  returns an optional former.
+- A blank optional splice retains every recursively contributed key and assigns
+  `null` to each leaf.
+
+### Migration
+
+- Rewrite destructured view and former builder arguments with callable
+  selectors as shown above. Select names at their point of declaration; query,
+  view, computation, and formed-result slots provide their inferred types.
+- Regenerate checked-in application manifests, assembled read-back, and wire
+  contracts. The expanded endpoint analysis can change advisory diagnostics,
+  and corrected optional former results can change generated TypeScript.
+
 ## [1.0.0] - 2026-07-31
 
 The first stable release tightens assembly, validation, persistence, client,

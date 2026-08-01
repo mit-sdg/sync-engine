@@ -60,8 +60,8 @@ on its own path returns.
 
 ## Correlation ID
 
-A tracing identifier carried through gateway and application observation. A
-correlation ID does not deduplicate work and is not an idempotency key.
+A tracing identifier carried through gateway and application observation.
+Deduplication requires a domain-owned idempotency key.
 
 ## Domain error
 
@@ -78,7 +78,8 @@ receives admitted input, and may produce one boundary response.
 ## Fault
 
 An unexpected failure attached to an action ask, such as an action throw or a
-former-evaluation failure. A fault is not a deliberate refusal.
+former-evaluation failure. A refusal is the corresponding deliberate domain
+outcome.
 
 ## Firing
 
@@ -92,7 +93,9 @@ consequences. Reaction matching and `earlier(...)` correlation are flow-local.
 
 ## Former
 
-A named current-state read that constructs a typed value tree. A former is
+A named current-state read that constructs a typed value tree. Literal binding
+selectors let its callable inputs and complete result infer from concept
+signatures; an explicit input/result pair is also available. A former is
 evaluated when asked; the engine does not store its result.
 
 ## Framework error
@@ -105,8 +108,8 @@ their own error unions.
 ## Gateway
 
 An `Invoker` decorator that performs public route admission, forwarding,
-limits, observation, timeout and abort handling, and ordered drain. A gateway
-does not create another reaction engine or occurrence index.
+limits, observation, timeout and abort handling, and ordered drain around the
+target application's reaction engine and occurrence index.
 
 ## HTTP floor
 
@@ -157,7 +160,7 @@ JSONL implementation.
 Recorded execution evidence for an action ask, return, refusal, or fault. The
 occurrence log also contains firing, reaction-failure, and integrity-failure
 evidence. The engine retains occurrences in its internal index and may copy them
-to a `LogSink`. Occurrences are not concept state.
+to a `LogSink`. Concept implementations own domain state separately.
 
 ## Portable behavior
 
@@ -173,8 +176,8 @@ runs the concept class directly and verifies the sequence without an assembly.
 ## Public error category
 
 The production HTTP classification registered for a concept refusal, such as
-`CONFLICT` or `UNAUTHORIZED`. Production HTTP exposes registered categories
-rather than private refusal codes.
+`CONFLICT` or `UNAUTHORIZED`. Production HTTP exposes registered categories and
+keeps private refusal codes inside the application boundary.
 
 ## Query
 
@@ -205,30 +208,32 @@ whether the case continues, drops, or expands.
 
 ## Read-back
 
-A generated textual description of an assembled application's reactions,
-views, formers, paths, bindings, and cardinality behavior. Read-back describes
-one assembled design; it is not executable source.
+A generated textual description of one assembled application's reactions,
+views, formers, paths, bindings, and cardinality behavior. Read-back has no
+execution semantics.
 
 ## Refusal
 
 A concept's deliberate rejection of an action. A registered exception class
-maps a specification code to a refusal outcome. A refusal is an expected domain
-result, not a fault.
+maps a specification code to a refusal outcome. Refusals are expected domain
+results; faults are unexpected execution failures.
 
 ## View
 
 A named relation over concept queries or other views. A predicate view answers
 whether a relation holds. An output view returns rows with a declared
-cardinality. A sync-engine view is not a rendered user interface.
+cardinality. Its input and output mappings infer when its builders use callable
+literal-name selectors. In sync-engine, `view` always refers to this authored
+relation.
 
 ## Vocabulary
 
 The named action and query references for a concept set, together with concept
-metadata and optional named computations. Vocabulary references are inert until
-resolved against an engine.
+metadata and optional named computations. `conceptSet` may construct those
+computation references from a second record of pure functions. Vocabulary
+references are inert until resolved against an engine.
 
 ## Wire contract
 
 Generated TypeScript mapping endpoint routes to JSON-projected input, output,
-and error types. A wire contract typechecks callers; it is not a runtime schema
-validator.
+and error types. Applications provide runtime schema validators separately.

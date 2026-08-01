@@ -81,11 +81,15 @@ async function evalSplice(
   const fragment = nestedFormerOf(use, hostName, env);
   const input = resolveInput(use.in, hostScope);
   if (input === ABSENT) {
-    return use.whether ? (blankNode(fragment.body) as Record<string, unknown>) : DROP_ROW;
+    return use.whether
+      ? (blankNode(fragment.body, fragment.formerName, env) as Record<string, unknown>)
+      : DROP_ROW;
   }
   const result = await evaluateFormer(fragment, input, env, assertRows);
   if (result === ABSENT) {
-    return use.whether ? (blankNode(fragment.body) as Record<string, unknown>) : DROP_ROW;
+    return use.whether
+      ? (blankNode(fragment.body, fragment.formerName, env) as Record<string, unknown>)
+      : DROP_ROW;
   }
   return result !== null && typeof result === "object" && !Array.isArray(result)
     ? (result as Record<string, unknown>)
@@ -102,7 +106,12 @@ function resolveInput(input: PatternIR, frame: Frame): Mapping | typeof ABSENT {
   return resolved;
 }
 
-function blankNode(node: FormerNodeIR): unknown {
+function blankNode(
+  node: FormerNodeIR,
+  formerName: string,
+  env: ReadEnv,
+  visiting: ReadonlySet<string> = new Set(),
+): unknown {
   switch (node.node) {
     case "leaf":
     case "first":
@@ -113,10 +122,22 @@ function blankNode(node: FormerNodeIR): unknown {
       return [];
     case "count":
       return 0;
-    case "record":
-      return Object.fromEntries(
-        Object.entries(node.entries).map(([key, child]) => [key, blankNode(child)]),
-      );
+    case "record": {
+      const result: Record<string, unknown> = {};
+      for (const [key, child] of Object.entries(node.entries)) {
+        setOwn(result, key, blankNode(child, formerName, env, visiting));
+      }
+      for (const splice of node.splices ?? []) {
+        const fragment = nestedFormerOf(splice, formerName, env);
+        if (visiting.has(fragment.formerName)) continue;
+        const next = new Set(visiting);
+        next.add(fragment.formerName);
+        const blank = blankNode(fragment.body, fragment.formerName, env, next);
+        if (blank === null || typeof blank !== "object" || Array.isArray(blank)) continue;
+        for (const [key, value] of Object.entries(blank)) setOwn(result, key, value);
+      }
+      return result;
+    }
   }
 }
 
@@ -175,9 +196,13 @@ async function evalNode(
     case "former": {
       const ref = nestedFormerOf(node, formerName, env);
       const input = resolveInput(node.in, frame);
-      if (input === ABSENT) return node.whether ? blankNode(ref.body) : DROP_ROW;
+      if (input === ABSENT) {
+        return node.whether ? blankNode(ref.body, ref.formerName, env) : DROP_ROW;
+      }
       const result = await evaluateFormer(ref, input, env, assertRows);
-      if (result === ABSENT) return node.whether ? blankNode(ref.body) : DROP_ROW;
+      if (result === ABSENT) {
+        return node.whether ? blankNode(ref.body, ref.formerName, env) : DROP_ROW;
+      }
       return result;
     }
     case "each": {
@@ -222,11 +247,11 @@ async function evalNode(
  * engine evaluates). A violated former promise throws {@link FormerFault}.
  * When forming a consequence input, the engine records that fault on the ask.
  */
-export async function formTree(
-  fused: FusedFormer,
+export async function formTree<Value>(
+  fused: FusedFormer<Value>,
   env: ReadEnv,
   assertRows?: AssertRows,
-): Promise<unknown> {
+): Promise<Value> {
   for (const inputName of fused.former.ins) {
     if (typeof fused.in[inputName] === "symbol") {
       throw new Error(
@@ -237,5 +262,5 @@ export async function formTree(
   }
   assertRows?.(1);
   const tree = await evaluateFormer(fused.former, fused.in, env, assertRows);
-  return tree === ABSENT ? null : tree;
+  return (tree === ABSENT ? null : tree) as Value;
 }

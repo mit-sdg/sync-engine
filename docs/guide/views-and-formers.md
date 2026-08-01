@@ -1,8 +1,8 @@
 # Views and formers
 
 This guide assumes the reaction model from [Connect independent
-behaviors](reactions.md). A sync-engine **view** is a named relation, not a user
-interface. A **former** constructs a current result value; it does not store a
+behaviors](reactions.md). A sync-engine **view** is a named relation used in
+composition. A **former** constructs a current result value without storing a
 read model.
 
 Independent membership, selection, discussion, and alert behavior leave two
@@ -21,6 +21,42 @@ concepts about one another.
 | View   | A reusable relation or policy over queries and other views   | A predicate or rows with declared cardinality         | No          |
 | Former | A current output tree over queries, views, and other formers | One record, an optional record, a row list, or a fold | No          |
 
+## Infer the reusable contract
+
+View and former builders receive callable selectors for their input, output,
+and local binding partitions. Calling a selector with literal names preserves
+each binding's identity for TypeScript, allowing the engine to infer its type
+from every query, view, or formed slot where it appears:
+
+```ts
+const profileCard = () =>
+  former("profile card (person)", (inputs, bindings) => {
+    const person = inputs("person");
+    const { profile, bio } = bindings("profile", "bio");
+    return where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
+      person,
+      profile,
+      bio,
+    });
+  });
+```
+
+No domain types are repeated. If `_ofOwner` takes `{ owner: PersonId }` and
+returns `{ profile: ProfileId; bio: string }`, this declaration is callable only
+with that `PersonId`, its result is inferred as the three-field record, and
+`application.form(profileCard()({ person }))` returns a promise of that record.
+Aliases retain the source slot type, as in `.is({ author: responder })`.
+Nested formers, `whether`, list forms, folds, and flat splices contribute their
+result types recursively.
+No property name is reserved; `inputs("$")` selects `"$"` when a domain uses it
+as a binding name.
+
+When an exported abstraction should state its contract independently of its
+implementation, annotate it with `RelationView<Input, Output>` or
+`Former<Input, Result>`. Known inferred fields must agree with the annotation.
+Runtime binding, cardinality, and portability validation remains the same in
+inferred and explicitly annotated declarations.
+
 ## Name the policy
 
 The first policy admits anyone who belongs to the gathering. Its negative view
@@ -31,14 +67,22 @@ _Source: [`examples/operations-room/src/composition/responders-may-contribute.ts
 ```ts
 export const responderMayContribute = view(
   "(responder) may contribute in (room)",
-  ({ responder, room }, _outputs, _bindings) =>
-    where(Gathering._membership({ gathering: room, member: responder }).is({ joined: true })),
+  (inputs, _outputs, _bindings) => {
+    const { responder, room } = inputs("responder", "room");
+    return where(
+      Gathering._membership({ gathering: room, member: responder }).is({ joined: true }),
+    );
+  },
 ).holds();
 
 export const responderMayNotContribute = view(
   "(responder) may not contribute in (room)",
-  ({ responder, room }, _outputs, _bindings) =>
-    where(Gathering._membership({ gathering: room, member: responder }).is({ joined: false })),
+  (inputs, _outputs, _bindings) => {
+    const { responder, room } = inputs("responder", "room");
+    return where(
+      Gathering._membership({ gathering: room, member: responder }).is({ joined: false }),
+    );
+  },
 ).holds();
 ```
 
@@ -58,24 +102,28 @@ For an existing room, the two views answer opposite permission states: one case
 keeps a permitted responder, and the other returns an explicit denial. The
 success case still requires a current selection and an open discussion.
 
-## Change the answer, not the concepts
+## Change the answer through policy composition
 
 A second policy keeps the same two questions and answers them from the room's
-host instead of its membership.
+host identity.
 
 _Source: [`examples/operations-room/src/composition/host-may-contribute.ts`](../../examples/operations-room/src/composition/host-may-contribute.ts)_
 
 ```ts
 export const responderMayContribute = view(
   "(responder) may contribute in (room)",
-  ({ responder, room }, _outputs, _bindings) =>
-    where(Gathering._get({ gathering: room }).is({ host: responder })),
+  (inputs, _outputs, _bindings) => {
+    const { responder, room } = inputs("responder", "room");
+    return where(Gathering._get({ gathering: room }).is({ host: responder }));
+  },
 ).holds();
 
 export const responderMayNotContribute = view(
   "(responder) may not contribute in (room)",
-  ({ responder, room }, _outputs, _bindings) =>
-    where(Gathering._get({ gathering: room }).is.not({ host: responder })),
+  (inputs, _outputs, _bindings) => {
+    const { responder, room } = inputs("responder", "room");
+    return where(Gathering._get({ gathering: room }).is.not({ host: responder }));
+  },
 ).holds();
 ```
 
@@ -93,13 +141,15 @@ former promises one roster and captures every responder.
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
-export const responderRoster = former("the responder roster of (room)", ({ room }, { responder }) =>
-  form({
+export const responderRoster = former("the responder roster of (room)", (inputs, bindings) => {
+  const room = inputs("room");
+  const responder = bindings("responder");
+  return form({
     responders: each(Gathering._members({ gathering: room }).is({ member: responder })).form({
       responder,
     }),
-  }),
-);
+  });
+});
 ```
 
 The input bag makes `room` the callable former's one named input.
@@ -115,8 +165,14 @@ _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/ope
 ```ts
 export const requiredCurrentMitigation = former(
   "the required current mitigation (room)",
-  ({ room }, { mitigation }) =>
-    where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
+  (inputs, bindings) => {
+    const room = inputs("room");
+    const mitigation = bindings("mitigation");
+    return where(Selecting._current({ scope: room }).is({ item: mitigation })).form({
+      room,
+      mitigation,
+    });
+  },
 );
 ```
 
@@ -126,21 +182,25 @@ the former in `optional()` and the whole formed value is absent instead.
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
-export const currentMitigation = former(
-  "the current mitigation (room)",
-  ({ room }, { mitigation }) =>
-    where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
-).optional(); // .optional() produces null when no row matches, rather than raising an error
+export const currentMitigation = former("the current mitigation (room)", (inputs, bindings) => {
+  const room = inputs("room");
+  const mitigation = bindings("mitigation");
+  return where(Selecting._current({ scope: room }).is({ item: mitigation })).form({
+    room,
+    mitigation,
+  });
+}).optional(); // .optional() maps no matching row to null
 ```
 
 After a selection, both versions return the chosen mitigation. The difference
 appears only when the query finds no row, so the former makes absence a local,
 visible choice.
 
-The human name is inert prose. The input and free-binding bags declare the
-call shape, the formed tree declares the output shape, and `optional()` alone
-weakens the record-root promise. Words such as `if any` in a name carry no
-runtime meaning.
+The human name is inert prose. Calls to the input and free-binding selectors
+declare those names, the formed tree declares the output shape, and `optional()` alone weakens
+the record-root promise. Literal selectors make those declarations available to
+TypeScript inference; words such as `if any` in a name carry no runtime or type
+meaning.
 
 The source declaration governs matching. A plain line continues once per
 distinct match or drops the candidate when none remain;
@@ -166,7 +226,7 @@ complete dashboard.
 
 ### Fold a selection
 
-A former can fold a captured selection instead of carrying its rows. This
+A former can consume a captured selection with a fold. This
 operations-room former uses all three folds. `count()` counts responses,
 `first(response)` reads the first response in source order, and
 `distinct(responder)` keeps each responder once in first-seen order.
@@ -174,21 +234,21 @@ operations-room former uses all three folds. `count()` counts responses,
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
-export const responseStats = former(
-  "the response stats of (discussion)",
-  ({ discussion }, { response, responder }) =>
-    form({
-      responseCount: each(
-        Discussing._responses({ discussion }).is({ response, author: responder }),
-      ).count(), // .count() returns the row count
-      firstResponse: each(
-        Discussing._responses({ discussion }).is({ response, author: responder }),
-      ).first(response), // .first() returns the earliest row by that value
-      responders: each(
-        Discussing._responses({ discussion }).is({ response, author: responder }),
-      ).distinct(responder), // .distinct() returns the unique values of that column
-    }),
-);
+export const responseStats = former("the response stats of (discussion)", (inputs, bindings) => {
+  const discussion = inputs("discussion");
+  const { response, responder } = bindings("response", "responder");
+  return form({
+    responseCount: each(
+      Discussing._responses({ discussion }).is({ response, author: responder }),
+    ).count(), // .count() returns the row count
+    firstResponse: each(
+      Discussing._responses({ discussion }).is({ response, author: responder }),
+    ).first(response), // .first() returns the earliest row by that value
+    responders: each(
+      Discussing._responses({ discussion }).is({ response, author: responder }),
+    ).distinct(responder), // .distinct() returns the unique values of that column
+  });
+});
 ```
 
 For an empty selection, `count()` returns `0`, `first(...)` returns `null`, and
@@ -207,13 +267,13 @@ name, and host.
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
-export const roomSummary = former(
-  "the room summary (room)",
-  ({ room }, { name, host }) =>
-    where(Gathering._get({ gathering: room }).is({ name, host }))
-      .form({ room, name, host })
-      .splicing(responderRoster({ room })), // .splicing() pulls in another former's output
-);
+export const roomSummary = former("the room summary (room)", (inputs, bindings) => {
+  const room = inputs("room");
+  const { name, host } = bindings("name", "host");
+  return where(Gathering._get({ gathering: room }).is({ name, host }))
+    .form({ room, name, host })
+    .splicing(responderRoster({ room })); // .splicing() pulls in another former's output
+});
 ```
 
 The roster promises one result, so the summary reads it plainly. An optional
@@ -232,52 +292,62 @@ current mitigation, its discussion and responses, and each responder's alerts.
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
-export const roomDashboard = former(
-  "the operations room (room)",
-  (
-    { room },
-    {
-      name,
-      host,
+export const roomDashboard = former("the operations room (room)", (inputs, bindings) => {
+  const room = inputs("room");
+  const {
+    name,
+    host,
+    responder,
+    selection,
+    mitigation,
+    discussion,
+    response,
+    author,
+    text,
+    alert,
+    subject,
+    alertedMitigation,
+  } = bindings(
+    "name",
+    "host",
+    "responder",
+    "selection",
+    "mitigation",
+    "discussion",
+    "response",
+    "author",
+    "text",
+    "alert",
+    "subject",
+    "alertedMitigation",
+  );
+  return where(Gathering._get({ gathering: room }).is({ name, host })).form({
+    room,
+    name,
+    host,
+    responders: each(Gathering._members({ gathering: room }).is({ member: responder })).form({
       responder,
-      selection,
+      alerts: each(Alerting._openFor({ recipient: responder }).is({ alert, subject }))
+        .where(Selecting._get({ selection: subject }).is({ item: alertedMitigation }))
+        .form({ alert, mitigation: alertedMitigation }),
+    }),
+    current: where(
+      whether(Selecting._current({ scope: room }).is({ selection, item: mitigation })), // whether() allows optional matching — the row still exists if no selection is found
+      whether(Discussing._openFor({ subject: selection }).is({ discussion })),
+    ).form({
       mitigation,
       discussion,
-      response,
-      author,
-      text,
-      alert,
-      subject,
-      alertedMitigation,
-    },
-  ) =>
-    where(Gathering._get({ gathering: room }).is({ name, host })).form({
-      room,
-      name,
-      host,
-      responders: each(Gathering._members({ gathering: room }).is({ member: responder })).form({
-        responder,
-        alerts: each(Alerting._openFor({ recipient: responder }).is({ alert, subject }))
-          .where(Selecting._get({ selection: subject }).is({ item: alertedMitigation }))
-          .form({ alert, mitigation: alertedMitigation }),
+      responses: each(Discussing._responses({ discussion }).is({ response, author, text })).form({
+        response,
+        responder: author,
+        text,
       }),
-      current: where(
-        whether(Selecting._current({ scope: room }).is({ selection, item: mitigation })), // whether() allows optional matching — the row still exists if no selection is found
-        whether(Discussing._openFor({ subject: selection }).is({ discussion })),
-      ).form({
-        mitigation,
-        discussion,
-        responses: each(Discussing._responses({ discussion }).is({ response, author, text })).form({
-          response,
-          responder: author,
-          text,
-        }),
-        responseCount: each(
-          Discussing._responses({ discussion }).is({ response, author, text }),
-        ).count(),
-      }),
+      responseCount: each(
+        Discussing._responses({ discussion }).is({ response, author, text }),
+      ).count(),
     }),
-);
+  });
+});
 ```
 
 The dashboard calls `each(Alerting._openFor(...)).form(...)` to form an alert
@@ -291,8 +361,7 @@ without the discussion reaction similarly leaves `discussion` as `null`.
 
 The dashboard calls `each(Discussing._responses(...)).form(...)` to return the
 response rows. It calls `each(Discussing._responses(...)).count()` to return
-their count. The count is calculated when the dashboard is requested rather
-than stored beside the responses.
+their count. The count is calculated when the dashboard is requested.
 
 With the discussion and alert reactions included, the formed result contains
 the opened `discussion-1` with a response count of `0`. Mara's alert resolves
@@ -302,7 +371,7 @@ mitigation.
 The application authors the dashboard tree once in `roomDashboard`. The room
 boundary fills its `(room)` slot and returns the formed tree, while the
 generated wire carries that shape to TypeScript. A new field therefore changes
-the former instead of a second response model. The [application boundary
+the former and propagates through the existing response model. The [application boundary
 chapter](application-boundary.md#generate-the-wire-contract) shows how that
 formed answer reaches the wire.
 

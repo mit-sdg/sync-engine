@@ -146,7 +146,8 @@ function inferValueWireType(
         const next = new Set(visiting);
         next.add(ref.name);
         const local = instantiateEnv(ref.in, env);
-        return inferFormerWireType(former.body, formers, local, views, next, ref.name);
+        const type = inferFormerWireType(former.body, formers, local, views, next, ref.name);
+        return former.promise === "optional" ? nullableWireType(type) : type;
       }
       case "$lit":
         return inferPatternWireType(
@@ -260,7 +261,7 @@ function inferFormerWireType(
         for (const field of fragmentType.fields) {
           fields.push(
             splice.whether
-              ? { key: field.key, type: nullableWireType(field.type) }
+              ? { key: field.key, type: nullableWireLeaves(field.type) }
               : { key: field.key, type: field.type },
           );
         }

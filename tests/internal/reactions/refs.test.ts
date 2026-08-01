@@ -86,23 +86,28 @@ describe("vocabulary refs", () => {
 
 // ── Module-level templates, shared by every engine below ──────────────────
 
-const readsAs = view("(note) reads as (text)", ({ note, text }, _outputs, _bindings) =>
-  where(Noting._getNote({ note }).is({ text })),
-).holds();
+const readsAs = view("(note) reads as (text)", (inputs, _outputs, _bindings) => {
+  const { note, text } = inputs("note", "text");
+  return where(Noting._getNote({ note }).is({ text }));
+}).holds();
 
-const theNotes = former("the notes ()", (_inputs, { note, text }) =>
-  each(Noting._all({}).is({ note, text })).form({ note, text }),
-);
+const theNotes = former("the notes ()", (_inputs, bindings) => {
+  const { note, text } = bindings("note", "text");
+  return each(Noting._all({}).is({ note, text })).form({ note, text });
+});
 
-const theNoteCard = former("the note card of (note)", ({ note }, { text }) =>
-  where(whether(Noting._getNote({ note }).is({ text }))).form({ text }),
-).optional();
+const theNoteCard = former("the note card of (note)", (inputs, bindings) => {
+  const note = inputs("note");
+  const text = bindings("text");
+  return where(whether(Noting._getNote({ note }).is({ text }))).form({ text });
+}).optional();
 
-const theShelf = former("the shelf ()", (_inputs, { note, text }) =>
-  each(Noting._all({}).is({ note, text: text }))
+const theShelf = former("the shelf ()", (_inputs, bindings) => {
+  const { note, text } = bindings("note", "text");
+  return each(Noting._all({}).is({ note, text: text }))
     .form({ note })
-    .splicing(whether(theNoteCard({ note }))),
-);
+    .splicing(whether(theNoteCard({ note })));
+});
 
 const EchoNote = reaction(({ note, text }) =>
   when(Noting.add({}).responds({ note }))

@@ -11,7 +11,7 @@ or production data.
 
 Maintainers target an acknowledgement within three business days and a status
 update at least weekly while an accepted report remains active. These are
-response targets, not a guarantee of remediation time. Reporters and
+response targets; remediation time depends on the reported defect. Reporters and
 maintainers should coordinate disclosure, avoid exploitation or unnecessary
 data access, and allow a fix and supported-user migration window before public
 details are shared. Credit is offered when requested and appropriate.

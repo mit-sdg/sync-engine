@@ -2,9 +2,9 @@
 
 sync-engine composes independently implemented stateful behaviors into one
 application. This page explains the parts of that application, what each part
-owns, and how an outside request reaches concept code. It is an explanation,
-not an API reference; use the [Public API](public-surface.md) and [Execution
-semantics](semantics.md) for exact signatures and runtime behavior.
+owns, and how an outside request reaches concept code. The [Public
+API](public-surface.md) and [Execution semantics](semantics.md) define exact
+signatures and runtime behavior.
 
 ## Application layers
 
@@ -52,8 +52,9 @@ application will open a discussion after a choice. This separation permits the
 same concept implementation to participate in more than one composition.
 
 The Markdown specification records purpose, one principle, action and query
-declarations, and expected refusals. Its optional State section is notation for
-readers, not a schema. A principle test calls the class directly and checks the
+declarations, and expected refusals. Its optional State section is uninterpreted
+prose for readers; registration derives no schema or validator from it. A
+principle test calls the class directly and checks the
 behavior without an assembly. [Concept specification
 format](concept-specification.md) defines the parsed boundary.
 
@@ -65,16 +66,17 @@ application name and derives:
 
 - `concepts`, the inert references used while authoring composition;
 - `vocabulary`, the names and metadata used by assembly and tooling; and
+- `computations`, optional vocabulary-owned references to named pure calculations;
 - implementation factories for the registered concepts.
 
 This is the scaffolded and example-application path. The lower-level
 `vocabulary(...)` API also accepts a concept class or inline concept descriptor
-directly. Those forms are useful for small assemblies, but they do not make
-`registerConcept(...)` mandatory. See the [`language`
+directly. Small assemblies can therefore use `vocabulary(...)` without
+`registerConcept(...)`. See the [`language`
 API](public-surface.md#language) for the accepted entries.
 
-Calling an action through `concepts` while declaring a reaction does not run the
-action. The call creates declaration data. Runtime execution begins only after
+Calling an action through `concepts` while declaring a reaction creates
+declaration data. Runtime execution begins only after
 an assembly instruments concrete concept instances.
 
 ## Composition connects concepts
@@ -88,9 +90,12 @@ Composition contains four related declaration forms:
 | Former   | Construct a current result tree from queries, views, or other formers                       |
 | Endpoint | Receive an outside input and produce one boundary response through the reaction model       |
 
-A reaction belongs to the application rather than to either participating
-concept. A view and a former also live in composition because they may read
-several concepts. None of these declarations stores domain state.
+A reaction belongs to the application composition. A view and a former also
+live in composition because they may read several concepts. Composition
+declarations carry behavior and references; concepts retain domain state.
+Application code may construct composition records with ordinary TypeScript
+factories. Assembly treats the returned records as containers, recursively
+discovers their tagged declarations, and serializes those declarations.
 
 ## Assembly installs one application
 
@@ -145,7 +150,7 @@ Concept state is the domain state owned by a concept implementation and its
 storage. Occurrence evidence records action asks, outcomes, faults, reaction
 firings, and selected runtime failures inside one assembly. The engine folds
 that evidence into its internal occurrence index for matching and inspection.
-An audit copy does not become concept state merely because it is persistent.
+An audit copy remains occurrence evidence after it is persisted.
 
 The optional `LogSink` receives each validated, redacted entry synchronously
 before the engine folds the entry into its index. The snapshot is structurally
@@ -169,15 +174,15 @@ recovery](advanced-recipes.md) demonstrates the separation.
 ## Guarantee boundaries
 
 The runtime serializes action bodies per concept instance within one assembly.
-It does not serialize all concepts, all assemblies, or several processes. A
-reaction chain is not a transaction: an earlier state change remains when a
-later action refuses or faults. Timeout and abort stop waiting but do not cancel
-accepted work.
+Other concept instances, assemblies, and processes execute independently. Each
+action commits independently, so an earlier state change remains when a later
+action refuses or faults. Timeout and abort stop waiting while accepted work may
+continue.
 
 Generated wire contracts provide TypeScript checks for callers using those
-types. They do not validate runtime values. Endpoint validators provide the
-separate runtime input, successful-output, and domain-error checks when an
-application needs them. A configured `rawFaultReporter` is a privileged path
+types. Endpoint validators provide runtime input, successful-output, and
+domain-error checks when an application needs them. A configured
+`rawFaultReporter` is a privileged path
 for original action and interpreter failures and endpoint-validator throws;
 ordinary occurrence evidence, process logs, and framework errors do not expose
 those raw values.

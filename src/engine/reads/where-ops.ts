@@ -12,14 +12,23 @@
  * closed conditions. Advanced code may use `custom(...)`.
  */
 
-import type { ComputationRef, FusedComputation } from "./computations.ts";
+import type { ComputationFn, ComputationRef, FusedComputation } from "./computations.ts";
 import { isFusedComputation } from "./computations.ts";
 import type { ActionTriggerPattern, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import { brand, hasBrand, WhereOpBrand } from "./brands.ts";
 import { isReadLine } from "./lines.ts";
-import type { ReadLine, RelationView, ViewReadLine } from "./lines.ts";
+import type { QueryReadLine, ReadLine, RelationView, ViewReadLine } from "./lines.ts";
 import { isFusedFormer, useFormer } from "./former-nodes.ts";
 import type { FormerUse, FusedFormer } from "./former-nodes.ts";
+import type {
+  CarriesFacts,
+  ExactPattern,
+  FactFromVariable,
+  FactsFromPattern,
+  FactsOf,
+  InputPattern,
+  MaybeFacts,
+} from "./type-inference.ts";
 
 /** The query or view used by one read operation. */
 interface LineRef {
@@ -28,7 +37,7 @@ interface LineRef {
 }
 
 /** A read whose output pattern binds or tests fields and whose `not` pattern tests differences. */
-export interface FindOp extends LineRef {
+export interface FindOp<Facts = any> extends LineRef, CarriesFacts<Facts> {
   readonly op: "find";
   readonly in: Mapping;
   readonly out: Mapping;
@@ -36,27 +45,27 @@ export interface FindOp extends LineRef {
 }
 
 /** A read that succeeds only when no row matches. */
-interface NoOp extends LineRef {
+interface NoOp<Facts = any> extends LineRef, CarriesFacts<Facts> {
   readonly op: "no";
   readonly in: Mapping;
   readonly out: Mapping;
 }
 
 /** A read that assigns matched outputs or assigns `null` when no row matches. */
-interface WhetherOp extends LineRef {
+interface WhetherOp<Facts = any> extends LineRef, CarriesFacts<Facts> {
   readonly op: "whether";
   readonly in: Mapping;
   readonly out: Mapping;
 }
 
 /** A closed line over a named computation; failing rows are dropped. */
-interface HoldsOp {
+interface HoldsOp<Facts = any> extends CarriesFacts<Facts> {
   readonly op: "holds";
   readonly fused: FusedComputation;
 }
 
 /** A vocabulary-owned calculation; exactly one result, bound to one variable. */
-interface ComputeOp {
+interface ComputeOp<Facts = any> extends CarriesFacts<Facts> {
   readonly op: "compute";
   readonly computation: ComputationRef;
   readonly in: Mapping;
@@ -64,7 +73,7 @@ interface ComputeOp {
 }
 
 /** An opaque escape with a declared positional footprint. */
-export interface CustomOp {
+export interface CustomOp<Facts = any> extends CarriesFacts<Facts> {
   readonly op: "custom";
   readonly name: string;
   readonly fn: (...args: unknown[]) => unknown | Promise<unknown>;
@@ -72,7 +81,13 @@ export interface CustomOp {
   readonly out: readonly symbol[];
 }
 
-export type WhereOp = FindOp | NoOp | WhetherOp | HoldsOp | ComputeOp | CustomOp;
+export type WhereOp<Facts = any> =
+  | FindOp<Facts>
+  | NoOp<Facts>
+  | WhetherOp<Facts>
+  | HoldsOp<Facts>
+  | ComputeOp<Facts>
+  | CustomOp<Facts>;
 
 /**
  * A non-consuming read of the flow's record: the pattern stood earlier in
@@ -81,13 +96,13 @@ export type WhereOp = FindOp | NoOp | WhetherOp | HoldsOp | ComputeOp | CustomOp
  * `earlier(action, in, out?)` (in `words.ts`, which owns action patterns);
  * evaluated by the engine, since it reads the flow index.
  */
-export interface EarlierOp {
+export interface EarlierOp<Facts = any> extends CarriesFacts<Facts> {
   readonly op: "earlier";
   readonly pattern: ActionTriggerPattern;
 }
 
 /** A where op as a reaction's `.where(...)` accepts it, including `earlier`. */
-export type AnyWhereOp = WhereOp | EarlierOp;
+export type AnyWhereOp<Facts = any> = WhereOp<Facts> | EarlierOp<Facts>;
 
 /** A condition accepted by `where(...)`: an operation, read line, or named computation. */
 export type Condition = AnyWhereOp | ReadLine | FusedComputation;
@@ -112,7 +127,7 @@ function refOf(line: ReadLine): LineRef {
 }
 
 /** Lower one line to its plain op. */
-function findOf(line: ReadLine): FindOp {
+function findOf<Line extends ReadLine>(line: Line): FindOp<FactsOf<Line>> {
   return brandOp({
     op: "find" as const,
     ...refOf(line),
@@ -127,6 +142,10 @@ function findOf(line: ReadLine): FindOp {
  * passes through, a plain line lowers to `find`, a fused computation to
  * `holds`, a sentence view to its existence line.
  */
+export function conditionOp<Value extends Condition>(
+  value: Value,
+  site: string,
+): AnyWhereOp<FactsOf<Value>>;
 export function conditionOp(value: Condition, site: string): AnyWhereOp {
   if (isWhereOp(value)) return value;
   if (isReadLine(value)) return findOf(value);
@@ -153,7 +172,7 @@ function assertPlainLine(call: string, line: ReadLine): void {
 }
 
 /** Require that the query or view return no matching row. The line cannot bind new variables. */
-export function no(line: ReadLine): NoOp {
+export function no<Line extends ReadLine>(line: Line): NoOp<FactsOf<Line>> {
   assertPlainLine("no", line);
   return brandOp({
     op: "no" as const,
@@ -164,9 +183,15 @@ export function no(line: ReadLine): NoOp {
 }
 
 /** Keep the current match when no row exists and assign `null` to the line's new variables. */
-export function whether(line: ViewReadLine): WhetherOp;
-export function whether(line: ReadLine): WhetherOp;
-export function whether(fused: FusedFormer): FormerUse;
+type WhetherFacts<Line> = Line extends
+  | QueryReadLine<unknown, infer InputFacts, infer OutputFacts>
+  | ViewReadLine<unknown, infer InputFacts, infer OutputFacts>
+  ? InputFacts | MaybeFacts<OutputFacts>
+  : FactsOf<Line>;
+
+export function whether<Line extends ViewReadLine>(line: Line): WhetherOp<WhetherFacts<Line>>;
+export function whether<Line extends ReadLine>(line: Line): WhetherOp<WhetherFacts<Line>>;
+export function whether<Fused extends FusedFormer>(fused: Fused): FormerUse<Fused, true>;
 export function whether(line: ReadLine | FusedFormer): WhetherOp | FormerUse {
   if (isFusedFormer(line)) return useFormer(line, true);
   if (!isReadLine(line)) {
@@ -179,7 +204,38 @@ export function whether(line: ReadLine | FusedFormer): WhetherOp | FormerUse {
 }
 
 /** Bind one variable to one calculation declared by the assembled vocabulary. */
-export function compute(computation: ComputationRef, input: Mapping, out: symbol): ComputeOp {
+export function compute<
+  Fn extends ComputationFn,
+  const Input extends InputPattern<
+    Parameters<Fn> extends [infer Declared, ...unknown[]]
+      ? Declared extends object
+        ? Declared
+        : Record<string, never>
+      : Record<string, never>
+  >,
+  Out extends symbol,
+>(
+  computation: ComputationRef<Fn>,
+  input: ExactPattern<
+    Parameters<Fn> extends [infer Declared, ...unknown[]]
+      ? Declared extends object
+        ? Declared
+        : Record<string, never>
+      : Record<string, never>,
+    Input
+  >,
+  out: Out,
+): ComputeOp<
+  | FactsFromPattern<
+      Parameters<Fn> extends [infer Declared, ...unknown[]]
+        ? Declared extends object
+          ? Declared
+          : Record<string, never>
+        : Record<string, never>,
+      Input
+    >
+  | FactFromVariable<Awaited<ReturnType<Fn>>, Out>
+> {
   if (typeof computation !== "function" || computation.source !== "vocabulary") {
     throw new Error("compute(...) requires a computation from vocabulary(...).computations.");
   }

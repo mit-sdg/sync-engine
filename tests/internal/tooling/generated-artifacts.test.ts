@@ -96,9 +96,7 @@ describe("generated application artifacts", () => {
     ).specification;
 
     expect(boundary?.actions.map(({ name }) => name)).toEqual(["request", "respond"]);
-    expect(inspection.diagnostics.map(({ code }) => code)).not.toContain(
-      "MISSING_ENDPOINT_FALLBACK",
-    );
+    expect(inspection.diagnostics.map(({ code }) => code)).toContain("MISSING_ENDPOINT_FALLBACK");
     expect(rendered).toContain("- `request (…)`");
     expect(rendered).toContain("- `respond (…)` — may refuse `NOT_PENDING`");
     expect(rendered).not.toMatch(/- `(register|cancel|respondFramework) /);
@@ -118,7 +116,7 @@ describe("generated application artifacts", () => {
       definition: { kind: "endpoint", name: "Unanswered" },
       endpoint: { name: "Unanswered", path: "/unanswered" },
       message:
-        'Endpoint "Unanswered" at "/unanswered" has no explicit unconditional fallback; coverage cannot be proved.',
+        'Endpoint "Unanswered" at "/unanswered" has no recognized total answer path; an admitted request can time out when every answer guard drops.',
     });
   });
 

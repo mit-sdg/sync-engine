@@ -16,7 +16,7 @@ import {
 } from "@engine/reactions/concepts/concept-metadata";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
-import type { ComputationFn } from "@engine/reads/computations";
+import type { CheckedComputationFns, ComputationFn } from "@engine/reads/computations";
 import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
 import { setOwn } from "@engine/utils/own-property";
 
@@ -253,10 +253,10 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     refusals?: RefusalContracts;
   };
 };
-type VocabularyOf<S extends Record<string, AnyRegistration>> = DeclaredVocabulary<
-  EntriesOf<S>,
-  Record<never, never>
->;
+type VocabularyOf<
+  S extends Record<string, AnyRegistration>,
+  Computations extends Record<string, ComputationFn> = Record<never, never>,
+> = DeclaredVocabulary<EntriesOf<S>, Computations>;
 type DeclaredFloorNames<S extends Record<string, AnyRegistration>> = {
   [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? keyof F : never;
 }[keyof S] &
@@ -306,21 +306,30 @@ type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> 
     : Name;
 }[keyof S];
 
-export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>> {
-  vocabulary: VocabularyOf<S>;
-  concepts: VocabularyOf<S>["concepts"];
+export interface RegisteredConceptSet<
+  S extends Record<string, AnyRegistration>,
+  Computations extends Record<string, ComputationFn> = Record<never, never>,
+> {
+  vocabulary: VocabularyOf<S, Computations>;
+  concepts: VocabularyOf<S, Computations>["concepts"];
+  computations: VocabularyOf<S, Computations>["computations"];
   implementations(
     ...args: [RequiredConstructorRegistration<S>] extends [never] ? [] : [never]
-  ): Implementations<VocabularyOf<S>>;
+  ): Implementations<VocabularyOf<S, Computations>>;
   implementations<Floor extends CompleteFloorNames<S>>(
     floor: Floor,
     context: FloorContext<S, Floor>,
-  ): Implementations<VocabularyOf<S>>;
+  ): Implementations<VocabularyOf<S, Computations>>;
 }
 
-export function conceptSet<const S extends Record<string, AnyRegistration>>(
+export function conceptSet<
+  const S extends Record<string, AnyRegistration>,
+  const Computations extends Record<string, ComputationFn> = Record<never, never>,
+>(
   registrations: S,
-): RegisteredConceptSet<S> {
+  computations: Computations & CheckedComputationFns<Computations> = {} as Computations &
+    CheckedComputationFns<Computations>,
+): RegisteredConceptSet<S, Computations> {
   const entries: Record<string, ConceptEntry> = {};
   for (const [conceptName, registration] of Object.entries(registrations)) {
     const { purpose, principle, actions, queries } = registration.specification;
@@ -352,7 +361,10 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
       ...(Object.keys(refusals).length === 0 ? {} : { refusals }),
     });
   }
-  const declared = vocabulary({ concepts: entries, computations: {} });
+  const declared = vocabulary({
+    concepts: entries,
+    computations: computations as unknown as Record<string, () => unknown>,
+  });
 
   const implementations = (floor?: string, context?: unknown) => {
     if (floor !== undefined) {
@@ -398,8 +410,9 @@ export function conceptSet<const S extends Record<string, AnyRegistration>>(
   };
 
   return {
-    vocabulary: declared as VocabularyOf<S>,
-    concepts: declared.concepts as VocabularyOf<S>["concepts"],
+    vocabulary: declared as unknown as VocabularyOf<S, Computations>,
+    concepts: declared.concepts as VocabularyOf<S, Computations>["concepts"],
+    computations: declared.computations as unknown as VocabularyOf<S, Computations>["computations"],
     implementations,
-  } as RegisteredConceptSet<S>;
+  } as RegisteredConceptSet<S, Computations>;
 }

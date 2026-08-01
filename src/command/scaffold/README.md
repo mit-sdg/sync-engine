@@ -20,8 +20,8 @@ generated files, runs application diagnostics, and typechecks the project.
 `principle` tests Noting without an assembly. `start` writes and reads a note,
 then observes the explicit `NOTE_NOT_FOUND` result through the standard gateway.
 
-A concept's State section is optional uninterpreted human notation. It is not a
-schema, is not compared with class fields or storage, and does not enter
+A concept's State section is optional uninterpreted human notation. It has no
+schema semantics, comparison with class fields or storage, or role in
 generated artifacts or endpoint validators. Establish its properties in
 principle, implementation, and backend constraint tests.
 

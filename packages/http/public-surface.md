@@ -81,7 +81,8 @@ clear paths must exist, at least one endpoint must be protected, and every
 top-level issue-output alternative must contain the token and expiry fields.
 `createHttpHandler(...)` checks these rules synchronously and also rejects a
 gateway that does not target `application`. The floor checks the declared origin
-only when an inbound `Origin` header is present; it is not a CORS implementation.
+only when an inbound `Origin` header is present. Applications require separate
+CORS handling.
 
 `HttpCorrelationOptions.resolve(request)` is called synchronously for each
 request. `responseHeader`, when supplied, must be a valid header name. Invalid,
@@ -136,8 +137,8 @@ layers apply their own defaults and configured maximums. An invalid
 | `BAD_STATUS`               | A non-2xx response lacked a JSON error envelope       |
 | `RESPONSE_TOO_LARGE`       | Declared or streamed response bytes exceeded the cap  |
 
-Abort is a core client condition and resolves as `ABORTED`, not as an
-`HttpClientErrorCode`. Abort can settle while an asynchronous header provider is
+Abort is a core client condition and resolves as `ABORTED`.
+`HttpClientErrorCode` covers HTTP transport failures. Abort can settle while an asynchronous header provider is
 still pending; the package cannot cancel that provider. An HTTP timeout or
 abort stops local transport waiting but does not establish cancellation or
 rollback of accepted server work. The handler passes its host-provided

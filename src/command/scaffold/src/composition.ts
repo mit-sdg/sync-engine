@@ -4,9 +4,11 @@ import { concepts } from "./concept-set.ts";
 
 const { Noting } = concepts;
 
-export const notePage = former("the note (note)", ({ note }, { text }) =>
-  where(Noting._get({ note }).is({ text })).form({ note, text }),
-);
+export const notePage = former("the note (note)", (inputs, bindings) => {
+  const note = inputs("note");
+  const text = bindings("text");
+  return where(Noting._get({ note }).is({ text })).form({ note, text });
+});
 
 export const WriteNote = endpoint("/notes/write", ({ text, note }) =>
   receive({ text }).then(Noting.write({ text }).responds({ note })).then(respond({ note })),

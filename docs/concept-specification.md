@@ -106,7 +106,7 @@ The signature parser recognizes only the prefix through the `return` token. It
 does not validate an output clause or reject trailing signature text. It also
 does not interpret output names, state changes, `where`, `then`, or other
 indented prose. These fields state the intended contract for readers and
-principle tests rather than a fully parsed grammar.
+principle tests; they are outside the parsed grammar.
 
 ### Refusal lines
 
@@ -118,8 +118,9 @@ refuse CODE "Normative sentence."
 
 The code must occur only once under an action, and the quoted sentence must not
 be empty. `registerConcept` requires one distinct registered `Error` class for
-every refusal code and rejects extra mappings. The sentence, not the `Error`
-instance's message, is the registered detail for direct assembled calls.
+every refusal code and rejects extra mappings. The quoted sentence supplies the
+registered detail for direct assembled calls; the `Error` instance's message is
+ignored.
 
 ## Query declarations
 
@@ -152,9 +153,8 @@ present fence must be closed.
 ## State notation
 
 A `## State` section is optional. When present, all of its contents, including a
-`state` fence, are uninterpreted human notation. There is no accepted machine
-grammar for state: arbitrary, malformed, or contradictory state text is not a
-specification parse, registration, or source-check error.
+`state` fence, are uninterpreted human notation. The parser and source checker
+ignore arbitrary, malformed, or contradictory state text.
 
 State notation is discarded by `parseSpec`, and `ConceptSpec` has no state
 member. Neither `registerConcept` nor `sync-engine check` compares it with class
@@ -211,7 +211,7 @@ Supported method parameter forms are:
 Unsupported forms include interfaces, imported or qualified types, alias
 chains, intersections, unions, mapped and utility types, multiple parameters,
 plain untyped parameters, and nested or rest destructuring. The check reports
-unsupported syntax instead of assuming that the inputs agree.
+unsupported syntax and requires explicit agreement that it can verify.
 
 The source checker skips methods marked TypeScript `private`, but runtime
 registration can still see those prototype methods and may reject them as

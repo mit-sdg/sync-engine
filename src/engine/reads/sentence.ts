@@ -1,46 +1,51 @@
 /** Binding bags and callable references shared by views and formers. */
 
-import type { Mapping, Vars } from "@engine/reactions/types";
+import type { Mapping } from "@engine/reactions/types";
 import { isPlainMapping } from "./matchers.ts";
+import type { BindingVariables } from "./type-inference.ts";
 
 /** One independently declared binding bag. */
 declare const InputBindingsBrand: unique symbol;
 declare const OutputBindingsBrand: unique symbol;
 declare const FreeBindingsBrand: unique symbol;
 
-export interface InputBindings extends Vars {
+export type InputBindings = BindingVariables<"input"> & {
   readonly [InputBindingsBrand]: true;
-}
-export interface OutputBindings extends Vars {
+};
+export type OutputBindings = BindingVariables<"output"> & {
   readonly [OutputBindingsBrand]: true;
-}
-export interface FreeBindings extends Vars {
+};
+export type FreeBindings = BindingVariables<"free"> & {
   readonly [FreeBindingsBrand]: true;
-}
+};
 
-interface BindingBag<TVars extends Vars = Vars> {
-  readonly vars: TVars;
+interface BindingBag<TBindings> {
+  readonly vars: TBindings;
   readonly minted: Map<string, symbol>;
 }
 
 /**
- * Create one logic-variable proxy. Repeated access to one name returns the
- * same symbol; separate bags keep the declaration's partitions visible.
+ * Create one logic-variable selector. Repeated selection of one name returns
+ * the same symbol; separate selectors keep declaration partitions visible.
  */
-export function bindingBag<TVars extends Vars = Vars>(): BindingBag<TVars> {
+export function bindingBag<TBindings>(): BindingBag<TBindings> {
   const minted = new Map<string, symbol>();
-  const vars = new Proxy({} as Vars, {
-    get(_target, prop) {
-      if (typeof prop !== "string") return undefined;
-      let existing = minted.get(prop);
-      if (existing === undefined) {
-        existing = Symbol(prop);
-        minted.set(prop, existing);
-      }
-      return existing;
-    },
-  });
-  return { vars: vars as TVars, minted };
+  const variable = (name: string): symbol => {
+    let existing = minted.get(name);
+    if (existing === undefined) {
+      existing = Symbol(name);
+      minted.set(name, existing);
+    }
+    return existing;
+  };
+  const vars = (...names: string[]): symbol | Record<string, symbol> => {
+    if (names.length === 0 || names.some((name) => name === "")) {
+      throw new Error("A binding selector takes one or more non-empty names.");
+    }
+    if (names.length === 1) return variable(names[0]);
+    return Object.fromEntries(names.map((name) => [name, variable(name)]));
+  };
+  return { vars: vars as TBindings, minted };
 }
 
 /** Reject one declared name appearing in two binding partitions. */
