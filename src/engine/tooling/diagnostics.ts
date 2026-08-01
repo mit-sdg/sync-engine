@@ -77,19 +77,19 @@ function responseCorrelates(answer: ReactionIR, root: ActionTriggerIR): boolean 
   });
 }
 
-function variablesIn(value: ValueIR, into: string[]): void {
+function addVariables(value: ValueIR, into: Set<string>): void {
   if (isVarIR(value)) {
-    into.push(value.$var);
+    into.add(value.$var);
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) variablesIn(item, into);
+    for (const item of value) addVariables(item, into);
     return;
   }
   if (value === null || typeof value !== "object") return;
   const marker = asMarker(value);
   if (marker !== null) return;
-  for (const child of Object.values(value)) variablesIn(child, into);
+  for (const child of Object.values(value)) addVariables(child, into);
 }
 
 function openPattern(pattern: PatternIR): boolean {
@@ -100,16 +100,6 @@ function openPattern(pattern: PatternIR): boolean {
     names.push(value.$var);
   }
   return new Set(names).size === names.length;
-}
-
-function sameTrigger(left: ActionTriggerIR, right: ActionTriggerIR): boolean {
-  return structurallyEqual(left, right);
-}
-
-function addVariables(value: ValueIR, bound: Set<string>): void {
-  const names: string[] = [];
-  variablesIn(value, names);
-  for (const name of names) bound.add(name);
 }
 
 function operationAnalysis(stages: readonly ReactionIR[]): {
@@ -130,7 +120,7 @@ function operationAnalysis(stages: readonly ReactionIR[]): {
     for (const operation of stage.where) {
       if (
         operation.op === "earlier" &&
-        ancestors.some((ancestor) => sameTrigger(operation.when, ancestor))
+        ancestors.some((ancestor) => structurallyEqual(operation.when, ancestor))
       ) {
         for (const value of [
           ...Object.values(operation.when.input),
@@ -430,27 +420,12 @@ function sameGuard(left: AnswerPath, right: AnswerPath): boolean {
   );
 }
 
-interface ReadCondition {
-  posture: "find" | "no";
-  bare: boolean;
-  source: unknown;
-  input: PatternIR;
-}
+type FindOpIR = Extract<WhereOpIR, { op: "find" | "whether" }> & { op: "find" };
 
-function singleReadCondition(path: AnswerPath): ReadCondition | undefined {
+function singleFind(path: AnswerPath): FindOpIR | undefined {
   if (!path.known || path.actionFilter || path.operations.length !== 1) return undefined;
   const condition = path.operations[0];
-  if (condition.op !== "find" && condition.op !== "no") return undefined;
-  const source = "query" in condition ? condition.query : condition.view;
-  return {
-    posture: condition.op,
-    bare:
-      condition.op === "find" &&
-      Object.keys(condition.out).length === 0 &&
-      (condition.not === undefined || Object.keys(condition.not).length === 0),
-    source,
-    input: condition.in,
-  };
+  return condition.op === "find" ? (condition as FindOpIR) : undefined;
 }
 
 function overlapReason(
@@ -465,17 +440,21 @@ function overlapReason(
     return "one answer path is unconditional";
   }
   if (sameGuard(left, right)) return "the complete answer guards are identical";
-  const first = singleReadCondition(left);
-  const second = singleReadCondition(right);
+  const first = singleFind(left);
+  const second = singleFind(right);
   if (
     first !== undefined &&
     second !== undefined &&
-    first.posture === "find" &&
-    second.posture === "find" &&
-    structurallyEqual(first.source, second.source) &&
-    structurallyEqual(first.input, second.input) &&
+    structurallyEqual(
+      "query" in first ? first.query : first.view,
+      "query" in second ? second.query : second.view,
+    ) &&
+    structurallyEqual(first.in, second.in) &&
     structurallyEqual(requestGuard(left.request), requestGuard(right.request)) &&
-    (first.bare || second.bare)
+    [first, second].some(
+      ({ out, not }) =>
+        Object.keys(out).length === 0 && (not === undefined || Object.keys(not).length === 0),
+    )
   ) {
     return "a bare existence read also admits the more specific answer path";
   }
@@ -507,32 +486,26 @@ function endpointDiagnostics(
   wire: WireContractsIR,
 ): ApplicationDiagnostic[] {
   const diagnostics: ApplicationDiagnostic[] = [];
-  const byPath = new Map<string, EndpointDeclaration[]>();
-  for (const endpoint of endpoints) {
-    const declarations = byPath.get(endpoint.path) ?? [];
-    declarations.push(endpoint);
-    byPath.set(endpoint.path, declarations);
+  const namesByPath = new Map<string, string[]>();
+  for (const { name, path } of endpoints) {
+    const names = namesByPath.get(path) ?? [];
+    names.push(name);
+    namesByPath.set(path, names);
   }
   const byName = new Map(app.reactions.map((reaction) => [reaction.name, reaction]));
-  const answersByPath = new Map<string | undefined, AnswerPath[]>();
+  const answersByPath = new Map<string, AnswerPath[]>();
   for (const answer of app.reactions
     .filter(isResponse)
     .map((reaction) => traceAnswer(reaction, byName))) {
     const answerPath = endpointPathOf(answer);
+    if (answerPath === undefined) continue;
     const answers = answersByPath.get(answerPath) ?? [];
     answers.push(answer);
     answersByPath.set(answerPath, answers);
   }
   const wireByPath = new Map(wire.endpoints.map((endpoint) => [endpoint.path, endpoint.input]));
-  for (const [path, declarations] of byPath) {
-    const endpoint: EndpointDeclaration = {
-      name: declarations
-        .map(({ name }) => name)
-        .sort(ordinal)
-        .join(", "),
-      path,
-      reactions: declarations.flatMap(({ reactions }) => reactions),
-    };
+  for (const [path, names] of namesByPath) {
+    const name = names.sort(ordinal).join(", ");
     const answers = answersByPath.get(path) ?? [];
     const required = requiredInputKeys(wireByPath.get(path) ?? { kind: "json" });
     const overlap = firstOverlap(answers, required);
@@ -540,10 +513,10 @@ function endpointDiagnostics(
       diagnostics.push({
         severity: "warning",
         code: "ENDPOINT_PATH_OVERLAP",
-        definition: { kind: "endpoint", name: endpoint.name },
-        endpoint: { name: endpoint.name, path: endpoint.path },
+        definition: { kind: "endpoint", name },
+        endpoint: { name, path },
         message:
-          `Endpoint "${endpoint.name}" at "${endpoint.path}" has potentially overlapping answer paths ` +
+          `Endpoint "${name}" at "${path}" has potentially overlapping answer paths ` +
           `"${overlap.left.name}" and "${overlap.right.name}": ${overlap.reason}; all matching paths run.`,
       });
     }
@@ -551,10 +524,10 @@ function endpointDiagnostics(
       diagnostics.push({
         severity: "warning",
         code: "MISSING_ENDPOINT_FALLBACK",
-        definition: { kind: "endpoint", name: endpoint.name },
-        endpoint: { name: endpoint.name, path: endpoint.path },
+        definition: { kind: "endpoint", name },
+        endpoint: { name, path },
         message:
-          `Endpoint "${endpoint.name}" at "${endpoint.path}" has no recognized total answer path; ` +
+          `Endpoint "${name}" at "${path}" has no recognized total answer path; ` +
           "an admitted request can time out when every answer guard drops.",
       });
     }
