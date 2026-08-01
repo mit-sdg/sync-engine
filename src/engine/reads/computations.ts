@@ -13,6 +13,7 @@ import { brand, hasBrand } from "./brands.ts";
 import type {
   CarriesFacts,
   ExactPattern,
+  FactFromVariable,
   FactsFromPattern,
   InputPattern,
 } from "./type-inference.ts";
@@ -133,24 +134,29 @@ const amongRef = computationRef(
   "standard",
 );
 
-function lt(left: unknown, right: unknown): FusedComputation {
-  return ltRef({ left, right });
-}
-function le(left: unknown, right: unknown): FusedComputation {
-  return leRef({ left, right });
-}
-function gt(left: unknown, right: unknown): FusedComputation {
-  return gtRef({ left, right });
-}
-function ge(left: unknown, right: unknown): FusedComputation {
-  return geRef({ left, right });
-}
-function among(value: unknown, collection: unknown): FusedComputation {
-  return amongRef({ value, collection });
+function relation<Fn extends ComputationFn, const Input extends Mapping>(
+  ref: ComputationRef<Fn>,
+  input: Input,
+): FusedComputation<Fn, FactFromVariable<unknown, Input[keyof Input]>> {
+  return ref(input as never) as FusedComputation<Fn, FactFromVariable<unknown, Input[keyof Input]>>;
 }
 
+type RelationCondition<Values> = FusedComputation<ComputationFn, FactFromVariable<unknown, Values>>;
+
+type StandardRelation = <const Left, const Right>(
+  left: Left,
+  right: Right,
+) => RelationCondition<Left | Right>;
+type StandardRelations = Readonly<Record<"lt" | "le" | "gt" | "ge" | "among", StandardRelation>>;
+
 /** The built-in order and membership relations, read as closed lines. */
-export const is = { lt, le, gt, ge, among } as const;
+export const is: StandardRelations = {
+  lt: (left, right) => relation(ltRef, { left, right }),
+  le: (left, right) => relation(leRef, { left, right }),
+  gt: (left, right) => relation(gtRef, { left, right }),
+  ge: (left, right) => relation(geRef, { left, right }),
+  among: (value, collection) => relation(amongRef, { value, collection }),
+};
 
 /** Engine-provided computation refs installed into every engine instance. */
 export const standardComputations: readonly ComputationRef<any>[] = [

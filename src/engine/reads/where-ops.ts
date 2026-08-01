@@ -234,11 +234,14 @@ export function compute<
  * which variables it reads (positional args) and which it writes (one value
  * per out variable; a single out binds the return value directly).
  */
-export function custom(
+export function custom<
+  const Input extends readonly symbol[],
+  const Output extends readonly symbol[],
+>(
   fn: (...args: never[]) => unknown | Promise<unknown>,
-  input: readonly symbol[],
-  output: readonly symbol[],
-): CustomOp {
+  input: Input,
+  output: Output,
+): CustomOp<FactFromVariable<unknown, Input[number] | Output[number]>> {
   if (typeof fn !== "function") throw new Error("custom(fn, in, out) requires a function.");
   if (!input.every((s) => typeof s === "symbol") || !output.every((s) => typeof s === "symbol")) {
     throw new Error("custom(fn, in, out) declares its footprint as variables.");

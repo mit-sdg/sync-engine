@@ -2723,7 +2723,7 @@ export {};
  * actually assembled the ref.
  */
 import type { Mapping } from "../reactions/types.ts";
-import type { CarriesFacts, ExactPattern, FactsFromPattern, InputPattern } from "./type-inference.ts";
+import type { CarriesFacts, ExactPattern, FactFromVariable, FactsFromPattern, InputPattern } from "./type-inference.ts";
 /** The runtime shape of a computation: one input mapping in, one value out. */
 export type ComputationFn<Input extends object = any, Output = unknown> = {
     bivarianceHack(input: Input): Output | Promise<Output>;
@@ -2754,19 +2754,11 @@ export interface FusedComputation<Fn extends ComputationFn = ComputationFn, Fact
 export declare function isFusedComputation(value: unknown): value is FusedComputation;
 /** Construct inert named data. Vocabulary construction is the public owner. */
 export declare function computationRef<Fn extends ComputationFn>(name: string, fn: Fn, source: ComputationSource): ComputationRef<Fn>;
-declare function lt(left: unknown, right: unknown): FusedComputation;
-declare function le(left: unknown, right: unknown): FusedComputation;
-declare function gt(left: unknown, right: unknown): FusedComputation;
-declare function ge(left: unknown, right: unknown): FusedComputation;
-declare function among(value: unknown, collection: unknown): FusedComputation;
+type RelationCondition<Values> = FusedComputation<ComputationFn, FactFromVariable<unknown, Values>>;
+type StandardRelation = <const Left, const Right>(left: Left, right: Right) => RelationCondition<Left | Right>;
+type StandardRelations = Readonly<Record<"lt" | "le" | "gt" | "ge" | "among", StandardRelation>>;
 /** The built-in order and membership relations, read as closed lines. */
-export declare const is: {
-    readonly lt: typeof lt;
-    readonly le: typeof le;
-    readonly gt: typeof gt;
-    readonly ge: typeof ge;
-    readonly among: typeof among;
-};
+export declare const is: StandardRelations;
 /** Engine-provided computation refs installed into every engine instance. */
 export declare const standardComputations: readonly ComputationRef<any>[];
 export {};
@@ -4175,7 +4167,7 @@ import type { RelationView } from "./lines.ts";
 import type { QueryPromise } from "./query-metadata.ts";
 import type { FormNodeOf } from "./former-builders.ts";
 import type { FormerEntry } from "./former-nodes.ts";
-import type { CarriesFacts, FactFromVariable, FactsFromPattern, FactsOf, PartialPattern, ShapeFromFactGroups } from "./type-inference.ts";
+import type { CarriesFacts, ExactPattern, FactFromVariable, FactsFromPattern, FactsOf, InputPattern, ShapeFromFactGroups } from "./type-inference.ts";
 /**
  * An aggregation: bind the number of rows a query answers with right now.
  * Legal only inside a view's alternatives — a count is taken at the moment
@@ -4202,8 +4194,8 @@ export declare function isCountOp(value: unknown): value is CountOp;
  * Bind the number of rows a query matches with `count(query, in, out)`.
  * Counting is available inside views, not in a reaction's `.where(...)`.
  */
-type QueryInput<Query> = [Query] extends [never] ? Mapping : Query extends (input: infer Input, ...args: never[]) => unknown ? Input : Mapping;
-export declare function count<Query extends InstrumentedQuery | ((...args: never[]) => unknown), const Input extends PartialPattern<QueryInput<Query>>, Out extends symbol>(query: Query, input: Input, out: Out): CountOp<FactsFromPattern<QueryInput<Query>, Input> | FactFromVariable<number, Out>>;
+type QueryInput<Query> = [Query] extends [never] ? Mapping : Query extends (input: infer Input, ...args: never[]) => unknown ? [Input] extends [object] ? Input : Mapping : Mapping;
+export declare function count<Query extends InstrumentedQuery | ((...args: never[]) => unknown), const Input extends InputPattern<QueryInput<Query>>, Out extends symbol>(query: Query, input: ExactPattern<QueryInput<Query>, Input>, out: Out): CountOp<FactsFromPattern<QueryInput<Query>, Input> | FactFromVariable<number, Out>>;
 /**
  * The view shape invariants: empty outputs mean `holds()`; named outputs mean
  * a row promise. Enforced at definition, registration, and IR import.
@@ -4338,7 +4330,7 @@ export declare function compute<Fn extends ComputationFn, const Input extends In
  * which variables it reads (positional args) and which it writes (one value
  * per out variable; a single out binds the return value directly).
  */
-export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
+export declare function custom<const Input extends readonly symbol[], const Output extends readonly symbol[]>(fn: (...args: never[]) => unknown | Promise<unknown>, input: Input, output: Output): CustomOp<FactFromVariable<unknown, Input[number] | Output[number]>>;
 export {};
 
 === dist/engine/tooling/artifact-plan.d.ts ===

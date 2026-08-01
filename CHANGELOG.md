@@ -63,6 +63,12 @@ output shapes.
 
 ### Fixed
 
+- TypeScript now requires `count(...)` to receive the query's complete input
+  mapping and rejects extra fields at every nested level.
+- Built-in `is.*` relations retain selector identities, so they no longer widen
+  facts inferred elsewhere in a view or former.
+- Advanced `custom(...)` operations retain their declared input and output
+  selector names instead of erasing other inferred facts.
 - A generated endpoint result includes `null` when the endpoint directly
   returns an optional former.
 - A blank optional splice retains every recursively contributed key and assigns

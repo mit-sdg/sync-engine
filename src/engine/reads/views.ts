@@ -62,10 +62,11 @@ import type { FormNodeOf } from "./former-builders.ts";
 import type { FormerEntry } from "./former-nodes.ts";
 import type {
   CarriesFacts,
+  ExactPattern,
   FactFromVariable,
   FactsFromPattern,
   FactsOf,
-  PartialPattern,
+  InputPattern,
   ShapeFromFactGroups,
 } from "./type-inference.ts";
 
@@ -119,16 +120,18 @@ export function isCountOp(value: unknown): value is CountOp {
 type QueryInput<Query> = [Query] extends [never]
   ? Mapping
   : Query extends (input: infer Input, ...args: never[]) => unknown
-    ? Input
+    ? [Input] extends [object]
+      ? Input
+      : Mapping
     : Mapping;
 
 export function count<
   Query extends InstrumentedQuery | ((...args: never[]) => unknown),
-  const Input extends PartialPattern<QueryInput<Query>>,
+  const Input extends InputPattern<QueryInput<Query>>,
   Out extends symbol,
 >(
   query: Query,
-  input: Input,
+  input: ExactPattern<QueryInput<Query>, Input>,
   out: Out,
 ): CountOp<FactsFromPattern<QueryInput<Query>, Input> | FactFromVariable<number, Out>> {
   const validated = assertConceptQuery(

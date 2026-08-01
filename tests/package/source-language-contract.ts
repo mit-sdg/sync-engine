@@ -1,7 +1,9 @@
 import {
+  count,
   each,
   form,
   former,
+  is,
   reaction,
   returned,
   view,
@@ -11,6 +13,7 @@ import {
   whether,
 } from "@sync-engine/language";
 import type { Former, RelationView } from "@sync-engine/language";
+import { custom } from "@sync-engine/advanced";
 
 class OneAnswer {
   start(_: Record<string, never>) {
@@ -178,6 +181,56 @@ const nestedView = view("a nested filter", (inputs, _outputs, _bindings) => {
 nestedView({ filter: { key: "present", limit: 1 } });
 // @ts-expect-error View calls reject undeclared nested input members.
 nestedView({ filter: { key: "present", limit: 1, extra: true } });
+
+const countResult = Symbol("count-result");
+count(Looking._answer, { key: "present" }, countResult);
+// @ts-expect-error Count requires every query input.
+count(Looking._answer, {}, countResult);
+// @ts-expect-error Count rejects undeclared query inputs.
+count(Looking._answer, { key: "present", extra: true }, countResult);
+// @ts-expect-error Count applies deep exactness to query inputs.
+count(Looking._nested, { filter: { key: "present", limit: 1, extra: true } }, countResult);
+
+const comparedLookup = view("a compared lookup", (inputs, _outputs, _bindings) => {
+  const key = inputs("key");
+  return where(Looking._answer({ key }), is.lt(key, "z"));
+}).holds();
+comparedLookup({ key: "present" });
+// @ts-expect-error A built-in comparison does not erase known input facts.
+comparedLookup({ key: 1 });
+// @ts-expect-error A built-in comparison does not open the inferred input mapping.
+comparedLookup({ key: "present", extra: true });
+
+const comparedPredicate = view("a compared predicate", (inputs, _outputs, _bindings) => {
+  const threshold = inputs("threshold");
+  return where(is.lt(threshold, 10));
+}).holds();
+comparedPredicate({ threshold: 1 });
+// @ts-expect-error Built-in comparisons retain required selector names.
+comparedPredicate({});
+// @ts-expect-error Built-in comparisons retain a closed selector mapping.
+comparedPredicate({ threshold: 1, extra: true });
+
+const opaqueLookup = view("an opaque lookup", (inputs, _outputs, _bindings) => {
+  const key = inputs("key");
+  return where(
+    Looking._answer({ key }),
+    custom(() => true, [key], []),
+  );
+}).holds();
+opaqueLookup({ key: "present" });
+// @ts-expect-error A custom condition does not erase known input facts.
+opaqueLookup({ key: 1 });
+
+const opaquePredicate = view("an opaque predicate", (inputs, _outputs, _bindings) => {
+  const token = inputs("token");
+  return where(custom(() => true, [token], []));
+}).holds();
+opaquePredicate({ token: 1 });
+// @ts-expect-error Custom footprints retain required selector names.
+opaquePredicate({});
+// @ts-expect-error Custom footprints retain a closed selector mapping.
+opaquePredicate({ token: 1, extra: true });
 
 const nestedCard = former("a nested card", (inputs, _bindings) => {
   const filter = inputs("filter");
