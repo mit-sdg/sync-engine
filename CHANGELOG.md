@@ -63,6 +63,8 @@ output shapes.
 
 ### Fixed
 
+- Callable binding selectors now reject non-string names passed through
+  JavaScript or `any`, using the existing error for missing or empty names.
 - TypeScript now requires `count(...)` to receive the query's complete input
   mapping and rejects extra fields at every nested level.
 - Built-in `is.*` relations retain selector identities, so they no longer widen

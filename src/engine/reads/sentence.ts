@@ -29,7 +29,7 @@ export function bindingBag<Kind extends BindingKind>(): BindingBag<Kind> {
     return existing;
   };
   const vars = (...names: string[]): symbol | Record<string, symbol> => {
-    if (names.length === 0 || names.some((name) => name === "")) {
+    if (names.length === 0 || names.some((name) => typeof name !== "string" || name === "")) {
       throw new Error("A binding selector takes one or more non-empty names.");
     }
     if (names.length === 1) return variable(names[0]);

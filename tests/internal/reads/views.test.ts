@@ -144,6 +144,15 @@ describe("views: definition", () => {
     expect(ownerOf.outs).toEqual(["owner"]);
   });
 
+  test("a selector rejects non-string names at runtime", () => {
+    expect(() =>
+      view("an invalid selector", (inputs, _outputs, _bindings) => {
+        inputs(1 as never);
+        return where(is.lt(1, 2));
+      }).holds(),
+    ).toThrow("A binding selector takes one or more non-empty names.");
+  });
+
   test("the input bag declares the call parameters", () => {
     const mayRead = mayReadView();
     expect(mayRead.viewName).toBe("(requester) may read (file)");
