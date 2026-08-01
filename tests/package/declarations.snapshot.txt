@@ -3960,12 +3960,15 @@ export interface BindingFact<Kind extends BindingKind = BindingKind, Name extend
     readonly maybe: Maybe;
 }
 declare const FactsType: unique symbol;
+type BivariantFacts<Facts> = {
+    bivarianceHack(facts: Facts): void;
+}["bivarianceHack"];
 /** Phantom facts carried by authored lines, operations, blocks, and nodes. */
 export interface CarriesFacts<Facts = never> {
-    readonly [FactsType]?: Facts;
+    readonly [FactsType]?: BivariantFacts<Facts>;
 }
 export type FactsOf<Value> = Value extends {
-    readonly [FactsType]?: infer Facts;
+    readonly [FactsType]?: BivariantFacts<infer Facts>;
 } ? Exclude<Facts, undefined> : never;
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
 declare const UnconstrainedType: unique symbol;

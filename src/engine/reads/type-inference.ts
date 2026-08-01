@@ -35,12 +35,14 @@ export interface BindingFact<
 
 declare const FactsType: unique symbol;
 
+type BivariantFacts<Facts> = { bivarianceHack(facts: Facts): void }["bivarianceHack"];
+
 /** Phantom facts carried by authored lines, operations, blocks, and nodes. */
 export interface CarriesFacts<Facts = never> {
-  readonly [FactsType]?: Facts;
+  readonly [FactsType]?: BivariantFacts<Facts>;
 }
 
-export type FactsOf<Value> = Value extends { readonly [FactsType]?: infer Facts }
+export type FactsOf<Value> = Value extends { readonly [FactsType]?: BivariantFacts<infer Facts> }
   ? Exclude<Facts, undefined>
   : never;
 
