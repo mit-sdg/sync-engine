@@ -93,24 +93,55 @@ function readEntries(path: string): AuditEntry[] {
 }
 
 describe("FileStore: the log survives as JSONL", () => {
-  test("redacts an entry appended directly to the public sink", () => {
+  test("redacts every mapping appended directly to the public sink", () => {
     const path = join(dir, "direct.jsonl");
     const sink = new FileLogSink(path);
-    const entry: LogEntry = {
-      kind: "fault",
-      at: 1,
-      id: "direct",
-      fault: { password: "secret", visible: "retained" },
-    };
+    const secrets = ["input-secret", "outcome-secret", "firing-secret", "fault-secret"];
+    const entries: LogEntry[] = [
+      {
+        kind: "invocation",
+        at: 1,
+        record: {
+          id: "invocation",
+          flow: "flow",
+          action: Object.assign(function direct() {}, { action: function direct() {} }),
+          concept: { name: "Direct" },
+          input: { password: secrets[0] },
+        },
+      } as unknown as LogEntry,
+      {
+        kind: "outcome",
+        at: 2,
+        id: "outcome",
+        output: {},
+        outcome: { kind: "result", value: { password: secrets[1] } },
+      },
+      {
+        kind: "firing",
+        at: 3,
+        firing: {
+          id: "firing",
+          reaction: "Direct",
+          flow: "flow",
+          bindings: { password: secrets[2] },
+          consumed: [],
+          produced: [],
+          at: 3,
+        },
+      },
+      { kind: "fault", at: 4, id: "fault", fault: { password: secrets[3] } },
+    ];
 
-    sink.append(entry);
+    for (const entry of entries) sink.append(entry);
 
-    expect(readEntries(path)[0]).toEqual({
-      kind: "fault",
-      at: 1,
-      id: "direct",
-      fault: { password: "[redacted]", visible: "retained" },
-    });
+    const serialized = readFileSync(path, "utf8");
+    for (const secret of secrets) expect(serialized).not.toContain(secret);
+    expect(readEntries(path).map(({ kind }) => kind)).toEqual([
+      "invocation",
+      "outcome",
+      "firing",
+      "fault",
+    ]);
   });
 
   test("indexes and audits the same entries", async () => {
