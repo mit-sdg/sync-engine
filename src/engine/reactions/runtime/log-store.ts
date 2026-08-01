@@ -240,7 +240,7 @@ export class MemoryStore {
   readonly integrityFailures: IntegrityFailureRecord[] = [];
   /** Derived index folded from firing entries: record id → reactions that consumed it. */
   private consumedIndex: Map<string, Set<string>> = new Map();
-  private settledFlowOrder: string[] = [];
+  private settledFlowOrder = new Set<string>();
 
   constructor(
     public readonly policy: RetentionPolicy = "keepAll",
@@ -276,10 +276,7 @@ export class MemoryStore {
         const partition = this.flowIndex.get(record.flow) ?? [];
         partition.push(record);
         this.flowIndex.set(record.flow, partition);
-        if (typeof this.policy === "object") {
-          const settledPosition = this.settledFlowOrder.indexOf(record.flow);
-          if (settledPosition >= 0) this.settledFlowOrder.splice(settledPosition, 1);
-        }
+        if (typeof this.policy === "object") this.settledFlowOrder.delete(record.flow);
         return;
       }
       case "outcome": {
@@ -336,25 +333,21 @@ export class MemoryStore {
     }
     this.dropFlowEntries(this.reactionFailures, flow);
     this.dropFlowEntries(this.integrityFailures, flow);
-    const position = this.settledFlowOrder.indexOf(flow);
-    if (position >= 0) this.settledFlowOrder.splice(position, 1);
+    this.settledFlowOrder.delete(flow);
   }
 
   flowSettled(flow: string): void {
     if (!this.flowIndex.has(flow)) return;
-    const previousPosition = this.settledFlowOrder.indexOf(flow);
-    if (previousPosition >= 0) this.settledFlowOrder.splice(previousPosition, 1);
-    this.settledFlowOrder.push(flow);
+    this.settledFlowOrder.delete(flow);
+    this.settledFlowOrder.add(flow);
     this.enforceWindow();
   }
 
   private enforceWindow(): void {
     if (typeof this.policy === "string") return;
-    const candidates = this.settledFlowOrder.slice(
-      0,
-      Math.max(0, this.settledFlowOrder.length - this.policy.window),
-    );
-    for (const flow of candidates) {
+    while (this.settledFlowOrder.size > this.policy.window) {
+      const flow = this.settledFlowOrder.values().next().value;
+      if (flow === undefined) return;
       this.evictFlow(flow);
     }
   }

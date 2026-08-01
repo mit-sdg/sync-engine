@@ -20,23 +20,7 @@ const fileRedactor = createRedactor();
  * which replaces values whose field names match the current policy. String
  * values under other field names are not inspected.
  */
-type AuditEntry =
-  | {
-      kind: "invocation";
-      at: number;
-      id: string;
-      flow: string;
-      concept: string;
-      action: string;
-      input: unknown;
-    }
-  | { kind: "outcome"; at: number; id: string; outcome: unknown }
-  | { kind: "firing"; at: number; firing: unknown }
-  | { kind: "reaction-failure"; at: number; failure: unknown }
-  | { kind: "integrity-failure"; at: number; failure: unknown }
-  | { kind: "fault"; at: number; id: string; fault: unknown };
-
-function auditEntryOf(entry: LogEntry): AuditEntry {
+function auditEntryOf(entry: LogEntry) {
   switch (entry.kind) {
     case "invocation":
       return {
