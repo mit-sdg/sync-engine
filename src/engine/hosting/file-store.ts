@@ -57,6 +57,8 @@ function auditEntryOf(entry: LogEntry) {
         fault: fileRedactor.redact(entry.fault),
       };
   }
+  const exhaustive: never = entry;
+  return exhaustive;
 }
 
 /**

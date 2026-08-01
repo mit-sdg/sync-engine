@@ -17,6 +17,7 @@ import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
 import { FileLogSink } from "@sync-engine/internal/hosting/file-store.ts";
 import {
+  type LogEntry,
   MemoryStore,
   type RetentionPolicy,
 } from "@sync-engine/internal/reactions/runtime/log-store.ts";
@@ -92,6 +93,26 @@ function readEntries(path: string): AuditEntry[] {
 }
 
 describe("FileStore: the log survives as JSONL", () => {
+  test("redacts an entry appended directly to the public sink", () => {
+    const path = join(dir, "direct.jsonl");
+    const sink = new FileLogSink(path);
+    const entry: LogEntry = {
+      kind: "fault",
+      at: 1,
+      id: "direct",
+      fault: { password: "secret", visible: "retained" },
+    };
+
+    sink.append(entry);
+
+    expect(readEntries(path)[0]).toEqual({
+      kind: "fault",
+      at: 1,
+      id: "direct",
+      fault: { password: "[redacted]", visible: "retained" },
+    });
+  });
+
   test("indexes and audits the same entries", async () => {
     const path = join(dir, "composed.jsonl");
     const store = new FileStore(path);

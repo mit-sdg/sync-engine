@@ -940,6 +940,9 @@ defaults retention to `"keepAll"`, and does not accept an occurrence-store
 argument.
 Window enforcement runs automatically only after a causal flow settles. It does
 not evict an active flow, so active flows may temporarily exceed the window.
+The window is ordered by latest settlement rather than flow start. Repeated
+settlement moves a flow to the newest position; a new invocation under a settled
+flow removes it from the settled count until the flow settles again.
 `{ window: 0 }` evicts a flow after settlement; `"keepAll"` retains indexed
 evidence for the engine lifetime. No public manual prune operation is available.
 

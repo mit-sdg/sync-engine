@@ -228,10 +228,13 @@ engine does not roll that state back.
 
 `FileLogSink(path)` implements `LogSink` with one append-only JSON audit
 projection per entry. Concept instances and action functions are represented by
-name. It never reads or replays existing lines, and retention never rewrites the
-file. `FileLogSink` has no close API. A custom sink remains responsible for its
-own durability, concurrency, retry, and resource lifecycle; the host closes
-custom resources after drain through an application-defined API.
+name. Before writing, it independently applies the default field-name redaction
+policy to invocation inputs, outcomes, faults, and firing bindings, including
+entries passed directly to `append`. It never reads or replays existing lines,
+and retention never rewrites the file. `FileLogSink` has no close API. A custom
+sink remains responsible for its own durability, concurrency, retry, and
+resource lifecycle; the host closes custom resources after drain through an
+application-defined API.
 
 `LogEntry`, `FiringRecord`, `ReactionFailureRecord`, and
 `IntegrityFailureRecord` name the corresponding contracts. Persistence,

@@ -262,6 +262,33 @@ describe("log store: window retention", () => {
     log._endMatchingInput("first");
     expect([...store.flowIndex.keys()]).toEqual(["first"]);
   });
+
+  test("moves a repeatedly settled flow to the newest position", () => {
+    const store = new MemoryStore({ window: 2 });
+    for (const flow of ["first", "second", "third"]) {
+      store.append({ kind: "invocation", at: 1, record: record({ id: flow, flow }) });
+    }
+
+    store.flowSettled("first");
+    store.flowSettled("second");
+    store.flowSettled("first");
+    store.flowSettled("third");
+
+    expect([...store.flowIndex.keys()]).toEqual(["first", "third"]);
+  });
+
+  test("removes a reopened flow from the settled window", () => {
+    const store = new MemoryStore({ window: 1 });
+    store.append({ kind: "invocation", at: 1, record: record({ id: "first-1", flow: "first" }) });
+    store.flowSettled("first");
+    store.append({ kind: "invocation", at: 2, record: record({ id: "first-2", flow: "first" }) });
+    store.append({ kind: "invocation", at: 3, record: record({ id: "second", flow: "second" }) });
+    store.flowSettled("second");
+
+    expect([...store.flowIndex.keys()]).toEqual(["first", "second"]);
+    store.flowSettled("first");
+    expect([...store.flowIndex.keys()]).toEqual(["first"]);
+  });
 });
 
 describe("log store: firing records", () => {
