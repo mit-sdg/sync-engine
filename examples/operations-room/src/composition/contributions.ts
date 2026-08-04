@@ -16,12 +16,8 @@ export function contributionEndpoints({
   mayNotContribute,
 }: {
   denied: string;
-  mayContribute: RelationView<{ responder: string; room: string }, Record<never, never>, undefined>;
-  mayNotContribute: RelationView<
-    { responder: string; room: string },
-    Record<never, never>,
-    undefined
-  >;
+  mayContribute: RelationView;
+  mayNotContribute: RelationView;
 }) {
   const AddContribution = endpoint(
     "/rooms/contribute",

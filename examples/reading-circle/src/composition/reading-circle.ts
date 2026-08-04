@@ -13,18 +13,14 @@ const { Discussing, Gathering, Selecting } = concepts;
 
 export const memberMayRespond = view(
   "(member) may respond in (circle)",
-  (inputs, _outputs, _bindings) => {
-    const { member, circle } = inputs("member", "circle");
-    return where(Gathering._membership({ gathering: circle, member }).is({ joined: true }));
-  },
+  ({ member, circle }, _outputs, _bindings) =>
+    where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
 ).holds();
 
 export const nonmemberMayNotRespond = view(
   "(member) may not respond in (circle)",
-  (inputs, _outputs, _bindings) => {
-    const { member, circle } = inputs("member", "circle");
-    return where(Gathering._membership({ gathering: circle, member }).is({ joined: false }));
-  },
+  ({ member, circle }, _outputs, _bindings) =>
+    where(Gathering._membership({ gathering: circle, member }).is({ joined: false })),
 ).holds();
 
 export const SelectedReadingOpensDiscussion = reaction(({ selection }) =>
@@ -33,37 +29,27 @@ export const SelectedReadingOpensDiscussion = reaction(({ selection }) =>
 );
 
 /** What should a reader see when opening a circle? */
-export const circlePage = former("the circle page (circle)", (inputs, bindings) => {
-  const circle = inputs("circle");
-  const { name, host, member, selection, reading, discussion, response, author, text } = bindings(
-    "name",
-    "host",
-    "member",
-    "selection",
-    "reading",
-    "discussion",
-    "response",
-    "author",
-    "text",
-  );
-  return where(Gathering._get({ gathering: circle }).is({ name, host })).form({
-    circle,
-    name,
-    host,
-    members: each(Gathering._members({ gathering: circle }).is({ member })).form({ member }),
-    reading: where(
-      Selecting._current({ scope: circle }).is({ selection, item: reading }),
-      Discussing._openFor({ subject: selection }).is({ discussion }),
-    ).form({
-      reading,
-      responses: each(Discussing._responses({ discussion }).is({ response, author, text })).form({
-        response,
-        member: author,
-        text,
+export const circlePage = former(
+  "the circle page (circle)",
+  ({ circle }, { name, host, member, selection, reading, discussion, response, author, text }) =>
+    where(Gathering._get({ gathering: circle }).is({ name, host })).form({
+      circle,
+      name,
+      host,
+      members: each(Gathering._members({ gathering: circle }).is({ member })).form({ member }),
+      reading: where(
+        Selecting._current({ scope: circle }).is({ selection, item: reading }),
+        Discussing._openFor({ subject: selection }).is({ discussion }),
+      ).form({
+        reading,
+        responses: each(Discussing._responses({ discussion }).is({ response, author, text })).form({
+          response,
+          member: author,
+          text,
+        }),
       }),
     }),
-  });
-});
+);
 
 export const CreateCircle = endpoint("/circles/create", ({ name, host, circle }) =>
   receive({ name, host })

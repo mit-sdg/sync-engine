@@ -102,39 +102,34 @@ function setup() {
  * "the owner of file is requester" — an equality test, not a rebinding.
  */
 function mayReadView() {
-  return view("(requester) may read (file)", (inputs, _outputs, _bindings) => {
-    const { requester, file } = inputs("requester", "file");
-    return [
-      where(refs.Filing._get({ id: file }).is({ owner: requester })),
-      where(refs.Filing._sharedWith({ id: file }).is({ person: requester })),
-    ];
-  }).holds();
+  return view("(requester) may read (file)", ({ requester, file }, _outputs, _bindings) => [
+    where(refs.Filing._get({ id: file }).is({ owner: requester })),
+    where(refs.Filing._sharedWith({ id: file }).is({ person: requester })),
+  ]).holds();
 }
 
 /** Aggregate example: seats filled compared with capacity. */
 function hasRoomView() {
-  return view("(venue) has room", (inputs, _outputs, bindings) => {
-    const venue = inputs("venue");
-    const { filled, capacity } = bindings("filled", "capacity");
-    return where(
+  return view("(venue) has room", ({ venue }, _outputs, { filled, capacity }) =>
+    where(
       count(refs.Seating._seated, {}, filled),
       refs.Seating._capacity({}).is({ venue, capacity }),
       is.lt(filled, capacity),
-    );
-  }).holds();
+    ),
+  ).holds();
 }
 
 // ── Definition ─────────────────────────────────────────────────────────────
 
 describe("views: definition", () => {
-  test("the literal selector preserves runtime binding identity", () => {
+  test("proxy bags mint stable bindings on destructuring and property access", () => {
     let sameInput = false;
     let sameOutput = false;
     const ownerOf = view("the selected owner of (file)", (inputs, outputs, _bindings) => {
-      const file = inputs("file");
-      const owner = outputs("owner");
-      sameInput = file === inputs("file");
-      sameOutput = owner === outputs("owner");
+      const { file } = inputs;
+      const { owner } = outputs;
+      sameInput = file === inputs.file;
+      sameOutput = owner === outputs.owner;
       return where(refs.Filing._get({ id: file }).is({ owner }));
     }).optional();
 
@@ -144,23 +139,14 @@ describe("views: definition", () => {
     expect(ownerOf.outs).toEqual(["owner"]);
   });
 
-  test("a selector rejects non-string names at runtime", () => {
-    expect(() =>
-      view("an invalid selector", (inputs, _outputs, _bindings) => {
-        inputs(1 as never);
-        return where(is.lt(1, 2));
-      }).holds(),
-    ).toThrow("A binding selector takes one or more non-empty names.");
-  });
-
   test("the input bag declares the call parameters", () => {
     const mayRead = mayReadView();
     expect(mayRead.viewName).toBe("(requester) may read (file)");
     expect(mayRead.ins).toEqual(["requester", "file"]);
-    expect(() => mayRead({ requester: "priya" } as never)).toThrowError(
+    expect(() => mayRead({ requester: "priya" })).toThrowError(
       new Error('View "(requester) may read (file)": required input "file" is missing.'),
     );
-    expect(() => mayRead({ requester: "priya", file: "f1", extra: true } as never)).toThrowError(
+    expect(() => mayRead({ requester: "priya", file: "f1", extra: true })).toThrowError(
       new Error(
         'View "(requester) may read (file)": "extra" is not an input; expected (requester, file).',
       ),
@@ -176,20 +162,18 @@ describe("views: definition", () => {
 
   test("an input binding the body never uses is a definition error", () => {
     expect(() =>
-      view("a ghost haunts", (inputs, _outputs, _bindings) => {
-        const _ghost = inputs("ghost");
-        return where(is.lt(1, 2));
-      }).holds(),
+      view("a ghost haunts", ({ ghost: _ghost }, _outputs, _bindings) =>
+        where(is.lt(1, 2)),
+      ).holds(),
     ).toThrow('input binding "ghost" is declared but never used');
   });
 
   test("a view answers from standing state — earlier() is rejected", () => {
     expect(() =>
-      view("(file) was opened", (inputs, _outputs, _bindings) => {
+      view("(file) was opened", ({ file }, _outputs, _bindings) =>
         // the runtime guard's job — the type system already refuses this
-        const file = inputs("file");
-        return where(earlier(refs.Filing.open, { id: file }) as unknown as ViewOp);
-      }).holds(),
+        where(earlier(refs.Filing.open, { id: file }) as unknown as ViewOp),
+      ).holds(),
     ).toThrow("standing state");
   });
 
@@ -204,11 +188,9 @@ describe("views: definition", () => {
   });
 
   test("an output view defaults to many", () => {
-    const sharedWith = view("the people sharing a file", (inputs, outputs, _bindings) => {
-      const file = inputs("file");
-      const person = outputs("person");
-      return where(refs.Filing._sharedWith({ id: file }).is({ person }));
-    });
+    const sharedWith = view("the people sharing a file", ({ file }, { person }, _bindings) =>
+      where(refs.Filing._sharedWith({ id: file }).is({ person })),
+    );
     expect(sharedWith.ins).toEqual(["file"]);
     expect(sharedWith.outs).toEqual(["person"]);
     expect(sharedWith.promise).toBe("many");
@@ -217,20 +199,17 @@ describe("views: definition", () => {
   test("a binding from outside the declaration is rejected", () => {
     const { owner } = $vars;
     expect(() =>
-      view("a file has an owner", (inputs, _outputs, _bindings) => {
-        const file = inputs("file");
-        return where(refs.Filing._get({ id: file }).is({ owner }));
-      }).holds(),
+      view("a file has an owner", ({ file }, _outputs, _bindings) =>
+        where(refs.Filing._get({ id: file }).is({ owner })),
+      ).holds(),
     ).toThrow('binding "owner" is not declared in the input, output, or free binding bag');
   });
 
   test("a predicate terminal rejects declared outputs", () => {
     expect(() =>
-      view("an owner of a file", (inputs, outputs, _bindings) => {
-        const file = inputs("file");
-        const owner = outputs("owner");
-        return where(refs.Filing._get({ id: file }).is({ owner }));
-      }).holds(),
+      view("an owner of a file", ({ file }, { owner }, _bindings) =>
+        where(refs.Filing._get({ id: file }).is({ owner })),
+      ).holds(),
     ).toThrow("holds() requires an empty output binding bag");
   });
 
@@ -291,10 +270,9 @@ describe("views: evaluation", () => {
 
   test("count with an already-bound slot is an equality test", async () => {
     const { reacting, Seating } = setup();
-    const seatsExactly = view("(venue) seats exactly (n)", (inputs, _outputs, _bindings) => {
-      const { venue, n } = inputs("venue", "n");
-      return where(refs.Seating._capacity({}).is({ venue }), count(refs.Seating._seated, {}, n));
-    }).holds();
+    const seatsExactly = view("(venue) seats exactly (n)", ({ venue, n }, _outputs, _bindings) =>
+      where(refs.Seating._capacity({}).is({ venue }), count(refs.Seating._seated, {}, n)),
+    ).holds();
     const { v } = $vars;
     const holds = async (n: number) =>
       (
@@ -331,10 +309,9 @@ describe("views: evaluation", () => {
   test("a view may rest on another view, and locals stay inside", async () => {
     const { reacting, Seating } = setup();
     const hasRoom = hasRoomView();
-    const admits = view("(venue) admits", (inputs, _outputs, _bindings) => {
-      const venue = inputs("venue");
-      return where(hasRoom({ venue }));
-    }).holds();
+    const admits = view("(venue) admits", ({ venue }, _outputs, _bindings) =>
+      where(hasRoom({ venue })),
+    ).holds();
     reacting.register({
       SeatOnReserve: reaction(({ person }: Vars) =>
         when(refs.Seating.reserve({ person }).responds())
@@ -350,11 +327,9 @@ describe("views: evaluation", () => {
 
   test("a blank optional view output stays unbound for a later plain query", async () => {
     const { reacting, Filing } = setup();
-    const optionalOwner = view("the optional owner of (file)", (inputs, outputs, _bindings) => {
-      const file = inputs("file");
-      const owner = outputs("owner");
-      return where(whether(refs.Filing._get({ id: file }).is({ owner })));
-    });
+    const optionalOwner = view("the optional owner of (file)", ({ file }, { owner }, _bindings) =>
+      where(whether(refs.Filing._get({ id: file }).is({ owner }))),
+    );
     const { file, owner } = $vars;
     const ops = [
       whether(optionalOwner({ file }).is({ owner })),
@@ -375,14 +350,12 @@ describe("views: evaluation", () => {
 
   test("two different definitions of one sentence are rejected", () => {
     const { reacting } = setup();
-    const one = view("(file) is precious", (inputs, _outputs, _bindings) => {
-      const file = inputs("file");
-      return where(refs.Filing._get({ id: file }));
-    }).holds();
-    const two = view("(file) is precious", (inputs, _outputs, _bindings) => {
-      const file = inputs("file");
-      return where(refs.Filing._sharedWith({ id: file }));
-    }).holds();
+    const one = view("(file) is precious", ({ file }, _outputs, _bindings) =>
+      where(refs.Filing._get({ id: file })),
+    ).holds();
+    const two = view("(file) is precious", ({ file }, _outputs, _bindings) =>
+      where(refs.Filing._sharedWith({ id: file })),
+    ).holds();
     const declare = (name: string, ref: typeof one) =>
       reacting.register({
         [name]: reaction(({ file }: Vars) =>
@@ -402,10 +375,9 @@ describe("views: IR and round trip", () => {
   test("exportReactions carries referenced views, dependencies first", () => {
     const { reacting } = setup();
     const hasRoom = hasRoomView();
-    const admits = view("(venue) admits", (inputs, _outputs, _bindings) => {
-      const venue = inputs("venue");
-      return where(hasRoom({ venue }));
-    }).holds();
+    const admits = view("(venue) admits", ({ venue }, _outputs, _bindings) =>
+      where(hasRoom({ venue })),
+    ).holds();
     reacting.register({
       SeatOnReserve: reaction(({ person }: Vars) =>
         when(refs.Seating.reserve({ person }).responds())
@@ -516,10 +488,9 @@ describe("views: IR and round trip", () => {
 
   test("a custom op inside a view stays visible in the opaque count", () => {
     const { reacting } = setup();
-    const shady = view("(file) passes a custom check", (inputs, _outputs, _bindings) => {
-      const file = inputs("file");
-      return where(custom((id) => typeof id === "string", [file], []));
-    }).holds();
+    const shady = view("(file) passes a custom check", ({ file }, _outputs, _bindings) =>
+      where(custom((id) => typeof id === "string", [file], [])),
+    ).holds();
     reacting.register({
       Checked: reaction(({ id }: Vars) =>
         when(refs.Filing.add({ id }).responds())

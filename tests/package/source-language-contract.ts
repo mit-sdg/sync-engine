@@ -1,19 +1,4 @@
-import {
-  count,
-  each,
-  form,
-  former,
-  is,
-  reaction,
-  returned,
-  view,
-  vocabulary,
-  when,
-  where,
-  whether,
-} from "@sync-engine/language";
-import type { Former, RelationView } from "@sync-engine/language";
-import { custom } from "@sync-engine/advanced";
+import { count, reaction, returned, vocabulary, when, where } from "@sync-engine/language";
 
 class OneAnswer {
   start(_: Record<string, never>) {
@@ -22,18 +7,6 @@ class OneAnswer {
 
   record({ value }: { value: number }) {
     return { value };
-  }
-
-  acceptCard({ card }: { card: { value: number } }) {
-    return card;
-  }
-
-  acceptLookup({ card }: { card: { key: string; value: string } }) {
-    return card;
-  }
-
-  acceptMaybeLookup({ card }: { card: { key: string; value: string | null } }) {
-    return card;
   }
 
   choose({ kind }: { kind: "number" | "text" }): { number: number } | { text: string } {
@@ -51,44 +24,12 @@ class ManyAnswers {
   }
 }
 
-interface LookupInput {
-  key: string;
-}
-
-interface LookupRow {
-  value: string;
-}
-
 class QueriedConcept {
-  _answer({ key }: LookupInput): LookupRow[] {
+  _answer({ key }: { key: string }): { value: string }[] {
     return key === "present" ? [{ value: key }] : [];
   }
 
-  _numberKey(_: { key: number }): LookupRow[] {
-    return [];
-  }
-
-  _nested(_: { filter: { key: string; limit: number } }): LookupRow[] {
-    return [];
-  }
-
-  _items(_: { items: { id: string }[] }): LookupRow[] {
-    return [];
-  }
-
-  _choice(_: {
-    choice: { kind: "text"; text: string } | { kind: "count"; count: number };
-  }): LookupRow[] {
-    return [];
-  }
-
-  _nestedOutput(_: Record<string, never>): { payload: { key: string; limit: number } }[] {
-    return [];
-  }
-}
-
-class UnionAnswers {
-  _answers(_: Record<string, never>): { value: string | number }[] {
+  _numberKey(_: { key: number }): { value: string }[] {
     return [];
   }
 }
@@ -136,55 +77,11 @@ const words = vocabulary({
     OneAnswer: { class: OneAnswer, queries: { _answer: "one" } },
     ManyAnswers,
     QueriedConcept: { class: QueriedConcept, queries: { _answer: "optional" } },
-    UnionAnswers,
   },
   computations: {},
 });
 const { OneAnswer: Answering } = words.concepts;
-const {
-  ManyAnswers: Listing,
-  QueriedConcept: Looking,
-  UnionAnswers: UnionListing,
-} = words.concepts;
-
-const lookedUpValue = view("the value for (key)", (inputs, outputs, _bindings) => {
-  const key = inputs("key");
-  const value = outputs("value");
-  return where(Looking._answer({ key }).is({ value }));
-}).optional();
-
-const typedLookup: RelationView<{ key: string }, { value: string }, "optional"> = lookedUpValue;
-void typedLookup;
-lookedUpValue({ key: "present" }).is({ value: "one" });
-// @ts-expect-error Inferred view inputs retain their query-slot type.
-lookedUpValue({ key: 1 });
-// @ts-expect-error Inferred view calls require every declared input.
-lookedUpValue({});
-// @ts-expect-error Inferred view outputs retain the aliased query-row type.
-lookedUpValue({ key: "present" }).is({ value: 1 });
-const nestedKey = Symbol("nested-key");
-// @ts-expect-error Recursive input patterns retain required nested members.
-Looking._nested({ filter: { key: nestedKey } });
-// @ts-expect-error Nested values are literals; logic variables bind complete top-level slots only.
-Looking._nested({ filter: { key: nestedKey, limit: 1 } });
-// @ts-expect-error Nested literal inputs reject undeclared members.
-Looking._nested({ filter: { key: "present", limit: 1, extra: true } });
-// @ts-expect-error Deep exactness checks objects inside array literals.
-Looking._items({ items: [{ id: "one", extra: true }] });
-Looking._choice({ choice: { kind: "text", text: "one" } });
-Looking._choice({ choice: { kind: "count", count: 1 } });
-// @ts-expect-error Deep exactness checks the selected member of an object union.
-Looking._choice({ choice: { kind: "text", text: "one", count: 1 } });
-// @ts-expect-error Output slot patterns use the same deep exactness contract.
-Looking._nestedOutput({}).is({ payload: { key: "one", limit: 1, extra: true } });
-
-const nestedView = view("a nested filter", (inputs, _outputs, _bindings) => {
-  const filter = inputs("filter");
-  return where(Looking._nested({ filter }));
-}).holds();
-nestedView({ filter: { key: "present", limit: 1 } });
-// @ts-expect-error View calls reject undeclared nested input members.
-nestedView({ filter: { key: "present", limit: 1, extra: true } });
+const { QueriedConcept: Looking } = words.concepts;
 
 const countResult = Symbol("count-result");
 count(Looking._answer, { key: "present" }, countResult);
@@ -192,298 +89,11 @@ count(Looking._answer, { key: "present" }, countResult);
 count(Looking._answer, {}, countResult);
 // @ts-expect-error Count rejects undeclared query inputs.
 count(Looking._answer, { key: "present", extra: true }, countResult);
-// @ts-expect-error Count applies deep exactness to query inputs.
-count(Looking._nested, { filter: { key: "present", limit: 1, extra: true } }, countResult);
-const chooseQuery = true as boolean;
-const disjointCountQuery = chooseQuery ? Looking._answer : Looking._nested;
-// @ts-expect-error A union query cannot be counted with only its first input contract.
-count(disjointCountQuery, { key: "present" }, countResult);
-// @ts-expect-error A union query cannot be counted with only its second input contract.
-count(disjointCountQuery, { filter: { key: "present", limit: 1 } }, countResult);
-count(
-  // @ts-expect-error A merged mapping is not exact for either member of a union query.
-  disjointCountQuery,
-  { key: "present", filter: { key: "present", limit: 1 } },
-  countResult,
-);
-const incompatibleCountQuery = chooseQuery ? Looking._answer : Looking._numberKey;
-// @ts-expect-error A union query with incompatible input slots has no safe string input.
-count(incompatibleCountQuery, { key: "present" }, countResult);
-// @ts-expect-error A union query with incompatible input slots has no safe numeric input.
-count(incompatibleCountQuery, { key: 1 }, countResult);
-
-const comparedLookup = view("a compared lookup", (inputs, _outputs, _bindings) => {
-  const key = inputs("key");
-  return where(Looking._answer({ key }), is.lt(key, "z"));
-}).holds();
-comparedLookup({ key: "present" });
-// @ts-expect-error A built-in comparison does not erase known input facts.
-comparedLookup({ key: 1 });
-// @ts-expect-error A built-in comparison does not open the inferred input mapping.
-comparedLookup({ key: "present", extra: true });
-
-const comparedPredicate = view("a compared predicate", (inputs, _outputs, _bindings) => {
-  const threshold = inputs("threshold");
-  return where(is.lt(threshold, 10));
-}).holds();
-comparedPredicate({ threshold: 1 });
-// @ts-expect-error Built-in comparisons retain required selector names.
-comparedPredicate({});
-// @ts-expect-error Built-in comparisons retain a closed selector mapping.
-comparedPredicate({ threshold: 1, extra: true });
-
-const opaqueLookup = view("an opaque lookup", (inputs, _outputs, _bindings) => {
-  const key = inputs("key");
-  return where(
-    Looking._answer({ key }),
-    custom(() => true, [key], []),
-  );
-}).holds();
-opaqueLookup({ key: "present" });
-// @ts-expect-error A custom condition does not erase known input facts.
-opaqueLookup({ key: 1 });
-
-const opaquePredicate = view("an opaque predicate", (inputs, _outputs, _bindings) => {
-  const token = inputs("token");
-  return where(custom(() => true, [token], []));
-}).holds();
-opaquePredicate({ token: 1 });
-// @ts-expect-error Custom footprints retain required selector names.
-opaquePredicate({});
-// @ts-expect-error Custom footprints retain a closed selector mapping.
-opaquePredicate({ token: 1, extra: true });
-
-const nestedCard = former("a nested card", (inputs, _bindings) => {
-  const filter = inputs("filter");
-  return where(Looking._nested({ filter })).form({ filter });
-});
-nestedCard({ filter: { key: "present", limit: 1 } });
-// @ts-expect-error Former calls reject undeclared nested input members.
-nestedCard({ filter: { key: "present", limit: 1, extra: true } });
-// @ts-expect-error Explicit former contracts cannot hide nested broad input leaves.
-const nestedUnknownInput: Former<
-  { filter: { key: unknown; limit: number } },
-  { filter: { key: string; limit: number } }
-> = nestedCard;
-void nestedUnknownInput;
-
-const mixedValue = view("a mixed value", (_inputs, outputs, _bindings) => {
-  const value = outputs("value");
-  return [
-    where(Answering._answer({}).is({ value })),
-    where(Looking._answer({ key: "present" }).is({ value })),
-  ];
-});
-const typedMixedValue: RelationView<
-  Record<string, never>,
-  { value: string | number },
-  "many"
-> = mixedValue;
-void typedMixedValue;
-// @ts-expect-error Alternative output types form a union rather than collapsing to one member.
-const stringOnlyMixedValue: RelationView<
-  Record<string, never>,
-  { value: string },
-  "many"
-> = mixedValue;
-void stringOnlyMixedValue;
-
-const nullableAlternative = view("a nullable alternative", (_inputs, outputs, _bindings) => {
-  const value = outputs("value");
-  return [
-    where(Looking._answer({ key: "present" }).is({ value })),
-    where(whether(Looking._answer({ key: "missing" }).is({ value }))),
-  ];
-});
-const typedNullableAlternative: RelationView<
-  Record<string, never>,
-  { value: string | null },
-  "many"
-> = nullableAlternative;
-void typedNullableAlternative;
-// @ts-expect-error Nullable facts from one alternative remain visible in the output contract.
-const requiredAlternative: RelationView<
-  Record<string, never>,
-  { value: string },
-  "many"
-> = nullableAlternative;
-void requiredAlternative;
-
-const numberCard = former("the number card", (_inputs, bindings) => {
-  const value = bindings("value");
-  return where(Answering._answer({}).is({ value })).form({ value });
-});
-
-const optionalNumberCard = former("the optional number card", (_inputs, bindings) => {
-  const value = bindings("value");
-  return where(Answering._answer({}).is({ value })).form({ value });
-}).optional();
-
-const lookupCard = former("the lookup card for (key)", (inputs, bindings) => {
-  const key = inputs("key");
-  const value = bindings("value");
-  return where(Looking._answer({ key }).is({ value })).form({ value });
-}).optional();
-
-const lookupEnvelope = former("the lookup envelope for (key)", (inputs, _bindings) => {
-  const key = inputs("key");
-  return form({ key }).splicing(lookupCard({ key }));
-});
-
-const maybeLookupEnvelope = former("the maybe lookup envelope for (key)", (inputs, _bindings) => {
-  const key = inputs("key");
-  return form({ key }).splicing(whether(lookupCard({ key })));
-});
-
-const answerRows = former("all answer rows", (_inputs, bindings) => {
-  const value = bindings("value");
-  return form({
-    rows: each(Listing._answers({}).is({ value })).form({ value }),
-    first: each(Listing._answers({}).is({ value })).first(value),
-    distinct: each(Listing._answers({}).is({ value })).distinct(value),
-  });
-});
-
-const widenedFirst: Former<Record<string, never>, number | null> = former(
-  "the first widened answer",
-  (_inputs, bindings) => {
-    const value: symbol = bindings("value");
-    return each(Listing._answers({}).is({ value })).first(value);
-  },
-);
-const widenedDistinct: Former<Record<string, never>, number[]> = former(
-  "the distinct widened answers",
-  (_inputs, bindings) => {
-    const value: symbol = bindings("value");
-    return each(Listing._answers({}).is({ value })).distinct(value);
-  },
-);
-void widenedFirst;
-void widenedDistinct;
-
-const unionCard = former("a union-valued card", (_inputs, bindings) => {
-  const value = bindings("value");
-  return where(UnionListing._answers({}).is({ value })).form({ value });
-});
-
-const maybeLookupCard = former("a nullable lookup card for (key)", (inputs, bindings) => {
-  const key = inputs("key");
-  const value = bindings("value");
-  return where(whether(Looking._answer({ key }).is({ value }))).form({ value });
-});
-
-const dollarLookup = former("the lookup card for ($)", (inputs, bindings) => {
-  const key = inputs("$");
-  const value = bindings("value");
-  return where(Looking._answer({ key }).is({ value })).form({ value });
-});
-
-Answering.acceptCard({ card: numberCard({}) });
-Answering.acceptLookup({ card: lookupEnvelope({ key: "present" }) });
-Answering.acceptMaybeLookup({ card: maybeLookupEnvelope({ key: "missing" }) });
-// @ts-expect-error Inferred former calls require the input discovered from nested use.
-lookupEnvelope({});
-// @ts-expect-error Inferred former inputs retain their nested former's input type.
-lookupEnvelope({ key: 1 });
-// @ts-expect-error Optional formed values cannot fill a required non-null action input.
-Answering.acceptCard({ card: optionalNumberCard({}) });
-// @ts-expect-error A formed object is checked against the complete action-input slot type.
-Answering.record({ value: numberCard({}) });
-void answerRows;
-void maybeLookupEnvelope;
-dollarLookup({ $: "present" });
-// @ts-expect-error A literal dollar binding retains its inferred slot type.
-dollarLookup({ $: 1 });
-// @ts-expect-error A literal dollar binding remains a required input.
-dollarLookup({});
-// @ts-expect-error A literal dollar binding does not make the input mapping open.
-dollarLookup({ $: "present", extra: true });
-const nullableLookup: Former<{ key: string }, { value: string | null }> = maybeLookupCard;
-void nullableLookup;
-// @ts-expect-error whether(...) makes newly bound result leaves nullable.
-const requiredLookup: Former<{ key: string }, { value: string }> = maybeLookupCard;
-void requiredLookup;
-// @ts-expect-error A union-valued inferred leaf must not collapse to one member.
-const stringOnlyUnion: Former<Record<string, never>, { value: string }> = unionCard;
-void stringOnlyUnion;
-const nullableEnvelope: Former<{ key: string }, { key: string; value: string | null }> =
-  maybeLookupEnvelope;
-void nullableEnvelope;
-// @ts-expect-error A whether-spliced leaf is nullable, not never.
-const impossibleEnvelope: Former<{ key: string }, { key: string; value: never }> =
-  maybeLookupEnvelope;
-void impossibleEnvelope;
-
-const explicitCard: Former<{ key: string }, { key: string }> = former(
-  "an explicitly typed card",
-  (inputs, _bindings) => {
-    const key = inputs("key");
-    return form({ key });
-  },
-);
-explicitCard({ key: "one" });
-// @ts-expect-error Explicit former input declarations remain enforced.
-explicitCard({ key: 1 });
-// @ts-expect-error An explicitly empty input contract remains closed.
-numberCard({ extra: true });
-
-// @ts-expect-error A declared former result must agree with the inferred formed tree.
-const malformedExplicitCard: Former<{ key: string }, { display: string }> = former(
-  "a malformed explicitly typed card",
-  (inputs, _bindings) => {
-    const key = inputs("key");
-    return form({ key });
-  },
-);
-void malformedExplicitCard;
-
-// @ts-expect-error Known inferred leaves cannot be changed by an explicit contract.
-const malformedKnownCard: Former<Record<string, never>, { value: string }> = numberCard;
-void malformedKnownCard;
-
-// @ts-expect-error An annotation cannot widen an inferred former's accepted input domain.
-const widenedFormerInput: Former<{ key: string | number }, { key: string; value: string }> =
-  lookupEnvelope;
-void widenedFormerInput;
-// @ts-expect-error An annotation cannot make a runtime-required former input optional.
-const optionalFormerInput: Former<{ key?: string }, { key: string; value: string }> =
-  lookupEnvelope;
-void optionalFormerInput;
-const narrowedFormerInput: Former<{ key: "present" }, { key: string; value: string }> =
-  lookupEnvelope;
-void narrowedFormerInput;
-// @ts-expect-error An explicit contract cannot widen a known input to unknown.
-const unknownFormerInput: Former<{ key: unknown }, { key: string; value: string }> = lookupEnvelope;
-void unknownFormerInput;
-// biome-ignore lint/suspicious/noExplicitAny: this contract test verifies that explicit any cannot bypass input checking.
-type ExplicitAny = any;
-// @ts-expect-error An explicit contract cannot use any to bypass a known input type.
-const anyFormerInput: Former<{ key: ExplicitAny }, { key: string; value: string }> = lookupEnvelope;
-void anyFormerInput;
-// @ts-expect-error The two-argument Former contract describes a required former.
-const requiredOptionalCard: Former<Record<string, never>, { value: number }> = optionalNumberCard;
-void requiredOptionalCard;
-
-const explicitlyOptionalCard = explicitCard.optional();
-const explicitWhetherEntry = former("an explicit whether entry for (key)", (inputs, _bindings) => {
-  const key = inputs("key");
-  return form({ card: whether(explicitlyOptionalCard({ key })) });
-});
-const typedExplicitWhetherEntry: Former<
-  { key: string },
-  { card: { key: string } | { key: null } }
-> = explicitWhetherEntry;
-void typedExplicitWhetherEntry;
-const explicitWhetherSplice = former(
-  "an explicit whether splice for (key)",
-  (inputs, _bindings) => {
-    const key = inputs("key");
-    return form({}).splicing(whether(explicitlyOptionalCard({ key })));
-  },
-);
-const typedExplicitWhetherSplice: Former<{ key: string }, { key: string | null }> =
-  explicitWhetherSplice;
-void typedExplicitWhetherSplice;
+const unionCountQuery = (true as boolean) ? Looking._answer : Looking._numberKey;
+// @ts-expect-error A union query cannot use one member's string input contract.
+count(unionCountQuery, { key: "present" }, countResult);
+// @ts-expect-error A union query cannot use one member's numeric input contract.
+count(unionCountQuery, { key: 1 }, countResult);
 
 const recordInput: Parameters<typeof Answering.record>[0] = { value: 1 };
 const recordOutput: ReturnType<typeof Answering.record> = { value: 1 };

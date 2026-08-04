@@ -1,41 +1,46 @@
 /** Binding bags and callable references shared by views and formers. */
 
-import type { Mapping } from "@engine/reactions/types";
+import type { Mapping, Vars } from "@engine/reactions/types";
 import { isPlainMapping } from "./matchers.ts";
-import type { BindingKind, BindingVariables } from "./type-inference.ts";
 
 /** One independently declared binding bag. */
-export type InputBindings = BindingVariables<"input">;
-export type OutputBindings = BindingVariables<"output">;
-export type FreeBindings = BindingVariables<"free">;
+declare const InputBindingsBrand: unique symbol;
+declare const OutputBindingsBrand: unique symbol;
+declare const FreeBindingsBrand: unique symbol;
 
-interface BindingBag<Kind extends BindingKind> {
-  readonly vars: BindingVariables<Kind>;
+export interface InputBindings extends Vars {
+  readonly [InputBindingsBrand]: true;
+}
+export interface OutputBindings extends Vars {
+  readonly [OutputBindingsBrand]: true;
+}
+export interface FreeBindings extends Vars {
+  readonly [FreeBindingsBrand]: true;
+}
+
+interface BindingBag<TVars extends Vars = Vars> {
+  readonly vars: TVars;
   readonly minted: Map<string, symbol>;
 }
 
 /**
- * Create one logic-variable selector. Repeated selection of one name returns
- * the same symbol; separate selectors keep declaration partitions visible.
+ * Create one logic-variable proxy. Repeated access to one name returns the
+ * same symbol; separate bags keep the declaration's partitions visible.
  */
-export function bindingBag<Kind extends BindingKind>(): BindingBag<Kind> {
+export function bindingBag<TVars extends Vars = Vars>(): BindingBag<TVars> {
   const minted = new Map<string, symbol>();
-  const variable = (name: string): symbol => {
-    let existing = minted.get(name);
-    if (existing === undefined) {
-      existing = Symbol(name);
-      minted.set(name, existing);
-    }
-    return existing;
-  };
-  const vars = (...names: string[]): symbol | Record<string, symbol> => {
-    if (names.length === 0 || names.some((name) => typeof name !== "string" || name === "")) {
-      throw new Error("A binding selector takes one or more non-empty names.");
-    }
-    if (names.length === 1) return variable(names[0]);
-    return Object.fromEntries(names.map((name) => [name, variable(name)]));
-  };
-  return { vars: vars as BindingVariables<Kind>, minted };
+  const vars = new Proxy({} as Vars, {
+    get(_target, prop) {
+      if (typeof prop !== "string") return undefined;
+      let existing = minted.get(prop);
+      if (existing === undefined) {
+        existing = Symbol(prop);
+        minted.set(prop, existing);
+      }
+      return existing;
+    },
+  });
+  return { vars: vars as TVars, minted };
 }
 
 /** Reject one declared name appearing in two binding partitions. */

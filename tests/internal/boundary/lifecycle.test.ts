@@ -249,10 +249,9 @@ describe("assembly execution lifecycle", () => {
     }
     const words = vocabulary({ concepts: { SlowForm: SlowFormConcept }, computations: {} });
     const { SlowForm } = words.concepts;
-    const values = former("slow values ()", (_input, bindings) => {
-      const value = bindings("value");
-      return each(SlowForm._rows({}).is({ value })).form({ value });
-    });
+    const values = former("slow values ()", (_input, { value }) =>
+      each(SlowForm._rows({}).is({ value })).form({ value }),
+    );
     const app = assemble({
       vocabulary: words,
       composition: { values },
@@ -285,10 +284,9 @@ describe("assembly execution lifecycle", () => {
     }
     const words = vocabulary({ concepts: { FreshForm: FreshFormConcept }, computations: {} });
     const { FreshForm } = words.concepts;
-    const snapshot = former("fresh assembly snapshot ()", (_input, bindings) => {
-      const value = bindings("value");
-      return each(FreshForm._rows({}).is({ value })).form({ value });
-    });
+    const snapshot = former("fresh assembly snapshot ()", (_input, { value }) =>
+      each(FreshForm._rows({}).is({ value })).form({ value }),
+    );
     const app = assemble({ vocabulary: words, composition: { snapshot } });
 
     expect(await app.form(snapshot({}))).toEqual([{ value: 1 }]);
@@ -308,16 +306,12 @@ describe("assembly execution lifecycle", () => {
     const build = (queryCache: "memoize" | "none") => {
       const words = vocabulary({ concepts: { Reading: ReadingConcept }, computations: {} });
       const { Reading } = words.concepts;
-      const repeated = former("repeated reads ()", (_input, bindings) => {
-        const { first, second } = bindings("first", "second");
-        return where(
-          Reading._row({}).is({ value: first }),
-          Reading._row({}).is({ value: second }),
-        ).form({
+      const repeated = former("repeated reads ()", (_input, { first, second }) =>
+        where(Reading._row({}).is({ value: first }), Reading._row({}).is({ value: second })).form({
           first,
           second,
-        });
-      });
+        }),
+      );
       return {
         app: assemble({ vocabulary: words, composition: { repeated }, queryCache }),
         repeated,
@@ -420,12 +414,11 @@ describe("assembly execution lifecycle", () => {
     }
     const words = vocabulary({ concepts: { Matrix: MatrixConcept }, computations: {} });
     const { Matrix } = words.concepts;
-    const matrix = former("matrix ()", (_input, bindings) => {
-      const { left, right } = bindings("left", "right");
-      return each(Matrix._left({}).is({ left }))
+    const matrix = former("matrix ()", (_input, { left, right }) =>
+      each(Matrix._left({}).is({ left }))
         .where(Matrix._right({ left }).is({ right }))
-        .form({ left, right });
-    });
+        .form({ left, right }),
+    );
     const app = assemble({
       vocabulary: words,
       composition: { matrix },
@@ -573,10 +566,9 @@ describe("assembly execution lifecycle", () => {
     }
     const words = vocabulary({ concepts: { Doubled: DoubledConcept }, computations: {} });
     const { Doubled } = words.concepts;
-    const doubled = former("the doubled value", (_inputs, bindings) => {
-      const value = bindings("value");
-      return where(Doubled._rows({}).is({ value })).form({ value });
-    });
+    const doubled = former("the doubled value", (_inputs, { value }) =>
+      where(Doubled._rows({}).is({ value })).form({ value }),
+    );
     const FaultingResponse = endpoint("/former-budget", () =>
       receive().then(respond({ value: doubled({}) })),
     );

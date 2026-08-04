@@ -107,8 +107,8 @@ not replace reactions inside an application that is already running.
 
 A composition factory is an ordinary TypeScript function called while the host
 constructs `AssemblyOptions`. It returns a plain record of tagged reactions,
-views, formers, or endpoints. Operations Room supplies its selected, inferred
-policy views to one such factory:
+views, formers, or endpoints. Operations Room supplies its selected policy views
+to one such factory:
 
 _Source: [`examples/operations-room/src/composition/contributions.ts`](../../examples/operations-room/src/composition/contributions.ts)_
 
@@ -119,12 +119,8 @@ export function contributionEndpoints({
   mayNotContribute,
 }: {
   denied: string;
-  mayContribute: RelationView<{ responder: string; room: string }, Record<never, never>, undefined>;
-  mayNotContribute: RelationView<
-    { responder: string; room: string },
-    Record<never, never>,
-    undefined
-  >;
+  mayContribute: RelationView;
+  mayNotContribute: RelationView;
 }) {
   const AddContribution = endpoint(
     "/rooms/contribute",
@@ -160,7 +156,7 @@ declaration it returns must still lower to portable IR; embedding a closure or
 other local escape inside a returned declaration does not make that behavior
 portable. Generated artifacts describe only the declarations returned by the
 factory. Use fixed records for selectable
-reaction packs, modules with the same inferred view contract for replaceable
+reaction packs, modules with the same view contract for replaceable
 policy, and factories when declarations themselves depend on supplied policy.
 
 Assembly validates that all installed reactions, views, formers, and endpoints

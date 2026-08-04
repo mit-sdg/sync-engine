@@ -12,4 +12,3 @@ export { each, form, former } from "@engine/reads/former-builders";
 export type { ReadLine, RelationView } from "@engine/reads/lines";
 export type { Condition } from "@engine/reads/where-ops";
 export type { QueryPromise } from "@engine/reads/query-metadata";
-export type { Former } from "@engine/reads/former-nodes";

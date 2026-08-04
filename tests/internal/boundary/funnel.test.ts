@@ -217,14 +217,12 @@ describe("faults while forming response input", () => {
     });
     const { Profiling } = words.concepts;
 
-    const card = former("the card of (owner)", (inputs, bindings) => {
-      const owner = inputs("owner");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(Profiling._ofOwner({ owner }).is({ profile, bio })).form({
+    const card = former("the card of (owner)", ({ owner }, { profile, bio }) =>
+      where(Profiling._ofOwner({ owner }).is({ profile, bio })).form({
         profile,
         bio,
-      });
-    });
+      }),
+    );
 
     const composition = {
       Card: endpoint("/profiles/card", ({ owner }: Vars) =>

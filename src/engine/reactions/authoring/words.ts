@@ -1,7 +1,6 @@
 import { brandWhereOp, conditionOp, isCondition } from "@engine/reads/where-ops";
 import type { AnyWhereOp, Condition, EarlierOp, WhereOp } from "@engine/reads/where-ops";
 import { isCountOp, where as viewWhere, type CountOp, type ViewBlock } from "@engine/reads/views";
-import type { FactsOf } from "@engine/reads/type-inference";
 import { assertReactionNodes } from "./nodes.ts";
 import { siblingTree } from "./partitions.ts";
 import { isChannelPattern } from "./channels.ts";
@@ -101,15 +100,13 @@ function declarativeWhenBuilder(
   } as WhenBuilderWithWhere;
 }
 
-interface AuthoredWhereBlock<Facts = any> extends ViewBlock<Facts> {
+interface AuthoredWhereBlock extends ViewBlock {
   then(node: UnnamedStepNode): BranchChain;
 }
 
 /** State a read conjunction, optionally qualifying one reaction branch with it. */
-export function where<const Conditions extends readonly (Condition | CountOp)[]>(
-  ...conditions: Conditions
-): AuthoredWhereBlock<FactsOf<Conditions[number]>> {
-  const block = viewWhere(...conditions) as AuthoredWhereBlock<FactsOf<Conditions[number]>>;
+export function where(...conditions: Array<Condition | CountOp>): AuthoredWhereBlock {
+  const block = viewWhere(...conditions) as AuthoredWhereBlock;
   Object.defineProperty(block, "then", {
     value: (...nodes: UnnamedStepNode[]) => {
       if (nodes.length !== 1) {

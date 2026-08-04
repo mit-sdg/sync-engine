@@ -241,7 +241,6 @@ describe("canonical public API", () => {
 const register = {
   language: [
     "Condition",
-    "Former",
     "QueryPromise",
     "ReadLine",
     "RelationView",

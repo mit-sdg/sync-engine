@@ -9,15 +9,11 @@
  * ```ts
  * export const authorFaceOf = view(
  *   "the author face of a post",
- *   (inputs, outputs, bindings) => {
- *     const post = inputs("post");
- *     const { username, avatar } = outputs("username", "avatar");
- *     const author = bindings("author");
- *     return where(
+ *   ({ post }, { username, avatar }, { author }) =>
+ *     where(
  *       Posting._getPost({ post }).is({ author }),
  *       Profiling._getProfile({ user: author }).is({ username, avatar }),
- *     );
- *   },
+ *     ),
  * ).optional();
  *
  * authorFaceOf({ post }).is({ username })   // at a use-site: the same line form
@@ -58,24 +54,16 @@ import type { QueryPromise } from "./query-metadata.ts";
 import { operationFootprint } from "./operation-footprint.ts";
 import { assertNoOrphanedOpens, scheduleBlock } from "./schedule.ts";
 import { formFrom } from "./former-builders.ts";
-import type { FormNodeOf } from "./former-builders.ts";
+import type { FormNode } from "./former-builders.ts";
 import type { FormerEntry } from "./former-nodes.ts";
-import type {
-  CarriesFacts,
-  ExactPattern,
-  FactFromVariable,
-  FactsFromPattern,
-  FactsOf,
-  InputPattern,
-  ShapeFromFactGroups,
-} from "./type-inference.ts";
+import type { ExactPattern, InputPattern } from "./type-inference.ts";
 
 /**
  * An aggregation: bind the number of rows a query answers with right now.
  * Legal only inside a view's alternatives — a count is taken at the moment
  * of asking and never stored, and policy over aggregates is a view's job.
  */
-export interface CountOp<Facts = any> extends CarriesFacts<Facts> {
+export interface CountOp {
   readonly op: "count";
   readonly query: InstrumentedQuery;
   readonly in: Mapping;
@@ -83,22 +71,17 @@ export interface CountOp<Facts = any> extends CarriesFacts<Facts> {
 }
 
 /** An op a view's alternative may carry: the where algebra plus `count`. */
-export type ViewOp<Facts = any> = WhereOp<Facts> | CountOp<Facts>;
+export type ViewOp = WhereOp | CountOp;
 
 /** One conjunction in a view; several returned blocks are alternatives. */
 declare const ViewBlockType: unique symbol;
-export type ViewBlock<Facts = any> = ViewOp[] &
-  CarriesFacts<Facts> & {
-    readonly [ViewBlockType]: true;
-    form<const Entries extends Record<string, FormerEntry>>(
-      entries: Entries,
-    ): FormNodeOf<Entries, Facts>;
-  };
+export type ViewBlock = ViewOp[] & {
+  readonly [ViewBlockType]: true;
+  form(entries: Record<string, FormerEntry>): FormNode;
+};
 
 /** State one view alternative as a variadic conjunction. */
-export function where<const Conditions extends readonly (Condition | CountOp)[]>(
-  ...conditions: Conditions
-): ViewBlock<FactsOf<Conditions[number]>> {
+export function where(...conditions: Array<Condition | CountOp>): ViewBlock {
   const ops = conditions.map((condition) =>
     isCountOp(condition) ? condition : (conditionOp(condition, "where") as ViewOp),
   );
@@ -140,7 +123,7 @@ export function count<
   query: SingleQuery<Query>,
   input: ExactPattern<QueryInput<NoInfer<Query>>, Input>,
   out: Out,
-): CountOp<FactsFromPattern<QueryInput<NoInfer<Query>>, Input> | FactFromVariable<number, Out>> {
+): CountOp {
   const validated = assertConceptQuery(
     query,
     "count",
@@ -278,26 +261,10 @@ export function relationViewWith(
 }
 
 /**
- * Define a view from explicit input, output, and free-binding selectors. Several
+ * Define a view from explicit input, output, and free-binding bags. Several
  * returned `where(...)` blocks are alternatives. End a predicate in
  * `holds()`. Output views default to `many()` and may state a narrower promise.
  */
-type BodyFactGroups<Body> = Body extends ViewBlock
-  ? readonly [FactsOf<Body>]
-  : Body extends readonly (infer Block)[]
-    ? Block extends ViewBlock
-      ? readonly [FactsOf<Block>]
-      : never
-    : readonly [FactsOf<Body>];
-
-export function view<const Body extends ViewBlock | readonly ViewBlock[]>(
-  name: string,
-  build: (inputs: InputBindings, outputs: OutputBindings, bindings: FreeBindings) => Body,
-): RelationView<
-  ShapeFromFactGroups<BodyFactGroups<Body>, "input">,
-  ShapeFromFactGroups<BodyFactGroups<Body>, "output">,
-  "many"
->;
 export function view(
   name: string,
   build: (
@@ -306,9 +273,9 @@ export function view(
     bindings: FreeBindings,
   ) => ViewBlock | readonly ViewBlock[],
 ): RelationView {
-  const inputs = bindingBag<"input">();
-  const outputs = bindingBag<"output">();
-  const bindings = bindingBag<"free">();
+  const inputs = bindingBag<InputBindings>();
+  const outputs = bindingBag<OutputBindings>();
+  const bindings = bindingBag<FreeBindings>();
   const built = build(inputs.vars, outputs.vars, bindings.vars);
 
   const alternatives: ViewOp[][] = hasBrand(built, ViewBlockBrand)

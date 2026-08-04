@@ -6,44 +6,11 @@ Review the [operational limits](docs/operations.md) before deployment.
 
 ## Unreleased
 
-This release adds inferred contracts for views, formers, and registered
-computations. It also expands endpoint diagnostics and corrects optional former
-output shapes.
-
-### Breaking changes
-
-- View builders now receive callable `inputs`, `outputs`, and `bindings`
-  selectors. Former builders receive callable `inputs` and `bindings`
-  selectors. Existing builders that destructure callback arguments must select
-  each literal name explicitly:
-
-  ```ts
-  const roomCard = former("the room (room)", (inputs, bindings) => {
-    const room = inputs("room");
-    const { name, host } = bindings("name", "host");
-    return where(Gathering._get({ gathering: room }).is({ name, host })).form({
-      room,
-      name,
-      host,
-    });
-  });
-  ```
-
-  A one-name selector returns one logic variable. A selector with two or more
-  names returns a keyed object. Calling a completed view or former continues to
-  use one object input mapping, such as `roomCard({ room })`.
+This release adds typed registered computations, expands endpoint diagnostics,
+tightens `count(...)` contracts, and corrects optional former output shapes.
 
 ### Added
 
-- Callable selectors preserve each binding's literal identity. TypeScript uses
-  the concept, view, and computation slots containing those bindings to infer
-  view inputs and outputs, former inputs and result trees, nested formers,
-  optional blanks, selections, folds, splices, and direct
-  `Assembly.form(...)` results.
-- Exported declarations can state checked contracts with
-  `RelationView<Input, Output>` and `Former<Input, Result>` annotations. The
-  annotations verify known inferred fields and supply types for otherwise
-  unconstrained fields.
 - `conceptSet(registrations, computations?)` installs named computations while
   retaining their names and function signatures on `set.computations` and
   `set.vocabulary.computations`.
@@ -63,19 +30,10 @@ output shapes.
 
 ### Fixed
 
-- Callable binding selectors now reject non-string names passed through
-  JavaScript or `any`, using the existing error for missing or empty names.
 - TypeScript now requires `count(...)` to receive the query's complete input
   mapping and rejects extra fields at every nested level. It rejects a
   union-typed query reference outright so the input argument cannot select or
   mask one possible query; choose one concrete query before calling `count`.
-- A selection `.first(...)` or `.distinct(...)` value widened to plain `symbol`
-  remains an unconstrained result leaf instead of making `symbol` the result
-  type. An explicit `Former` annotation can supply that leaf's type.
-- Built-in `is.*` relations retain selector identities, so they no longer widen
-  facts inferred elsewhere in a view or former.
-- Advanced `custom(...)` operations retain their declared input and output
-  selector names instead of erasing other inferred facts.
 - A generated endpoint result includes `null` when the endpoint directly
   returns an optional former.
 - A blank optional splice retains every recursively contributed key and assigns
@@ -83,9 +41,6 @@ output shapes.
 
 ### Migration
 
-- Rewrite destructured view and former builder arguments with callable
-  selectors as shown above. Select names at their point of declaration; query,
-  view, computation, and formed-result slots provide their inferred types.
 - Regenerate checked-in application manifests, assembled read-back, and wire
   contracts. The expanded endpoint analysis can change advisory diagnostics,
   and corrected optional former results can change generated TypeScript.

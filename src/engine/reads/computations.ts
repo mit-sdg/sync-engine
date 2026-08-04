@@ -10,13 +10,7 @@
 
 import type { Mapping } from "@engine/reactions/types";
 import { brand, hasBrand } from "./brands.ts";
-import type {
-  CarriesFacts,
-  ExactPattern,
-  FactFromVariable,
-  FactsFromPattern,
-  InputPattern,
-} from "./type-inference.ts";
+import type { ExactPattern, InputPattern } from "./type-inference.ts";
 
 /** The runtime shape of a computation: one input mapping in, one value out. */
 // biome-ignore lint/suspicious/noExplicitAny: bare ComputationFn is the constraint for arbitrary object-shaped computation inputs.
@@ -68,17 +62,14 @@ export type ComputationInput<Fn extends ComputationFn> =
 export interface ComputationRef<Fn extends ComputationFn = ComputationFn> {
   <const Pattern extends InputPattern<ComputationInput<Fn>>>(
     input: ExactPattern<ComputationInput<Fn>, Pattern>,
-  ): FusedComputation<Fn, FactsFromPattern<ComputationInput<Fn>, Pattern>>;
+  ): FusedComputation<Fn>;
   readonly computationName: string;
   readonly fn: Fn;
   readonly source: ComputationSource;
 }
 
 /** A computation ref fused with its input pattern. */
-export interface FusedComputation<
-  Fn extends ComputationFn = ComputationFn,
-  Facts = any,
-> extends CarriesFacts<Facts> {
+export interface FusedComputation<Fn extends ComputationFn = ComputationFn> {
   readonly computation: ComputationRef<Fn>;
   readonly in: Mapping;
 }
@@ -134,19 +125,14 @@ const amongRef = computationRef(
   "standard",
 );
 
-function relation<Fn extends ComputationFn, const Input extends Mapping>(
+function relation<Fn extends ComputationFn>(
   ref: ComputationRef<Fn>,
-  input: Input,
-): FusedComputation<Fn, FactFromVariable<unknown, Input[keyof Input]>> {
-  return ref(input as never) as FusedComputation<Fn, FactFromVariable<unknown, Input[keyof Input]>>;
+  input: Mapping,
+): FusedComputation<Fn> {
+  return ref(input as never);
 }
 
-type RelationCondition<Values> = FusedComputation<ComputationFn, FactFromVariable<unknown, Values>>;
-
-type StandardRelation = <const Left, const Right>(
-  left: Left,
-  right: Right,
-) => RelationCondition<Left | Right>;
+type StandardRelation = (left: unknown, right: unknown) => FusedComputation;
 type StandardRelations = Readonly<Record<"lt" | "le" | "gt" | "ge" | "among", StandardRelation>>;
 
 /** The built-in order and membership relations, read as closed lines. */

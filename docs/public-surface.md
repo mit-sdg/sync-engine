@@ -41,7 +41,7 @@ update.
 
 <!-- register:language:start -->
 
-`Condition`, `Former`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
+`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -83,17 +83,11 @@ Concept entries accepted by `vocabulary` are either a concept class or
 When a query promise is available as a TypeScript literal, the vocabulary types
 link `"one"` to a record return and `"optional"` or `"many"` to an array of
 records. Runtime evaluation checks the same container and cardinality contract.
-`Condition`, `ReadLine`, `RelationView`, and `Former` name reusable declaration
-shapes. View and former builders receive callable binding selectors: one name,
-as in `inputs("name")`, returns one logic variable; several names, as in
-`bindings("first", "second")`, return a keyed object. Literal selectors let
-TypeScript infer view inputs, view outputs, former inputs, and complete former
-results from the concept signatures and formed tree. Authors may instead
-annotate an exported declaration with `RelationView<Input, Output>` or
-`Former<Input, Result>`; known inferred fields must agree with that contract,
-and the contract supplies otherwise unconstrained result leaves. A value
-widened to plain `symbol` before `.first(...)` or `.distinct(...)` leaves that
-fold's value type unconstrained.
+`Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes.
+View and former builders receive binding bags. Reading a property, including by
+destructuring, declares a stable logic variable in that input, output, or
+free-binding partition. Completed views and formers take one object-shaped input
+mapping.
 
 For worked examples, see the [reactions guide](./guide/reactions.md) and
 [views and formers guide](./guide/views-and-formers.md). The normative matching,
@@ -140,8 +134,8 @@ that index, and `logSink` may be combined with any `retention` policy.
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
 `whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
 both lifecycle promises resolve when accepted action, query, and former work
-actually settles. `form(...)` resolves to the supplied former's inferred result;
-an optional record former contributes `null` to that result.
+actually settles. `form(...)` resolves to the formed runtime value; an optional
+record former contributes `null` to that result.
 `ActionRefusal` is the direct-action refusal result.
 `ConceptImplementation`, `Implementations`, and `ImplementationOverrides` name
 complete or partial implementation maps. Assembled non-query actions are

@@ -166,57 +166,42 @@ async function seedThread(Threading: ThreadingConcept, conversation = "c1") {
 // ── Definition ─────────────────────────────────────────────────────────────
 
 describe("formers: definition", () => {
-  test("the literal selector preserves runtime binding identity", () => {
+  test("proxy bags mint stable bindings on destructuring and property access", () => {
     let sameInput = false;
     let sameBinding = false;
-    const selected = former("selected thread (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author } = bindings("node", "author");
-      sameInput = conversation === inputs("conversation");
-      sameBinding = node === bindings("node") && author === bindings("author");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, author })).form({
+    const thread = former("one thread (conversation)", (inputs, bindings) => {
+      const { conversation } = inputs;
+      const { node } = bindings;
+      sameInput = conversation === inputs.conversation;
+      sameBinding = node === bindings.node;
+      return where(ThreadingReads._nodes({ conversation }).is({ node })).form({
+        conversation,
         node,
-        author,
       });
     });
 
     expect(sameInput).toBe(true);
     expect(sameBinding).toBe(true);
-    expect(selected.ins).toEqual(["conversation"]);
-    expect(selected.bindings).toEqual(["node", "author"]);
-  });
-
-  test("the callable selector leaves dollar available as a binding name", () => {
-    let sameInput = false;
-    const selected = former("selected by ($)", (inputs, _bindings) => {
-      const value = inputs("$");
-      sameInput = value === inputs("$");
-      return form({ value });
-    });
-
-    expect(sameInput).toBe(true);
-    expect(selected.ins).toEqual(["$"]);
-    expect(selected({ $: "literal-name" }).in).toEqual({ $: "literal-name" });
+    expect(thread.ins).toEqual(["conversation"]);
+    expect(thread.bindings).toEqual(["node"]);
   });
 
   test("the input bag declares the call parameters", () => {
-    const thread = former("thread (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author } = bindings("node", "author");
-      return form({
+    const thread = former("thread (conversation)", ({ conversation }, { node, author }) =>
+      form({
         conversation,
         posts: each(ThreadingReads._nodes({ conversation }).is({ node, author })).form({
           node,
           author,
         }),
-      });
-    });
+      }),
+    );
     expect(thread.formerName).toBe("thread (conversation)");
     expect(thread.ins).toEqual(["conversation"]);
-    expect(() => thread({} as never)).toThrowError(
+    expect(() => thread({})).toThrowError(
       new Error('Former "thread (conversation)": required input "conversation" is missing.'),
     );
-    expect(() => thread({ conversation: "c1", extra: true } as never)).toThrowError(
+    expect(() => thread({ conversation: "c1", extra: true })).toThrowError(
       new Error(
         'Former "thread (conversation)": "extra" is not an input; expected (conversation).',
       ),
@@ -240,41 +225,32 @@ describe("formers: definition", () => {
 
   test("a selection cannot be optional", () => {
     expect(() =>
-      former("all conversations", (_inputs, bindings) => {
-        const conversation = bindings("conversation");
-        return each(ThreadingReads._conversations({}).is({ conversation })).form({ conversation });
-      }).optional(),
+      former("all conversations", (_inputs, { conversation }) =>
+        each(ThreadingReads._conversations({}).is({ conversation })).form({ conversation }),
+      ).optional(),
     ).toThrow("a selection always answers and cannot be optional");
   });
 
   test("an input binding the body never uses is a definition error", () => {
     expect(() =>
-      former("ghost (haunt)", (inputs, bindings) => {
-        const _haunt = inputs("haunt");
-        const nothing = bindings("nothing");
-        return form({ nothing });
-      }),
+      former("ghost (haunt)", ({ haunt: _haunt }, { nothing }) => form({ nothing })),
     ).toThrow('input binding "haunt" is declared but never used');
   });
 
   test("a leaf bound by nothing is a definition error", () => {
-    expect(() =>
-      former("dangling ()", (_inputs, bindings) => {
-        const loose = bindings("loose");
-        return form({ loose });
-      }),
-    ).toThrow("bound by nothing");
+    expect(() => former("dangling ()", (_inputs, { loose }) => form({ loose }))).toThrow(
+      "bound by nothing",
+    );
   });
 
   test("unresolved record conditions name every blocked line and binding", () => {
     expect(() =>
-      former("cyclic record ()", (_inputs, bindings) => {
-        const { author, createdAt } = bindings("author", "createdAt");
-        return where(
+      former("cyclic record ()", (_inputs, { author, createdAt }) =>
+        where(
           ThreadingReads._nodes({ conversation: author }).is({ createdAt }),
           ThreadingReads._nodes({ conversation: createdAt }).is({ author }),
-        ).form({ author });
-      }),
+        ).form({ author }),
+      ),
     ).toThrow(
       'the conditions cannot be ordered — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
     );
@@ -282,18 +258,16 @@ describe("formers: definition", () => {
 
   test("unresolved selection conditions name every blocked line and binding", () => {
     expect(() =>
-      former("cyclic selection (conversation)", (inputs, bindings) => {
-        const conversation = inputs("conversation");
-        const { node, author, createdAt } = bindings("node", "author", "createdAt");
-        return form({
+      former("cyclic selection (conversation)", ({ conversation }, { node, author, createdAt }) =>
+        form({
           nodes: each(ThreadingReads._nodes({ conversation }).is({ node }))
             .where(
               ThreadingReads._nodes({ conversation: author }).is({ createdAt }),
               ThreadingReads._nodes({ conversation: createdAt }).is({ author }),
             )
             .form({ node }),
-        });
-      }),
+        }),
+      ),
     ).toThrow(
       'the conditions cannot be ordered — find Threading._nodes needs "author"; find Threading._nodes needs "createdAt"',
     );
@@ -302,30 +276,26 @@ describe("formers: definition", () => {
   test("a former answers from standing state — earlier() is rejected", () => {
     const { Threading } = setup();
     expect(() =>
-      former("stale (conversation)", (inputs, bindings) => {
-        const conversation = inputs("conversation");
-        const node = bindings("node");
-        return form({
+      former("stale (conversation)", ({ conversation }, { node }) =>
+        form({
           posts: each(ThreadingReads._nodes({ conversation }).is({ node }))
             .where(earlier(Threading.open, { conversation }) as unknown as WhereOp)
             .form({ node }),
-        });
-      }),
+        }),
+      ),
     ).toThrow("standing state");
   });
 
   test("count cannot be used as a selection filter", () => {
     const countLike = { op: "count" } as unknown as WhereOp;
     expect(() =>
-      former("misplaced (conversation)", (inputs, bindings) => {
-        const conversation = inputs("conversation");
-        const node = bindings("node");
-        return form({
+      former("misplaced (conversation)", ({ conversation }, { node }) =>
+        form({
           posts: each(ThreadingReads._nodes({ conversation }).is({ node }))
             .where(countLike)
             .form({ node }),
-        });
-      }),
+        }),
+      ),
     ).toThrow("End the selection with .count()");
   });
 });
@@ -336,16 +306,16 @@ describe("formers: evaluation", () => {
   test("forms a record whose key contains an ordered list", async () => {
     const { reacting, Threading } = setup();
     await seedThread(Threading);
-    const thread = former("thread (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author, createdAt } = bindings("node", "author", "createdAt");
-      return form({
-        conversation,
-        posts: each(ThreadingReads._nodes({ conversation }).is({ node, author, createdAt }))
-          .arranged("oldest")
-          .form({ node, author }),
-      });
-    });
+    const thread = former(
+      "thread (conversation)",
+      ({ conversation }, { node, author, createdAt }) =>
+        form({
+          conversation,
+          posts: each(ThreadingReads._nodes({ conversation }).is({ node, author, createdAt }))
+            .arranged("oldest")
+            .form({ node, author }),
+        }),
+    );
     expect(await reacting.form(thread({ conversation: "c1" }))).toEqual({
       conversation: "c1",
       posts: [
@@ -359,13 +329,13 @@ describe("formers: evaluation", () => {
   test("arranged by a bound value, descending", async () => {
     const { reacting, Threading } = setup();
     await seedThread(Threading);
-    const latestFirst = former("latest first (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, createdAt } = bindings("node", "createdAt");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, createdAt }))
-        .arranged(createdAt, "descending")
-        .form({ node });
-    });
+    const latestFirst = former(
+      "latest first (conversation)",
+      ({ conversation }, { node, createdAt }) =>
+        each(ThreadingReads._nodes({ conversation }).is({ node, createdAt }))
+          .arranged(createdAt, "descending")
+          .form({ node }),
+    );
     expect(await reacting.form(latestFirst({ conversation: "c1" }))).toEqual([
       { node: "n3" },
       { node: "n2" },
@@ -376,11 +346,11 @@ describe("formers: evaluation", () => {
   test("a selection's where keeps only what matches", async () => {
     const { reacting, Threading } = setup();
     await seedThread(Threading);
-    const byPriya = former("posts by (author) in (conversation)", (inputs, bindings) => {
-      const { conversation, author } = inputs("conversation", "author");
-      const node = bindings("node");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, author })).form({ node });
-    });
+    const byPriya = former(
+      "posts by (author) in (conversation)",
+      ({ conversation, author }, { node }) =>
+        each(ThreadingReads._nodes({ conversation }).is({ node, author })).form({ node }),
+    );
     // The already-bound `author` slot unifies against each row — an equality
     // test per match, the same discipline as everywhere else.
     expect(await reacting.form(byPriya({ author: "priya", conversation: "c1" }))).toEqual([
@@ -394,15 +364,13 @@ describe("formers: evaluation", () => {
 
 describe("formers: records from at-most-one queries", () => {
   const profileCard = () =>
-    former("profile card (person)", (inputs, bindings) => {
-      const person = inputs("person");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
+    former("profile card (person)", ({ person }, { profile, bio }) =>
+      where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
         person,
         profile,
         bio,
-      });
-    });
+      }),
+    );
 
   test("a matching query row binds fields into the record", async () => {
     const { reacting, Profiling } = setup();
@@ -429,14 +397,12 @@ describe("formers: records from at-most-one queries", () => {
     await expect(reacting.form(profileCard()({ person: "priya" }))).rejects.toThrow(
       'promises "optional"',
     );
-    const optionalCard = former("optional card (person)", (inputs, bindings) => {
-      const person = inputs("person");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
+    const optionalCard = former("optional card (person)", ({ person }, { profile, bio }) =>
+      where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
         person,
         profile,
-      });
-    });
+      }),
+    );
     await expect(reacting.form(optionalCard({ person: "priya" }))).rejects.toThrow(
       'promises "optional"',
     );
@@ -444,15 +410,13 @@ describe("formers: records from at-most-one queries", () => {
 
   test("whether assigns null to fields when the query returns no row", async () => {
     const { reacting } = setup();
-    const card = former("card (person)", (inputs, bindings) => {
-      const person = inputs("person");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
+    const card = former("card (person)", ({ person }, { profile, bio }) =>
+      where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
         person,
         profile,
         bio,
-      });
-    });
+      }),
+    );
     expect(await reacting.form(card({ person: "nobody" }))).toEqual({
       person: "nobody",
       profile: null,
@@ -464,14 +428,12 @@ describe("formers: records from at-most-one queries", () => {
     const { reacting } = setup();
     // No profile exists for "nobody", so `profile` remains unset. The second
     // query therefore returns no row, and `whether` keeps the record.
-    const chained = former("chained (person)", (inputs, bindings) => {
-      const person = inputs("person");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(
+    const chained = former("chained (person)", ({ person }, { profile, bio }) =>
+      where(
         whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })),
         whether(ProfilingReads._ofOwner({ owner: profile }).is({})),
-      ).form({ person, profile });
-    });
+      ).form({ person, profile }),
+    );
     expect(await reacting.form(chained({ person: "nobody" }))).toEqual({
       person: "nobody",
       profile: null,
@@ -483,10 +445,8 @@ describe("formers: records from at-most-one queries", () => {
 
 describe("formers: selection reductions", () => {
   const feedRow = () =>
-    former("feed row (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, parent, author, createdAt } = bindings("node", "parent", "author", "createdAt");
-      return form({
+    former("feed row (conversation)", ({ conversation }, { node, parent, author, createdAt }) =>
+      form({
         conversation,
         replyCount: each(
           ThreadingReads._nodes({ conversation }).is({ node, parent }).is.not({ parent: null }),
@@ -497,8 +457,8 @@ describe("formers: selection reductions", () => {
         participants: each(ThreadingReads._nodes({ conversation }).is({ node, author })).distinct(
           author,
         ),
-      });
-    });
+      }),
+    );
 
   test("count / first-arranged / distinct, taken at the moment of asking", async () => {
     const { reacting, Threading } = setup();
@@ -533,15 +493,8 @@ describe("formers: selection reductions", () => {
       author: "ada",
       createdAt: 99,
     });
-    const feed = former("the feed ()", (_inputs, bindings) => {
-      const { conversation, title, node, parent, author } = bindings(
-        "conversation",
-        "title",
-        "node",
-        "parent",
-        "author",
-      );
-      return each(ThreadingReads._conversations({}).is({ conversation, title })).form({
+    const feed = former("the feed ()", (_inputs, { conversation, title, node, parent, author }) =>
+      each(ThreadingReads._conversations({}).is({ conversation, title })).form({
         conversation,
         title,
         replyCount: each(
@@ -550,8 +503,8 @@ describe("formers: selection reductions", () => {
         participants: each(ThreadingReads._nodes({ conversation }).is({ node, author })).distinct(
           author,
         ),
-      });
-    });
+      }),
+    );
     expect(await reacting.form(feed({}))).toEqual([
       { conversation: "c1", title: "hello", replyCount: 2, participants: ["priya", "sam"] },
       { conversation: "c2", title: "second", replyCount: 0, participants: ["ada"] },
@@ -571,29 +524,23 @@ describe("formers: the gradebook matrix", () => {
     Grading.learners.push({ learner: "sam", name: "Sam" }, { learner: "ada", name: "Ada" });
     Grading.grades.push({ learner: "sam", item: "hw1", score: 88 });
 
-    const gradebook = former("gradebook ()", (_inputs, bindings) => {
-      const { item, title, position, learner, name, score } = bindings(
-        "item",
-        "title",
-        "position",
-        "learner",
-        "name",
-        "score",
-      );
-      return form({
-        items: each(GradingReads._items({}).is({ item, title, position }))
-          .arranged(position)
-          .form({ item, title }),
-        rows: each(GradingReads._learners({}).is({ learner, name })).form({
-          learner,
-          name,
-          cells: each(GradingReads._items({}).is({ item, position }))
-            .where(whether(GradingReads._grade({ learner, item }).is({ score })))
+    const gradebook = former(
+      "gradebook ()",
+      (_inputs, { item, title, position, learner, name, score }) =>
+        form({
+          items: each(GradingReads._items({}).is({ item, title, position }))
             .arranged(position)
-            .form({ item, score }),
+            .form({ item, title }),
+          rows: each(GradingReads._learners({}).is({ learner, name })).form({
+            learner,
+            name,
+            cells: each(GradingReads._items({}).is({ item, position }))
+              .where(whether(GradingReads._grade({ learner, item }).is({ score })))
+              .arranged(position)
+              .form({ item, score }),
+          }),
         }),
-      });
-    });
+    );
 
     expect(await reacting.form(gradebook({}))).toEqual({
       items: [
@@ -627,16 +574,14 @@ describe("formers: the gradebook matrix", () => {
 describe("formers: dispatch integration", () => {
   test("a reaction responds with a former's tree, evaluated per firing", async () => {
     const { reacting, Threading, Recorder } = setup();
-    const summary = former("summary (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, parent } = bindings("node", "parent");
-      return form({
+    const summary = former("summary (conversation)", ({ conversation }, { node, parent }) =>
+      form({
         conversation,
         replyCount: each(
           ThreadingReads._nodes({ conversation }).is({ node, parent }).is.not({ parent: null }),
         ).count(),
-      });
-    });
+      }),
+    );
     reacting.register({
       ServeThread: reaction(({ conversation }: Vars) =>
         when(ThreadingReads.open({ conversation }).responds()).then(
@@ -651,14 +596,12 @@ describe("formers: dispatch integration", () => {
 
   test("a former fault prevents the consequence action from running", async () => {
     const { reacting, Threading, Recorder } = setup();
-    const card = former("card (person)", (inputs, bindings) => {
-      const person = inputs("person");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
+    const card = former("card (person)", ({ person }, { profile, bio }) =>
+      where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
         person,
         bio,
-      });
-    });
+      }),
+    );
     reacting.register({
       ServeCard: reaction(({ conversation }: Vars) =>
         when(ThreadingReads.open({ conversation }).responds()).then(
@@ -689,14 +632,12 @@ describe("formers: dispatch integration", () => {
     }).concepts;
     reacting.instrumentConcept(new ProtectedAction(), "Protected");
     reacting.instrumentConcept(new FaultRecorder(), "FaultRecorder");
-    const card = former("protected card (person)", (inputs, bindings) => {
-      const person = inputs("person");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
+    const card = former("protected card (person)", ({ person }, { profile, bio }) =>
+      where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
         person,
         bio,
-      });
-    });
+      }),
+    );
     reacting.register({
       FormProtectedInput: reaction(({ conversation }: Vars) =>
         when(ThreadingReads.open({ conversation }).responds()).then(
@@ -725,19 +666,19 @@ describe("formers: dispatch integration", () => {
 describe("formers: IR round-trip", () => {
   function boardApp() {
     const { reacting, Threading, Grading, Profiling, Recorder } = setup();
-    const summary = former("summary (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author, createdAt } = bindings("node", "author", "createdAt");
-      return form({
-        conversation,
-        posts: each(ThreadingReads._nodes({ conversation }).is({ node, author, createdAt }))
-          .arranged(createdAt)
-          .form({ node, author }),
-        participants: each(ThreadingReads._nodes({ conversation }).is({ node, author })).distinct(
-          author,
-        ),
-      });
-    });
+    const summary = former(
+      "summary (conversation)",
+      ({ conversation }, { node, author, createdAt }) =>
+        form({
+          conversation,
+          posts: each(ThreadingReads._nodes({ conversation }).is({ node, author, createdAt }))
+            .arranged(createdAt)
+            .form({ node, author }),
+          participants: each(ThreadingReads._nodes({ conversation }).is({ node, author })).distinct(
+            author,
+          ),
+        }),
+    );
     reacting.register({
       ServeThread: reaction(({ conversation }: Vars) =>
         when(ThreadingReads.open({ conversation }).responds()).then(
@@ -816,17 +757,13 @@ describe("formers: IR round-trip", () => {
 
   test("two different definitions of one sentence are rejected", () => {
     const { reacting } = setup();
-    const one = former("the same (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const node = bindings("node");
-      return each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node });
-    });
-    const two = former("the same (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author } = bindings("node", "author");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, author })).form({ author });
-    });
-    const declare = (name: string, ref: typeof one | typeof two) =>
+    const one = former("the same (conversation)", ({ conversation }, { node }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node }),
+    );
+    const two = former("the same (conversation)", ({ conversation }, { node, author }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node, author })).form({ author }),
+    );
+    const declare = (name: string, ref: typeof one) =>
       reacting.register({
         [name]: reaction(({ conversation }: Vars) =>
           when(ThreadingReads.open({ conversation }).responds()).then(
@@ -841,17 +778,16 @@ describe("formers: IR round-trip", () => {
 
   test("a view inside a former's selection exports with the app's views", async () => {
     const { reacting, Threading, Recorder } = setup();
-    const isReply = view("(node) is a reply in (conversation)", (inputs, _outputs, _bindings) => {
-      const { node, conversation } = inputs("node", "conversation");
-      return where(ThreadingReads._nodes({ conversation }).is({ node }).is.not({ parent: null }));
-    }).holds();
-    const replies = former("replies (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const node = bindings("node");
-      return each(ThreadingReads._nodes({ conversation }).is({ node }))
+    const isReply = view(
+      "(node) is a reply in (conversation)",
+      ({ node, conversation }, _outputs, _bindings) =>
+        where(ThreadingReads._nodes({ conversation }).is({ node }).is.not({ parent: null })),
+    ).holds();
+    const replies = former("replies (conversation)", ({ conversation }, { node }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node }))
         .where(isReply({ node, conversation }))
-        .form({ node });
-    });
+        .form({ node }),
+    );
     reacting.declareFormers(replies);
     const app = reacting.exportReactions();
     expect(app.views.map((v) => v.name)).toEqual(["(node) is a reply in (conversation)"]);
@@ -870,32 +806,23 @@ describe("formers: IR round-trip", () => {
 describe("formers: rendering", () => {
   test("a former renders as a former block", () => {
     const { reacting } = setup();
-    const summary = former("summary (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, parent, author, createdAt, profile, bio } = bindings(
-        "node",
-        "parent",
-        "author",
-        "createdAt",
-        "profile",
-        "bio",
-      );
-      return where(
-        whether(ProfilingReads._ofOwner({ owner: conversation }).is({ profile, bio })),
-      ).form({
-        conversation,
-        bio,
-        replyCount: each(
-          ThreadingReads._nodes({ conversation }).is({ node, parent }).is.not({ parent: null }),
-        ).count(),
-        lastActivity: each(ThreadingReads._nodes({ conversation }).is({ node, createdAt }))
-          .arranged(createdAt, "descending")
-          .first(createdAt),
-        posts: each(ThreadingReads._nodes({ conversation }).is({ node, author }))
-          .arranged("oldest")
-          .form({ node, author }),
-      });
-    });
+    const summary = former(
+      "summary (conversation)",
+      ({ conversation }, { node, parent, author, createdAt, profile, bio }) =>
+        where(whether(ProfilingReads._ofOwner({ owner: conversation }).is({ profile, bio }))).form({
+          conversation,
+          bio,
+          replyCount: each(
+            ThreadingReads._nodes({ conversation }).is({ node, parent }).is.not({ parent: null }),
+          ).count(),
+          lastActivity: each(ThreadingReads._nodes({ conversation }).is({ node, createdAt }))
+            .arranged(createdAt, "descending")
+            .first(createdAt),
+          posts: each(ThreadingReads._nodes({ conversation }).is({ node, author }))
+            .arranged("oldest")
+            .form({ node, author }),
+        }),
+    );
     reacting.declareFormers(summary);
     const rendered = reacting.renderApp("Summary");
     expect(rendered).toContain(
@@ -919,11 +846,9 @@ describe("formers: rendering", () => {
 
   test("the app spec carries a Formers section, and the consequence reads as the sentence", () => {
     const { reacting } = setup();
-    const summary = former("summary (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const node = bindings("node");
-      return each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node });
-    });
+    const summary = former("summary (conversation)", ({ conversation }, { node }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node }),
+    );
     reacting.register({
       ServeThread: reaction(({ conversation }: Vars) =>
         when(ThreadingReads.open({ conversation }).responds()).then(
@@ -947,14 +872,12 @@ describe("formers: rendering", () => {
 describe("formers: fragments (splice)", () => {
   /** A reusable optional profile fragment merged into post rows. */
   function postSummaryFragment() {
-    return former("the profile summary of (person)", (inputs, bindings) => {
-      const person = inputs("person");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
+    return former("the profile summary of (person)", ({ person }, { profile, bio }) =>
+      where(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio })).form({
         profile,
         bio,
-      });
-    }).optional();
+      }),
+    ).optional();
   }
 
   test("a splice closes the fragment's anchors and merges its keys flat", async () => {
@@ -962,13 +885,11 @@ describe("formers: fragments (splice)", () => {
     Profiling.profiles.push({ profile: "p1", owner: "priya", bio: "designs" });
     await seedThread(Threading);
     const summary = postSummaryFragment();
-    const posts = former("the posts of (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author } = bindings("node", "author");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, author }))
+    const posts = former("the posts of (conversation)", ({ conversation }, { node, author }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node, author }))
         .form({ node, author })
-        .splicing(whether(summary({ person: author })));
-    });
+        .splicing(whether(summary({ person: author }))),
+    );
     const tree = (await reacting.form(posts({ conversation: "c1" }))) as Array<
       Record<string, unknown>
     >;
@@ -982,14 +903,12 @@ describe("formers: fragments (splice)", () => {
     const { reacting, Profiling } = setup();
     Profiling.profiles.push({ profile: "p1", owner: "priya", bio: "designs" });
     const summary = postSummaryFragment();
-    const nested = former("the nested profile of (person)", (inputs, _bindings) => {
-      const person = inputs("person");
-      return form({ person, summary: whether(summary({ person })) });
-    });
-    const present = former("the present nested profile of (person)", (inputs, _bindings) => {
-      const person = inputs("person");
-      return form({ person, summary: summary({ person }) });
-    }).optional();
+    const nested = former("the nested profile of (person)", ({ person }, _bindings) =>
+      form({ person, summary: whether(summary({ person })) }),
+    );
+    const present = former("the present nested profile of (person)", ({ person }, _bindings) =>
+      form({ person, summary: summary({ person }) }),
+    ).optional();
     expect(await reacting.form(nested({ person: "sam" }))).toEqual({
       person: "sam",
       summary: { profile: null, bio: null },
@@ -1001,38 +920,18 @@ describe("formers: fragments (splice)", () => {
     });
   });
 
-  test("a blank optional splice includes keys contributed by nested splices", async () => {
-    const { reacting } = setup();
-    const summary = postSummaryFragment();
-    const extended = former("the extended profile of (person)", (inputs, _bindings) => {
-      const person = inputs("person");
-      return form({ owner: person }).splicing(summary({ person }));
-    }).optional();
-    const host = former("the profile request for (person)", (inputs, _bindings) => {
-      const person = inputs("person");
-      return form({ requested: person }).splicing(whether(extended({ person })));
-    });
-
-    expect(await reacting.form(host({ person: "sam" }))).toEqual({
-      requested: "sam",
-      owner: null,
-      profile: null,
-      bio: null,
-    });
-  });
-
   test("plain splice use vanishes the host's row", async () => {
     const { reacting, Threading, Profiling } = setup();
     Profiling.profiles.push({ profile: "p1", owner: "priya", bio: "designs" });
     await seedThread(Threading);
     const summary = postSummaryFragment();
-    const posts = former("the profiled posts of (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author } = bindings("node", "author");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, author }))
-        .form({ node })
-        .splicing(summary({ person: author }));
-    });
+    const posts = former(
+      "the profiled posts of (conversation)",
+      ({ conversation }, { node, author }) =>
+        each(ThreadingReads._nodes({ conversation }).is({ node, author }))
+          .form({ node })
+          .splicing(summary({ person: author })),
+    );
     const tree = (await reacting.form(posts({ conversation: "c1" }))) as Array<
       Record<string, unknown>
     >;
@@ -1043,13 +942,11 @@ describe("formers: fragments (splice)", () => {
   test("a splice anchor bound by nothing is a definition error", () => {
     const summary = postSummaryFragment();
     expect(() =>
-      former("the floating summary (conversation)", (inputs, bindings) => {
-        const conversation = inputs("conversation");
-        const { node, person } = bindings("node", "person");
-        return each(ThreadingReads._nodes({ conversation }).is({ node }))
+      former("the floating summary (conversation)", ({ conversation }, { node, person }) =>
+        each(ThreadingReads._nodes({ conversation }).is({ node }))
           .form({ node })
-          .splicing(whether(summary({ person })));
-      }),
+          .splicing(whether(summary({ person }))),
+      ),
     ).toThrow('splice "the profile summary of (person)" anchor uses "person" before it is bound');
   });
 
@@ -1061,13 +958,11 @@ describe("formers: fragments (splice)", () => {
     );
     await seedThread(Threading);
     const summary = postSummaryFragment();
-    const posts = former("the posts of (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author } = bindings("node", "author");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, author }))
+    const posts = former("the posts of (conversation)", ({ conversation }, { node, author }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node, author }))
         .form({ node })
-        .splicing(whether(summary({ person: author })));
-    });
+        .splicing(whether(summary({ person: author }))),
+    );
     await expect(reacting.form(posts({ conversation: "c1" }))).rejects.toThrow(
       'promises "optional"',
     );
@@ -1076,19 +971,15 @@ describe("formers: fragments (splice)", () => {
   test("splice key collisions are definition-time errors; only record roots splice", () => {
     const summary = postSummaryFragment();
     expect(() =>
-      former("colliding (conversation)", (inputs, bindings) => {
-        const conversation = inputs("conversation");
-        const { node, author } = bindings("node", "author");
-        return each(ThreadingReads._nodes({ conversation }).is({ node, author }))
+      former("colliding (conversation)", ({ conversation }, { node, author }) =>
+        each(ThreadingReads._nodes({ conversation }).is({ node, author }))
           .form({ node, bio: author as never })
-          .splicing(whether(summary({ person: author })));
-      }),
+          .splicing(whether(summary({ person: author }))),
+      ),
     ).toThrow('collides on key "bio"');
-    const listShaped = former("the nodes of (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const node = bindings("node");
-      return each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node });
-    });
+    const listShaped = former("the nodes of (conversation)", ({ conversation }, { node }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node }),
+    );
     expect(() => form({}).splicing(listShaped({ conversation: "c1" }))).toThrow(
       "not record-rooted",
     );
@@ -1097,13 +988,11 @@ describe("formers: fragments (splice)", () => {
   test("the IR retains fragments through dependency-first export and round-trip", () => {
     const { reacting } = setup();
     const summary = postSummaryFragment();
-    const posts = former("the posts of (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author } = bindings("node", "author");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, author }))
+    const posts = former("the posts of (conversation)", ({ conversation }, { node, author }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node, author }))
         .form({ node, author })
-        .splicing(summary({ person: author }));
-    });
+        .splicing(summary({ person: author })),
+    );
     reacting.register({
       Serve: reaction(({ conversation }: Vars) =>
         when(ThreadingReads.open({ conversation }).responds()).then(
@@ -1130,13 +1019,11 @@ describe("formers: fragments (splice)", () => {
   test("a splice renders as the … line, posture said when it drops", () => {
     const { reacting } = setup();
     const summary = postSummaryFragment();
-    const posts = former("the posts of (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const { node, author } = bindings("node", "author");
-      return each(ThreadingReads._nodes({ conversation }).is({ node, author }))
+    const posts = former("the posts of (conversation)", ({ conversation }, { node, author }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node, author }))
         .form({ node })
-        .splicing(summary({ person: author }));
-    });
+        .splicing(summary({ person: author })),
+    );
     reacting.declareFormers(posts);
     const rendered = reacting.renderApp("Posts");
     expect(rendered).toContain('… former "the profile summary of (person)" with (person: author)');
@@ -1147,35 +1034,27 @@ describe("formers: fragments (splice)", () => {
 
 describe("formers: nodes and keys", () => {
   test("contributedKeys returns entry keys for a plain record former", () => {
-    const rec = former("rec (a, b)", (inputs, _bindings) => {
-      const { a, b } = inputs("a", "b");
-      return form({ a, b });
-    });
+    const rec = former("rec (a, b)", ({ a, b }, _bindings) => form({ a, b }));
     expect(contributedKeys(rec).sort()).toEqual(["a", "b"]);
   });
 
   test("contributedKeys includes keys from spliced fragments", () => {
-    const frag = former("frag (person)", (inputs, bindings) => {
-      const person = inputs("person");
-      const { profile, bio } = bindings("profile", "bio");
-      return where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
+    const frag = former("frag (person)", ({ person }, { profile, bio }) =>
+      where(whether(ProfilingReads._ofOwner({ owner: person }).is({ profile, bio }))).form({
         profile,
         bio,
-      });
-    });
-    const host = former("host (node)", (inputs, _bindings) => {
-      const node = inputs("node");
-      return form({ node }).splicing(whether(frag({ person: "priya" })));
-    });
+      }),
+    );
+    const host = former("host (node)", ({ node }, _bindings) =>
+      form({ node }).splicing(whether(frag({ person: "priya" }))),
+    );
     expect(contributedKeys(host).sort()).toEqual(["bio", "node", "profile"]);
   });
 
   test("contributedKeys returns empty array for a non-record former", () => {
-    const list = former("list (conversation)", (inputs, bindings) => {
-      const conversation = inputs("conversation");
-      const node = bindings("node");
-      return each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node });
-    });
+    const list = former("list (conversation)", ({ conversation }, { node }) =>
+      each(ThreadingReads._nodes({ conversation }).is({ node })).form({ node }),
+    );
     expect(contributedKeys(list)).toEqual([]);
   });
 

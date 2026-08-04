@@ -247,11 +247,11 @@ async function evalNode(
  * engine evaluates). A violated former promise throws {@link FormerFault}.
  * When forming a consequence input, the engine records that fault on the ask.
  */
-export async function formTree<Value>(
-  fused: FusedFormer<Value>,
+export async function formTree(
+  fused: FusedFormer,
   env: ReadEnv,
   assertRows?: AssertRows,
-): Promise<Value> {
+): Promise<unknown> {
   for (const inputName of fused.former.ins) {
     if (typeof fused.in[inputName] === "symbol") {
       throw new Error(
@@ -262,5 +262,5 @@ export async function formTree<Value>(
   }
   assertRows?.(1);
   const tree = await evaluateFormer(fused.former, fused.in, env, assertRows);
-  return (tree === ABSENT ? null : tree) as Value;
+  return tree === ABSENT ? null : tree;
 }

@@ -53,10 +53,9 @@ function setup() {
   });
   const { FailureSource } = words.concepts;
   const { broken } = words.computations;
-  const onlyRow = view("the only failure-source row", (_inputs, outputs, _bindings) => {
-    const value = outputs("value");
-    return where(FailureSource._rows({}).is({ value }));
-  }).one();
+  const onlyRow = view("the only failure-source row", (_inputs, { value }, _bindings) =>
+    where(FailureSource._rows({}).is({ value })),
+  ).one();
 
   const QueryFailure = endpoint("/fail/query", ({ value }: Vars) =>
     receive().where(FailureSource._broken({}).is({ value })).then(respond({ value })),

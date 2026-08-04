@@ -12,10 +12,8 @@ separate composition, leaving their implementations independent of peers.
 Composition has four main parts:
 
 - **reactions** ask for consequences after action asks or outcomes;
-- **views** name shared relations and policy decisions with inferred input and
-  output types;
-- **formers** build current-state result trees with inferred input and result
-  types;
+- **views** name shared relations and policy decisions;
+- **formers** build current-state result trees;
 - **endpoints** connect outside requests to composed behavior.
 
 The engine validates the composition, instruments the selected concept

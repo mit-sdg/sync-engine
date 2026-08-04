@@ -93,10 +93,8 @@ consequences. Reaction matching and `earlier(...)` correlation are flow-local.
 
 ## Former
 
-A named current-state read that constructs a typed value tree. Literal binding
-selectors let its callable inputs and complete result infer from concept
-signatures; an explicit input/result pair is also available. A former is
-evaluated when asked; the engine does not store its result.
+A named current-state read that constructs a value tree. A former is evaluated
+when asked; the engine does not store its result.
 
 ## Framework error
 
@@ -222,9 +220,7 @@ results; faults are unexpected execution failures.
 
 A named relation over concept queries or other views. A predicate view answers
 whether a relation holds. An output view returns rows with a declared
-cardinality. Its input and output mappings infer when its builders use callable
-literal-name selectors. In sync-engine, `view` always refers to this authored
-relation.
+cardinality. In sync-engine, `view` always refers to this authored relation.
 
 ## Vocabulary
 

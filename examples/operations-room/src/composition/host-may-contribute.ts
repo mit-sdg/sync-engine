@@ -5,18 +5,14 @@ const { Gathering } = concepts;
 
 export const responderMayContribute = view(
   "(responder) may contribute in (room)",
-  (inputs, _outputs, _bindings) => {
-    const { responder, room } = inputs("responder", "room");
-    return where(Gathering._get({ gathering: room }).is({ host: responder }));
-  },
+  ({ responder, room }, _outputs, _bindings) =>
+    where(Gathering._get({ gathering: room }).is({ host: responder })),
 ).holds();
 
 export const responderMayNotContribute = view(
   "(responder) may not contribute in (room)",
-  (inputs, _outputs, _bindings) => {
-    const { responder, room } = inputs("responder", "room");
-    return where(Gathering._get({ gathering: room }).is.not({ host: responder }));
-  },
+  ({ responder, room }, _outputs, _bindings) =>
+    where(Gathering._get({ gathering: room }).is.not({ host: responder })),
 ).holds();
 
 export const deniedContribution = "HOST_ONLY";

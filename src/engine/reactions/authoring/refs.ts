@@ -32,9 +32,7 @@ import { brand, hasFuncBrand } from "@engine/reads/brands";
 import { actionLine } from "./nodes.ts";
 import { lineOf } from "@engine/reads/lines";
 import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
-import type { ExactPattern, FactsFromPattern } from "@engine/reads/type-inference";
-import type { FusedFormer } from "@engine/reads/former-nodes";
-import type { PatternValue } from "@engine/reads/type-inference";
+import type { ExactPattern } from "@engine/reads/type-inference";
 import { parseSpec } from "../concepts/concept-spec.ts";
 import type {
   CheckedComputationFns,
@@ -109,11 +107,11 @@ type QueryRow<A> = Awaited<A> extends readonly (infer Row)[] ? Row : Awaited<A>;
  */
 type ExactSlotPattern<Shape, Pattern> = ExactPattern<Shape, Pattern>;
 
-type QueryLineFn<F, Promise extends QueryPromise> = F extends (input: infer I) => infer A
+type QueryLineFn<F> = F extends (input: infer I) => infer A
   ? {
       <const Pattern extends SlotPattern<I>>(
         pattern: ExactSlotPattern<I, Pattern>,
-      ): QueryReadLine<QueryRow<A>, FactsFromPattern<I, Pattern>, never, Promise>;
+      ): QueryReadLine<QueryRow<A>>;
       (input: I): A;
     }
   : F;
@@ -128,13 +126,9 @@ type RequiredInputKeys<I> = {
   [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
 }[keyof I];
 
-type ActionSlotPattern<Input> = {
-  readonly [Key in keyof Input]?: PatternValue<Input[Key]> | FusedFormer<Input[Key]>;
-};
-
 type ActionLineFn<F> = F extends (input: infer I) => infer A
   ? {
-      <P extends ActionSlotPattern<I>>(
+      <P extends SlotPattern<I>>(
         pattern: P,
       ): RequiredInputKeys<I> extends keyof P
         ? ActionCall<F & InstrumentedAction, P, A>
@@ -148,19 +142,10 @@ type ActionLineFn<F> = F extends (input: infer I) => infer A
  * actions become callable data lines for `when` and `then`;
  * queries become typed line builders — the callable vocabulary proxy.
  */
-type PromiseOf<Entry, Key extends PropertyKey> =
-  Extract<DeclaredQueryPromise<Entry, Key>, QueryPromise> extends infer Promise
-    ? [Promise] extends [never]
-      ? "many"
-      : Promise extends QueryPromise
-        ? Promise
-        : "many"
-    : "many";
-
 type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
   readonly [K in keyof I as I[K] extends (...args: never[]) => unknown
     ? K
-    : never]: K extends `_${string}` ? QueryLineFn<I[K], PromiseOf<Entry, K>> : ActionLineFn<I[K]>;
+    : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
 };
 
 /** The vocabulary's refs: one `ConceptRef` per declared name. */

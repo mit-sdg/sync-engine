@@ -76,11 +76,9 @@ describe("external concept registration", () => {
       { Cataloging: cataloging },
       { normalize: ({ value }: { value: string }) => value.trim().toLowerCase() },
     );
-    const normalized = former("the normalized (value)", (inputs, bindings) => {
-      const value = inputs("value");
-      const result = bindings("result");
-      return where(compute(set.computations.normalize, { value }, result)).form({ result });
-    });
+    const normalized = former("the normalized (value)", ({ value }, { result }) =>
+      where(compute(set.computations.normalize, { value }, result)).form({ result }),
+    );
     const application = assembleApplication({
       vocabulary: set.vocabulary,
       composition: { normalized },

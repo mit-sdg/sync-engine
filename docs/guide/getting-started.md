@@ -86,8 +86,8 @@ bunx sync-engine artifacts check
 
 `src/concepts/noting/spec.md` is the authored specification. It states the
 concept's purpose and principle, declares action signatures and refusal
-branches, and declares query cardinality. Its optional State section is
-uninterpreted prose for readers and contributes no schema or validator. [Concept specification
+branches, and declares query cardinality. Its optional State section is reader
+notation. [Concept specification
 format](../concept-specification.md) defines exactly which parts are parsed and
 checked.
 
@@ -123,11 +123,9 @@ tooling.
 ```ts
 const { Noting } = concepts;
 
-export const notePage = former("the note (note)", (inputs, bindings) => {
-  const note = inputs("note");
-  const text = bindings("text");
-  return where(Noting._get({ note }).is({ text })).form({ note, text });
-});
+export const notePage = former("the note (note)", ({ note }, { text }) =>
+  where(Noting._get({ note }).is({ text })).form({ note, text }),
+);
 
 export const WriteNote = endpoint("/notes/write", ({ text, note }) =>
   receive({ text }).then(Noting.write({ text }).responds({ note })).then(respond({ note })),

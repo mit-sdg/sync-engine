@@ -306,8 +306,9 @@ How such a fault is delivered depends on where the read occurs. See
 
 ## Views and formers
 
-A **view** names a match. Its builder receives separate callable input, output,
-and free-binding selectors. A predicate view ends in `.holds()`. A view with outputs defaults
+A **view** names a match. Its builder receives separate input, output, and
+free-binding bags. Reading a property, including by destructuring, declares a
+stable logic variable. A predicate view ends in `.holds()`. A view with outputs defaults
 to `.many()` and may instead declare `.one()` or `.optional()`. Its human name
 carries no signature or cardinality. At a use-site a view takes one plain
 object input mapping. Every enumerable own key must be declared, and every
@@ -315,21 +316,13 @@ declared input must be present according to the JavaScript `in` operator. The
 view is read exactly like a concept query. Its local bindings do not escape.
 Stacked `where` blocks are alternatives; any matching block can supply a result.
 
-At type time, a callable selector such as `bindings("name")` preserves a binding's literal identity. Query,
-view, and computation slots then infer a view's input/output mapping and a
-former's input/result tree, including aliases, nested formers, optional blanks,
-selections, folds, and splices. `RelationView<Input, Output>` and
-`Former<Input, Result>` annotations state checked explicit contracts. These
-TypeScript facts do not replace the runtime shape, scheduling, cardinality, or
-portability checks.
-
 The engine checks a concept query's declared promise whenever it reads the
 query and checks a view's declared promise whenever it reads the view. The
 read-back states the declaration and the runtime integrity check. The current
-package does not expose inferred-cardinality analysis over exported IR.
+package does not analyze cardinality over exported IR.
 
-A **former** names a formed answer. Its builder receives separate callable input
-and free-binding selectors. Its body matches in `where` and produces in `form`, and
+A **former** names a formed answer. Its builder receives separate input and
+free-binding bags. Its body matches in `where` and produces in `form`, and
 production is terminal: nothing in a `where` chooses output. A record former
 promises one answer unless it ends in `.optional()`. A selection-root former
 always produces one result whose shape is determined by `.form`, `.count`,

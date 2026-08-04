@@ -83,8 +83,7 @@ does not exist, and would let a failure to alert stop the discussion.
 
 **Siblings in one `then(...)` group**, each ending in a stable `.named(...)`
 label, when several alternatives are cases of one decision. They read as one
-rule with branches, avoiding near-duplicate rules that a reader would have to
-diff. The
+rule with branches. The
 engine lowers them to separate paths and the group carries no priority,
 exclusivity, or coverage claim, so any disjointness is yours to establish and
 state — see [sibling paths and endpoint
@@ -109,8 +108,8 @@ an identity: Selecting produced a value it calls a selection, and this rule
 declares that Alerting should treat it as a subject. Second, an opened name is a
 claim that the rule ranges over it, so the binding list should state what the
 rule depends on. Registration diagnoses unused fresh bindings opened by
-declarative read lines. Unused trigger and result bindings remain outside that
-diagnostic's scope.
+declarative read lines. Trigger and result bindings are outside this diagnostic's
+scope.
 
 Bind every identity explicitly. A reaction that passes a whole result object
 through obscures which fields matter and breaks when the producing concept adds
@@ -253,10 +252,8 @@ _Source: [`examples/reading-circle/src/composition/reading-circle.ts`](../../exa
 ```ts
 export const memberMayRespond = view(
   "(member) may respond in (circle)",
-  (inputs, _outputs, _bindings) => {
-    const { member, circle } = inputs("member", "circle");
-    return where(Gathering._membership({ gathering: circle, member }).is({ joined: true }));
-  },
+  ({ member, circle }, _outputs, _bindings) =>
+    where(Gathering._membership({ gathering: circle, member }).is({ joined: true })),
 ).holds();
 ```
 

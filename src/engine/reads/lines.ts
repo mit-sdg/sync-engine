@@ -20,36 +20,11 @@ import { brand, hasBrand, hasFuncBrand, LineBrand, RelationViewBrand } from "./b
 import type { InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import type { QueryPromise } from "./query-metadata.ts";
 import { isPlainObject } from "./matchers.ts";
-import type {
-  CarriesFacts,
-  ExactPattern,
-  FactsFromPattern,
-  InputPattern,
-  PartialPattern,
-} from "./type-inference.ts";
+import type { ExactPattern, PartialPattern } from "./type-inference.ts";
 
 /** A view declared as a relation: named inputs, promised outputs, a body. */
-declare const RelationViewType: unique symbol;
-export interface RelationView<
-  // biome-ignore lint/suspicious/noExplicitAny: bare RelationView is the intentionally erased declaration contract.
-  Input extends object = any,
-  // biome-ignore lint/suspicious/noExplicitAny: bare RelationView is the intentionally erased declaration contract.
-  Output extends object = any,
-  Promise extends QueryPromise | undefined = QueryPromise | undefined,
-> {
-  readonly [RelationViewType]: {
-    readonly input: (value: Input) => void;
-    readonly output: Output;
-    readonly promise: Promise;
-  };
-  <const Pattern extends InputPattern<Input>>(
-    pattern: ExactPattern<Input, Pattern>,
-  ): ViewReadLine<
-    Output,
-    FactsFromPattern<Input, Pattern>,
-    never,
-    Promise extends QueryPromise ? Promise : "optional"
-  >;
+export interface RelationView {
+  (pattern: Mapping): ViewReadLine;
   readonly viewName: string;
   /** Input names declared by the view's input bag. */
   readonly ins: readonly string[];
@@ -63,10 +38,10 @@ export interface RelationView<
   readonly holdsPredicate: boolean;
   /** The where blocks, as IR — stacked blocks are alternatives. */
   readonly alternatives: readonly (readonly unknown[])[];
-  holds(): RelationView<Input, Output, undefined>;
-  one(): RelationView<Input, Output, "one">;
-  optional(): RelationView<Input, Output, "optional">;
-  many(): RelationView<Input, Output, "many">;
+  holds(): RelationView;
+  one(): RelationView;
+  optional(): RelationView;
+  many(): RelationView;
 }
 
 export function isRelationView(value: unknown): value is RelationView {
@@ -91,62 +66,41 @@ interface LineShape {
 
 /** A plain line whose source is one concept query. */
 // biome-ignore lint/suspicious/noExplicitAny: `any` keeps every typed line accepted as an untyped condition.
-export interface QueryReadLine<
-  Row = any,
-  InputFacts = never,
-  OutputFacts = never,
-  Promise extends QueryPromise = QueryPromise,
->
-  extends LineShape, CarriesFacts<InputFacts | OutputFacts> {
+export interface QueryReadLine<Row = any> extends LineShape {
   readonly query: InstrumentedQuery;
   readonly view?: never;
-  readonly queryPromise?: Promise;
   /** Match output fields, testing literals or bound variables and binding new variables. */
   readonly is: {
     <const Pattern extends SlotPattern<Row>>(
       pattern: ExactPattern<Row, Pattern>,
-    ): QueryReadLine<Row, InputFacts, OutputFacts | FactsFromPattern<Row, Pattern>, Promise>;
+    ): QueryReadLine<Row>;
     /** Negated slot tests: each stated slot's value differs from the row's. */
     not<const Pattern extends SlotPattern<Row>>(
       pattern: ExactPattern<Row, Pattern>,
-    ): QueryReadLine<Row, InputFacts, OutputFacts | FactsFromPattern<Row, Pattern>, Promise>;
+    ): QueryReadLine<Row>;
   };
 }
 
 /** A plain line whose source is one derived relation view. */
 // biome-ignore lint/suspicious/noExplicitAny: `any` keeps every typed line accepted as an untyped condition.
-export interface ViewReadLine<
-  Row = any,
-  InputFacts = never,
-  OutputFacts = never,
-  Promise extends QueryPromise = QueryPromise,
->
-  extends LineShape, CarriesFacts<InputFacts | OutputFacts> {
+export interface ViewReadLine<Row = any> extends LineShape {
   readonly query?: never;
   readonly view: RelationView;
-  readonly viewPromise?: Promise;
   /** Match output fields, testing literals or bound variables and binding new variables. */
   readonly is: {
     <const Pattern extends SlotPattern<Row>>(
       pattern: ExactPattern<Row, Pattern>,
-    ): ViewReadLine<Row, InputFacts, OutputFacts | FactsFromPattern<Row, Pattern>, Promise>;
+    ): ViewReadLine<Row>;
     /** Negated slot tests: each stated slot's value differs from the row's. */
     not<const Pattern extends SlotPattern<Row>>(
       pattern: ExactPattern<Row, Pattern>,
-    ): ViewReadLine<Row, InputFacts, OutputFacts | FactsFromPattern<Row, Pattern>, Promise>;
+    ): ViewReadLine<Row>;
   };
 }
 
 /** One plain line: query-backed or view-backed, with the same condition shape. */
 // biome-ignore lint/suspicious/noExplicitAny: `any` keeps every typed line accepted as an untyped condition.
-export type ReadLine<
-  Row = any,
-  InputFacts = any,
-  OutputFacts = any,
-  Promise extends QueryPromise = QueryPromise,
-> =
-  | QueryReadLine<Row, InputFacts, OutputFacts, Promise>
-  | ViewReadLine<Row, InputFacts, OutputFacts, Promise>;
+export type ReadLine<Row = any> = QueryReadLine<Row> | ViewReadLine<Row>;
 
 export function isReadLine(value: unknown): value is ReadLine {
   return hasBrand(value, LineBrand);
@@ -192,10 +146,10 @@ function assertPattern(pattern: unknown, operation: string): void {
 }
 
 /** Construct a read from a query or view and its input pattern. @internal */
-export function lineOf<const Input extends Mapping>(
+export function lineOf(
   source: { query: (...args: never[]) => unknown },
-  input: Input,
-): QueryReadLine<any, FactsFromPattern<Mapping, Input>>;
+  input: Mapping,
+): QueryReadLine;
 export function lineOf(source: { view: RelationView }, input: Mapping): ViewReadLine;
 export function lineOf(
   source: LineSource | { query: (...args: never[]) => unknown },
