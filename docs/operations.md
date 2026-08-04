@@ -1,7 +1,7 @@
 # Operational limits
 
 This page states the deployment properties that should determine whether
-sync-engine is suitable for an application. It applies to the stable 1.x
+sync-engine is suitable for an application. It applies to the current beta
 implementation. [Execution semantics](semantics.md) defines the lower-level
 runtime contract.
 
@@ -42,12 +42,12 @@ or automatic restart recovery.
 ## Stable compatibility
 
 Public subpaths, including `/advanced`, and documented behavior follow Semantic
-Versioning. Use `@latest` for the current release or pin an exact stable version
+Versioning. Use `@beta` for the current release or pin an exact beta version
 for reproducibility. Review the changelog, regenerate artifacts, and typecheck a
 packed consumer before upgrading. Generated assembly compatibility is governed
-by the application manifest format and stable package SemVer. Core generator
-identities must name `@mit-sdg/sync-engine` at a stable 1.x version. Projector
-provenance may name any nonblank package at any valid stable SemVer version; it
+by the application manifest format and package SemVer. Core generator
+identities must name `@mit-sdg/sync-engine` at a 1.x version. Projector
+provenance may name any nonblank package at any valid SemVer version; it
 is not restricted to 1.x. The [support policy](../SUPPORT.md) defines the
 version and format rules.
 
@@ -326,7 +326,7 @@ public errors and logs.
 
 Before serving an assembly outside a test environment:
 
-1. Pin an exact stable version and review its changelog and support window.
+1. Pin an exact beta version and review its changelog and support window.
 2. Run the concept, type, test, and generated-artifact checks.
 3. Validate untrusted inputs outside or inside the receiving concept.
 4. Define concept-state persistence, transaction, retry, and deduplication

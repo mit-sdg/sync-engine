@@ -1,6 +1,6 @@
 # Support policy
 
-## Public stable surface
+## Public beta surface
 
 The core package's supported public API is exactly these six package subpaths:
 
@@ -19,28 +19,26 @@ is its exact export register.
 `@mit-sdg/sync-engine-http` is an independently published first-party transport
 package with exactly these supported subpaths: `/server`, `/client`, and
 `/tooling`. Its root and deep imports are unsupported. Its core peer dependency
-accepts compatible stable 1.x releases. Core can be installed alone for custom
+requires the exact matching beta release. Core can be installed alone for custom
 transports and server adapters.
 
-## Stable compatibility
+## Beta compatibility
 
-Stable releases follow Semantic Versioning. All six public core subpaths,
-including `/advanced`, and the three HTTP subpaths follow the same stable SemVer
-policy. Every release identifies compatibility and migration effects in the
-[changelog](CHANGELOG.md). Consumers should use `@latest` for the current release
-or pin an exact version for reproducibility, and review the changelog before
-upgrading.
+Beta releases use Semantic Versioning prerelease identifiers. A newer beta may
+make incompatible changes to all six public core subpaths, including
+`/advanced`, and the three HTTP subpaths. Every release identifies compatibility
+and migration effects in the [changelog](CHANGELOG.md). Consumers should pin an
+exact version and review the changelog before upgrading.
 
 Published versions, tags, and tarballs are immutable. A bad release is not
 replaced or silently corrected; a fix receives a new version with migration
 notes.
 
-Only the newest stable 1.x release is supported. Alpha and beta releases are
-unsupported after a stable release.
+Only the newest beta is supported. Alpha releases are unsupported.
 
-The stable `RetentionPolicy` surface contains only `"keepAll"` and
-`{ window: number }`. The prerelease `"evictConsumed"` policy and manual pruning
-interfaces are not part of the stable compatibility surface.
+The current `RetentionPolicy` surface contains only `"keepAll"` and
+`{ window: number }`. The earlier prerelease `"evictConsumed"` policy and manual
+pruning interfaces are no longer supported.
 
 ## Generated contracts
 
@@ -52,10 +50,10 @@ every package version change and typecheck their consumers.
 incompatible structural or semantic format change requires a new integer format
 version and new public type names. A package release does not bump a format
 version when the existing format and meaning remain compatible. Generated
-assembly compatibility is governed by this manifest format and stable package
-SemVer. The artifact planner accepts stable 1.x core generator identities and
-projector provenance with a nonblank package name and stable SemVer version;
-prerelease generator and projector identities are not accepted.
+assembly compatibility is governed by this manifest format and package SemVer.
+The artifact planner accepts 1.x core generator identities and projector
+provenance with a nonblank package name and valid SemVer version, including
+prereleases.
 
 ## Runtime and toolchain
 

@@ -1,7 +1,7 @@
 # sync-engine
 
-[![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/latest?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
-[![HTTP npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/latest?label=HTTP%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
+[![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
+[![HTTP npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is a TypeScript library for composing independently implemented
@@ -22,7 +22,7 @@ read-back and TypeScript boundary contract from that assembly.
 
 ## Status and requirements
 
-Version 1 is stable. Only the newest stable 1.x release is supported. Read the
+Version 1 is in beta. Only the newest beta release is supported. Read the
 [support policy](SUPPORT.md) and review the
 [operational limits](docs/operations.md) before choosing a deployment.
 
@@ -32,7 +32,7 @@ and toolchain requirements.
 ## Install in an existing project
 
 ```sh
-bun add @mit-sdg/sync-engine@latest
+bun add @mit-sdg/sync-engine@beta
 ```
 
 ## Packages
@@ -45,12 +45,12 @@ bun add @mit-sdg/sync-engine@latest
 ## Create an application
 
 ```sh
-bunx --package @mit-sdg/sync-engine@latest sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
 cd note-keeper
 bun install
 ```
 
-For a reproducible evaluation, replace `@latest` with a pinned version.
+For a reproducible evaluation, replace `@beta` with a pinned version.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
@@ -160,7 +160,7 @@ bun install
 bun run scenario
 ```
 
-## Upgrading stable versions
+## Upgrading beta versions
 
 Stable releases follow Semantic Versioning. Before changing a pinned version,
 read the [changelog](CHANGELOG.md) and the corresponding [GitHub

@@ -5,7 +5,7 @@ import { renderApp } from "@engine/reads/render";
 import { ordinal } from "@engine/utils/ordinal";
 import {
   assertCompatibleGenerator,
-  isStableSemVer,
+  isSemVer,
   PACKAGE_NAME,
   PACKAGE_VERSION,
 } from "@engine/utils/package-version";
@@ -120,12 +120,9 @@ export function planGenerated(
     const appWideErrorName =
       projection.render?.appWideErrorName ?? `${projection.name}AppWideError`;
     reserveTypeName(appWideErrorName, "projected app-wide error");
-    if (
-      projection.provenance.name.trim() === "" ||
-      !isStableSemVer(projection.provenance.version)
-    ) {
+    if (projection.provenance.name.trim() === "" || !isSemVer(projection.provenance.version)) {
       throw new Error(
-        "generated artifacts: projection provenance needs a package name and stable SemVer version.",
+        "generated artifacts: projection provenance needs a package name and SemVer version.",
       );
     }
   }

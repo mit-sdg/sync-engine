@@ -222,7 +222,7 @@ describe("artifact plans", () => {
     ).toThrow('duplicate generated type name "AtPath"');
   });
 
-  test("accepts the manifest format across stable 1.x generator versions", () => {
+  test("accepts the manifest format across SemVer 1.x generator versions", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
     const manifest = applicationManifest(
       assemble({
@@ -235,19 +235,17 @@ describe("artifact plans", () => {
     expect(() => planGenerated(manifest, { title: "Ping service" })).not.toThrow();
     manifest.generator.version = "2.0.0";
     expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
-      `requires a stable 1.x ${PACKAGE_NAME} generator identity`,
+      `requires a 1.x ${PACKAGE_NAME} generator identity`,
     );
     manifest.generator.version = "1.0.0-beta.3";
-    expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
-      `requires a stable 1.x ${PACKAGE_NAME} generator identity`,
-    );
+    expect(() => planGenerated(manifest, { title: "Ping service" })).not.toThrow();
     for (const version of ["1.9007199254740992.0", "1.9.9+build.1"]) {
       manifest.generator.version = version;
       expect(() => planGenerated(manifest, { title: "Ping service" })).not.toThrow();
     }
   });
 
-  test("accepts stable projector SemVer across majors and rejects invalid provenance", () => {
+  test("accepts projector SemVer across majors and rejects invalid provenance", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
     const manifest = applicationManifest(
       assemble({
@@ -270,11 +268,15 @@ describe("artifact plans", () => {
         planGenerated(manifest, { title: "Ping service", projections: [projection] }),
       ).not.toThrow();
     }
-    for (const version of ["2.0.0-beta.1", "2.0.0+bad metadata"]) {
+    projection.provenance.version = "2.0.0-beta.1";
+    expect(() =>
+      planGenerated(manifest, { title: "Ping service", projections: [projection] }),
+    ).not.toThrow();
+    for (const version of ["2.0.0-beta.01", "2.0.0+bad metadata"]) {
       projection.provenance.version = version;
       expect(() =>
         planGenerated(manifest, { title: "Ping service", projections: [projection] }),
-      ).toThrow("projection provenance needs a package name and stable SemVer version");
+      ).toThrow("projection provenance needs a package name and SemVer version");
     }
   });
 

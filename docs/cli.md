@@ -165,7 +165,7 @@ Projection failures also occur before comparison or writing. `projections` must
 be an array whose entries provide `project(facts)`. Logical and projected wire
 names, app-wide error names, and generated helper names must be distinct valid
 TypeScript identifiers, and every projector must provide a nonblank package name
-and a valid stable SemVer version as provenance. Projector versions are not
+and a valid SemVer version as provenance. Projector versions are not
 restricted to 1.x.
 
 After inspection, the command begins assembly drain and waits for idle before

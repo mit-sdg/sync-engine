@@ -131,15 +131,13 @@ function releaseFacts(root: JsonObject | undefined): ReleaseFacts {
   };
 }
 
-function stableOneVersion(value: string | undefined): value is string {
-  const match = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value ?? "");
-  return (
-    match !== null && match.slice(1).every((component) => Number.isSafeInteger(Number(component)))
-  );
+function betaOneVersion(value: string | undefined): value is string {
+  const match = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(value ?? "");
+  return match !== null && Number.isSafeInteger(Number(match[1]));
 }
 
 function compatiblePeer(version: string): string {
-  return `^${version}`;
+  return version;
 }
 
 function majorRange(value: string | undefined): number | undefined {
@@ -165,7 +163,7 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
   if (Object.values(facts).some((value) => value === undefined)) {
     throw new Error("package.json is missing a release fact");
   }
-  if (!stableOneVersion(facts.version)) {
+  if (!betaOneVersion(facts.version)) {
     throw new Error("package.json contains an invalid release version");
   }
   const minimumBun = bunRange(facts.bun);
@@ -189,6 +187,9 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
     const manifest = object(JSON.parse(sources.get(path) ?? ""));
     if (manifest === undefined) throw new Error(`${path} must contain an object`);
     manifest.version = facts.version;
+    const publishConfig = object(manifest.publishConfig) ?? {};
+    manifest.publishConfig = publishConfig;
+    publishConfig.tag = object(root.publishConfig)?.tag;
     const engines = object(manifest.engines) ?? {};
     manifest.engines = engines;
     engines.node = facts.node;
@@ -313,8 +314,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const root = manifest("package.json");
   const facts = releaseFacts(root);
   const version = facts.version;
-  if (!stableOneVersion(version)) {
-    failures.push("package.json: version must be a canonical stable 1.x version");
+  if (!betaOneVersion(version)) {
+    failures.push("package.json: version must match 1.0.0-beta.N without leading zeroes");
   }
   const nodeMajor = majorRange(facts.node);
   if (nodeMajor === undefined) {
@@ -335,7 +336,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
 
   const publishTag = object(root?.publishConfig)?.tag;
-  if (publishTag !== "latest") failures.push('package.json: publishConfig.tag must be "latest"');
+  if (publishTag !== "beta") failures.push('package.json: publishConfig.tag must be "beta"');
 
   const packageFiles = root?.files;
   for (const policy of ["SUPPORT.md", "SECURITY.md"]) {
@@ -384,8 +385,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       failures.push(`${workspace.packageManifest}: name must be ${workspace.packageName}`);
     }
     if (workspace.id === coreWorkspace.id) continue;
-    if (object(project?.publishConfig)?.tag !== "latest") {
-      failures.push(`${workspace.packageManifest}: publishConfig.tag must be "latest"`);
+    if (object(project?.publishConfig)?.tag !== "beta") {
+      failures.push(`${workspace.packageManifest}: publishConfig.tag must be "beta"`);
     }
   }
 
@@ -472,7 +473,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const releasing = sources.get("docs/releasing.md") ?? "";
   for (const fact of [
     "npm deprecate @mit-sdg/sync-engine@$PRERELEASE_VERSION",
-    "install @mit-sdg/sync-engine@$VERSION or use @latest",
+    "install @mit-sdg/sync-engine@$VERSION or use @beta",
     "versions deprecated --json",
     "never\n  overwrite an existing tag or tarball",
   ]) {
@@ -483,7 +484,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
 
   const support = sources.get("SUPPORT.md") ?? "";
   const supportFacts = [
-    "Only the newest stable 1.x release is supported.",
+    "Only the newest beta is supported.",
     "sync-engine.application-manifest` version 3",
   ];
   if (facts.node !== undefined) supportFacts.push(`Node.js \`${facts.node}\``);
@@ -498,7 +499,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "security/advisories/new",
     "acknowledgement within three business days",
     "update at least weekly",
-    "Newest stable `1.x`",
+    "Newest `1.0.0-beta.x`",
   ]) {
     if (!security.includes(fact))
       failures.push(`SECURITY.md: missing security policy fact ${fact}`);
@@ -594,7 +595,11 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const verify = workflowJob(publish, "verify");
   const publishCore = workflowJob(publish, "publish-core");
   const publishHttp = workflowJob(publish, "publish-http");
-  for (const fact of ["name: Publish stable", '- "v1.*.*"', "permissions:\n  contents: read"]) {
+  for (const fact of [
+    "name: Publish beta",
+    '- "v1.0.0-beta.*"',
+    "permissions:\n  contents: read",
+  ]) {
     if (!publish.includes(fact)) failures.push(`.github/workflows/publish.yml: missing ${fact}`);
   }
   for (const gate of publishVerificationGates) {
@@ -651,13 +656,13 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       "publish-core",
       publishCore,
       "sha256sum --check release/package.tgz.sha256",
-      "npm publish ./release/package.tgz --provenance --tag latest --access public",
+      "npm publish ./release/package.tgz --provenance --tag beta --access public",
     ],
     [
       "publish-http",
       publishHttp,
       "sha256sum --check release/http-package.tgz.sha256",
-      "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
     ],
   ] as const) {
     const checksumPosition = runCommandPosition(job, checksum);
@@ -725,8 +730,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     ],
     ["annotated tag", 'test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag'],
     ["live tag commit", 'test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"'],
-    ["stable 1.x", "/^1\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/"],
-    ["safe numeric components", "Number.isSafeInteger(Number(component))"],
+    ["v1 beta", "/^1\\.0\\.0-beta\\.(0|[1-9]\\d*)$/"],
+    ["safe numeric components", "Number.isSafeInteger(Number(beta[1]))"],
     ["`v${core.version}`", "`v${core.version}`"],
     ["core.version !== http.version", "core.version !== http.version"],
   ] as const;

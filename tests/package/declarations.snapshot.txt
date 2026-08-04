@@ -4518,7 +4518,7 @@ export interface GeneratorIdentity {
     version: string;
 }
 export declare const GENERATOR_IDENTITY: GeneratorIdentity;
-export declare function isStableSemVer(value: unknown): value is string;
+export declare function isSemVer(value: unknown): value is string;
 export declare function assertCompatibleGenerator(identity: unknown, owner: string): asserts identity is GeneratorIdentity;
 
 === dist/engine/utils/promise-like.d.ts ===

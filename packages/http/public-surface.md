@@ -12,11 +12,11 @@ defines the supported core subpaths and transport-neutral contracts.
 Install the maintained companion explicitly:
 
 ```sh
-bun add @mit-sdg/sync-engine@latest @mit-sdg/sync-engine-http@latest
+bun add @mit-sdg/sync-engine@beta @mit-sdg/sync-engine-http@beta
 ```
 
-Pin both selectors to compatible versions for reproducibility. The independently
-published companion declares a compatible stable core peer dependency. It is
+Pin both selectors to the same exact beta for reproducibility. The independently
+published companion declares an exact matching beta core peer dependency. It is
 ESM-only and supports these three entrypoints.
 
 | Package path                                    | Role                           |

@@ -1,9 +1,9 @@
-name: Publish stable
+name: Publish beta
 
 on:
   push:
     tags:
-      - "v1.*.*"
+      - "v1.0.0-beta.*"
 
 permissions:
   contents: read
@@ -31,9 +31,9 @@ jobs:
         run: |
           node -e 'const core = require("./package.json");
           const http = require("./packages/http/package.json");
-          const stable = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(core.version);
-          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || stable === null || stable.slice(1).some((component) => !Number.isSafeInteger(Number(component)))) {
-            throw new Error(`Expected a configured stable v1 tag; received ${process.env.GITHUB_REF_NAME}`);
+          const beta = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(core.version);
+          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || beta === null || !Number.isSafeInteger(Number(beta[1]))) {
+            throw new Error(`Expected a configured v1 beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
@@ -93,9 +93,9 @@ jobs:
         run: |
           node -e 'const core = require("./package.json");
           const http = require("./packages/http/package.json");
-          const stable = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(core.version);
-          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || stable === null || stable.slice(1).some((component) => !Number.isSafeInteger(Number(component)))) {
-            throw new Error(`Expected a configured stable v1 tag; received ${process.env.GITHUB_REF_NAME}`);
+          const beta = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(core.version);
+          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || beta === null || !Number.isSafeInteger(Number(beta[1]))) {
+            throw new Error(`Expected a configured v1 beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
@@ -104,7 +104,7 @@ jobs:
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - run: sha256sum --check release/package.tgz.sha256
-      - run: npm publish ./release/package.tgz --provenance --tag latest --access public
+      - run: npm publish ./release/package.tgz --provenance --tag beta --access public
 
   publish-http:
     needs: [verify, publish-core]
@@ -132,9 +132,9 @@ jobs:
         run: |
           node -e 'const core = require("./package.json");
           const http = require("./packages/http/package.json");
-          const stable = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(core.version);
-          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || stable === null || stable.slice(1).some((component) => !Number.isSafeInteger(Number(component)))) {
-            throw new Error(`Expected a configured stable v1 tag; received ${process.env.GITHUB_REF_NAME}`);
+          const beta = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(core.version);
+          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || beta === null || !Number.isSafeInteger(Number(beta[1]))) {
+            throw new Error(`Expected a configured v1 beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
@@ -143,4 +143,4 @@ jobs:
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - run: sha256sum --check release/http-package.tgz.sha256
-      - run: npm publish ./release/http-package.tgz --provenance --tag latest --access public
+      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public

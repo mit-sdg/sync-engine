@@ -1,7 +1,7 @@
 # Execution semantics
 
 This page defines the observable execution contract for actions, reactions,
-reads, formed results, and application boundaries in stable 1.x.
+reads, formed results, and application boundaries in the current beta.
 The [documentation index](./index.md) points to the authoring guides, the
 [read construction cookbook](./book.md) demonstrates representative constructions, and the
 [Public API](./public-surface.md) lists the exports.
@@ -700,16 +700,16 @@ provenance.
 Projection planning validates all names before rendering. The logical wire,
 every projected wire, each app-wide error type, `Json`, and vocabulary helper
 types must have distinct valid TypeScript identifiers. Provenance package names
-must be nonblank, and provenance versions must be valid stable SemVer. Core
+must be nonblank, and provenance versions must be valid SemVer. Core
 evaluates projectors in declaration order, and a projector or validation failure
 occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
-format and stable package SemVer. Artifact planning requires
-`sync-engine.application-manifest` version 3, a stable core generator identity,
-and stable-SemVer projector provenance. The core generator identity must name
-`@mit-sdg/sync-engine` at a stable 1.x version. Projector provenance accepts any
-nonblank package name with any valid stable SemVer version; projector versions
+format and package SemVer. Artifact planning requires
+`sync-engine.application-manifest` version 3, a 1.x core generator identity,
+and SemVer projector provenance. The core generator identity must name
+`@mit-sdg/sync-engine` at a 1.x version. Projector provenance accepts any
+nonblank package name with any valid SemVer version; projector versions
 are not restricted to 1.x. Prerelease identities are not accepted.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)

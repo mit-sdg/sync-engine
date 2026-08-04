@@ -90,7 +90,7 @@ TypeScript files are pinned outputs from their assemblies.
 - [Operational limits](operations.md) states suitable and unsuitable uses,
   concurrency boundaries, resource limits, persistence limits, and host
   responsibilities.
-- [Support policy](../SUPPORT.md) defines stable SemVer and generated-format
+- [Support policy](../SUPPORT.md) defines beta compatibility and generated-format
   compatibility, runtime/toolchain ranges, and the support window.
 - [Security policy](../SECURITY.md) defines private vulnerability reporting,
   security-fix eligibility, response targets, and the host/application boundary.

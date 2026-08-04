@@ -1,61 +1,23 @@
 # Changelog
 
-This project follows semantic versioning. Stable v1 public subpaths, behavior,
-and generated-format compatibility follow the [support policy](SUPPORT.md).
-Review the [operational limits](docs/operations.md) before deployment.
+This project follows semantic versioning. During beta, public subpaths,
+behavior, and generated formats may change incompatibly between releases. Pin
+an exact version, follow the [support policy](SUPPORT.md), and review the
+[operational limits](docs/operations.md) before deployment.
 
-## Unreleased
+## [1.0.0-beta.4] - 2026-08-04
 
-This release adds typed registered computations, expands endpoint diagnostics,
-tightens `count(...)` contracts, and corrects optional former output shapes.
-
-### Added
-
-- `conceptSet(registrations, computations?)` installs named computations while
-  retaining their names and function signatures on `set.computations` and
-  `set.vocabulary.computations`.
-
-### Changed
-
-- Endpoint diagnostics trace causal `by` provenance to attribute an eventual
-  response to its request path. Only a response that uses the traced request
-  identifier on a direct request-to-response answer path contributes to overlap
-  or coverage proof. An intermediate action posture makes the path ineligible
-  for either proof.
-- Overlap diagnostics describe structurally possible intersections as
-  potential overlap. On direct paths, the analysis recognizes canonical
-  `receive(...)` shapes, disjoint literal request alternatives, non-dropping
-  `whether` lines, and fresh computations. Complementary state reads remain
-  unproved because sibling reactions observe separate state snapshots.
-
-### Fixed
-
-- TypeScript now requires `count(...)` to receive the query's complete input
-  mapping and rejects extra fields at every nested level. It rejects a
-  union-typed query reference outright so the input argument cannot select or
-  mask one possible query; choose one concrete query before calling `count`.
-- A generated endpoint result includes `null` when the endpoint directly
-  returns an optional former.
-- A blank optional splice retains every recursively contributed key and assigns
-  `null` to each leaf.
-
-### Migration
-
-- Regenerate checked-in application manifests, assembled read-back, and wire
-  contracts. The expanded endpoint analysis can change advisory diagnostics,
-  and corrected optional former results can change generated TypeScript.
-
-## [1.0.0] - 2026-07-31
-
-The first stable release tightens assembly, validation, persistence, client,
-and transport contracts while keeping application policy and infrastructure
-choices outside the engine.
+This beta tightens assembly, validation, persistence, client, transport, and
+read contracts while keeping application policy and infrastructure choices
+outside the engine.
 
 ### Compatibility
 
-- Public API compatibility now follows Semantic Versioning across all supported
-  subpaths, including `/advanced`. Only the newest stable 1.x release is
-  supported.
+- The supported package subpaths include `/advanced`, but beta compatibility
+  remains version-specific. Only the newest beta is supported.
+- `conceptSet(registrations, computations?)` installs named computations while
+  retaining their names and function signatures on `set.computations` and
+  `set.vocabulary.computations`.
 - Ordinary `assemble(...)` applications reject undeclared advanced refusal
   codes. Manual `createEngine(...)` assembly remains open for advanced hosts.
 - Occurrence retention is split from audit export: `MemoryStore` is no longer a
@@ -89,19 +51,24 @@ choices outside the engine.
 - Declare every advanced refusal code used by an ordinarily assembled
   application. Hosts intentionally assembling engines manually may continue to
   define refusal policy outside the engine.
-- Update query result types to agree with their declared cardinality and adjust
+- Update query result types to agree with their declared cardinality. TypeScript
+  now requires `count(...)` to receive the query's complete input mapping,
+  rejects extra fields at every nested level, and rejects union-typed query
+  references. Adjust
   custom client transports to carry `timeoutMs` and `correlationId` when those
   per-call options are used.
-- Install `@mit-sdg/sync-engine-http@1.0.0` with a compatible stable core 1.x
-  release; its core peer range is now `^1.0.0`.
+- Install `@mit-sdg/sync-engine-http@1.0.0-beta.4` with the exact matching core
+  beta.
+- Regenerate checked-in application manifests, assembled read-back, and wire
+  contracts. Expanded endpoint analysis can change advisory diagnostics, and
+  corrected optional former results can change generated TypeScript.
 
 ### Generated formats
 
-- Application manifest format remains version 3. Compatible stable 1.x
-  generators are accepted by format version, and projector provenance requires
-  valid stable Semantic Versioning.
+- Application manifest format remains version 3. Generator and projector
+  provenance accepts valid Semantic Versioning, including prereleases.
 - Regenerate checked-in artifacts so generator and HTTP projector provenance
-  records `1.0.0`.
+  records `1.0.0-beta.4`.
 
 ### Runtime and security support
 
@@ -116,10 +83,17 @@ choices outside the engine.
   opt-in streaming response-size limits.
 - Query caching is explicit through `"memoize"` and `"none"` modes, allowing
   applications to disable memoization without replacing engine policy.
-- Stable publication uses immutable annotated tags and verified tarballs,
-  publishes core under `latest`, and publishes HTTP only after core succeeds.
+- Endpoint diagnostics trace causal `by` provenance and distinguish potential
+  overlap from proved direct-path overlap. They recognize canonical request
+  shapes, disjoint literal alternatives, non-dropping `whether` lines, and
+  fresh computations.
+- Generated endpoint results include `null` when an endpoint directly returns
+  an optional former, and blank optional splices retain all recursively
+  contributed keys with `null` leaves.
+- Beta publication uses immutable annotated tags and verified tarballs,
+  publishes core under `beta`, and publishes HTTP only after core succeeds.
 
-[Release][1.0.0] | [Changes since 1.0.0-beta.3][1.0.0-compare]
+[Release][1.0.0-beta.4] | [Changes since 1.0.0-beta.3][1.0.0-beta.4-compare]
 
 ## [1.0.0-beta.3] - 2026-07-30
 
@@ -416,8 +390,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
-[1.0.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0
-[1.0.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.3...v1.0.0
+[1.0.0-beta.4]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.4
+[1.0.0-beta.4-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.3
 [1.0.0-beta.3-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.2...v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.2

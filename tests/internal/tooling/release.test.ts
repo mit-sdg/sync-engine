@@ -70,7 +70,7 @@ function editManifest(
 }
 
 describe("release source facts", () => {
-  test("accepts the stable release sources", () => {
+  test("accepts the beta release sources", () => {
     expect(checkRelease(fixture())).toEqual([]);
   });
 
@@ -143,8 +143,8 @@ describe("release source facts", () => {
     ],
     [
       "HTTP peer range",
-      `        "@mit-sdg/sync-engine": "^${currentVersion}"`,
       `        "@mit-sdg/sync-engine": "${currentVersion}"`,
+      `        "@mit-sdg/sync-engine": "^${currentVersion}"`,
     ],
     [
       "core registry resolution",
@@ -159,27 +159,27 @@ describe("release source facts", () => {
 
   test.each([
     "1.0.0-alpha.1",
-    "1.0.0-beta.1",
+    "1.0.0-beta.01",
     "1.0.01",
     "1.9007199254740992.0",
     "1.0.9007199254740992",
     "2.0.0",
-  ])("rejects invalid stable version %s", (version) => {
+  ])("rejects invalid beta version %s", (version) => {
     const sources = fixture();
     editManifest(sources, "package.json", (manifest) => {
       manifest.version = version;
     });
     expect(checkRelease(sources)).toContainEqual(
-      expect.stringContaining("canonical stable 1.x version"),
+      expect.stringContaining("1.0.0-beta.N without leading zeroes"),
     );
   });
 
-  test("rejects a non-latest dist-tag", () => {
+  test("rejects a non-beta dist-tag", () => {
     const sources = fixture();
     editManifest(sources, "package.json", (manifest) => {
-      manifest.publishConfig.tag = "beta";
+      manifest.publishConfig.tag = "latest";
     });
-    expect(checkRelease(sources)).toContain('package.json: publishConfig.tag must be "latest"');
+    expect(checkRelease(sources)).toContain('package.json: publishConfig.tag must be "beta"');
   });
 
   test("requires the root workspace override for the HTTP peer", () => {
@@ -309,7 +309,7 @@ describe("release source facts", () => {
   );
 
   test.each([
-    ["SUPPORT.md", "Only the newest stable 1.x release is supported."],
+    ["SUPPORT.md", "Only the newest beta is supported."],
     ["SUPPORT.md", `Node.js \`${packageManifest.engines.node}\``],
     ["SECURITY.md", "security/advisories/new"],
     ["SECURITY.md", "acknowledgement within three business days"],
@@ -417,8 +417,8 @@ describe("release source facts", () => {
     "needs: [verify, publish-core]",
     "id-token: write",
     "name: npm",
-    "npm publish ./release/package.tgz --provenance --tag latest --access public",
-    "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+    "npm publish ./release/package.tgz --provenance --tag beta --access public",
+    "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
   ])("requires the publish-only fact %s", (fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-publish-fact");
@@ -429,12 +429,12 @@ describe("release source facts", () => {
     [
       "publish-core",
       "sha256sum --check release/package.tgz.sha256",
-      "npm publish ./release/package.tgz --provenance --tag latest --access public",
+      "npm publish ./release/package.tgz --provenance --tag beta --access public",
     ],
     [
       "publish-http",
       "sha256sum --check release/http-package.tgz.sha256",
-      "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
     ],
   ] as const)(
     "requires checksum verification before publication in %s",
@@ -453,10 +453,10 @@ describe("release source facts", () => {
   );
 
   test.each([
-    ["publish-core", "npm publish ./release/package.tgz --provenance --tag latest --access public"],
+    ["publish-core", "npm publish ./release/package.tgz --provenance --tag beta --access public"],
     [
       "publish-http",
-      "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
     ],
   ] as const)("rejects an extra npm publish command in %s", (name, publish) => {
     const sources = fixture();
@@ -488,8 +488,8 @@ describe("release source facts", () => {
     ["GITHUB_REF_NAME", "GITHUB_REF_NAME"],
     ["GITHUB_SHA", "GITHUB_SHA"],
     ["origin/main", "origin/main"],
-    ["/^1\\.", "stable 1.x"],
-    ["Number.isSafeInteger(Number(component))", "safe numeric components"],
+    ["/^1\\.0\\.0-beta\\.", "v1 beta"],
+    ["Number.isSafeInteger(Number(beta[1]))", "safe numeric components"],
     ["`v${core.version}`", "`v${core.version}`"],
     ["core.version !== http.version", "core.version !== http.version"],
   ])("requires source validation fact %s", (source, fact) => {

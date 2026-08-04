@@ -13,9 +13,9 @@ export const GENERATOR_IDENTITY: GeneratorIdentity = Object.freeze({
   version: PACKAGE_VERSION,
 });
 
-export function isStableSemVer(value: unknown): value is string {
+export function isSemVer(value: unknown): value is string {
   if (typeof value !== "string") return false;
-  return /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(
+  return /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*)|(?:\d*[A-Za-z-][0-9A-Za-z-]*))(?:\.(?:(?:0|[1-9]\d*)|(?:\d*[A-Za-z-][0-9A-Za-z-]*)))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(
     value,
   );
 }
@@ -26,7 +26,7 @@ export function assertCompatibleGenerator(
 ): asserts identity is GeneratorIdentity {
   const candidate = identity as Partial<GeneratorIdentity> | undefined;
   const version = candidate?.version;
-  if (candidate?.name !== PACKAGE_NAME || !isStableSemVer(version) || !version.startsWith("1.")) {
-    throw new Error(`${owner}: requires a stable 1.x ${PACKAGE_NAME} generator identity.`);
+  if (candidate?.name !== PACKAGE_NAME || !isSemVer(version) || !version.startsWith("1.")) {
+    throw new Error(`${owner}: requires a 1.x ${PACKAGE_NAME} generator identity.`);
   }
 }

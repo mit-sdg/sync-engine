@@ -1,13 +1,13 @@
 # Public API
 
 This reference lists every supported core package subpath and export in the
-current stable 1.x release. There is no root export and no supported deep import.
+current beta release. There is no root export and no supported deep import.
 The export registers are exact; compact signatures and tables summarize the
 principal call shapes and do not replace the generated TypeScript declarations.
 
 The independently published HTTP companion has its own [public API reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md).
 
-The [support policy](../SUPPORT.md) defines stable SemVer compatibility,
+The [support policy](../SUPPORT.md) defines beta compatibility,
 generated-assembly compatibility, and format-version rules. The
 [security policy](../SECURITY.md) defines the supported security-fix window.
 
@@ -565,10 +565,10 @@ multiple transport contracts in one wire module. `projections` must be an array,
 and each entry must provide `project(facts)`. The logical wire name, projected
 wire names, app-wide error names, `Json`, and generated vocabulary-helper names
 must be distinct TypeScript identifiers. Projection provenance must contain a
-nonblank package name and a valid stable SemVer version. Projector versions are
+nonblank package name and a valid SemVer version. Projector versions are
 not restricted to 1.x. Artifact planning separately requires the manifest's
-core generator identity to name `@mit-sdg/sync-engine` at a stable 1.x version;
-neither generator nor projector provenance accepts a prerelease version. Core
+core generator identity to name `@mit-sdg/sync-engine` at a 1.x version;
+generator and projector provenance may use prerelease versions. Core
 evaluates projections in declaration order and rejects any projection or naming
 failure before an artifact command compares or writes files. The HTTP companion's
 `httpWire({ policy, name })` additionally removes cookie-consumed credential

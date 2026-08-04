@@ -16,7 +16,7 @@ configuration.
 ## Create the project
 
 ```sh
-bunx --package @mit-sdg/sync-engine@latest sync-engine new note-keeper
+bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
 cd note-keeper
 bun install
 ```
