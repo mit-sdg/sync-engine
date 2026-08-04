@@ -4,14 +4,13 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const gates = [
   ["install", "--frozen-lockfile"],
-  ["run", "check"],
   ["run", "release:check"],
+  ["run", "check"],
   ["run", "test"],
   ["run", "coverage"],
-  ["run", "build"],
   ["run", "declarations:check"],
   ["run", "examples:check"],
-  ["run", "scenario"],
+  ["scripts/examples.ts", "scenario"],
   ["run", "package:check"],
   ["audit"],
 ] as const;

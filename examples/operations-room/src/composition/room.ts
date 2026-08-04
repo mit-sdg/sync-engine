@@ -36,7 +36,7 @@ export const currentMitigation = former(
   "the current mitigation (room)",
   ({ room }, { mitigation }) =>
     where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
-).optional(); // .optional() produces null when no row matches, rather than raising an error
+).optional(); // .optional() maps no matching row to null
 
 /** How many responses does this discussion have, which came first, and who responded? */
 export const responseStats = former(

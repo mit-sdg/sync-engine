@@ -1,4 +1,3 @@
-import { setReactionLintExtraUses } from "@engine/reads/reaction-validation";
 import type { WhereOp } from "@engine/reads/where-ops";
 import type {
   ReactionDeclaration,
@@ -11,7 +10,7 @@ import type {
 import { ReactionPartitionBrand, brand, hasBrand } from "@engine/reads/brands";
 import { assertReactionNodes } from "./nodes.ts";
 
-export function isReactionPartition(value: unknown): value is ReactionPartition {
+function isReactionPartition(value: unknown): value is ReactionPartition {
   return hasBrand(value, ReactionPartitionBrand);
 }
 
@@ -24,7 +23,7 @@ function cloneTrigger(pattern: TriggerPattern): TriggerPattern {
   return {
     ...pattern,
     input: { ...pattern.input },
-    ...(pattern.output !== undefined ? { output: { ...pattern.output } } : {}),
+    output: { ...pattern.output },
   };
 }
 
@@ -95,21 +94,16 @@ export function siblingTree(
   nodes: readonly ThenNode[],
 ): ReactionPartition {
   const branches = labeledBranches(nodes, 1);
-  const declarations: ReactionDeclaration[] = branches.map((branch) =>
-    setReactionLintExtraUses(
-      {
-        when: patterns.map(cloneTrigger),
-        ...root,
-        then: withIncomingWhere(
-          branch.steps,
-          branch.whereOps,
-          branches.length > 1 ? branch.label : undefined,
-        ),
-        ...(branches.length > 1 ? { path: [branch.label as string] } : {}),
-      },
-      [],
+  const declarations: ReactionDeclaration[] = branches.map((branch) => ({
+    when: patterns.map(cloneTrigger),
+    ...root,
+    then: withIncomingWhere(
+      branch.steps,
+      branch.whereOps,
+      branches.length > 1 ? branch.label : undefined,
     ),
-  );
+    ...(branches.length > 1 ? { path: [branch.label as string] } : {}),
+  }));
 
   const result = {
     declarations,
@@ -119,28 +113,23 @@ export function siblingTree(
       const expanded: ReactionDeclaration[] = [];
       for (const declaration of declarations) {
         for (const branch of nextBranches) {
-          expanded.push(
-            setReactionLintExtraUses(
-              {
-                ...declaration,
-                when: declaration.when.map(cloneTrigger),
-                then: [
-                  ...declaration.then.map((step) => ({ ...step })),
-                  ...withIncomingWhere(
-                    branch.steps,
-                    branch.whereOps,
-                    nextBranches.length > 1 ? branch.label : undefined,
-                  ),
-                ],
-                ...(nextBranches.length > 1
-                  ? { path: [...(declaration.path ?? []), branch.label as string] }
-                  : declaration.path !== undefined
-                    ? { path: [...declaration.path] }
-                    : {}),
-              },
-              [],
-            ),
-          );
+          expanded.push({
+            ...declaration,
+            when: declaration.when.map(cloneTrigger),
+            then: [
+              ...declaration.then.map((step) => ({ ...step })),
+              ...withIncomingWhere(
+                branch.steps,
+                branch.whereOps,
+                nextBranches.length > 1 ? branch.label : undefined,
+              ),
+            ],
+            ...(nextBranches.length > 1
+              ? { path: [...(declaration.path ?? []), branch.label as string] }
+              : declaration.path !== undefined
+                ? { path: [...declaration.path] }
+                : {}),
+          });
         }
       }
       declarations.splice(0, declarations.length, ...expanded);

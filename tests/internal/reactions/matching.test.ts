@@ -1,17 +1,15 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
-  literalEquals,
   matchArguments,
   matchChannel,
   unifyPattern,
 } from "@sync-engine/internal/reactions/runtime/matching.ts";
 import type { ActionRecord } from "@sync-engine/internal/reactions/runtime/actions.ts";
 import type {
-  ActionPattern,
+  ActionTriggerPattern,
   ChannelPattern,
   InstrumentedAction,
 } from "@sync-engine/internal/reactions/types.ts";
-import { oneOf } from "@sync-engine/internal/reads/matchers";
 import { withLive } from "@sync-engine/internal/reads/ir.ts";
 
 describe("reaction matching", () => {
@@ -54,7 +52,7 @@ describe("reaction matching", () => {
       outcome: { kind: "result", value: {} },
       flow: "flow",
     };
-    const pattern: ActionPattern = {
+    const pattern: ActionTriggerPattern = {
       action,
       concept,
       input: { roles: ["reader", "writer"] },
@@ -62,12 +60,6 @@ describe("reaction matching", () => {
       flow: Symbol("flow"),
     };
     expect(matchArguments(record, pattern, {}, Symbol("record"))).toBeDefined();
-  });
-
-  test("shares read equality for dates and does not guess at collection equality", () => {
-    expect(literalEquals(new Date("2024-01-01"), new Date("2024-01-01"))).toBe(true);
-    expect(literalEquals(new Map(), new Map())).toBe(false);
-    expect(literalEquals(new Set(), new Set())).toBe(false);
   });
 
   test("matchArguments accepts a record with fault when posture is faulted", () => {
@@ -82,7 +74,7 @@ describe("reaction matching", () => {
       fault: { message: "boom" },
       flow: "flow",
     };
-    const pattern: ActionPattern = {
+    const pattern: ActionTriggerPattern = {
       action,
       concept,
       input: { key: "value" },
@@ -106,7 +98,7 @@ describe("reaction matching", () => {
       outcome: { kind: "result", value: {} },
       flow: "flow",
     };
-    const pattern: ActionPattern = {
+    const pattern: ActionTriggerPattern = {
       action,
       concept,
       input: { key: "value" },
@@ -135,40 +127,13 @@ describe("reaction matching", () => {
     expect(matchChannel(record, clause, {}, Symbol("record"), new WeakMap())).toBeUndefined();
   });
 
-  test("matchArguments throws when the pattern is missing output", () => {
-    const concept = {};
-    const action = (async () => ({})) as InstrumentedAction;
-    action.concept = concept;
-    const record: ActionRecord = {
-      id: "one",
-      action,
-      concept,
-      input: {},
-      flow: "flow",
-      outcome: { kind: "result", value: {} },
-    };
-    const pattern: ActionPattern = {
-      action,
-      concept,
-      input: {},
-      flow: Symbol("flow"),
-    };
-    expect(() => matchArguments(record, pattern, {}, Symbol("record"))).toThrow(
-      "is missing output pattern",
-    );
-  });
-
-  test("unifyPattern matches a value against oneOf candidates", () => {
-    const matcher = oneOf("a", "b");
-    expect(unifyPattern({ role: "a" }, { role: matcher }, {})).toBeDefined();
-    expect(unifyPattern({ role: "c" }, { role: matcher }, {})).toBeUndefined();
-  });
-
-  test("oneOf candidates use structural equality", () => {
-    expect(unifyPattern({ role: { kind: "a" } }, { role: oneOf({ kind: "a" }) }, {})).toBeDefined();
+  test("serialized $oneOf candidates use structural equality", () => {
     expect(
       unifyPattern({ role: { kind: "a" } }, { role: { $oneOf: [{ kind: "a" }] } }, {}),
     ).toBeDefined();
+    expect(
+      unifyPattern({ role: { kind: "b" } }, { role: { $oneOf: [{ kind: "a" }] } }, {}),
+    ).toBeUndefined();
   });
 
   test("unifyPattern matches a record value against a $is marker's live value", () => {
@@ -180,11 +145,15 @@ describe("reaction matching", () => {
   });
 
   test("unifyPattern matches a record value against a $lit payload", () => {
-    expect(unifyPattern({ role: "hello" }, { role: { $lit: "hello" } }, {})).toBeDefined();
-    expect(unifyPattern({ role: "hello" }, { role: { $lit: "goodbye" } }, {})).toBeUndefined();
+    expect(
+      unifyPattern({ role: { $var: "hello" } }, { role: { $lit: { $var: "hello" } } }, {}),
+    ).toBeDefined();
+    expect(
+      unifyPattern({ role: { $var: "hello" } }, { role: { $lit: { $var: "goodbye" } } }, {}),
+    ).toBeUndefined();
   });
 
-  test("unifyPattern falls back to literalEquals for an unknown marker tag", () => {
+  test("unifyPattern treats an unknown marker tag as literal data", () => {
     const value = { $former: { name: "test", in: {} } };
     expect(unifyPattern({ role: value }, { role: value }, {})).toBeDefined();
     expect(unifyPattern({ role: "other" }, { role: value }, {})).toBeUndefined();

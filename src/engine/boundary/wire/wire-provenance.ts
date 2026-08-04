@@ -18,13 +18,12 @@ import { ordinal } from "@engine/utils/ordinal";
 export interface ProvenanceCell {
   alternatives: WireOrigin[][];
   maybe: boolean;
-  presenceGroups: Set<string>;
   sites: Set<string>;
 }
 
 export type ProvenanceEnv = Map<string, ProvenanceCell>;
 
-export interface ReactionProvenance {
+interface ReactionProvenance {
   env: ProvenanceEnv;
   requestFields: Map<string, ProvenanceCell>;
 }
@@ -46,7 +45,7 @@ function addOrigin(cell: ProvenanceCell, origin: WireOrigin, site: string): void
 function cell(env: ProvenanceEnv, name: string): ProvenanceCell {
   let found = env.get(name);
   if (found === undefined) {
-    found = { alternatives: [[]], maybe: false, presenceGroups: new Set(), sites: new Set() };
+    found = { alternatives: [[]], maybe: false, sites: new Set() };
     env.set(name, found);
   }
   return found;
@@ -65,7 +64,6 @@ function detachedEnv(parent: ProvenanceEnv): ProvenanceEnv {
         copy = {
           alternatives: source.alternatives.map((alternative) => [...alternative]),
           maybe: source.maybe,
-          presenceGroups: new Set(source.presenceGroups),
           sites: new Set(source.sites),
         };
         copies.set(source, copy);
@@ -103,12 +101,12 @@ function patternMayBeAbsent(pattern: PatternIR, env: ProvenanceEnv): boolean {
   return Object.values(pattern).some(visit);
 }
 
-export function constrainPattern(
+function constrainPattern(
   env: ProvenanceEnv,
   pattern: PatternIR,
   origin: ConceptOrigin,
   site: string,
-  options: { maybeFresh?: boolean; presenceGroup?: string } = {},
+  options: { maybeFresh?: boolean } = {},
 ): void {
   const visit = (value: ValueIR, current: ConceptOrigin): void => {
     const name = variableName(value);
@@ -118,9 +116,6 @@ export function constrainPattern(
       addOrigin(target, current, site);
       if (fresh && options.maybeFresh === true) {
         target.maybe = true;
-        if (options.presenceGroup !== undefined) {
-          target.presenceGroups.add(options.presenceGroup);
-        }
       }
       return;
     }
@@ -136,7 +131,7 @@ function queryOrigin(source: "query-input" | "query-output", query: QueryRefIR):
   return { source, concept: query.concept, member: query.query, path: [] };
 }
 
-export function applyQueryProvenance(
+function applyQueryProvenance(
   env: ProvenanceEnv,
   query: QueryRefIR,
   input: PatternIR,
@@ -147,13 +142,10 @@ export function applyQueryProvenance(
 ): void {
   constrainPattern(env, input, queryOrigin("query-input", query), site);
   const scope = posture === "claim" ? sharedChildEnv(env) : env;
-  const presenceGroup =
-    posture === "optional" ? JSON.stringify({ site, query, input, output }) : undefined;
   constrainPattern(scope, output, queryOrigin("query-output", query), site, {
     maybeFresh:
       posture === "optional" ||
       (options.propagateInputAbsence === true && patternMayBeAbsent(input, env)),
-    presenceGroup,
   });
 }
 
@@ -209,7 +201,6 @@ function instantiateView(
     if (branches.length === 0) return;
     target.alternatives = branches.flatMap((source) => source.alternatives);
     target.maybe = branches.some((source) => source.maybe);
-    target.presenceGroups = new Set(branches.flatMap((source) => [...source.presenceGroups]));
     target.sites = new Set(branches.flatMap((source) => [...source.sites]));
   };
   for (const [variable, target] of caller) {

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { reaction, vocabulary, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
-import { oneOf } from "@sync-engine/internal/reads/matchers";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { conditionOp, custom } from "@sync-engine/internal/reads/where-ops";
 import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
@@ -132,7 +131,7 @@ describe("pipeline then", () => {
 });
 
 describe("matchers in when patterns", () => {
-  test("uses RegExp and oneOf to shape a when trigger", async () => {
+  test("uses RegExp to shape a when trigger", async () => {
     const { reacting, Button, Recorder } = setup();
     reacting.register({
       Matcher: reaction((_vars: Vars) =>
@@ -140,17 +139,12 @@ describe("matchers in when patterns", () => {
           refs.Recorder.record({ tag: "regex" }),
         ),
       ),
-      OneOf: reaction((_vars: Vars) =>
-        when(refs.Button.clicked({ kind: oneOf("manual", "reject") } as never).responds()).then(
-          refs.Recorder.record({ tag: "oneof" }),
-        ),
-      ),
     });
 
     await Button.clicked({ kind: "approve" });
     await Button.clicked({ kind: "approve" });
     await Button.clicked({ kind: "manual" });
-    expect(Recorder.order).toEqual(["regex", "regex", "oneof"]);
+    expect(Recorder.order).toEqual(["regex", "regex"]);
   });
 });
 
@@ -166,7 +160,10 @@ describe("raw step transforms", () => {
           conditionOp(refs.List._items({}).is({ value }), "test step transform") as WhereOp,
           custom((item) => `v:${String(item)}`, [value], [tag]),
         ];
-        completion.transform = (frames) => applyWhereOps(frames, completion.transformOps ?? []);
+        completion.transform = (frames) => {
+          const transformed = Promise.resolve(applyWhereOps(frames, completion.transformOps ?? []));
+          return { then: transformed.then.bind(transformed) };
+        };
         return when(refs.Button.clicked({ kind: "fanout" }).responds())
           .then(completion as never)
           .then(refs.Recorder.record({ tag }))

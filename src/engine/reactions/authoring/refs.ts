@@ -32,8 +32,13 @@ import { brand, hasFuncBrand } from "@engine/reads/brands";
 import { actionLine } from "./nodes.ts";
 import { lineOf } from "@engine/reads/lines";
 import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
+import type { ExactPattern } from "@engine/reads/type-inference";
 import { parseSpec } from "../concepts/concept-spec.ts";
-import type { ComputationFn, ComputationRef } from "@engine/reads/computations";
+import type {
+  CheckedComputationFns,
+  ComputationFn,
+  ComputationRef,
+} from "@engine/reads/computations";
 import {
   CONCEPT_PROTOCOL,
   conceptProtocolOf,
@@ -100,9 +105,13 @@ type QueryRow<A> = Awaited<A> extends readonly (infer Row)[] ? Row : Awaited<A>;
  * names a query's answer) resolves to the class's own declared answer; every
  * actual call matches the first overload and answers a line.
  */
-export type QueryLineFn<F> = F extends (input: infer I) => infer A
+type ExactSlotPattern<Shape, Pattern> = ExactPattern<Shape, Pattern>;
+
+type QueryLineFn<F> = F extends (input: infer I) => infer A
   ? {
-      (pattern: SlotPattern<I>): QueryReadLine<QueryRow<A>>;
+      <const Pattern extends SlotPattern<I>>(
+        pattern: ExactSlotPattern<I, Pattern>,
+      ): QueryReadLine<QueryRow<A>>;
       (input: I): A;
     }
   : F;
@@ -117,7 +126,7 @@ type RequiredInputKeys<I> = {
   [K in keyof I]-?: [I[K]] extends [never] ? never : {} extends Pick<I, K> ? never : K;
 }[keyof I];
 
-export type ActionLineFn<F> = F extends (input: infer I) => infer A
+type ActionLineFn<F> = F extends (input: infer I) => infer A
   ? {
       <P extends SlotPattern<I>>(
         pattern: P,
@@ -133,19 +142,19 @@ export type ActionLineFn<F> = F extends (input: infer I) => infer A
  * actions become callable data lines for `when` and `then`;
  * queries become typed line builders — the callable vocabulary proxy.
  */
-export type ConceptRef<I> = {
+type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
   readonly [K in keyof I as I[K] extends (...args: never[]) => unknown
     ? K
     : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
 };
 
 /** The vocabulary's refs: one `ConceptRef` per declared name. */
-export type VocabularyRefs<T extends Record<string, ConceptClass>> = {
-  readonly [K in keyof T]: ConceptRef<InstanceType<T[K]>>;
+type VocabularyRefs<T extends Record<string, ConceptEntry>> = {
+  readonly [K in keyof T]: ConceptRef<T[K]>;
 };
 
 /** A concept class plus metadata owned by its vocabulary name. */
-export type ConceptDeclaration<C extends ConceptClass> = ConceptMetadata & {
+type ConceptDeclaration<C extends ConceptClass> = ConceptMetadata & {
   readonly class: C;
   readonly spec?: string;
 };
@@ -165,21 +174,48 @@ type QueryRowIsValid<T> = T extends (...args: never[]) => unknown
 type QueryAnswerIsValid<T> =
   Awaited<T> extends readonly (infer Row)[] ? QueryRowIsValid<Row> : QueryRowIsValid<Awaited<T>>;
 
-type InvalidQueryKeys<I> = {
+type QueryAnswerMatchesPromise<Answer, Promise> = [Promise] extends [never]
+  ? QueryAnswerIsValid<Answer>
+  : QueryPromise extends Promise
+    ? QueryAnswerIsValid<Answer>
+    : [Promise] extends ["one"]
+      ? Awaited<Answer> extends readonly unknown[]
+        ? false
+        : QueryRowIsValid<Awaited<Answer>>
+      : [Promise] extends ["optional" | "many"]
+        ? Awaited<Answer> extends readonly (infer Row)[]
+          ? QueryRowIsValid<Row>
+          : false
+        : QueryAnswerIsValid<Answer>;
+
+type DeclaredQueryPromise<Entry, Key extends PropertyKey> = Entry extends {
+  readonly queries: infer Queries;
+}
+  ? Key extends keyof Queries
+    ? Queries[Key]
+    : never
+  : Entry extends { readonly class: infer Class }
+    ? Class extends { readonly queries: infer Queries }
+      ? Key extends keyof Queries
+        ? Queries[Key]
+        : never
+      : never
+    : never;
+
+type InvalidQueryKeys<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
   [K in QueryKeys<I>]: I[K] extends (...args: never[]) => infer Answer
-    ? QueryAnswerIsValid<Answer> extends true
+    ? QueryAnswerMatchesPromise<Answer, DeclaredQueryPromise<Entry, K>> extends true
       ? never
       : K
     : K;
 }[QueryKeys<I>];
 
-type ValidConceptClass<C extends ConceptClass> =
-  InvalidQueryKeys<InstanceType<C>> extends never ? C : never;
-
 type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass
-  ? ValidConceptClass<E>
+  ? InvalidQueryKeys<E> extends never
+    ? E
+    : never
   : E extends ConceptDeclaration<infer C>
-    ? E & { readonly class: ValidConceptClass<C> }
+    ? E & { readonly class: InvalidQueryKeys<E> extends never ? C : never }
     : never;
 
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
@@ -193,8 +229,8 @@ export type ConceptClassesOf<T extends Record<string, ConceptEntry>> = {
   readonly [K in keyof T]: ClassOf<T[K]>;
 };
 
-export type ComputationRefs<T extends Record<string, ComputationFn>> = {
-  readonly [K in keyof T]: ComputationRef;
+type ComputationRefs<T extends Record<string, ComputationFn>> = {
+  readonly [K in keyof T]: ComputationRef<T[K]>;
 };
 
 /** Concept and computation refs grouped by their role. */
@@ -202,14 +238,14 @@ export interface DeclaredVocabulary<
   TConcepts extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 > {
-  readonly concepts: VocabularyRefs<ConceptClassesOf<TConcepts>>;
+  readonly concepts: VocabularyRefs<TConcepts>;
   readonly computations: ComputationRefs<TComputations>;
   readonly [VocabularyClasses]: ConceptClassesOf<TConcepts>;
   readonly [VocabularyComputations]: ComputationRefs<TComputations>;
   readonly [VocabularyMetadata]: Record<string, ConceptMetadata>;
 }
 
-export interface VocabularyDeclaration<
+interface VocabularyDeclaration<
   TConcepts extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 > {
@@ -316,11 +352,12 @@ function conceptRefProxy(
  * uses the declaration to construct default concept instances.
  */
 export function vocabulary<
-  TConcepts extends Record<string, ConceptEntry>,
-  TComputations extends Record<string, ComputationFn>,
+  const TConcepts extends Record<string, ConceptEntry>,
+  const TComputations extends Record<string, ComputationFn>,
 >(
   declaration: VocabularyDeclaration<TConcepts, TComputations> & {
     concepts: CheckedConceptEntries<TConcepts>;
+    computations?: CheckedComputationFns<TComputations>;
   },
 ): DeclaredVocabulary<TConcepts, TComputations>;
 export function vocabulary(

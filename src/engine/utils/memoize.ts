@@ -16,7 +16,7 @@ class QueryCacheKeyDepthError extends Error {
   }
 }
 
-export interface MemoizedQuery<T extends AnyFn> {
+interface MemoizedQuery<T extends AnyFn> {
   (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
   invalidate(): void;
 }
@@ -33,7 +33,7 @@ function identityTable(): IdentityTable {
 }
 
 /** Build a deterministic key without conflating cyclic, collection, or identity values. */
-export function queryCacheKey(args: readonly unknown[], identities = identityTable()): string {
+function queryCacheKey(args: readonly unknown[], identities = identityTable()): string {
   const active = new Map<object, number>();
   let nextReference = 1;
 
@@ -123,12 +123,16 @@ export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
     }
     if (cache.has(key)) return cache.get(key) as ReturnType<T>;
     const result = fn.call(this, ...args);
-    cache.set(key, result);
-    if (result instanceof Promise) {
-      result.catch(() => {
-        if (cache.get(key) === result) cache.delete(key);
+    const promise = normalizePromiseLike(result);
+    if (promise !== undefined) {
+      // Cache the normalized promise so structural thenables execute only once.
+      cache.set(key, promise);
+      void promise.catch(() => {
+        if (cache.get(key) === promise) cache.delete(key);
       });
+      return promise as ReturnType<T>;
     }
+    cache.set(key, result);
     return result as ReturnType<T>;
   };
   wrapper.invalidate = () => {
@@ -136,3 +140,4 @@ export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
   };
   return wrapper as MemoizedQuery<T>;
 }
+import { normalizePromiseLike } from "./promise-like.ts";

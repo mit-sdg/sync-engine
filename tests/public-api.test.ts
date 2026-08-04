@@ -269,19 +269,21 @@ const register = {
     "ConceptImplementation",
     "ConceptRegistration",
     "ExecutionLimits",
-    "FileStore",
+    "FileLogSink",
     "FiringRecord",
     "ImplementationOverrides",
     "Implementations",
     "IntegrityFailureRecord",
     "LogEntry",
-    "LogStore",
+    "LogSink",
     "Logging",
-    "MemoryStore",
     "OperationalEvent",
     "OperationalObserver",
     "OperationalResultClass",
+    "QueryCacheMode",
     "ReactionFailureRecord",
+    "RawFaultReport",
+    "RawFaultReporter",
     "RegisteredConcept",
     "RegisteredConceptSet",
     "RetentionPolicy",
@@ -325,6 +327,7 @@ const register = {
     "ClientError",
     "ClientOptions",
     "ClientRequest",
+    "ClientResponseValidator",
     "ClientTransport",
     "ContractShape",
     "DomainErrorValue",
@@ -365,7 +368,16 @@ const register = {
     "renderWireTypes",
     "wireContracts",
   ],
-  advanced: ["Engine", "EngineObserver", "LogEvent", "Refuse", "createEngine", "custom", "faulted"],
+  advanced: [
+    "Engine",
+    "EngineObserver",
+    "EngineOptions",
+    "LogEvent",
+    "Refuse",
+    "createEngine",
+    "custom",
+    "faulted",
+  ],
 } as const;
 
 const httpRegister = {
@@ -374,6 +386,7 @@ const httpRegister = {
     "HttpClientError",
     "HttpClientErrorCode",
     "HttpClientOptions",
+    "HttpRequestContext",
     "createHttpClient",
     "createHttpTransport",
   ],
@@ -506,7 +519,7 @@ describe("public API register", () => {
         .sort(),
     );
 
-    const reference = readFileSync(resolve(root, "docs/public-surface.md"), "utf8");
+    const reference = readFileSync(resolve(root, "packages/http/public-surface.md"), "utf8");
     for (const subpath of Object.keys(httpRegister) as Array<keyof typeof httpRegister>) {
       const sourceText = readFileSync(resolve(packageRoot, "src", subpath, "index.ts"), "utf8");
       const source = ts.createSourceFile("index.ts", sourceText, ts.ScriptTarget.Latest, true);

@@ -1,8 +1,8 @@
 # Read construction cookbook
 
 Use this cookbook to look up a representative reading construction and compare
-it with a close variant. The cookbook is not a complete language register. The [Public
-API](./public-surface.md#language) lists the exported forms, and [Execution
+it with a close variant. The [Public API](./public-surface.md#language) lists the
+exported forms, and [Execution
 semantics](./semantics.md#reading-declarations-govern) defines matching and
 cardinality.
 
@@ -25,7 +25,7 @@ former-root errors fail when the former is installed for evaluation.
 | Need                                     | Entry                                                                     |
 | ---------------------------------------- | ------------------------------------------------------------------------- |
 | Require one relation row                 | [A plain line](#1--a-plain-line)                                          |
-| Depend on declared cardinality           | [The promise decides](#2--the-promise-decides-not-the-words)              |
+| Depend on declared cardinality           | [Declared promises](#2--declared-promises)                                |
 | Test a literal                           | [A literal in the pattern tests](#3--a-literal-in-the-pattern-tests)      |
 | Reuse a bound name and fan out           | [A bound name tests](#4--a-bound-name-tests-and-a-many-relation-fans-out) |
 | Require absence                          | [`no`](#5--no--denial)                                                    |
@@ -49,11 +49,10 @@ former-root errors fail when the former is installed for evaluation.
 
 ## The scene
 
-Everything below reads against the
-[reading-circle example](../examples/reading-circle/README.md)'s own
-vocabulary — the entries import it rather than restate it: people gather in
-circles, a circle selects a current reading, and an open discussion collects
-responses. Their queries declare every promise the entries lean on:
+Everything below uses the
+[reading-circle example](../examples/reading-circle/README.md) vocabulary:
+people gather in circles, a circle selects a current reading, and an open
+discussion collects responses. Its queries declare every promise used here:
 
 | Concept    | Actions                    | Queries and their promises                                                                                                                        |
 | ---------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -113,7 +112,7 @@ nobody reads is refused:
 Reaction "bad.ReopenOnJoin": "reading" is opened and never used — omit the key instead.
 ```
 
-## 2 · The promise decides, not the words
+## 2 · Declared promises
 
 `_membership` promises exactly one row — every member-circle pair has a
 standing. This line accepts that row and binds its `joined` field, so the line
@@ -134,8 +133,8 @@ const theStandingOf = view(
   when the view is read.
 - **Opens**: `joined`.
 
-A `one` promise guarantees the source row, not a pattern match. A literal or an
-already-bound name in `.is(...)` can still reject that row and drop the case.
+A `one` promise guarantees the source row. A literal or already-bound name in
+`.is(...)` can reject that row and drop the case.
 
 ```
 the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); checked when read
@@ -143,8 +142,8 @@ the standing of (member) in (circle) — inputs (member, circle); outputs (joine
 ```
 
 Entries 1 and 2 show the cardinality contract. Authors do not repeat a quantity
-at the use-site. The relation's promise decides between _always fills_, _fills
-or drops_, and _fans out_.
+at the use-site. The relation's promise determines whether a read _always
+fills_, _fills or drops_, or _fans out_.
 
 ## 3 · A literal in the pattern tests
 
@@ -165,8 +164,8 @@ const nonmemberMayNotRespond = view(
 ```
 
 - **English**: the member's standing says joined.
-- **Runs**: the same one-row read as entry 2, but `joined: true` is a literal,
-  so the row is tested instead of opened.
+- **Runs**: the same one-row read as entry 2. The `joined: true` literal tests
+  the row.
 - **None / many**: the row always exists; the line holds or it does not. A
   view with no output tail is a predicate.
 - **Opens**: nothing.
@@ -176,8 +175,7 @@ const nonmemberMayNotRespond = view(
   Gathering._membership (gathering: circle, member) has (joined: true) — existence — fires once or drops the case
 ```
 
-The second view is a deliberate twin, not a leftover: it gives the boundary's
-denial branch its own named question.
+The second view gives the boundary's denial branch its own named question.
 
 ## 4 · A bound name tests, and a many-relation fans out
 
@@ -200,8 +198,8 @@ const HostLeavingDissolvesCircle = reaction(({ circle, host, member }) =>
   same variable in both output patterns. The second line reads a many-promise relation with a
   fresh name.
 - **None / many**: if the leaver is not the host, the first line drops the
-  case. The second line fires the consequence once per distinct member — the
-  fan-out was declared by `_members`, not written here.
+  case. The second line fires the consequence once per distinct member, as
+  declared by `_members`.
 - **Opens**: `member`.
 
 ```
@@ -559,7 +557,7 @@ book.ChooseReadingHostOnly:host#2
   then RequestBoundary.respond (selection, requestId)
 ```
 
-**A live overlap — a split by intent, not by condition.** The author meant the
+**Overlapping conditions.** The author meant the
 second branch as "not found" but wrote it as a plain read. When the circle is
 found, both branches match and both ask the boundary to answer:
 
@@ -593,11 +591,10 @@ const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
 );
 ```
 
-This version covers found and missing circles because those are the conditions
-the author wrote. Runtime execution does not prove or enforce that coverage.
-Application diagnostics recognize some simple present/absent pairs and can warn
-about missing fallbacks, but the author remains responsible for the endpoint's
-complete cases.
+This version covers found and missing circles. Runtime execution does not prove
+or enforce that coverage. Application diagnostics report that neither answer
+path is independently total; present and absent reads do not share a state
+snapshot. The author remains responsible for complete endpoint cases.
 
 ```
 book.GetCircleName:found
@@ -650,11 +647,10 @@ const theCircleActivityOf = former(
 the circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises exactly one; checked when formed
 ```
 
-Nothing in this body tests that the circle exists,
-so asking about a circle nobody created still answers — a record of blanks,
-not absence. When blanks are not what you mean, the earlier entries are the
-choices: anchor the body with one plain line (entry 6), or state `optional()`
-over a plain read and let the case drop (entry 8).
+Nothing in this body tests that the circle exists, so an unknown circle returns
+a record of blanks. To return absence, anchor the body with one plain line
+(entry 6), or state `optional()` over a plain read and let the case drop (entry
+8).
 
 This variant adds a plain `_responses` read. It returns a record only when the
 open discussion has at least one response:

@@ -1,31 +1,30 @@
 import { renderInputContracts } from "@engine/boundary/protocol/endpoints";
-import { renderWireTypes } from "@engine/boundary/wire/wire-renderer";
+import { renderWireTypes, wireHelperNames } from "@engine/boundary/wire/wire-renderer";
 import { assertApplicationLocality } from "@engine/boundary/assembly/locality-validation";
 import { renderApp } from "@engine/reads/render";
-import { canonicalDigest } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
 import {
-  assertCurrentGenerator,
+  assertCompatibleGenerator,
+  isSemVer,
   PACKAGE_NAME,
   PACKAGE_VERSION,
 } from "@engine/utils/package-version";
 import type { ApplicationManifestV3 } from "./manifest.ts";
 import type { PlannedWireProjection } from "./wire-projection.ts";
 
-export type ArtifactKind = "specification" | "wire" | "manifest";
+type ArtifactKind = "specification" | "wire";
 
-export interface ArtifactPlanEntry {
+interface ArtifactPlanEntry {
   path: string;
   content: string;
   kind: ArtifactKind;
-  digest: string;
 }
 
 export interface ArtifactPlan {
   entries: ArtifactPlanEntry[];
 }
 
-export interface GeneratedPlanOptions {
+interface GeneratedPlanOptions {
   title: string;
   specification?: string;
   specificationBanner?: string;
@@ -40,7 +39,7 @@ export interface GeneratedPlanOptions {
 
 export type ArtifactStatus =
   | { path: string; kind: ArtifactKind; status: "missing" | "changed" | "unchanged" }
-  | { path: string; kind: ArtifactKind; status: "failed"; errorClass: string };
+  | { path: string; kind: ArtifactKind; status: "failed" };
 
 export interface ArtifactFilesystem {
   read(path: string): Promise<string | undefined>;
@@ -48,11 +47,7 @@ export interface ArtifactFilesystem {
   writeAtomic(path: string, content: string): Promise<void>;
 }
 
-function errorClass(error: unknown): string {
-  return error instanceof Error && error.constructor.name !== "" ? error.constructor.name : "Error";
-}
-
-export function normalizeArtifactPath(path: string): string {
+function normalizeArtifactPath(path: string): string {
   if (
     typeof path !== "string" ||
     path === "" ||
@@ -75,7 +70,7 @@ export function normalizeArtifactPath(path: string): string {
   return parts.join("/");
 }
 
-export function artifactPlan(entries: readonly Omit<ArtifactPlanEntry, "digest">[]): ArtifactPlan {
+export function artifactPlan(entries: readonly ArtifactPlanEntry[]): ArtifactPlan {
   const paths = new Set<string>();
   const planned = entries.map((entry) => {
     const path = normalizeArtifactPath(entry.path);
@@ -84,7 +79,7 @@ export function artifactPlan(entries: readonly Omit<ArtifactPlanEntry, "digest">
     if (typeof entry.content !== "string") {
       throw new Error(`Artifact "${path}" content must be a string.`);
     }
-    return { ...entry, path, digest: canonicalDigest(entry.content) };
+    return { ...entry, path };
   });
   return { entries: planned.sort((left, right) => ordinal(left.path, right.path)) };
 }
@@ -96,7 +91,7 @@ export function planGenerated(
   if (manifest.format !== "sync-engine.application-manifest" || manifest.version !== 3) {
     throw new Error("generated artifacts: requires an application manifest at version 3.");
   }
-  assertCurrentGenerator(manifest.generator, "generated artifacts");
+  assertCompatibleGenerator(manifest.generator, "generated artifacts");
   assertApplicationLocality("generated artifacts", manifest.application);
   const specification = options.specification ?? "application.md";
   const wire = options.wire ?? "wire.ts";
@@ -116,14 +111,7 @@ export function planGenerated(
   reserveTypeName("AppWideError", "logical app-wide error");
   reserveTypeName("Json", "logical JSON");
   if (options.vocabulary !== undefined) {
-    for (const name of [
-      "ApplicationVocabulary",
-      "AtPath",
-      "QueryRow",
-      "AllOf",
-      "OneOf",
-      "Jsonify",
-    ]) {
+    for (const name of wireHelperNames([manifest.wire, ...projections.map(({ wire }) => wire)])) {
       reserveTypeName(name, "logical helper");
     }
   }
@@ -132,9 +120,9 @@ export function planGenerated(
     const appWideErrorName =
       projection.render?.appWideErrorName ?? `${projection.name}AppWideError`;
     reserveTypeName(appWideErrorName, "projected app-wide error");
-    if (projection.provenance.name.trim() === "" || projection.provenance.version.trim() === "") {
+    if (projection.provenance.name.trim() === "" || !isSemVer(projection.provenance.version)) {
       throw new Error(
-        "generated artifacts: projection provenance needs a package name and version.",
+        "generated artifacts: projection provenance needs a package name and SemVer version.",
       );
     }
   }
@@ -155,6 +143,7 @@ export function planGenerated(
     moduleName: wireName,
     banner: wireBanner,
     ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }),
+    sharedWires: projections.map(({ wire }) => wire),
     strictLeaves: options.strictLeaves ?? false,
   });
   const renderedWire = projections.reduce(
@@ -201,8 +190,8 @@ export async function checkArtifactPlan(
           kind,
           status: current === undefined ? "missing" : current === content ? "unchanged" : "changed",
         } as ArtifactStatus;
-      } catch (error) {
-        return { path, kind, status: "failed", errorClass: errorClass(error) };
+      } catch {
+        return { path, kind, status: "failed" };
       }
     }),
   );
@@ -226,12 +215,11 @@ export async function applyArtifactPlan(
     if (entry === undefined) continue;
     try {
       await filesystem.writeAtomic(entry.path, entry.content);
-    } catch (error) {
+    } catch {
       status[index] = {
         path: entry.path,
         kind: entry.kind,
         status: "failed",
-        errorClass: errorClass(error),
       };
     }
   }

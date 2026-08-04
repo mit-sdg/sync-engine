@@ -20,7 +20,7 @@ export interface ArchitectureProject {
   projectDirectories?: ReadonlySet<string>;
 }
 
-export interface ArchitectureResult {
+interface ArchitectureResult {
   failures: string[];
   /** Runtime import SCCs, each also reported as a structural failure. */
   runtimeCycles: string[][];

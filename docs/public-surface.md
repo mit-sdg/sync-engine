@@ -1,29 +1,28 @@
 # Public API
 
-This reference lists every supported package subpath and export in the current
-beta. There is no root export and no supported deep import. The export
-registers are exact; compact signatures and tables summarize the principal
-call shapes and do not replace the generated TypeScript declarations.
+This reference lists every supported core package subpath and export in the
+current beta release. There is no root export and no supported deep import.
+The export registers are exact; compact signatures and tables summarize the
+principal call shapes and do not replace the generated TypeScript declarations.
 
-The [support policy](../SUPPORT.md) defines beta compatibility, `/advanced`
-churn, exact-version generated contracts, and format-version rules. The
+The independently published HTTP companion has its own [public API reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md).
+
+The [support policy](../SUPPORT.md) defines beta compatibility,
+generated-assembly compatibility, and format-version rules. The
 [security policy](../SECURITY.md) defines the supported security-fix window.
 
 Most backend files use `language`, `assembly`, and `boundary`; frontend files
 use `client`; generation scripts use `tooling`. `advanced` marks deliberate
 manual construction and explicit escape hatches.
 
-| Package path                                                   | Role                                                          |
-| -------------------------------------------------------------- | ------------------------------------------------------------- |
-| [`@mit-sdg/sync-engine/language`](#language)                   | Concepts, reactions, views, formers, and their conditions     |
-| [`@mit-sdg/sync-engine/assembly`](#assembly)                   | Concept registration, assemblies, and occurrence-log stores   |
-| [`@mit-sdg/sync-engine/boundary`](#boundary)                   | Endpoints, invocation, gateways, and transport binding        |
-| [`@mit-sdg/sync-engine/client`](#client)                       | Local and custom clients over a generated contract            |
-| [`@mit-sdg/sync-engine-http/server`](#http-companion-package)  | First-party HTTP handler and policy                           |
-| [`@mit-sdg/sync-engine-http/client`](#http-companion-package)  | First-party fetch client                                      |
-| [`@mit-sdg/sync-engine-http/tooling`](#http-companion-package) | Generated HTTP wire projection                                |
-| [`@mit-sdg/sync-engine/tooling`](#tooling)                     | Assembly inspection, read-back rendering, and wire generation |
-| [`@mit-sdg/sync-engine/advanced`](#advanced)                   | Manual engine construction and explicit escape hatches        |
+| Package path                                 | Role                                                          |
+| -------------------------------------------- | ------------------------------------------------------------- |
+| [`@mit-sdg/sync-engine/language`](#language) | Concepts, reactions, views, formers, and their conditions     |
+| [`@mit-sdg/sync-engine/assembly`](#assembly) | Concept registration, assemblies, retention, and audit sinks  |
+| [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, invocation, gateways, and transport binding        |
+| [`@mit-sdg/sync-engine/client`](#client)     | Local and custom clients over a generated contract            |
+| [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation |
+| [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches        |
 
 | Task                                      | Primary APIs                                                |
 | ----------------------------------------- | ----------------------------------------------------------- |
@@ -72,11 +71,23 @@ call shapes:
 | `.first(value)`    | Value from the first selected row after optional arrangement | `null`          |
 | `.distinct(value)` | First-seen distinct values                                   | `[]`            |
 
+The TypeScript contract for `count` requires one non-union query reference and
+its complete input mapping, with undeclared fields rejected recursively. A
+union-typed query reference is rejected outright so the input argument cannot
+select or mask one possible query; choose one concrete query before calling
+`count`.
+
 Concept entries accepted by `vocabulary` are either a concept class or
 `{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals? }`.
 `QueryPromise` is `"one" | "optional" | "many"`.
-`Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes;
-bindings are inferred from their declaration callbacks.
+When a query promise is available as a TypeScript literal, the vocabulary types
+link `"one"` to a record return and `"optional"` or `"many"` to an array of
+records. Runtime evaluation checks the same container and cardinality contract.
+`Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes.
+View and former builders receive binding bags. Reading a property, including by
+destructuring, declares a stable logic variable in that input, output, or
+free-binding partition. Completed views and formers take one object-shaped input
+mapping.
 
 For worked examples, see the [reactions guide](./guide/reactions.md) and
 [views and formers guide](./guide/views-and-formers.md). The normative matching,
@@ -87,7 +98,7 @@ semantics](./semantics.md#reactions).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileStore`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogStore`, `Logging`, `MemoryStore`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ReactionFailureRecord`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -97,26 +108,34 @@ semantics](./semantics.md#reactions).
 assemble(options: AssemblyOptions): Assembly
 ```
 
-| `AssemblyOptions` field | Required    | Default / effect                                                                                        |
-| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
-| `vocabulary`            | yes         | Declared application vocabulary                                                                         |
-| `composition`           | yes         | Reactions, endpoints, views, and formers to register                                                    |
-| `initialize`            | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them |
-| `instances`             | no          | Ready implementations by concept name; each overrides `initialize`                                      |
-| `logging`               | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                   |
-| `retention`             | no          | `{ window: 100 }`; also accepts `{ window }`, `"keepAll"`, or `"evictConsumed"`                         |
-| `logStore`              | no          | New `MemoryStore`; a supplied store remains caller-owned and excludes `retention`                       |
-| `executionLimits`       | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                 |
-| `observers`             | no          | No operational observers                                                                                |
-| `redaction`             | no          | Universal sensitive-field patterns only                                                                 |
+| `AssemblyOptions` field | Required    | Default / effect                                                                                             |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `vocabulary`            | yes         | Declared application vocabulary                                                                              |
+| `composition`           | yes         | Reactions, endpoints, views, and formers to register                                                         |
+| `initialize`            | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
+| `instances`             | no          | Ready implementations by concept name; each overrides `initialize`                                           |
+| `logging`               | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
+| `retention`             | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
+| `queryCache`            | no          | `"memoize"`; `"none"` disables query-result memoization                                                      |
+| `logSink`               | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
+| `executionLimits`       | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
+| `observers`             | no          | No operational observers                                                                                     |
+| `rawFaultReporter`      | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
+| `redaction`             | no          | Universal sensitive-field patterns only                                                                      |
 
-A retention window must be a finite, non-negative integer. `{ window: 0 }`
-allows an active flow to complete before automatic eviction.
+`RetentionPolicy` is `"keepAll" | { window: number }`. A retention window must
+be a finite, non-negative integer. Window enforcement runs automatically only
+after a causal flow settles. `{ window: 0 }` therefore allows an active flow to
+complete before evicting it. The public assembly and engine surfaces expose no
+manual prune operation.
+Every assembly owns an internal occurrence index. `logSink` does not replace
+that index, and `logSink` may be combined with any `retention` policy.
 
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
 `whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
 both lifecycle promises resolve when accepted action, query, and former work
-actually settles.
+actually settles. `form(...)` resolves to the formed runtime value; an optional
+record former contributes `null` to that result.
 `ActionRefusal` is the direct-action refusal result.
 `ConceptImplementation`, `Implementations`, and `ImplementationOverrides` name
 complete or partial implementation maps. Assembled non-query actions are
@@ -135,13 +154,20 @@ drain state. `OperationalObserver` callbacks are synchronous bounded handoff:
 the engine catches throws and never awaits returned work; exporters and network
 I/O belong behind a host-owned queue. Events carry no action input or output.
 `OperationalResultClass` names the safe result categories.
+`RawFaultReport` is the privileged discriminated union for the original
+`unknown` values thrown by actions, interpreter stages, and endpoint validators.
+`RawFaultReporter` failures are isolated: a throw or rejected returned
+promise-like value does not change the action or invocation result. Raw values
+do not enter ordinary occurrence evidence, operational events, process logs, or
+public framework errors. Restrict access to this reporter as for any other
+sensitive host sink.
 
 ### Registration and floors
 
 | API               | Compact signature                                                 |
 | ----------------- | ----------------------------------------------------------------- |
 | `registerConcept` | `registerConcept({ class, spec, refusals?, floors? })`            |
-| `conceptSet`      | `conceptSet({ ...registeredConcepts })`                           |
+| `conceptSet`      | `conceptSet({ ...registeredConcepts }, computations?)`            |
 | `conceptFloor`    | `conceptFloor(vocabulary, { name, instances, resources, close })` |
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
@@ -152,6 +178,13 @@ supplies it. If an incomplete floor is selected by bypassing that type
 restriction, selection fails at runtime. The zero-argument `implementations()`
 form is available only when every canonical class can be constructed without
 required arguments; otherwise use a named floor.
+
+The optional second `conceptSet` argument is a record of named pure computation
+functions. The returned set exposes vocabulary-owned references under both
+`set.computations` and `set.vocabulary.computations`; their names, inputs, and
+results remain inferred from the supplied functions. Compose raw computation
+records before constructing one set. Refs from separate vocabularies cannot be
+combined.
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`
@@ -165,22 +198,43 @@ class fields, floor implementations, databases, or storage. State properties
 belong in principle, implementation, and backend constraint tests; future
 machine conformance requires a separately designed backend-neutral descriptor.
 
-### Log stores
+### Occurrence index and log sinks
 
-`MemoryStore` and `FileStore` implement `LogStore`. `MemoryStore` is the runtime
-occurrence index. `FileStore` composes a fresh `MemoryStore` with a Node-specific
-append-only JSONL audit sink.
-`new MemoryStore()` defaults to `"evictConsumed"`. Ordinary `assemble(...)`
-instead supplies `{ window: 100 }`. `new FileStore(path)` defaults to
-`"keepAll"`; its synchronous append completes before the entry enters the
-in-memory fold. Pruning does not rewrite its file.
-Assembly never closes a supplied `LogStore`. `LogStore` itself has no
-close method; the host invokes any resource-specific method exposed by its
-chosen implementation after drain.
-`RetentionPolicy`, `LogEntry`, `FiringRecord`, `ReactionFailureRecord`, and
+Every engine owns an internal `MemoryStore` occurrence index. This private
+implementation is
+the source for reaction matching and retained inspection; `RetentionPolicy`
+governs its contents.
+
+`LogSink.append(entry)` is the synchronous application-owned audit extension
+point. The engine validates an entry and redacts engine-created mappings, calls
+the sink with a structural snapshot, and only then folds the entry into the
+internal index. Arrays and plain records are recursively copied and frozen.
+Invocation concept and action fields become frozen, name-preserving
+representatives. `Date` values are copied.
+Opaque leaves such as class instances, `Map`, `Set`, and functions
+retain their runtime representation and identity. The snapshot does not
+recursively freeze opaque leaves. The sink must treat opaque leaves as read-only
+sensitive values; structural readonly types do not make those leaves immutable.
+`append` must return `undefined` synchronously. A throw or any other return
+value, including a promise or structural thenable, fails the append before the
+fold. An invocation append failure can prevent the action body from running. An
+outcome append failure can occur after the body has changed concept state; the
+engine does not roll that state back.
+
+`FileLogSink(path)` implements `LogSink` with one append-only JSON audit
+projection per entry. Concept instances and action functions are represented by
+name. Before writing, it independently applies the default field-name redaction
+policy to invocation inputs, outcomes, faults, and firing bindings, including
+entries passed directly to `append`. It never reads or replays existing lines,
+and retention never rewrites the file. `FileLogSink` has no close API. A custom
+sink remains responsible for its own durability, concurrency, retry, and
+resource lifecycle; the host closes custom resources after drain through an
+application-defined API.
+
+`LogEntry`, `FiringRecord`, `ReactionFailureRecord`, and
 `IntegrityFailureRecord` name the corresponding contracts. Persistence,
-eviction, redaction, and restart limits are normative in [Execution
-semantics](./semantics.md#logs-concept-implementations-and-restart).
+eviction, redaction, sink failure, and restart limits are normative in
+[Execution semantics](./semantics.md#logs-concept-implementations-and-restart).
 The [persistence and restart recipe](./advanced-recipes.md#persistence-restart-and-recovery)
 shows separate concept-state and occurrence files plus explicit derived-state
 recovery.
@@ -204,7 +258,9 @@ recovery.
 `EndpointDef`, `EndpointOptions`, and `InputContractDecl` name the declaration
 and optional runtime outer-shape contract. `EndpointValidator`,
 `EndpointValidators`, and `ValidationResult` define schema-library-neutral
-input and successful-output checks. The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
+input, successful-output, and domain-error checks. The domain-error validator
+receives exactly the value of the authored response's top-level `error` field.
+The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
 shows the endpoint authoring path, and [Add runtime
 validation](./guide/application-boundary.md#add-runtime-validation) shows the
 validator call shape. [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
@@ -218,9 +274,8 @@ paths](./semantics.md#correlation-and-route-paths). `receive(...)` cannot author
 the framework-owned `path` or `requestId` fields. `respond(...)` cannot author
 `requestId` or `errorKind`.
 
-Endpoint validators are supplied explicitly by the application. They are not
-derived from generated types or concept State notation, and the engine infers
-no runtime schema from a concept specification.
+Applications supply endpoint validators explicitly. Generated types and concept
+State notation have no runtime schema semantics.
 
 | `InputContractDecl` field | Default / effect                                 |
 | ------------------------- | ------------------------------------------------ |
@@ -238,7 +293,13 @@ Assembly rejects an explicit contract when omitting its optional keys cannot
 match any receive alternative after declared defaults are applied.
 Input validation follows shallow defaulting and precedes the application ask.
 Invalid successful output is recorded as an integrity failure and returned as
-opaque `INTERNAL_ERROR`. A path may declare each validator at most once.
+opaque `INTERNAL_ERROR`. An invalid domain-error value records
+`invalid-domain-error` integrity evidence and also returns opaque
+`INTERNAL_ERROR`. A thrown validator fails closed and reaches
+`rawFaultReporter`, when configured, as an unsanitized `endpoint-validator`
+report. An input-validator throw returns `INVALID_INPUT` before the boundary ask;
+output and domain-error integrity evidence retain only the `ValidatorFault`
+class. A path may declare each validator at most once.
 
 ### Gateway and invocation
 
@@ -271,7 +332,8 @@ invalid value returns `INVALID_INPUT` before work is recorded. Gateway and
 application invokers apply the option as separate durations; it is not one
 absolute deadline shared by both layers.
 
-The gateway is an `Invoker` decorator, not a second reaction engine. Observers
+The gateway decorates the target application's `Invoker` and uses the target's
+reaction engine. Observers
 receive gateway limit and drain events plus exactly one `invocation-settled`
 event for each public `invoke` call after the final result is known. That event uses the
 requested application route and effective correlation id, includes the final
@@ -307,142 +369,6 @@ generated projection. It remains transport-neutral; core owns strict leaf
 checks, vocabulary anchoring, rendering, provenance, and atomic artifact
 writes.
 
-### HTTP companion package
-
-Install the maintained companion explicitly:
-
-```sh
-bun add @mit-sdg/sync-engine@1.0.0-beta.3 @mit-sdg/sync-engine-http@1.0.0-beta.3
-```
-
-During beta the companion declares an exact core peer dependency. It is ESM-only,
-has no root export, and supports these three entrypoints.
-
-#### `@mit-sdg/sync-engine-http/server`
-
-<!-- register:http-server:start -->
-
-`HttpCorrelationOptions`, `HttpCredentialBinding`, `HttpFloor`, `HttpPublicErrorCategory`, `HttpPublicErrorPolicy`, `ProductionHttpProfile`, `createHttpHandler`, `httpFloor`, `productionHttpProfile`
-
-<!-- register:http-server:end -->
-
-```ts
-productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile
-httpFloor(declaration: HttpFloor): HttpFloor
-createHttpHandler(options: {
-  application: Assembly<Record<string, new (...args: never[]) => object>>;
-  gateway: Gateway<ContractShape>;
-  profile: ProductionHttpProfile;
-  correlation?: HttpCorrelationOptions;
-}): (request: Request) => Promise<Response>
-createHttpHandler(options: {
-  application: Assembly<Record<string, new (...args: never[]) => object>>;
-  gateway: Gateway<ContractShape>;
-  floor: HttpFloor;
-  correlation?: HttpCorrelationOptions;
-}): (request: Request) => Promise<Response>
-```
-
-| Profile field  | Required | Meaning                                                        |
-| -------------- | -------- | -------------------------------------------------------------- |
-| `origin`       | yes      | Absolute HTTP or HTTPS origin with no path, query, or fragment |
-| `basePath`     | no       | Portable route prefix; omitted or `/` means no prefix          |
-| `publicErrors` | no       | Domain refusal code to public HTTP category                    |
-
-`HttpPublicErrorCategory` is `INVALID_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`,
-`NOT_FOUND`, or `CONFLICT`. Those categories use status 400, 401, 403, 404, and
-409 respectively. Private and unknown domain refusals use `INTERNAL_ERROR`/500.
-Framework `INVALID_INPUT` uses `INVALID_REQUEST`/400 and framework `NOT_FOUND`
-uses `NOT_FOUND`/404; other framework server failures use
-`INTERNAL_ERROR`/500. Public failure bodies contain only `{ error }`.
-
-`HttpFloor` adds a `credential` field with the following shape:
-
-```ts
-credential: {
-  readonly name: string;
-  readonly input: string;
-  readonly issue: { readonly path: string; readonly output: string; readonly expires: string };
-  readonly clear: readonly string[];
-}
-```
-
-An endpoint is protected only when its input contract lists `credential.input`
-as required. The issue and clear paths must exist, at least one endpoint must be
-protected, and every top-level issue-output alternative must contain the token
-and expiry fields. `createHttpHandler(...)` checks these rules synchronously and
-also rejects a gateway that does not target `application`. The floor checks the
-declared origin only when an inbound `Origin` header is present; it is not a
-CORS implementation.
-
-`HttpCorrelationOptions.resolve(request)` is called synchronously for each
-request. `responseHeader`, when supplied, must be a valid header name. Invalid,
-missing, or faulting resolver results are replaced with a UUID under the rules
-in [Correlation and route paths](./semantics.md#correlation-and-route-paths).
-
-#### `@mit-sdg/sync-engine-http/client`
-
-<!-- register:http-client:start -->
-
-`HeadersOption`, `HttpClientError`, `HttpClientErrorCode`, `HttpClientOptions`, `createHttpClient`, `createHttpTransport`
-
-<!-- register:http-client:end -->
-
-```ts
-createHttpTransport(options?: HttpClientOptions): ClientTransport<HttpClientError>
-createHttpClient<Contract extends ContractShape>(options?: HttpClientOptions): Client<Contract, HttpClientError>
-```
-
-| `HttpClientOptions` field | Default / effect                                                                  |
-| ------------------------- | --------------------------------------------------------------------------------- |
-| `baseUrl`                 | `API_BASE_URL`, then `/api`; `/` selects the origin root; trailing `/` is removed |
-| `fetch`                   | `globalThis.fetch`                                                                |
-| `headers`                 | Record or synchronous/asynchronous provider called once per request               |
-| `credentials`             | `"include"`                                                                       |
-
-The transport sends JSON `POST` requests. Per-request headers are merged after
-the initial `Content-Type: application/json` header and can replace it. An empty
-response body becomes `{}`. A nonempty body must be JSON; response
-`Content-Type` is not consulted. A non-2xx JSON object with an `error` property
-is returned as the server result. A non-2xx response without that envelope uses
-`BAD_STATUS`.
-
-| `HttpClientErrorCode`      | Condition                                             |
-| -------------------------- | ----------------------------------------------------- |
-| `HEADER_RESOLUTION_FAILED` | The per-request header provider threw or rejected     |
-| `NETWORK_ERROR`            | Fetch failed before a response was obtained           |
-| `BAD_JSON`                 | The response body could not be read or parsed as JSON |
-| `BAD_STATUS`               | A non-2xx response lacked a JSON error envelope       |
-
-Abort is a core client condition and resolves as `ABORTED`, not as an
-`HttpClientErrorCode`. Abort can settle while an asynchronous header provider is
-still pending; the package cannot cancel that provider. The client performs no
-runtime validation against the generated contract. In Node.js, the selected
-`fetch` implementation must provide cookie storage if a credential floor
-requires browser-like cookie persistence.
-
-#### `@mit-sdg/sync-engine-http/tooling`
-
-<!-- register:http-tooling:start -->
-
-`HttpWireOptions`, `httpWire`
-
-<!-- register:http-tooling:end -->
-
-```ts
-httpWire(options: { policy: ProductionHttpProfile | HttpFloor; name: string }): WireProjection
-```
-
-Reuse the immutable value returned by `productionHttpProfile(...)` or
-`httpFloor(...)` in `createHttpHandler(...)` and `httpWire(...)`. The projector
-derives public HTTP categories and, for a floor, omits the cookie-provided input
-and consumed issue outputs. A raw mutable policy is structurally accepted but is
-read later when projection runs; mutating it can change generated output.
-
-The package owns POST, JSON, body-size, origin, status, cookie, correlation, and
-fetch behavior. See [Execution semantics](./semantics.md#boundary-gateway-and-client)
-and the [production example](../examples/production-http/README.md).
-
 ### Framework errors
 
 `FrameworkErrorCode` is the stable core value object; its value union names the
@@ -452,34 +378,46 @@ accompany an error, but exception text from an unknown failure is omitted.
 
 | Code              | Ordinary source                                                                |
 | ----------------- | ------------------------------------------------------------------------------ |
-| `INVALID_INPUT`   | Invoker or gateway option, outer-shape, contract, or input-validator admission |
+| `INVALID_INPUT`   | Invoker, gateway, or HTTP timeout option; shape, contract, or input validation |
 | `NOT_FOUND`       | Unknown logical route                                                          |
 | `UNAVAILABLE`     | Overload or draining admission                                                 |
-| `TIMED_OUT`       | Invocation wait expired                                                        |
+| `TIMED_OUT`       | Invocation or HTTP transport wait expired                                      |
 | `ABORTED`         | Invocation or client signal aborted                                            |
 | `INTERNAL_ERROR`  | Application, framework, validation, or interpreter fault                       |
-| `TRANSPORT_ERROR` | In-process forwarding or custom transport failure                              |
+| `TRANSPORT_ERROR` | Forwarding, transport, or client-response validation failure                   |
 | `UNKNOWN_ERROR`   | Unclassified framework envelope                                                |
 
 ## `client`
 
 <!-- register:client:start -->
 
-`Client`, `ClientCallOptions`, `ClientError`, `ClientOptions`, `ClientRequest`, `ClientTransport`, `ContractShape`, `DomainErrorValue`, `createClient`, `createLocalClient`
+`Client`, `ClientCallOptions`, `ClientError`, `ClientOptions`, `ClientRequest`, `ClientResponseValidator`, `ClientTransport`, `ContractShape`, `DomainErrorValue`, `createClient`, `createLocalClient`
 
 <!-- register:client:end -->
 
 ### Constructors
 
-| API                 | Compact signature                                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `createLocalClient` | `createLocalClient<Contract>({ invoker }): Client<Contract>`                                            |
-| `createClient`      | `createClient<Contract, TransportError = ClientError>({ transport }): Client<Contract, TransportError>` |
+| API                 | Compact signature                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `createLocalClient` | `createLocalClient<Contract>({ invoker, validateResponse? }): Client<Contract>`                                            |
+| `createClient`      | `createClient<Contract, TransportError = ClientError>({ transport, validateResponse? }): Client<Contract, TransportError>` |
 
 `ClientOptions.transport` and `createLocalClient`'s `invoker` are required.
+`ClientOptions.validateResponse` is an optional synchronous check of each
+complete untrusted transport result. It receives `(value, { path })`. A
+`{ ok: false }` result, throw, or promise-like result resolves to
+`{ error: "TRANSPORT_ERROR" }`; an accepted value is returned unchanged.
 `ClientTransport` and `ClientRequest` name the extension contract. Every
-endpoint call accepts an optional second `ClientCallOptions`
-argument whose signal cancels transport and waiting, not accepted server work.
+endpoint call accepts an optional second `ClientCallOptions` argument:
+
+| Field           | Transport request effect                                                        |
+| --------------- | ------------------------------------------------------------------------------- |
+| `signal`        | Carries caller abort; cancellation behavior depends on the selected transport   |
+| `timeoutMs`     | Carries a transport-local timeout; the core client does not interpret the value |
+| `correlationId` | Carries a trace token when the selected transport supports correlation          |
+
+`ClientRequest` carries the same three optional fields. None promises rollback
+or cancellation of accepted server work.
 A `Client<Contract>` supports grouped access such as
 `client.rooms.get(input)` and indexed access such as
 `client["/rooms/get"]`, followed by the input call.
@@ -487,8 +425,8 @@ A `Client<Contract>` supports grouped access such as
 `ContractShape` is the path-to-input/output/error record accepted by every
 constructor. `ClientError` is `{ error: FrameworkErrorCode; detail?:
 string }`; `DomainErrorValue` extracts a generated route's domain error value.
-Calls resolve to success or error envelopes rather than throwing for handled
-transport failures. JSON projection and error delivery are normative in
+Calls resolve handled transport failures as error envelopes. JSON projection
+and error delivery are normative in
 [Execution semantics](./semantics.md#boundary-gateway-and-client).
 
 `createClient` replaces a nullish input with `{}`. A transport throw or rejected
@@ -526,7 +464,7 @@ Neither form weakens generated endpoint input and output types.
 `ObservedOccurrence` name inspected data. `ObservedOccurrence` contains the
 concept, action, optional `by`, output, and outcome summary; it omits input,
 action id, flow, and timestamp. Inspection reports only evidence retained by
-the store and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
+the internal occurrence index and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
 `WireType` name derived wire data.
 `WireEndpoint.inputAdmissionError` preserves whether framework input admission
 contributed `INVALID_INPUT`, so production projection remains distinct from a
@@ -534,7 +472,7 @@ registered domain refusal using the same code.
 
 `ApplicationManifestV3` has format `sync-engine.application-manifest`, version
 `3`, and is static canonical JSON-round-trippable application data. Its
-`generator` identifies the exact `@mit-sdg/sync-engine` package version. It
+`generator` records the exact `@mit-sdg/sync-engine` package version. It
 contains the application IR, concept inventories, declaration-owned
 `ManifestEndpointV3` entries, input contracts, wire IR, validator-presence
 flags, structured diagnostics, and `digest`. The digest covers every other
@@ -549,6 +487,22 @@ view-alternative, and former-node sequences retain semantics.
 machine-readable advisory surface. `diagnosticsFail` treats error diagnostics as
 failures by default and can promote warnings; informational diagnostics remain
 advisory.
+Endpoint diagnostics trace causal `by` provenance to attribute an eventual
+response to its request path. Only a response that uses the traced request
+identifier on a direct request-to-response answer path contributes to overlap
+or coverage proof. An intermediate action posture makes the path ineligible for
+either proof. On direct paths, the analyzer recognizes canonical
+`receive(...)` shapes, disjoint literal request alternatives, non-dropping
+`whether` lines, and fresh computations.
+`ENDPOINT_PATH_OVERLAP` reports bounded potential overlaps such as duplicate
+complete guards, an unconditional answer beside a conditional answer, or a bare
+existence branch that subsumes a more specific read. It does not prove that a
+conditional guard is inhabited. `MISSING_ENDPOINT_FALLBACK`
+means no non-dropping total answer path was recognized; it does not imply that
+an unconditional sibling would be a safe ordered fallback. Coverage analysis
+leaves complementary state reads unproved because siblings observe separate
+state snapshots. The analysis is conservative and does not prove arbitrary
+view, computation, validator, action-outcome, or concurrent-state logic.
 
 The structural argument consumed by `renderApp` has `title: string`,
 `concepts: ConceptInventoryIR[]`, and `app: AppIR`. The package does not export
@@ -569,6 +523,12 @@ a separate public name for that aggregate argument type.
 | `strictLeaves`            | `false`; `true` requires an anchor and rejects unresolved `Json` leaves |
 | `appWideErrorName`        | `"AppWideError"`                                                        |
 | `preamble`                | `true`; set `false` when appending another contract to one module       |
+| `sharedWires`             | `[]`; later contracts whose required helpers this preamble must emit    |
+
+A render with `preamble: false` emits no imports or shared helper types. The
+earlier render that emits the module preamble must receive every later
+`preamble: false` contract in `sharedWires`; otherwise `renderWireTypes` can omit
+a helper alias used by a later contract.
 
 ### Generated descriptor
 
@@ -605,9 +565,12 @@ multiple transport contracts in one wire module. `projections` must be an array,
 and each entry must provide `project(facts)`. The logical wire name, projected
 wire names, app-wide error names, `Json`, and generated vocabulary-helper names
 must be distinct TypeScript identifiers. Projection provenance must contain a
-nonblank package name and version. Core evaluates projections in declaration
-order and rejects any projection or naming failure before an artifact command
-compares or writes files. The HTTP companion's
+nonblank package name and a valid SemVer version. Projector versions are
+not restricted to 1.x. Artifact planning separately requires the manifest's
+core generator identity to name `@mit-sdg/sync-engine` at a 1.x version;
+generator and projector provenance may use prerelease versions. Core
+evaluates projections in declaration order and rejects any projection or naming
+failure before an artifact command compares or writes files. The HTTP companion's
 `httpWire({ policy, name })` additionally removes cookie-consumed credential
 fields for a floor. The
 [application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
@@ -618,25 +581,34 @@ defines derivation guarantees.
 
 <!-- register:advanced:start -->
 
-`Engine`, `EngineObserver`, `LogEvent`, `Refuse`, `createEngine`, `custom`, `faulted`
+`Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `createEngine`, `custom`, `faulted`
 
 <!-- register:advanced:end -->
 
 This subpath crosses the ordinary application boundary. Prefer the ordinary
 assembly APIs unless the host needs manual engine construction or an explicit
-escape hatch.
+escape hatch. Despite its low-level role, `/advanced` follows the same stable
+SemVer policy as every other public subpath.
 
 | API            | Compact signature / role                         |
 | -------------- | ------------------------------------------------ |
-| `createEngine` | `createEngine(store?: LogStore): Engine`         |
+| `createEngine` | `createEngine(options?: EngineOptions): Engine`  |
 | `custom`       | `custom(fn, inputs, outputs)`                    |
 | `faulted`      | `faulted(pattern, { by?, except?, exceptBy? }?)` |
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
-observation contracts. `Refuse` is the low-level refusal marker. Its `message` becomes the refusal's
-`error` field and takes precedence over an `error` field in its optional data.
-An undeclared code remains a refusal. The current implementation warns only
-when the action has an explicit refusal contract that omits the code. The
+observation contracts. `Refuse` is the low-level refusal marker. Its `message`
+becomes the refusal's `error` field and takes precedence over an `error` field in
+its optional data.
+`EngineOptions` accepts `retention` and `logSink`; the default retention policy
+is `"keepAll"`. The engine still owns its internal occurrence index. The optional
+sink receives a synchronous audit copy and must return `undefined` from each
+`append` call.
+
+A manually created engine accepts an undeclared `Refuse` code as a refusal. It
+warns when an explicit refusal contract omits that code. Ordinary
+`assemble(...)` is closed instead: an undeclared advanced refusal is recorded as
+a fault, and an unanswered endpoint settles as opaque `INTERNAL_ERROR`. The
 advanced pieces do not install the
 ordinary assembly's quiescent interpreter-failure settlement policy. Standard
 assembly behavior is normative under [Failures between action

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { MemoryStore } from "@sync-engine/assembly";
+import type { LogEntry, LogSink } from "@sync-engine/assembly";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { each, earlier, former, reaction, vocabulary, when, where } from "@sync-engine/language";
 import type { Empty, Vars } from "@sync-engine/internal/reactions/types";
 import { flow } from "@sync-engine/internal/reactions/context";
@@ -293,6 +294,39 @@ describe("assembly execution lifecycle", () => {
     expect(app.concepts.FreshForm.calls).toBe(2);
   });
 
+  test("queryCache none evaluates repeated reads independently", async () => {
+    class ReadingConcept {
+      static readonly queries = { _row: "one" } as const;
+      calls = 0;
+
+      _row(_: Empty) {
+        return { value: ++this.calls };
+      }
+    }
+    const build = (queryCache: "memoize" | "none") => {
+      const words = vocabulary({ concepts: { Reading: ReadingConcept }, computations: {} });
+      const { Reading } = words.concepts;
+      const repeated = former("repeated reads ()", (_input, { first, second }) =>
+        where(Reading._row({}).is({ value: first }), Reading._row({}).is({ value: second })).form({
+          first,
+          second,
+        }),
+      );
+      return {
+        app: assemble({ vocabulary: words, composition: { repeated }, queryCache }),
+        repeated,
+      };
+    };
+
+    const memoized = build("memoize");
+    expect(await memoized.app.form(memoized.repeated({}))).toEqual({ first: 1, second: 1 });
+    expect(memoized.app.concepts.Reading.calls).toBe(1);
+
+    const uncached = build("none");
+    expect(await uncached.app.form(uncached.repeated({}))).toEqual({ first: 1, second: 2 });
+    expect(uncached.app.concepts.Reading.calls).toBe(2);
+  });
+
   test("pending-request limits remain in force after uncovered work becomes idle", async () => {
     class CompletingConcept {
       complete(_: Empty) {
@@ -557,25 +591,24 @@ describe("assembly execution lifecycle", () => {
     expect(app.engine.Action._getMatchingRecordCount()).toBe(0);
   });
 
-  test("ordinary assembly accepts an application-owned log store", async () => {
-    const store = new MemoryStore("keepAll");
+  test("ordinary assembly keeps indexing while forwarding entries to an application sink", async () => {
+    const entries: LogEntry[] = [];
+    const sink: LogSink = {
+      append(entry) {
+        entries.push(entry);
+      },
+    };
     const Answer = endpoint("/answer", () => receive().then(respond({ ok: true })));
     const app = assemble({
       vocabulary: vocabulary({ concepts: {}, computations: {} }),
       composition: { Answer },
-      logStore: store,
+      logSink: sink,
+      retention: "keepAll",
     });
 
     await app.invoker.invoke("/answer", {});
-    expect(app.engine.Action.store).toBe(store);
-    expect(store.actions.size).toBeGreaterThan(0);
-    expect(() =>
-      assemble({
-        vocabulary: vocabulary({ concepts: {}, computations: {} }),
-        composition: {},
-        logStore: store,
-        retention: "keepAll",
-      }),
-    ).toThrow("logStore and retention cannot both be supplied");
+    expect(app.engine.Action.store.policy).toBe("keepAll");
+    expect(app.engine.Action.store.actions.size).toBeGreaterThan(0);
+    expect(entries.length).toBeGreaterThan(0);
   });
 });

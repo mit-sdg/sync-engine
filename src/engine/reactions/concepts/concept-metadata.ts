@@ -4,7 +4,7 @@ import type { QueryPromise } from "@engine/reads/query-metadata";
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 
 /** One refusal branch: the code it returns, the class that signals it, and its sentence. */
-export interface RefusalBranch {
+interface RefusalBranch {
   code: string;
   error: ErrorConstructor;
   /** The normative sentence the specification gives this branch. */
@@ -15,7 +15,7 @@ export interface RefusalBranch {
 export type RefusalContracts = Record<string, readonly RefusalBranch[]>;
 
 /** Canonical callable surface retained from the vocabulary's concept class. */
-export interface ConceptProtocol {
+interface ConceptProtocol {
   readonly actions: readonly string[];
   readonly queries: readonly string[];
 }
@@ -88,7 +88,7 @@ export function conceptMetadataOf(concept: object): ConceptMetadata | undefined 
  * specification declares here, or one it declares only for other actions —
  * which is a specification the implementation has outgrown, not a refusal.
  */
-export type RefusalMatch =
+type RefusalMatch =
   | { kind: "declared"; code: string; message: string }
   | { kind: "misplaced"; code: string; declaredOn: readonly string[] };
 

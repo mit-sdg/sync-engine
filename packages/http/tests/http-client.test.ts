@@ -18,7 +18,6 @@ function mockFetch(body: Record<string, unknown>): typeof fetch {
     ok: true,
     status: 200,
     text: () => Promise.resolve(JSON.stringify(body)),
-    json: () => Promise.resolve(body),
   };
   return vi.fn(() => Promise.resolve(response as unknown as Response)) as unknown as typeof fetch;
 }
@@ -28,13 +27,6 @@ function mockFetchText(text: string, status = 200, ok = true): typeof fetch {
     ok,
     status,
     text: () => Promise.resolve(text),
-    json: () => {
-      try {
-        return Promise.resolve(JSON.parse(text));
-      } catch {
-        return Promise.reject(new Error("Invalid JSON"));
-      }
-    },
   };
   return vi.fn(() => Promise.resolve(response as unknown as Response)) as unknown as typeof fetch;
 }
@@ -342,6 +334,46 @@ describe("createHttpClient", () => {
     );
   });
 
+  test("a PromiseLike header provider supplies request headers", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const client = createHttpClient<TestApi>({
+      baseUrl: "http://localhost",
+      fetch,
+      headers: () => {
+        const headers = Promise.resolve({ "X-Trace": "trace-thenable" });
+        return { then: headers.then.bind(headers) };
+      },
+    });
+
+    await client.auth.login({ username: "a", password: "b" });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost/auth/login",
+      expect.objectContaining({
+        headers: {
+          "Content-Type": "application/json",
+          "X-Trace": "trace-thenable",
+        },
+      }),
+    );
+  });
+
+  test("forwards response validation through the HTTP client convenience", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const client = createHttpClient<TestApi>({
+      baseUrl: "http://localhost",
+      fetch,
+      validateResponse: (value, { path }) =>
+        path === "/auth/login" && (value as { token?: unknown }).token === "x"
+          ? { ok: true }
+          : { ok: false },
+    });
+
+    await expect(client.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      token: "x",
+    });
+  });
+
   test("requests include credentials by default", async () => {
     const fetch = mockFetch({ token: "x" });
     const client = makeClient(fetch);
@@ -401,6 +433,230 @@ describe("createHttpClient", () => {
       error: HttpClientErrorCode.BAD_JSON,
       detail: expect.stringContaining("Failed to read"),
     });
+  });
+
+  test("passes correlation and timeout context to the header provider", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const contexts: unknown[] = [];
+    const client = createHttpClient<TestApi>({
+      baseUrl: "http://localhost",
+      fetch,
+      headers: (context) => {
+        contexts.push(context);
+        return { "X-Correlation-Id": context.correlationId ?? "missing" };
+      },
+    });
+
+    await client.auth.login(
+      { username: "a", password: "b" },
+      { timeoutMs: 250, correlationId: "trace-http" },
+    );
+
+    expect(contexts).toEqual([
+      expect.objectContaining({
+        path: "/auth/login",
+        timeoutMs: 250,
+        correlationId: "trace-http",
+        signal: expect.any(AbortSignal),
+      }),
+    ]);
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost/auth/login",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Correlation-Id": "trace-http" }),
+      }),
+    );
+  });
+
+  test("applies a transport-local timeout", async () => {
+    const fetch = vi.fn(
+      (_input: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
+            once: true,
+          });
+        }),
+    ) as unknown as typeof globalThis.fetch;
+    const client = makeClient(fetch);
+
+    await expect(
+      client.auth.login({ username: "a", password: "b" }, { timeoutMs: 5 }),
+    ).resolves.toEqual({ error: FrameworkErrorCode.TIMED_OUT });
+  });
+
+  test("accepts the reliable timer maximum and rejects the first value above it", async () => {
+    const fetch = mockFetch({ token: "x" });
+    const client = makeClient(fetch);
+
+    await expect(
+      client.auth.login({ username: "a", password: "b" }, { timeoutMs: 2_147_483_647 }),
+    ).resolves.toEqual({ token: "x" });
+    await expect(
+      client.auth.login({ username: "a", password: "b" }, { timeoutMs: 2_147_483_648 }),
+    ).resolves.toEqual({ error: FrameworkErrorCode.INVALID_INPUT });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    ["caller abort", "abort", FrameworkErrorCode.ABORTED],
+    ["timeout", "timeout", FrameworkErrorCode.TIMED_OUT],
+  ] as const)(
+    "settles promptly for %s when fetch ignores interruption and later rejects",
+    async (_name, first, error) => {
+      const controller = new AbortController();
+      let fetchStarted!: () => void;
+      let rejectFetch!: () => void;
+      const started = new Promise<void>((resolve) => {
+        fetchStarted = resolve;
+      });
+      const fetch = vi.fn(
+        () =>
+          new Promise<Response>((_resolve, reject) => {
+            rejectFetch = () => reject(new Error("Delayed custom fetch rejection"));
+            fetchStarted();
+          }),
+      ) as unknown as typeof globalThis.fetch;
+      const client = makeClient(fetch);
+
+      const pending = client.auth.login(
+        { username: "a", password: "b" },
+        { signal: controller.signal, timeoutMs: 5 },
+      );
+      await started;
+      if (first === "abort") controller.abort();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      if (first === "timeout") controller.abort();
+
+      await expect(pending).resolves.toEqual({ error });
+      rejectFetch();
+      await new Promise((resolve) => setImmediate(resolve));
+    },
+  );
+
+  test.each([
+    ["caller abort", "abort", FrameworkErrorCode.ABORTED],
+    ["timeout", "timeout", FrameworkErrorCode.TIMED_OUT],
+  ] as const)(
+    "settles promptly for %s and cancels a late response",
+    async (_name, first, error) => {
+      const controller = new AbortController();
+      let canceled = false;
+      let fetchStarted!: () => void;
+      let resolveFetch!: (response: Response) => void;
+      const started = new Promise<void>((resolve) => {
+        fetchStarted = resolve;
+      });
+      const fetch = vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFetch = resolve;
+            fetchStarted();
+          }),
+      ) as unknown as typeof globalThis.fetch;
+      const client = makeClient(fetch);
+
+      const pending = client.auth.login(
+        { username: "a", password: "b" },
+        { signal: controller.signal, timeoutMs: 5 },
+      );
+      await started;
+      if (first === "abort") controller.abort();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      if (first === "timeout") controller.abort();
+
+      await expect(pending).resolves.toEqual({ error });
+      const stream = new ReadableStream<Uint8Array>({
+        cancel() {
+          canceled = true;
+        },
+      });
+      // Resolve the ignored Fetch after the caller has already settled.
+      const lateResponse = new Response(stream);
+      expect(canceled).toBe(false);
+      resolveFetch(lateResponse);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(canceled).toBe(true);
+    },
+  );
+
+  test.each([
+    ["uncapped", undefined],
+    ["capped", 8],
+  ] as const)("times out while an %s response body ignores cancellation", async (_name, cap) => {
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() {
+        canceled = true;
+      },
+    });
+    const fetch = vi.fn(() =>
+      Promise.resolve(new Response(stream)),
+    ) as unknown as typeof globalThis.fetch;
+    const client = makeClient(fetch, cap === undefined ? {} : { maxResponseBytes: cap });
+
+    await expect(
+      client.auth.login({ username: "a", password: "b" }, { timeoutMs: 5 }),
+    ).resolves.toEqual({ error: FrameworkErrorCode.TIMED_OUT });
+    if (cap !== undefined) expect(canceled).toBe(true);
+  });
+
+  test("bounds streamed response bodies by bytes and cancels oversized streams", async () => {
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"token":"too-large"}'));
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const fetch = vi.fn(() =>
+      Promise.resolve(new Response(stream)),
+    ) as unknown as typeof globalThis.fetch;
+    const client = makeClient(fetch, { maxResponseBytes: 8 });
+
+    await expect(client.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      error: HttpClientErrorCode.RESPONSE_TOO_LARGE,
+    });
+    expect(canceled).toBe(true);
+  });
+
+  test("rejects an oversized Content-Length and invalid response limits", async () => {
+    const fetch = vi.fn(() =>
+      Promise.resolve(new Response('{"token":"x"}', { headers: { "Content-Length": "100" } })),
+    ) as unknown as typeof globalThis.fetch;
+    const client = makeClient(fetch, { maxResponseBytes: 10 });
+
+    await expect(client.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      error: HttpClientErrorCode.RESPONSE_TOO_LARGE,
+    });
+    expect(() => makeClient(fetch, { maxResponseBytes: 0 })).toThrow(
+      "maxResponseBytes must be a positive finite integer",
+    );
+  });
+
+  test("does not wait for cancellation of oversized response bodies", async () => {
+    function oversizedResponse(contentLength?: string): Response {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"token":"too-large"}'));
+        },
+        cancel() {
+          return new Promise<void>(() => undefined);
+        },
+      });
+      return new Response(stream, {
+        headers: contentLength === undefined ? undefined : { "Content-Length": contentLength },
+      });
+    }
+
+    for (const response of [oversizedResponse(), oversizedResponse("100")]) {
+      const fetch = vi.fn(() => Promise.resolve(response)) as unknown as typeof globalThis.fetch;
+      const client = makeClient(fetch, { maxResponseBytes: 8 });
+      await expect(
+        client.auth.login({ username: "a", password: "b" }, { timeoutMs: 20 }),
+      ).resolves.toEqual({ error: HttpClientErrorCode.RESPONSE_TOO_LARGE });
+    }
   });
 });
 

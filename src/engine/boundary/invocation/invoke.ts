@@ -13,12 +13,16 @@ import { requestTimeout, RuntimeLifecycle } from "./lifecycle.ts";
 
 interface PendingRequest {
   resolve: (value: Record<string, unknown>) => void;
-  reject: (reason: unknown) => void;
   timer: ReturnType<typeof setTimeout>;
   signal?: AbortSignal;
   signalListener?: () => void;
   outputValidator?: EndpointValidator;
-  onInvalidOutput?: (errorClass: "ValidationFailure" | "ValidatorFault") => void;
+  domainErrorValidator?: EndpointValidator;
+  onInvalidResponse?: (
+    phase: "output" | "domain-error",
+    errorClass: "ValidationFailure" | "ValidatorFault",
+  ) => void;
+  onValidatorFault?: (phase: "output" | "domain-error", error: unknown) => void;
 }
 
 const frameworkResponses = new WeakSet<Record<string, unknown>>();
@@ -77,13 +81,21 @@ function settlePending(
   requests.delete(requestId);
   disposePending(pending);
   let settledOutput = output;
-  if (!framework && !("error" in output) && pending.outputValidator !== undefined) {
-    const validation = validateRuntimeValue(pending.outputValidator, output);
+  if (!framework) {
+    const phase = "error" in output ? "domain-error" : "output";
+    const validator =
+      phase === "domain-error" ? pending.domainErrorValidator : pending.outputValidator;
+    const value = phase === "domain-error" ? output.error : output;
+    const validation =
+      validator === undefined ? { ok: true as const } : validateRuntimeValue(validator, value);
     if (!validation.ok) {
       try {
-        pending.onInvalidOutput?.(validation.errorClass);
+        pending.onInvalidResponse?.(phase, validation.errorClass);
       } catch {
         // Integrity evidence is best-effort; it cannot take ownership of caller settlement.
+      }
+      if (validation.errorClass === "ValidatorFault") {
+        pending.onValidatorFault?.(phase, validation.fault);
       }
       settledOutput = { error: FrameworkErrorCode.INTERNAL_ERROR };
       framework = true;
@@ -134,8 +146,13 @@ export class Requesting {
     timeoutMs: number,
     signal?: AbortSignal,
     output?: {
-      validator?: EndpointValidator;
-      onInvalid?: (errorClass: "ValidationFailure" | "ValidatorFault") => void;
+      success?: EndpointValidator;
+      domainError?: EndpointValidator;
+      onInvalid?: (
+        phase: "output" | "domain-error",
+        errorClass: "ValidationFailure" | "ValidatorFault",
+      ) => void;
+      onFault?: (phase: "output" | "domain-error", error: unknown) => void;
     },
   ): Promise<Record<string, unknown>> {
     const requests = requestsFor(this);
@@ -172,12 +189,13 @@ export class Requesting {
 
       requests.set(requestId, {
         resolve,
-        reject,
         timer,
         signal,
         signalListener,
-        outputValidator: output?.validator,
-        onInvalidOutput: output?.onInvalid,
+        outputValidator: output?.success,
+        domainErrorValidator: output?.domainError,
+        onInvalidResponse: output?.onInvalid,
+        onValidatorFault: output?.onFault,
       });
     });
   }
@@ -223,11 +241,20 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
   validators?: Readonly<Record<string, EndpointValidators>>;
   /** When supplied, reject paths outside the assembled public route set. */
   routes?: ReadonlySet<string>;
-  /** Record an invalid successful result without exposing validator detail. */
-  onInvalidOutput?: (event: {
+  /** Record an invalid authored result without exposing validator detail. */
+  onInvalidResponse?: (event: {
     path: string;
     requestId: string;
+    phase: "output" | "domain-error";
     errorClass: "ValidationFailure" | "ValidatorFault";
+  }) => void;
+  /** Report a raw validator throw through a privileged host-owned channel. */
+  onValidatorFault?: (event: {
+    path: string;
+    requestId?: string;
+    correlationId?: string;
+    phase: "input" | "output" | "domain-error";
+    error: unknown;
   }) => void;
   /** Root admission, pending waits, drain state, and actual-flow quiescence. */
   lifecycle?: RuntimeLifecycle;
@@ -240,7 +267,8 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
     contracts,
     validators,
     routes,
-    onInvalidOutput,
+    onInvalidResponse,
+    onValidatorFault,
     lifecycle,
     refresh,
   } = opts;
@@ -294,10 +322,19 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
         if (inputValidator !== undefined) {
           const validation = validateRuntimeValue(inputValidator, input);
           if (!validation.ok) {
+            if (validation.errorClass === "ValidatorFault") {
+              onValidatorFault?.({
+                path,
+                phase: "input",
+                error: validation.fault,
+                ...(correlationId === undefined ? {} : { correlationId }),
+              });
+            }
             return settle(
               frameworkError(
                 FrameworkErrorCode.INVALID_INPUT,
-                validation.detail ?? `${path} failed runtime validation`,
+                ("detail" in validation ? validation.detail : undefined) ??
+                  `${path} failed runtime validation`,
               ),
             );
           }
@@ -344,8 +381,11 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       const deadline = performance.now() + timeoutMs;
       try {
         responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal, {
-          validator: validators?.[path]?.output,
-          onInvalid: (errorClass) => onInvalidOutput?.({ path, requestId, errorClass }),
+          success: validators?.[path]?.output,
+          domainError: validators?.[path]?.domainError,
+          onInvalid: (phase, errorClass) =>
+            onInvalidResponse?.({ path, requestId, phase, errorClass }),
+          onFault: (phase, error) => onValidatorFault?.({ path, requestId, phase, error }),
         });
       } catch {
         lifecycle?.abandon(requestId);

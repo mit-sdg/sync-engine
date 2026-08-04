@@ -5,7 +5,7 @@ import { vocabulary } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
-import { createRedactor, redact, UNIVERSAL_SENSITIVE_PATTERNS } from "@engine/utils/redaction";
+import { createRedactor, redact } from "@engine/utils/redaction";
 
 describe("redact — universal credential patterns (no policy registered)", () => {
   test("redacts credential-shaped keys regardless of domain", () => {
@@ -34,10 +34,6 @@ describe("redact — universal credential patterns (no policy registered)", () =
     expect(result.email).toBe("user@example.com");
     expect(result.name).toBe("Alice");
     expect(result.amount).toBe(5000);
-  });
-
-  test("the universal patterns are non-empty (always-on safety net)", () => {
-    expect(UNIVERSAL_SENSITIVE_PATTERNS.length).toBeGreaterThan(0);
   });
 });
 

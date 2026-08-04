@@ -1,7 +1,7 @@
 # Execution semantics
 
 This page defines the observable execution contract for actions, reactions,
-reads, formed results, and application boundaries in the current 1.0 beta.
+reads, formed results, and application boundaries in the current beta.
 The [documentation index](./index.md) points to the authoring guides, the
 [read construction cookbook](./book.md) demonstrates representative constructions, and the
 [Public API](./public-surface.md) lists the exports.
@@ -55,16 +55,19 @@ The action then settles in one of two outcome postures:
 
 - **returned** — the action completed and its result was recorded;
 - **refused** — the concept deliberately declined by throwing an error class
-  registered for that action or by throwing the advanced `Refuse` marker.
+  registered for that action. The advanced `Refuse` marker also produces this
+  posture when its code is accepted under the engine mode described below.
 
 A registered exception must belong to that action; an exception registered only
-for another action is a fault. `Refuse` always creates a refusal. When an action
-has an explicit refusal contract and the `Refuse` code is absent from it, the
-current implementation warns rather than turning the refusal into a fault. An
-action without a refusal contract produces no such warning. Applications
+for another action is a fault. Ordinary `assemble(...)` accepts `Refuse` only
+when the action's refusal contract declares its code. An undeclared advanced
+code is a fault: it creates no refusal outcome, a direct assembled call rejects,
+and an unanswered endpoint settles as opaque `INTERNAL_ERROR`. Manual
+`createEngine(...)` remains open: any `Refuse` code creates a refusal, and the
+runtime warns when an explicit contract exists but omits that code. Applications
 should use declared refusals for stable contracts.
 
-A different throw is a **fault**, not a third action outcome. The engine records
+A different throw is a **fault**. The engine records
 the fault against the ask, leaves that ask without an outcome, and lets the
 throw reach a direct caller. Failure delivery during reaction matching and at
 the application boundary is covered in
@@ -180,12 +183,16 @@ ordinary action body is released. Same-concept requested consequences use an
 internal reservation release to make progress without changing body-arrival
 order.
 
-One action body runs at a time per raw concept instance within one engine. An
-`async` method returns a native `Promise`, which the queue awaits. An arbitrary
-thenable, including a Promise from another JavaScript realm, is not covered by
-that wait. Supplying one raw instance to several engines creates separate
-queues and query caches and does not serialize those engines. Different concept
-instances and separate root flows can overlap.
+One action body runs at a time per raw concept instance within one engine. The
+queue awaits a structural `PromiseLike`: any returned object or function whose
+`then` property is callable. This includes native promises from another
+JavaScript realm and non-native thenables. The queue reads `then` once and
+invokes it in a microtask. A throwing `then` accessor, or a `then` call that
+throws before settlement, faults the action. A thenable that never settles holds
+the serial line just as a never-settling promise does. Supplying one raw instance
+to several engines creates separate queues and query caches and does not
+serialize those engines. Different concept instances and separate root flows
+can overlap.
 Reactions for one landed occurrence are currently evaluated sequentially. Their
 trigger and `where` stages all finish before any matching consequence is
 dispatched, so one sibling consequence cannot change another sibling's guard.
@@ -253,6 +260,8 @@ or `"many"`. A `one` query returns one record. An `optional` query returns an
 array containing zero or one record. A `many` query returns an array of
 records. An undeclared query may return one record or an array of records;
 because it makes no narrower promise, authoring treats it as potentially many.
+When the authored promise is available as a TypeScript literal, the vocabulary
+types reject a method whose return container does not match that promise.
 The engine attaches the registry's promises to whichever implementation the
 selected floor supplies and checks every answer when a reaction, view, or
 former reads it. `null`, a scalar, an array row that is null, scalar, or another
@@ -261,17 +270,22 @@ instances and other non-null, non-array objects pass this container check. This
 is not row-schema validation. A record missing a field named in `.is` does not
 match that pattern.
 
-Queries are memoized by concept instance and argument between invalidation
-points. Instrumented actions invalidate the acted-on concept instance's query
-caches before and after their bodies, and an assembled outside invocation
-invalidates all concept query caches before dispatch.
-A rejected native `Promise` from the same JavaScript realm is removed from the
-cache. Arbitrary thenables are cached as ordinary values. Direct state mutation
-or an external database change that bypasses an instrumented action can remain
-hidden until the next invalidation; a query call is not guaranteed to execute
-its implementation on every read. Cache-key construction traverses at most 100
-nested levels. A call with a deeper argument still executes but bypasses
-memoization for that call.
+An ordinary assembly defaults to `queryCache: "memoize"`, which memoizes queries
+by concept instance and argument between invalidation points. Instrumented
+actions invalidate the acted-on concept instance's query caches before and after
+their bodies, and an assembled outside invocation invalidates all concept query
+caches before dispatch. `queryCache: "none"` disables this memoization; repeated
+reads execute the query implementation independently.
+A structural thenable returned by a memoized query is normalized to one native
+promise before that promise is cached. Equivalent reads reuse the normalized
+promise, so the original thenable's `then` is invoked once. Rejection, including
+a throw while reading `then` or before the `then` call settles, evicts the entry;
+a later equivalent read executes the query again. A thenable that never settles
+remains cached until invalidation. Direct state mutation or an external database
+change that bypasses an instrumented action can remain hidden until the next
+invalidation; a query call is not guaranteed to execute its implementation on
+every read. Cache-key construction traverses at most 100 nested levels. A call
+with a deeper argument still executes but bypasses memoization for that call.
 Cache arguments follow read equality: arrays and plain records are structural,
 `Date` values use their timestamps, and maps, sets, class instances, regular
 expressions, functions, symbols, and other opaque values use identity.
@@ -292,8 +306,9 @@ How such a fault is delivered depends on where the read occurs. See
 
 ## Views and formers
 
-A **view** names a match. Its builder receives separate input, output, and free
-binding bags. A predicate view ends in `.holds()`. A view with outputs defaults
+A **view** names a match. Its builder receives separate input, output, and
+free-binding bags. Reading a property, including by destructuring, declares a
+stable logic variable. A predicate view ends in `.holds()`. A view with outputs defaults
 to `.many()` and may instead declare `.one()` or `.optional()`. Its human name
 carries no signature or cardinality. At a use-site a view takes one plain
 object input mapping. Every enumerable own key must be declared, and every
@@ -304,10 +319,10 @@ Stacked `where` blocks are alternatives; any matching block can supply a result.
 The engine checks a concept query's declared promise whenever it reads the
 query and checks a view's declared promise whenever it reads the view. The
 read-back states the declaration and the runtime integrity check. The current
-package does not expose inferred-cardinality analysis over exported IR.
+package does not analyze cardinality over exported IR.
 
 A **former** names a formed answer. Its builder receives separate input and
-free binding bags. Its body matches in `where` and produces in `form`, and
+free-binding bags. Its body matches in `where` and produces in `form`, and
 production is terminal: nothing in a `where` chooses output. A record former
 promises one answer unless it ends in `.optional()`. A selection-root former
 always produces one result whose shape is determined by `.form`, `.count`,
@@ -342,13 +357,14 @@ is recorded with the fault and remains unanswered. Calling a former directly
 has no action ask to mark, so the evaluation rejects instead. The operational
 fault is a `FormerFault`: `FORMER_NONE` means a former promising one answer
 produced none, and `FORMER_MANY` means a record body produced several matches.
-These faults are not domain refusals. The operational delivery boundary is described under
+These faults use the operational failure path. The delivery boundary is described under
 [Failures between action asks](#failures-between-action-asks).
 
 ## Decisions that must not race
 
 A uniqueness, capacity, first-come, or answer-once decision belongs in the
-action that owns the state, not in a reaction's `where`. The exact execution,
+action that owns the state. A reaction's `where` supplies a current observation.
+The exact execution,
 coordination, and rollback limits live under
 [Ordering and state-read timing](#ordering-and-state-read-timing).
 
@@ -393,14 +409,26 @@ flow becomes quiescent, an answer already delivered remains authoritative. If
 no answer exists and the interpreter failed between action asks, the invocation
 settles with opaque `INTERNAL_ERROR`. A fault-free unanswered invocation waits
 30 seconds by default and then returns `TIMED_OUT`; `InvokeOptions.timeoutMs`
-overrides that wait. Public endpoints should provide explicit coverage or
-fallback branches rather than use timeout as an authored outcome.
+overrides that wait. Public endpoints should provide explicit complementary
+case branches that answer every admitted case. An unconditional
+sibling is not ordered fall-through and overlaps every conditional sibling that
+can answer.
 [Cancellation](#cancellation) defines what timeout and abort do with a pending
 call. Runtime execution does not enforce branch disjointness or endpoint
-coverage. `applicationDiagnostics(...)` can warn about a limited set of
-duplicate answer conditions and missing unconditional fallbacks. Those warnings
-remain advisory unless a repository runs `sync-engine check --fail-on-warnings`
-with an application config.
+coverage. `applicationDiagnostics(...)` traces causal `by` provenance to
+attribute an eventual response to its request path. Only a response that uses
+the traced request identifier on a direct request-to-response answer path
+contributes to overlap or coverage proof. An intermediate action posture makes
+the path ineligible for either proof.
+On direct paths, the analyzer recognizes canonical `receive(...)` shapes,
+disjoint literal request alternatives, non-dropping `whether` lines, and fresh
+computations. It can report a bounded set of potential overlaps and warn when
+it recognizes no non-dropping total answer path. Complementary state reads
+remain unproved because siblings evaluate independently and do not share a
+state snapshot. The analyzer does not prove arbitrary view, computation,
+validator, action-outcome, or concurrent-state logic. Warnings remain advisory
+unless a repository runs `sync-engine check --fail-on-warnings` with an
+application config.
 
 ## Boundary, gateway, and client
 
@@ -425,13 +453,25 @@ an authored response denotes a domain failure, so a successful endpoint result
 cannot use `error` as an ordinary top-level data field. See the exact
 [cancellation boundary](#cancellation).
 
+Every generated client endpoint accepts an optional `ClientCallOptions` after
+its input. The core client copies `signal`, `timeoutMs`, and `correlationId` to
+the `ClientRequest`; the selected transport defines how it uses them. The core
+client does not itself apply a timer or create a correlation header. An optional
+synchronous `validateResponse` callback inspects the complete untrusted
+transport result with its route. `{ ok: false }`, a throw, or a promise-like
+validator result becomes `{ error: "TRANSPORT_ERROR" }`; an accepted result is
+returned without transformation.
+
 The maintained HTTP client resolves its base URL when the client or transport is
 constructed: an explicit nonblank `baseUrl` takes precedence, followed by
 `API_BASE_URL`, then `/api`. Trailing slashes are removed, while `/` means no
 prefix. It sends `POST`, serializes nullish input as `{}`, supplies
 `Content-Type: application/json`, and uses Fetch credentials mode `include` by
 default. A header record or synchronous/asynchronous header provider is merged
-after the initial content type for each request.
+after the initial content type for each request. The provider receives an
+`HttpRequestContext` containing the path and the effective signal, timeout, and
+correlation token when present. Correlation is not projected to an HTTP header
+unless the provider does so.
 
 The HTTP client reads every response as text. An empty body becomes `{}`; a
 nonempty body must parse as JSON regardless of response `Content-Type`. A
@@ -440,8 +480,22 @@ non-2xx responses become `BAD_STATUS`; unreadable or invalid JSON becomes
 `BAD_JSON`; header-provider failure becomes `HEADER_RESOLUTION_FAILED`; and
 Fetch rejection becomes `NETWORK_ERROR`. Abort before Fetch, while headers are
 pending, or while a body is read becomes the core `ABORTED` result. The header
-provider itself is not cancellable. Neither status handling nor parsing validates
-the result against the generated TypeScript contract.
+provider itself is not cancellable. `timeoutMs` is a positive finite integer for
+the HTTP transport and cannot exceed `2_147_483_647` milliseconds, the reliable
+Node timer maximum. Expiry aborts local Fetch waiting and returns `TIMED_OUT`.
+An invalid or larger timeout returns core `INVALID_INPUT` before header
+resolution or Fetch. This ceiling governs only the transport-local timer. The
+standard HTTP client does not turn it into a gateway or application deadline;
+those layers apply their own defaults and configured `ExecutionLimits`.
+
+`maxResponseBytes`, when supplied, is a positive finite integer. The HTTP client
+rejects a larger declared `Content-Length` before buffering and counts streamed
+bytes when the declaration is absent or insufficient. Exceeding either check
+cancels the response body where possible and returns `RESPONSE_TOO_LARGE`. The
+default leaves response bytes uncapped. Status handling, parsing, and response
+size checks do not validate the result against the generated TypeScript
+contract. The `createHttpClient` convenience applies `validateResponse` through
+the core client; `createHttpTransport` alone does not.
 
 The HTTP handler accepts only `POST`. An absent `Content-Type` is accepted; a
 present content type must be `application/json`, optionally followed by
@@ -449,7 +503,10 @@ parameters. Routing uses `URL.pathname`, so query parameters do not select a
 different route. Empty request text becomes `{}`. Malformed, unreadable, or
 larger-than-1,048,576-byte bodies become `INVALID_REQUEST`/400. The handler
 checks both declared `Content-Length` and bytes read from the stream. Every
-response uses JSON content type, and every successful invocation uses status 200. Serialization failure becomes opaque `INTERNAL_ERROR`/500.
+response uses JSON content type, and every successful invocation uses status 200. Serialization failure becomes opaque `INTERNAL_ERROR`/500. The handler
+passes its host-provided `Request.signal` to the application invoker. The HTTP
+protocol defines no message that rolls back or cancels concept work after
+admission.
 
 ### Limits and operational observation
 
@@ -555,20 +612,29 @@ validate the route and request's outer shape. The input must be a non-null,
 non-array object and contain every required own key. Extra keys remain. Defaults
 are shallow and apply only when a key is absent; a present value is never
 overwritten. An endpoint may additionally attach application-supplied input and
-successful-output validators. The input validator sees the admitted value after
-defaults and runs before the application boundary ask is recorded. Invalid
-input returns `INVALID_INPUT`. The output validator runs before a successful
-result leaves the invoker. Invalid output records integrity evidence and becomes
-opaque `INTERNAL_ERROR`; domain and framework failures are not output-validated.
+successful-output validators, plus a `domainError` validator. The input
+validator sees the admitted value after defaults and runs before the application
+boundary ask is recorded. Invalid input returns `INVALID_INPUT`. The output
+validator runs before a successful result leaves the invoker. The domain-error
+validator runs on the value under an authored response's top-level `error`
+field. Invalid output records `invalid-output` integrity evidence; an invalid
+domain error records `invalid-domain-error` evidence. Both become opaque
+`INTERNAL_ERROR`. Framework failures are not endpoint-validated.
 
 Without an input validator, primitive types and nested shapes are not checked,
 so explicit `null` and direct-invocation `undefined` pass required-key presence.
 JSON transport removes `undefined` object fields before admission. Validators
 inspect values but do not transform them, and thrown validator failures fail
-closed. The generated TypeScript contract remains a static caller check rather
-than runtime validation. Optional concept State sections are uninterpreted human
-notation; they do not contribute to endpoint contracts or validators, and no
-schema is inferred from concept specifications.
+closed. A configured `rawFaultReporter` receives the original thrown value with
+kind `endpoint-validator` and phase `input`, `output`, or `domain-error`.
+For output and domain-error throws, ordinary integrity evidence retains only
+the `ValidatorFault` class. An input-validator throw returns `INVALID_INPUT`
+before an occurrence is recorded. Caller-visible errors contain no thrown
+detail, and reporter failure is isolated from validation settlement. The
+generated TypeScript contract provides static caller checks. Runtime validation
+requires endpoint validators. Optional concept State sections are
+uninterpreted human notation; they do not contribute to endpoint contracts or
+validators, and no schema is inferred from concept specifications.
 
 ### Endpoint input contracts
 
@@ -618,14 +684,14 @@ contract and uses `Json` for leaves it cannot trace to a signature.
 Ordinary assembly rejects every local reaction, view, or former. The error names
 each local owner before a route or artifact plan is exposed. Direct invocation,
 gateway routing, transport adapters, and generation therefore share one complete
-portable design instead of silently omitting executable-only behavior.
+portable design. Executable-only behavior causes assembly to fail.
 
 When a generated application descriptor supplies ordered `projections`, one
 module contains the logical contract followed by each named transport contract.
 The contract named by `wireName` retains the logical application inputs, outputs,
 and refusal codes for a local or custom client. The HTTP companion's
-`httpWire({ policy, name })` carries public policy categories rather than private
-refusal codes. With `httpFloor`, that contract also omits the cookie-bound input
+`httpWire({ policy, name })` carries public policy categories and excludes
+private refusal codes. With `httpFloor`, that contract also omits the cookie-bound input
 from protected routes and the consumed token and expiry fields from the issuing
 route's output. All contracts share generated type helpers and the vocabulary
 anchor. Core records every projector package and version in generated
@@ -634,13 +700,21 @@ provenance.
 Projection planning validates all names before rendering. The logical wire,
 every projected wire, each app-wide error type, `Json`, and vocabulary helper
 types must have distinct valid TypeScript identifiers. Provenance package names
-and versions must be nonblank. Core evaluates projectors in declaration order,
-and a projector or validation failure occurs before any artifact comparison or
-write.
+must be nonblank, and provenance versions must be valid SemVer. Core
+evaluates projectors in declaration order, and a projector or validation failure
+occurs before any artifact comparison or write.
+
+Generated assembly compatibility is governed by the application manifest
+format and package SemVer. Artifact planning requires
+`sync-engine.application-manifest` version 3, a 1.x core generator identity,
+and SemVer projector provenance. The core generator identity must name
+`@mit-sdg/sync-engine` at a 1.x version. Projector provenance accepts any
+nonblank package name with any valid SemVer version; projector versions
+are not restricted to 1.x. Prerelease identities are not accepted.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
-defines input admission and explicit successful-output validation. Neither is
-inferred from the generated type.
+defines input admission and explicit input, successful-output, and domain-error
+validation. None is inferred from the generated type.
 
 ## Operational limits
 
@@ -651,7 +725,7 @@ delivery, cancellation, persistence, restart, or boundary operation.
 
 Several application instances may use the same durable domain state when each
 instance has its own assembly, concept objects, action scheduler, gateway, and
-occurrence store, and host-supplied concept implementations connect them to a
+occurrence index, and host-supplied concept implementations connect them to a
 transactional store. The concept action that owns a state decision must perform
 its uniqueness, capacity, and durable domain-operation idempotency checks in one
 storage transaction. Storage constraints or equivalent storage coordination,
@@ -694,7 +768,8 @@ downstream invoker as a second public admission path while gateway shutdown is
 in progress. `whenIdle()` observes the same ordered gateway/application work
 without changing admission. Caller timeout and abort remove a pending wait but
 never release active-flow accounting. The host still owns the listener, OS
-signals, hard shutdown deadline, floor and log-store closure, and process exit.
+signals, hard shutdown deadline, floor and custom log-sink resource closure, and
+process exit.
 
 A direct call through `Assembly.concepts`, and direct `Assembly.form(...)`
 evaluation, is an assembly root: it participates in active-root limits, idle
@@ -712,13 +787,13 @@ priority and do not form a join; each path advances when its own preceding ask
 returns. Applications must not use evaluation order as a priority mechanism.
 
 Action bodies run one at a time per concept instance within one engine, in
-arrival order. The queue awaits same-realm native Promises, including ordinary
-`async` methods; arbitrary thenables are outside that guarantee. Sharing one raw
-instance between engines does not share a queue or query cache. This is an
-in-process guarantee. A concept's implementation and storage must supply any
+arrival order. The queue awaits native promises and structural thenables as
+described under [Execution and concurrency](#execution-and-concurrency). Sharing
+one raw instance between engines does not share a queue or query cache. This is
+an in-process guarantee. A concept's implementation and storage must supply any
 atomicity or coordination required across processes. A reaction consequence
-chain is not a database transaction:
-earlier actions are not rolled back when a later action refuses or faults.
+chain commits each action independently. Earlier actions remain committed when a
+later action refuses or faults.
 The runtime provides no retry deduplication or exactly-once guarantee. A retry
 may repeat a completed action or overlap work that continued after timeout.
 
@@ -754,6 +829,9 @@ for a consequence, its action and action id when available. The stages are
 `trigger`, `where`, `consequence-input`, `consequence-dispatch`,
 `consequence-output`, and `result-transform`. Exception messages, stacks,
 causes, and attached fields are not retained in that automatic evidence.
+When `rawFaultReporter` is configured, the reporter separately receives the
+original `unknown` value for action and interpreter faults. Reporter throws and
+rejected returned promise-like values are isolated from runtime settlement.
 
 The failed evaluation stops without creating a fault occurrence. A trigger or
 `where` failure happens before a firing and does not consume its triggers, so
@@ -768,11 +846,14 @@ coverage hole still waits for its invocation deadline and returns `TIMED_OUT`.
 Concepts should represent expected rejection with registered refusals and
 explicit policy alternatives.
 
-A `LogStore` failure is outside this interpreter-failure path. An invocation
-append failure can prevent an action body from running. An outcome append
-failure can occur after the action body has already changed concept state; the
-engine does not roll that state back. Custom stores must define their own
-failure, durability, and retry behavior.
+A `LogSink` failure is outside this interpreter-failure path. The sink runs
+synchronously before the internal occurrence fold and must return `undefined`.
+A throw or any returned value, including a promise or structural thenable, fails
+the append before the fold. An invocation append failure can prevent an action
+body from running. An outcome append failure can occur after the action body has
+already changed concept state; the engine does not roll that state back. Custom
+sinks must define their own failure, durability, retry, and resource-lifecycle
+behavior.
 
 ### Cancellation
 
@@ -780,11 +861,16 @@ An invocation already aborted when it begins does not reach the gateway. While
 a request is pending, aborting marks it to resolve with `ABORTED`. The standard
 gateway forwards the signal to the application invoker, where it also ends the
 wait; the signal does not cancel, prevent, or roll back accepted concept work.
-Local and HTTP client calls accept the same signal as their optional second
-argument. The default timeout is 30 seconds without a profile and the profile's
-maximum request duration with one; `InvokeOptions.timeoutMs` selects a validated
-duration no greater than that maximum, and expiry resolves with `TIMED_OUT`. Timeout and
-abort end the pending wait but do not themselves record a
+Client calls carry `signal`, `timeoutMs`, and `correlationId` in their optional
+second argument. The local client forwards those values to the invoker. The HTTP
+client uses `timeoutMs` for a transport-local Fetch timer and exposes the
+correlation token to its header provider. An HTTP abort does not guarantee that
+the server observes or cancels accepted work.
+
+The default invocation timeout is 30 seconds without a profile and the
+profile's maximum request duration with one; `InvokeOptions.timeoutMs` selects a
+validated duration no greater than that maximum, and expiry resolves with
+`TIMED_OUT`. Timeout and abort end the pending wait but do not themselves record a
 `RequestBoundary.respond` occurrence, so recorded application work may remain
 unanswered. Continued work can later ask `respond`; after pending state is gone,
 that ask is recorded and refuses with `NOT_PENDING`. If an answer was accepted
@@ -801,46 +887,69 @@ duration.
 
 ### Logs, concept implementations, and restart
 
-Concept state is separate from the assembly's occurrence log. The engine sends
-append-only invocation, outcome, fault, firing, reaction-failure, and integrity-failure entries to
-its `LogStore`, which folds them into indexes for matching and inspection.
-Retention may evict indexed entries, so no assembly promises to retain every
-occurrence forever.
+Concept state is separate from the assembly's occurrence evidence. Every engine
+owns a process-local internal `MemoryStore` that folds invocation, outcome,
+fault, firing, reaction-failure, and integrity-failure entries into indexes for
+matching and inspection. `MemoryStore` is a private implementation with no
+public replacement interface. An assembly configured with a window may
+evict indexed entries and does not promise to retain every occurrence forever.
+
+An optional application-owned `LogSink` receives each entry synchronously after
+entry validation and redaction but before the internal fold. Arrays and plain
+records in the entry are recursively copied and frozen. Invocation concept and
+action identities are replaced by frozen name-bearing representatives, and
+`Date` values are copied. Opaque leaves such as class instances, `Map`, `Set`,
+and functions retain their ordinary runtime representation and
+identity; the snapshot does not recursively freeze them. A sink must treat
+opaque leaves as read-only sensitive values. `LogSink.append` must return
+`undefined` synchronously. The sink is an audit destination; it does not supply
+matching, retention, or replay. `logSink` and `retention` are independent
+`AssemblyOptions` and may be used together. A sink failure prevents the
+corresponding fold as described under
+[Failures between action asks](#failures-between-action-asks).
 
 Each ordinary assembly creates its own field-name redactor before entries reach
-a store, observer, or inspection summary. During an active causal flow, the
-interpreter privately retains original values for execution and matching, then
-clears them when the outermost action settles. Ordinary process logs omit
-exception messages, stacks, causes, and attached fields. Caller-reviewed
-diagnostic channels may expose exception text, but automatic public error
-envelopes do not. Assembly redaction copies exact field names and the pattern
-list but retains the supplied `RegExp` objects; callers must not mutate those
-expressions after constructing an assembly. There is no setter for a
-process-global redaction policy.
+the internal index, a sink, an observer, or an inspection summary. During an
+active causal flow, the interpreter privately retains original values for
+execution and matching, then clears them when the outermost action settles.
+Ordinary process logs omit exception messages, stacks, causes, and attached
+fields. Public framework errors are likewise opaque. Assembly redaction copies
+exact field names and the pattern list but retains the supplied `RegExp` objects;
+callers must not mutate those expressions after constructing an assembly. There
+is no setter for a process-global redaction policy.
 
-Ordinary `assemble(...)` uses a process-local `MemoryStore` retaining the 100
-most recent settled causal flows. Its `retention` option can select another
-window, `"keepAll"`, or `"evictConsumed"`; `logStore` installs an
-application-owned store instead and is mutually exclusive with `retention`.
-Assembly does not close a supplied store. The host must close any
-resources behind a custom store after drain, using the store's own API.
-Automatic window enforcement does not evict an active flow, so active flows may
-temporarily exceed a window. Explicit
-`evictFlow` calls and custom stores are outside that protection. Advanced
-callers may also pass a `FileStore` or custom `LogStore` to
-`createEngine(store?)`. `FileStore` composes an in-memory occurrence index with
-an append-only JSONL audit sink; retention trims the index without rewriting
-that file.
+`rawFaultReporter` is the explicit exception to that sanitized path. It receives
+the original action, interpreter, or endpoint-validator thrown value together
+with classified context. The reporter is privileged application code and must
+be treated as a sensitive sink. Reporter failure is caught and does not replace
+the action or invocation result.
 
-`"keepAll"` never prunes indexed evidence. `"evictConsumed"` removes only a
-consumed suffix when `prune()` is called; flow settlement does not call that
-prune operation automatically. A direct `MemoryStore()` defaults to
-`"evictConsumed"`, while direct `FileStore(path)` defaults to `"keepAll"`.
+Ordinary `assemble(...)` defaults to retaining the 100 most recent settled
+causal flows. `RetentionPolicy` is `"keepAll" | { window: number }`; the window
+must be a finite, non-negative integer. An ordinary assembly may select another
+window or `"keepAll"`.
+`createEngine(options?)` accepts the same `retention` and `logSink` options,
+defaults retention to `"keepAll"`, and does not accept an occurrence-store
+argument.
+Window enforcement runs automatically only after a causal flow settles. It does
+not evict an active flow, so active flows may temporarily exceed the window.
+The window is ordered by latest settlement rather than flow start. Repeated
+settlement moves a flow to the newest position; a new invocation under a settled
+flow removes it from the settled count until the flow settles again.
+`{ window: 0 }` evicts a flow after settlement; `"keepAll"` retains indexed
+evidence for the engine lifetime. No public manual prune operation is available.
+
+`FileLogSink(path)` is the supplied Node-specific sink. It appends one JSONL
+audit projection per entry. The engine never reads or replays that file, and
+retention never rewrites it. `FileLogSink` has no close API. A custom sink may
+own resources, but the host must close those resources after drain through an
+application-defined API.
 
 An application may persist concept state while leaving occurrence logs in
 memory, or vice versa. The engine does not load prior occurrence files, rebuild
 concept state, resume interrupted reactions, restore pending requests, or
-replay firings. JSONL occurrences are evidence, not restart recovery.
+replay firings. Restart recovery must reconstruct state from concept-owned
+storage and explicit host procedures.
 
 ### Boundary operations
 
@@ -851,5 +960,6 @@ trusted-proxy handling, reverse-proxy policy, or authentication; deployment and
 application code must supply them. Generated wire contracts typecheck callers,
 but the gateway does not automatically validate returned values against
 generated output types or derive a runtime validator from concept
-specifications. An endpoint's explicit successful-output validator runs at the
-assembled invoker as described under [Runtime validation](#runtime-validation).
+specifications. An endpoint's explicit input, successful-output, and
+domain-error validators run at the assembled invoker as described under
+[Runtime validation](#runtime-validation).

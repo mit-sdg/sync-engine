@@ -7,7 +7,7 @@
  *
  * These helpers import no application concepts or boundaries.
  */
-import type { ActionPattern, InstrumentedAction } from "../types.ts";
+import type { InstrumentedAction } from "../types.ts";
 import type { ConceptInventoryIR } from "@engine/reads/ir";
 import { contractOf } from "./outcomes.ts";
 import {
@@ -54,14 +54,6 @@ export function actionNameOf(action: InstrumentedAction): string {
   if (!bound) return "UNDEFINED";
   const name = bound.name;
   return name.startsWith("bound ") ? name.slice("bound ".length) : name;
-}
-
-/**
- * Stable node identifier for a concept-action pair.
- * e.g. "Authenticating.authenticate"
- */
-export function actionNodeId(p: ActionPattern): string {
-  return `${conceptNameOf(p.concept)}.${actionNameOf(p.action)}`;
 }
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;

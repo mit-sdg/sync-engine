@@ -25,7 +25,7 @@ import { brand, hasBrand } from "@engine/reads/brands";
 
 const ChannelBrand: unique symbol = Symbol("ChannelBrand");
 
-export interface ChannelOptions {
+interface ChannelOptions {
   /** Concepts (instances, instrumented proxies, or instrumented actions) to skip. */
   except?: readonly object[];
   /** Reaction names whose own asks the channel skips — the provenance loop-guard. */

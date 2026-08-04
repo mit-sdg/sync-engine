@@ -142,7 +142,7 @@ export function readBackReaction(reaction: ReactionIR, env: ReadBackEnv): string
 }
 
 /** Generate one view's declared promise and inferred body bound. */
-export function readBackView(view: ViewIR, env: ReadBackEnv): string {
+function readBackView(view: ViewIR, env: ReadBackEnv): string {
   const lines: string[] = [];
   const partitions = [
     view.ins.length > 0 ? `inputs (${view.ins.join(", ")})` : "inputs ()",
@@ -169,8 +169,7 @@ export function readBackView(view: ViewIR, env: ReadBackEnv): string {
   return lines.join("\n");
 }
 
-export function readBackFormer(former: FormerIR, env: ReadBackEnv): string {
-  void env;
+function readBackFormer(former: FormerIR): string {
   const partitions = [
     former.ins.length > 0 ? `inputs (${former.ins.join(", ")})` : "inputs ()",
     former.bindings.length > 0 ? `bindings (${former.bindings.join(", ")})` : "bindings ()",
@@ -188,7 +187,7 @@ export function readBackApp(
 ): string {
   const sections: string[] = [];
   for (const view of views) sections.push(readBackView(view, env));
-  for (const former of formers) sections.push(readBackFormer(former, env));
+  for (const former of formers) sections.push(readBackFormer(former));
   for (const reaction of reactions) sections.push(readBackReaction(reaction, env));
   for (const reaction of unlowered) {
     sections.push(

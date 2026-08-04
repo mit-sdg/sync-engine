@@ -103,6 +103,62 @@ packs, or with a different contribution policy.
 Each call creates a new application. Changing an option and running again does
 not replace reactions inside an application that is already running.
 
+### Construct composition with a TypeScript factory
+
+A composition factory is an ordinary TypeScript function called while the host
+constructs `AssemblyOptions`. It returns a plain record of tagged reactions,
+views, formers, or endpoints. Operations Room supplies its selected policy views
+to one such factory:
+
+_Source: [`examples/operations-room/src/composition/contributions.ts`](../../examples/operations-room/src/composition/contributions.ts)_
+
+```ts
+export function contributionEndpoints({
+  denied,
+  mayContribute,
+  mayNotContribute,
+}: {
+  denied: string;
+  mayContribute: RelationView;
+  mayNotContribute: RelationView;
+}) {
+  const AddContribution = endpoint(
+    "/rooms/contribute",
+    ({ room, responder, text, selection, discussion, response }) =>
+      receive({ room, responder, text })
+        .where(
+          mayContribute({ responder, room }),
+          Selecting._current({ scope: room }).is({ selection }),
+          Discussing._openFor({ subject: selection }).is({ discussion }),
+        )
+        .then(Discussing.respond({ discussion, author: responder, text }).responds({ response }))
+        .then(respond({ response })),
+  );
+
+  const RejectContribution = endpoint("/rooms/contribute", ({ room, responder, text }) =>
+    receive({ room, responder, text })
+      .where(mayNotContribute({ responder, room }))
+      .then(respond({ error: denied })),
+  );
+
+  return { AddContribution, RejectContribution };
+}
+```
+
+The application calls this function; `assemble(...)` never invokes functions it
+encounters while walking `composition`. Assembly recursively visits plain
+records and module namespaces, registers tagged declaration leaves, ignores
+untagged helpers and constants, and gives nested reactions dotted names such as
+`contributions.AddContribution`.
+
+The factory runs during construction. Every
+declaration it returns must still lower to portable IR; embedding a closure or
+other local escape inside a returned declaration does not make that behavior
+portable. Generated artifacts describe only the declarations returned by the
+factory. Use fixed records for selectable
+reaction packs, modules with the same view contract for replaceable
+policy, and factories when declarations themselves depend on supplied policy.
+
 Assembly validates that all installed reactions, views, formers, and endpoints
 are portable before returning the application's route set. [Portable and local
 behavior](../semantics.md#portable-and-local-behavior) defines that boundary and
@@ -152,18 +208,30 @@ adapter can call the same endpoint declarations.
 
 An endpoint can also answer differently by case. `receive(...)` supplies the
 outside-request trigger to the same labeled sibling tree ordinary reactions
-use. Every matching branch runs, and labels establish provenance rather than
-priority or exclusivity. If several branches answer, the boundary accepts one
+use. Every matching branch runs, and labels establish provenance. Labels carry
+no priority or exclusivity. If several branches answer, the boundary accepts one
 response and refuses another with `NOT_PENDING`. [The read construction
 cookbook](../book.md#12--an-endpoint-uses-the-same-sibling-shape) shows this
 boundary specialization, and [Execution
 semantics](../semantics.md#sibling-paths-and-endpoint-settlement) defines its
 lowering and settlement.
 
-Cover every admitted case on a public endpoint with an answer or an explicit
-fallback branch. A fault-free request that no branch answers remains pending
-until its deadline and returns `TIMED_OUT`. Timeout and abort stop the caller's
-wait without cancelling accepted work. [Endpoint
+Cover every admitted case on a public endpoint with an answer or explicit
+complementary case branches. An unconditional sibling overlaps every
+conditional branch that can answer. A
+fault-free request that no branch answers remains pending until its deadline and
+returns `TIMED_OUT`. `applicationDiagnostics(...)` traces causal `by`
+provenance to attribute an eventual response to its request path. Only a
+response that uses the traced request identifier on a direct
+request-to-response answer path contributes to overlap or coverage proof. An
+intermediate action posture makes the path ineligible for either proof.
+On direct paths, the analysis recognizes canonical `receive(...)` shapes,
+disjoint literal request alternatives, non-dropping `whether` lines, and fresh
+computations. It reports bounded potential overlaps and cases where no
+non-dropping total answer path is recognized. Complementary state reads remain
+unproved because siblings observe separate state snapshots; opaque policy
+remains the author's responsibility.
+Timeout and abort stop the caller's wait without cancelling accepted work. [Endpoint
 settlement](../semantics.md#sibling-paths-and-endpoint-settlement) and
 [cancellation](../semantics.md#cancellation) define the complete behavior.
 
@@ -183,15 +251,14 @@ export function buildOperationsRoom(instances: OperationsRoomOverrides = {}) {
 }
 ```
 
-`createGateway` is the fixed standard gateway, not a general gateway assembly.
-Application code supplies the application rather than replacing its vocabulary
-or routing design.
+`createGateway` applies the standard gateway vocabulary and routing behavior to
+the supplied application.
 
 ## Generate the wire contract
 
 The tooling reads the assembled design and derives TypeScript contracts from
 portable reaction data. Generation is all-or-nothing: any local definition
-fails assembly with its owner rather than being omitted from the contract. One
+fails assembly with its owner. One
 application descriptor names the assembly and the application;
 the artifact paths and type names follow from the title and the config's own
 location, and each may be overridden.
@@ -287,34 +354,42 @@ package.
 
 ## Add runtime validation
 
-The generated contract is a compile-time guarantee, not a runtime schema.
-Standard admission checks that input is an object and required keys are present.
+The generated contract checks TypeScript callers at compile time. Standard
+admission checks that input is an object and required keys are present.
 For untyped or hostile callers, attach schema-library-neutral validators to the
 endpoint:
 
 ```typescript
-endpoint("/rooms/create", createRoom, {
+endpoint("/rooms/join", joinRoom, {
   validators: {
     input: (value) =>
-      isCreateRoomInput(value)
+      isJoinRoomInput(value)
         ? { ok: true }
-        : { ok: false, detail: "host and name must be strings" },
-    output: (value) => (isCreateRoomOutput(value) ? { ok: true } : { ok: false }),
+        : { ok: false, detail: "room and responder must be strings" },
+    output: (value) => (isJoinRoomOutput(value) ? { ok: true } : { ok: false }),
+    domainError: (value) =>
+      value === "GATHERING_NOT_FOUND" || value === "ALREADY_JOINED"
+        ? { ok: true }
+        : { ok: false, detail: "unexpected join refusal" },
   },
 });
 ```
 
 The input validator runs after shallow defaults and before the application ask.
-The output validator protects successful results; a violation is retained as
+The output validator receives the complete successful result. The `domainError`
+validator receives only the value under an authored response's top-level
+`error` field, such as `ALREADY_JOINED`; framework errors bypass it. Validators
+observe values without transforming them and must return synchronously. A promise-like
+return fails validation. An invalid output or domain-error value causes
 integrity evidence and leaves the invoker as opaque `INTERNAL_ERROR`.
 [Runtime validation](../semantics.md#runtime-validation) defines the complete
 admission and output-validation boundary.
 
 ## Call the typed client
 
-Code outside the assembly accepts a client typed by the generated wire. It does
-not import concepts, reactions, the gateway, or the application, and it does not
-need to choose a transport.
+Code outside the assembly depends only on a client typed by the generated wire.
+The client abstraction hides concepts, reactions, gateways, assemblies, and the
+selected transport.
 
 _Source: [`examples/operations-room/src/client.ts`](../../examples/operations-room/src/client.ts)_
 
@@ -419,11 +494,11 @@ source and generated outputs follow this layout:
 A larger host may split assembly, concept-floor selection, HTTP policy, and
 process lifecycle into separate files. The ownership does not change: assembly
 installs an implementation map but does not call a concept floor's `close()`;
-the HTTP handler is a Fetch adapter, not a listener or complete server; and the
-host owns process signals and resource closure.
+the HTTP handler adapts Fetch requests; and the host owns the listener, server,
+process signals, and resource closure.
 
 During shutdown, stop the listener, call `beginDrain()`, await it up to a hard
-host deadline, then close the concept floor and any custom log-store resources.
+host deadline, then close the concept floor and any custom log-sink resources.
 Timeout or abort may leave accepted work running after a caller stops waiting,
 so tracking HTTP promises alone does not establish quiescence. [Operational
 limits](../operations.md#timeouts-abort-and-shutdown) defines the required

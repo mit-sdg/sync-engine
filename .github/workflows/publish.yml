@@ -31,8 +31,9 @@ jobs:
         run: |
           node -e 'const core = require("./package.json");
           const http = require("./packages/http/package.json");
-          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || !/^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(core.version)) {
-            throw new Error(`Expected a configured beta tag; received ${process.env.GITHUB_REF_NAME}`);
+          const beta = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(core.version);
+          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || beta === null || !Number.isSafeInteger(Number(beta[1]))) {
+            throw new Error(`Expected a configured v1 beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
@@ -45,14 +46,12 @@ jobs:
       - run: bun run check
       - run: bun run test
       - run: bun run coverage
-      - run: bun run build
       - run: bun run declarations:check
       - run: bun run examples:check
-      - run: bun run scenario
+      - run: bun scripts/examples.ts scenario
       - name: Verify packed artifacts
         run: bun run package:check
         env:
-          SYNC_ENGINE_VERIFIED_TARBALL: release/package.tgz
           SYNC_ENGINE_VERIFIED_TARBALLS: release
       - run: bun audit
       - run: sha256sum release/package.tgz > release/package.tgz.sha256
@@ -68,7 +67,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  publish:
+  publish-core:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -94,8 +93,9 @@ jobs:
         run: |
           node -e 'const core = require("./package.json");
           const http = require("./packages/http/package.json");
-          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || !/^1\.0\.0-beta\.(?:0|[1-9]\d*)$/.test(core.version)) {
-            throw new Error(`Expected a configured beta tag; received ${process.env.GITHUB_REF_NAME}`);
+          const beta = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(core.version);
+          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || beta === null || !Number.isSafeInteger(Number(beta[1]))) {
+            throw new Error(`Expected a configured v1 beta tag; received ${process.env.GITHUB_REF_NAME}`);
           }'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
@@ -105,5 +105,42 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - run: sha256sum --check release/package.tgz.sha256
       - run: npm publish ./release/package.tgz --provenance --tag beta --access public
+
+  publish-http:
+    needs: [verify, publish-core]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: npm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-npm-package
+          path: release
+      - name: Recheck release source
+        run: |
+          node -e 'const core = require("./package.json");
+          const http = require("./packages/http/package.json");
+          const beta = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(core.version);
+          if (process.env.GITHUB_REF_NAME !== `v${core.version}` || core.version !== http.version || beta === null || !Number.isSafeInteger(Number(beta[1]))) {
+            throw new Error(`Expected a configured v1 beta tag; received ${process.env.GITHUB_REF_NAME}`);
+          }'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag
+          test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - run: sha256sum --check release/http-package.tgz.sha256
       - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public

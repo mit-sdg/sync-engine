@@ -17,8 +17,8 @@ meaning than it does in ordinary TypeScript or HTTP code.
 tell a concept from an entity, screen, workflow, or implementation component;
 how to judge a candidate; when to split or combine; what a concept owns; how
 reactions compose concepts through explicit rules; and how to review a whole
-design. It teaches decisions, not the authoring API — start there when designing
-or reviewing an application, and use the guides below to write what you decided.
+design. It teaches design decisions. Start there when designing or reviewing an
+application, and use the guides below for the authoring API.
 
 ## Build an application
 
@@ -37,25 +37,27 @@ Read these pages in order:
    assembles the application, generates the wire, and calls a typed client.
 
 The first page is a standalone tutorial. The remaining pages inspect one larger
-shipped example; they do not modify the generated Note Keeper project. The
+shipped example and leave the generated Note Keeper project unchanged. The
 guides are introductory. [Execution semantics](semantics.md) is authoritative
 when a guide simplifies a runtime rule.
 
 ## Call an existing application
 
-Client code needs the generated wire type and the `client` package, not concept
-or assembly imports. Start with [Call the typed
+Client code uses the generated wire type and the `client` package. Start with [Call the typed
 client](guide/application-boundary.md#call-the-typed-client), then use the
 [`client` API reference](public-surface.md#client) for local and custom
-transport constructors, then the [HTTP companion package](public-surface.md#http-companion-package)
+transport constructors, then the [HTTP companion package](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
 for the maintained fetch transport. The [Production HTTP
 example](../examples/production-http/README.md) shows the projected public
 contract used by an HTTP client.
 
 ## Look up a contract
 
-- [Public API](public-surface.md) lists every supported package subpath and
-  export, then records signatures, defaults, and directly observable behavior.
+- [Core Public API](public-surface.md) lists every supported core package
+  subpath and export, then records signatures, defaults, and directly observable
+  behavior.
+- [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md) lists the maintained
+  companion's supported subpaths, exports, and transport behavior.
 - [Concept specification format](concept-specification.md) defines `spec.md`,
   registration checks, source checks, and deliberately unchecked prose.
 - [CLI reference](cli.md) defines `sync-engine new`, `check`, and `artifacts`,
@@ -88,8 +90,8 @@ TypeScript files are pinned outputs from their assemblies.
 - [Operational limits](operations.md) states suitable and unsuitable uses,
   concurrency boundaries, resource limits, persistence limits, and host
   responsibilities.
-- [Support policy](../SUPPORT.md) defines beta compatibility, exact-version
-  generated contracts, runtime/toolchain ranges, and the support window.
+- [Support policy](../SUPPORT.md) defines beta compatibility and generated-format
+  compatibility, runtime/toolchain ranges, and the support window.
 - [Security policy](../SECURITY.md) defines private vulnerability reporting,
   security-fix eligibility, response targets, and the host/application boundary.
 - [Execution semantics](semantics.md#boundary-gateway-and-client) defines the

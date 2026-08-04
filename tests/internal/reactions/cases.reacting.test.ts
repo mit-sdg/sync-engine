@@ -1,12 +1,15 @@
 import { describe, expect, test } from "vite-plus/test";
-import { Logging, MemoryStore } from "@sync-engine/assembly";
+import { Logging } from "@sync-engine/assembly";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
 import { earlier, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
-import { actionNodeId } from "@sync-engine/internal/reactions/concepts/introspect";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";
-import type { LogEntry } from "@sync-engine/internal/reactions/runtime/log-store";
+import {
+  MemoryStore,
+  type LogEntry,
+  type LogSink,
+} from "@sync-engine/internal/reactions/runtime/log-store";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import {
   ButtonConcept,
@@ -148,8 +151,12 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     expect(record?.fault).toEqual({
       error: FrameworkErrorCode.UNKNOWN_ERROR,
     });
-    expect(reacting.Action._getFaulted()).toHaveLength(1);
-    expect(reacting.Action._getPending()).toHaveLength(1);
+    expect(
+      [...reacting.Action.store.actions.values()].filter(({ fault }) => fault !== undefined),
+    ).toHaveLength(1);
+    expect(
+      [...reacting.Action.store.actions.values()].filter(({ outcome }) => outcome === undefined),
+    ).toHaveLength(1);
   });
 
   test("a faulted consequence prevents later actions in its pipeline", async () => {
@@ -243,34 +250,6 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     expect(c3).toBe(1);
   });
 
-  test("manual engine queries retain memoized results until invalidated", async () => {
-    class CachingConcept {
-      calls = 0;
-      _data(_: Record<PropertyKey, never>) {
-        this.calls++;
-        return [{ value: this.calls }];
-      }
-    }
-
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
-    const raw = new CachingConcept();
-    const { C } = reacting.instrument({ C: raw });
-
-    const r1 = await C._data({});
-    expect(r1).toEqual([{ value: 1 }]);
-
-    const r2 = await C._data({});
-    expect(r2).toEqual([{ value: 1 }]);
-
-    reacting.invalidateCaches(C);
-    const r3 = await C._data({});
-    expect(r3).toEqual([{ value: 2 }]);
-
-    const r4 = await C._data({});
-    expect(r4).toEqual([{ value: 2 }]);
-  });
-
   test("invalidateAllCaches refreshes memoized queries for every concept", async () => {
     class CachingA {
       calls = 0;
@@ -342,8 +321,8 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     ]);
   });
 
-  test("retention cannot invalidate trigger ids captured before an async where", async () => {
-    const store = new MemoryStore();
+  test("window retention waits for an async where before evicting its flow", async () => {
+    const store = new MemoryStore({ window: 0 });
     const reacting = new Reacting(new ActionConcept(store));
     reacting.logging = Logging.OFF;
     const { Button, Recorder } = reacting.instrument({
@@ -361,35 +340,31 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
     reacting.register({
       Retained: (_vars: Vars) =>
         when(mockRefs.Button.clicked({ kind: "retained" }).responds())
-          .where(async (frames: Frames) => {
+          .where((frames: Frames) => {
             enteredWhere();
-            await waitForRelease;
-            return frames;
+            const filtered = waitForRelease.then(() => frames);
+            return { then: filtered.then.bind(filtered) };
           })
           .then(mockRefs.Recorder.record({ tag: "kept" })),
     });
 
     const pending = Button.clicked({ kind: "retained" });
     await entered;
-    const activeFlow = [...store.flowIndex.keys()][0];
-    expect(activeFlow).toBeDefined();
-    if (activeFlow === undefined) throw new Error("expected an active flow");
-    store.evictFlow(activeFlow);
+    expect(store.flowIndex.size).toBe(1);
     releaseWhere();
     await pending;
 
     expect(Recorder.order).toEqual(["kept"]);
-    expect(store.firings.get("Retained")?.[0]?.consumed).toHaveLength(1);
+    expect(store.flowIndex.size).toBe(0);
   });
 
   test("a consequence ask remains produced when recording its fault fails", async () => {
-    class FaultRejectingStore extends MemoryStore {
-      override append(entry: LogEntry): void {
+    class FaultRejectingSink implements LogSink {
+      append(entry: LogEntry): undefined {
         if (entry.kind === "fault") throw new Error("fault store unavailable");
-        super.append(entry);
       }
     }
-    const store = new FaultRejectingStore();
+    const store = new MemoryStore("keepAll", new FaultRejectingSink());
     const reacting = new Reacting(new ActionConcept(store));
     reacting.logging = Logging.OFF;
     const { Button } = reacting.instrument({
@@ -438,30 +413,5 @@ describe("engine: instrumentation, faults, caches, and registration", () => {
 
     expect(Recorder.order.filter((t) => t === "old")).toHaveLength(1);
     expect(Recorder.order).toContain("new");
-  });
-
-  test("actionNodeId joins the concept and action names with a dot", () => {
-    const reacting = new Reacting();
-    reacting.logging = Logging.OFF;
-    const { Button, Recorder } = reacting.instrument({
-      Button: new ButtonConcept(),
-      Recorder: new RecorderConcept(),
-    });
-
-    const bp = {
-      action: Button.clicked,
-      concept: (Button.clicked as unknown as Record<string, unknown>).concept as object,
-      input: {},
-      flow: Symbol("flow"),
-    };
-    expect(actionNodeId(bp)).toBe("Button.clicked");
-
-    const rp = {
-      action: Recorder.record,
-      concept: (Recorder.record as unknown as Record<string, unknown>).concept as object,
-      input: { tag: "x" },
-      flow: Symbol("flow"),
-    };
-    expect(actionNodeId(rp)).toBe("Recorder.record");
   });
 });

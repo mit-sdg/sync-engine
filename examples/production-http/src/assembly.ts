@@ -22,5 +22,3 @@ export function assembleProductionHttp(instances: ProductionHttpOverrides = {}) 
     executionLimits: productionExecutionLimits,
   });
 }
-
-export type ProductionHttpApp = ReturnType<typeof assembleProductionHttp>;

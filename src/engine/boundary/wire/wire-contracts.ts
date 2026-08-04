@@ -346,7 +346,6 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
     if (path === null) {
       if (isGlobalGuard(reaction)) {
         globalSeeds.push(reaction);
-        collectReactionErrors(reaction, boundary, refusalsOf, appWide);
       }
       continue;
     }
@@ -359,16 +358,11 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
       if (consequence.concept === boundary.concept && consequence.action === boundary.respond) {
         const { error, body } = splitRespond(consequence.input);
         if (error !== undefined) {
-          if (typeof error === "string") bucket.errors.add(error);
-          else bucket.openError = true;
+          if (typeof error !== "string") bucket.openError = true;
         } else {
           bucket.outputs.push(
             inferPatternWireType(body, formersByName, provenance.env, viewsByName),
           );
-        }
-      } else {
-        for (const code of refusalsOf(consequence.concept, consequence.action)) {
-          bucket.errors.add(code);
         }
       }
     }

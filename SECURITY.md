@@ -11,18 +11,18 @@ or production data.
 
 Maintainers target an acknowledgement within three business days and a status
 update at least weekly while an accepted report remains active. These are
-response targets, not a guarantee of remediation time. Reporters and
+response targets; remediation time depends on the reported defect. Reporters and
 maintainers should coordinate disclosure, avoid exploitation or unnecessary
 data access, and allow a fix and supported-user migration window before public
 details are shared. Credit is offered when requested and appropriate.
 
 ## Supported versions
 
-| Version               | Security fixes                                           |
-| --------------------- | -------------------------------------------------------- |
-| Newest `1.0.0-beta.x` | Supported until 30 days after stable `1.0.0` is released |
-| `1.0.0-alpha.x`       | Unsupported as of `1.0.0-beta.0`                         |
-| Earlier versions      | Unsupported                                              |
+| Version               | Security fixes |
+| --------------------- | -------------- |
+| Newest `1.0.0-beta.x` | Supported      |
+| Alpha releases        | Unsupported    |
+| Earlier versions      | Unsupported    |
 
 Published versions are immutable. Security corrections receive a new package
 version; maintainers do not replace an existing tag or tarball. See the
@@ -45,3 +45,9 @@ untrusted values, enforce domain invariants in owning concepts, configure
 public error projection and redaction, bound engine and host workloads, and
 protect logs and custom observers as sensitive sinks. The [operational
 limits](docs/operations.md) describe these responsibilities in detail.
+
+`rawFaultReporter` is an unsanitized privileged sink. It receives original
+values thrown by actions, interpreter stages, and endpoint validators without
+the redaction applied to ordinary evidence and process logs. Restrict who can
+configure or read this sink, apply an explicit scrubbing and retention policy,
+and do not expose its reports through public errors or ordinary logs.

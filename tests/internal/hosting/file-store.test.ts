@@ -1,5 +1,5 @@
 /**
- * FileStore composes a live in-memory occurrence index with append-only JSONL
+ * FileLogSink composes with a live in-memory occurrence index for JSONL
  * auditing. The audit is intentionally not replayed into a new runtime index.
  */
 
@@ -15,7 +15,12 @@ import type { Vars } from "@sync-engine/internal/reactions/types";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
-import { FileStore } from "@sync-engine/internal/hosting/file-store.ts";
+import { FileLogSink } from "@sync-engine/internal/hosting/file-store.ts";
+import {
+  type LogEntry,
+  MemoryStore,
+  type RetentionPolicy,
+} from "@sync-engine/internal/reactions/runtime/log-store.ts";
 
 type AuditEntry =
   | {
@@ -33,6 +38,15 @@ type AuditEntry =
   | { kind: "fault"; id: string; fault: unknown };
 
 let dir: string;
+
+class FileStore extends MemoryStore {
+  constructor(
+    readonly path: string,
+    policy: RetentionPolicy = "keepAll",
+  ) {
+    super(policy, new FileLogSink(path));
+  }
+}
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "file-store-"));
 });
@@ -79,6 +93,57 @@ function readEntries(path: string): AuditEntry[] {
 }
 
 describe("FileStore: the log survives as JSONL", () => {
+  test("redacts every mapping appended directly to the public sink", () => {
+    const path = join(dir, "direct.jsonl");
+    const sink = new FileLogSink(path);
+    const secrets = ["input-secret", "outcome-secret", "firing-secret", "fault-secret"];
+    const entries: LogEntry[] = [
+      {
+        kind: "invocation",
+        at: 1,
+        record: {
+          id: "invocation",
+          flow: "flow",
+          action: Object.assign(function direct() {}, { action: function direct() {} }),
+          concept: { name: "Direct" },
+          input: { password: secrets[0] },
+        },
+      } as unknown as LogEntry,
+      {
+        kind: "outcome",
+        at: 2,
+        id: "outcome",
+        output: {},
+        outcome: { kind: "result", value: { password: secrets[1] } },
+      },
+      {
+        kind: "firing",
+        at: 3,
+        firing: {
+          id: "firing",
+          reaction: "Direct",
+          flow: "flow",
+          bindings: { password: secrets[2] },
+          consumed: [],
+          produced: [],
+          at: 3,
+        },
+      },
+      { kind: "fault", at: 4, id: "fault", fault: { password: secrets[3] } },
+    ];
+
+    for (const entry of entries) sink.append(entry);
+
+    const serialized = readFileSync(path, "utf8");
+    for (const secret of secrets) expect(serialized).not.toContain(secret);
+    expect(readEntries(path).map(({ kind }) => kind)).toEqual([
+      "invocation",
+      "outcome",
+      "firing",
+      "fault",
+    ]);
+  });
+
   test("indexes and audits the same entries", async () => {
     const path = join(dir, "composed.jsonl");
     const store = new FileStore(path);
@@ -180,14 +245,13 @@ describe("FileStore: the log survives as JSONL", () => {
     expect(JSON.stringify(failures)).not.toContain("private diagnostic");
   });
 
-  test("keepAll never prunes; the fold retains everything", async () => {
+  test("keepAll retains everything", async () => {
     const store = new FileStore(join(dir, "log.jsonl"), "keepAll");
     const { Source } = engineOn(store);
 
     await Source.emit({ tag: "a" });
     await Source.emit({ tag: "b" });
 
-    expect(store.prune()).toBe(0);
     expect(store.actions.size).toBe(4);
   });
 
@@ -290,7 +354,9 @@ describe("FileStore: the log survives as JSONL", () => {
       setupKey: "setup-key-sentinel",
     };
 
-    const { id } = log.invoke({
+    const id = "credential-action";
+    log.invoke({
+      id,
       action: (() => {}) as never,
       concept: {},
       input: sentinels,

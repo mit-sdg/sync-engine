@@ -12,7 +12,7 @@ runtime contract.
 | Serialize actions on one concept instance       | Yes, within one assembly                              | Use concept storage for cross-process coordination                                |
 | Transaction across several actions or concepts  | No                                                    | Put the atomic decision in one owning concept action and storage transaction      |
 | Persist concept state and recover after restart | No                                                    | Concept implementation and host recovery policy                                   |
-| Validate endpoint values at runtime             | Explicit endpoint hooks only                          | Application-supplied input and successful-output validators                       |
+| Validate endpoint values at runtime             | Explicit endpoint hooks only                          | Application-supplied input, successful-output, and domain-error validators        |
 | Bound engine-owned work                         | Optional `ExecutionLimits`                            | Configure limits; keep host connection, rate, and queue limits                    |
 | Cancel work after acceptance                    | No                                                    | Design idempotency and recovery for work that outlives the caller                 |
 | Serve a public JSON boundary                    | Fetch handler with a production profile or HTTP floor | Host supplies TLS, listener, CORS policy, traffic controls, and process lifecycle |
@@ -26,47 +26,57 @@ Use sync-engine when independently implemented concepts benefit from explicit,
 inspectable composition. One process can host an ordinary application; several
 independent instances can share domain state only when their concept
 implementations and host-owned storage provide the required transactions and
-coordination. The ordinary runtime is suitable for evaluation, prototypes,
-deterministic application tests, and hosts that provide their own storage,
-validation, outer traffic controls, and process lifecycle.
+coordination. The ordinary runtime is suitable for deterministic application
+tests and for hosts that provide their own storage, validation, outer traffic
+controls, and process lifecycle.
 
-Do not use the current beta as the sole production control plane for untrusted
-or unbounded traffic. Configure `ExecutionLimits` for engine-owned work and
-retain host limits for connections, rates, DDoS protection, and exporter queues.
+Do not use the engine as the sole control plane for untrusted or unbounded
+traffic. Configure `ExecutionLimits` for engine-owned work and retain host
+limits for connections, rates, DDoS protection, and exporter queues.
 
 Use a different architecture, or add host-level coordination, when correctness
 requires a transaction across concepts, synchronous cancellation of accepted
 work, distributed serialization, occurrence replay, exactly-once processing,
 or automatic restart recovery.
 
-## Beta compatibility
+## Stable compatibility
 
-Public subpaths, behavior, and generated formats may change incompatibly between
-beta versions. Pin an exact package version, review the changelog, regenerate
-both artifacts, and typecheck a packed consumer before upgrading. Generated
-Markdown, IR, manifests, and wire output are exact-version
-contracts rather than cross-version interchange formats. The [support
-policy](../SUPPORT.md) defines the version and format rules.
+Public subpaths, including `/advanced`, and documented behavior follow Semantic
+Versioning. Use `@beta` for the current release or pin an exact beta version
+for reproducibility. Review the changelog, regenerate artifacts, and typecheck a
+packed consumer before upgrading. Generated assembly compatibility is governed
+by the application manifest format and package SemVer. Core generator
+identities must name `@mit-sdg/sync-engine` at a 1.x version. Projector
+provenance may name any nonblank package at any valid SemVer version; it
+is not restricted to 1.x. The [support policy](../SUPPORT.md) defines the
+version and format rules.
 
 ## Concurrency and atomicity
 
-One action body runs at a time per concept instance within one engine. The
-queue awaits native Promises from the same JavaScript realm, including ordinary
-`async` methods; arbitrary thenables are outside that guarantee. Different
-concept instances and separate root flows may overlap. Sharing one raw instance
-between assemblies creates separate queues and query caches. Two processes
-using the same external storage are not serialized by the engine. The concept
-implementation and storage layer must provide any cross-process locking,
-transactions, isolation, and conflict handling.
+One action body runs at a time per concept instance within one engine. The queue
+awaits native promises and structural `PromiseLike` values, including promises
+from another JavaScript realm. A structural thenable is an object or function
+with a callable `then` property. A throwing `then` accessor, or a `then` call
+that throws before settlement, faults the action. A thenable that never settles
+holds the serial line. Different concept instances and separate root flows may
+overlap. Sharing one raw instance between assemblies creates separate queues and
+query caches. Two processes using the same external storage are not serialized
+by the engine. The concept implementation and storage layer must provide any
+cross-process locking, transactions, isolation, and conflict handling.
 
 Queries and read evaluation do not enter the action queue. They can overlap an
 asynchronous action body and other queries, and they do not receive a
 transactional or as-of-action snapshot. Query implementations must be
 side-effect-free. The storage layer must provide any read/write isolation the
-application requires.
+application requires. Assembly defaults to `queryCache: "memoize"`;
+`queryCache: "none"` disables memoization and makes repeated reads execute the
+query implementation independently. In `"memoize"` mode, a structural thenable
+is normalized and cached once, equivalent reads share that normalized promise,
+and rejection evicts the entry. A thenable that never settles remains cached
+until invalidation.
 
-A reaction chain is not a transaction. If an early consequence changes state
-and a later consequence refuses or faults, the earlier change remains. Put
+Each action in a reaction chain commits independently. If an early consequence
+changes state and a later consequence refuses or faults, the earlier change remains. Put
 uniqueness, capacity, first-writer, and answer-once decisions inside the action
 that owns the relevant state.
 
@@ -78,8 +88,8 @@ idempotency keys and durable deduplication where required.
 ## Supported multi-instance topology
 
 A supported multi-instance deployment gives every instance a separate
-assembly, concept instance set, action scheduler, gateway, application log
-store, and gateway observer stream. Concept implementations may connect those
+assembly, concept instance set, action scheduler, gateway, occurrence index,
+and gateway observer stream. Concept implementations may connect those
 instances to one transactional domain store. Every race-sensitive decision and
 domain idempotency check must occur atomically in the owning concept action,
 using storage constraints or equivalent storage coordination. Use a durable
@@ -110,6 +120,15 @@ forwards cancellation into accepted concept work or rolls back completed
 actions. A timed-out flow can continue consuming queue, query, reaction, and
 storage resources within its flow budgets.
 
+The HTTP client implements `timeoutMs` by aborting its local Fetch operation. It
+accepts positive finite integers through `2_147_483_647` milliseconds; a larger
+or otherwise invalid value returns core `INVALID_INPUT` before Fetch. This
+transport-local ceiling is separate from gateway and application defaults and
+configured maximum request durations. The HTTP protocol has no cancellation
+message for accepted server work. The server handler passes the host-provided
+`Request.signal` to its invoker, where the signal ends waiting while accepted
+concept work may continue.
+
 Tracking HTTP promises is insufficient because a timed-out request can outlive
 its transport wait. A host can stop accepting new requests and apply a hard
 shutdown deadline. Call `beginDrain()` to stop root admission and await its
@@ -121,13 +140,14 @@ public admission path during this interval.
 
 `ConceptFloor.close()` is a descriptor operation supplied by the host. Assembly
 does not call it automatically. The host owns listener shutdown, process
-signals, hard deadlines, and resource close ordering. Assembly does not close a
-supplied `logStore`; if a custom store owns resources, close it through its
-host-defined API after drain.
+signals, hard deadlines, and resource close ordering. `LogSink` has no lifecycle
+method, and `FileLogSink` has no close API. If a custom sink owns files,
+connections, queues, or workers, the host closes those resources through its
+own API after drain.
 
 The host sequence is: stop the listener, call `beginDrain()`, await it up to the
 host's hard deadline, invoke each concept floor's `close()` exactly once, close
-host-owned log-store resources, then exit. Closing resources after the hard
+host-owned log-sink resources, then exit. Closing resources after the hard
 deadline is forced shutdown: it can interrupt accepted work, so the application
 must define recovery for partially completed operations.
 
@@ -141,12 +161,18 @@ present key.
 Explicit `null` and, for direct invocation, explicit `undefined` satisfy
 required-key presence unless an endpoint input validator rejects them.
 
-Applications may attach runtime input and successful-output validators to an
-endpoint without adopting a particular schema library. Input validation runs
-before application work. Invalid output is retained as integrity evidence and
-becomes opaque `INTERNAL_ERROR`. Validators are explicit application contracts;
-the engine does not infer them from generated types or optional, uninterpreted
-concept State notation.
+Applications may attach runtime input, successful-output, and domain-error
+validators to an endpoint without adopting a particular schema library. Input
+validation runs before application work. The domain-error validator receives
+the value under the authored response's top-level `error` field. Invalid output
+and invalid domain error values are retained as `invalid-output` or
+`invalid-domain-error` integrity evidence and become opaque `INTERNAL_ERROR`.
+A validator throw is also reported to `rawFaultReporter` when the application
+configures that privileged channel. Output and domain-error evidence retains the
+`ValidatorFault` class only; an input-validator throw returns
+`INVALID_INPUT` before the boundary ask. Validators are explicit application
+contracts; the engine does not infer them from generated types or optional,
+uninterpreted concept State notation.
 
 ## Endpoint completeness
 
@@ -158,6 +184,11 @@ gateways, HTTP, and generated clients use the same complete portable design.
 Manual engines under the `advanced` subpath retain explicit local constructs
 without acquiring an application boundary override.
 
+Ordinary assembly accepts an advanced `Refuse` marker only when the action's
+refusal contract declares its code. An undeclared code is an action fault.
+Manual `createEngine(...)` remains open to
+undeclared `Refuse` codes.
+
 Endpoint branches have no priority or exclusivity. If more than one branch
 responds, one answer is accepted and the others receive `NOT_PENDING`; callers
 must not rely on which matching answer wins. If no branch responds and no
@@ -165,33 +196,40 @@ interpreter failure occurs, the request waits until its deadline.
 
 ## Persistence and restart
 
-Concept state and occurrence evidence are separate. `MemoryStore` is
-process-local. `FileStore` appends JSONL synchronously but does not load the
-file, rebuild indexes, replay reactions, or restore concept state on startup.
-In-memory pruning does not rewrite the JSONL file. The [persistence and restart
+Concept state and occurrence evidence are separate. Every engine owns a
+process-local internal `MemoryStore` occurrence index. `FileLogSink` appends an
+audit projection as JSONL synchronously but does not load the file, rebuild the
+index, replay reactions, or restore concept state on startup. In-memory
+retention does not rewrite the JSONL file. The [persistence and restart
 recipe](./advanced-recipes.md#persistence-restart-and-recovery) demonstrates
 those boundaries with separate state and evidence files.
 
 The engine does not restore pending requests, interrupted reaction paths, or
 prior firings after restart. Persist concept state in the concept
 implementation, and design application-specific recovery. An occurrence file
-can support audit or diagnosis; it is not a recovery log.
+can support audit or diagnosis. Recovery must use concept-owned state and an
+application-specific procedure.
 
-The supplied sources do not establish safe shared access to one `FileStore`
-path from several processes or network filesystems. Use a host-owned store with
+`FileLogSink` performs append operations but provides no locking, shared-writer,
+flush, or network-filesystem durability contract. Use a host-owned sink with
 documented concurrency and durability behavior when those properties matter.
 
 ## Retention and memory
 
-Ordinary assembly uses a `MemoryStore` with a default window of the 100 most
-recent settled flows. Automatic window enforcement does not evict an active
-flow, so active work may exceed the configured window. Explicit `evictFlow` and
-custom stores are outside that protection.
+Ordinary assembly uses an internal occurrence index with a default window of the
+100 most recent settled flows. `RetentionPolicy` accepts `"keepAll"` or a
+non-negative finite-integer `{ window: number }`. Manual `createEngine(...)`
+defaults to `"keepAll"`; configure a window explicitly when its retained index
+must be bounded by settled-flow count.
 
-`"keepAll"` retains all indexed evidence until the process or store releases
-it. `"evictConsumed"` removes only a consumed suffix when `prune()` is called;
-settlement does not invoke that prune operation automatically. Increasing
-retention increases memory use. No hard retained-byte limit is provided.
+Window enforcement runs automatically only after a causal flow settles and does
+not evict active flows. Active work can therefore exceed a configured window
+until settlement. `{ window: 0 }` removes a flow after it settles. `"keepAll"`
+retains all indexed evidence for the engine lifetime. There is no manual prune
+operation. Increasing a window or using `"keepAll"` increases memory use. No
+hard retained-byte limit is provided. `logSink` and `retention` are independent
+and may be configured together; retention never removes previously emitted sink
+output.
 
 ## Operational observation
 
@@ -232,9 +270,11 @@ present and does not implement CORS preflight. Its cookies are `HttpOnly`,
 The fetch client defaults to credentials mode `include`, but this does not add a
 cookie jar. Browsers own their cookie storage. A Node.js or custom `fetch`
 implementation must provide cookie persistence when floor-protected calls span
-multiple requests.
+multiple requests. Set `maxResponseBytes` when the client must bound response
+buffering; an exceeded declared or streamed byte count returns
+`RESPONSE_TOO_LARGE`. The default leaves response size uncapped.
 
-Every handler is a Fetch adapter, not a complete server. The host owns CORS,
+Every handler adapts Fetch requests. The host owns CORS,
 connection and request-rate limits, denial-of-service controls, TLS termination,
 HSTS, trusted-proxy and reverse-proxy policy, deployment health, autoscaling,
 listener lifecycle, and authentication integration. Application concepts own
@@ -246,18 +286,41 @@ application responsibilities to the engine.
 
 ## Logs and sensitive values
 
-Assembly-scoped field-name redaction runs before occurrence entries reach
-stores, observers, or inspection. Each assembly creates its own redactor and
-copies the policy's exact field names and pattern list, but retains the supplied
-`RegExp` objects. Do not mutate those expressions after constructing an
-assembly. Redaction matches field names; it does not search arbitrary string
-contents. During an active flow, the interpreter privately
+An optional `LogSink` receives every validated, redacted occurrence entry
+synchronously before the internal index folds it. `append` must return
+`undefined` synchronously. A throw or any other return value, including a
+promise or structural thenable, fails the append before the fold. An invocation
+append failure can prevent the action body from running; an outcome append
+failure can occur after the body changed state. The engine does not retry the
+append or roll back concept state. Custom sink availability and recovery are
+host responsibilities.
+
+Sink-entry isolation covers structural data. Arrays and plain
+records are copied and frozen; invocation identities are replaced by frozen
+name-bearing representatives; and `Date` values are copied. Opaque leaves such
+as class instances, `Map`, `Set`, and function values retain their runtime
+identity and are not recursively frozen. Treat opaque leaves as read-only
+sensitive values.
+
+Assembly-scoped field-name redaction runs before occurrence entries reach the
+internal index, a `LogSink`, observers, or inspection. Each assembly creates its
+own redactor and copies the policy's exact field names and pattern list, but
+retains the supplied `RegExp` objects. Do not mutate those expressions after
+constructing an assembly. Redaction matches field names; it does not search
+arbitrary string contents. During an active flow, the interpreter privately
 retains original values needed for matching and clears them when the outermost
 action settles.
 
 Do not place secrets in unstructured strings and assume field-name redaction
 will find them. Stable operational events omit action values. Review custom
-stores and manual-engine observers as sensitive-data sinks.
+sinks and manual-engine observers as sensitive-data destinations.
+
+`rawFaultReporter` is deliberately outside this sanitized path. It receives the
+original `unknown` value from action faults, interpreter failures, and endpoint
+validator throws. Reporter throws and rejected returned promise-like values are
+isolated from runtime results, but the reporter itself is privileged application
+code. Restrict access, bound its work, and keep raw reports out of ordinary
+public errors and logs.
 
 ## Operational checklist
 
@@ -272,6 +335,7 @@ Before serving an assembly outside a test environment:
 6. Verify that every endpoint is represented in generated artifacts and that
    every admitted case answers explicitly.
 7. Verify that the assembly contains portable behavior only.
-8. Review log retention, redaction, and diagnostic access.
+8. Review occurrence retention, sink failure behavior, redaction, and raw-fault
+   access.
 9. Test process interruption and storage failure against the application's own
    recovery design.

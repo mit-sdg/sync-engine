@@ -24,8 +24,15 @@ export class ReactionCatalog {
       if (!Object.hasOwn(this.reactions, reactionName)) continue;
       const old = this.reactions[reactionName];
       for (const clause of old.when) {
-        if ("channel" in clause) this.reactionsByChannel.get(clause.channel)?.delete(old);
-        else this.reactionsByAction.get(clause.action)?.delete(old);
+        if ("channel" in clause) {
+          const indexed = this.reactionsByChannel.get(clause.channel);
+          indexed?.delete(old);
+          if (indexed?.size === 0) this.reactionsByChannel.delete(clause.channel);
+        } else {
+          const indexed = this.reactionsByAction.get(clause.action);
+          indexed?.delete(old);
+          if (indexed?.size === 0) this.reactionsByAction.delete(clause.action);
+        }
       }
       delete this.reactions[reactionName];
       this.unloweredByName.delete(reactionName);
@@ -70,8 +77,7 @@ export class ReactionCatalog {
   ): Set<ExecutableReaction> | undefined {
     const byAction = this.reactionsByAction.get(action);
     const byChannel = posture === undefined ? undefined : this.reactionsByChannel.get(posture);
-    if (byAction === undefined && (byChannel === undefined || byChannel.size === 0))
-      return undefined;
+    if (byAction === undefined && byChannel === undefined) return undefined;
     return new Set([...(byAction ?? []), ...(byChannel ?? [])]);
   }
 

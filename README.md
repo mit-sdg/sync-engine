@@ -1,19 +1,19 @@
 # sync-engine
 
-[![npm beta](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm%20beta)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
-[![HTTP npm beta](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP%20npm%20beta)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
+[![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
+[![HTTP npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is a TypeScript library for composing independently implemented
 application behaviors. Each behavior, called a **concept**, owns its state,
 actions, queries, and expected refusals. The application connects concepts in a
-separate composition instead of adding peer imports to their implementations.
+separate composition, leaving their implementations independent of peers.
 
 Composition has four main parts:
 
 - **reactions** ask for consequences after action asks or outcomes;
 - **views** name shared relations and policy decisions;
-- **formers** build typed result trees from current state;
+- **formers** build current-state result trees;
 - **endpoints** connect outside requests to composed behavior.
 
 The engine validates the composition, instruments the selected concept
@@ -22,11 +22,9 @@ read-back and TypeScript boundary contract from that assembly.
 
 ## Status and requirements
 
-Version 1 is beta. It is not recommended as a sole production control plane.
-Public APIs, execution behavior, and generated formats may change incompatibly
-between beta releases. Only the newest beta is supported; pin an exact version,
-read the [support policy](SUPPORT.md), and review the [operational
-limits](docs/operations.md) before choosing a deployment.
+Version 1 is in beta. Only the newest beta release is supported. Read the
+[support policy](SUPPORT.md) and review the
+[operational limits](docs/operations.md) before choosing a deployment.
 
 The package is ESM-only. See the [support policy](SUPPORT.md) for current runtime
 and toolchain requirements.
@@ -37,25 +35,12 @@ and toolchain requirements.
 bun add @mit-sdg/sync-engine@beta
 ```
 
-For the maintained HTTP handler, fetch client, and generated wire projection,
-install the companion alongside the same exact beta:
-
-```sh
-bun add @mit-sdg/sync-engine@1.0.0-beta.3 @mit-sdg/sync-engine-http@1.0.0-beta.3
-```
-
 ## Packages
 
-| Package                     | Role                                                                   |
-| --------------------------- | ---------------------------------------------------------------------- |
-| `@mit-sdg/sync-engine`      | Concepts, composition, assembly, boundaries, clients, tooling, and CLI |
-| `@mit-sdg/sync-engine-http` | Maintained HTTP handler, fetch client, and generated wire projection   |
-
-Core can be installed alone for local clients and custom transports. The HTTP
-package is independently published and requires the exact matching core beta as
-a peer dependency. Neither package has a root export. Use the supported core
-subpaths and the HTTP package's `/server`, `/client`, and `/tooling` subpaths
-listed in the [Public API](docs/public-surface.md).
+| Package                                                                                       | Role                                                                   |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `@mit-sdg/sync-engine`                                                                        | Concepts, composition, assembly, boundaries, clients, tooling, and CLI |
+| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http) | Maintained HTTP handler, fetch client, and generated wire projection   |
 
 ## Create an application
 
@@ -65,8 +50,7 @@ cd note-keeper
 bun install
 ```
 
-For a reproducible evaluation, replace `@beta` with the exact version
-`@1.0.0-beta.3`.
+For a reproducible evaluation, replace `@beta` with a pinned version.
 
 The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
@@ -97,7 +81,7 @@ sequence, commands, and source-of-truth order.
 
 ## How composition works
 
-This reaction belongs to the application, not to either concept. It opens a
+This reaction is part of the application composition. It opens a
 discussion whenever Selecting returns a new selection:
 
 ```ts
@@ -111,9 +95,9 @@ export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
 );
 ```
 
-Calling `Selecting.choose(...)` in this declaration creates authoring data; it
-does not invoke the concept. At runtime, the reaction watches a returned
-`Selecting.choose` occurrence, binds `selection` from its result, and asks
+Calling `Selecting.choose(...)` in this declaration records an action reference.
+At runtime, a returned `Selecting.choose` occurrence activates the reaction,
+binds `selection` from the result, and causes the reaction to ask
 `Discussing.open`. Selecting and Discussing remain independently implemented.
 
 See [Connect independent behaviors](docs/guide/reactions.md) for the authoring
@@ -150,19 +134,20 @@ validation.
 
 An application built with `assemble(...)` has these relevant boundaries:
 
-| Property         | Contract                                                                                                                                      |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Action execution | One action body runs at a time per concept instance within one assembly. Different instances and flows may overlap.                           |
-| Evidence         | Each action ask and its return, refusal, or fault is recorded in the selected occurrence store. The store is not concept state.               |
-| Composition      | Assembly validates the registered, portable design before it exposes routes. Generated artifacts fail rather than omit unsupported endpoints. |
-| Caller typing    | Generated contracts typecheck callers. They do not validate runtime values.                                                                   |
-| Cancellation     | Timeout and abort stop the caller's wait. They do not cancel accepted work.                                                                   |
-| Persistence      | The engine does not provide concept-state persistence, occurrence replay, restart recovery, or transactions across actions.                   |
-| Distribution     | The engine does not provide distributed serialization, deduplication, or exactly-once execution.                                              |
+| Property         | Contract                                                                                                                                                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Action execution | One action body runs at a time per concept instance within one assembly. Different instances and flows may overlap.                                                                                                           |
+| Evidence         | Each action ask and its return, refusal, or fault is recorded in an engine-owned occurrence index. An optional `LogSink` receives redacted audit entries and must return `undefined` synchronously. Neither is concept state. |
+| Retention        | Ordinary assembly retains the 100 most recent settled flows by default. Configure `{ window: number }` or `"keepAll"`; window enforcement runs after flow settlement.                                                         |
+| Composition      | Assembly rejects local reactions, views, and formers before exposing routes or generating artifacts.                                                                                                                          |
+| Caller typing    | Generated contracts typecheck callers. They do not validate runtime values.                                                                                                                                                   |
+| Cancellation     | Timeout and abort stop the caller's wait. They do not cancel accepted work.                                                                                                                                                   |
+| Persistence      | The engine does not provide concept-state persistence, occurrence replay, restart recovery, or transactions across actions.                                                                                                   |
+| Distribution     | The engine does not provide distributed serialization, deduplication, or exactly-once execution.                                                                                                                              |
 
-The optional State section in a concept specification is notation for readers,
-not a runtime schema. See [Concept specification
-format](docs/concept-specification.md#state-notation) for what is parsed,
+The optional State section in a concept specification is uninterpreted prose for
+readers. Registration derives no schema or validator from it. See [Concept
+specification format](docs/concept-specification.md#state-notation) for what is parsed,
 [Execution semantics](docs/semantics.md) for the complete runtime contract, and
 [Operational limits](docs/operations.md) before deployment.
 
@@ -177,11 +162,11 @@ bun run scenario
 
 ## Upgrading beta versions
 
-Beta releases may make incompatible changes with explicit migration notes.
-Before changing a pinned version, read the [changelog](CHANGELOG.md) and the
-corresponding [GitHub release](https://github.com/mit-sdg/sync-engine/releases).
-Regenerate and review all pinned artifacts; generated clients, servers, and
-tooling must use the same exact package version.
+Stable releases follow Semantic Versioning. Before changing a pinned version,
+read the [changelog](CHANGELOG.md) and the corresponding [GitHub
+release](https://github.com/mit-sdg/sync-engine/releases). Regenerate and review
+all pinned artifacts, keep independently published packages within their
+declared peer ranges, and typecheck their consumers.
 
 ## License
 

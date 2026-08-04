@@ -26,8 +26,7 @@ export function describeError(err: unknown): string {
   }
 }
 
-export function serializeError(err: unknown, depth = 0): Record<string, unknown> {
-  void depth;
+export function serializeError(err: unknown): Record<string, unknown> {
   try {
     return { name: err instanceof Error ? stableErrorName(err) : "NonErrorThrown" };
   } catch {
@@ -39,7 +38,7 @@ export function serializeError(err: unknown, depth = 0): Record<string, unknown>
  * Default patterns for sensitive field names. These patterns match object
  * keys. They do not inspect string values stored under other field names.
  */
-export const UNIVERSAL_SENSITIVE_PATTERNS: readonly RegExp[] = [
+const UNIVERSAL_SENSITIVE_PATTERNS: readonly RegExp[] = [
   /password/i,
   /secret/i,
   /token/i,
@@ -61,7 +60,7 @@ export interface RedactionPolicy {
 }
 
 export interface Redactor {
-  redact(value: unknown, depth?: number): unknown;
+  redact(value: unknown): unknown;
 }
 
 function policyParts(policy: RedactionPolicy): {
@@ -96,17 +95,17 @@ export function createRedactor(policy: RedactionPolicy = {}): Redactor {
     });
   };
   return {
-    redact(value, depth = 0) {
+    redact(value) {
       if (value === undefined) return undefined;
-      return redactValue(value, depth, new WeakSet(), isSensitive);
+      return redactValue(value, 0, new WeakSet(), isSensitive);
     },
   };
 }
 
 const standaloneRedactor = createRedactor();
 
-export function redact(obj: unknown, depth = 0): unknown {
-  return standaloneRedactor.redact(obj, depth);
+export function redact(obj: unknown): unknown {
+  return standaloneRedactor.redact(obj);
 }
 
 const MAX_REDACTION_DEPTH = 5;

@@ -12,17 +12,23 @@
  * closed conditions. Advanced code may use `custom(...)`.
  */
 
-import type { ComputationRef, FusedComputation } from "./computations.ts";
+import type {
+  ComputationFn,
+  ComputationInput,
+  ComputationRef,
+  FusedComputation,
+} from "./computations.ts";
 import { isFusedComputation } from "./computations.ts";
-import type { ActionPattern, InstrumentedQuery, Mapping } from "@engine/reactions/types";
+import type { ActionTriggerPattern, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import { brand, hasBrand, WhereOpBrand } from "./brands.ts";
 import { isReadLine } from "./lines.ts";
 import type { ReadLine, RelationView, ViewReadLine } from "./lines.ts";
 import { isFusedFormer, useFormer } from "./former-nodes.ts";
 import type { FormerUse, FusedFormer } from "./former-nodes.ts";
+import type { ExactPattern, InputPattern } from "./type-inference.ts";
 
 /** The query or view used by one read operation. */
-export interface LineRef {
+interface LineRef {
   readonly query?: InstrumentedQuery;
   readonly view?: RelationView;
 }
@@ -36,27 +42,27 @@ export interface FindOp extends LineRef {
 }
 
 /** A read that succeeds only when no row matches. */
-export interface NoOp extends LineRef {
+interface NoOp extends LineRef {
   readonly op: "no";
   readonly in: Mapping;
   readonly out: Mapping;
 }
 
 /** A read that assigns matched outputs or assigns `null` when no row matches. */
-export interface WhetherOp extends LineRef {
+interface WhetherOp extends LineRef {
   readonly op: "whether";
   readonly in: Mapping;
   readonly out: Mapping;
 }
 
 /** A closed line over a named computation; failing rows are dropped. */
-export interface HoldsOp {
+interface HoldsOp {
   readonly op: "holds";
   readonly fused: FusedComputation;
 }
 
 /** A vocabulary-owned calculation; exactly one result, bound to one variable. */
-export interface ComputeOp {
+interface ComputeOp {
   readonly op: "compute";
   readonly computation: ComputationRef;
   readonly in: Mapping;
@@ -83,7 +89,7 @@ export type WhereOp = FindOp | NoOp | WhetherOp | HoldsOp | ComputeOp | CustomOp
  */
 export interface EarlierOp {
   readonly op: "earlier";
-  readonly pattern: ActionPattern;
+  readonly pattern: ActionTriggerPattern;
 }
 
 /** A where op as a reaction's `.where(...)` accepts it, including `earlier`. */
@@ -97,7 +103,7 @@ function brandOp<T extends object>(op: T): T {
 }
 
 /** Whether a value is a where op built by this module (or `earlier`). */
-export function isWhereOp(value: unknown): value is AnyWhereOp {
+function isWhereOp(value: unknown): value is AnyWhereOp {
   return hasBrand(value, WhereOpBrand);
 }
 
@@ -179,7 +185,15 @@ export function whether(line: ReadLine | FusedFormer): WhetherOp | FormerUse {
 }
 
 /** Bind one variable to one calculation declared by the assembled vocabulary. */
-export function compute(computation: ComputationRef, input: Mapping, out: symbol): ComputeOp {
+export function compute<
+  Fn extends ComputationFn,
+  const Input extends InputPattern<ComputationInput<Fn>>,
+  Out extends symbol,
+>(
+  computation: ComputationRef<Fn>,
+  input: ExactPattern<ComputationInput<Fn>, Input>,
+  out: Out,
+): ComputeOp {
   if (typeof computation !== "function" || computation.source !== "vocabulary") {
     throw new Error("compute(...) requires a computation from vocabulary(...).computations.");
   }

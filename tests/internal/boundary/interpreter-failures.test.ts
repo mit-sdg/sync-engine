@@ -1,7 +1,7 @@
 /** Truthful boundary settlement for interpreter failures between action asks. */
 
 import { describe, expect, test } from "vite-plus/test";
-import { MemoryStore } from "@sync-engine/assembly";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { reaction, view, vocabulary, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
@@ -340,7 +340,7 @@ describe("interpreter failure settlement", () => {
       ok: true,
       value: { answer: "safe" },
     });
-    const firing = app.engine._getFirings("AccessorTriggerClosure")[0];
+    const firing = app.engine.Action.store.firingsByReaction("AccessorTriggerClosure")[0];
     expect(firing?.consumed).toHaveLength(1);
     expect(firing?.consumed).not.toContain("forged");
   });
@@ -377,7 +377,9 @@ describe("interpreter failure settlement", () => {
       error: { kind: "framework", code: "TIMED_OUT", detail: undefined },
     });
     expect((app.engine.Action.store as MemoryStore).reactionFailures).toEqual([]);
-    expect(app.engine.Action._getFaulted()).toEqual([]);
+    expect(
+      [...app.engine.Action.store.actions.values()].filter(({ fault }) => fault !== undefined),
+    ).toEqual([]);
   });
 
   test("waits for root-flow quiescence before settling a recorded failure", async () => {

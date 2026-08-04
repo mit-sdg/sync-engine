@@ -387,7 +387,7 @@ describe("where ops: inside a reaction", () => {
 
     await List.add({ value: 7 });
     expect(Recorder.order).toEqual(["stamped"]);
-    const firings = reacting._getFirings("Stamped");
+    const firings = reacting.Action.store.firingsByReaction("Stamped");
     expect(firings.length).toBe(1);
     expect(firings[0].bindings.mark).toBe("stamped");
   });

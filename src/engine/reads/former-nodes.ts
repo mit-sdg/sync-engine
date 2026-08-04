@@ -21,7 +21,7 @@ export type Arranged =
   | { readonly by: symbol; readonly order: "ascending" | "descending" };
 
 /** The selection every comprehension-shaped node shares: source line and refinements. */
-export interface Selection {
+interface Selection {
   readonly from: FindOp;
   readonly where: readonly WhereOp[];
 }
@@ -60,7 +60,7 @@ export interface DistinctNode extends Selection {
   readonly value: symbol;
 }
 
-export interface LeafNode {
+interface LeafNode {
   readonly node: "leaf";
   readonly var: symbol;
 }

@@ -5,7 +5,6 @@ import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { each, former, reaction, view, vocabulary, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
-import { oneOf } from "@sync-engine/internal/reads/matchers";
 
 class WorkingConcept {
   static readonly queries = { _items: "many" } as const;
@@ -120,14 +119,14 @@ describe("portable-only ordinary assembly", () => {
     expect(errorOf({ ZReaction, AReaction })).toBe(errorOf({ AReaction, ZReaction }));
   });
 
-  test("accepts regexp, oneOf, and named-vocabulary computation behavior", async () => {
+  test("accepts regexp and named-vocabulary computation behavior", async () => {
     const portableWords = vocabulary({
       concepts: {},
       computations: { accepted: ({ value }) => value === "accepted" },
     });
     const { accepted } = portableWords.computations;
     const Portable = endpoint("/portable", () =>
-      receive({ first: /^ok$/, second: oneOf("a", "b") })
+      receive({ first: /^ok$/, second: "a" })
         .where(accepted({ value: "accepted" }))
         .then(respond({ ok: true })),
     );

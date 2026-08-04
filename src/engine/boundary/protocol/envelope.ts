@@ -22,7 +22,7 @@ import {
  * a domain value as-is when it already reads as an error envelope (else
  * wrapped in `{ error }`), a framework code as `{ error, detail? }`.
  */
-export function toEnvelope(result: InvocationResult): unknown {
+function toEnvelope(result: InvocationResult): unknown {
   if (result.ok) return result.value;
   if (result.error.kind === "domain") {
     const value = result.error.value;

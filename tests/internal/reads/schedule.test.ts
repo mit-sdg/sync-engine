@@ -3,12 +3,7 @@ import type { WhereOpIR } from "@sync-engine/internal/reads/ir";
 import type { ViewOpIR } from "@sync-engine/internal/reads/ir";
 import { operationFootprint } from "@sync-engine/internal/reads/operation-footprint";
 import type { AnyWhereOp } from "@sync-engine/internal/reads/where-ops";
-import {
-  opNamesIR,
-  opNeedsIR,
-  opOpensIR,
-  scheduleBlock,
-} from "@sync-engine/internal/reads/schedule";
+import { scheduleBlock } from "@sync-engine/internal/reads/schedule";
 
 const query = { concept: "Items", query: "_items" };
 
@@ -49,32 +44,6 @@ describe("where scheduling", () => {
     expect(operationFootprint(holds, "ir").inputs).toEqual(["expected"]);
   });
 
-  test("classifies the bindings read, opened, and mentioned by each op", () => {
-    const find: WhereOpIR = {
-      op: "find",
-      query,
-      in: { owner: { $var: "owner" } },
-      out: { item: { $var: "item" } },
-      not: { state: { $var: "blocked" } },
-    };
-    expect(opNeedsIR(find)).toEqual(["owner", "blocked"]);
-    expect(opOpensIR(find, new Set(["owner", "blocked"]))).toEqual(["item"]);
-    expect(opNamesIR(find)).toEqual(["owner", "item", "blocked"]);
-
-    const earlier: WhereOpIR = {
-      op: "earlier",
-      when: {
-        kind: "action",
-        concept: "Items",
-        action: "add",
-        input: { item: { $var: "prior" } },
-        output: {},
-      },
-    };
-    expect(opNeedsIR(earlier)).toEqual([]);
-    expect(opOpensIR(earlier, new Set())).toEqual(["prior"]);
-  });
-
   test("orders dependencies while preserving authored order among ready operations", () => {
     const firstReady: WhereOpIR = { op: "holds", computation: "ok", in: {} };
     const dependent: WhereOpIR = {
@@ -106,30 +75,6 @@ describe("where scheduling", () => {
     expect(() => scheduleBlock([blocked], new Set(), 'Reaction "Blocked"')).toThrow(
       'conditions cannot be ordered — holds ok needs "missing"',
     );
-  });
-
-  test("opNamesIR lists all names from a no op's in and out patterns", () => {
-    const noOp: WhereOpIR = {
-      op: "no",
-      query,
-      in: { type: { $var: "t" } },
-      out: { status: { $var: "s" } },
-    };
-    expect(opNamesIR(noOp)).toEqual(["t", "s"]);
-  });
-
-  test("opNamesIR lists all names from an earlier op's when patterns", () => {
-    const earlierOp: WhereOpIR = {
-      op: "earlier",
-      when: {
-        kind: "action",
-        concept: "Items",
-        action: "add",
-        input: { item: { $var: "prior" } },
-        output: { id: { $var: "priorId" } },
-      },
-    };
-    expect(opNamesIR(earlierOp)).toEqual(["prior", "priorId"]);
   });
 
   test("reports a compute op in the ordering error", () => {

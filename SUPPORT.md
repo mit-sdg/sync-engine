@@ -11,47 +11,49 @@ The core package's supported public API is exactly these six package subpaths:
 - `@mit-sdg/sync-engine/tooling`
 - `@mit-sdg/sync-engine/advanced`
 
-The package root and all deep imports are unsupported. The [Public
-API](docs/public-surface.md) is the exact export register.
+The package root and all deep imports are unsupported. The [core Public
+API](docs/public-surface.md) is the exact export register; the HTTP companion's
+[Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
+is its exact export register.
 
 `@mit-sdg/sync-engine-http` is an independently published first-party transport
 package with exactly these supported subpaths: `/server`, `/client`, and
-`/tooling`. Its root and deep imports are unsupported. During
-beta it requires the exact matching core version as a peer dependency. Core can
-be installed alone for custom transports and server adapters.
+`/tooling`. Its root and deep imports are unsupported. Its core peer dependency
+requires the exact matching beta release. Core can be installed alone for custom
+transports and server adapters.
 
 ## Beta compatibility
 
 Beta releases use Semantic Versioning prerelease identifiers. A newer beta may
-make incompatible API, behavior, or generated-format changes. Every release
-must identify those changes under `Compatibility` and `Migration`, even when
-there are none. Consumers should pin an exact version and review the
-[changelog](CHANGELOG.md) before upgrading.
+make incompatible changes to all six public core subpaths, including
+`/advanced`, and the three HTTP subpaths. Every release identifies compatibility
+and migration effects in the [changelog](CHANGELOG.md). Consumers should pin an
+exact version and review the changelog before upgrading.
 
 Published versions, tags, and tarballs are immutable. A bad release is not
 replaced or silently corrected; a fix receives a new version with migration
-notes. The `/advanced` surface may change between package versions, but it is
-never changed in place within an immutable version.
+notes.
 
-Only the newest beta is supported. Alpha releases are unsupported as of
-`1.0.0-beta.0`. After stable `1.0.0` is released, the newest beta remains
-supported for 30 days, after which beta support ends unless a later policy
-explicitly extends it.
+Only the newest beta is supported. Alpha releases are unsupported.
+
+The current `RetentionPolicy` surface contains only `"keepAll"` and
+`{ window: number }`. The earlier prerelease `"evictConsumed"` policy and manual
+pruning interfaces are no longer supported.
 
 ## Generated contracts
 
-Generated Markdown and TypeScript wire files belong to the exact core and
-projector versions that produced them. Regenerate and review all generated files
-for every version change. A generated client, server assembly, and generation
-tool must use the same exact package versions; cross-version generated contracts
-are not supported, even when their shapes happen to match.
+Generated Markdown and TypeScript wire files record the exact core generator and
+projector versions that produced them. Regenerate and review generated files for
+every package version change and typecheck their consumers.
 
 `sync-engine.application-manifest` version 3 is a versioned data format. An
 incompatible structural or semantic format change requires a new integer format
 version and new public type names. A package release does not bump a format
-version when the existing format and meaning remain compatible. Format version
-equality alone does not override the exact-package-version policy for generated
-Markdown, wire contracts, or manifests.
+version when the existing format and meaning remain compatible. Generated
+assembly compatibility is governed by this manifest format and package SemVer.
+The artifact planner accepts 1.x core generator identities and projector
+provenance with a nonblank package name and valid SemVer version, including
+prereleases.
 
 ## Runtime and toolchain
 

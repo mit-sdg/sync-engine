@@ -69,12 +69,10 @@ export const workspaceCatalog = [
     internalSourceDirectories: [],
     publicSubpathContainsOnlyEntrypoint: false,
     copiesExamples: false,
-    requiredPackedFiles: ["LICENSE", "NOTICE", "README.md", "package.json"],
+    requiredPackedFiles: ["LICENSE", "NOTICE", "README.md", "public-surface.md", "package.json"],
     packageBudget: { files: 80, packedBytes: 150_000, unpackedBytes: 600_000 },
   },
 ] as const satisfies readonly Workspace[];
-
-export type WorkspaceId = (typeof workspaceCatalog)[number]["id"];
 
 export function workspaceById(id: string): Workspace {
   const workspace = workspaceCatalog.find((candidate) => candidate.id === id);

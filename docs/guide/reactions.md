@@ -117,6 +117,13 @@ other siblings. The engine pins a chained response pattern to the exact ask
 from the preceding stage, so another matching `Discussing.respond` call cannot
 advance this path.
 
+Later stages do not inherit arbitrary bindings opened by an earlier standing-
+state read. Such a value travels only when an intervening action input or output
+semantically carries it. Put the read on the later stage when observing later
+state is correct; do not add incidental action fields merely to transport
+composition data. The contributor [architecture note](../architecture.md#bindings-between-lowered-reaction-stages)
+records the deferred portable-handoff requirements.
+
 ## Choose the trigger posture
 
 `when(Concept.action(pattern))` watches the ask before the action body runs.

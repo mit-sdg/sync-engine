@@ -1,8 +1,8 @@
 /**
  * The **action log** — itself a tiny concept.
  *
- * Every instrumented action invocation appends an entry to a {@link LogStore}.
- * Its outcome arrives as a second entry. The store folds both entries into an
+ * Every instrumented action invocation appends an occurrence entry.
+ * Its outcome arrives as a second entry. The index folds both entries into an
  * indexed action record without modifying the invocation entry. Reactions match
  * recorded occurrences rather than live callbacks. The runtime does not load
  * or replay occurrence files.
@@ -17,26 +17,29 @@
  */
 
 import type { ActionOutcome } from "../types.ts";
-import { uuid } from "@engine/utils/runtime";
 import { redact, serializeError } from "@engine/utils/redaction";
 import { ListenerSet } from "@engine/utils/listener-set";
 import { snapshotValue } from "@engine/utils/snapshot";
 import type { Redactor } from "@engine/utils/redaction";
 import { logger } from "@engine/utils/logger";
+import { actionNameOf, conceptNameOf } from "../concepts/introspect.ts";
 import {
   MemoryStore,
   type ActionRecord,
   type IntegrityFailureRecord,
-  type LogStore,
   type ReactionFailureRecord,
 } from "./log-store.ts";
-import type { OperationalEvents } from "./operational.ts";
+import {
+  reportRawFault,
+  type OperationalEvents,
+  type RawFaultReport,
+  type RawFaultReporter,
+} from "./operational.ts";
 
 export type { ActionRecord } from "./log-store.ts";
 
 interface MatchingRecordValues {
   input: Record<string, unknown>;
-  output?: Record<string, unknown>;
   outcome?: ActionOutcome;
 }
 
@@ -46,7 +49,7 @@ interface ActiveFlowValues {
   interpreterFailed: boolean;
 }
 
-export interface FlowQuiescence {
+interface FlowQuiescence {
   flow: string;
   interpreterFailed: boolean;
 }
@@ -75,40 +78,41 @@ export class ActionConcept {
   private readonly flowQuiescenceListeners = new ListenerSet<(event: FlowQuiescence) => void>();
 
   constructor(
-    public readonly store: LogStore = new MemoryStore(),
+    public readonly store: MemoryStore = new MemoryStore(),
     readonly operational?: OperationalEvents,
     readonly redactor: Redactor = { redact },
+    private readonly rawFaultReporter?: RawFaultReporter,
   ) {}
+
+  _reportRawFault(report: RawFaultReport): void {
+    const context = report.flow === undefined ? undefined : this.operational?.context(report.flow);
+    reportRawFault(
+      this.rawFaultReporter,
+      context === undefined ? report : { ...context, ...report },
+    );
+  }
 
   /** Folded view: all retained records, keyed by their unique id. */
   get actions(): Map<string, ActionRecord> {
     return this.store.actions;
   }
 
-  /** Folded view: retained records grouped by flow token, in invocation order. */
-  get flowIndex(): Map<string, ActionRecord[]> {
-    return this.store.flowIndex;
-  }
-
   /**
    * Append an invocation. Input values whose field names match the current
    * redaction policy are replaced before the record reaches the store.
    */
-  invoke(record: ActionRecord): { id: string } {
-    const id = record.id ?? uuid();
+  invoke(record: ActionRecord): void {
     this.store.append({
       kind: "invocation",
       at: Date.now(),
       record: {
         ...record,
-        id,
         input: this.redactor.redact(record.input) as Record<string, unknown>,
       },
     });
-    return { id };
   }
 
-  /** Snapshot and retain raw input; raw output and outcome are added when the action resolves. */
+  /** Snapshot and retain raw input; the raw outcome is added when the action resolves. */
   _beginMatchingInput({
     id,
     flow,
@@ -148,7 +152,7 @@ export class ActionConcept {
           error: serializeError(error),
         }),
     );
-    this.store.flowSettled?.(flow);
+    this.store.flowSettled(flow);
   }
 
   /** Observe fully settled causal flows before occurrence retention is applied. */
@@ -174,6 +178,15 @@ export class ActionConcept {
       ...consequence,
       errorClass: typeof serialized.name === "string" ? serialized.name : "Error",
       at: Date.now(),
+    });
+    this._reportRawFault({
+      kind: "interpreter",
+      error,
+      at: Date.now(),
+      flow,
+      reaction,
+      stage,
+      ...consequence,
     });
   }
 
@@ -237,13 +250,13 @@ export class ActionConcept {
     }
   }
 
-  /** Return a transient record with raw input, output, and outcome while its flow is active. */
+  /** Return a transient record with raw input and outcome while its flow is active. */
   _matchingRecord(record: ActionRecord): ActionRecord {
-    const values = record.id === undefined ? undefined : this.matchingValues.get(record.id);
+    const values = this.matchingValues.get(record.id);
     return values === undefined ? record : { ...record, ...values };
   }
 
-  /** Number of action records with raw input, output, or outcome retained for active flows. */
+  /** Number of action records with raw matching values retained for active flows. */
   _getMatchingRecordCount(): number {
     return this.matchingValues.size;
   }
@@ -251,8 +264,7 @@ export class ActionConcept {
   /**
    * Append an action output after redacting matching field names. A supplied
    * `outcome` records its known posture; otherwise the output is recorded as a
-   * successful result. Raw output and outcome remain available to active-flow
-   * matching.
+   * successful result. The raw outcome remains available to active-flow matching.
    */
   invoked({
     id,
@@ -262,13 +274,10 @@ export class ActionConcept {
     id: string;
     output: Record<string, unknown>;
     outcome?: ActionOutcome;
-  }): {
-    id: string;
-  } {
+  }): void {
     const resolvedOutcome = outcome ?? normalizeOutcome(output);
     const matching = this.matchingValues.get(id);
     if (matching !== undefined) {
-      matching.output = output;
       matching.outcome = resolvedOutcome;
     }
     this.store.append({
@@ -278,15 +287,35 @@ export class ActionConcept {
       output: this.redactor.redact(output) as Record<string, unknown>,
       outcome: this.redactor.redact(resolvedOutcome) as ActionOutcome,
     });
-    return { id };
   }
 
   /**
    * Append a fault classification for an ask without recording an outcome.
    */
-  faulted({ id, fault }: { id: string; fault: Record<string, unknown> }): { id: string } {
-    this.store.append({ kind: "fault", at: Date.now(), id, fault });
-    return { id };
+  faulted({
+    id,
+    fault,
+    error,
+  }: {
+    id: string;
+    fault: Record<string, unknown>;
+    error?: unknown;
+  }): void {
+    const record = this.store.byId(id);
+    const at = Date.now();
+    this.store.append({ kind: "fault", at, id, fault });
+    if (error !== undefined && record !== undefined) {
+      this._reportRawFault({
+        kind: "action",
+        error,
+        at,
+        flow: record.flow,
+        concept: conceptNameOf(record.concept),
+        action: actionNameOf(record.action),
+        actionId: id,
+        ...(record.by === undefined ? {} : { reaction: record.by }),
+      });
+    }
   }
 
   /** All records belonging to a flow, in order (or `undefined` if unknown). */
@@ -294,29 +323,9 @@ export class ActionConcept {
     return this.store.byFlow(flow);
   }
 
-  /** Records without an outcome, including in-flight and faulted asks. */
-  _getPending(): ActionRecord[] {
-    return [...this.store.actions.values()].filter((record) => record.outcome === undefined);
-  }
-
-  /** Records with a fault classification. */
-  _getFaulted(): ActionRecord[] {
-    return [...this.store.actions.values()].filter((record) => record.fault !== undefined);
-  }
-
   /** Look up a single record by id. */
   _getById(id: string): ActionRecord | undefined {
     return this.store.byId(id);
-  }
-
-  /** Evict all records belonging to a flow from the folded views. */
-  evictFlow(flow: string): void {
-    this.store.evictFlow(flow);
-  }
-
-  /** Run the store's prune policy and return its reported eviction count. */
-  evictConsumedFlows(): number {
-    return this.store.prune();
   }
 }
 

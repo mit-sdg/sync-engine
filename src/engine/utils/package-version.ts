@@ -13,12 +13,20 @@ export const GENERATOR_IDENTITY: GeneratorIdentity = Object.freeze({
   version: PACKAGE_VERSION,
 });
 
-export function assertCurrentGenerator(
+export function isSemVer(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  return /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*)|(?:\d*[A-Za-z-][0-9A-Za-z-]*))(?:\.(?:(?:0|[1-9]\d*)|(?:\d*[A-Za-z-][0-9A-Za-z-]*)))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(
+    value,
+  );
+}
+
+export function assertCompatibleGenerator(
   identity: unknown,
   owner: string,
 ): asserts identity is GeneratorIdentity {
   const candidate = identity as Partial<GeneratorIdentity> | undefined;
-  if (candidate?.name !== PACKAGE_NAME || candidate.version !== PACKAGE_VERSION) {
-    throw new Error(`${owner}: requires generator ${PACKAGE_NAME}@${PACKAGE_VERSION}.`);
+  const version = candidate?.version;
+  if (candidate?.name !== PACKAGE_NAME || !isSemVer(version) || !version.startsWith("1.")) {
+    throw new Error(`${owner}: requires a 1.x ${PACKAGE_NAME} generator identity.`);
   }
 }

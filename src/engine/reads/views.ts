@@ -56,6 +56,7 @@ import { assertNoOrphanedOpens, scheduleBlock } from "./schedule.ts";
 import { formFrom } from "./former-builders.ts";
 import type { FormNode } from "./former-builders.ts";
 import type { FormerEntry } from "./former-nodes.ts";
+import type { ExactPattern, InputPattern } from "./type-inference.ts";
 
 /**
  * An aggregation: bind the number of rows a query answers with right now.
@@ -99,10 +100,29 @@ export function isCountOp(value: unknown): value is CountOp {
  * Bind the number of rows a query matches with `count(query, in, out)`.
  * Counting is available inside views, not in a reaction's `.where(...)`.
  */
-export function count(
-  query: InstrumentedQuery | ((...args: never[]) => unknown),
-  input: Mapping,
-  out: symbol,
+type QueryInput<Query> = [Query] extends [never]
+  ? Mapping
+  : [Query] extends [(input: infer Input, ...args: never[]) => unknown]
+    ? [Input] extends [object]
+      ? Input
+      : Mapping
+    : Mapping;
+
+type IsUnion<Value, Whole = Value> = Value extends unknown
+  ? [Whole] extends [Value]
+    ? false
+    : true
+  : never;
+type SingleQuery<Query> = true extends IsUnion<Query> ? never : Query;
+
+export function count<
+  const Query extends InstrumentedQuery | ((...args: never[]) => unknown),
+  const Input extends InputPattern<QueryInput<NoInfer<Query>>>,
+  Out extends symbol,
+>(
+  query: SingleQuery<Query>,
+  input: ExactPattern<QueryInput<NoInfer<Query>>, Input>,
+  out: Out,
 ): CountOp {
   const validated = assertConceptQuery(
     query,
@@ -251,7 +271,7 @@ export function view(
     inputs: InputBindings,
     outputs: OutputBindings,
     bindings: FreeBindings,
-  ) => ViewBlock | ViewBlock[],
+  ) => ViewBlock | readonly ViewBlock[],
 ): RelationView {
   const inputs = bindingBag<InputBindings>();
   const outputs = bindingBag<OutputBindings>();

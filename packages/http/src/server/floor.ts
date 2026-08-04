@@ -35,6 +35,9 @@ export function httpFloor(declaration: HttpFloor): HttpFloor {
   for (const path of [credential.issue.path, ...credential.clear]) {
     assertPortableRoutePath(path, "httpFloor: credential endpoint");
   }
+  if (credential.clear.includes(credential.issue.path)) {
+    throw new Error(`httpFloor: "${credential.issue.path}" cannot issue and clear credentials.`);
+  }
   if (new Set(credential.clear).size !== credential.clear.length) {
     throw new Error("httpFloor: credential clearing endpoints must be distinct.");
   }

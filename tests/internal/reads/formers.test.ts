@@ -21,7 +21,6 @@ import {
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { FormerFault } from "@sync-engine/internal/reads/former-nodes";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";
-import { renderFormer } from "@sync-engine/internal/reads/render";
 import type { WhereOp } from "@sync-engine/internal/reads/where-ops";
 import { quietReacting } from "../../utils/reacting.ts";
 
@@ -167,6 +166,26 @@ async function seedThread(Threading: ThreadingConcept, conversation = "c1") {
 // ── Definition ─────────────────────────────────────────────────────────────
 
 describe("formers: definition", () => {
+  test("proxy bags mint stable bindings on destructuring and property access", () => {
+    let sameInput = false;
+    let sameBinding = false;
+    const thread = former("one thread (conversation)", (inputs, bindings) => {
+      const { conversation } = inputs;
+      const { node } = bindings;
+      sameInput = conversation === inputs.conversation;
+      sameBinding = node === bindings.node;
+      return where(ThreadingReads._nodes({ conversation }).is({ node })).form({
+        conversation,
+        node,
+      });
+    });
+
+    expect(sameInput).toBe(true);
+    expect(sameBinding).toBe(true);
+    expect(thread.ins).toEqual(["conversation"]);
+    expect(thread.bindings).toEqual(["node"]);
+  });
+
   test("the input bag declares the call parameters", () => {
     const thread = former("thread (conversation)", ({ conversation }, { node, author }) =>
       form({
@@ -805,8 +824,8 @@ describe("formers: rendering", () => {
         }),
     );
     reacting.declareFormers(summary);
-    const rendered = renderFormer(reacting.exportReactions().formers[0]);
-    expect(rendered).toBe(
+    const rendered = reacting.renderApp("Summary");
+    expect(rendered).toContain(
       [
         'Former "summary (conversation)" — inputs (conversation); bindings (node, parent, author, createdAt, profile, bio); promises exactly one record — forms:',
         "  a record of",
@@ -1006,10 +1025,7 @@ describe("formers: fragments (splice)", () => {
         .splicing(summary({ person: author })),
     );
     reacting.declareFormers(posts);
-    const hostIR = reacting
-      .exportReactions()
-      .formers.find((f) => f.name === "the posts of (conversation)");
-    const rendered = renderFormer(hostIR as never);
+    const rendered = reacting.renderApp("Posts");
     expect(rendered).toContain('… former "the profile summary of (person)" with (person: author)');
   });
 });

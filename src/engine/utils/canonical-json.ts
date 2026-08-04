@@ -1,13 +1,7 @@
 import { ordinal } from "./ordinal.ts";
 import { setOwn } from "./own-property.ts";
 
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 /** Validate and copy a value into canonical key order without reordering arrays. */
 export function canonicalValue(value: unknown): JsonValue {

@@ -2,14 +2,14 @@
 
 > sync-engine is an ESM-only TypeScript library for composing independently implemented stateful behaviors. Concepts own state and behavior; reactions, views, formers, and endpoints connect them at the application level.
 
-The 1.0 release line is beta. Pin an exact package version and read the [support policy](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/SUPPORT.md) before upgrading or deploying it.
+The stable 1.x release line is supported. Pin an exact package version and read the [support policy](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/SUPPORT.md) before upgrading or deploying it.
 
 ## Start here
 
 - [Documentation index](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/index.md) — reader paths by task
 - [Application model](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/overview.md) — concepts, composition, assembly, clients, and occurrence evidence
 - [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/guide/getting-started.md) — scaffold and run one complete application
-- [Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/public-surface.md) — supported package subpaths, exports, signatures, and defaults
+- [Core Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/public-surface.md) — supported core subpaths, exports, signatures, and defaults
 - [Execution semantics](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/semantics.md) — authoritative runtime behavior
 - [Operational limits](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/operations.md) — deployment suitability and host responsibilities
 
@@ -43,7 +43,8 @@ The 1.0 release line is beta. Pin an exact package version and read the [support
 
 ## HTTP transport
 
-- Install `@mit-sdg/sync-engine-http` at the exact same beta version as `@mit-sdg/sync-engine`.
+- [HTTP Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/http/public-surface.md) — supported HTTP subpaths, exports, signatures, and defaults
+- Install `@mit-sdg/sync-engine-http` with a compatible stable `@mit-sdg/sync-engine` release; use `@latest` or pin compatible versions.
 - Import handlers and policies from `@mit-sdg/sync-engine-http/server`, fetch clients from `@mit-sdg/sync-engine-http/client`, and `httpWire` from `@mit-sdg/sync-engine-http/tooling`. The companion root and deep imports are unsupported.
 - Put public domain-error mappings on the reused HTTP profile or floor. Generate the public contract with `projections: [httpWire({ policy, name })]`.
 - Core contains no HTTP handler or fetch-client exports. Use `bindTransport` and `createClient` for a custom transport without the companion package.
@@ -52,9 +53,11 @@ The 1.0 release line is beta. Pin an exact package version and read the [support
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
 - Keep concept implementations independent of peer concepts and application composition.
-- Treat generated TypeScript as a caller contract, not runtime validation.
+- Treat generated TypeScript as a caller contract. Add explicit validators for
+  runtime values.
 - Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.
-- Change source declarations rather than generated artifacts, then regenerate and review the diff.
+- Change source declarations, regenerate artifacts, and review the generated
+  diff.
 - Use the reference pages for guarantees. Guides, examples, and generated read-back demonstrate particular constructions.
 
 ## Repository work

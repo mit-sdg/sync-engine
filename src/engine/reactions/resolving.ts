@@ -1,6 +1,6 @@
 import type { ComputationRef } from "@engine/reads/computations";
 import type { InstrumentedAction, InstrumentedQuery, Mapping } from "./types.ts";
-import type { ActionPattern, ActionPosture } from "./types.ts";
+import type { ActionPattern, ActionPosture, ActionTriggerPattern } from "./types.ts";
 import { flow } from "./context.ts";
 
 function diagnosticSite(site: string): string {
@@ -9,28 +9,12 @@ function diagnosticSite(site: string): string {
 
 /** Resolves vocabulary names against one assembly's installed referents. */
 export class NameResolver {
-  private readonly definitions: {
-    conceptNamed(name: string): object | undefined;
-    computationNamed(name: string): ComputationRef | undefined;
-  };
-
   constructor(
-    definitions:
-      | Map<string, object>
-      | {
-          conceptNamed(name: string): object | undefined;
-          computationNamed(name: string): ComputationRef | undefined;
-        },
-    computations?: Map<string, ComputationRef>,
-  ) {
-    this.definitions =
-      definitions instanceof Map
-        ? {
-            conceptNamed: (name) => definitions.get(name),
-            computationNamed: (name) => computations?.get(name),
-          }
-        : definitions;
-  }
+    private readonly definitions: {
+      conceptNamed(name: string): object | undefined;
+      computationNamed(name: string): ComputationRef | undefined;
+    },
+  ) {}
 
   concept(name: string, site: string): object {
     const concept = this.definitions.conceptNamed(name);
@@ -42,6 +26,24 @@ export class NameResolver {
     return concept;
   }
 
+  action(
+    conceptName: string,
+    actionName: string,
+    input: Mapping,
+    output: Mapping,
+    site: string,
+    posture?: ActionPosture,
+    by?: string,
+  ): ActionTriggerPattern;
+  action(
+    conceptName: string,
+    actionName: string,
+    input: Mapping,
+    output: undefined,
+    site: string,
+    posture?: ActionPosture,
+    by?: string,
+  ): ActionPattern;
   action(
     conceptName: string,
     actionName: string,

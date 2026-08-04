@@ -1,9 +1,8 @@
 # Views and formers
 
 This guide assumes the reaction model from [Connect independent
-behaviors](reactions.md). A sync-engine **view** is a named relation, not a user
-interface. A **former** constructs a current result value; it does not store a
-read model.
+behaviors](reactions.md). A sync-engine **view** is a named relation used in
+composition. A **former** constructs a current result value when called.
 
 Independent membership, selection, discussion, and alert behavior leave two
 questions for the operations room:
@@ -58,10 +57,10 @@ For an existing room, the two views answer opposite permission states: one case
 keeps a permitted responder, and the other returns an explicit denial. The
 success case still requires a current selection and an open discussion.
 
-## Change the answer, not the concepts
+## Select a policy
 
 A second policy keeps the same two questions and answers them from the room's
-host instead of its membership.
+host identity.
 
 _Source: [`examples/operations-room/src/composition/host-may-contribute.ts`](../../examples/operations-room/src/composition/host-may-contribute.ts)_
 
@@ -120,8 +119,8 @@ export const requiredCurrentMitigation = former(
 );
 ```
 
-Before the room chooses a mitigation, that read fails with `FORMER_NONE`. End
-the former in `optional()` and the whole formed value is absent instead.
+Before the room chooses a mitigation, the required former fails with
+`FORMER_NONE`. The optional former returns `null` for the same state.
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../examples/operations-room/src/composition/room.ts)_
 
@@ -130,17 +129,15 @@ export const currentMitigation = former(
   "the current mitigation (room)",
   ({ room }, { mitigation }) =>
     where(Selecting._current({ scope: room }).is({ item: mitigation })).form({ room, mitigation }),
-).optional(); // .optional() produces null when no row matches, rather than raising an error
+).optional(); // .optional() maps no matching row to null
 ```
 
-After a selection, both versions return the chosen mitigation. The difference
-appears only when the query finds no row, so the former makes absence a local,
-visible choice.
+After a selection, both versions return the chosen mitigation. The terminal
+`optional()` defines how the former handles an empty match.
 
-The human name is inert prose. The input and free-binding bags declare the
-call shape, the formed tree declares the output shape, and `optional()` alone
-weakens the record-root promise. Words such as `if any` in a name carry no
-runtime meaning.
+The input and free-binding bags declare the runtime call shape. The formed tree
+declares the output shape, and `optional()` changes the record-root promise from
+one to at most one. The human name provides documentation.
 
 The source declaration governs matching. A plain line continues once per
 distinct match or drops the candidate when none remain;
@@ -166,7 +163,7 @@ complete dashboard.
 
 ### Fold a selection
 
-A former can fold a captured selection instead of carrying its rows. This
+A former can reduce a captured selection with a fold. This
 operations-room former uses all three folds. `count()` counts responses,
 `first(response)` reads the first response in source order, and
 `distinct(responder)` keeps each responder once in first-seen order.
@@ -291,8 +288,7 @@ without the discussion reaction similarly leaves `discussion` as `null`.
 
 The dashboard calls `each(Discussing._responses(...)).form(...)` to return the
 response rows. It calls `each(Discussing._responses(...)).count()` to return
-their count. The count is calculated when the dashboard is requested rather
-than stored beside the responses.
+their count. The count is calculated when the dashboard is requested.
 
 With the discussion and alert reactions included, the formed result contains
 the opened `discussion-1` with a response count of `0`. Mara's alert resolves
@@ -301,8 +297,8 @@ mitigation.
 
 The application authors the dashboard tree once in `roomDashboard`. The room
 boundary fills its `(room)` slot and returns the formed tree, while the
-generated wire carries that shape to TypeScript. A new field therefore changes
-the former instead of a second response model. The [application boundary
+generated wire carries that shape to TypeScript. A new field changes the former
+and propagates through the generated response model. The [application boundary
 chapter](application-boundary.md#generate-the-wire-contract) shows how that
 formed answer reaches the wire.
 

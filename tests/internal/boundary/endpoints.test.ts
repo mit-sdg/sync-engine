@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
-import { assemble, fail, isEndpointDef } from "@sync-engine/internal/boundary/assembly/assemble";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { declarationsOf } from "@sync-engine/internal/reactions/authoring/partitions";
 import type { ActionPattern } from "@sync-engine/internal/reactions/types";
 
@@ -18,8 +18,6 @@ describe("endpoint", () => {
 
     expect(Login.path).toBe("/auth/login");
     expect(Login.input).toEqual({ required: ["username"] });
-    expect(isEndpointDef(Login)).toBe(true);
-    expect(isEndpointDef({ path: "/auth/login", reaction: Login.reaction })).toBe(false);
   });
 
   test("the reaction produces ordinary when/then data", () => {
@@ -58,9 +56,11 @@ describe("endpoint", () => {
     );
   });
 
-  test("respond carries the body and fail carries a domain error", () => {
+  test("respond carries success bodies and domain errors", () => {
     const Success = endpoint("/success", () => receive().then(respond({ ok: true, id: "abc" })));
-    const Failure = endpoint("/failure", () => receive().then(fail({ code: "NOPE" })));
+    const Failure = endpoint("/failure", () =>
+      receive().then(respond({ error: { code: "NOPE" } })),
+    );
 
     const successInput = (
       declarationsOf(Success.reaction({} as Vars))[0].then[0] as unknown as {
@@ -118,27 +118,6 @@ describe("endpoint", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
     const pattern = declarationsOf(Ping.reaction({} as Vars))[0].when[0] as ActionPattern;
     expect(pattern.output).toEqual({});
-  });
-
-  test("fail carries a string without changing it", () => {
-    const Failure = endpoint("/failure", () => receive().then(fail("NOPE")));
-    const input = (
-      declarationsOf(Failure.reaction({} as Vars))[0].then[0] as unknown as {
-        action: { input: unknown };
-      }
-    ).action.input;
-    expect(input).toMatchObject({ error: "NOPE" });
-  });
-
-  test("fail keeps non-plain error values intact", () => {
-    const date = new Date("2024-01-01");
-    const Failure = endpoint("/failure", () => receive().then(fail(date)));
-    const input = (
-      declarationsOf(Failure.reaction({} as Vars))[0].then[0] as unknown as {
-        action: { input: unknown };
-      }
-    ).action.input as { error: unknown };
-    expect(input.error).toBe(date);
   });
 
   test("different paths own independent reaction functions", () => {

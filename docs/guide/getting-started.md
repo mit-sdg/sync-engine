@@ -24,7 +24,8 @@ bun install
 The command writes a project only when none of its template files would be
 overwritten. The generated application has one Noting concept, two endpoints,
 an assembly, a local-gateway scenario, and generated-artifact configuration.
-Pin an exact package version when reproducing an evaluation or deployment.
+Pin the package selector to a chosen release when reproducing an evaluation or
+deployment exactly.
 
 ## Generated files
 
@@ -85,8 +86,8 @@ bunx sync-engine artifacts check
 
 `src/concepts/noting/spec.md` is the authored specification. It states the
 concept's purpose and principle, declares action signatures and refusal
-branches, and declares query cardinality. Its optional State section is
-notation for readers, not a schema. [Concept specification
+branches, and declares query cardinality. Its optional State section is reader
+notation. [Concept specification
 format](../concept-specification.md) defines exactly which parts are parsed and
 checked.
 
@@ -194,8 +195,8 @@ diff; do not edit generated files directly.
 Generated TypeScript checks typed callers. Gateway admission only checks the
 route, an outer object, and required-key presence. It does not validate
 primitive or nested values by default. Public endpoints can attach explicit
-runtime input and successful-output validators as shown in [Application
-boundary](application-boundary.md#add-runtime-validation).
+runtime input, successful-output, and domain-error validators as shown in
+[Application boundary](application-boundary.md#add-runtime-validation).
 
 The remaining guide changes from the small scaffold to the shipped Operations
 Room case study. Continue to [Define one behavior](concepts.md), then [Connect

@@ -18,7 +18,7 @@ export interface FreeBindings extends Vars {
   readonly [FreeBindingsBrand]: true;
 }
 
-export interface BindingBag<TVars extends Vars = Vars> {
+interface BindingBag<TVars extends Vars = Vars> {
   readonly vars: TVars;
   readonly minted: Map<string, symbol>;
 }
@@ -64,7 +64,7 @@ export function assertSeparateBags(
 }
 
 /** The parts a finished definition needs to become an object-call reference. */
-export interface ObjectRefSpec<Ref, Fused> {
+interface ObjectRefSpec<Ref, Fused> {
   kind: string;
   name: string;
   inputs: readonly string[];

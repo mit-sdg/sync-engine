@@ -3,7 +3,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
 import { Logging } from "@sync-engine/assembly";
-import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
 import type { InvocationResult } from "@sync-engine/boundary";
 import { former, vocabulary, where, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
@@ -26,6 +26,10 @@ const faultSentinels = {
 };
 
 class SeatingConcept {
+  static readonly outcomes = {
+    claim: { refusals: ["SEAT_TAKEN"] },
+  } as const;
+
   private taken = new Set<string>();
 
   claim({ seat }: { seat: string }) {
@@ -42,6 +46,10 @@ class SeatingConcept {
     });
     Object.assign(error, { detail: faultSentinels.detail, code: faultSentinels.code });
     throw error;
+  }
+
+  escape(_: Empty): never {
+    throw new Refuse("UNDECLARED");
   }
 }
 
@@ -64,6 +72,11 @@ function setup() {
     Audit: endpoint("/seats/audit", () =>
       receive()
         .then(Seating.audit({}))
+        .then(respond({ ok: true })),
+    ),
+    Escape: endpoint("/seats/escape", () =>
+      receive()
+        .then(Seating.escape({}))
         .then(respond({ ok: true })),
     ),
   };
@@ -111,6 +124,25 @@ describe("refusalFunnel", () => {
     }
   });
 
+  test("treats an undeclared advanced refusal as a fault", async () => {
+    const { reaction, invoker } = setup();
+    const result = await invoker.invoke("/seats/escape", {} as never);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatchObject({
+        kind: "framework",
+        code: FrameworkErrorCode.INTERNAL_ERROR,
+      });
+    }
+    const escaped = [...reaction.Action.actions.values()].find(
+      (record) => actionNameOf(record.action) === "escape",
+    );
+    expect(escaped?.fault).toEqual({ error: FrameworkErrorCode.UNKNOWN_ERROR });
+    expect(escaped?.outcome).toBeUndefined();
+    expect(reaction.Action.store.firingsByReaction("DeliverRefusalToAsker")).toHaveLength(0);
+  });
+
   test("the first refusal answers; a second in the same flow cannot", async () => {
     const { reaction, invoker } = setup();
     await invoker.invoke("/seats/claim", { seat: "B1" } as never);
@@ -128,7 +160,7 @@ describe("refusalFunnel", () => {
     expect(refusals.length).toBe(2);
     // Each refusal starts one delivery reaction. The request boundary returns
     // the first response and refuses later responses with NOT_PENDING.
-    expect(reaction._getFirings("DeliverRefusalToAsker")).toHaveLength(2);
+    expect(reaction.Action.store.firingsByReaction("DeliverRefusalToAsker")).toHaveLength(2);
     const doubleFlow = [...reaction.Action.actions.values()].find(
       (r) => r.input?.path === "/seats/double",
     )?.flow;
@@ -224,7 +256,7 @@ describe("faults while forming response input", () => {
       (r) => actionNameOf(r.action) === "respondFramework" && r.outcome?.kind === "result",
     );
     expect(delivered).toHaveLength(1);
-    expect(reaction._getFirings(FAULT_REACTION)).toHaveLength(1);
+    expect(reaction.Action.store.firingsByReaction(FAULT_REACTION)).toHaveLength(1);
   });
 
   test("the fault reaction skips its own asks — one delivery attempt, no recursion", async () => {
@@ -259,7 +291,7 @@ describe("faults while forming response input", () => {
 
     // The audit fault starts one delivery attempt. The failed response asked
     // by DeliverFaultToAsker does not start another.
-    expect(reaction._getFirings(FAULT_REACTION)).toHaveLength(1);
+    expect(reaction.Action.store.firingsByReaction(FAULT_REACTION)).toHaveLength(1);
     const faultedResponds = [...reaction.Action.actions.values()].filter(
       (r) => actionNameOf(r.action) === "respondFramework" && r.fault !== undefined,
     );

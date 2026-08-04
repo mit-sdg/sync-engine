@@ -12,6 +12,9 @@ import {
   createHttpHandler,
   httpFloor,
   productionHttpProfile,
+  type HttpFloor,
+  type HttpPublicErrorCategory,
+  type ProductionHttpProfile,
 } from "@mit-sdg/sync-engine-http/server";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 
@@ -119,6 +122,16 @@ function setup() {
 }
 
 describe("HTTP floor", () => {
+  test("rejects one endpoint configured to issue and clear credentials", () => {
+    const { floor } = setup();
+    expect(() =>
+      httpFloor({
+        ...floor,
+        credential: { ...floor.credential, clear: [floor.credential.issue.path] },
+      }),
+    ).toThrowError(new Error('httpFloor: "/login" cannot issue and clear credentials.'));
+  });
+
   test("binds a cookie from the concept-owned expiry and hides consumed fields", async () => {
     const { fetch } = setup();
     const response = await fetch(
@@ -200,6 +213,51 @@ describe("HTTP floor", () => {
     expect(JSON.stringify(me?.input)).not.toContain("session");
   });
 
+  test("snapshots raw mutable policies when handlers and projectors are constructed", async () => {
+    const { application, floor, gateway } = setup();
+    const binding = bindTransport({ application, gateway });
+    const mutableProfile: ProductionHttpProfile = {
+      origin: floor.origin,
+      publicErrors: { UNKNOWN_SESSION: "UNAUTHORIZED" },
+    };
+    const profileProjection = httpWire({
+      policy: mutableProfile,
+      name: "ProfileWire",
+    });
+    (mutableProfile.publicErrors as Record<string, HttpPublicErrorCategory>).UNKNOWN_SESSION =
+      "NOT_FOUND";
+
+    const profileWire = profileProjection.project(binding).wire;
+    const me = profileWire.endpoints.find(({ path }) => path === "/me");
+    expect(me?.errors).toContain("UNAUTHORIZED");
+    expect(me?.errors).not.toContain("NOT_FOUND");
+
+    const mutableFloor: HttpFloor = {
+      origin: floor.origin,
+      publicErrors: { ...floor.publicErrors },
+      credential: {
+        ...floor.credential,
+        issue: { ...floor.credential.issue },
+        clear: [...floor.credential.clear],
+      },
+    };
+    const floorProjection = httpWire({ policy: mutableFloor, name: "FloorWire" });
+    const fetch = createHttpHandler({ application, gateway, floor: mutableFloor });
+    (mutableFloor.credential as { input: string }).input = "changed";
+
+    const floorWire = floorProjection.project(binding).wire;
+    const protectedEndpoint = floorWire.endpoints.find(({ path }) => path === "/me");
+    expect(JSON.stringify(protectedEndpoint?.input)).not.toContain("session");
+    const response = await fetch(
+      new Request("http://learning.test/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+    expect(response.headers.get("Set-Cookie")).toContain("session=secret-session");
+  });
+
   test("has no implicit /api alias and requires an explicit base path", async () => {
     const { application, fetch, floor, gateway } = setup();
     const implicit = await fetch(
@@ -265,6 +323,18 @@ describe("HTTP floor", () => {
 });
 
 describe("production HTTP profile", () => {
+  test("constructs a plain profile handler without reading wire projection facts", () => {
+    const { application, gateway } = setup();
+    Object.defineProperty(application.publicInterface, "routes", {
+      get() {
+        throw new Error("wire projection facts were read");
+      },
+    });
+    const profile = productionHttpProfile({ origin: "https://learning.test" });
+
+    expect(() => createHttpHandler({ application, gateway, profile })).not.toThrow();
+  });
+
   test("preserves successes and projects registered categories behind a base path", async () => {
     const { application, gateway } = setup();
     const fetch = createHttpHandler({

@@ -6,6 +6,7 @@ import { siblingTree } from "./partitions.ts";
 import { isChannelPattern } from "./channels.ts";
 import { actionPattern, branchChain } from "./nodes.ts";
 import type {
+  ActionTriggerPattern,
   BranchChain,
   UnnamedStepNode,
   ChannelPattern,
@@ -26,7 +27,7 @@ export { actionPattern } from "./nodes.ts";
 export function earlier(action: InstrumentedAction, input: Mapping, output?: Mapping): EarlierOp {
   return brandWhereOp({
     op: "earlier",
-    pattern: actionPattern(action, input, output ?? {}),
+    pattern: { ...actionPattern(action, input, output ?? {}), output: output ?? {} },
   }) as EarlierOp;
 }
 
@@ -57,9 +58,11 @@ export function when(line: StepNode | ChannelPattern): WhenBuilder {
   if (typeof line !== "object" || line === null || line.kind !== "step") {
     throw new Error("when(...) takes one callable action line or posture channel.");
   }
-  const pattern = { ...line.action };
-  pattern.posture = line.linePosture ?? "requested";
-  pattern.output ??= {};
+  const pattern: ActionTriggerPattern = {
+    ...line.action,
+    posture: line.linePosture ?? "requested",
+    output: line.action.output ?? {},
+  };
   return createWhenBuilderFromPatterns([pattern]);
 }
 
@@ -97,7 +100,7 @@ function declarativeWhenBuilder(
   } as WhenBuilderWithWhere;
 }
 
-export interface AuthoredWhereBlock extends ViewBlock {
+interface AuthoredWhereBlock extends ViewBlock {
   then(node: UnnamedStepNode): BranchChain;
 }
 

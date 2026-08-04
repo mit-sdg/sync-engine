@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FileStore, assemble } from "@mit-sdg/sync-engine/assembly";
+import { FileLogSink, assemble } from "@mit-sdg/sync-engine/assembly";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 
@@ -52,7 +52,7 @@ const IndexSavedNote = reaction(({ note, text }) =>
 );
 
 function assembleNotebook(statePath: string, occurrencePath: string) {
-  const occurrenceStore = new FileStore(occurrencePath);
+  const occurrenceSink = new FileLogSink(occurrencePath);
   const application = assemble({
     vocabulary: notebookVocabulary,
     composition: { IndexSavedNote },
@@ -60,9 +60,10 @@ function assembleNotebook(statePath: string, occurrencePath: string) {
       Notes: new FileBackedNotes(statePath),
       SearchIndex: new SearchIndexConcept(),
     },
-    logStore: occurrenceStore,
+    logSink: occurrenceSink,
+    retention: "keepAll",
   });
-  return { application, occurrenceStore };
+  return { application, occurrenceSink };
 }
 
 async function recoverSearchIndex(
@@ -115,7 +116,6 @@ describe("advanced persistence recipe", () => {
     await first.application.beginDrain();
 
     const restarted = assembleNotebook(statePath, occurrencePath);
-    expect(restarted.occurrenceStore.actions.size).toBe(0);
     expect(await restarted.application.concepts.Notes._all({})).toEqual([
       { note: "n1", text: "Durable note" },
     ]);
@@ -126,6 +126,6 @@ describe("advanced persistence recipe", () => {
     expect(await restarted.application.concepts.SearchIndex._all({})).toEqual([
       { note: "n1", text: "Durable note" },
     ]);
-    expect(restarted.occurrenceStore.actions.size).toBe(1);
+    expect(fs.readFileSync(occurrencePath, "utf8").length).toBeGreaterThan(firstEvidence.length);
   });
 });

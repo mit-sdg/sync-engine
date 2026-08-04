@@ -24,10 +24,11 @@ asking reaction.
 ## Assembly
 
 One installed vocabulary, concept implementation set, and composition. An
-assembly owns its execution lifecycle and uses one occurrence store. It creates
-a `MemoryStore` by default; a supplied store remains caller-owned. Creating
-another assembly creates another runtime; it does not reconfigure an existing
-assembly.
+assembly owns its execution lifecycle and an internal `MemoryStore` occurrence
+index governed by `"keepAll"` or a settled-flow window. An optional
+application-owned `LogSink` receives an audit copy; the sink does not replace
+the index. Creating another assembly creates another runtime; it does not
+reconfigure an existing assembly.
 
 ## Binding
 
@@ -59,14 +60,15 @@ on its own path returns.
 
 ## Correlation ID
 
-A tracing identifier carried through gateway and application observation. A
-correlation ID does not deduplicate work and is not an idempotency key.
+A tracing identifier carried through gateway and application observation.
+Deduplication requires a domain-owned idempotency key.
 
 ## Domain error
 
 An application-authored failure value, such as a concept refusal or an endpoint
 response with a top-level `error` field. The invoker distinguishes domain errors
-from framework errors even though a client receives both as error envelopes.
+from framework errors even though a client receives both as error envelopes. An
+endpoint's `domainError` validator checks the value under that top-level field.
 
 ## Endpoint
 
@@ -76,7 +78,8 @@ receives admitted input, and may produce one boundary response.
 ## Fault
 
 An unexpected failure attached to an action ask, such as an action throw or a
-former-evaluation failure. A fault is not a deliberate refusal.
+former-evaluation failure. A refusal is the corresponding deliberate domain
+outcome.
 
 ## Firing
 
@@ -90,8 +93,8 @@ consequences. Reaction matching and `earlier(...)` correlation are flow-local.
 
 ## Former
 
-A named current-state read that constructs a typed value tree. A former is
-evaluated when asked; the engine does not store its result.
+A named current-state read that constructs a value tree. A former is evaluated
+when asked; the engine does not store its result.
 
 ## Framework error
 
@@ -103,8 +106,8 @@ their own error unions.
 ## Gateway
 
 An `Invoker` decorator that performs public route admission, forwarding,
-limits, observation, timeout and abort handling, and ordered drain. A gateway
-does not create another reaction engine or occurrence store.
+limits, observation, timeout and abort handling, and ordered drain around the
+target application's reaction engine and occurrence index.
 
 ## HTTP floor
 
@@ -121,8 +124,8 @@ option.
 ## Integrity failure
 
 Evidence that accepted execution violated an engine-owned contract, such as an
-invalid successful endpoint output or an execution-budget breach. An integrity
-failure is distinct from an action fault.
+invalid successful endpoint output, an invalid domain error, or an
+execution-budget breach. An integrity failure is distinct from an action fault.
 
 ## Invoker
 
@@ -137,11 +140,25 @@ its serialized representation, such as a closure or object-identity pattern.
 Ordinary assembly rejects local behavior; manual engines under `advanced` may
 execute it.
 
+## Log sink
+
+An optional synchronous, application-owned destination for validated and
+redacted occurrence entries. The engine calls the sink before folding an entry
+into its internal occurrence index. `LogSink.append` must return `undefined`
+synchronously; a throw or any other return value fails before the fold. A sink
+entry copies and freezes arrays and plain records and replaces invocation
+identities with frozen name-bearing representatives. Opaque leaves retain their
+runtime identity and are not recursively frozen; sinks must treat them as
+read-only sensitive values. A sink does not supply matching, retention, or
+replay. `LogSink` has no close method. `FileLogSink` is the supplied append-only
+JSONL implementation.
+
 ## Occurrence
 
 Recorded execution evidence for an action ask, return, refusal, or fault. The
 occurrence log also contains firing, reaction-failure, and integrity-failure
-evidence. Occurrences are not concept state.
+evidence. The engine retains occurrences in its internal index and may copy them
+to a `LogSink`. Concept implementations own domain state separately.
 
 ## Portable behavior
 
@@ -157,14 +174,23 @@ runs the concept class directly and verifies the sequence without an assembly.
 ## Public error category
 
 The production HTTP classification registered for a concept refusal, such as
-`CONFLICT` or `UNAUTHORIZED`. Production HTTP exposes registered categories
-rather than private refusal codes.
+`CONFLICT` or `UNAUTHORIZED`. Production HTTP exposes registered categories and
+keeps private refusal codes inside the application boundary.
 
 ## Query
 
 An underscore-prefixed concept operation that reads current state. A registered
 query promises `one`, `optional`, or `many` rows. Queries must not create side
-effects.
+effects. TypeScript links a literal authored promise to the method's return
+container, and runtime evaluation checks the promise. Assembly memoizes queries
+unless `queryCache` is `"none"`.
+
+## Raw fault report
+
+A privileged report containing the original `unknown` value thrown by an action,
+interpreter stage, or endpoint validator. Raw fault reports bypass ordinary
+fault redaction and must be handled as sensitive data. Reporter failure does not
+replace the runtime result.
 
 ## Reaction
 
@@ -180,30 +206,30 @@ whether the case continues, drops, or expands.
 
 ## Read-back
 
-A generated textual description of an assembled application's reactions,
-views, formers, paths, bindings, and cardinality behavior. Read-back describes
-one assembled design; it is not executable source.
+A generated textual description of one assembled application's reactions,
+views, formers, paths, bindings, and cardinality behavior. Read-back has no
+execution semantics.
 
 ## Refusal
 
 A concept's deliberate rejection of an action. A registered exception class
-maps a specification code to a refusal outcome. A refusal is an expected domain
-result, not a fault.
+maps a specification code to a refusal outcome. Refusals are expected domain
+results; faults are unexpected execution failures.
 
 ## View
 
 A named relation over concept queries or other views. A predicate view answers
 whether a relation holds. An output view returns rows with a declared
-cardinality. A sync-engine view is not a rendered user interface.
+cardinality. In sync-engine, `view` always refers to this authored relation.
 
 ## Vocabulary
 
 The named action and query references for a concept set, together with concept
-metadata and optional named computations. Vocabulary references are inert until
-resolved against an engine.
+metadata and optional named computations. `conceptSet` may construct those
+computation references from a second record of pure functions. Vocabulary
+references are inert until resolved against an engine.
 
 ## Wire contract
 
 Generated TypeScript mapping endpoint routes to JSON-projected input, output,
-and error types. A wire contract typechecks callers; it is not a runtime schema
-validator.
+and error types. Applications provide runtime schema validators separately.

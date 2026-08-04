@@ -5,11 +5,15 @@
 generated-wire projection. It does not provide an HTTP listener or web
 framework integration.
 
-This beta requires Node.js 24, ESM, and the exact matching core beta:
+Stable 1.x requires Node.js 24 and ESM. This independently published package
+declares an exact matching beta core peer dependency. Install both packages with
+the current release:
 
 ```sh
-bun add @mit-sdg/sync-engine@1.0.0-beta.3 @mit-sdg/sync-engine-http@1.0.0-beta.3
+bun add @mit-sdg/sync-engine@beta @mit-sdg/sync-engine-http@beta
 ```
+
+For reproducibility, replace `@beta` with the same pinned beta version.
 
 The package has no root export. Use only these subpaths:
 
@@ -74,7 +78,16 @@ const result = await client.names.claim({ name: "Ada" });
 `baseUrl` defaults to `API_BASE_URL`, then `/api`. An explicit `/` means no
 prefix. The client uses `globalThis.fetch`, sends JSON `POST` requests, and uses
 Fetch credentials mode `include` by default. `headers` may be a record or a
-synchronous or asynchronous provider called for each request.
+synchronous or asynchronous provider called for each request. `timeoutMs` and
+`correlationId` may be supplied per call. `maxResponseBytes` places an opt-in
+byte limit on response bodies, and `validateResponse` may validate the complete
+parsed success-or-error result before it reaches the caller.
+
+`timeoutMs` must be a positive finite integer no greater than `2_147_483_647`
+milliseconds. A value outside that range returns core `INVALID_INPUT` before
+header resolution or Fetch. This timer limits only the client's local Fetch
+wait; gateway and application deadlines use their own defaults and configured
+limits.
 
 Calls resolve to a success value or error envelope. The HTTP-client errors are:
 
@@ -84,6 +97,7 @@ Calls resolve to a success value or error envelope. The HTTP-client errors are:
 | `NETWORK_ERROR`            | Fetch failed before a response was obtained           |
 | `BAD_JSON`                 | The response body could not be read or parsed as JSON |
 | `BAD_STATUS`               | A non-2xx response lacked a JSON error envelope       |
+| `RESPONSE_TOO_LARGE`       | The response exceeded `maxResponseBytes`              |
 
 Abort resolves as the core `ABORTED` error. An empty response body becomes `{}`.
 A non-2xx JSON object with an `error` property is returned as the server result.
@@ -134,7 +148,9 @@ Handler calls may overlap, and client header providers may run concurrently.
 The handler and client have no disposal method and do not own application,
 gateway, store, listener, or fetch-agent lifetime.
 
-See the [HTTP API reference](https://github.com/mit-sdg/sync-engine/blob/main/docs/public-surface.md#http-companion-package),
+See the [HTTP API reference](public-surface.md),
 [execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/semantics.md#boundary-gateway-and-client),
 [host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/operations.md#http-host-responsibilities),
+[support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md),
+[security policy and private vulnerability reporting](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md),
 and [complete production example](https://github.com/mit-sdg/sync-engine/tree/main/examples/production-http).

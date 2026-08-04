@@ -5,12 +5,16 @@ import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspec
 import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
 import { createLocalClient } from "@sync-engine/client";
 import type { OperationalEvent, OperationalObserver } from "@sync-engine/boundary";
-import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { createGateway } from "@sync-engine/internal/boundary/gateway/gateway";
 
 class InvalidMessage extends Error {}
 
 class AnsweringConcept {
+  static readonly outcomes = {
+    reject: { refusals: [FrameworkErrorCode.NOT_FOUND] },
+  } as const;
+
   completed: string[] = [];
 
   echo({ message }: { message: string }) {
@@ -77,7 +81,7 @@ const Explode = endpoint("/explode", () =>
 );
 
 const Forge = endpoint("/forge", () =>
-  receive({}).then(fail({ error: "DOMAIN", errorKind: "framework" })),
+  receive({}).then(respond({ error: { error: "DOMAIN", errorKind: "framework" } })),
 );
 
 type TestApi = {

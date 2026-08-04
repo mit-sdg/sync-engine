@@ -15,11 +15,7 @@ import {
   serializeUnloweredReaction,
 } from "@engine/reads/reaction-lowering";
 import { readBackReaction } from "@engine/reads/read-back";
-import {
-  assertThenInputsAreData,
-  copyReactionLintExtraUses,
-  lintReactionOpens,
-} from "@engine/reads/reaction-validation";
+import { assertThenInputsAreData, lintReactionOpens } from "@engine/reads/reaction-validation";
 import { Registry } from "@engine/reads/definition-registry";
 import type { BoundReaction, BoundWhereOp } from "@engine/reads/definition-registry";
 import { applyWhereOps } from "@engine/reads/where-evaluation";
@@ -33,7 +29,7 @@ import { declarationsOf } from "../authoring/partitions.ts";
 import { actionNameOf, conceptNameOf } from "../concepts/introspect.ts";
 import { flow, landing } from "../context.ts";
 import type {
-  ActionPattern,
+  ActionTriggerPattern,
   ExecutableReaction,
   Frame,
   InstrumentedAction,
@@ -45,17 +41,14 @@ import { ActionScheduler } from "./action-scheduler.ts";
 import { ActionConcept, breachLimit, type ActionRecord } from "./actions.ts";
 import { FiringBook } from "./firing.ts";
 import { FiringPipeline } from "./firing-pipeline.ts";
-import { ConceptInstrumentation } from "./instrumenting.ts";
+import { ConceptInstrumentation, type QueryCacheMode } from "./instrumenting.ts";
 import { Logging, ReactionLogger } from "./logging.ts";
-import type { FiringRecord } from "./log-store.ts";
 import type { EngineObserver } from "./logging.ts";
 import type { ExecutionControl } from "./operational.ts";
 import { ReactionCatalog } from "./reaction-catalog.ts";
 import { exportConcepts, exportReactions, readBack, renderApp } from "./reacting-export.ts";
 import { matchArguments as matchActionArguments } from "./matching.ts";
 import { TriggerMatcher } from "./matching.ts";
-
-type ActionArguments = Record<string | symbol, unknown>;
 
 export class Reacting {
   public Action: ActionConcept;
@@ -69,7 +62,12 @@ export class Reacting {
   private readonly firingPipeline: FiringPipeline;
   private readonly execution?: ExecutionControl;
 
-  constructor(actionConcept: ActionConcept = new ActionConcept(), execution?: ExecutionControl) {
+  constructor(
+    actionConcept: ActionConcept = new ActionConcept(),
+    execution?: ExecutionControl,
+    requireDeclaredRefusals = false,
+    queryCache: QueryCacheMode = "memoize",
+  ) {
     this.Action = actionConcept;
     this.execution = execution;
     this.reactionLogger = new ReactionLogger(actionConcept, actionConcept.redactor);
@@ -86,6 +84,8 @@ export class Reacting {
       actions: actionConcept,
       scheduler: this.actionScheduler,
       execution,
+      requireDeclaredRefusals,
+      queryCache,
       react: (record, durationMs) => this.react(record, durationMs),
       emit: (record, durationMs) => this.reactionLogger.emit(record, durationMs),
       registerConcept: (name, instrumented) => this.registry.registerConcept(name, instrumented),
@@ -128,10 +128,6 @@ export class Reacting {
     this.registry.registerComputations(computations);
   }
 
-  invalidateCaches(concept: object): void {
-    this.instrumentation.invalidate(concept);
-  }
-
   invalidateAllCaches(): void {
     this.instrumentation.invalidateAll();
   }
@@ -153,7 +149,6 @@ export class Reacting {
           ...raw,
           then: Array.isArray(raw.then) ? raw.then : [raw.then],
         };
-        copyReactionLintExtraUses(raw, declaration);
         this.registry.resolveDeclaration(name, declaration);
         assertThenInputsAreData(name, declaration.then);
         lintReactionOpens(name, declaration);
@@ -335,7 +330,7 @@ export class Reacting {
   }
 
   async react(record: ActionRecord, durationMs?: number): Promise<void> {
-    if (durationMs !== undefined && record.id !== undefined) {
+    if (durationMs !== undefined) {
       const stored = this.Action._getById(record.id);
       const result =
         stored?.fault !== undefined
@@ -368,19 +363,6 @@ export class Reacting {
     }
     await this.firingPipeline.fire(record, candidates);
     this.reactionLogger.emit(record, durationMs);
-  }
-
-  matchThen(
-    then: ActionPattern,
-    frame: Frame,
-    by?: string,
-    authoritativeFlow?: string,
-  ): ActionArguments {
-    return this.firingPipeline.matchThen(then, frame, by, authoritativeFlow);
-  }
-
-  _getFirings(reaction: string): FiringRecord[] {
-    return this.firingBook.firings(reaction);
   }
 
   instrumentConcept<T extends object>(concept: T, name?: string): T {
@@ -441,7 +423,7 @@ export class Reacting {
     });
   }
 
-  private applyEarlier(frames: Frames, pattern: ActionPattern): Frames {
+  private applyEarlier(frames: Frames, pattern: ActionTriggerPattern): Frames {
     const result: Frame[] = [];
     for (const frame of frames) {
       const flowToken = frame[flow];

@@ -17,9 +17,9 @@ import type {
 import { foldFormerNode, foldOps, foldReaction, foldView } from "./schema.ts";
 import { ordinal } from "@engine/utils/ordinal";
 
-export type LocalDefinitionKind = "reaction" | "view" | "former";
+type LocalDefinitionKind = "reaction" | "view" | "former";
 
-export interface LocalBehaviorDefinition {
+interface LocalBehaviorDefinition {
   kind: LocalDefinitionKind;
   name: string;
 }
@@ -28,16 +28,16 @@ export interface ObservedLocalDefinition extends LocalBehaviorDefinition {
   reasons: readonly string[];
 }
 
-export type OpaqueOccurrenceKind = "custom" | "identity-pattern" | "unlowered";
+type OpaqueOccurrenceKind = "custom" | "identity-pattern" | "unlowered";
 
-export interface OpaqueOccurrence {
+interface OpaqueOccurrence {
   definition: LocalBehaviorDefinition;
   kind: OpaqueOccurrenceKind;
   occurrence: number;
   reason: string;
 }
 
-export interface LocalBehaviorAnalysis {
+interface LocalBehaviorAnalysis {
   localDefinitions: readonly ObservedLocalDefinition[];
   occurrences: readonly OpaqueOccurrence[];
 }

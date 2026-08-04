@@ -7,10 +7,11 @@ import {
   applyArtifactPlan,
   artifactPlan,
   checkArtifactPlan,
-  normalizeArtifactPath,
   planGenerated,
 } from "@engine/tooling/artifact-plan";
 import type { ArtifactFilesystem } from "@engine/tooling/artifact-plan";
+import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
+import type { WireOrigin } from "@engine/boundary/wire/wire-types";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
 class MemoryFilesystem implements ArtifactFilesystem {
@@ -47,14 +48,14 @@ describe("artifact plans", () => {
     "C:/wire.ts",
     "foo:bar.md",
   ])("rejects unsafe path %s", (path) => {
-    expect(() => normalizeArtifactPath(path)).toThrow(
+    expect(() => artifactPlan([{ path, content: "", kind: "wire" }])).toThrow(
       /relative POSIX|escapes or does not normalize/,
     );
   });
 
   test("classifies entries and applies only missing or changed content", async () => {
     const plan = artifactPlan([
-      { path: "a.txt", content: "same", kind: "manifest" },
+      { path: "a.txt", content: "same", kind: "specification" },
       { path: "nested/b.txt", content: "new", kind: "wire" },
       { path: "c.txt", content: "created", kind: "specification" },
     ]);
@@ -63,7 +64,7 @@ describe("artifact plans", () => {
     filesystem.files.set("nested/b.txt", "old");
 
     expect(await checkArtifactPlan(plan, filesystem)).toEqual([
-      { path: "a.txt", kind: "manifest", status: "unchanged" },
+      { path: "a.txt", kind: "specification", status: "unchanged" },
       { path: "c.txt", kind: "specification", status: "missing" },
       { path: "nested/b.txt", kind: "wire", status: "changed" },
     ]);
@@ -75,7 +76,7 @@ describe("artifact plans", () => {
 
   test("a failed preflight prevents every write", async () => {
     const plan = artifactPlan([
-      { path: "a.txt", content: "a", kind: "manifest" },
+      { path: "a.txt", content: "a", kind: "specification" },
       { path: "b.txt", content: "b", kind: "wire" },
     ]);
     const filesystem = new MemoryFilesystem();
@@ -85,7 +86,6 @@ describe("artifact plans", () => {
       path: "b.txt",
       kind: "wire",
       status: "failed",
-      errorClass: "Error",
     });
     expect(filesystem.writes).toEqual([]);
   });
@@ -118,7 +118,6 @@ describe("artifact plans", () => {
       { path: "ping.md", kind: "specification" },
       { path: "wire.ts", kind: "wire" },
     ]);
-    expect(plan.entries.every(({ digest }) => /^fnv1a64-[0-9a-f]{16}$/.test(digest))).toBe(true);
     expect(plan.entries.find(({ kind }) => kind === "specification")?.content).toContain(
       "# Ping service",
     );
@@ -177,7 +176,7 @@ describe("artifact plans", () => {
     ).toThrow('duplicate generated type name "PingWire"');
   });
 
-  test("rejects a manifest produced by another generator version", () => {
+  test("reserves exactly the helpers used by appended contracts", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
     const manifest = applicationManifest(
       assemble({
@@ -185,11 +184,100 @@ describe("artifact plans", () => {
         composition: { Ping },
       }),
     );
-    manifest.generator.version = "9.9.9";
+    const projection = (origin: WireOrigin) => ({
+      name: "PingProjectedWire",
+      wire: {
+        appWide: [],
+        endpoints: [
+          {
+            path: "/projected",
+            input: { kind: "object" as const, fields: [] },
+            output: { kind: "reference" as const, allOf: [origin], sites: ["projection"] },
+            errors: [],
+            openError: false,
+          },
+        ],
+      } satisfies WireContractsIR,
+      render: { appWideErrorName: "AtPath" },
+      provenance: { name: "@example/projector", version: "1.0.0" },
+    });
+    const options = {
+      title: "Ping",
+      vocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
+    };
 
-    expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
-      `requires generator ${PACKAGE_NAME}@${PACKAGE_VERSION}`,
+    expect(() =>
+      planGenerated(manifest, {
+        ...options,
+        projections: [projection({ source: "literal", value: true })],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      planGenerated(manifest, {
+        ...options,
+        projections: [
+          projection({ source: "action-output", concept: "Ping", member: "ping", path: [] }),
+        ],
+      }),
+    ).toThrow('duplicate generated type name "AtPath"');
+  });
+
+  test("accepts the manifest format across SemVer 1.x generator versions", () => {
+    const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: { Ping },
+      }),
     );
+    manifest.generator.version = "1.9.9";
+
+    expect(() => planGenerated(manifest, { title: "Ping service" })).not.toThrow();
+    manifest.generator.version = "2.0.0";
+    expect(() => planGenerated(manifest, { title: "Ping service" })).toThrow(
+      `requires a 1.x ${PACKAGE_NAME} generator identity`,
+    );
+    manifest.generator.version = "1.0.0-beta.3";
+    expect(() => planGenerated(manifest, { title: "Ping service" })).not.toThrow();
+    for (const version of ["1.9007199254740992.0", "1.9.9+build.1"]) {
+      manifest.generator.version = version;
+      expect(() => planGenerated(manifest, { title: "Ping service" })).not.toThrow();
+    }
+  });
+
+  test("accepts projector SemVer across majors and rejects invalid provenance", () => {
+    const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: { Ping },
+      }),
+    );
+    const projection = {
+      name: "PingProjectedWire",
+      wire: manifest.wire,
+      provenance: { name: "@example/projector", version: "2.0.0" },
+    };
+
+    expect(() =>
+      planGenerated(manifest, { title: "Ping service", projections: [projection] }),
+    ).not.toThrow();
+    for (const version of ["2.9007199254740992.0", "2.0.0+build.1"]) {
+      projection.provenance.version = version;
+      expect(() =>
+        planGenerated(manifest, { title: "Ping service", projections: [projection] }),
+      ).not.toThrow();
+    }
+    projection.provenance.version = "2.0.0-beta.1";
+    expect(() =>
+      planGenerated(manifest, { title: "Ping service", projections: [projection] }),
+    ).not.toThrow();
+    for (const version of ["2.0.0-beta.01", "2.0.0+bad metadata"]) {
+      projection.provenance.version = version;
+      expect(() =>
+        planGenerated(manifest, { title: "Ping service", projections: [projection] }),
+      ).toThrow("projection provenance needs a package name and SemVer version");
+    }
   });
 
   test("rejects forged non-portable manifest data", () => {

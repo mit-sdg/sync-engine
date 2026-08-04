@@ -5,6 +5,7 @@ import {
   checkRelease,
   ownedDependencyManifests,
   projectReleaseManifests,
+  releaseManifestPaths,
   releaseSourcePaths,
 } from "@scripts/release";
 
@@ -40,6 +41,24 @@ function replaceSource(
   sources.set(path, source.replace(current, replacement));
 }
 
+function replaceCurrentChangelogEntry(
+  sources: Map<string, string>,
+  current: string,
+  replacement: string,
+): void {
+  const path = "CHANGELOG.md";
+  const source = sources.get(path) ?? "";
+  const start = source.indexOf(`## [${currentVersion}]`);
+  if (start < 0) throw new Error(`${path} has no ${currentVersion} entry`);
+  const end = source.indexOf("\n## [", start + 1);
+  const entry = source.slice(start, end < 0 ? undefined : end);
+  if (!entry.includes(current)) {
+    throw new Error(`${path} ${currentVersion} entry does not contain ${current}`);
+  }
+  const updated = entry.replace(current, replacement);
+  sources.set(path, `${source.slice(0, start)}${updated}${end < 0 ? "" : source.slice(end)}`);
+}
+
 function editManifest(
   sources: Map<string, string>,
   path: string,
@@ -51,14 +70,20 @@ function editManifest(
 }
 
 describe("release source facts", () => {
-  test("accepts the beta cutover sources", () => {
+  test("accepts the beta release sources", () => {
     expect(checkRelease(fixture())).toEqual([]);
   });
 
   test("projects root facts into owned manifests", () => {
     const sources = fixture();
+    editManifest(sources, releaseManifestPaths[0], (manifest) => {
+      manifest.version = "stale";
+      manifest.engines.node = "stale";
+      manifest.peerDependencies["@mit-sdg/sync-engine"] = "stale";
+    });
     editManifest(sources, ownedDependencyManifests[0], (manifest) => {
       manifest.dependencies["@mit-sdg/sync-engine"] = "stale";
+      manifest.dependencies.typescript = "stale";
       delete manifest.devDependencies["@types/node"];
       manifest.devDependencies.typescript = "stale";
       manifest.devDependencies.vite = "stale";
@@ -69,31 +94,85 @@ describe("release source facts", () => {
       manifest.packageManager = "stale";
     });
 
+    expect(checkRelease(sources)).toEqual(
+      expect.arrayContaining(
+        [releaseManifestPaths[0], ownedDependencyManifests[0]].map(
+          (path) => `${path}: release-owned facts are stale; run bun run release:update`,
+        ),
+      ),
+    );
     const projected = projectReleaseManifests(sources);
-    sources.set(ownedDependencyManifests[0], projected.get(ownedDependencyManifests[0]) ?? "");
+    expect(
+      JSON.parse(projected.get(ownedDependencyManifests[0]) ?? "").dependencies,
+    ).not.toHaveProperty("typescript");
+    for (const [path, source] of projected) sources.set(path, source);
     expect(checkRelease(sources)).toEqual([]);
   });
 
-  test("refuses to project an invalid canonical version", () => {
+  test("reports every malformed owned manifest by path", () => {
     const sources = fixture();
-    editManifest(sources, "package.json", (manifest) => {
-      manifest.version = "invalid";
-    });
-    expect(() => projectReleaseManifests(sources)).toThrow(/invalid release version/);
+    const malformed = [releaseManifestPaths[0], ownedDependencyManifests[0]];
+    for (const path of malformed) sources.set(path, "{");
+
+    const failures = checkRelease(sources);
+    for (const path of malformed) {
+      expect(
+        failures.filter((failure) => failure.startsWith(`${path}: invalid JSON`)),
+      ).toHaveLength(1);
+    }
+    expect(failures).not.toContainEqual(expect.stringContaining("projection failed"));
   });
 
-  test.each(["1.0.0-alpha.1", "1.0.0-beta.01", "1.0.1-beta.0"])(
-    "rejects invalid beta version %s",
+  test.each(["invalid", "1.9007199254740992.0", "1.0.9007199254740992"])(
+    "refuses to project invalid canonical version %s",
     (version) => {
       const sources = fixture();
       editManifest(sources, "package.json", (manifest) => {
         manifest.version = version;
       });
-      expect(checkRelease(sources)).toContainEqual(
-        expect.stringContaining("without leading zeroes"),
-      );
+      expect(() => projectReleaseManifests(sources)).toThrow(/invalid release version/);
     },
   );
+
+  test.each([
+    ["root workspace identity", `      "name": "@mit-sdg/sync-engine",`, `      "name": "stale",`],
+    [
+      "HTTP workspace version",
+      `    "packages/http": {\n      "name": "@mit-sdg/sync-engine-http",\n      "version": "${currentVersion}"`,
+      `    "packages/http": {\n      "name": "@mit-sdg/sync-engine-http",\n      "version": "1.0.1"`,
+    ],
+    [
+      "HTTP peer range",
+      `        "@mit-sdg/sync-engine": "${currentVersion}"`,
+      `        "@mit-sdg/sync-engine": "^${currentVersion}"`,
+    ],
+    [
+      "core registry resolution",
+      `    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:",`,
+      `    "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@${currentVersion}",`,
+    ],
+  ] as const)("rejects a stale bun.lock %s", (_name, current, replacement) => {
+    const sources = fixture();
+    replaceSource(sources, "bun.lock", current, replacement);
+    expect(checkRelease(sources)).toContainEqual(expect.stringContaining("bun.lock:"));
+  });
+
+  test.each([
+    "1.0.0-alpha.1",
+    "1.0.0-beta.01",
+    "1.0.01",
+    "1.9007199254740992.0",
+    "1.0.9007199254740992",
+    "2.0.0",
+  ])("rejects invalid beta version %s", (version) => {
+    const sources = fixture();
+    editManifest(sources, "package.json", (manifest) => {
+      manifest.version = version;
+    });
+    expect(checkRelease(sources)).toContainEqual(
+      expect.stringContaining("1.0.0-beta.N without leading zeroes"),
+    );
+  });
 
   test("rejects a non-beta dist-tag", () => {
     const sources = fixture();
@@ -101,6 +180,16 @@ describe("release source facts", () => {
       manifest.publishConfig.tag = "latest";
     });
     expect(checkRelease(sources)).toContain('package.json: publishConfig.tag must be "beta"');
+  });
+
+  test("requires the root workspace override for the HTTP peer", () => {
+    const sources = fixture();
+    editManifest(sources, "package.json", (manifest) => {
+      delete manifest.overrides["@mit-sdg/sync-engine"];
+    });
+    expect(checkRelease(sources)).toContain(
+      "package.json: overrides.@mit-sdg/sync-engine must equal file:.",
+    );
   });
 
   test.each(ownedDependencyManifests)("rejects a stale owned dependency in %s", (path) => {
@@ -115,7 +204,7 @@ describe("release source facts", () => {
     "rejects a changelog without the %s heading",
     (heading) => {
       const sources = fixture();
-      replaceSource(sources, "CHANGELOG.md", `### ${heading}`, `### Missing ${heading}`);
+      replaceCurrentChangelogEntry(sources, `### ${heading}`, `### Missing ${heading}`);
       expect(checkRelease(sources)).toContain(
         `CHANGELOG.md: ${currentVersion} is missing the ${heading} heading`,
       );
@@ -128,7 +217,7 @@ describe("release source facts", () => {
       sources,
       "CHANGELOG.md",
       `releases/tag/v${currentVersion}`,
-      "releases/tag/v1.0.0-beta.999",
+      "releases/tag/v1.0.1",
     );
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining("release link"));
   });
@@ -163,14 +252,6 @@ describe("release source facts", () => {
       `${sources.get("CHANGELOG.md") ?? ""}\n[future]: https://example.test/future\n`,
     );
     expect(checkRelease(sources)).not.toContainEqual(expect.stringContaining("0.1.0 must remain"));
-  });
-
-  test("rejects a stale exact README evaluation version", () => {
-    const sources = fixture();
-    replaceSource(sources, "README.md", `\`@${currentVersion}\``, "`@1.0.0-beta.999`");
-    expect(checkRelease(sources)).toContain(
-      `README.md: exact evaluation version must be @${currentVersion}`,
-    );
   });
 
   test.each([
@@ -238,7 +319,7 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`${path}: missing`));
   });
 
-  test("requires both release code owners", () => {
+  test("lists both release code owners", () => {
     const sources = fixture();
     replaceSource(
       sources,
@@ -247,7 +328,7 @@ describe("release source facts", () => {
       "/.github/workflows/ @BarishNamazov",
     );
     expect(checkRelease(sources)).toContain(
-      ".github/CODEOWNERS: /.github/workflows/ must require both release code owners",
+      ".github/CODEOWNERS: /.github/workflows/ must list both release code owners",
     );
   });
 
@@ -313,26 +394,27 @@ describe("release source facts", () => {
     );
   });
 
-  test("requires every publish verification gate", () => {
+  test("requires the publish scenario gate to reuse the existing build", () => {
     const sources = fixture();
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "bun run coverage",
-      "bun run omitted-coverage",
+      "bun scripts/examples.ts scenario",
+      "bun run scenario",
     );
     expect(
       checkRelease(sources).filter((failure) =>
         failure.startsWith(".github/workflows/publish.yml: verify"),
       ),
     ).toEqual([
-      ".github/workflows/publish.yml: verify job must run bun run coverage",
+      ".github/workflows/publish.yml: verify job must run bun scripts/examples.ts scenario",
       ".github/workflows/publish.yml: verify gates must remain in reviewed order",
     ]);
   });
 
   test.each([
     "needs: verify",
+    "needs: [verify, publish-core]",
     "id-token: write",
     "name: npm",
     "npm publish ./release/package.tgz --provenance --tag beta --access public",
@@ -343,31 +425,81 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`missing ${fact}`));
   });
 
-  test("requires core to publish before HTTP", () => {
+  test.each([
+    [
+      "publish-core",
+      "sha256sum --check release/package.tgz.sha256",
+      "npm publish ./release/package.tgz --provenance --tag beta --access public",
+    ],
+    [
+      "publish-http",
+      "sha256sum --check release/http-package.tgz.sha256",
+      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+    ],
+  ] as const)(
+    "requires checksum verification before publication in %s",
+    (name, checksum, publish) => {
+      const sources = fixture();
+      replaceSource(
+        sources,
+        ".github/workflows/publish.yml",
+        `      - run: ${checksum}\n      - run: ${publish}`,
+        `      - run: ${publish}\n      - run: ${checksum}`,
+      );
+      expect(checkRelease(sources)).toContain(
+        `.github/workflows/publish.yml: ${name} checksum verification must precede npm publish`,
+      );
+    },
+  );
+
+  test.each([
+    ["publish-core", "npm publish ./release/package.tgz --provenance --tag beta --access public"],
+    [
+      "publish-http",
+      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+    ],
+  ] as const)("rejects an extra npm publish command in %s", (name, publish) => {
     const sources = fixture();
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "npm publish ./release/package.tgz --provenance --tag beta --access public\n      - run: sha256sum --check release/http-package.tgz.sha256\n      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public",
-      "npm publish ./release/http-package.tgz --provenance --tag beta --access public\n      - run: sha256sum --check release/http-package.tgz.sha256\n      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+      `      - run: ${publish}`,
+      `      - run: ${publish}\n      - run: npm publish ./release/unreviewed.tgz --access public`,
     );
     expect(checkRelease(sources)).toContain(
-      ".github/workflows/publish.yml: publish must release core before HTTP",
+      `.github/workflows/publish.yml: ${name} job must contain exactly one npm publish command`,
+    );
+  });
+
+  test("requires HTTP publication to depend on core publication", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "needs: [verify, publish-core]",
+      "needs: verify",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: publish-http job is missing needs: [verify, publish-core]",
     );
   });
 
   test.each([
-    "GITHUB_REF_NAME",
-    "GITHUB_SHA",
-    "origin/main",
-    "[1-9]\\d*",
-    "`v${core.version}`",
-    "core.version !== http.version",
-  ])("requires source validation fact %s", (fact) => {
+    ["GITHUB_REF_NAME", "GITHUB_REF_NAME"],
+    ["GITHUB_SHA", "GITHUB_SHA"],
+    ["origin/main", "origin/main"],
+    ["/^1\\.0\\.0-beta\\.", "v1 beta"],
+    ["Number.isSafeInteger(Number(beta[1]))", "safe numeric components"],
+    ["`v${core.version}`", "`v${core.version}`"],
+    ["core.version !== http.version", "core.version !== http.version"],
+  ])("requires source validation fact %s", (source, fact) => {
     const sources = fixture();
     sources.set(
       ".github/workflows/publish.yml",
-      (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(fact, "omitted-source-fact"),
+      (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
+        source,
+        "omitted-source-fact",
+      ),
     );
     expect(
       checkRelease(sources).filter((failure) =>
@@ -375,7 +507,8 @@ describe("release source facts", () => {
       ),
     ).toEqual([
       `.github/workflows/publish.yml: verify source validation is missing ${fact}`,
-      `.github/workflows/publish.yml: publish source validation is missing ${fact}`,
+      `.github/workflows/publish.yml: publish-core source validation is missing ${fact}`,
+      `.github/workflows/publish.yml: publish-http source validation is missing ${fact}`,
     ]);
   });
 
@@ -423,7 +556,7 @@ describe("release source facts", () => {
       "    # needs: verify",
     );
     expect(checkRelease(dependency)).toContain(
-      ".github/workflows/publish.yml: publish job is missing needs: verify",
+      ".github/workflows/publish.yml: publish-core job is missing needs: verify",
     );
   });
 

@@ -1,4 +1,4 @@
-import { reaction, returned, vocabulary, when, where } from "@sync-engine/language";
+import { count, reaction, returned, vocabulary, when, where } from "@sync-engine/language";
 
 class OneAnswer {
   start(_: Record<string, never>) {
@@ -28,6 +28,10 @@ class QueriedConcept {
   _answer({ key }: { key: string }): { value: string }[] {
     return key === "present" ? [{ value: key }] : [];
   }
+
+  _numberKey(_: { key: number }): { value: string }[] {
+    return [];
+  }
 }
 
 class InvalidAnswer {
@@ -48,6 +52,26 @@ class InvalidNestedRows {
   }
 }
 
+class ArrayPromisedAsOne {
+  _answer(_: Record<string, never>): { value: number }[] {
+    return [{ value: 1 }];
+  }
+}
+
+class RecordPromisedAsOptional {
+  _answer(_: Record<string, never>): { value: number } {
+    return { value: 1 };
+  }
+}
+
+class AsyncRecordPromisedAsMany {
+  static readonly queries = { _answer: "many" } as const;
+
+  async _answer(_: Record<string, never>): Promise<{ value: number }> {
+    return { value: 1 };
+  }
+}
+
 const words = vocabulary({
   concepts: {
     OneAnswer: { class: OneAnswer, queries: { _answer: "one" } },
@@ -57,6 +81,19 @@ const words = vocabulary({
   computations: {},
 });
 const { OneAnswer: Answering } = words.concepts;
+const { QueriedConcept: Looking } = words.concepts;
+
+const countResult = Symbol("count-result");
+count(Looking._answer, { key: "present" }, countResult);
+// @ts-expect-error Count requires every query input.
+count(Looking._answer, {}, countResult);
+// @ts-expect-error Count rejects undeclared query inputs.
+count(Looking._answer, { key: "present", extra: true }, countResult);
+const unionCountQuery = (true as boolean) ? Looking._answer : Looking._numberKey;
+// @ts-expect-error A union query cannot use one member's string input contract.
+count(unionCountQuery, { key: "present" }, countResult);
+// @ts-expect-error A union query cannot use one member's numeric input contract.
+count(unionCountQuery, { key: 1 }, countResult);
 
 const recordInput: Parameters<typeof Answering.record>[0] = { value: 1 };
 const recordOutput: ReturnType<typeof Answering.record> = { value: 1 };
@@ -162,3 +199,16 @@ vocabulary({ concepts: { InvalidCallableAnswer }, computations: {} });
 
 // @ts-expect-error Each member of a many answer must be a record, not another array.
 vocabulary({ concepts: { InvalidNestedRows }, computations: {} });
+
+// @ts-expect-error A one query returns one record, not an array.
+vocabulary({ concepts: { Invalid: { class: ArrayPromisedAsOne, queries: { _answer: "one" } } } });
+
+vocabulary({
+  concepts: {
+    // @ts-expect-error An optional query returns an array containing zero or one record.
+    Invalid: { class: RecordPromisedAsOptional, queries: { _answer: "optional" } },
+  },
+});
+
+// @ts-expect-error A many query returns an array, including when the method is asynchronous.
+vocabulary({ concepts: { Invalid: AsyncRecordPromisedAsMany } });

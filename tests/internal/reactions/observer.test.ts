@@ -122,6 +122,34 @@ describe("engine observer", () => {
     expect(goodCalled).toBe(true);
   });
 
+  test("consumes a rejected PromiseLike from an observer without blocking peers", async () => {
+    const { reacting } = engine();
+    const { Button } = reacting.instrument({ Button: new ButtonConcept() });
+    let thenCalled = false;
+    let goodCalled = false;
+    reacting.addObserver({
+      onAction() {
+        const failure = Promise.reject(new Error("observer rejected"));
+        return {
+          then: (...args: Parameters<PromiseLike<never>["then"]>) => {
+            thenCalled = true;
+            return failure.then(...args);
+          },
+        } as PromiseLike<never>;
+      },
+    });
+    reacting.addObserver({
+      onAction() {
+        goodCalled = true;
+      },
+    });
+
+    await expect(Button.clicked({ kind: "test" })).resolves.toEqual({ kind: "test" });
+    await Promise.resolve();
+    expect(thenCalled).toBe(true);
+    expect(goodCalled).toBe(true);
+  });
+
   test("the unsubscribe function stops later observer events", async () => {
     const { reacting } = engine();
     const { Button } = reacting.instrument({ Button: new ButtonConcept() });

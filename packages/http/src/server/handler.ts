@@ -8,14 +8,15 @@ import {
 } from "@mit-sdg/sync-engine/boundary";
 import type { ContractShape } from "@mit-sdg/sync-engine/client";
 import type { HttpFloor } from "./floor.ts";
-import { credentialProtectedPaths, validateHttpFloor } from "./floor.ts";
+import { credentialProtectedPaths, httpFloor, validateHttpFloor } from "./floor.ts";
 import type { ProductionHttpProfile } from "./policy.ts";
-import { normalizeHttpBasePath, normalizeProductionHttpProfile } from "./policy.ts";
+import { normalizeHttpBasePath, productionHttpProfile } from "./policy.ts";
 import {
   publicErrorStatus,
   publicFrameworkCategoryOf,
   registeredPublicCategoryOf,
 } from "./public-errors.ts";
+import { readCappedUtf8Stream } from "../stream.ts";
 
 type Application = Assembly<Record<string, new (...args: never[]) => object>>;
 
@@ -87,43 +88,19 @@ function withCorrelation(
   return response;
 }
 
-type RequestTextResult =
-  | { ok: true; text: string }
-  | { ok: false; reason: "too_large" | "unreadable" };
-
-function cancelStream(stream: ReadableStream<Uint8Array> | null): void {
-  if (stream !== null) void stream.cancel().catch(() => undefined);
-}
+type RequestTextResult = { ok: true; text: string } | { ok: false };
 
 async function readRequestText(request: Request): Promise<RequestTextResult> {
   const declared = request.headers.get("Content-Length");
-  if (declared !== null && Number(declared) > MAX_BODY_BYTES) {
-    cancelStream(request.body);
-    return { ok: false, reason: "too_large" };
-  }
-  if (request.body === null) return { ok: true, text: "" };
-
-  const reader = request.body.getReader();
-  const decoder = new TextDecoder();
-  const parts: string[] = [];
-  let bytes = 0;
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      bytes += value.byteLength;
-      if (bytes > MAX_BODY_BYTES) {
-        void reader.cancel().catch(() => undefined);
-        return { ok: false, reason: "too_large" };
-      }
-      parts.push(decoder.decode(value, { stream: true }));
-    }
-    parts.push(decoder.decode());
-    return { ok: true, text: parts.join("") };
+    const result = await readCappedUtf8Stream(
+      request.body,
+      MAX_BODY_BYTES,
+      declared === null ? undefined : Number(declared),
+    );
+    return "aborted" in result ? { ok: false } : result;
   } catch {
-    return { ok: false, reason: "unreadable" };
-  } finally {
-    reader.releaseLock();
+    return { ok: false };
   }
 }
 
@@ -158,15 +135,16 @@ export function createHttpHandler(
   options: FloorHandlerOptions | ProfileHandlerOptions,
 ): (request: Request) => Promise<Response> {
   const binding = bindTransport({ application: options.application, gateway: options.gateway });
-  const floor = "floor" in options ? options.floor : undefined;
+  let floor: HttpFloor | undefined;
+  let profile: ProductionHttpProfile;
+  if ("floor" in options) {
+    floor = httpFloor(options.floor);
+    profile = floor;
+  } else {
+    profile = productionHttpProfile(options.profile);
+  }
   if (floor !== undefined) validateHttpFloor(binding, floor);
   const correlation = normalizeCorrelationOptions(options.correlation);
-  const declaration = "floor" in options ? options.floor : options.profile;
-  const profile = normalizeProductionHttpProfile(
-    declaration,
-    floor === undefined ? "productionHttpProfile" : "httpFloor",
-    floor === undefined ? "" : " for secure cookies",
-  );
   const base = normalizeHttpBasePath(profile.basePath);
   const credential = floor?.credential;
   const secure = new URL(profile.origin).protocol === "https:";

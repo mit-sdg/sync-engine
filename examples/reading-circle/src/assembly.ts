@@ -11,5 +11,3 @@ export function assembleReadingCircle(instances: ReadingCircleOverrides = {}) {
     composition: { readingCircle },
   });
 }
-
-export type ReadingCircleApp = ReturnType<typeof assembleReadingCircle>;

@@ -15,6 +15,10 @@ import { isRefuse, refusalMapping } from "@sync-engine/internal/reactions/concep
 import { quietReacting } from "../../utils/reacting.ts";
 import type { Empty } from "@sync-engine/internal/reactions/types";
 import { ButtonConcept, RecorderConcept } from "./mocks.ts";
+import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting.ts";
+import type { RawFaultReport } from "@sync-engine/assembly";
 
 class GateKeeperConcept {
   admit({ name }: { name: string }) {
@@ -105,7 +109,37 @@ describe("faults during action instrumentation", () => {
     const records = [...reacting.Action.actions.values()];
     expect(records[0]?.outcome).toBeUndefined();
     expect(records[0]?.fault).toMatchObject({ error: "UNKNOWN_ERROR" });
-    expect(reacting.Action._getPending()).toHaveLength(1);
+    expect(
+      [...reacting.Action.store.actions.values()].filter(({ outcome }) => outcome === undefined),
+    ).toHaveLength(1);
+  });
+
+  test("reports the original action fault only through the privileged reporter", async () => {
+    const fault = new TypeError("private fault detail");
+    const reports: RawFaultReport[] = [];
+    class Faulting {
+      run(_: Empty): never {
+        throw fault;
+      }
+    }
+    const store = new MemoryStore();
+    const reacting = new Reacting(
+      new ActionConcept(store, undefined, undefined, (report) => {
+        reports.push(report);
+        throw new Error("reporter failure");
+      }),
+    );
+    const Fault = reacting.instrumentConcept(new Faulting(), "Faulting");
+
+    await expect(Fault.run({})).rejects.toBe(fault);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({
+      kind: "action",
+      error: fault,
+      concept: "Faulting",
+      action: "run",
+    });
+    expect(JSON.stringify(store.actions)).not.toContain("private fault detail");
   });
 
   test("a refusal is not a fault", async () => {
@@ -131,9 +165,11 @@ describe("faults during action instrumentation", () => {
     // The pipeline stopped at the fault; the firing retains the faulted
     // ask on its produced list, and the trigger stays consumed.
     expect(Recorder.order).toEqual([]);
-    const firings = reacting._getFirings("FaultyPipeline");
+    const firings = reacting.Action.store.firingsByReaction("FaultyPipeline");
     expect(firings).toHaveLength(1);
-    const faulted = reacting.Action._getFaulted();
+    const faulted = [...reacting.Action.store.actions.values()].filter(
+      ({ fault }) => fault !== undefined,
+    );
     expect(faulted).toHaveLength(1);
     expect(firings[0]?.produced).toContain(faulted[0]?.id);
   });

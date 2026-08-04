@@ -65,7 +65,7 @@ the committed files with fresh output.
 The six files under `src/<subpath>/index.ts` are export-only core public
 barrels. Workspace packages expose their own export-only public entrypoints and
 may import only supported core subpaths. Internal engine code imports engine
-modules rather than public barrels. The architecture check enforces dependency
+modules directly. The architecture check enforces dependency
 direction and rejects unsupported entrypoints. Any export change requires
 corresponding public API and declaration updates.
 

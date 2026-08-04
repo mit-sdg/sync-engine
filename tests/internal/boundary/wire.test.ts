@@ -21,7 +21,7 @@ import {
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { wireContracts } from "@sync-engine/tooling";
 import { inventoryOf } from "@sync-engine/internal/reactions/concepts/introspect";
-import { assemble, fail } from "@sync-engine/internal/boundary/assembly/assemble";
+import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
 import type { AppIR } from "@sync-engine/internal/reads/ir";
 
@@ -76,7 +76,7 @@ function setup() {
       { input: { required: ["session", "item", "amount"], defaults: { note: null } } },
     ),
     LedgerAddForbidden: endpoint("/ledger/add", ({ session, item, amount }: Vars) =>
-      receive({ session, item, amount }).then(fail("FORBIDDEN")),
+      receive({ session, item, amount }).then(respond({ error: "FORBIDDEN" })),
     ),
     LedgerList: endpoint("/ledger/list", () => receive({}).then(respond({ rows: theRows({}) }))),
     LedgerLatest: endpoint("/ledger/latest", () =>

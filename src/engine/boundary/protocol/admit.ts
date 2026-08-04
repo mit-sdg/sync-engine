@@ -8,9 +8,7 @@
 import type { InputContractDecl } from "./endpoints.ts";
 import { isPlainObject } from "@engine/reads/matchers";
 
-export type AdmitResult =
-  | { ok: true; admitted: Record<string, unknown> }
-  | { ok: false; detail: string };
+type AdmitResult = { ok: true; admitted: Record<string, unknown> } | { ok: false; detail: string };
 
 /** Check `input` against `contract` and name `path` in every failure. */
 export function admitInput(contract: InputContractDecl, path: string, input: unknown): AdmitResult {

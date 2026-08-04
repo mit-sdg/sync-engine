@@ -168,7 +168,7 @@ const theRespondedCircleActivityOf = former(
     ).form({ reading, discussion }),
 ).optional();
 
-// ── The caught mistakes — each rejected at registration ─────────────────────
+// ── The caught mistakes — registration, evaluation, and live overlap ────────
 
 const CloseTheAbsentDiscussion = reaction(({ selection, discussion }) =>
   when(Selecting.clear({}).responds({ selection }))
@@ -367,7 +367,7 @@ describe("the example book", () => {
     for (const pin of readBackPins) expect(book).toContain(pin);
   });
 
-  test("every mistake the book shows is rejected in its exact words", async () => {
+  test("every mistake the book shows has its documented result", async () => {
     const book = await bookText();
     const rejects = (entry: Record<string, unknown>) => () =>
       assemble({ vocabulary: words, composition: { bad: entry } });

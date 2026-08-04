@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting.ts";
 import { createEngine } from "@sync-engine/internal/reactions/engine.ts";
-import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { each, former, vocabulary, when } from "@sync-engine/language";
 
 describe("Reacting interpreter loop", () => {
@@ -30,27 +29,11 @@ describe("Reacting interpreter loop", () => {
     });
     await SourceConcept.open({});
     expect(sink.seen).toBe(1);
-    expect(reacting._getFirings("Notify")).toHaveLength(1);
+    expect(reacting.Action.store.firingsByReaction("Notify")).toHaveLength(1);
   });
 
-  test("does not resolve inherited frame properties as consequence bindings", () => {
-    class Sink {
-      note(_input: { value: unknown }) {
-        return {};
-      }
-    }
-    const { Sink: SinkRef } = vocabulary({ concepts: { Sink } }).concepts;
-    const reacting = new Reacting();
-    reacting.instrumentConcept(new Sink());
-
-    for (const name of ["constructor", "toString", "__proto__"]) {
-      const consequence = SinkRef.note({ value: { $var: name } });
-      expect(() => reacting.matchThen(consequence.action, {})).toThrow("is not bound");
-    }
-  });
-
-  test("createEngine with a LogStore returns an Engine", () => {
-    const engine = createEngine(new MemoryStore());
+  test("createEngine with occurrence options returns an Engine", () => {
+    const engine = createEngine({ retention: "keepAll", logSink: { append() {} } });
     expect(engine.instrument).instanceOf(Function);
     expect(engine.register).instanceOf(Function);
     expect(engine.logging).toBeDefined();

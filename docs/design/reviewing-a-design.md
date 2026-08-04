@@ -2,8 +2,8 @@
 
 A set of individually defensible concepts can still be a poor application. This
 page is a review sequence: purposes and boundaries first, then state and
-actions, then composition, then the whole system under scenarios that are not
-the happy path.
+actions, then composition, then the whole system under ordinary and failure
+scenarios.
 
 Review in that order. A boundary defect found late invalidates the state and
 action review that preceded it, so do not begin with field-level questions.
@@ -47,12 +47,11 @@ Five checks catch most defects quickly:
 - Name the lifecycle stages that apply to each managed entity, including any
   end, retention, expiry, or deliberate-permanence rule.
 - Find the concept's invariants and confirm the owning action implementation —
-  and, when needed, its storage coordination — enforces them rather than a
-  caller.
+  and, when needed, its storage coordination — enforces them directly.
 
 ## 3. Review the composition
 
-Read every reaction and endpoint as a set, not one at a time.
+Review the combined set of reactions and endpoints.
 
 - **Does each rule have a documented purpose?** It can express policy, a
   workflow, notification, lifecycle cascade, compensation, adapter, or repair
@@ -70,7 +69,7 @@ Read every reaction and endpoint as a set, not one at a time.
   the interval during which each is false.
 - **Is any policy duplicated?** The same condition written into three endpoints
   should be one named view.
-- **Do protected or case-split endpoint paths cover denial and fallback?**
+- **Do protected or case-split endpoint paths cover every denial and remaining case?**
   Endpoints on one path do not fall through in declaration order. Alternatives
   that can produce competing answers need intentional overlap or disjointness;
   an admitted, fault-free unmatched request waits for its deadline.
@@ -100,7 +99,7 @@ Cover ordinary success and the failures that apply to the application.
 | Timeout or abort                | Which accepted work can continue after the caller stops waiting         |
 | Action or interpreter fault     | How a pending boundary request is settled and what evidence remains     |
 
-Trace the interruption at each important step, not only at the start. "The
+Trace the interruption at the start and at each important later step. "The
 selection landed and the discussion did not" is a reachable state, and it is the
 one a design forgets; the runtime does not offer "both or neither."
 
@@ -110,7 +109,7 @@ Failure review asks one question of every effect: what remains if this step does
 not happen?
 
 - **Per action:** what does it refuse, and what does it fault on? An expected
-  domain condition that faults instead of refusing cannot be handled as an
+  domain condition requires a declared refusal so callers can handle it as an
   ordinary domain alternative. Framework reactions can observe faults, and the
   standard boundary can settle a pending request with `INTERNAL_ERROR`.
 - **Per chain:** which earlier effects persist when a later action refuses or
@@ -142,8 +141,8 @@ one comes from.
   the time the effect runs, and confirm that any decision needing exactness at
   the moment of effect is enforced inside the action that owns the state and, for
   shared durable state, its storage transaction or constraint.
-- Confirm protected or case-split paths have an intentional denial or fallback
-  result rather than dropping the case.
+- Confirm protected or case-split paths have intentional complementary cases
+  that return a result for every covered case.
 - Check direct `Assembly.concepts` roots as well as endpoints. Either they are
   trusted internal calls or they independently enforce the required policy.
 - Check what leaves the boundary. The production HTTP profile projects mapped
@@ -183,8 +182,8 @@ reactions that only forward. Fold it into the concept that reads it.
 **Add the missing action.** Symptom: a reaction reads several queries and asks
 several actions to accomplish one thing, or the same workaround appears in
 several rules. Add the semantic action and delete the workaround. This is the
-right revision when the work belongs to one owner; it removes rules rather than
-moving them.
+right revision when the work belongs to one owner; it removes rules while
+keeping the work with that owner.
 
 **Move a racing decision into the action.** Symptom: a rule reads a fact and then
 asks an action that depends on it, where two callers could interleave. Move the
@@ -203,8 +202,8 @@ also legitimate when the behavior does not exist elsewhere.
 
 **Declare an adapter as an adapter.** Symptom: a concept whose actions map
 one-to-one onto an external system. Keep it, and say in its specification prose
-that it is a boundary to a specific external interface rather than a domain
-mechanism, so nobody evaluates it as one.
+that it is a boundary to a specific external interface. This classification
+prevents reviewers from evaluating it as a domain mechanism.
 
 ## Checklist
 
@@ -241,9 +240,8 @@ assumes the reasoning above; it does not replace it.
 - [ ] Every identity is bound explicitly. Fresh names opened by declarative reads
       have a later use; inspect trigger and result bindings separately.
 - [ ] The condition reads no more than the decision needs.
-- [ ] The rule has a documented purpose — policy, workflow, notification,
-      cascade, compensation, adapter, or cross-concept repair — rather than a
-      concept's own invariant.
+- [ ] The rule documents an application purpose — policy, workflow,
+      notification, cascade, compensation, adapter, or cross-concept repair.
 - [ ] Fan-out is intended, and something bounds the number of matches.
 - [ ] The behavior when nothing matches is intended.
 - [ ] Repeated firing is safe, refused, or explicitly accepted.
@@ -251,8 +249,8 @@ assumes the reasoning above; it does not replace it.
       faults.
 - [ ] Endpoint alternatives that can produce competing answers have intentional
       overlap or disjoint conditions. Protected or case-split paths have a
-      denial or fallback result.
-- [ ] Authorization uses a verified identity, not a claimed one.
+      denial or complementary result.
+- [ ] Authorization uses the identity established by authentication.
 - [ ] Any decision that must not race is inside an owner action and, for shared
       durable state, protected by storage coordination.
 
@@ -265,6 +263,6 @@ assumes the reasoning above; it does not replace it.
       budget decision.
 - [ ] Rules between one pair of concepts have documented independent purposes;
       pass-through and reconstruction rules have been reviewed.
-- [ ] A likely change touches one concept or one rule, not several of each.
+- [ ] A likely change remains confined to one concept or one rule.
 - [ ] Each changed concept and rule has focused evidence or a test that exercises
       its ordinary and relevant failure behavior.

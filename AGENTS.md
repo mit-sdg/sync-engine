@@ -40,7 +40,7 @@ Start with `docs/index.md`. The document owners are:
 - Progressive application authoring: `docs/guide/`
 - Application model explanation: `docs/overview.md`
 - Small tested read constructions: `docs/book.md`
-- Exact package exports and API summaries: `docs/public-surface.md`
+- Exact core exports and API summaries: `docs/public-surface.md`; HTTP exports and API summaries: `packages/http/public-surface.md`
 - Concept file grammar: `docs/concept-specification.md`
 - Installed command behavior: `docs/cli.md`
 - Execution guarantees: `docs/semantics.md`
@@ -86,7 +86,7 @@ the book.
 | `tests/public-api.test.ts`       | Exact core export register, public-package-subpath check, and unsupported-entrypoint check                                          |
 
 Public entrypoints contain exports only. Code under `src/engine/` imports other
-engine modules rather than a public entrypoint. The architecture check enforces
+engine modules directly. The architecture check enforces
 these dependency directions and import spellings, rejects unsupported
 top-level and test directories, nested barrels, unreachable source, invalid
 generated provenance, package export mismatches, and every runtime import SCC

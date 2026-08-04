@@ -36,7 +36,6 @@ interface PackageManifest {
 interface PackedWorkspace {
   workspace: Workspace;
   manifest: PackageManifest;
-  packed: NpmPackResult;
   tarball: string;
   entries: Set<string>;
 }
@@ -251,7 +250,7 @@ async function verifyPackedWorkspace(
   ) {
     throw new Error("core package contains the HTTP workspace");
   }
-  return { workspace, manifest, packed, tarball, entries };
+  return { workspace, manifest, tarball, entries };
 }
 
 async function verifyInstalledWorkspace(
@@ -286,9 +285,10 @@ function assertWorkspacePeers(
 ): void {
   for (const peerId of workspace.peerWorkspaceIds) {
     const peer = workspaceArtifact(artifacts, workspaceById(peerId));
-    if (manifest.peerDependencies?.[peer.workspace.packageName] !== peer.manifest.version) {
+    const expected = peer.manifest.version;
+    if (manifest.peerDependencies?.[peer.workspace.packageName] !== expected) {
       throw new Error(
-        `${workspace.id} must declare an exact peer on ${peer.workspace.packageName}@${peer.manifest.version}`,
+        `${workspace.id} must declare peer ${peer.workspace.packageName}@${expected}`,
       );
     }
   }
@@ -720,16 +720,9 @@ async function copyVerifiedTarballs(
       await copyFile(artifact.tarball, resolve(destinationDirectory, workspace.verifiedTarball));
     }
   }
-  const legacyDestination = process.env.SYNC_ENGINE_VERIFIED_TARBALL;
-  if (legacyDestination !== undefined) {
-    const destination = resolve(root, legacyDestination);
-    await mkdir(dirname(destination), { recursive: true });
-    await copyFile(workspaceArtifact(artifacts, coreWorkspace).tarball, destination);
-  }
 }
 
 try {
-  run("bun", ["run", "build"]);
   const artifacts = new Map<string, PackedWorkspace>();
   for (const workspace of workspaceBuildOrder) {
     const manifest = JSON.parse(

@@ -1,6 +1,7 @@
 import { ListenerSet } from "@engine/utils/listener-set";
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
+import { normalizePromiseLike } from "@engine/utils/promise-like";
 import type { IntegrityFailureRecord, ReactionFailureRecord } from "./log-store.ts";
 
 export interface ExecutionControl {
@@ -69,9 +70,58 @@ export type OperationalEvent =
       state: "draining" | "idle";
     });
 
+interface RawFaultBase {
+  readonly error: unknown;
+  readonly at: number;
+  readonly flow?: string;
+  readonly route?: string;
+  readonly correlationId?: string;
+}
+
+/** A privileged, unsanitized host report that is never persisted or made public. */
+export type RawFaultReport =
+  | (RawFaultBase & {
+      readonly kind: "action";
+      readonly concept: string;
+      readonly action: string;
+      readonly actionId: string;
+      readonly reaction?: string;
+    })
+  | (RawFaultBase & {
+      readonly kind: "interpreter";
+      readonly reaction: string;
+      readonly stage: ReactionFailureRecord["stage"];
+      readonly action?: string;
+      readonly actionId?: string;
+    })
+  | (RawFaultBase & {
+      readonly kind: "endpoint-validator";
+      readonly phase: "input" | "output" | "domain-error";
+    });
+
+export type RawFaultReporter = (report: RawFaultReport) => void;
+
+/** Deliver a privileged report without allowing the reporter to affect runtime behavior. */
+export function reportRawFault(
+  reporter: RawFaultReporter | undefined,
+  report: RawFaultReport,
+): void {
+  if (reporter === undefined) return;
+  try {
+    const promise = normalizePromiseLike(reporter(report));
+    if (promise !== undefined) {
+      void promise.catch((error) =>
+        logger.warn("raw fault reporter failed", { error: serializeError(error) }),
+      );
+    }
+  } catch (error) {
+    logger.warn("raw fault reporter failed", { error: serializeError(error) });
+  }
+}
+
 export type OperationalObserver = (event: OperationalEvent) => void;
 
-export interface FlowOperationalContext {
+interface FlowOperationalContext {
   route: string;
   correlationId: string;
 }

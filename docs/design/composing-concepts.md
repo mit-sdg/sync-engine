@@ -3,12 +3,12 @@
 In this design model, concepts name no peers, so every dependency between two
 behaviors is stated outside both of them. A **reaction** is that statement: when
 an action is asked, returned, or refused, where current state matches, then ask
-further actions. This is a specification constraint, not a runtime restriction
-on arbitrary class code.
+further actions. This constraint governs concept specifications; arbitrary class
+code remains ordinary TypeScript.
 
-A reaction should make a dependency visible. It is not a way to call one concept
-from another with extra syntax — if a rule reads as "Selecting needs Discussing
-to finish its job," the boundary is wrong before the rule is written.
+Use a reaction to connect independently complete concepts. If Selecting needs
+Discussing to fulfill Selecting's own purpose, revise the concept boundary before
+writing the rule.
 
 This page is about designing reactions. [Connect independent
 behaviors](../guide/reactions.md) teaches the authoring surface, [the read
@@ -49,15 +49,15 @@ the engine does not infer that property from their position in a rule.
 `then` asks semantic actions. The reaction IR does not write storage or mutate
 concept state directly; each action decides whether it returns or refuses.
 
-Name the reaction after the decision, not the mechanism.
+Name the reaction after the decision.
 `SelectedMitigationAlertsResponders` says what the application believes.
 `ChooseHandler` says nothing, and a reviewer cannot tell whether the rule is
 still wanted.
 
 ## Stages, siblings, and separate rules
 
-One set of consequences can be written three ways, and the choice is a design
-decision rather than formatting. It changes how the correlation between steps is
+One set of consequences can be written three ways, and the choice affects the
+design. It changes how the correlation between steps is
 established, where a failure stops, and whether a reader can tell which parts are
 independent.
 
@@ -82,8 +82,8 @@ include either without the other. Chaining them would claim a dependency that
 does not exist, and would let a failure to alert stop the discussion.
 
 **Siblings in one `then(...)` group**, each ending in a stable `.named(...)`
-label, when several alternatives are cases of one decision. They read as one rule
-with branches instead of near-duplicate rules that a reader has to diff. The
+label, when several alternatives are cases of one decision. They read as one
+rule with branches. The
 engine lowers them to separate paths and the group carries no priority,
 exclusivity, or coverage claim, so any disjointness is yours to establish and
 state — see [sibling paths and endpoint
@@ -108,8 +108,8 @@ an identity: Selecting produced a value it calls a selection, and this rule
 declares that Alerting should treat it as a subject. Second, an opened name is a
 claim that the rule ranges over it, so the binding list should state what the
 rule depends on. Registration diagnoses unused fresh bindings opened by
-declarative read lines; it is not a complete audit of every unused trigger or
-result binding.
+declarative read lines. Trigger and result bindings are outside this diagnostic's
+scope.
 
 Bind every identity explicitly. A reaction that passes a whole result object
 through obscures which fields matter and breaks when the producing concept adds
@@ -123,9 +123,8 @@ flow-local, so one request's selection cannot fire a reaction against another
 request's discussion.
 
 `earlier(...)` reads records earlier in the same flow — the mechanism a later
-stage uses to recover the original request's inputs. Ordinary query lines are
-different: they read concept state at the moment the reaction runs, not as of the
-trigger. A reaction late in a cascade may observe state that an earlier
+stage uses to recover the original request's inputs. Ordinary query lines read
+concept state when the reaction runs. A reaction late in a cascade may observe state that an earlier
 consequence already changed, and the runtime provides no as-of-trigger snapshot.
 
 ## What belongs in a reaction
@@ -156,13 +155,12 @@ consequence already changed, and the runtime provides no as-of-trigger snapshot.
   enforcement also needs storage coordination.
 - **Storage manipulation or hidden mutation.** Effects are action asks.
 - **Behavior a concept needs to fulfill its own purpose.** A notification concept
-  that cannot deliver anything without a reaction supplying the delivery step is
-  incomplete, not composed.
+  that depends on a reaction for delivery has an incomplete concept boundary.
 - **Work around a missing action.** When a rule reads three queries and asks four
   actions to achieve what one well-named action would do, add the action.
 
-Repeated workarounds against the same concept's interface are strong evidence
-that the concept, not the rule, needs revision.
+Repeated workarounds against the same interface are strong evidence that the
+concept interface needs revision.
 
 ## Cross-concept invariants
 
@@ -182,7 +180,7 @@ Room can request when its discussion pack is enabled. The concepts are Selecting
 and Discussing; a returned `Selecting.choose` occurrence triggers
 `SelectedMitigationOpensDiscussion`, which asks `Discussing.open`. A fault can
 leave the selection without a discussion. `DISCUSSION_ALREADY_OPEN` means an
-open discussion was already observed, so it is not a missing-discussion case.
+open discussion was already observed and the relation currently holds.
 The pack can also be absent. The dashboard therefore treats a discussion as
 optional.
 
@@ -231,15 +229,15 @@ Two boundary rules shape endpoint design. An endpoint records **at most one**
 answer: a second answer is refused with `NOT_PENDING`, and the caller keeps the
 first. And nothing enforces coverage — a fault-free request whose conditions all
 dropped simply waits for its deadline and returns `TIMED_OUT`. Design explicit
-alternatives rather than relying on timeout as an outcome. See [sibling paths and
+alternatives so unmatched cases receive an authored outcome. See [sibling paths and
 endpoint settlement](../semantics.md#sibling-paths-and-endpoint-settlement).
 
 ## Authorization across concept boundaries
 
 Composition can express authorization policy when the relevant facts are owned
 by different concepts: who the caller is, what relationship they have to the
-resource, and what that relationship permits. It is not the only enforcement
-point. A security-critical or race-sensitive action must recheck the current
+resource, and what that relationship permits. The owner action and its storage
+are additional enforcement points. A security-critical or race-sensitive action must recheck the current
 rule in the owner action and, for shared durable state, in the relevant storage
 transaction or constraint.
 
@@ -267,24 +265,23 @@ contribute](../../examples/operations-room/src/composition/responders-may-contri
 
 Four rules follow.
 
-**Never treat a request-supplied identifier as authenticated.** An identity that
-arrives in a request body is a claim. It becomes an identity only after a concept
-that owns credentials or sessions has verified it, and the verified value — not
-the claimed one — is what the effect must use.
+**Use identities established by authentication.** An identifier in a request
+body is a claim. A concept that owns credentials or sessions verifies the claim
+and supplies the identity used by the effect.
 
 **Keep the facts in separate concepts.** Authentication, session validity,
 profile, ownership, membership, and role assignment are different mechanisms with
 different lifecycles. Fusing them produces a concept whose purpose is "everything
 about users," and authorization rules that cannot be reviewed one at a time.
 
-**Write a denial or fallback branch for protected or case-split paths.**
+**Write explicit complementary branches for protected or case-split paths.**
 Endpoints on one path do not fall through in declaration order, and the runtime
 does not check that alternatives are disjoint or complete. The Reading Circle
 pairs `memberMayRespond` with a deliberately disjoint `nonmemberMayNotRespond`
-view driving a rejecting endpoint on the same path, so a nonmember gets an
-answer rather than a timeout.
+view driving a rejecting endpoint on the same path, so a nonmember receives a
+denial response.
 
-**Treat an authorization read as an observation, not a lock.** The membership
+**Treat an authorization read as a current observation.** The membership
 read happens when the endpoint evaluates; the action runs afterwards. If the
 decision must be exact at the moment of the effect — a capacity check, a
 one-time redemption, a first-writer-wins claim — the concept that owns the state
@@ -300,8 +297,8 @@ A rule that maps each action of one concept onto a corresponding action of
 another, with no condition and no decision, is a symptom. Either one concept is
 an adapter to an external system, or the split has no semantic value.
 
-An adapter is legitimate — say so in its specification prose, rather than
-presenting it as a domain concept. A split with no semantic value should be
+An adapter is legitimate when its specification identifies the external
+interface boundary. A split with no semantic value should be
 undone; see [the reaction-pressure
 test](granularity.md#the-reaction-pressure-test).
 
@@ -334,7 +331,7 @@ states an order, but the causal sequence is distributed across the file.
 - **A fork can duplicate a tail.** An optional condition often requires the
   later work once for each branch, and the copies can drift.
 - **The ordering is harder to inspect.** A reader has to follow each effect to
-  the next trigger across a file rather than seeing the dependency in one rule.
+  the next trigger across a file to reconstruct the dependency.
 
 When the work really is one decision, collapse the chain. Effects that are
 independent can be named siblings in one `then(...)` group, with the reads they
@@ -358,13 +355,12 @@ expressed at too fine a grain, or the sequencing chain above. They can also be
 intentional independent policy or workflow rules.
 
 There is no numeric threshold. Read each rule and ask what application decision
-it encodes. Rules that encode no decision are the ones to remove — but remove
-them by collapsing them into the rule or action that should have carried the
-work, not by deleting the effect.
+it encodes. Move every effect from a rule that encodes no decision into the rule
+or action that should have carried it.
 
 A high number of single-effect, unconditional rules is a prompt to inspect the
-whole design. It is not a threshold or proof: read the decision and failure
-behavior of each rule before merging or removing it.
+whole design. Read the decision and failure behavior of each rule before merging
+or removing it.
 
 ### Cycles
 
@@ -374,8 +370,8 @@ matches a reaction earlier in the same chain.
 The engine does not detect cycles. For public single-trigger reactions, trigger
 consumption prevents one reaction from evaluating the _same_ record twice. Each
 turn of a cycle produces new records, and those match normally. Manually
-registered multi-trigger IR has different reconsideration behavior; it is not a
-public authoring form. A cycle therefore runs until something stops it.
+registered multi-trigger IR has different reconsideration behavior and remains
+available only to manual engines. A cycle therefore runs until something stops it.
 
 A concept refusal, a fault, or a condition that stops matching can stop a cycle.
 With an `ExecutionLimits` profile configured, the per-flow action, firing, and
@@ -386,8 +382,7 @@ per-flow action, firing, or row budget applies.
 
 For every potential cycle, determine whether it is intentional, what state change
 disables it, whether the actions in it are idempotent, whether a retry can
-restart it, and how it is tested. A cycle that terminates in one example is not a
-cycle that terminates.
+restart it, and how it is tested. One terminating example proves only that run.
 
 Prefer to break cycles by design: trigger on a narrower posture, add a condition
 that the effect invalidates, or move the decision into an action that refuses the
@@ -409,18 +404,20 @@ effect, which is usually right and occasionally a silent hole — if a selection
 an empty room should still be visible somewhere, some other rule must say so.
 
 Row limits under `ExecutionLimits` bound engine-owned expansion during matching
-and evaluation. They are a safety limit, not a design decision.
+and evaluation. Design fan-out independently within those safety limits.
 
 ### Partial failure
 
-Consequences are not atomic and are not rolled back.
+Each consequence commits independently. Later failure leaves completed effects
+in place.
 
 Within one `then(...)` group, members are independent siblings: each matching
 sibling is eligible to ask its action, the group carries no priority and no
 exclusivity claim, and a refusal or fault on one path does not stop the others.
 Current execution is sequential, however, so an earlier sibling evaluation that
 does not settle prevents later sibling work. A later `.then(...)` extends each
-path after that path's own preceding action returns; it is not a join.
+path after that path's own preceding action returns. Each path advances
+independently.
 
 Across a fan-out, some `Alerting.raise` asks can succeed while another faults.
 The successful alerts remain. Nothing retries the failed one.
@@ -446,8 +443,8 @@ Compensation is a reaction that reacts to a failure: `when` an action refuses,
 `then` ask the action that undoes an earlier effect. Use the `.refuses(...)`
 posture so the rule names the domain outcome it responds to.
 
-Compensation restores service; it does not erase what happened. A refund is a
-new fact, not the absence of a charge. And the compensating action can itself
+Compensation restores service while preserving the original history. A refund
+adds a new fact alongside the charge. The compensating action can itself
 refuse or fault, which leaves the system in a third state — decide whether that
 state is acceptable before relying on the pattern.
 
@@ -486,8 +483,8 @@ either order is acceptable — including the case where one fails.
 Action bodies targeting the same raw concept instance run one at a time within
 one engine. There is no engine-wide serialization: different concepts and flows
 can overlap, and separate engines or processes do not share a queue. The queue
-awaits same-realm native promises. Queries do not enter the action queue and can
-overlap an asynchronous action body.
+awaits native promises and structural `PromiseLike` values. Queries do not enter
+the action queue and can overlap an asynchronous action body.
 
 A reaction's read is therefore a snapshot of nothing: it was true when it was
 read. Every rule of the form "read a fact, then act on it" has a window. Where

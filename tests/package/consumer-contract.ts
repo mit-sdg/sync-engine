@@ -1,7 +1,12 @@
 import { createClient, createLocalClient } from "@mit-sdg/sync-engine/client";
 import type { ClientError, ClientTransport } from "@mit-sdg/sync-engine/client";
-import { assemble, Logging } from "@mit-sdg/sync-engine/assembly";
-import type { ActionRefusal, AssemblyOptions } from "@mit-sdg/sync-engine/assembly";
+import { assemble, conceptSet, Logging, registerConcept } from "@mit-sdg/sync-engine/assembly";
+import type {
+  ActionRefusal,
+  AssemblyOptions,
+  LogEntry,
+  LogSink,
+} from "@mit-sdg/sync-engine/assembly";
 import type { GatewayOptions, InvocationResult, Invoker } from "@mit-sdg/sync-engine/boundary";
 import {
   createHttpClient,
@@ -42,12 +47,49 @@ class DirectConcept {
   }
 }
 
+const directSet = conceptSet(
+  { Direct: registerConcept({ class: DirectConcept, spec: "# Concept" }) },
+  { normalize: ({ value }: { value: string }) => value.trim() },
+);
+directSet.computations.normalize({ value: "packed" });
+// @ts-expect-error Packed declarations preserve computation input signatures.
+directSet.computations.normalize({ value: false });
+
 const directVocabulary = vocabulary({ concepts: { Direct: DirectConcept }, computations: {} });
+const occurrenceEntries: LogEntry[] = [];
+const logSink: LogSink = {
+  append(entry) {
+    occurrenceEntries.push(entry);
+  },
+};
+const accidentallyAsyncLogSink: LogSink = {
+  // @ts-expect-error A log sink must finish before the entry is folded.
+  async append(_entry) {},
+};
+class AccidentallyAsyncLogSink implements LogSink {
+  // @ts-expect-error Class implementations must also finish synchronously.
+  async append(_entry: LogEntry) {}
+}
+declare const occurrenceEntry: LogEntry;
+if (occurrenceEntry.kind === "invocation") {
+  const actionName: string = occurrenceEntry.record.action.name;
+  const conceptName: string = occurrenceEntry.record.concept.name;
+  void [actionName, conceptName];
+  // @ts-expect-error Sink entries are immutable snapshots.
+  occurrenceEntry.record.input.changed = true;
+}
+if (occurrenceEntry.kind === "firing") {
+  // @ts-expect-error Nested sink-entry arrays are immutable snapshots.
+  occurrenceEntry.firing.consumed.push("another-id");
+}
+void [accidentallyAsyncLogSink, AccidentallyAsyncLogSink];
 const directOptions: AssemblyOptions<{ Direct: typeof DirectConcept }, {}> = {
   vocabulary: directVocabulary,
   composition: {},
   initialize: { Direct: ["direct:"] },
   logging: Logging.TRACE,
+  logSink,
+  retention: "keepAll",
 };
 const directAssembly = assemble(directOptions);
 const directAction: Promise<{ value: string } | ActionRefusal> = directAssembly.concepts.Direct.act(
@@ -61,7 +103,7 @@ const httpProfile: ProductionHttpProfile = productionHttpProfile({
   origin: "https://example.test",
   basePath: "/api",
 });
-void [directAction, directQuery, gatewayOptions, httpProfile];
+void [directAction, directQuery, gatewayOptions, httpProfile, occurrenceEntries];
 
 // @ts-expect-error A direct action caller must account for refusal mappings.
 const directSuccessOnly: Promise<{ value: string }> = directAssembly.concepts.Direct.act({

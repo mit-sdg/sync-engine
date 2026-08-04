@@ -7,7 +7,7 @@ export interface ExecutionLimits {
   maxRequestDurationMs: number;
 }
 
-export type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
+type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
@@ -23,7 +23,7 @@ function assertPositiveInteger(value: number, name: keyof ExecutionLimits): void
   }
 }
 
-export function assertExecutionLimits(limits: ExecutionLimits): void {
+function assertExecutionLimits(limits: ExecutionLimits): void {
   const names: (keyof ExecutionLimits)[] = [
     "maxActiveRootFlows",
     "maxPendingRequests",

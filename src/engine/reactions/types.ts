@@ -60,8 +60,11 @@ export interface ChannelPattern {
   by?: string;
 }
 
+/** A concrete action trigger always has an output pattern after authoring normalization. */
+export type ActionTriggerPattern = ActionPattern & { output: Mapping };
+
 /** A `when` clause: one concrete action, or a posture channel. */
-export type TriggerPattern = ActionPattern | ChannelPattern;
+export type TriggerPattern = ActionTriggerPattern | ChannelPattern;
 
 /**
  * The normalized result of invoking an action: one success kind and one
@@ -72,19 +75,10 @@ export type TriggerPattern = ActionPattern | ChannelPattern;
 export type ActionOutcome = { kind: "result"; value: Mapping } | { kind: "error"; error: Mapping };
 
 /** A pure transform over frames — the `where` clause. */
-export type WhereFn = (frames: Frames) => Frames | Promise<Frames>;
+export type WhereFn = (frames: Frames) => Frames | PromiseLike<Frames>;
 
-declare const MatcherBrand: unique symbol;
 declare const NamedLineBrand: unique symbol;
 declare const CompleteInputBrand: unique symbol;
-
-/** A branded value matcher used inside a pattern mapping. */
-export interface Matcher {
-  readonly [MatcherBrand]: true;
-  readonly kind: "oneOf";
-  readonly label: string;
-  readonly candidates?: readonly unknown[];
-}
 
 /** A dispatch step. */
 export interface StepNode {
@@ -171,7 +165,7 @@ type ExactActionOutputPattern<TReturn, TOutput extends Mapping> = TOutput &
   ActionOutputPattern<TReturn> &
   Record<Exclude<keyof TOutput, ActionOutputKeys<TReturn>>, never>;
 
-export interface NamedActionCall<
+interface NamedActionCall<
   TAction extends InstrumentedAction = InstrumentedAction,
   TInput extends Mapping = Mapping,
   TReturn = unknown,
@@ -203,7 +197,7 @@ export interface ReturnedTriggerActionLine<
   named(name: string): ReturnedTriggerActionLine<TAction, TInput, TOutput>;
 }
 
-export interface NamedReturnedActionLine<
+interface NamedReturnedActionLine<
   TAction extends InstrumentedAction = InstrumentedAction,
   TInput extends Mapping = Mapping,
   TOutput extends Mapping = Mapping,
@@ -235,7 +229,7 @@ export interface RefusedTriggerActionLine<
   named(name: string): RefusedTriggerActionLine<TAction, TInput, TRefusal>;
 }
 
-export interface NamedRefusedActionLine<
+interface NamedRefusedActionLine<
   TAction extends InstrumentedAction = InstrumentedAction,
   TInput extends Mapping = Mapping,
   TRefusal extends Mapping = Mapping,
@@ -267,13 +261,13 @@ export interface NamedBranchChain {
 
 /** Public executable node accepted by `then`. */
 export type ThenNode = StepNode | BranchChain | NamedBranchChain;
-export type ConsequenceNode =
+type ConsequenceNode =
   | ActionCall
   | ReturnedActionLine
   | RefusedActionLine
   | BranchChain
   | NamedBranchChain;
-export type NamedThenNode =
+type NamedThenNode =
   | NamedActionCall
   | NamedReturnedActionLine
   | NamedRefusedActionLine

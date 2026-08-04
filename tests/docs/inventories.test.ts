@@ -59,6 +59,7 @@ describe("documented inventories", () => {
       "docs/index.md",
       "docs/overview.md",
       "docs/public-surface.md",
+      "packages/http/public-surface.md",
       "docs/semantics.md",
       "docs/operations.md",
     ]) {

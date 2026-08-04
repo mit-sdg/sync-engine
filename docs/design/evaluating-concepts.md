@@ -8,13 +8,12 @@ adding actions, and a concept with the wrong boundary cannot be repaired by
 tidying its state.
 
 Each criterion below states what to check, the evidence that settles it, the
-failure it detects, and the move that corrects the failure. Evidence means
-something you can point at in the specification, the tests, or the composition,
-not a judgment about elegance.
+failure it detects, and the move that corrects the failure. Evidence must be
+identifiable in the specification, tests, or composition.
 
 ## Purpose
 
-### The purpose names a need, not a mechanism or a behavior list
+### The purpose names a need
 
 A purpose is the reason the concept exists. It is the only part of a
 specification that can tell you the concept should not exist at all.
@@ -81,7 +80,7 @@ The specification can be read and understood without reading any other
 specification.
 
 _Evidence:_ the checklist in [independence](concepts.md#independence) — the
-purpose names no peer, the state holds identities rather than a peer's data, no
+purpose names no peer, the state holds only peer identities, no
 action calls or inspects a peer, and the lifecycle completes alone. In this
 repository, a concept class that imports a peer concept or a composition file
 fails design review. Registration does not inspect those imports.
@@ -136,7 +135,8 @@ free; [choosing granularity](granularity.md) gives the tests that decide whether
 a specific seam is real and what the split costs.
 
 Do not split to make concepts smaller. A split is justified when each side
-becomes independently meaningful and complete, not when the file gets shorter.
+becomes independently meaningful and complete. File length does not determine
+the boundary.
 
 ## Coverage
 
@@ -193,8 +193,8 @@ but never cancelled; a temporary grant is issued with no expiry or revocation.
 
 _Correction:_ add the transition the lifecycle needs. Do not add CRUD symmetry
 for its own sake — a concept whose entities genuinely never end does not need a
-delete action, and one that would leave a dangling reference should say so
-rather than offering a delete that quietly breaks an invariant.
+delete action. A concept whose delete would leave a dangling reference should
+document that invariant and omit the delete.
 
 ### Action minimality
 
@@ -211,10 +211,10 @@ concept was supposed to enforce.
 _Correction:_ delete it, turn it into a query, or replace it with the named
 transitions it was hiding.
 
-Minimality is not "fewest actions." Removing `cancel` from a reservation concept
-makes it smaller and incomplete. Removing an action that closes a lifecycle,
-reverses an effect, or preserves an invariant is a coverage failure, not a
-simplification.
+Minimality means that every action supports the purpose. Removing `cancel` from
+a reservation concept makes it smaller and incomplete. Removing an action that
+closes a lifecycle, reverses an effect, or preserves an invariant is a coverage
+failure.
 
 ## Failure, reversal, and authority
 
@@ -288,15 +288,15 @@ two shipped applications with different meanings bound to their generic types.
 _Failure:_ `Selecting` renamed `MitigationChoosing`, with `scope` renamed
 `room`. The behavior is identical and the reuse is gone.
 
-_Correction:_ name the mechanism, not the application. Bind the meaning in
+_Correction:_ name the mechanism. Bind the application-specific meaning in
 composition, where the reaction that asks `Selecting.choose({ scope: room })`
 already says what the scope is here.
 
 Not every concept must be reusable. An application-specific concept is a
-legitimate outcome when the behavior genuinely exists only here — say it
-explicitly rather than dressing it in generic names.
+legitimate outcome when the behavior genuinely exists only here. Name the
+application scope explicitly.
 
-Use the following as a review heuristic, not a runtime classification.
+Use the following as a review heuristic. It has no runtime effect.
 Reusability has a ceiling, and passing it can be a more expensive mistake than
 falling short. Aim for a concept reusable across applications **in a domain**,
 not across every domain.
@@ -313,15 +313,15 @@ frictionless precisely because there is no domain to contradict it.
 
 _Correction:_ ask what the generic thing was standing in for. If a real domain
 mechanism is behind it, name that mechanism and give it the transitions and
-refusals the domain implies. If nothing is behind it, it is a module the concept
-implementations import, not a concept.
+refusals the domain implies. If nothing is behind it, keep it as a module that
+concept implementations import.
 
 Two risks follow from getting this wrong, and both can land outside the concept.
 Its actions can become generic, so composition may recover meaning from literal
-constants in trigger patterns rather than from action names — see [semantic
+constants in trigger patterns because action names no longer carry that meaning — see [semantic
 actions](state-and-actions.md#semantic-actions). Domain rules that the concept
 could have enforced may also become application obligations. Inspect the actual
-triggers and invariants rather than treating either result as automatic.
+triggers and invariants to determine whether either result occurred.
 
 ### Familiarity
 
@@ -339,8 +339,7 @@ what it actually is.
 
 ### Change containment
 
-A likely change touches one concept, or touches composition, but not both, and
-not many concepts.
+A likely change remains confined to one concept or to composition.
 
 _Evidence:_ take three changes the application is likely to face and name the
 files each would touch. "Alert responders when a mitigation is chosen" touches
@@ -366,9 +365,9 @@ underlying defect.
 | Purpose needs "and"; state divides cleanly                                            | Two concepts fused                                  | [granularity](granularity.md#evidence-for-and-against-a-split)                                 |
 | Principle needs another concept's action                                              | Workflow described as a concept                     | [concepts](concepts.md#principle)                                                              |
 | Preconditions reach for facts the concept lacks                                       | Wrong owner for the decision                        | [state sufficiency](state-and-actions.md#state-sufficiency)                                    |
-| Only CRUD actions                                                                     | Storage exposed instead of behavior                 | [semantic actions](state-and-actions.md#semantic-actions)                                      |
+| Only CRUD actions                                                                     | Interface exposes storage operations                | [semantic actions](state-and-actions.md#semantic-actions)                                      |
 | Many reactions between the same two concepts                                          | Split below a natural boundary, or a missing action | [reaction pressure](granularity.md#the-reaction-pressure-test)                                 |
 | Composition reads a concept's state to decide what that concept should already refuse | Invariant escaped its owner                         | [what does not belong in a reaction](composing-concepts.md#what-does-not-belong-in-a-reaction) |
 
-Fix the defect, not the symptom. Adding a reaction to work around a missing
-action leaves both problems in place.
+Fix the underlying defect. Adding a reaction to work around a missing action
+leaves both problems in place.
