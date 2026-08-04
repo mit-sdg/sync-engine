@@ -215,8 +215,9 @@ unsupported syntax and requires explicit agreement that it can verify.
 
 The source checker skips methods marked TypeScript `private`, but runtime
 registration can still see those prototype methods and may reject them as
-unspecified actions. Use ECMAScript `#private` methods or module-level functions
-for helpers so both checks observe the same members.
+unspecified actions. TypeScript `protected` prototype methods are visible to both
+checks. Neither modifier hides a runtime helper; use ECMAScript `#private`
+methods or module-level functions so both checks observe the same members.
 
 Neither `registerConcept` nor `sync-engine check` validates action output
 fields, query row fields, state notation, class fields, storage layout, or
@@ -231,5 +232,5 @@ concept directory so the default CLI search can discover them. Run
 the relevant principle, implementation, and backend constraint tests after
 changing behavior or state notation.
 
-See [Define one behavior](guide/concepts.md) for a worked example and [CLI
+See [Define one behavior](../guide/authoring.md#define-one-behavior) for a worked example and [CLI
 reference](cli.md#sync-engine-check) for command behavior.

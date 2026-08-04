@@ -43,14 +43,14 @@ export const releaseSourcePaths = [
   "packages/http/public-surface.md",
   "README.md",
   "CHANGELOG.md",
-  "docs/releasing.md",
-  "docs/llms.txt",
-  "docs/index.md",
-  "docs/public-surface.md",
-  "docs/semantics.md",
-  "docs/operations.md",
-  "docs/cli.md",
-  "docs/guide/getting-started.md",
+  "docs/project/releasing.md",
+  "docs/user/llms.txt",
+  "docs/user/index.md",
+  "docs/user/reference/public-api.md",
+  "docs/user/reference/semantics.md",
+  "docs/user/reference/operations.md",
+  "docs/user/reference/cli.md",
+  "docs/user/guide/getting-started.md",
   "SUPPORT.md",
   "SECURITY.md",
   scaffoldManifest,
@@ -470,7 +470,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     }
   }
 
-  const releasing = sources.get("docs/releasing.md") ?? "";
+  const releasing = sources.get("docs/project/releasing.md") ?? "";
   for (const fact of [
     "npm deprecate @mit-sdg/sync-engine@$PRERELEASE_VERSION",
     "install @mit-sdg/sync-engine@$VERSION or use @beta",
@@ -478,7 +478,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "never\n  overwrite an existing tag or tarball",
   ]) {
     if (!releasing.includes(fact)) {
-      failures.push(`docs/releasing.md: missing prerelease retirement fact ${fact}`);
+      failures.push(`docs/project/releasing.md: missing prerelease retirement fact ${fact}`);
     }
   }
 
@@ -517,7 +517,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "/CHANGELOG.md",
     "/SUPPORT.md",
     "/SECURITY.md",
-    "/docs/releasing.md",
+    "/docs/project/releasing.md",
     "/scripts/release.ts",
     "/scripts/check-release.ts",
     "/scripts/update-release-manifests.ts",

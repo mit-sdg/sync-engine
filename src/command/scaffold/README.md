@@ -45,6 +45,6 @@ bunx sync-engine artifacts check
 
 Generated files are derived from `generated.config.ts`; do not edit them by
 hand. Documentation matching the installed package is under
-`node_modules/@mit-sdg/sync-engine/docs/`. The [online documentation
-index](https://github.com/mit-sdg/sync-engine/blob/main/docs/index.md) tracks the
+`node_modules/@mit-sdg/sync-engine/docs/user/`. The [online documentation
+index](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/index.md) tracks the
 current development branch and may differ from this installed beta release.

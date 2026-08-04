@@ -7,9 +7,9 @@ principal call shapes and do not replace the generated TypeScript declarations.
 
 The independently published HTTP companion has its own [public API reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md).
 
-The [support policy](../SUPPORT.md) defines beta compatibility,
+The [support policy](../../../SUPPORT.md) defines beta compatibility,
 generated-assembly compatibility, and format-version rules. The
-[security policy](../SECURITY.md) defines the supported security-fix window.
+[security policy](../../../SECURITY.md) defines the supported security-fix window.
 
 Most backend files use `language`, `assembly`, and `boundary`; frontend files
 use `client`; generation scripts use `tooling`. `advanced` marks deliberate
@@ -32,10 +32,6 @@ manual construction and explicit escape hatches.
 | Call generated routes                     | `createLocalClient`, `createClient`, or a transport package |
 | Inspect or generate contracts             | `inspectAssembly`, `applicationManifest`, `renderWireTypes` |
 | Construct a manual local engine           | `createEngine` from `advanced`                              |
-
-The public API test compares each inventory below with the corresponding
-package barrel. An export change therefore requires an explicit reference
-update.
 
 ## `language`
 
@@ -62,6 +58,7 @@ call shapes:
 | `former`               | `former(name, (input, free) => form(...) \| where(...).form(...))`           |
 | `form`                 | `form({ ...shape })`                                                         |
 | `each`                 | `each(readLine).where(...).arranged(...).form(...)` or a fold                |
+| `.splicing`            | `form({ ...shape }).splicing(...formerUses)`                                 |
 | `is`                   | `is.lt`, `is.le`, `is.gt`, `is.ge`, and `is.among` comparisons               |
 
 | Consumer           | Result                                                       | Empty selection |
@@ -88,11 +85,19 @@ View and former builders receive binding bags. Reading a property, including by
 destructuring, declares a stable logic variable in that input, output, or
 free-binding partition. Completed views and formers take one object-shaped input
 mapping.
+`.splicing(...uses)` merges one or more record-rooted former fragments into a
+host record. Each variable referenced by a fragment input must already be bound;
+literal inputs are accepted. Fragment keys must not collide with host or
+earlier-fragment keys. A plain optional fragment drops the host row when absent;
+`whether(...)` preserves the row and fills the fragment leaves with `null`.
+Runtime evaluation checks each fragment's declared promise and faults if it
+produces several rows. A fragment must be record-rooted; the host may be a record
+form or an `each(...).form(...)` selection row.
 
-For worked examples, see the [reactions guide](./guide/reactions.md) and
-[views and formers guide](./guide/views-and-formers.md). The normative matching,
-cardinality, sibling, absence, and production rules live in [Execution
-semantics](./semantics.md#reactions).
+For worked examples, see [Application
+authoring](../guide/authoring.md#connect-independent-behaviors). [Reaction
+semantics](semantics.md#reactions) defines matching and siblings; [Views and
+formers](semantics.md#views-and-formers) defines absence and production.
 
 ## `assembly`
 
@@ -137,6 +142,9 @@ both lifecycle promises resolve when accepted action, query, and former work
 actually settles. `form(...)` resolves to the formed runtime value; an optional
 record former contributes `null` to that result.
 `ActionRefusal` is the direct-action refusal result.
+For a registered exception, it contains the specification code and sentence as
+`detail`. The standard boundary refusal funnel exposes the code without that
+detail.
 `ConceptImplementation`, `Implementations`, and `ImplementationOverrides` name
 complete or partial implementation maps. Assembled non-query actions are
 asynchronous and conservatively resolve to their awaited result or an
@@ -147,6 +155,11 @@ Closures, explicit `custom` operations, `$is` object-identity patterns, raw
 transforms, and whole unlowered reactions are local. Ordinary assembly rejects
 every local reaction, view, and former before returning an invoker or public
 route set. Manual engines under `advanced` retain those explicit escape hatches.
+Assembly recursively discovers tagged declarations in nested plain records and
+module namespace objects. Reactions and endpoints use their dotted record path
+as the registration name; views and formers retain the names supplied to their
+constructors. Untagged, nullish, and nondeclaration leaves are ignored; assembly
+does not call function leaves as composition factories.
 
 `OperationalEvent` is the stable discriminated union for action settlement,
 interpreter and integrity failure, invocation settlement, limit breach, and
@@ -172,12 +185,18 @@ sensitive host sink.
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
 `ConceptFloor` name those descriptors. Floor names must be non-empty, and each
-supplied floor value must be a factory function. A floor name is available
-through the typed `implementations(...)` overload only when every concept
-supplies it. If an incomplete floor is selected by bypassing that type
-restriction, selection fails at runtime. The zero-argument `implementations()`
-form is available only when every canonical class can be constructed without
-required arguments; otherwise use a named floor.
+supplied floor value must be a factory function. Call
+`set.implementations(floor, context)` to construct a named implementation map.
+Each factory receives that exact caller-supplied `context`, followed by the
+concept's registration name; TypeScript requires the context to satisfy every
+selected factory's first parameter. This context is separate from
+`ConceptFloor.resources`.
+
+A floor name is available through the typed `implementations(...)` overload only
+when every concept supplies it. If an incomplete floor is selected by bypassing
+that type restriction, selection fails at runtime. The zero-argument
+`implementations()` form is available only when every canonical class can be
+constructed without required arguments; otherwise use a named floor.
 
 The optional second `conceptSet` argument is a record of named pure computation
 functions. The returned set exposes vocabulary-owned references under both
@@ -200,10 +219,9 @@ machine conformance requires a separately designed backend-neutral descriptor.
 
 ### Occurrence index and log sinks
 
-Every engine owns an internal `MemoryStore` occurrence index. This private
-implementation is
-the source for reaction matching and retained inspection; `RetentionPolicy`
-governs its contents.
+Every engine owns a process-local occurrence index used for reaction matching
+and retained inspection. `RetentionPolicy` governs its contents. The package
+exposes no interface for replacing the index.
 
 `LogSink.append(entry)` is the synchronous application-owned audit extension
 point. The engine validates an entry and redacts engine-created mappings, calls
@@ -234,8 +252,8 @@ application-defined API.
 `LogEntry`, `FiringRecord`, `ReactionFailureRecord`, and
 `IntegrityFailureRecord` name the corresponding contracts. Persistence,
 eviction, redaction, sink failure, and restart limits are normative in
-[Execution semantics](./semantics.md#logs-concept-implementations-and-restart).
-The [persistence and restart recipe](./advanced-recipes.md#persistence-restart-and-recovery)
+[Execution semantics](semantics.md#logs-concept-implementations-and-restart).
+The [persistence and restart recipe](../guide/persistence-recovery.md#persistence-restart-and-recovery)
 shows separate concept-state and occurrence files plus explicit derived-state
 recovery.
 
@@ -260,22 +278,29 @@ and optional runtime outer-shape contract. `EndpointValidator`,
 `EndpointValidators`, and `ValidationResult` define schema-library-neutral
 input, successful-output, and domain-error checks. The domain-error validator
 receives exactly the value of the authored response's top-level `error` field.
-The [application-boundary guide](./guide/application-boundary.md#receive-ask-respond)
-shows the endpoint authoring path, and [Add runtime
-validation](./guide/application-boundary.md#add-runtime-validation) shows the
-validator call shape. [Execution semantics](./semantics.md#sibling-paths-and-endpoint-settlement)
-defines settlement.
+
+| Type                 | Shape                                                    |
+| -------------------- | -------------------------------------------------------- |
+| `ValidationResult`   | `{ ok: true } \| { ok: false; detail?: string }`         |
+| `EndpointValidator`  | `(value: unknown) => ValidationResult`                   |
+| `EndpointValidators` | Optional `input`, `output`, and `domainError` validators |
+
+[Receive, ask, respond](../guide/authoring.md#receive-ask-respond) shows endpoint
+authoring. [Execution
+semantics](semantics.md#sibling-paths-and-endpoint-settlement) defines
+settlement.
 
 Endpoint paths must be canonical portable absolute URL pathnames. Queries,
 fragments, scheme-relative paths, dot-segment normalization, malformed percent
 escapes, literal spaces, and literal Unicode are rejected; the declared spelling
 must survive WHATWG pathname handling unchanged. See [Correlation and route
-paths](./semantics.md#correlation-and-route-paths). `receive(...)` cannot author
+paths](semantics.md#correlation-and-route-paths). `receive(...)` cannot author
 the framework-owned `path` or `requestId` fields. `respond(...)` cannot author
 `requestId` or `errorKind`.
 
 Applications supply endpoint validators explicitly. Generated types and concept
-State notation have no runtime schema semantics.
+State notation have no runtime schema semantics. Validators must return a
+`ValidationResult` synchronously; a promise-like result fails validation.
 
 | `InputContractDecl` field | Default / effect                                 |
 | ------------------------- | ------------------------------------------------ |
@@ -346,8 +371,8 @@ contracts. Timeout and abort stop waiting but do
 not cancel forwarded application work. A fault-free unanswered endpoint reaches
 `TIMED_OUT`; an unanswered flow with a recorded interpreter failure settles
 promptly as opaque `INTERNAL_ERROR`. See [Failures between action
-asks](./semantics.md#failures-between-action-asks) and
-[Cancellation](./semantics.md#cancellation).
+asks](semantics.md#failures-between-action-asks) and
+[Cancellation](semantics.md#cancellation).
 
 ### Transport binding
 
@@ -427,7 +452,7 @@ constructor. `ClientError` is `{ error: FrameworkErrorCode; detail?:
 string }`; `DomainErrorValue` extracts a generated route's domain error value.
 Calls resolve handled transport failures as error envelopes. JSON projection
 and error delivery are normative in
-[Execution semantics](./semantics.md#boundary-gateway-and-client).
+[Execution semantics](semantics.md#boundary-gateway-and-client).
 
 `createClient` replaces a nullish input with `{}`. A transport throw or rejected
 promise resolves as `{ error: "TRANSPORT_ERROR" }`. Transport-specific failures
@@ -573,8 +598,8 @@ evaluates projections in declaration order and rejects any projection or naming
 failure before an artifact command compares or writes files. The HTTP companion's
 `httpWire({ policy, name })` additionally removes cookie-consumed credential
 fields for a floor. The
-[application-boundary guide](./guide/application-boundary.md#generate-the-wire-contract)
-shows the application-owned command path; [Generated wire](./semantics.md#generated-wire)
+[application authoring guide](../guide/authoring.md#generate-the-wire-contract)
+shows the application-owned command path; [Generated wire](semantics.md#generated-wire)
 defines derivation guarantees.
 
 ## `advanced`
@@ -587,8 +612,8 @@ defines derivation guarantees.
 
 This subpath crosses the ordinary application boundary. Prefer the ordinary
 assembly APIs unless the host needs manual engine construction or an explicit
-escape hatch. Despite its low-level role, `/advanced` follows the same stable
-SemVer policy as every other public subpath.
+escape hatch. `/advanced` follows the same beta compatibility policy as every
+other public subpath.
 
 | API            | Compact signature / role                         |
 | -------------- | ------------------------------------------------ |
@@ -612,5 +637,5 @@ a fault, and an unanswered endpoint settles as opaque `INTERNAL_ERROR`. The
 advanced pieces do not install the
 ordinary assembly's quiescent interpreter-failure settlement policy. Standard
 assembly behavior is normative under [Failures between action
-asks](./semantics.md#failures-between-action-asks) and
-[Cancellation](./semantics.md#cancellation).
+asks](semantics.md#failures-between-action-asks) and
+[Cancellation](semantics.md#cancellation).

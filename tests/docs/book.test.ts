@@ -1,5 +1,5 @@
 /**
- * Executable sources for `docs/book.md`. The documentation test keeps its
+ * Executable sources for `docs/user/guide/read-construction.md`. The documentation test keeps its
  * TypeScript excerpts byte-exact with this file and checks quoted read-backs
  * and registration errors against a live engine.
  *
@@ -356,7 +356,10 @@ function buildBook() {
 }
 
 async function bookText(): Promise<string> {
-  return await readFile(new URL("../../docs/book.md", import.meta.url), "utf8");
+  return await readFile(
+    new URL("../../docs/user/guide/read-construction.md", import.meta.url),
+    "utf8",
+  );
 }
 
 describe("the example book", () => {

@@ -26,12 +26,10 @@
   ],
   "files": [
     "CHANGELOG.md",
-    "CONTRIBUTING.md",
     "SECURITY.md",
     "SUPPORT.md",
     "dist",
-    "docs",
-    "!docs/tmp-*",
+    "docs/user",
     "examples",
     "NOTICE"
   ],

@@ -3,8 +3,8 @@
 This procedure is for maintainers publishing an approved v1 beta release
 after its source changes are reviewed and merged. It does not define public
 behavior; use the
-[changelog](../CHANGELOG.md), [support policy](../SUPPORT.md), [security
-policy](../SECURITY.md), and [Execution semantics](./semantics.md) for those
+[changelog](../../CHANGELOG.md), [support policy](../../SUPPORT.md), [security
+policy](../../SECURITY.md), and [Execution semantics](../user/reference/semantics.md) for those
 contracts. Published versions, tags, and tarballs are immutable.
 
 ## External settings

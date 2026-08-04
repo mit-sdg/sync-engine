@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
 import { applicationExamples } from "@examples/register";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
@@ -7,6 +7,19 @@ const root = new URL("../../", import.meta.url);
 
 async function text(path: string): Promise<string> {
   return readFile(new URL(path, root), "utf8");
+}
+
+async function filesBelow(directory: URL, prefix: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const path = `${prefix}${entry.name}`;
+      return entry.isDirectory()
+        ? filesBelow(new URL(`${entry.name}/`, directory), `${path}/`)
+        : [path];
+    }),
+  );
+  return nested.flat().sort();
 }
 
 function table(document: string, header: string): string {
@@ -23,7 +36,51 @@ function tableCells(row: string): string[] {
     .map((cell) => cell.trim());
 }
 
+function catalogRows(document: string): Array<{ path: string; documentClass: string }> {
+  return table(document, "| Path")
+    .split("\n")
+    .slice(2)
+    .filter((row) => row.startsWith("|"))
+    .map(tableCells)
+    .map(([pathCell, documentClass]) => {
+      const path = /`(docs\/[^`]+)`/.exec(pathCell ?? "")?.[1];
+      if (path === undefined || documentClass === undefined) {
+        throw new Error(`invalid document catalog row: ${pathCell ?? ""}`);
+      }
+      return { path, documentClass };
+    });
+}
+
 describe("documented inventories", () => {
+  test("every documentation file has exactly one audience and document class", async () => {
+    const files = await filesBelow(new URL("../../docs/", import.meta.url), "docs/");
+    const engineUserRows = catalogRows(await text("docs/user/index.md"));
+    const projectRows = catalogRows(await text("docs/project/index.md"));
+    const allowedClasses = new Set([
+      "Index",
+      "Tutorial",
+      "How-to guide",
+      "Explanation",
+      "Reference",
+    ]);
+
+    expect(
+      files.every((path) => path.startsWith("docs/user/") || path.startsWith("docs/project/")),
+    ).toBe(true);
+    expect(engineUserRows.map(({ path }) => path).sort()).toEqual(
+      files.filter((path) => path.startsWith("docs/user/")),
+    );
+    expect(projectRows.map(({ path }) => path).sort()).toEqual(
+      files.filter((path) => path.startsWith("docs/project/")),
+    );
+    expect(new Set([...engineUserRows, ...projectRows].map(({ path }) => path)).size).toBe(
+      files.length,
+    );
+    for (const { path, documentClass } of [...engineUserRows, ...projectRows]) {
+      expect(allowedClasses.has(documentClass), path).toBe(true);
+    }
+  });
+
   test("the public API package subpaths match the package export register", async () => {
     const packageJson = JSON.parse(await text("package.json")) as {
       exports: Record<string, unknown>;
@@ -35,7 +92,7 @@ describe("documented inventories", () => {
       .map((path) => path.replace(/^\.\//, ""))
       .sort();
 
-    const publicSurface = await text("docs/public-surface.md");
+    const publicSurface = await text("docs/user/reference/public-api.md");
     const documented = [...publicSurface.matchAll(/^## `([^`]+)`$/gm)]
       .map((match) => match[1])
       .sort();
@@ -47,8 +104,8 @@ describe("documented inventories", () => {
     }
   });
 
-  test("the agent index uses absolute GitHub links to the canonical documents", async () => {
-    const agentIndex = await text("docs/llms.txt");
+  test("the consumer agent index uses absolute GitHub links to consumer documents", async () => {
+    const agentIndex = await text("docs/user/llms.txt");
     const base = "https://raw.githubusercontent.com/mit-sdg/sync-engine/main/";
     const links = [...agentIndex.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map((match) => match[1]);
 
@@ -56,19 +113,21 @@ describe("documented inventories", () => {
     expect(links.every((link) => link.startsWith(base) && link.endsWith(".md"))).toBe(true);
     for (const path of [
       "SUPPORT.md",
-      "docs/index.md",
-      "docs/overview.md",
-      "docs/public-surface.md",
+      "docs/user/index.md",
+      "docs/user/overview.md",
+      "docs/user/reference/public-api.md",
       "packages/http/public-surface.md",
-      "docs/semantics.md",
-      "docs/operations.md",
+      "docs/user/reference/semantics.md",
+      "docs/user/reference/operations.md",
     ]) {
       expect(links).toContain(`${base}${path}`);
     }
+    expect(links.some((link) => /\/(?:AGENTS|CONTRIBUTING)\.md$/.test(link))).toBe(false);
+    expect(links.some((link) => link.includes("/docs/project/"))).toBe(false);
   });
 
   test("exact source paths in the architecture map exist", async () => {
-    const architecture = await text("docs/architecture.md");
+    const architecture = await text("docs/project/architecture.md");
     const paths = [...architecture.matchAll(/`(src\/[^`]+)`/g)]
       .map((match) => match[1])
       .filter((path) => !/[<*>,]/.test(path));
@@ -101,8 +160,8 @@ describe("documented inventories", () => {
 
   test("the root map leaves inventories in their reference homes", async () => {
     const docsIndex = await text("README.md");
-    const guide = await text("docs/guide/views-and-formers.md");
-    const publicSurface = await text("docs/public-surface.md");
+    const guide = await text("docs/user/guide/authoring.md");
+    const publicSurface = await text("docs/user/reference/public-api.md");
 
     expect(docsIndex).not.toContain("| Construction |");
     expect(docsIndex).not.toContain("| Package path");
@@ -111,9 +170,9 @@ describe("documented inventories", () => {
   });
 
   test("reference lookup indexes and package-role links stay available", async () => {
-    const book = await text("docs/book.md");
-    const semantics = await text("docs/semantics.md");
-    const publicSurface = await text("docs/public-surface.md");
+    const book = await text("docs/user/guide/read-construction.md");
+    const semantics = await text("docs/user/reference/semantics.md");
+    const publicSurface = await text("docs/user/reference/public-api.md");
 
     expect(table(book, "| Rejected attempt")).toContain("#5--no--denial");
     expect(table(semantics, "| Contract need")).toContain(
@@ -127,7 +186,7 @@ describe("documented inventories", () => {
   });
 
   test("the public API tables are well formed and list every framework error", async () => {
-    const publicSurface = await text("docs/public-surface.md");
+    const publicSurface = await text("docs/user/reference/public-api.md");
     const tables = [...publicSurface.matchAll(/^(?:\|.*\|\n?){2,}/gm)].map((match) =>
       match[0].trim(),
     );

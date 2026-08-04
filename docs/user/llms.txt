@@ -1,0 +1,57 @@
+# sync-engine
+
+> sync-engine is an ESM-only TypeScript library for composing independently implemented stateful behaviors. Concepts own state and behavior; reactions, views, formers, and endpoints connect them at the application level.
+
+This index is for human and software agents that use sync-engine to design,
+build, call, or operate an application. It does not describe changes to the
+sync-engine repository.
+
+The current release is beta, and only the newest beta is supported. Pin an exact package version and read the [support policy](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/SUPPORT.md) before upgrading or deploying it.
+
+## Start here
+
+- [Documentation index](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/index.md) — reader paths by task
+- [Application model](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/overview.md) — concepts, composition, assembly, clients, and occurrence evidence
+- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/getting-started.md) — scaffold and run one complete application
+- [Core Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/public-api.md) — supported core subpaths, exports, signatures, and defaults
+- [Execution semantics](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/semantics.md) — authoritative runtime behavior
+- [Operational limits](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/operations.md) — deployment suitability and host responsibilities
+
+## Design
+
+- [Designing with concepts](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/design.md) — purpose, ownership, actions, boundaries, composition, and hazards
+- [Reviewing a design](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/reviewing-a-design.md) — ordered review procedure and required evidence
+
+## Authoring
+
+- [Application authoring](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/authoring.md)
+- [Read construction cookbook](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/read-construction.md)
+- [Concept specification format](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/concept-specification.md)
+- [Command-line reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/cli.md)
+- [Glossary](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/glossary.md)
+
+## Examples
+
+- [Reading Circle](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/reading-circle/README.md) — shortest complete multi-concept application
+- [Operations Room](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/operations-room/README.md) — selectable reactions, policy, and staged formers
+- [Production HTTP](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/production-http/README.md) — validation, limits, public errors, correlation, and cookie credentials
+- [Persistence, restart, and recovery](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/persistence-recovery.md) — durable concept state versus occurrence evidence
+
+## HTTP transport
+
+- [HTTP Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/http/public-surface.md) — supported HTTP subpaths, exports, signatures, and defaults
+- Install the exact same beta of `@mit-sdg/sync-engine-http` and `@mit-sdg/sync-engine`; the HTTP package declares an exact core peer dependency.
+- Import handlers and policies from `@mit-sdg/sync-engine-http/server`, fetch clients from `@mit-sdg/sync-engine-http/client`, and `httpWire` from `@mit-sdg/sync-engine-http/tooling`. The companion root and deep imports are unsupported.
+- Put public domain-error mappings on the reused HTTP profile or floor. Generate the public contract with `projections: [httpWire({ policy, name })]`.
+- Core contains no HTTP handler or fetch-client exports. Use `bindTransport` and `createClient` for a custom transport without the companion package.
+
+## Working rules
+
+- Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
+- Keep concept implementations independent of peer concepts and application composition.
+- Treat generated TypeScript as a caller contract. Add explicit validators for
+  runtime values.
+- Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.
+- Change application source declarations, regenerate artifacts, and review the
+  generated diff.
+- Use the reference pages for guarantees. Guides, examples, and generated read-back demonstrate particular constructions.

@@ -28,16 +28,3 @@ bun run start
 `check` verifies formatting, types, tests, and pinned artifacts. `start` prints
 the deterministic scenario result. Run `bun run artifacts:pin` only when an
 intentional composition or contract change requires updated generated files.
-
-From the repository root:
-
-```sh
-bun install
-bun run example
-bun run example:operations
-bun run example:http
-bun run scenario
-```
-
-The first three commands run one scenario. `scenario` runs all registered
-examples.

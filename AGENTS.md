@@ -34,20 +34,35 @@ include them.
 
 ## Docs
 
-Start with `docs/index.md`. The document owners are:
+`docs/user/index.md` and `docs/user/llms.txt` are for agents using sync-engine in an
+application. This file and `CONTRIBUTING.md` are the entrypoints for agents and
+people changing the sync-engine repository.
 
-- Semantic design decisions and design review: `docs/design/`
-- Progressive application authoring: `docs/guide/`
-- Application model explanation: `docs/overview.md`
-- Small tested read constructions: `docs/book.md`
-- Exact core exports and API summaries: `docs/public-surface.md`; HTTP exports and API summaries: `packages/http/public-surface.md`
-- Concept file grammar: `docs/concept-specification.md`
-- Installed command behavior: `docs/cli.md`
-- Execution guarantees: `docs/semantics.md`
-- Deployment selection and limits: `docs/operations.md`
-- Contributor implementation map: `docs/architecture.md`
-- Agent-oriented consumer index: `docs/llms.txt`
+The consumer document owners are:
+
+- Semantic design decisions: `docs/user/design.md`; design review: `docs/user/guide/reviewing-a-design.md`
+- Progressive application authoring: `docs/user/guide/`
+- Application model explanation: `docs/user/overview.md`
+- Small tested read constructions: `docs/user/guide/read-construction.md`
+- Exact core exports and API summaries: `docs/user/reference/public-api.md`; HTTP exports and API summaries: `packages/http/public-surface.md`
+- Concept file grammar: `docs/user/reference/concept-specification.md`
+- Installed command behavior: `docs/user/reference/cli.md`
+- Execution guarantees: `docs/user/reference/semantics.md`
+- Deployment selection and limits: `docs/user/reference/operations.md`
+- Agent-oriented consumer index: `docs/user/llms.txt`
+
+The project document owners are:
+
+- Contributor workflow: `CONTRIBUTING.md`
+- Contributor documentation map: `docs/project/index.md`
+- Contributor implementation map: `docs/project/architecture.md`
+- Release procedure: `docs/project/releasing.md`
+- Coding-agent checkout instructions: `AGENTS.md`
 - Vite+ docs: `node_modules/vite-plus/docs/` or https://viteplus.dev/guide/
+
+Documents must live under `docs/user/` or `docs/project/` and appear in that
+directory's `index.md` catalog. Do not add another root document or put
+temporary notes under `docs/`.
 
 ### Contributing to the example book
 
@@ -56,7 +71,7 @@ show. Vary one part of an existing example so readers can compare the two
 forms directly. A rejection example should use a construction an author could
 reasonably try and quote the exact registration error.
 
-Every TypeScript fence in `docs/book.md` is a byte-exact excerpt from
+Every TypeScript fence in `docs/user/guide/read-construction.md` is a byte-exact excerpt from
 `tests/docs/book.test.ts`. The same test checks each quoted read-back and error
 against a live engine. Add or update the test first, then copy its text into
 the book.
@@ -74,7 +89,8 @@ the book.
 | `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
 | `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
 | `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |
-| `docs/`                          | Public guide, API reference, and execution semantics                                                                                |
+| `docs/user/`                     | Consumer guide, API reference, execution semantics, and design guidance                                                             |
+| `docs/project/`                  | Contributor-only implementation architecture and release procedure                                                                  |
 | `examples/`                      | Runnable applications, shared example concepts, and pinned generated artifacts                                                      |
 | `scripts/`                       | Build, package, architecture, declaration, and maintenance commands                                                                 |
 | `.github/`                       | Continuous integration using the same named package commands contributors run                                                       |

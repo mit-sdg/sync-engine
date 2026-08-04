@@ -24,7 +24,7 @@ read-back and TypeScript boundary contract from that assembly.
 
 Version 1 is in beta. Only the newest beta release is supported. Read the
 [support policy](SUPPORT.md) and review the
-[operational limits](docs/operations.md) before choosing a deployment.
+[operational limits](docs/user/reference/operations.md) before choosing a deployment.
 
 The package is ESM-only. See the [support policy](SUPPORT.md) for current runtime
 and toolchain requirements.
@@ -56,28 +56,28 @@ The generated project declares its own package dependency and contains one
 complete behavior: a specification, plain TypeScript class, principle test,
 registry, concept set, composition, assembly, gateway scenario, and
 generated-artifact configuration. Continue with [Getting
-started](docs/guide/getting-started.md#run-the-complete-lifecycle) to run and
+started](docs/user/guide/getting-started.md#run-the-complete-lifecycle) to run and
 inspect it.
 
 ## Documentation
 
 Choose the path that matches the work:
 
-| Task                                                         | Start here                                           |
-| ------------------------------------------------------------ | ---------------------------------------------------- |
-| Understand concepts, composition, assembly, and the boundary | [Application model](docs/overview.md)                |
-| Decide what the concepts are and review a design             | [Designing with concepts](docs/design/index.md)      |
-| Build and run the generated application                      | [Getting started](docs/guide/getting-started.md)     |
-| Add concepts, reactions, views, formers, and endpoints       | [Authoring path](docs/index.md#build-an-application) |
-| Look up exports, options, and defaults                       | [Public API](docs/public-surface.md)                 |
-| Determine exact runtime behavior                             | [Execution semantics](docs/semantics.md)             |
-| Select a deployment and identify host responsibilities       | [Operational limits](docs/operations.md)             |
-| Inspect complete applications                                | [Example applications](examples/README.md)           |
+| Task                                                         | Start here                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------------- |
+| Understand concepts, composition, assembly, and the boundary | [Application model](docs/user/overview.md)                      |
+| Decide what the concepts are and review a design             | [Designing with concepts](docs/user/design.md)                  |
+| Build and run the generated application                      | [Getting started](docs/user/guide/getting-started.md)           |
+| Add concepts, reactions, views, formers, and endpoints       | [Authoring path](docs/user/index.md#application-authoring-path) |
+| Look up exports, options, and defaults                       | [Public API](docs/user/reference/public-api.md)                 |
+| Determine exact runtime behavior                             | [Execution semantics](docs/user/reference/semantics.md)         |
+| Select a deployment and identify host responsibilities       | [Operational limits](docs/user/reference/operations.md)         |
+| Inspect complete applications                                | [Example applications](examples/README.md)                      |
 
-The [documentation index](docs/index.md) also routes client authors,
-operators, and contributors. Automated tools should begin with
-[`docs/llms.txt`](docs/llms.txt), which records the supported imports, authoring
-sequence, commands, and source-of-truth order.
+The [consumer documentation index](docs/user/index.md) routes application designers,
+authors, callers, and operators. Human and software agents using the engine can
+start with [`docs/user/llms.txt`](docs/user/llms.txt), which records the supported imports,
+authoring sequence, commands, and source-of-truth order.
 
 ## How composition works
 
@@ -100,9 +100,10 @@ At runtime, a returned `Selecting.choose` occurrence activates the reaction,
 binds `selection` from the result, and causes the reaction to ask
 `Discussing.open`. Selecting and Discussing remain independently implemented.
 
-See [Connect independent behaviors](docs/guide/reactions.md) for the authoring
-rules and [Execution semantics](docs/semantics.md) for ordering and failure
-behavior.
+See [Connect independent
+behaviors](docs/user/guide/authoring.md#connect-independent-behaviors) for the
+authoring path and [Execution semantics](docs/user/reference/semantics.md) for ordering and
+failure behavior.
 
 ## Expose an application boundary
 
@@ -132,41 +133,37 @@ validation.
 
 ## Contract boundaries
 
-An application built with `assemble(...)` has these relevant boundaries:
-
-| Property         | Contract                                                                                                                                                                                                                      |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Action execution | One action body runs at a time per concept instance within one assembly. Different instances and flows may overlap.                                                                                                           |
-| Evidence         | Each action ask and its return, refusal, or fault is recorded in an engine-owned occurrence index. An optional `LogSink` receives redacted audit entries and must return `undefined` synchronously. Neither is concept state. |
-| Retention        | Ordinary assembly retains the 100 most recent settled flows by default. Configure `{ window: number }` or `"keepAll"`; window enforcement runs after flow settlement.                                                         |
-| Composition      | Assembly rejects local reactions, views, and formers before exposing routes or generating artifacts.                                                                                                                          |
-| Caller typing    | Generated contracts typecheck callers. They do not validate runtime values.                                                                                                                                                   |
-| Cancellation     | Timeout and abort stop the caller's wait. They do not cancel accepted work.                                                                                                                                                   |
-| Persistence      | The engine does not provide concept-state persistence, occurrence replay, restart recovery, or transactions across actions.                                                                                                   |
-| Distribution     | The engine does not provide distributed serialization, deduplication, or exactly-once execution.                                                                                                                              |
-
-The optional State section in a concept specification is uninterpreted prose for
-readers. Registration derives no schema or validator from it. See [Concept
-specification format](docs/concept-specification.md#state-notation) for what is parsed,
-[Execution semantics](docs/semantics.md) for the complete runtime contract, and
-[Operational limits](docs/operations.md) before deployment.
+Actions serialize per concept instance within one assembly, not across concepts,
+assemblies, or processes. The engine does not provide multi-action transactions,
+accepted-work cancellation, concept-state persistence, restart replay,
+distributed serialization, or exactly-once execution. Generated contracts do
+not validate runtime values. See [Execution semantics](docs/user/reference/semantics.md) for
+the contract and [Operational limits](docs/user/reference/operations.md) before deployment.
 
 ## Run the shipped examples
 
-From a source checkout, install dependencies and run all example scenarios:
+Each example is a standalone application. The [example
+index](examples/README.md) selects an application and lists its local install,
+check, and start commands.
 
-```sh
-bun install
-bun run scenario
-```
+## Work on sync-engine itself
+
+Consumer documentation does not describe changes to this repository. Project
+contributors use these repository documents:
+
+- [Contributing](https://github.com/mit-sdg/sync-engine/blob/main/CONTRIBUTING.md)
+  selects checks by change type.
+- [Repository agent instructions](https://github.com/mit-sdg/sync-engine/blob/main/AGENTS.md)
+  define checkout mechanics and source boundaries for coding agents.
+- [Project documentation](https://github.com/mit-sdg/sync-engine/blob/main/docs/project/index.md)
+  classifies the implementation architecture and release procedure.
 
 ## Upgrading beta versions
 
-Stable releases follow Semantic Versioning. Before changing a pinned version,
-read the [changelog](CHANGELOG.md) and the corresponding [GitHub
-release](https://github.com/mit-sdg/sync-engine/releases). Regenerate and review
-all pinned artifacts, keep independently published packages within their
-declared peer ranges, and typecheck their consumers.
+A newer beta may make incompatible changes. Before changing a pinned version,
+read the [changelog](CHANGELOG.md), regenerate and review pinned artifacts, keep
+the core and HTTP packages on the exact same beta, and typecheck consumers. The
+[support policy](SUPPORT.md) defines the current window.
 
 ## License
 

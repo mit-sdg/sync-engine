@@ -7,7 +7,7 @@
 /CHANGELOG.md @BarishNamazov @eagonmeng
 /SUPPORT.md @BarishNamazov @eagonmeng
 /SECURITY.md @BarishNamazov @eagonmeng
-/docs/releasing.md @BarishNamazov @eagonmeng
+/docs/project/releasing.md @BarishNamazov @eagonmeng
 /scripts/release.ts @BarishNamazov @eagonmeng
 /scripts/check-release.ts @BarishNamazov @eagonmeng
 /scripts/verify-release.ts @BarishNamazov @eagonmeng

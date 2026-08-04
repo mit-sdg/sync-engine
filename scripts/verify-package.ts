@@ -128,6 +128,9 @@ async function verifyPackedDocLinks(entries: Set<string>, installed: string): Pr
   for (const entry of entries) {
     if (!entry.startsWith("package/") || !entry.endsWith(".md")) continue;
     const documentPath = entry.slice("package/".length);
+    // Released changelog entries are immutable and may name documentation paths
+    // that existed only in the corresponding package version.
+    if (documentPath === "CHANGELOG.md") continue;
     const markdown = await readFile(resolve(installed, documentPath), "utf8");
     for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
       const target = match[1];
@@ -220,13 +223,27 @@ async function verifyPackedWorkspace(
   const tarball = resolve(temporary, packed.filename);
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
   const entries = new Set(listing.trim().split(/\r?\n/));
-  if ([...entries].some((entry) => entry.startsWith("package/docs/tmp-"))) {
-    throw new Error("packed package contains temporary internal documentation");
+  if (
+    workspace.id === coreWorkspace.id &&
+    (entries.has("package/CONTRIBUTING.md") ||
+      [...entries].some((entry) => entry.startsWith("package/docs/project/")))
+  ) {
+    throw new Error("core packed package contains project-only documentation");
   }
   if ([...entries].some((entry) => entry.endsWith(".map"))) {
     throw new Error("packed package contains source maps whose implementation sources are omitted");
   }
   for (const path of workspace.requiredPackedFiles) requireEntry(entries, path);
+  if (workspace.id === coreWorkspace.id) {
+    for (const path of await filesBelow(resolve(root, "docs"))) {
+      const documentationPath = portablePath(relative(root, path));
+      if (documentationPath.startsWith("docs/user/")) {
+        requireEntry(entries, documentationPath);
+      } else if (!documentationPath.startsWith("docs/project/")) {
+        throw new Error(`${documentationPath} is outside a documentation audience directory`);
+      }
+    }
+  }
   if (workspace.copiesExamples) {
     for (const path of await filesBelow(resolve(root, "examples"))) {
       requireEntry(entries, portablePath(relative(root, path)));

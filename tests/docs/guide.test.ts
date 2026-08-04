@@ -1,32 +1,21 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { camel, heading, pascal, slug } from "@engine/utils/case";
 import { describe, expect, test } from "vite-plus/test";
 
-const guideDirectory = new URL("../../docs/guide/", import.meta.url);
+const guideDirectory = new URL("../../docs/user/guide/", import.meta.url);
 const guideFiles = [
   "getting-started.md",
-  "concepts.md",
-  "reactions.md",
-  "application-boundary.md",
-  "views-and-formers.md",
-];
-const designDirectory = new URL("../../docs/design/", import.meta.url);
-const designFiles = [
-  "index.md",
-  "concepts.md",
-  "evaluating-concepts.md",
-  "granularity.md",
-  "state-and-actions.md",
-  "composing-concepts.md",
+  "authoring.md",
   "reviewing-a-design.md",
+  "read-construction.md",
+  "persistence-recovery.md",
 ];
 const firstPartyRawPrefix = "https://raw.githubusercontent.com/mit-sdg/sync-engine/main/";
-const advancedRecipes = new URL("../../docs/advanced-recipes.md", import.meta.url);
+const persistenceRecovery = new URL("persistence-recovery.md", guideDirectory);
+const readConstruction = new URL("read-construction.md", guideDirectory);
 const excerptDocs = [
   ...guideFiles.map((file) => new URL(file, guideDirectory)),
-  ...designFiles.map((file) => new URL(file, designDirectory)),
-  advancedRecipes,
-  new URL("../../docs/book.md", import.meta.url),
+  new URL("../../docs/user/design.md", import.meta.url),
 ];
 
 const sourceBlock =
@@ -34,7 +23,7 @@ const sourceBlock =
 const sourceLabel = /^(?:_Source|Source): \[[^\]]+\]\([^)]+\)_?$/gm;
 const typeScriptBlock = /^```ts\n([\s\S]*?)\n```$/gm;
 const repositoryOnlySources = new Map<string, URL[]>([
-  [advancedRecipes.pathname, [new URL("../docs/advanced-recipes.test.ts", import.meta.url)]],
+  [persistenceRecovery.pathname, [new URL("../docs/advanced-recipes.test.ts", import.meta.url)]],
   [
     new URL("getting-started.md", guideDirectory).pathname,
     [
@@ -43,21 +32,7 @@ const repositoryOnlySources = new Map<string, URL[]>([
       new URL("../../src/command/scaffold/src/assembly.ts", import.meta.url),
     ],
   ],
-  [
-    new URL("../../docs/book.md", import.meta.url).pathname,
-    [new URL("../docs/book.test.ts", import.meta.url)],
-  ],
-  [
-    new URL("reactions.md", guideDirectory).pathname,
-    [
-      new URL("../internal/reactions/chains.test.ts", import.meta.url),
-      new URL("../docs/book.test.ts", import.meta.url),
-    ],
-  ],
-  [
-    new URL("views-and-formers.md", guideDirectory).pathname,
-    [new URL("../internal/reads/formers.test.ts", import.meta.url)],
-  ],
+  [readConstruction.pathname, [new URL("../docs/book.test.ts", import.meta.url)]],
 ]);
 
 function atExcerptIndents(source: string): string[] {
@@ -108,6 +83,18 @@ function headingAnchors(markdown: string): Set<string> {
   }
 
   return anchors;
+}
+
+async function documentationFiles(directory: URL): Promise<URL[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map((entry) => {
+      const url = new URL(entry.name + (entry.isDirectory() ? "/" : ""), directory);
+      if (entry.isDirectory()) return documentationFiles(url);
+      return entry.name.endsWith(".md") || entry.name === "llms.txt" ? [url] : [];
+    }),
+  );
+  return files.flat();
 }
 
 describe("guided curriculum", () => {
@@ -193,7 +180,7 @@ describe("guided curriculum", () => {
   test("the root documentation map points to the public API without copying subpaths", async () => {
     const index = await readFile(new URL("../../README.md", import.meta.url), "utf8");
 
-    expect(index).toContain("[Public API](docs/public-surface.md)");
+    expect(index).toContain("[Public API](docs/user/reference/public-api.md)");
     expect(index).not.toContain("@mit-sdg/sync-engine/utils");
   });
 
@@ -207,24 +194,10 @@ describe("guided curriculum", () => {
     const docs = [
       new URL("../../README.md", import.meta.url),
       new URL("../../CONTRIBUTING.md", import.meta.url),
-      new URL("../../docs/index.md", import.meta.url),
-      advancedRecipes,
-      new URL("../../docs/book.md", import.meta.url),
-      new URL("../../docs/cli.md", import.meta.url),
-      new URL("../../docs/concept-specification.md", import.meta.url),
-      new URL("../../docs/glossary.md", import.meta.url),
-      new URL("../../docs/llms.txt", import.meta.url),
-      new URL("../../docs/operations.md", import.meta.url),
-      new URL("../../docs/overview.md", import.meta.url),
-      new URL("../../docs/public-surface.md", import.meta.url),
-      new URL("../../docs/architecture.md", import.meta.url),
-      new URL("../../docs/releasing.md", import.meta.url),
-      new URL("../../docs/semantics.md", import.meta.url),
+      ...(await documentationFiles(new URL("../../docs/", import.meta.url))),
       new URL("../../examples/README.md", import.meta.url),
       new URL("../../examples/operations-room/README.md", import.meta.url),
       new URL("../../examples/reading-circle/README.md", import.meta.url),
-      ...guideFiles.map((file) => new URL(file, guideDirectory)),
-      ...designFiles.map((file) => new URL(file, designDirectory)),
     ];
     for (const docUrl of docs) {
       const markdown = await readFile(docUrl, "utf8");
@@ -234,7 +207,7 @@ describe("guided curriculum", () => {
         expect(entrypoints, `${docUrl.pathname}: ${match[1]}`).toContain(match[1]);
       }
       if (
-        !docUrl.pathname.endsWith("/public-surface.md") &&
+        !docUrl.pathname.endsWith("/public-api.md") &&
         !docUrl.pathname.endsWith("/architecture.md")
       ) {
         expect(markdown).not.toMatch(/\bReacting\b|\bClock\b|\bRandom\b/);

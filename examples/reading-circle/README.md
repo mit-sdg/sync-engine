@@ -64,6 +64,6 @@ bun run artifacts:check
 `artifacts:check` is silent on success. To update both generated files after an
 intentional source change, run `bun run artifacts:pin` and review the diff.
 
-Continue with the [Example book](../../docs/book.md) for small reading
-constructions or [Execution semantics](../../docs/semantics.md) for the runtime
+Continue with the [read construction cookbook](../../docs/user/guide/read-construction.md) for small reading
+constructions or [Execution semantics](../../docs/user/reference/semantics.md) for the runtime
 contract.

@@ -1,9 +1,9 @@
 # Read construction cookbook
 
 Use this cookbook to look up a representative reading construction and compare
-it with a close variant. The [Public API](./public-surface.md#language) lists the
+it with a close variant. The [Public API](../reference/public-api.md#language) lists the
 exported forms, and [Execution
-semantics](./semantics.md#reading-declarations-govern) defines matching and
+semantics](../reference/semantics.md#reading-declarations-govern) defines matching and
 cardinality.
 
 For your own assembly, `inspectAssembly(assemble(...)).readBack` returns the
@@ -50,7 +50,7 @@ former-root errors fail when the former is installed for evaluation.
 ## The scene
 
 Everything below uses the
-[reading-circle example](../examples/reading-circle/README.md) vocabulary:
+[reading-circle example](../../../examples/reading-circle/README.md) vocabulary:
 people gather in circles, a circle selects a current reading, and an open
 discussion collects responses. Its queries declare every promise used here:
 
@@ -678,7 +678,7 @@ the responded circle activity of (circle) — inputs (circle); bindings (selecti
 
 ## Related references
 
-Use [Execution semantics](./semantics.md) for rules not established by these
+Use [Execution semantics](../reference/semantics.md) for rules not established by these
 examples, including cache freshness, equality, failure delivery, concurrency,
-retention, and cancellation. Use [Getting started](./guide/getting-started.md)
+retention, and cancellation. Use [Getting started](getting-started.md)
 to build and run a complete application.

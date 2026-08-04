@@ -3,7 +3,7 @@
 This project follows semantic versioning. During beta, public subpaths,
 behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
-[operational limits](docs/operations.md) before deployment.
+[operational limits](docs/user/reference/operations.md) before deployment.
 
 ## [1.0.0-beta.4] - 2026-08-04
 

@@ -44,7 +44,7 @@ Generated TypeScript is not runtime validation. Applications must validate
 untrusted values, enforce domain invariants in owning concepts, configure
 public error projection and redaction, bound engine and host workloads, and
 protect logs and custom observers as sensitive sinks. The [operational
-limits](docs/operations.md) describe these responsibilities in detail.
+limits](docs/user/reference/operations.md) describe these responsibilities in detail.
 
 `rawFaultReporter` is an unsanitized privileged sink. It receives original
 values thrown by actions, interpreter stages, and endpoint validators without

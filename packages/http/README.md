@@ -5,7 +5,7 @@
 generated-wire projection. It does not provide an HTTP listener or web
 framework integration.
 
-Stable 1.x requires Node.js 24 and ESM. This independently published package
+The current 1.x beta requires Node.js 24 and ESM. This independently published package
 declares an exact matching beta core peer dependency. Install both packages with
 the current release:
 
@@ -54,16 +54,9 @@ export default {
 };
 ```
 
-The handler accepts JSON `POST` requests. It limits request bodies to 1,048,576
-bytes and returns JSON. Public domain categories are `INVALID_REQUEST`,
-`UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, and `CONFLICT`, with status 400, 401,
-403, 404, and 409 respectively. Unknown or private refusals and most framework
-failures become `INTERNAL_ERROR`/500 without diagnostic detail. Framework input
-and route failures become `INVALID_REQUEST`/400 and `NOT_FOUND`/404.
-
-The configured origin must be an absolute HTTP or HTTPS origin. Production mode
-requires HTTPS. A credential-free profile does not use the inbound `Origin`
-header for authorization or CORS.
+The profile projects only mapped domain errors and opaque protocol categories.
+The [server reference](public-surface.md#server) defines request limits, status
+mapping, origin rules, correlation, and failure behavior.
 
 ## Fetch client
 
@@ -75,33 +68,11 @@ const client = createHttpClient<ApplicationWireHttp>({ baseUrl: "/api" });
 const result = await client.names.claim({ name: "Ada" });
 ```
 
-`baseUrl` defaults to `API_BASE_URL`, then `/api`. An explicit `/` means no
-prefix. The client uses `globalThis.fetch`, sends JSON `POST` requests, and uses
-Fetch credentials mode `include` by default. `headers` may be a record or a
-synchronous or asynchronous provider called for each request. `timeoutMs` and
-`correlationId` may be supplied per call. `maxResponseBytes` places an opt-in
-byte limit on response bodies, and `validateResponse` may validate the complete
-parsed success-or-error result before it reaches the caller.
-
-`timeoutMs` must be a positive finite integer no greater than `2_147_483_647`
-milliseconds. A value outside that range returns core `INVALID_INPUT` before
-header resolution or Fetch. This timer limits only the client's local Fetch
-wait; gateway and application deadlines use their own defaults and configured
-limits.
-
-Calls resolve to a success value or error envelope. The HTTP-client errors are:
-
-| Code                       | Condition                                             |
-| -------------------------- | ----------------------------------------------------- |
-| `HEADER_RESOLUTION_FAILED` | The header provider threw or rejected                 |
-| `NETWORK_ERROR`            | Fetch failed before a response was obtained           |
-| `BAD_JSON`                 | The response body could not be read or parsed as JSON |
-| `BAD_STATUS`               | A non-2xx response lacked a JSON error envelope       |
-| `RESPONSE_TOO_LARGE`       | The response exceeded `maxResponseBytes`              |
-
-Abort resolves as the core `ABORTED` error. An empty response body becomes `{}`.
-A non-2xx JSON object with an `error` property is returned as the server result.
-The client does not runtime-validate response values against generated types.
+`baseUrl` defaults to `API_BASE_URL`, then `/api`; `/` selects the origin root.
+Per-call options carry abort, timeout, and correlation values. Optional headers,
+response-size limits, and response validation belong in `HttpClientOptions`.
+Calls resolve handled transport failures as error envelopes. The [client
+reference](public-surface.md#client) lists every default, limit, and error code.
 
 ## Cookie credential floor
 
@@ -130,15 +101,10 @@ as required. The handler replaces that input with the cookie value and never
 trusts a body-supplied value. The projector removes the credential input and
 consumed issue outputs from the public generated contract.
 
-The floor checks the configured origin only when the request contains an
-`Origin` header. It does not implement CORS or require that header. Cookies are
-`HttpOnly`, `SameSite=Strict`, and `Path=/`; HTTPS cookies are `Secure` and use
-the `__Host-` prefix. Issuance, clearing, and unauthorized protected responses
-use `Cache-Control: no-store`.
-
-Browser fetch owns browser cookie storage. Node.js fetch does not supply a
-browser-style cookie jar; a Node.js or custom fetch implementation must provide
-cookie persistence when calls depend on the floor.
+The [credential-floor reference](public-surface.md#credential-floor) defines
+origin checks, cookie attributes, issuance, clearing, and validation. Browsers
+own their cookie storage; a Node.js or custom `fetch` must supply persistence
+when calls depend on the floor.
 
 ## Host responsibilities
 
@@ -149,8 +115,8 @@ The handler and client have no disposal method and do not own application,
 gateway, store, listener, or fetch-agent lifetime.
 
 See the [HTTP API reference](public-surface.md),
-[execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/semantics.md#boundary-gateway-and-client),
-[host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/operations.md#http-host-responsibilities),
+[execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client),
+[host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md#http-host-responsibilities),
 [support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md),
 [security policy and private vulnerability reporting](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md),
 and [complete production example](https://github.com/mit-sdg/sync-engine/tree/main/examples/production-http).

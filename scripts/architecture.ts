@@ -716,7 +716,10 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
             (parts.length >= 3 && parts[2] === "scaffold"))) ||
           (publicSubpaths.has(parts[1] ?? "") && parts.length === 3 && parts[2] === "index.ts") ||
           (parts[1] === "engine" && path.endsWith(".ts")))) ||
-      (head === "docs" && (path.endsWith(".md") || path === "docs/llms.txt")) ||
+      (head === "docs" &&
+        parts.length >= 3 &&
+        (parts[1] === "user" || parts[1] === "project") &&
+        (path.endsWith(".md") || path === "docs/user/llms.txt")) ||
       (head === "examples" &&
         (path.endsWith(".md") || path.endsWith(".ts") || path.endsWith(".json"))) ||
       (head === "scripts" && parts.length === 2 && path.endsWith(".ts")) ||

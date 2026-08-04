@@ -72,8 +72,6 @@ bun run artifacts:check
 Run `bun run artifacts:pin` only after an intentional composition or contract
 change. Review both generated diffs.
 
-The authoring case study starts with [Define one
-behavior](../../docs/guide/concepts.md), then continues through [Connect
-independent behaviors](../../docs/guide/reactions.md), [Views and
-formers](../../docs/guide/views-and-formers.md), then [Application
-boundary](../../docs/guide/application-boundary.md).
+The [application authoring guide](../../docs/user/guide/authoring.md) follows this
+example from concept registration through composition, assembly, generation,
+and a typed client.

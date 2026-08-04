@@ -12,7 +12,7 @@ The core package's supported public API is exactly these six package subpaths:
 - `@mit-sdg/sync-engine/advanced`
 
 The package root and all deep imports are unsupported. The [core Public
-API](docs/public-surface.md) is the exact export register; the HTTP companion's
+API](docs/user/reference/public-api.md) is the exact export register; the HTTP companion's
 [Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
 is its exact export register.
 
@@ -68,7 +68,7 @@ The supported runtime and toolchain ranges are:
 CI exercises current GitHub-hosted Linux, macOS, and Windows images for package
 and test behavior. Host-specific filesystems, databases, proxies, TLS, process
 management, and browser behavior remain host or application responsibilities;
-review the [operational limits](docs/operations.md) before deployment.
+review the [operational limits](docs/user/reference/operations.md) before deployment.
 
 ## Getting help
 

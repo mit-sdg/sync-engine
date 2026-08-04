@@ -1,9 +1,10 @@
 # Contributing
 
 Contributions must preserve the public package boundary, generated artifacts,
-and documented execution contracts. Start with [Engine
-architecture](docs/architecture.md) before moving implementation files, and
-read [Execution semantics](docs/semantics.md) before changing observable
+and documented execution contracts. The [project documentation
+map](docs/project/index.md) classifies contributor material. Read [Engine
+architecture](docs/project/architecture.md) before moving implementation files,
+and read [Execution semantics](docs/user/reference/semantics.md) before changing observable
 runtime behavior.
 Public compatibility and vulnerability work must also follow the [support
 policy](SUPPORT.md) and [security policy](SECURITY.md).
@@ -67,11 +68,17 @@ barrels. Workspace packages expose their own export-only public entrypoints and
 may import only supported core subpaths. Internal engine code imports engine
 modules directly. The architecture check enforces dependency
 direction and rejects unsupported entrypoints. Any export change requires
-corresponding public API and declaration updates.
+corresponding public API and declaration updates. `tests/public-api.test.ts`
+compares the exact export register and reference units in
+`docs/user/reference/public-api.md` with the public barrels.
 
-## Documentation examples
+## Documentation
 
-Every TypeScript fence in `docs/book.md` is a byte-exact excerpt from
+Documents must live under `docs/user/` or `docs/project/` and appear exactly
+once in that audience's `index.md` catalog. Temporary notes do not belong under
+`docs/`.
+
+Every TypeScript fence in `docs/user/guide/read-construction.md` is a byte-exact excerpt from
 `tests/docs/book.test.ts`. Add or change the test first, then copy the exact
 text and generated read-back into the book.
 
@@ -86,6 +93,6 @@ Do not commit, tag, or publish a release as part of an ordinary contribution.
 After changing version or toolchain facts in the root manifest, run
 `bun run release:update` and review the concrete standalone-manifest changes.
 Release maintainers use the [Contributor release
-procedure](docs/releasing.md) after all intended changes reach `main`. Released
+procedure](docs/project/releasing.md) after all intended changes reach `main`. Released
 versions are immutable; compatibility, migration, generated-format, and
 runtime/security notes are required for every release.

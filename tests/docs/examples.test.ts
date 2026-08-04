@@ -9,8 +9,8 @@ import { describe, expect, test } from "vite-plus/test";
 const root = new URL("../../", import.meta.url);
 const documents = {
   readme: new URL("README.md", root),
-  semantics: new URL("docs/semantics.md", root),
-  publicSurface: new URL("docs/public-surface.md", root),
+  semantics: new URL("docs/user/reference/semantics.md", root),
+  publicSurface: new URL("docs/user/reference/public-api.md", root),
 };
 
 function codeBlocks(markdown: string, language: string): string[] {
@@ -81,11 +81,11 @@ describe("executable documentation examples", () => {
     const contexts = [
       [documents.readme, [await json("package.json")]],
       [
-        new URL("docs/guide/getting-started.md", root),
+        new URL("docs/user/guide/getting-started.md", root),
         [await json("src/command/scaffold/package.json")],
       ],
       [
-        new URL("docs/guide/application-boundary.md", root),
+        new URL("docs/user/guide/authoring.md", root),
         [await json("package.json"), await json("examples/operations-room/package.json")],
       ],
     ] as const;
@@ -140,7 +140,7 @@ describe("executable documentation examples", () => {
   });
 
   test("the documented artifact script is backed by a passing local artifact check", async () => {
-    const guide = await readFile(new URL("docs/guide/application-boundary.md", root), "utf8");
+    const guide = await readFile(new URL("docs/user/guide/authoring.md", root), "utf8");
     const manifest = await json("examples/operations-room/package.json");
     const command = shellLines(guide).find((line) => line.startsWith("bun run artifacts:"));
     const scriptName = command?.match(/^bun run ([\w:-]+)$/)?.[1];

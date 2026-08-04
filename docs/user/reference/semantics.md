@@ -2,17 +2,9 @@
 
 This page defines the observable execution contract for actions, reactions,
 reads, formed results, and application boundaries in the current beta.
-The [documentation index](./index.md) points to the authoring guides, the
-[read construction cookbook](./book.md) demonstrates representative constructions, and the
-[Public API](./public-surface.md) lists the exports.
-
-| Category                   | Contract                                                                                                                                        |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Runtime guarantee          | Per-instance action serialization, flow-local matching, one accepted boundary answer, and the cardinality checks stated below                   |
-| Type-time guarantee        | Generated wire and client types for callers that use the generated contract                                                                     |
-| Application responsibility | Value validation, domain invariants, concept-state persistence, idempotency, and cross-process coordination                                     |
-| Host responsibility        | Connection and workload limits, TLS, process lifecycle, resource closure, and deployment recovery                                               |
-| Not provided               | Multi-action transactions, rollback, accepted-work cancellation, replay, restart recovery, distributed serialization, or exactly-once execution |
+The [Public API](public-api.md) lists the exports. The [read construction
+cookbook](../guide/read-construction.md) demonstrates representative declarations without extending
+this contract.
 
 ## Contract index
 
@@ -29,8 +21,6 @@ The [documentation index](./index.md) points to the authoring guides, the
 | Sibling and endpoint settlement             | [Sibling paths and endpoint settlement](#sibling-paths-and-endpoint-settlement)         |
 | Gateway and client result model             | [Result model and gateway](#result-model-and-gateway)                                   |
 | Runtime input and output validation         | [Runtime validation](#runtime-validation)                                               |
-| Production HTTP projection                  | [Production HTTP profile](#production-http-profile)                                     |
-| Cookie credential binding                   | [Cookie credential floor](#cookie-credential-floor)                                     |
 | Generated caller contracts                  | [Generated wire](#generated-wire)                                                       |
 | Deployment and resource limits              | [Operational limits](#operational-limits)                                               |
 | Interpreter failure delivery                | [Failures between action asks](#failures-between-action-asks)                           |
@@ -58,6 +48,11 @@ The action then settles in one of two outcome postures:
   registered for that action. The advanced `Refuse` marker also produces this
   posture when its code is accepted under the engine mode described below.
 
+The engine classifies the outcome after the action body settles; it does not
+create a concept-state transaction. State changed before the action returns or
+throws is not rolled back by the engine. The concept implementation and backing
+store determine whether those changes persist.
+
 A registered exception must belong to that action; an exception registered only
 for another action is a fault. Ordinary `assemble(...)` accepts `Refuse` only
 when the action's refusal contract declares its code. An undeclared advanced
@@ -84,18 +79,8 @@ The direct caller receives a scalar action return unchanged. Occurrence
 matching normalizes a non-object return to an empty successful result, so
 reaction output patterns cannot bind fields from that scalar. Concept action
 contracts should return object mappings when composition needs their outputs.
-
-The operations room shows three client-visible cases:
-
-- choosing a mitigation returns `{ mitigation }`;
-- joining twice makes Gathering refuse, and the client receives
-  `{ error: "ALREADY_JOINED" }`;
-- a contribution rejected by host-only policy follows an explicit boundary
-  branch, and the client receives `{ error: "HOST_ONLY" }`.
-
-The last two answers share the simple client shape but not their meaning.
-`ALREADY_JOINED` is a concept refusal. `HOST_ONLY` is an authored boundary
-response. The client shape does not erase that distinction in the runtime.
+An action return remains successful when its object has a top-level `error`
+field; only a registered refusal produces the refused posture.
 
 ## Reactions
 
@@ -143,9 +128,17 @@ stage needs the original outside input. A refusal or fault stops that path
 while other siblings continue. A qualified sibling may carry its own chain
 before its trailing branch label.
 
+A later stage does not inherit a binding opened only by an earlier standing
+read. The binding reaches the later stage only when an intervening action input
+or output carries it. Read the value again at the later stage when later state
+is intended; do not add action fields solely to transport composition data.
+
 The public `when(...)` form accepts one trigger. Use `earlier` for directional
 correlation, views for standing policy, and concept guards for decisions that
 must run once. The package exports no public multi-occurrence join form.
+The engine does not detect reaction cycles. Each turn of a cycle creates new
+occurrences and may continue until a condition, refusal, fault, or configured
+execution limit stops it.
 
 ### Portable and local behavior
 
@@ -245,13 +238,15 @@ to a plain line, never to each other:
 Order comparisons (`is.lt`, `is.le`, `is.gt`, `is.ge`, …) are ordinary
 built-in relations read as closed lines over bound values.
 
-Registration rejects a fresh name under a denial, an opened name that no later
-line or consequence reads ("omit the key instead"), and a cycle between
-views. It also generates a read-back for every reaction. The read-back identifies
-paths, stages, opened and tested names, fan-out, and dropped cases.
+Registration rejects a fresh name under a denial, a name opened by a declarative
+read that no later line or consequence uses ("omit the key instead"), and a cycle
+between views. Unused trigger and action-result bindings are outside this check
+and require review. Registration also generates a read-back for every reaction.
+The read-back identifies paths, stages, opened and tested names, fan-out, and
+dropped cases.
 `inspectAssembly(assemble(...)).readBack` returns the application's complete
 read-back as one string.
-[The read construction cookbook](./book.md) quotes these read-backs entry by entry.
+[The read construction cookbook](../guide/read-construction.md) quotes these read-backs entry by entry.
 
 ## Queries
 
@@ -268,7 +263,8 @@ former reads it. `null`, a scalar, an array row that is null, scalar, or another
 array, or a violation of declared cardinality raises a query fault. Class
 instances and other non-null, non-array objects pass this container check. This
 is not row-schema validation. A record missing a field named in `.is` does not
-match that pattern.
+match that pattern. A direct query root returns the implementation result
+without this `where`-read container and cardinality check.
 
 An ordinary assembly defaults to `queryCache: "memoize"`, which memoizes queries
 by concept instance and argument between invalidation points. Instrumented
@@ -276,6 +272,8 @@ actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
 caches before dispatch. `queryCache: "none"` disables this memoization; repeated
 reads execute the query implementation independently.
+Query implementations must not create side effects. The engine does not inspect
+or enforce query purity.
 A structural thenable returned by a memoized query is normalized to one native
 promise before that promise is cached. Equivalent reads reuse the normalized
 promise, so the original thenable's `then` is invoked once. Rejection, including
@@ -347,10 +345,21 @@ Production handles absence and plurality in three ways:
   `.distinct(value)` — reduce the capture to one answer. A fold over a source
   that promises at most one row is rejected: the promise already answers.
 
+Without `.arranged(...)`, a selection retains source-row order. A view-level
+`count(query, input, output)` binds `0` when the query returns no rows.
+
 Record entries may read named formers directly, plainly or under `whether`,
 so absence is declared once at the source and every reader chooses how to
 handle it. The engine evaluates a former when asked; it does not store the
 formed result.
+
+`.splicing(...uses)` merges one or more record-rooted former fragments into a
+host record or selection row. Each variable referenced by a fragment input must
+already be bound; literal inputs are accepted. Fragment keys must not collide
+with host or earlier-fragment keys. A plain optional fragment drops the host row
+when absent; `whether(fragment)` preserves the row and fills the fragment leaves
+with `null`. The engine checks each fragment's promise; several rows fault the
+former evaluation.
 
 If a former faults while forming a reaction consequence, that consequence ask
 is recorded with the fault and remains unanswered. Calling a former directly
@@ -363,18 +372,9 @@ These faults use the operational failure path. The delivery boundary is describe
 ## Decisions that must not race
 
 A uniqueness, capacity, first-come, or answer-once decision belongs in the
-action that owns the state. A reaction's `where` supplies a current observation.
-The exact execution,
-coordination, and rollback limits live under
-[Ordering and state-read timing](#ordering-and-state-read-timing).
-
-Applications must not use reaction registration order as priority or conflict
-resolution. Independent reactions and sibling branches may all match. If
-several branches answer one outside request, the boundary accepts one response
-ask and refuses later ones with `NOT_PENDING`; the caller may receive any one
-of the matching answers. See
-[Operational limits](#operational-limits) for the
-ordering and state-read boundary.
+action that owns the state. A reaction's `where` is a current observation, not
+an atomic guard. [Ordering and state-read timing](#ordering-and-state-read-timing)
+defines the in-process serialization and cross-process limits.
 
 ## Sibling paths and endpoint settlement
 
@@ -427,15 +427,14 @@ it recognizes no non-dropping total answer path. Complementary state reads
 remain unproved because siblings evaluate independently and do not share a
 state snapshot. The analyzer does not prove arbitrary view, computation,
 validator, action-outcome, or concurrent-state logic. Warnings remain advisory
-unless a repository runs `sync-engine check --fail-on-warnings` with an
-application config.
+unless `sync-engine check --fail-on-warnings` runs with an application config.
 
 ## Boundary, gateway, and client
 
 ### Result model and gateway
 
-The [application-boundary guide](./guide/application-boundary.md) shows the
-authoring path from assembly through the fixed gateway and generated client.
+The [application authoring guide](../guide/authoring.md#application-boundary)
+shows the path from assembly through the fixed gateway and generated client.
 Semantically, `assemble` gives an application its own boundary and occurrence
 log. The log records what happened in that assembly; it is not concept state.
 `createGateway` decorates the application's `Invoker` with route admission,
@@ -445,13 +444,12 @@ and application observation share the effective correlation id.
 
 The local and HTTP clients resolve to the same simple shape: the endpoint's
 success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
-boundary answer keeps domain errors and framework errors distinct. Every HTTP
-handler owns method checks, JSON parsing, a one-mebibyte request-body limit, and
-status mapping. Client and invocation adapters omit exception text when
-an unknown thrown value becomes a framework error. A top-level `error` field in
-an authored response denotes a domain failure, so a successful endpoint result
-cannot use `error` as an ordinary top-level data field. See the exact
-[cancellation boundary](#cancellation).
+boundary answer keeps domain errors and framework errors distinct. Client and
+invocation adapters omit exception text when an unknown thrown value becomes a
+framework error. A top-level `error` field in an authored response denotes a
+domain failure, so a successful endpoint result cannot use `error` as an
+ordinary top-level data field. See the exact [cancellation
+boundary](#cancellation).
 
 Every generated client endpoint accepts an optional `ClientCallOptions` after
 its input. The core client copies `signal`, `timeoutMs`, and `correlationId` to
@@ -462,51 +460,9 @@ transport result with its route. `{ ok: false }`, a throw, or a promise-like
 validator result becomes `{ error: "TRANSPORT_ERROR" }`; an accepted result is
 returned without transformation.
 
-The maintained HTTP client resolves its base URL when the client or transport is
-constructed: an explicit nonblank `baseUrl` takes precedence, followed by
-`API_BASE_URL`, then `/api`. Trailing slashes are removed, while `/` means no
-prefix. It sends `POST`, serializes nullish input as `{}`, supplies
-`Content-Type: application/json`, and uses Fetch credentials mode `include` by
-default. A header record or synchronous/asynchronous header provider is merged
-after the initial content type for each request. The provider receives an
-`HttpRequestContext` containing the path and the effective signal, timeout, and
-correlation token when present. Correlation is not projected to an HTTP header
-unless the provider does so.
-
-The HTTP client reads every response as text. An empty body becomes `{}`; a
-nonempty body must parse as JSON regardless of response `Content-Type`. A
-non-2xx parsed object with an `error` property is returned unchanged. Other
-non-2xx responses become `BAD_STATUS`; unreadable or invalid JSON becomes
-`BAD_JSON`; header-provider failure becomes `HEADER_RESOLUTION_FAILED`; and
-Fetch rejection becomes `NETWORK_ERROR`. Abort before Fetch, while headers are
-pending, or while a body is read becomes the core `ABORTED` result. The header
-provider itself is not cancellable. `timeoutMs` is a positive finite integer for
-the HTTP transport and cannot exceed `2_147_483_647` milliseconds, the reliable
-Node timer maximum. Expiry aborts local Fetch waiting and returns `TIMED_OUT`.
-An invalid or larger timeout returns core `INVALID_INPUT` before header
-resolution or Fetch. This ceiling governs only the transport-local timer. The
-standard HTTP client does not turn it into a gateway or application deadline;
-those layers apply their own defaults and configured `ExecutionLimits`.
-
-`maxResponseBytes`, when supplied, is a positive finite integer. The HTTP client
-rejects a larger declared `Content-Length` before buffering and counts streamed
-bytes when the declaration is absent or insufficient. Exceeding either check
-cancels the response body where possible and returns `RESPONSE_TOO_LARGE`. The
-default leaves response bytes uncapped. Status handling, parsing, and response
-size checks do not validate the result against the generated TypeScript
-contract. The `createHttpClient` convenience applies `validateResponse` through
-the core client; `createHttpTransport` alone does not.
-
-The HTTP handler accepts only `POST`. An absent `Content-Type` is accepted; a
-present content type must be `application/json`, optionally followed by
-parameters. Routing uses `URL.pathname`, so query parameters do not select a
-different route. Empty request text becomes `{}`. Malformed, unreadable, or
-larger-than-1,048,576-byte bodies become `INVALID_REQUEST`/400. The handler
-checks both declared `Content-Length` and bytes read from the stream. Every
-response uses JSON content type, and every successful invocation uses status 200. Serialization failure becomes opaque `INTERNAL_ERROR`/500. The handler
-passes its host-provided `Request.signal` to the application invoker. The HTTP
-protocol defines no message that rolls back or cancels concept work after
-admission.
+The maintained HTTP package defines its method, body, status, correlation,
+timeout, response-size, and cookie behavior in the [HTTP Public
+API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md).
 
 ### Limits and operational observation
 
@@ -539,71 +495,28 @@ remain host responsibilities.
 
 ### Correlation and route paths
 
-HTTP handlers in `@mit-sdg/sync-engine-http/server` may resolve an inbound correlation id and project the effective
-value in a response header. Accepted identifiers are non-empty,
-control-character-free ByteStrings of at most 128 code units without leading or
-trailing spaces; invalid, non-ByteString, or faulting resolver results become a fresh UUID. Response
-header names are validated when a handler is constructed, and decoration cannot
-reject a handled request. A handler also rejects construction unless its
-standard gateway targets the supplied assembly. When direct callers omit a
-correlation id, the gateway establishes a fresh UUID once at public entry and
-carries it through gateway and application observation. Correlation does not
-deduplicate work and is not an idempotency key.
+When a direct caller omits a correlation id, the gateway establishes a fresh
+UUID once at public entry and carries it through gateway and application
+observation. Correlation does not deduplicate work and is not an idempotency
+key. HTTP correlation resolution is specified by the [HTTP Public
+API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server).
 
-Endpoint paths are portable absolute URL pathnames. The HTTP companion applies
-the same grammar to its base paths. Their
-declared spelling must survive WHATWG URL pathname handling exactly: queries,
+Endpoint paths are portable absolute URL pathnames. Their declared spelling
+must survive WHATWG URL pathname handling exactly: queries,
 fragments, scheme-relative paths, literal spaces or Unicode, dot-segment
 normalization (including encoded dot segments), malformed percent escapes, and
 other noncanonical spellings are rejected. Percent-encoded path data remains
-valid when URL handling preserves it. `/` is a valid endpoint path and means no
-prefix when used as a base path. A trailing base-path slash is accepted and
-removed before routing, so `/api/` and `/api` declare the same base.
+valid when URL handling preserves it. `/` is a valid endpoint path.
 
 ### Production HTTP profile
 
-`productionHttpProfile(...)` in `@mit-sdg/sync-engine-http/server` declares a
-public origin, optional base path, and policy-owned `publicErrors` map. The
-handler form carrying that profile and the assembly is the production
-credential-free policy. It accepts JSON `POST` requests, preserves ordinary
-successful values, and projects only policy-mapped domain refusals. A private,
-unknown, non-string, or dynamically open domain failure becomes
-`{ error: "INTERNAL_ERROR" }`. Framework input and route failures become
-`INVALID_REQUEST` and `NOT_FOUND`; every framework server failure becomes the
-same opaque internal response. Diagnostic detail never crosses this policy. The
-declared origin identifies public deployment and enforces the production HTTPS
-check; the credential-free profile does not use an inbound `Origin` header as an
-authorization or CORS decision.
+The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server)
+defines production error projection and origin handling.
 
 ### Cookie credential floor
 
-An HTTP floor may additionally bind one logical credential input to a cookie.
-The policy declares the credential name and input, the endpoint that
-issues it and the returned token and expiry fields, the successful endpoints
-that clear it, and the public origin. Credential and output field names must be
-JavaScript-style identifiers. Issue and clear paths must be canonical portable
-paths, and clear paths must be distinct. Projection validation requires every
-named path to exist, at least one endpoint to require the credential input, and
-every top-level alternative of the issuing endpoint's successful output to
-contain the token and expiry fields. Any endpoint whose input contract requires
-that credential becomes protected without another floor edit.
-
-The fixed floor uses the production profile's request and public-error policy,
-enforces the declared origin when
-an `Origin` header is present, replaces a protected request's credential input
-with the cookie value, and never accepts that value from the body. It projects
-domain refusal codes through the same policy categories. The issuing
-endpoint's token and expiry fields become the cookie and do not enter its HTTP
-response. At runtime, the token must be a string and the expiry must be a valid
-`Date` or a value whose string representation is date-parsable; malformed issue
-output becomes opaque `INTERNAL_ERROR`. Successful clearing endpoints and an
-unauthorized protected request clear the cookie. Responses that issue or clear
-the cookie use `Cache-Control: no-store`. The floor performs this conditional
-origin check and uses a strict same-site cookie; it does not require an `Origin`
-header, compare the configured origin with `request.url`, answer CORS preflights,
-or emit CORS headers.
-The floor adds no implicit `/api` route alias; serving below `/api` requires an
-explicit `basePath: "/api"` declaration.
+The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server)
+defines the cookie credential binding and its generated projection.
 
 ### Runtime validation
 
@@ -625,8 +538,9 @@ Without an input validator, primitive types and nested shapes are not checked,
 so explicit `null` and direct-invocation `undefined` pass required-key presence.
 JSON transport removes `undefined` object fields before admission. Validators
 inspect values but do not transform them, and thrown validator failures fail
-closed. A configured `rawFaultReporter` receives the original thrown value with
-kind `endpoint-validator` and phase `input`, `output`, or `domain-error`.
+closed. Validators must return synchronously; a promise-like result fails
+validation. A configured `rawFaultReporter` receives the original thrown value
+with kind `endpoint-validator` and phase `input`, `output`, or `domain-error`.
 For output and domain-error throws, ordinary integrity evidence retains only
 the `ValidatorFault` class. An input-validator throw returns `INVALID_INPUT`
 before an occurrence is recorded. Caller-visible errors contain no thrown
@@ -648,32 +562,21 @@ receive alternative after defaults are applied.
 
 ### Production transport requirements
 
-Production profiles and floors reject a non-HTTPS public origin when
-`NODE_ENV=production`. Cookies are `HttpOnly`, `SameSite=Strict`, and scoped to `Path=/`, with no
-`Domain`. An HTTPS origin uses a `Secure` cookie whose name has the `__Host-`
-prefix. Deployment responsibilities are listed under [Boundary
-operations](#boundary-operations).
+Transport requirements are specified by the [HTTP Public
+API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
+and [HTTP host responsibilities](operations.md#http-host-responsibilities).
 
 ### JSON projection
 
-For JSON-representable values, both clients expose the same projected data. The
-local client serializes and parses input and output before returning it. Dates
-become strings and undefined object fields disappear. Projection failures do
-not have identical error codes: the local transport normally reports
-`TRANSPORT_ERROR`, while the HTTP client reports its package-owned
-`HttpClientError` union and server response serialization can report
-`INTERNAL_ERROR`.
-
-The production profile exposes only policy-mapped categories and opaque protocol
-failures. The credential floor adds cookie consumption and issuance to that
-production policy. Both handlers apply the same request limits, JSON projection,
-correlation, and public status mapping.
+The local client serializes and parses input and output before returning it.
+Dates become strings and undefined object fields disappear. Other transports
+define their own projection failures and error codes.
 
 ## Generated wire
 
-The application-boundary guide explains what the
-[generated wire](./guide/application-boundary.md#generate-the-wire-contract)
-derives and how to regenerate it. With a vocabulary type anchor, endpoint
+The authoring guide explains how to [generate the wire
+contract](../guide/authoring.md#generate-the-wire-contract). With a vocabulary
+type anchor, endpoint
 leaves refer back to concept action parameters, action results, and query rows;
 the response structure and absence rules come from the endpoint and its
 formers. The generated module applies the same JSON projection as the clients,
@@ -691,11 +594,11 @@ module contains the logical contract followed by each named transport contract.
 The contract named by `wireName` retains the logical application inputs, outputs,
 and refusal codes for a local or custom client. The HTTP companion's
 `httpWire({ policy, name })` carries public policy categories and excludes
-private refusal codes. With `httpFloor`, that contract also omits the cookie-bound input
-from protected routes and the consumed token and expiry fields from the issuing
-route's output. All contracts share generated type helpers and the vocabulary
-anchor. Core records every projector package and version in generated
-provenance.
+private refusal codes. With `httpFloor`, that contract also omits the
+cookie-bound input from protected routes and the consumed token and expiry fields
+from the issuing route's output. All contracts share generated type helpers and
+the vocabulary anchor. Core records every projector package and version in
+generated provenance.
 
 Projection planning validates all names before rendering. The logical wire,
 every projected wire, each app-wide error type, `Json`, and vocabulary helper
@@ -710,7 +613,8 @@ format and package SemVer. Artifact planning requires
 and SemVer projector provenance. The core generator identity must name
 `@mit-sdg/sync-engine` at a 1.x version. Projector provenance accepts any
 nonblank package name with any valid SemVer version; projector versions
-are not restricted to 1.x. Prerelease identities are not accepted.
+are not restricted to 1.x. Generator and projector identities may use
+prerelease versions.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 defines input admission and explicit input, successful-output, and domain-error
@@ -752,11 +656,11 @@ responsibilities.
 
 ### Execution and resource bounds
 
-Every HTTP handler limits one request body to 1,048,576 bytes, automatic log
-retention bounds settled-flow inspection, and `ExecutionLimits` provides the
-engine-owned production budget. Row limits stop engine-owned expansion during
-reaction matching, where evaluation, direct reads, and former evaluation. A
-query implementation still owns the memory needed to construct its answer.
+Automatic log retention bounds settled-flow inspection, and `ExecutionLimits`
+provides the engine-owned production budget. Row limits stop engine-owned
+expansion during reaction matching, where evaluation, direct reads, and former
+evaluation. A query implementation still owns the memory needed to construct its
+answer.
 These limits do not replace host limits for connections, request rate, DDoS
 protection, exporter queues, or autoscaling.
 
@@ -846,14 +750,9 @@ coverage hole still waits for its invocation deadline and returns `TIMED_OUT`.
 Concepts should represent expected rejection with registered refusals and
 explicit policy alternatives.
 
-A `LogSink` failure is outside this interpreter-failure path. The sink runs
-synchronously before the internal occurrence fold and must return `undefined`.
-A throw or any returned value, including a promise or structural thenable, fails
-the append before the fold. An invocation append failure can prevent an action
-body from running. An outcome append failure can occur after the action body has
-already changed concept state; the engine does not roll that state back. Custom
-sinks must define their own failure, durability, retry, and resource-lifecycle
-behavior.
+A `LogSink` failure is outside this interpreter-failure path. [Logs, concept
+implementations, and restart](#logs-concept-implementations-and-restart) defines
+its ordering and state consequences.
 
 ### Cancellation
 
@@ -862,10 +761,8 @@ a request is pending, aborting marks it to resolve with `ABORTED`. The standard
 gateway forwards the signal to the application invoker, where it also ends the
 wait; the signal does not cancel, prevent, or roll back accepted concept work.
 Client calls carry `signal`, `timeoutMs`, and `correlationId` in their optional
-second argument. The local client forwards those values to the invoker. The HTTP
-client uses `timeoutMs` for a transport-local Fetch timer and exposes the
-correlation token to its header provider. An HTTP abort does not guarantee that
-the server observes or cancels accepted work.
+second argument. The local client forwards those values to the invoker. Other
+transports define how they apply the options.
 
 The default invocation timeout is 30 seconds without a profile and the
 profile's maximum request duration with one; `InvokeOptions.timeoutMs` selects a
@@ -888,11 +785,11 @@ duration.
 ### Logs, concept implementations, and restart
 
 Concept state is separate from the assembly's occurrence evidence. Every engine
-owns a process-local internal `MemoryStore` that folds invocation, outcome,
-fault, firing, reaction-failure, and integrity-failure entries into indexes for
-matching and inspection. `MemoryStore` is a private implementation with no
-public replacement interface. An assembly configured with a window may
-evict indexed entries and does not promise to retain every occurrence forever.
+owns a process-local occurrence index that folds invocation, outcome, fault,
+firing, reaction-failure, and integrity-failure entries for matching and
+inspection. The package exposes no interface for replacing the index. An
+assembly configured with a window may evict indexed entries and does not promise
+to retain every occurrence forever.
 
 An optional application-owned `LogSink` receives each entry synchronously after
 entry validation and redaction but before the internal fold. Arrays and plain
@@ -902,11 +799,12 @@ action identities are replaced by frozen name-bearing representatives, and
 and functions retain their ordinary runtime representation and
 identity; the snapshot does not recursively freeze them. A sink must treat
 opaque leaves as read-only sensitive values. `LogSink.append` must return
-`undefined` synchronously. The sink is an audit destination; it does not supply
-matching, retention, or replay. `logSink` and `retention` are independent
-`AssemblyOptions` and may be used together. A sink failure prevents the
-corresponding fold as described under
-[Failures between action asks](#failures-between-action-asks).
+`undefined` synchronously. A throw or any other return value prevents the fold.
+An invocation append failure can prevent the action body from running; an
+outcome append failure can occur after the action changed concept state, and the
+engine does not roll that state back. The sink is an audit destination; it does
+not supply matching, retention, or replay. `logSink` and `retention` are
+independent `AssemblyOptions` and may be used together.
 
 Each ordinary assembly creates its own field-name redactor before entries reach
 the internal index, a sink, an observer, or an inspection summary. During an
@@ -953,13 +851,7 @@ storage and explicit host procedures.
 
 ### Boundary operations
 
-When `NODE_ENV=production`, production HTTP profiles and floors reject a public
-origin that is not HTTPS. A production host must set that environment value.
-The Fetch handler does not provide CORS policy, TLS termination, HSTS,
-trusted-proxy handling, reverse-proxy policy, or authentication; deployment and
-application code must supply them. Generated wire contracts typecheck callers,
-but the gateway does not automatically validate returned values against
-generated output types or derive a runtime validator from concept
-specifications. An endpoint's explicit input, successful-output, and
-domain-error validators run at the assembled invoker as described under
-[Runtime validation](#runtime-validation).
+Generated wire contracts do not provide runtime validation. An endpoint's
+explicit validators run at the assembled invoker as described under [Runtime
+validation](#runtime-validation). Host and transport obligations are listed in
+[Operational limits](operations.md).

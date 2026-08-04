@@ -1,8 +1,9 @@
 # Engine architecture
 
-This explanation maps the current source tree for contributors. The
-[documentation index](./index.md), [Execution semantics](./semantics.md), and
-[Public API](./public-surface.md) define supported behavior.
+This project document maps the current source tree for contributors changing
+sync-engine itself. The consumer [documentation index](../user/index.md), [Execution
+semantics](../user/reference/semantics.md), and [Public API](../user/reference/public-api.md) define
+supported package behavior.
 
 ## Concern map
 
@@ -60,15 +61,11 @@ work, and removes the final serial line after settlement.
 
 `src/engine/reactions/runtime/log-store.ts` owns the append-driven folded
 occurrence index through the internal `MemoryStore`. Each engine constructs its
-own index and defaults to `"keepAll"`; ordinary assembly supplies its default
-`{ window: 100 }` policy explicitly. A window is enforced automatically after a
-flow settles. `MemoryStore.append(...)` validates the entry, calls an optional
-application-owned `LogSink` synchronously, and folds only when the sink returns
-`undefined`. Before the call, `snapshotValue(...)` copies arrays, plain records,
-and `Date` values. Invocation identities become frozen name-bearing
-representatives, and the structural arrays and records are frozen. Opaque leaves
-retain their runtime identity and are not recursively frozen. Any other sink
-return value or a throw prevents the fold.
+own index. `MemoryStore.append(...)` validates and snapshots an entry, hands it
+to an optional `LogSink`, and folds it into the index after a successful sink
+return. Retention is applied after flow settlement. [Logs, concept
+implementations, and restart](../user/reference/semantics.md#logs-concept-implementations-and-restart)
+defines the observable ordering, snapshot, and failure contract.
 `ActionConcept` in `src/engine/reactions/runtime/actions.ts` is the small adapter
 that appends log entries and retains unredacted values only while their causal
 flow is active.
@@ -164,7 +161,7 @@ and serializes each path's triggers, reads, and consequence asks.
 identity-pattern, and unlowered occurrence discovery. Ordinary assembly rejects
 every owner reported by that analysis, while manual advanced engines retain the
 underlying executable constructs. See
-[Sibling paths and endpoint settlement](./semantics.md#sibling-paths-and-endpoint-settlement)
+[Sibling paths and endpoint settlement](../user/reference/semantics.md#sibling-paths-and-endpoint-settlement)
 for the resulting behavior.
 
 ### Bindings between lowered reaction stages
@@ -182,14 +179,11 @@ path unlowered with the reason `needs rows from a state read, which would re-run
 at a later position`. Ordinary assembly then rejects that local path.
 
 Portable read-binding handoff is deferred. A future design must correlate the
-carried values with the exact path, firing, and preceding ask; preserve fan-out
-and optional blanks without another state read; define portable encoding,
-redaction, evidence, and row-budget accounting; round-trip through exported IR;
-and specify failure without implying rollback or restart replay. Until then,
-place the read on the later stage when later-state observation is intended, or
-put a value on an action input/output only when it belongs to that action's
-semantic contract. Race-sensitive multi-step state decisions usually belong in
-one owning concept action.
+carried values with the exact path, firing, and preceding ask without rerunning
+state reads. Until then, place the read on the later stage when later-state
+observation is intended, or put a value on an action input/output only when it
+belongs to that action's semantic contract. The observable limitation is defined
+under [Reactions](../user/reference/semantics.md#reactions).
 
 `Registry` in `src/engine/reads/definition-registry.ts` owns the concept,
 computation, view, and former maps and the cached read environment.

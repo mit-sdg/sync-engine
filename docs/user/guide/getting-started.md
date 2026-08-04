@@ -3,13 +3,13 @@
 This introductory tutorial creates and runs the smallest complete sync-engine
 application. The result is a Note Keeper project with one concept, two
 endpoints, generated contracts, and a local client scenario. The tutorial does
-not cover every authoring form; use the [Public API](../public-surface.md) and
-[Execution semantics](../semantics.md) as the authoritative references.
+not cover every authoring form; use the [Public API](../reference/public-api.md) and
+[Execution semantics](../reference/semantics.md) as the authoritative references.
 
 ## Prerequisites
 
 Use a supported Bun release and a shell that can run the commands below. The
-[runtime and toolchain support policy](../../SUPPORT.md#runtime-and-toolchain)
+[runtime and toolchain support policy](../../../SUPPORT.md#runtime-and-toolchain)
 lists the exact ranges. The scaffold writes its own TypeScript and package
 configuration.
 
@@ -88,7 +88,7 @@ bunx sync-engine artifacts check
 concept's purpose and principle, declares action signatures and refusal
 branches, and declares query cardinality. Its optional State section is reader
 notation. [Concept specification
-format](../concept-specification.md) defines exactly which parts are parsed and
+format](../reference/concept-specification.md) defines exactly which parts are parsed and
 checked.
 
 `src/concepts/noting/noting.ts` implements the contract as an ordinary class.
@@ -167,23 +167,6 @@ export function assembleNoteKeeper() {
 `/notes/get`. The local client applies the same JSON serialization boundary as
 the HTTP client; it does not expose richer in-process values.
 
-## Trace the scenario
-
-The `start` script follows one complete boundary lifecycle:
-
-1. `createLocalClient(...)` receives the generated `NoteKeeperWire` type and
-   targets the gateway.
-2. The client calls `/notes/write` with `{ text: "buy milk" }`.
-3. `WriteNote` receives `text`, asks `Noting.write`, and waits for the returned
-   note identifier.
-4. `respond({ note })` settles the endpoint request. The client receives the
-   JSON-projected result.
-5. The client calls `/notes/get` with that identifier. `GetNote` reads the
-   current note and returns the `notePage` former.
-
-The action ask and return are occurrence evidence in this assembly. The note
-itself remains state owned by the Noting instance.
-
 ## Generated artifacts
 
 `generated/note-keeper.md` is the assembled design read-back.
@@ -196,12 +179,9 @@ Generated TypeScript checks typed callers. Gateway admission only checks the
 route, an outer object, and required-key presence. It does not validate
 primitive or nested values by default. Public endpoints can attach explicit
 runtime input, successful-output, and domain-error validators as shown in
-[Application boundary](application-boundary.md#add-runtime-validation).
+[Add runtime validation](authoring.md#add-runtime-validation).
 
-The remaining guide changes from the small scaffold to the shipped Operations
-Room case study. Continue to [Define one behavior](concepts.md), then [Connect
-independent behaviors](reactions.md), [Views and
-formers](views-and-formers.md), and [Application
-boundary](application-boundary.md). Read [How sync-engine applications fit
+The [application authoring guide](authoring.md) continues with the shipped
+Operations Room case study. Read [How sync-engine applications fit
 together](../overview.md) first when the distinction between a concept,
 composition, and assembly is not yet clear.

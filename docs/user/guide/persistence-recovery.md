@@ -3,9 +3,9 @@
 This how-to separates durable concept state, occurrence evidence, and recovery
 of process-local derived state. It assumes an application already has concepts,
 composition, and an assembly. Start with the [application authoring
-guide](./index.md#build-an-application) for that lifecycle. [Operational
-limits](./operations.md#persistence-and-restart) and [Execution
-semantics](./semantics.md#logs-concept-implementations-and-restart) define the
+guide](../index.md#application-authoring-path) for that lifecycle. [Operational
+limits](../reference/operations.md#persistence-and-restart) and [Execution
+semantics](../reference/semantics.md#logs-concept-implementations-and-restart) define the
 underlying contracts.
 
 The executable examples use only Node APIs and supported package subpaths:
