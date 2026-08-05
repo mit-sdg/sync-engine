@@ -86,13 +86,13 @@ export interface StepNode {
   action: ActionPattern;
   linePosture?: "requested" | "returned" | "refused";
   /** Conditions read immediately before this step at its incoming frontier. */
-  whereOps?: readonly WhereOp[];
+  whereOps?: readonly AnyWhereOp[];
   /**
-   * Hold this stage until a settlement frontier — the moment the causal work
-   * started by its trigger has drained (see `.afterFlowSettles()`). The
-   * stage's conditions are re-read at each frontier of the same flow.
+   * Hold this stage until a settlement frontier, after tracked ordinary work in
+   * the trigger's causal flow has drained (see `.afterFlowSettles()`). The
+   * stage's conditions are re-read at each frontier of that flow.
    */
-  deferred?: true;
+  readonly deferred?: true;
   transform?: WhereFn;
   /** The declarative form of the step's transform, when authored as ops. */
   transformOps?: readonly WhereOp[];
@@ -249,7 +249,7 @@ export type UnnamedStepNode = StepNode & { readonly [NamedLineBrand]?: never };
 /** A qualified branch with temporal stages private to that branch. */
 export interface BranchChain {
   readonly kind: "branch";
-  readonly whereOps: readonly WhereOp[];
+  readonly whereOps: readonly AnyWhereOp[];
   readonly steps: readonly StepNode[];
   readonly branchLabel?: string;
   then(node: UnnamedStepNode): BranchChain;
@@ -258,7 +258,7 @@ export interface BranchChain {
 
 export interface NamedBranchChain {
   readonly kind: "branch";
-  readonly whereOps: readonly WhereOp[];
+  readonly whereOps: readonly AnyWhereOp[];
   readonly steps: readonly StepNode[];
   readonly branchLabel: string;
   readonly [NamedLineBrand]: true;
@@ -299,13 +299,13 @@ export interface ReactionPartition {
 
 /** One authored stage's deferral and incoming conditions, as the builders pass them down. */
 export interface StageOptions {
-  deferred?: boolean;
-  whereOps?: readonly WhereOp[];
+  readonly deferred?: true;
+  readonly whereOps?: readonly AnyWhereOp[];
 }
 
 /** A chained stage after `.afterFlowSettles()`. */
 export interface DeferredStage {
-  where(...conditions: Condition[]): DeferredStageWithWhere;
+  where(first: Condition, ...conditions: Condition[]): DeferredStageWithWhere;
   then(node: ConsequenceNode): ReactionPartition;
   then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
@@ -350,7 +350,7 @@ export type Empty = Record<PropertyKey, never>;
 
 /** A `when` builder whose consequence waits for a settlement frontier. */
 export interface DeferredWhenBuilder {
-  where(...conditions: Condition[]): WhenBuilderWithWhere;
+  where(first: Condition, ...conditions: Condition[]): WhenBuilderWithWhere;
   where(fn: WhereFn): WhenBuilderWithFunctionWhere;
   then(node: ConsequenceNode): ReactionPartition;
   then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
@@ -359,9 +359,10 @@ export interface DeferredWhenBuilder {
 /** The builder returned by `when(...)`. */
 export interface WhenBuilder extends DeferredWhenBuilder {
   /**
-   * Hold the consequence until the causal work started by the trigger has
-   * drained. The conditions stated after it are re-read at each settlement
-   * frontier of the same flow until the reaction fires once.
+   * Hold the consequence until tracked ordinary work in the trigger's causal
+   * flow has drained. The conditions stated after it are re-read at each
+   * settlement frontier of that flow until the trigger match qualifies or the
+   * flow finalizes.
    */
   afterFlowSettles(): DeferredWhenBuilder;
 }

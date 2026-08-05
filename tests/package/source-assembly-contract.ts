@@ -8,10 +8,10 @@ import type {
 } from "@sync-engine/assembly";
 import type { GatewayOptions } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/language";
-import type { ApplicationManifestV3 } from "@sync-engine/tooling";
+import type { ApplicationManifestV4 } from "@sync-engine/tooling";
 
-declare const manifestV3: ApplicationManifestV3;
-const manifestVersion: 3 = manifestV3.version;
+declare const manifestV4: ApplicationManifestV4;
+const manifestVersion: 4 = manifestV4.version;
 void manifestVersion;
 
 class FirstConcept {}

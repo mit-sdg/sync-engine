@@ -133,6 +133,29 @@ describe("deferred endpoint stages", () => {
     expect(stage?.where.some((op) => op.op === "earlier")).toBe(true);
   });
 
+  test("a deferred endpoint stage survives a JSON registration fixed point", async () => {
+    const source = setup();
+    const exported = JSON.parse(JSON.stringify(source.app.engine.exportReactions()));
+    const sourceStage = exported.reactions.find(
+      ({ name }: { name: string }) => name === "RunSequence#2",
+    );
+
+    const target = setup();
+    target.app.engine.registerReactions(exported.reactions);
+    const targetStage = target.app.engine
+      .exportReactions()
+      .reactions.find(({ name }) => name === "RunSequence#2");
+    expect(targetStage).toEqual(sourceStage);
+
+    const result = await target.app.invoker.invoke(
+      "/sequence/run" as never,
+      {
+        sequence: "s",
+      } as never,
+    );
+    expect(result).toEqual({ ok: true, value: { job: "s/job" } });
+  });
+
   test("an unanswered deferred stage leaves the existing timeout behavior", async () => {
     // Without the advance rules the job stays running, so the response guard
     // never holds and the frontier that finds no firing finalizes the flow.

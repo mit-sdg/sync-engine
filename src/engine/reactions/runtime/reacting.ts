@@ -183,7 +183,9 @@ export class Reacting {
           return;
         }
 
-        const deferredStage = declaration.then.findIndex((step) => step.deferred === true);
+        const deferredStage = declaration.then.findIndex(
+          (step, stage) => stage > 0 && step.deferred === true,
+        );
         if (deferredStage > 0) {
           const path = declaration.path?.join(" → ") ?? "main";
           throw new Error(
@@ -194,10 +196,7 @@ export class Reacting {
         }
 
         const ops = [...(declaration.whereOps ?? []), ...(declaration.then[0]?.whereOps ?? [])];
-        const where =
-          ops.length > 0
-            ? (frames: Frames) => this.applyLoweredWhere(frames, ops)
-            : declaration.where;
+        const where = this.compileWhere(declaration.where, ops);
         unlowered.push({
           definition: serializeUnloweredReaction(
             name,
@@ -387,16 +386,31 @@ export class Reacting {
   }
 
   private compileReaction(reaction: BoundReaction | LoweredReaction): ExecutableReaction {
-    const where: WhereFn | undefined =
-      reaction.whereFn ??
-      (reaction.whereOps !== undefined
-        ? (frames) => this.applyLoweredWhere(frames, reaction.whereOps ?? [])
-        : undefined);
+    const where = this.compileWhere(reaction.whereFn, reaction.whereOps);
     return {
       name: reaction.name,
       when: reaction.when,
       ...(where !== undefined ? { where } : {}),
       then: [reaction.step],
+    };
+  }
+
+  private compileWhere(
+    whereFn: WhereFn | undefined,
+    whereOps: readonly (BoundWhereOp | AnyWhereOp)[] | undefined,
+  ): WhereFn | undefined {
+    if (whereFn === undefined) {
+      return whereOps === undefined
+        ? undefined
+        : (frames) => this.applyLoweredWhere(frames, whereOps);
+    }
+    if (whereOps === undefined || whereOps.length === 0) return whereFn;
+    return async (frames) => {
+      const filtered = await whereFn(frames);
+      if (!(filtered instanceof Frames)) {
+        throw new TypeError("A reaction where function must return Frames.");
+      }
+      return this.applyLoweredWhere(filtered, whereOps);
     };
   }
 

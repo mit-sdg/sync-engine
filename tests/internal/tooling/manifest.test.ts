@@ -23,7 +23,10 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 const words = vocabulary({ concepts: {}, computations: {} });
 const First = endpoint(
   "/shared",
-  ({ value }) => receive({ value }).then(respond({ source: "first", value })),
+  ({ value }) =>
+    receive({ value })
+      .afterFlowSettles()
+      .then(respond({ source: "first", value })),
   {
     input: { required: ["value"], defaults: { z: 1, a: 2 } },
     validators: {
@@ -90,7 +93,7 @@ describe("application manifest", () => {
 
     expect(manifest).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 3,
+      version: 4,
       generator: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
       digest: expect.stringMatching(/^fnv1a64-[0-9a-f]{16}$/),
       endpoints: [
@@ -109,6 +112,9 @@ describe("application manifest", () => {
       ],
     });
     expect(manifest.diagnostics.map(({ code }) => code)).toContain("ENDPOINT_PATH_OVERLAP");
+    expect(manifest.application.reactions.find(({ name }) => name === "First")?.deferred).toBe(
+      true,
+    );
     expect(diagnosticsFail(manifest.diagnostics)).toBe(false);
     expect(diagnosticsFail(manifest.diagnostics, "warnings")).toBe(true);
   });
@@ -649,7 +655,7 @@ describe("application manifest", () => {
     expect(printed.status).toBe(0);
     expect(JSON.parse(printed.stdout)).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 3,
+      version: 4,
     });
     expect(printed.stdout.endsWith("\n")).toBe(true);
 

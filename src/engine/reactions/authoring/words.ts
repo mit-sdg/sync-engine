@@ -1,5 +1,5 @@
 import { brandWhereOp } from "@engine/reads/where-ops";
-import type { AnyWhereOp, Condition, EarlierOp, WhereOp } from "@engine/reads/where-ops";
+import type { AnyWhereOp, Condition, EarlierOp } from "@engine/reads/where-ops";
 import { isCountOp, where as viewWhere, type CountOp, type ViewBlock } from "@engine/reads/views";
 import { normalizeWhere } from "./conditions.ts";
 import { assertReactionNodes } from "./nodes.ts";
@@ -64,7 +64,7 @@ function createWhenBuilderFromPatterns(
         } as WhenBuilderWithFunctionWhere;
         return functional;
       }
-      return declarativeWhenBuilder(patterns, normalized.ops ?? [], stage);
+      return declarativeWhenBuilder(patterns, normalized.ops, stage);
     },
     then(...nodes: ThenNode[]) {
       assertReactionNodes(nodes);
@@ -110,7 +110,7 @@ export function where(...conditions: Array<Condition | CountOp>): AuthoredWhereB
             "To test a count as policy, define a view and read that view.",
         );
       }
-      return branchChain(block as WhereOp[], nodes[0]);
+      return branchChain(block as AnyWhereOp[], nodes[0]);
     },
   });
   return block;

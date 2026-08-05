@@ -8,7 +8,7 @@ export type {
   DiagnosticSeverity,
 } from "@engine/tooling/diagnostics";
 export { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
-export type { ApplicationManifestV3, ManifestEndpointV3 } from "@engine/tooling/manifest";
+export type { ApplicationManifestV4, ManifestEndpointV4 } from "@engine/tooling/manifest";
 export { renderApp, renderReaction } from "@engine/reads/render";
 export { wireContracts } from "@engine/boundary/wire/wire-contracts";
 export { renderWireTypes } from "@engine/boundary/wire/wire-renderer";

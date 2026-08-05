@@ -46,7 +46,7 @@ Generated Markdown and TypeScript wire files record the exact core generator and
 projector versions that produced them. Regenerate and review generated files for
 every package version change and typecheck their consumers.
 
-`sync-engine.application-manifest` version 3 is a versioned data format. An
+`sync-engine.application-manifest` version 4 is a versioned data format. An
 incompatible structural or semantic format change requires a new integer format
 version and new public type names. A package release does not bump a format
 version when the existing format and meaning remain compatible. Generated

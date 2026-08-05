@@ -10,7 +10,7 @@ import type {
 } from "../types.ts";
 import { flow } from "../context.ts";
 import { isActionRef } from "./references.ts";
-import type { WhereOp } from "@engine/reads/where-ops";
+import type { AnyWhereOp } from "@engine/reads/where-ops";
 import { brand, hasBrand } from "@engine/reads/brands";
 
 const NodeBrand: unique symbol = Symbol("NodeBrand");
@@ -49,7 +49,7 @@ export function actionLine(action: InstrumentedAction, input: Mapping): StepNode
 }
 
 /** Qualify and privately chain one sibling branch. */
-export function branchChain(whereOps: readonly WhereOp[], first: UnnamedStepNode): BranchChain {
+export function branchChain(whereOps: readonly AnyWhereOp[], first: UnnamedStepNode): BranchChain {
   if (first.branchLabel !== undefined) {
     throw new Error(
       "name the qualified branch after its local action chain, not an action inside it.",

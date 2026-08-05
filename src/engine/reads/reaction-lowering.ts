@@ -176,6 +176,12 @@ function lowerChainStep(
 export function lowerReaction(name: string, decl: ReactionDeclaration): LowerOutcome {
   if (!decl.then.every(isPlainStep)) return { reason: "a step transform in the pipeline" };
   const chain = decl.then as StepNode[];
+  if (
+    decl.where !== undefined &&
+    ((decl.whereOps?.length ?? 0) > 0 || (chain[0]?.whereOps?.length ?? 0) > 0)
+  ) {
+    return { reason: "a closure where combined with declarative conditions" };
+  }
   const labels: string[] = [];
   const names = chain.map((step, i) => {
     labels.push(...(step.pathLabels ?? []));
@@ -249,5 +255,15 @@ export function serializeUnloweredReaction(
     if (step.action.output !== undefined) patterns.push(encodePattern(step.action.output, vars));
     for (const op of step.transformOps ?? []) where.push(encodeWhereOp(op, vars));
   }
-  return { name, reason, known: { when, where, then, patterns } };
+  return {
+    name,
+    reason,
+    known: {
+      when,
+      ...(declaration.then[0]?.deferred === true ? { deferred: true as const } : {}),
+      where,
+      then,
+      patterns,
+    },
+  };
 }

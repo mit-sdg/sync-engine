@@ -1,8 +1,16 @@
 import { describe, expect, test } from "vite-plus/test";
-import { earlier, no, reaction, vocabulary, when } from "@sync-engine/language";
+import { Logging } from "@sync-engine/assembly";
+import type { LogEntry, LogSink } from "@sync-engine/assembly";
+import { earlier, no, reaction, vocabulary, when, where } from "@sync-engine/language";
 import type { Empty, Vars } from "@sync-engine/internal/reactions/types";
 import { SettlementBook } from "@sync-engine/internal/reactions/runtime/settlement";
 import type { MatchedTrigger } from "@sync-engine/internal/reactions/runtime/firing-pipeline";
+import { Frames } from "@sync-engine/internal/reads/frames";
+import type { PatternIR, ReactionIR } from "@sync-engine/internal/reads/ir";
+import { flow } from "@sync-engine/internal/reactions/context";
+import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";
+import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store";
+import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { quietReacting } from "../../utils/reacting.ts";
 
 /**
@@ -69,6 +77,75 @@ class FaultyConcept {
   _boom(_: Empty): Empty[] {
     throw new Error("query failed");
   }
+}
+
+class JointEventConcept {
+  first(input: { group: string; key?: string }) {
+    return input;
+  }
+  second(input: { group: string; key: string }) {
+    return input;
+  }
+}
+
+class JointGateConcept {
+  private readonly ready = new Set(["one"]);
+  readonly reads: string[] = [];
+  readonly opened: string[] = [];
+
+  constructor(private readonly unlockSecond = false) {}
+
+  _ready({ key }: { key: string }): Empty[] {
+    this.reads.push(key);
+    return this.ready.has(key) ? [{}] : [];
+  }
+
+  open({ key }: { key: string }) {
+    this.opened.push(key);
+    if (this.unlockSecond && key === "one") this.ready.add("two");
+    return {};
+  }
+}
+
+function jointReaction(name: string, firstInput: PatternIR): ReactionIR {
+  return {
+    name,
+    when: [
+      {
+        kind: "action",
+        concept: "JointEvent",
+        action: "first",
+        posture: "returned",
+        input: firstInput,
+        output: {},
+      },
+      {
+        kind: "action",
+        concept: "JointEvent",
+        action: "second",
+        posture: "returned",
+        input: { group: { $var: "group" }, key: { $var: "key" } },
+        output: {},
+      },
+    ],
+    deferred: true,
+    where: [
+      {
+        op: "find",
+        query: { concept: "JointGate", query: "_ready" },
+        in: { key: { $var: "key" } },
+        out: {},
+      },
+    ],
+    then: [
+      {
+        kind: "request",
+        concept: "JointGate",
+        action: "open",
+        input: { key: { $var: "key" } },
+      },
+    ],
+  };
 }
 
 /** The per-phase work an ordinary reaction contributes. */
@@ -163,7 +240,7 @@ describe("deferred triggers at settlement frontiers", () => {
     ]);
   });
 
-  test("a deferred reaction fires at most once per anchor occurrence", async () => {
+  test("a deferred reaction retires an anchor once it qualifies", async () => {
     const { reacting, Phasing, journal } = setup(1);
     reacting.register(phaseReactions());
 
@@ -257,6 +334,7 @@ describe("deferred triggers at settlement frontiers", () => {
         // reaction of its own and has no trigger to defer from.
         Local: reaction(({ sequence, job, attempt }: Vars) =>
           when(refs.Phasing.start({ sequence }).responds({ job }))
+            .afterFlowSettles()
             .where((frames) => frames)
             .then(refs.PhaseWork.perform({ job, attempt: 1 }).responds({}))
             .afterFlowSettles()
@@ -264,6 +342,36 @@ describe("deferred triggers at settlement frontiers", () => {
         ),
       }),
     ).toThrow(/afterFlowSettles\(\), which needs its stage to lower/);
+  });
+
+  test("a functional guard still applies before branch-local deferred conditions", async () => {
+    const { reacting, Phasing, journal } = setup(1);
+    reacting.register({
+      Guarded: reaction(({ sequence, job, attempt }: Vars) =>
+        when(refs.Phasing.start({ sequence }).responds({ job, attempt }))
+          .afterFlowSettles()
+          .where(() => new Frames())
+          .then(
+            where(refs.Phasing._running({ job }).is({ attempt })).then(
+              refs.PhaseWork.record({ job, attempt }),
+            ),
+          ),
+      ),
+    });
+
+    const exported = reacting.exportReactions();
+    expect(exported.reactions).toEqual([]);
+    expect(exported.unlowered[0]).toMatchObject({
+      reason: "a closure where combined with declarative conditions",
+      known: { deferred: true },
+    });
+    expect(reacting.readBack()).toContain(
+      "local executable reaction at the flow's settlement frontier",
+    );
+    expect(reacting.renderApp()).toContain("`Guarded` — at the flow's settlement frontier");
+
+    await Phasing.start({ sequence: "s" });
+    expect(journal).toEqual(["start"]);
   });
 
   test("afterFlowSettles(...).where(...) refuses a frame function", () => {
@@ -351,13 +459,102 @@ describe("deferred triggers at settlement frontiers", () => {
     const advance = exported.reactions.find(({ name }) => name === "AdvanceAfterStart");
 
     expect(advance?.deferred).toBe(true);
-    expect(source.reacting.readBack()).toContain("after the flow settles");
+    expect(source.reacting.readBack()).toContain("at the flow's settlement frontier");
 
     const target = setup(1);
     target.reacting.registerReactions(exported.reactions);
     await target.Phasing.start({ sequence: "s" });
 
     expect(target.journal).toEqual(["start", "work:1", "record:1", "advance:2"]);
+  });
+
+  test("imported deferred timing rejects non-true values", () => {
+    const source = setup(1);
+    source.reacting.register(phaseReactions());
+    const deferred = source.reacting
+      .exportReactions()
+      .reactions.find(({ name }) => name === "AdvanceAfterStart");
+    if (deferred === undefined) throw new Error("expected a deferred reaction");
+
+    const target = setup(1);
+    expect(() =>
+      target.reacting.registerReactions([{ ...deferred, deferred: false } as never]),
+    ).toThrow('Reaction "AdvanceAfterStart": deferred must be true when present.');
+  });
+
+  test("unqualified joint matches remain armed for a later frontier", async () => {
+    const reacting = quietReacting();
+    const gate = new JointGateConcept(true);
+    const { JointEvent } = reacting.instrument({
+      JointEvent: new JointEventConcept(),
+      JointGate: gate,
+    });
+    const flowToken = "joint-flow";
+    await JointEvent.first({ group: "one", key: "one", [flow]: flowToken } as never);
+    await JointEvent.second({ group: "one", key: "one", [flow]: flowToken } as never);
+    await JointEvent.first({ group: "two", key: "two", [flow]: flowToken } as never);
+    await JointEvent.second({ group: "two", key: "two", [flow]: flowToken } as never);
+
+    reacting.registerReactions([
+      jointReaction("OpenReadyPairs", {
+        group: { $var: "group" },
+        key: { $var: "key" },
+      }),
+    ]);
+
+    await JointEvent.second({ group: "other", key: "unmatched", [flow]: flowToken } as never);
+
+    expect(gate.opened).toEqual(["one", "two"]);
+    expect(reacting.Action.store.firingsByReaction("OpenReadyPairs")).toHaveLength(2);
+  });
+
+  test("a joint match retires combinations that share a consumed occurrence", async () => {
+    const reacting = quietReacting();
+    const gate = new JointGateConcept();
+    const { JointEvent } = reacting.instrument({
+      JointEvent: new JointEventConcept(),
+      JointGate: gate,
+    });
+    const flowToken = "overlap-flow";
+    await JointEvent.first({ group: "shared", [flow]: flowToken } as never);
+    await JointEvent.second({ group: "shared", key: "one", [flow]: flowToken } as never);
+    await JointEvent.second({ group: "shared", key: "two", [flow]: flowToken } as never);
+
+    reacting.registerReactions([
+      jointReaction("OpenOneOverlappingPair", { group: { $var: "group" } }),
+    ]);
+
+    await JointEvent.second({ group: "other", key: "unmatched", [flow]: flowToken } as never);
+
+    expect(gate.opened).toEqual(["one"]);
+    expect(gate.reads).toEqual(["one", "two"]);
+    expect(reacting.Action.store.firingsByReaction("OpenOneOverlappingPair")).toHaveLength(1);
+  });
+
+  test("settlement failure still clears matching state", async () => {
+    class RejectSettlementEntries implements LogSink {
+      append(entry: LogEntry): undefined {
+        if (entry.kind === "firing" || entry.kind === "reaction-failure") {
+          throw new Error("settlement log unavailable");
+        }
+      }
+    }
+
+    const store = new MemoryStore("keepAll", new RejectSettlementEntries());
+    const actions = new ActionConcept(store);
+    const reacting = new Reacting(actions);
+    reacting.logging = Logging.OFF;
+    const { Phasing } = reacting.instrument({ Phasing: new PhasingConcept(1) });
+    reacting.register({
+      Advance: reaction(({ sequence, job, attempt }: Vars) =>
+        when(refs.Phasing.start({ sequence }).responds({ job, attempt }))
+          .afterFlowSettles()
+          .then(refs.Phasing.advance({ job, attempt })),
+      ),
+    });
+
+    await expect(Phasing.start({ sequence: "s" })).rejects.toThrow("settlement log unavailable");
+    expect(actions._getMatchingRecordCount()).toBe(0);
   });
 });
 

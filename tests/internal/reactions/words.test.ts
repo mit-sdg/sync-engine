@@ -54,7 +54,8 @@ describe("reaction words", () => {
   test("where rejects zero arguments", () => {
     const a = action("a");
     const step = actionLine(a, {});
-    expect(() => rawWhen(step).where()).toThrow("states at least one condition line.");
+    const whereWithoutConditions = rawWhen(step).where as (...conditions: unknown[]) => unknown;
+    expect(() => whereWithoutConditions()).toThrow("states at least one condition line.");
   });
 
   test("actionPattern throws for an uninstrumented action", () => {

@@ -98,10 +98,10 @@ export class ReactionLogger {
     if (this.level === Logging.VERBOSE && frames.length > 0) logger.debug(message, { frames });
   }
 
-  /** Trace one settlement frontier: the deferred firings it prepared. */
-  settlement(flow: string, firings: number): void {
+  /** Trace one settlement frontier, including the final empty one. */
+  settlement(flow: string, batches: number): void {
     if (this.level === Logging.VERBOSE) {
-      logger.debug("Settlement frontier prepared deferred firings:", { flow, firings });
+      logger.debug("Settlement frontier prepared deferred trigger batches:", { flow, batches });
     }
   }
 

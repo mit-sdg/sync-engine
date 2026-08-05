@@ -1,4 +1,4 @@
-import type { WhereOp } from "@engine/reads/where-ops";
+import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type {
   DeferredStage,
   DeferredStageWithWhere,
@@ -33,7 +33,7 @@ function cloneTrigger(pattern: TriggerPattern): TriggerPattern {
 
 function branchOf(node: ThenNode): {
   steps: StepNode[];
-  whereOps: readonly WhereOp[];
+  whereOps: readonly AnyWhereOp[];
   label?: string;
 } {
   if (node.kind === "branch") {
@@ -83,9 +83,9 @@ function labeledBranches(nodes: readonly ThenNode[], stage: number) {
  */
 function withIncomingWhere(
   steps: readonly StepNode[],
-  whereOps: readonly WhereOp[],
+  whereOps: readonly AnyWhereOp[],
   label?: string,
-  deferred?: boolean,
+  deferred?: true,
 ): StepNode[] {
   return steps.map((step, index) =>
     index === 0
@@ -100,7 +100,7 @@ function withIncomingWhere(
 }
 
 /** The conditions one stage carries in: the stage's own, then its branch's. */
-function stageWhere(stage: StageOptions, branchOps: readonly WhereOp[]): readonly WhereOp[] {
+function stageWhere(stage: StageOptions, branchOps: readonly AnyWhereOp[]): readonly AnyWhereOp[] {
   return stage.whereOps === undefined ? branchOps : [...stage.whereOps, ...branchOps];
 }
 
@@ -119,7 +119,7 @@ function deferredStage(
       }
       return {
         then(...nodes: ThenNode[]) {
-          return extend(nodes, { deferred: true, whereOps: normalized.ops as WhereOp[] });
+          return extend(nodes, { deferred: true, whereOps: normalized.ops });
         },
       } as DeferredStageWithWhere;
     },

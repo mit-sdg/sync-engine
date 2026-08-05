@@ -8,12 +8,12 @@
  * occurrences, bindings, and transient matching values are still alive.
  *
  * This book holds one armed list per flow. A frontier qualifies each armed
- * trigger against current state: one that fires is retired, one whose
+ * trigger against current state: one that qualifies is retired, one whose
  * conditions do not hold stays armed for a later frontier of the same flow,
  * and the whole list is discarded when the flow finalizes. The anchor
- * occurrence a trigger matched keeps supplying the landing position and the
- * consumption identity, so a deferred reaction fires at most once per anchor
- * exactly as an ordinary one does.
+ * occurrence keeps supplying the landing position and consumption identity.
+ * Once a trigger combination qualifies, it is retired and each surviving
+ * binding is dispatched independently.
  */
 
 import type { ExecutableReaction } from "../types.ts";

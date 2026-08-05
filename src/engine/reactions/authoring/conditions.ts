@@ -10,10 +10,9 @@ import type { AnyWhereOp } from "@engine/reads/where-ops";
 import { isCountOp } from "@engine/reads/views";
 import type { WhereFn } from "../types.ts";
 
-export interface NormalizedWhere {
-  fn?: WhereFn;
-  ops?: readonly AnyWhereOp[];
-}
+export type NormalizedWhere =
+  | { fn: WhereFn; ops?: never }
+  | { fn?: never; ops: readonly AnyWhereOp[] };
 
 export function normalizeWhere(args: unknown[], site: string): NormalizedWhere {
   if (args.length === 1 && typeof args[0] === "function" && !isCondition(args[0])) {

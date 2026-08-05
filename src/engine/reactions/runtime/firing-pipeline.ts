@@ -110,15 +110,16 @@ export class FiringPipeline {
   }
 
   /**
-   * Open settlement frontiers for one flow until none produces a firing.
+   * Open settlement frontiers for one flow until none qualifies a trigger.
    *
    * Each frontier qualifies every trigger armed in the flow before dispatching
    * any of their consequences, exactly as one landed occurrence does for its
    * siblings, then lets those consequences and the ordinary cascades they
-   * start drain before the next frontier opens. An armed trigger whose
-   * conditions do not hold stays eligible for a later frontier. Interpreter or
-   * integrity failure stops deferred advancement; the flow finalizes with
-   * whatever it has already accepted.
+   * start drain before the next frontier opens. An unqualified combination
+   * remains armed unless another firing consumes one of its trigger
+   * occurrences. An interpreter or integrity failure prevents subsequent
+   * frontiers but does not cancel matches already being processed in the current
+   * frontier.
    */
   settle(flowToken: string): void | Promise<void> {
     if (!this.settlement.has(flowToken) || !this.actions._isFlowOutermost(flowToken)) return;
@@ -130,13 +131,19 @@ export class FiringPipeline {
       while (this.settlement.has(flowToken) && !this.actions._flowFailed(flowToken)) {
         const prepared: PreparedFiring[] = [];
         for (const armed of this.settlement.pending(flowToken)) {
+          if (!this.retainUnconsumedFrames(armed)) {
+            this.settlement.retire(flowToken, armed);
+            continue;
+          }
           const firing = await this.qualify(armed);
           if (firing === undefined) continue;
-          this.settlement.retire(flowToken, armed);
+          if (!this.retainUnqualifiedFrames(armed, firing.frameTriggerIds)) {
+            this.settlement.retire(flowToken, armed);
+          }
           prepared.push(firing);
         }
-        if (prepared.length === 0) return;
         this.reactionLogger.settlement(flowToken, prepared.length);
+        if (prepared.length === 0) return;
         for (const firing of prepared) await this.dispatch(firing);
       }
     } finally {
@@ -183,7 +190,7 @@ export class FiringPipeline {
     let frames = matched.frames;
     if (reaction.where !== undefined) {
       try {
-        const filtered = reaction.where(frames);
+        const filtered = reaction.where(new Frames(...frames));
         const filteredPromise = normalizePromiseLike(filtered);
         frames = filteredPromise === undefined ? (filtered as Frames) : await filteredPromise;
         if (!(frames instanceof Frames)) {
@@ -248,6 +255,39 @@ export class FiringPipeline {
         ? { triggerSignatures: new Set(frameTriggerIds.map((ids) => JSON.stringify(ids))) }
         : {}),
     };
+  }
+
+  private retainFrames(matched: MatchedTrigger, retain: (ids: string[]) => boolean): boolean {
+    const remaining = matched.provenance.frameTriggerIds
+      .map((ids, index) => ({ ids, frame: matched.frames[index]! }))
+      .filter(({ ids }) => retain(ids));
+    if (remaining.length === 0) return false;
+    if (remaining.length === matched.frames.length) return true;
+
+    const frameTriggerIds = remaining.map(({ ids }) => ids);
+    matched.frames = new Frames(...remaining.map(({ frame }) => frame));
+    matched.provenance = {
+      flow: matched.provenance.flow,
+      triggerIds: [...new Set(frameTriggerIds.flat())],
+      frameTriggerIds,
+      ...(matched.actionSymbols.length > 0
+        ? { triggerSignatures: new Set(frameTriggerIds.map((ids) => JSON.stringify(ids))) }
+        : {}),
+    };
+    return true;
+  }
+
+  /** Drop combinations invalidated when another firing consumed a shared occurrence. */
+  private retainUnconsumedFrames(matched: MatchedTrigger): boolean {
+    return this.retainFrames(matched, (ids) =>
+      ids.every((id) => !this.firingBook.hasConsumed(id, matched.reaction.name)),
+    );
+  }
+
+  /** Keep trigger combinations whose conditions produced no binding at this frontier. */
+  private retainUnqualifiedFrames(matched: MatchedTrigger, qualifiedIds: string[][]): boolean {
+    const qualified = new Set(qualifiedIds.map((ids) => JSON.stringify(ids)));
+    return this.retainFrames(matched, (ids) => !qualified.has(JSON.stringify(ids)));
   }
 
   private assertProvenance(

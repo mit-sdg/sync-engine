@@ -1076,19 +1076,22 @@ export {};
  */
 import type { AnyWhereOp } from "../../reads/where-ops.ts";
 import type { WhereFn } from "../types.ts";
-export interface NormalizedWhere {
-    fn?: WhereFn;
-    ops?: readonly AnyWhereOp[];
-}
+export type NormalizedWhere = {
+    fn: WhereFn;
+    ops?: never;
+} | {
+    fn?: never;
+    ops: readonly AnyWhereOp[];
+};
 export declare function normalizeWhere(args: unknown[], site: string): NormalizedWhere;
 
 === dist/engine/reactions/authoring/nodes.d.ts ===
 import type { ActionPattern, BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode, UnnamedStepNode } from "../types.ts";
-import type { WhereOp } from "../../reads/where-ops.ts";
+import type { AnyWhereOp } from "../../reads/where-ops.ts";
 /** Build the callable data line represented by one vocabulary action ref. */
 export declare function actionLine(action: InstrumentedAction, input: Mapping): StepNode;
 /** Qualify and privately chain one sibling branch. */
-export declare function branchChain(whereOps: readonly WhereOp[], first: UnnamedStepNode): BranchChain;
+export declare function branchChain(whereOps: readonly AnyWhereOp[], first: UnnamedStepNode): BranchChain;
 export declare function assertReactionNodes(nodes: readonly ThenNode[]): void;
 /** Normalize an authored action reference into an occurrence pattern. */
 export declare function actionPattern(action: InstrumentedAction, input: Mapping, output?: Mapping): ActionPattern;
@@ -1818,15 +1821,16 @@ export declare class FiringPipeline {
     }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
     fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void>;
     /**
-     * Open settlement frontiers for one flow until none produces a firing.
+     * Open settlement frontiers for one flow until none qualifies a trigger.
      *
      * Each frontier qualifies every trigger armed in the flow before dispatching
      * any of their consequences, exactly as one landed occurrence does for its
      * siblings, then lets those consequences and the ordinary cascades they
-     * start drain before the next frontier opens. An armed trigger whose
-     * conditions do not hold stays eligible for a later frontier. Interpreter or
-     * integrity failure stops deferred advancement; the flow finalizes with
-     * whatever it has already accepted.
+     * start drain before the next frontier opens. An unqualified combination
+     * remains armed unless another firing consumes one of its trigger
+     * occurrences. An interpreter or integrity failure prevents subsequent
+     * frontiers but does not cancel matches already being processed in the current
+     * frontier.
      */
     settle(flowToken: string): void | Promise<void>;
     private openFrontiers;
@@ -1836,6 +1840,11 @@ export declare class FiringPipeline {
     private qualify;
     private dispatch;
     private capture;
+    private retainFrames;
+    /** Drop combinations invalidated when another firing consumed a shared occurrence. */
+    private retainUnconsumedFrames;
+    /** Keep trigger combinations whose conditions produced no binding at this frontier. */
+    private retainUnqualifiedFrames;
     private assertProvenance;
     private triggerIdsOf;
     private dispatchFrames;
@@ -2213,8 +2222,8 @@ export declare class ReactionLogger {
     /** Call each observer; log an opaque error class when one throws. */
     emit(record: ActionRecord, durationMs?: number): void;
     frames(message: string, frames: Frames<Frame>): void;
-    /** Trace one settlement frontier: the deferred firings it prepared. */
-    settlement(flow: string, firings: number): void;
+    /** Trace one settlement frontier, including the final empty one. */
+    settlement(flow: string, batches: number): void;
     action(record: ActionRecord, durationMs?: number): void;
 }
 
@@ -2418,6 +2427,7 @@ export declare class Reacting {
     instrument<T extends Record<string, object>>(concepts: T): T;
     instrument<T extends object>(concept: T): T;
     private compileReaction;
+    private compileWhere;
     private applyLoweredWhere;
     private applyEarlier;
     private assertRows;
@@ -2456,12 +2466,12 @@ export declare class ReactionCatalog {
  * occurrences, bindings, and transient matching values are still alive.
  *
  * This book holds one armed list per flow. A frontier qualifies each armed
- * trigger against current state: one that fires is retired, one whose
+ * trigger against current state: one that qualifies is retired, one whose
  * conditions do not hold stays armed for a later frontier of the same flow,
  * and the whole list is discarded when the flow finalizes. The anchor
- * occurrence a trigger matched keeps supplying the landing position and the
- * consumption identity, so a deferred reaction fires at most once per anchor
- * exactly as an ordinary one does.
+ * occurrence keeps supplying the landing position and consumption identity.
+ * Once a trigger combination qualifies, it is retired and each surviving
+ * binding is dispatched independently.
  */
 import type { ExecutableReaction } from "../types.ts";
 import type { MatchedTrigger } from "./firing-pipeline.ts";
@@ -2569,13 +2579,13 @@ export interface StepNode {
     action: ActionPattern;
     linePosture?: "requested" | "returned" | "refused";
     /** Conditions read immediately before this step at its incoming frontier. */
-    whereOps?: readonly WhereOp[];
+    whereOps?: readonly AnyWhereOp[];
     /**
-     * Hold this stage until a settlement frontier — the moment the causal work
-     * started by its trigger has drained (see `.afterFlowSettles()`). The
-     * stage's conditions are re-read at each frontier of the same flow.
+     * Hold this stage until a settlement frontier, after tracked ordinary work in
+     * the trigger's causal flow has drained (see `.afterFlowSettles()`). The
+     * stage's conditions are re-read at each frontier of that flow.
      */
-    deferred?: true;
+    readonly deferred?: true;
     transform?: WhereFn;
     /** The declarative form of the step's transform, when authored as ops. */
     transformOps?: readonly WhereOp[];
@@ -2680,7 +2690,7 @@ export type UnnamedStepNode = StepNode & {
 /** A qualified branch with temporal stages private to that branch. */
 export interface BranchChain {
     readonly kind: "branch";
-    readonly whereOps: readonly WhereOp[];
+    readonly whereOps: readonly AnyWhereOp[];
     readonly steps: readonly StepNode[];
     readonly branchLabel?: string;
     then(node: UnnamedStepNode): BranchChain;
@@ -2688,7 +2698,7 @@ export interface BranchChain {
 }
 export interface NamedBranchChain {
     readonly kind: "branch";
-    readonly whereOps: readonly WhereOp[];
+    readonly whereOps: readonly AnyWhereOp[];
     readonly steps: readonly StepNode[];
     readonly branchLabel: string;
     readonly [NamedLineBrand]: true;
@@ -2716,12 +2726,12 @@ export interface ReactionPartition {
 }
 /** One authored stage's deferral and incoming conditions, as the builders pass them down. */
 export interface StageOptions {
-    deferred?: boolean;
-    whereOps?: readonly WhereOp[];
+    readonly deferred?: true;
+    readonly whereOps?: readonly AnyWhereOp[];
 }
 /** A chained stage after `.afterFlowSettles()`. */
 export interface DeferredStage {
-    where(...conditions: Condition[]): DeferredStageWithWhere;
+    where(first: Condition, ...conditions: Condition[]): DeferredStageWithWhere;
     then(node: ConsequenceNode): ReactionPartition;
     then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
@@ -2758,7 +2768,7 @@ export type ReactionMap = Record<string, Reaction>;
 export type Empty = Record<PropertyKey, never>;
 /** A `when` builder whose consequence waits for a settlement frontier. */
 export interface DeferredWhenBuilder {
-    where(...conditions: Condition[]): WhenBuilderWithWhere;
+    where(first: Condition, ...conditions: Condition[]): WhenBuilderWithWhere;
     where(fn: WhereFn): WhenBuilderWithFunctionWhere;
     then(node: ConsequenceNode): ReactionPartition;
     then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
@@ -2766,9 +2776,10 @@ export interface DeferredWhenBuilder {
 /** The builder returned by `when(...)`. */
 export interface WhenBuilder extends DeferredWhenBuilder {
     /**
-     * Hold the consequence until the causal work started by the trigger has
-     * drained. The conditions stated after it are re-read at each settlement
-     * frontier of the same flow until the reaction fires once.
+     * Hold the consequence until tracked ordinary work in the trigger's causal
+     * flow has drained. The conditions stated after it are re-read at each
+     * settlement frontier of that flow until the trigger match qualifies or the
+     * flow finalizes.
      */
     afterFlowSettles(): DeferredWhenBuilder;
 }
@@ -3512,9 +3523,10 @@ export interface ReactionIR {
     name: string;
     when: TriggerIR[];
     /**
-     * A deferred trigger: the firing waits for a settlement frontier in the
-     * trigger's flow, and `where` is re-read at each frontier until it fires.
-     * Absent: the firing is prepared where the trigger lands.
+     * A deferred trigger: qualification waits for a settlement frontier in the
+     * trigger's flow, and `where` is re-read at each frontier until the trigger
+     * match qualifies or the flow finalizes. Absent: qualification happens where
+     * the trigger lands.
      */
     deferred?: true;
     where: WhereOpIR[];
@@ -3527,6 +3539,8 @@ export interface UnloweredIR {
     /** Inspectable facts retained even though the complete definition is local code. */
     known: {
         when: TriggerIR[];
+        /** Whether the local pipeline's first consequence waits for a settlement frontier. */
+        deferred?: true;
         where: WhereOpIR[];
         then: ConsequenceIR[];
         patterns: PatternIR[];
@@ -4306,7 +4320,7 @@ export declare function custom(fn: (...args: never[]) => unknown | Promise<unkno
 export {};
 
 === dist/engine/tooling/artifact-plan.d.ts ===
-import type { ApplicationManifestV3 } from "./manifest.ts";
+import type { ApplicationManifestV4 } from "./manifest.ts";
 import type { PlannedWireProjection } from "./wire-projection.ts";
 type ArtifactKind = "specification" | "wire";
 interface ArtifactPlanEntry {
@@ -4347,7 +4361,7 @@ export interface ArtifactFilesystem {
     writeAtomic(path: string, content: string): Promise<void>;
 }
 export declare function artifactPlan(entries: readonly ArtifactPlanEntry[]): ArtifactPlan;
-export declare function planGenerated(manifest: ApplicationManifestV3, options: GeneratedPlanOptions): ArtifactPlan;
+export declare function planGenerated(manifest: ApplicationManifestV4, options: GeneratedPlanOptions): ArtifactPlan;
 export declare function checkArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export declare function applyArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export {};
@@ -4474,7 +4488,7 @@ import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
 import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
 import { type GeneratorIdentity } from "../utils/package-version.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
-export interface ManifestEndpointV3 {
+export interface ManifestEndpointV4 {
     name: string;
     path: string;
     reactions: string[];
@@ -4485,14 +4499,14 @@ export interface ManifestEndpointV3 {
         domainError?: true;
     };
 }
-export interface ApplicationManifestV3 {
+export interface ApplicationManifestV4 {
     format: "sync-engine.application-manifest";
-    version: 3;
+    version: 4;
     generator: GeneratorIdentity;
     digest: string;
     application: AppIR;
     concepts: ConceptInventoryIR[];
-    endpoints: ManifestEndpointV3[];
+    endpoints: ManifestEndpointV4[];
     inputContracts: Record<string, InputContractDecl>;
     wire: WireContractsIR;
     diagnostics: ApplicationDiagnostic[];
@@ -4501,8 +4515,8 @@ export interface ApplicationManifestV3 {
  * Snapshot one assembly's static design. Retained runtime state and uninterpreted concept State
  * sections are excluded.
  */
-export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV3;
-export declare function renderApplicationManifest(manifest: ApplicationManifestV3): string;
+export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV4;
+export declare function renderApplicationManifest(manifest: ApplicationManifestV4): string;
 
 === dist/engine/tooling/wire-projection.d.ts ===
 import type { WireProjectionFacts } from "../boundary/gateway/transport-binding.ts";
@@ -4727,7 +4741,7 @@ export type { ObservedOccurrence } from "../engine/tooling/inspection.ts";
 export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagnostics.ts";
 export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
 export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
-export type { ApplicationManifestV3, ManifestEndpointV3 } from "../engine/tooling/manifest.ts";
+export type { ApplicationManifestV4, ManifestEndpointV4 } from "../engine/tooling/manifest.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
 export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";

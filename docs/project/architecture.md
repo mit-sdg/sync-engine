@@ -61,10 +61,10 @@ work, and removes the final serial line after settlement.
 
 The same wrapper opens the flow's settlement frontiers. When the ask it settles
 is the flow's outermost one, it asks the firing pipeline to run the deferred
-triggers `settlement.ts` armed for that flow, and does so before
+trigger matches retained by `settlement.ts`, and does so before
 `ActionConcept._endMatchingInput(...)` clears the flow's transient matching
-values and notifies quiescence — a deferred trigger reads the occurrences,
-bindings, and consumption evidence that cleanup would otherwise remove.
+values, notifies quiescence, and applies retention. `settlement.ts` discards its
+remaining frames and anchor provenance after frontier processing finishes.
 [Deferred triggers and settlement
 frontiers](../user/reference/semantics.md#deferred-triggers-and-settlement-frontiers)
 defines the observable contract.
@@ -268,7 +268,7 @@ index, load an existing file, replay entries, or expose a close operation.
 
 `src/engine/tooling/inspection.ts` projects one assembly into app IR, concept
 inventories, input contracts, retained occurrence summaries, and diagnostic
-read-back. `manifest.ts` emits manifest V3 and its digest. `artifact-plan.ts` is
+read-back. `manifest.ts` emits manifest V4 and its digest. `artifact-plan.ts` is
 the single specification and wire renderer. `generated-artifacts.ts` resolves a
 project descriptor, gives its ordered projections immutable logical facts, and
 checks or writes the two pinned files only after the complete plan succeeds.

@@ -331,7 +331,7 @@ export function renderReaction(reaction: ReactionIR): string {
       index === 0 ? `when ${renderTrigger(trigger)}` : `and jointly when ${renderTrigger(trigger)}`,
     );
   });
-  if (reaction.deferred === true) lines.push("after the flow settles");
+  if (reaction.deferred === true) lines.push("at the flow's settlement frontier");
   if (reaction.where.length > 0) {
     lines.push("where");
     for (const op of reaction.where) lines.push(`  ${renderWhereOp(op)}`);
@@ -448,7 +448,11 @@ export function renderApp(spec: AppSpecIR): string {
       "",
     );
     for (const reaction of spec.app.unlowered) {
-      lines.push(`- \`${reaction.name}\` — ${reaction.reason}`);
+      lines.push(
+        `- \`${reaction.name}\`${
+          reaction.known.deferred === true ? " — at the flow's settlement frontier" : ""
+        } — ${reaction.reason}`,
+      );
     }
     lines.push("");
   }

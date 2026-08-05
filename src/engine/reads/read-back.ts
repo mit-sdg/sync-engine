@@ -129,7 +129,9 @@ export function readBackReaction(reaction: ReactionIR, env: ReadBackEnv): string
     lines.push(`  when ${head}${opens.length > 0 ? ` — opens (${opens.join(", ")})` : ""}`);
   }
   if (reaction.deferred === true) {
-    lines.push("  after the flow settles — held until the work this trigger started drains");
+    lines.push(
+      "  at the flow's settlement frontier — after tracked ordinary work in this causal flow drains",
+    );
   }
   const scheduled = scheduleBlock(reaction.where, bound, `Reaction "${reaction.name}"`);
   for (const op of scheduled.ordered) {
@@ -194,7 +196,9 @@ export function readBackApp(
   for (const reaction of reactions) sections.push(readBackReaction(reaction, env));
   for (const reaction of unlowered) {
     sections.push(
-      `${reaction.name}\n  local executable reaction — not portable\n  reason — ${reaction.reason}`,
+      `${reaction.name}\n  local executable reaction${
+        reaction.known.deferred === true ? " at the flow's settlement frontier" : ""
+      } — not portable\n  reason — ${reaction.reason}`,
     );
   }
   return sections.join("\n\n");

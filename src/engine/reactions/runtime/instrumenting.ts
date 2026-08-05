@@ -359,9 +359,12 @@ export function instrumentConcept<T extends object>(
           // The flow's outermost ask reaches its settlement frontier here:
           // its cascades have drained, and the occurrences and matching
           // values a deferred trigger reads are still retained below.
-          const settling = state.settle(flowToken);
-          if (settling !== undefined) await settling;
-          state.actions._endMatchingInput(flowToken);
+          try {
+            const settling = state.settle(flowToken);
+            if (settling !== undefined) await settling;
+          } finally {
+            state.actions._endMatchingInput(flowToken);
+          }
         }
       } as InstrumentedAction;
 

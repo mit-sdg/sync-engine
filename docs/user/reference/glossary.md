@@ -60,9 +60,9 @@ not an idempotency key.
 
 ## Deferred trigger
 
-A reaction trigger stated with `.afterFlowSettles()`. Its firing is armed where
-the occurrence lands and prepared at a settlement frontier instead, so the
-consequence follows the causal work that occurrence started.
+A reaction trigger stated with `.afterFlowSettles()`. Its trigger match is armed
+where the occurrence lands and qualified at a settlement frontier, so any
+consequence follows tracked ordinary work in that causal flow.
 
 ## Domain error
 
@@ -201,9 +201,9 @@ expected domain outcomes. Ordinary assembly treats an undeclared advanced
 
 ## Settlement frontier
 
-The point where a flow's outermost ask is about to settle and every ordinary
-cascade it started has drained. Deferred triggers armed in that flow are read
-there; a frontier that produces no firing finalizes the flow.
+The point where a flow's outermost ask is about to settle and all tracked
+ordinary work in that flow has drained. Deferred triggers armed in that flow are
+qualified there; a frontier at which none qualifies finalizes the flow.
 
 ## View
 
