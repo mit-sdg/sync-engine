@@ -122,7 +122,7 @@ declaration order.
 
 ### `manifest`
 
-Prints `sync-engine.application-manifest` version `3` as canonical JSON. The
+Prints `sync-engine.application-manifest` version `4` as canonical JSON. The
 manifest contains application design, declaration-owned endpoints, input and
 wire contracts, validator-presence flags, structured diagnostics, and a digest
 over those fields. It excludes occurrences and other runtime state.

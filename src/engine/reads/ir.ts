@@ -263,6 +263,13 @@ export interface ConsequenceIR {
 export interface ReactionIR {
   name: string;
   when: TriggerIR[];
+  /**
+   * A deferred trigger: qualification waits for a settlement frontier in the
+   * trigger's flow, and `where` is re-read at each frontier until the trigger
+   * match qualifies or the flow finalizes. Absent: qualification happens where
+   * the trigger lands.
+   */
+  deferred?: true;
   where: WhereOpIR[];
   then: ConsequenceIR[];
   /** Plain reads an authored partition assumes will fill. */
@@ -275,6 +282,8 @@ export interface UnloweredIR {
   /** Inspectable facts retained even though the complete definition is local code. */
   known: {
     when: TriggerIR[];
+    /** Whether the local pipeline's first consequence waits for a settlement frontier. */
+    deferred?: true;
     where: WhereOpIR[];
     then: ConsequenceIR[];
     patterns: PatternIR[];

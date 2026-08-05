@@ -44,22 +44,31 @@ manual construction and explicit escape hatches.
 `language` declares designs; it does not execute them. These are the primary
 call shapes:
 
-| API                    | Compact signature                                                            |
-| ---------------------- | ---------------------------------------------------------------------------- |
-| `vocabulary`           | `vocabulary({ concepts, computations? })`                                    |
-| `reaction`             | `reaction(vars => when(trigger).where(...conditions).then(...consequences))` |
-| `returned` / `refused` | `(pattern?, { by?, except?, exceptBy? }?)`                                   |
-| `where`                | `where(...conditions)`                                                       |
-| `no` / `whether`       | `(readLine)`                                                                 |
-| `earlier`              | `earlier(action, input, output?)`                                            |
-| `view`                 | `view(name, (input, output, free) => where(...))`                            |
-| `count`                | `count(query, input, outputVariable)`                                        |
-| `compute`              | `compute(namedComputation, input, output)`                                   |
-| `former`               | `former(name, (input, free) => form(...) \| where(...).form(...))`           |
-| `form`                 | `form({ ...shape })`                                                         |
-| `each`                 | `each(readLine).where(...).arranged(...).form(...)` or a fold                |
-| `.splicing`            | `form({ ...shape }).splicing(...formerUses)`                                 |
-| `is`                   | `is.lt`, `is.le`, `is.gt`, `is.ge`, and `is.among` comparisons               |
+| API                    | Compact signature                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| `vocabulary`           | `vocabulary({ concepts, computations? })`                                                       |
+| `reaction`             | `reaction(vars => when(trigger).where(...conditions).then(...consequences))`                    |
+| `.afterFlowSettles()`  | `when(trigger).afterFlowSettles().then(step)` or `completedStage.afterFlowSettles().then(step)` |
+| `returned` / `refused` | `(pattern?, { by?, except?, exceptBy? }?)`                                                      |
+| `where`                | `where(...conditions)`                                                                          |
+| `no` / `whether`       | `(readLine)`                                                                                    |
+| `earlier`              | `earlier(action, input, output?)`                                                               |
+| `view`                 | `view(name, (input, output, free) => where(...))`                                               |
+| `count`                | `count(query, input, outputVariable)`                                                           |
+| `compute`              | `compute(namedComputation, input, output)`                                                      |
+| `former`               | `former(name, (input, free) => form(...) \| where(...).form(...))`                              |
+| `form`                 | `form({ ...shape })`                                                                            |
+| `each`                 | `each(readLine).where(...).arranged(...).form(...)` or a fold                                   |
+| `.splicing`            | `form({ ...shape }).splicing(...formerUses)`                                                    |
+| `is`                   | `is.lt`, `is.le`, `is.gt`, `is.ge`, and `is.among` comparisons                                  |
+
+`.afterFlowSettles()` may follow `when(trigger)` or a completed stage. It may be
+followed directly by `.then(step)` or by `.where(...conditions).then(step)`. On
+an initial deferred stage, `.where(...)` also accepts one frame function,
+subject to the ordinary portability restrictions. A chained deferred stage
+accepts condition lines only; TypeScript rejects a frame function, and untyped
+use fails while constructing the declaration. Registration separately rejects
+a later deferred stage when its containing chain cannot lower to reactions.
 
 | Consumer           | Result                                                       | Empty selection |
 | ------------------ | ------------------------------------------------------------ | --------------- |
@@ -237,7 +246,10 @@ sensitive values; structural readonly types do not make those leaves immutable.
 value, including a promise or structural thenable, fails the append before the
 fold. An invocation append failure can prevent the action body from running. An
 outcome append failure can occur after the body has changed concept state; the
-engine does not roll that state back.
+engine does not roll that state back. A deferred firing append can fail after its
+consequence changed state. If recording the resulting reaction failure also
+fails, settlement aborts and the outer action call rejects; active-flow matching
+state is still cleared, and concept state is not rolled back.
 
 `FileLogSink(path)` implements `LogSink` with one append-only JSON audit
 projection per entry. Concept instances and action functions are represented by
@@ -288,7 +300,10 @@ receives exactly the value of the authored response's top-level `error` field.
 [Receive, ask, respond](../guide/authoring.md#receive-ask-respond) shows endpoint
 authoring. [Execution
 semantics](semantics.md#sibling-paths-and-endpoint-settlement) defines
-settlement.
+settlement. A stage may state `.afterFlowSettles()` to form its response at a
+settlement frontier. Add conditions that identify any terminal state the
+endpoint requires; see [deferred triggers and settlement
+frontiers](semantics.md#deferred-triggers-and-settlement-frontiers).
 
 Endpoint paths must be canonical portable absolute URL pathnames. Queries,
 fragments, scheme-relative paths, dot-segment normalization, malformed percent
@@ -466,7 +481,7 @@ Neither form weakens generated endpoint input and output types.
 
 <!-- register:tooling:start -->
 
-`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV3`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedApplication`, `ManifestEndpointV3`, `ObservedOccurrence`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `diagnosticsFail`, `inspectAssembly`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
+`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV4`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedApplication`, `ManifestEndpointV4`, `ObservedOccurrence`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `diagnosticsFail`, `inspectAssembly`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
 
 <!-- register:tooling:end -->
 
@@ -480,7 +495,7 @@ Neither form weakens generated endpoint input and output types.
 | `renderInputContracts`      | `renderInputContracts(contracts): string`                    |
 | `wireContracts`             | `wireContracts(app, options?: WireOptions): WireContractsIR` |
 | `renderWireTypes`           | `renderWireTypes(wire, moduleName? \| options?): string`     |
-| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV3`       |
+| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV4`       |
 | `renderApplicationManifest` | `renderApplicationManifest(manifest): string`                |
 | `applicationDiagnostics`    | `applicationDiagnostics(app, endpoints, wire)`               |
 | `diagnosticsFail`           | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`      |
@@ -495,11 +510,21 @@ the internal occurrence index and applies redaction again. `WireContractsIR`, `W
 contributed `INVALID_INPUT`, so production projection remains distinct from a
 registered domain refusal using the same code.
 
-`ApplicationManifestV3` has format `sync-engine.application-manifest`, version
-`3`, and is static canonical JSON-round-trippable application data. Its
+`ReactionIR.deferred` is optional. When `true`, the engine arms the trigger match
+when the trigger lands, then qualifies it and dispatches surviving bindings at
+settlement frontiers. It re-evaluates `where` at each frontier until the match
+qualifies or the flow finalizes. When absent, qualification happens where the
+trigger lands. Imported IR with another value is rejected. Standalone deferred
+`ReactionIR` must be consumed by a package version that recognizes the field;
+during beta, use the same package version to produce and consume IR. The
+version-4 manifest protects application IR carried inside a manifest from older
+tooling.
+
+`ApplicationManifestV4` has format `sync-engine.application-manifest`, version
+`4`, and is static canonical JSON-round-trippable application data. Its
 `generator` records the exact `@mit-sdg/sync-engine` package version. It
 contains the application IR, concept inventories, declaration-owned
-`ManifestEndpointV3` entries, input contracts, wire IR, validator-presence
+`ManifestEndpointV4` entries, input contracts, wire IR, validator-presence
 flags, structured diagnostics, and `digest`. The digest covers every other
 manifest field. It excludes occurrences, timestamps, other runtime state, and
 uninterpreted concept State sections. State notation likewise contributes

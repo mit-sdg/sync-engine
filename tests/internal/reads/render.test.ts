@@ -47,6 +47,30 @@ describe("renderReaction", () => {
     );
   });
 
+  test("renders deferred timing between the trigger and conditions", () => {
+    const reaction: ReactionIR = {
+      name: "AfterWork",
+      when: [
+        {
+          kind: "action",
+          concept: "Work",
+          action: "start",
+          input: {},
+          output: {},
+        },
+      ],
+      deferred: true,
+      where: [],
+      then: [{ kind: "request", concept: "Work", action: "finish", input: {} }],
+    };
+
+    expect(renderReaction(reaction)).toBe(
+      ["when Work.start ()", "at the flow's settlement frontier", "then", "  Work.finish ()"].join(
+        "\n",
+      ),
+    );
+  });
+
   test("posture and provenance pins render as words, roles merge input and output", () => {
     const reaction: ReactionIR = {
       name: "Chained#2",

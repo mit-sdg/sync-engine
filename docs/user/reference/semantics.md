@@ -8,24 +8,25 @@ this contract.
 
 ## Contract index
 
-| Contract need                               | Section                                                                                 |
-| ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Action outcomes, refusals, and direct calls | [Actions, refusals, and faults](#actions-refusals-and-faults)                           |
-| Trigger matching and consequence paths      | [Reactions](#reactions)                                                                 |
-| Portable and local definitions              | [Portable and local behavior](#portable-and-local-behavior)                             |
-| In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                 |
-| Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                            |
-| Query promises, caching, and equality       | [Queries](#queries)                                                                     |
-| Views and formed results                    | [Views and formers](#views-and-formers)                                                 |
-| Placement of race-sensitive decisions       | [Decisions that must not race](#decisions-that-must-not-race)                           |
-| Sibling and endpoint settlement             | [Sibling paths and endpoint settlement](#sibling-paths-and-endpoint-settlement)         |
-| Gateway and client result model             | [Result model and gateway](#result-model-and-gateway)                                   |
-| Runtime input and output validation         | [Runtime validation](#runtime-validation)                                               |
-| Generated caller contracts                  | [Generated wire](#generated-wire)                                                       |
-| Deployment and resource limits              | [Operational limits](#operational-limits)                                               |
-| Interpreter failure delivery                | [Failures between action asks](#failures-between-action-asks)                           |
-| Timeout and abort                           | [Cancellation](#cancellation)                                                           |
-| Occurrence logs and restart                 | [Logs, concept implementations, and restart](#logs-concept-implementations-and-restart) |
+| Contract need                               | Section                                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Action outcomes, refusals, and direct calls | [Actions, refusals, and faults](#actions-refusals-and-faults)                             |
+| Trigger matching and consequence paths      | [Reactions](#reactions)                                                                   |
+| Consequences held until causal work drains  | [Deferred triggers and settlement frontiers](#deferred-triggers-and-settlement-frontiers) |
+| Portable and local definitions              | [Portable and local behavior](#portable-and-local-behavior)                               |
+| In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                   |
+| Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                              |
+| Query promises, caching, and equality       | [Queries](#queries)                                                                       |
+| Views and formed results                    | [Views and formers](#views-and-formers)                                                   |
+| Placement of race-sensitive decisions       | [Decisions that must not race](#decisions-that-must-not-race)                             |
+| Sibling and endpoint settlement             | [Sibling paths and endpoint settlement](#sibling-paths-and-endpoint-settlement)           |
+| Gateway and client result model             | [Result model and gateway](#result-model-and-gateway)                                     |
+| Runtime input and output validation         | [Runtime validation](#runtime-validation)                                                 |
+| Generated caller contracts                  | [Generated wire](#generated-wire)                                                         |
+| Deployment and resource limits              | [Operational limits](#operational-limits)                                                 |
+| Interpreter failure delivery                | [Failures between action asks](#failures-between-action-asks)                             |
+| Timeout and abort                           | [Cancellation](#cancellation)                                                             |
+| Occurrence logs and restart                 | [Logs, concept implementations, and restart](#logs-concept-implementations-and-restart)   |
 
 ## Actions, refusals, and faults
 
@@ -99,16 +100,15 @@ The trigger form selects the posture:
 | `when(Concept.action(pattern).refuses(refusal))` | the refused outcome                            |
 | `when(returned(...))` / `when(refused(...))`     | the corresponding cross-action posture channel |
 
-Each requested ask, returned or refused outcome, and fault mark watched by a
-framework reaction gives each matching public single-trigger reaction one
-evaluation. A later record cannot make that reaction reconsider an earlier
-trigger. Manually registered multi-trigger IR can instead join a newly landed
-record with earlier unconsumed records in the flow. A `where` block may produce
-several bindings, so one evaluation may produce several firings. Each firing record
-names the reaction, its binding, the trigger it consumed, and the asks it
-produced. Once an evaluation records a firing, consumption prevents that
-reaction from evaluating the trigger again; other reactions consume it
-independently.
+Each watched record gives each matching public single-trigger reaction one
+trigger match. An ordinary reaction qualifies that match once when the record
+lands. A deferred reaction matches its trigger once but may re-evaluate its
+conditions at successive settlement frontiers. Manually registered
+multi-trigger IR can join a newly landed record with earlier unconsumed records
+in the flow. A `where` block may produce several bindings, so one qualification
+may dispatch several consequences. Each recorded firing names the reaction, its
+binding, the trigger occurrences it consumed, and the asks it produced. Other
+reactions consume those occurrences independently.
 
 Every callable consequence receives a fresh action id, inherits the trigger's
 flow, and records the asking reaction as `by`. Several members of one
@@ -140,6 +140,85 @@ The engine does not detect reaction cycles. Each turn of a cycle creates new
 occurrences and may continue until a condition, refusal, fault, or configured
 execution limit stops it.
 
+### Deferred triggers and settlement frontiers
+
+`.afterFlowSettles()` holds a consequence until tracked ordinary work in the
+trigger's causal flow has drained:
+
+```ts
+when(Phasing.start({ sequence }).responds({ job, attempt }))
+  .afterFlowSettles()
+  .where(Phasing._running({ sequence }).is({ job, attempt }))
+  .then(Phasing.advance({ job, attempt }));
+```
+
+Such a trigger is **deferred**. Where an ordinary reaction prepares its firing
+as the occurrence lands, a deferred one is armed there and waits for a
+**settlement frontier**: the moment the flow's outermost ask is about to settle,
+when all tracked ordinary work in that flow has drained. Settlement is per
+causal flow. Unrelated root flows neither delay a frontier nor open one, and no
+application-wide idle is involved.
+
+At a frontier the engine reads the conditions of every deferred trigger match
+armed in that flow before dispatching any consequences. This is the same rule
+ordinary reactions follow for one landed occurrence. The engine runs qualified
+consequences in the same flow, lets their ordinary cascades drain, and then opens
+another frontier. A frontier at which no trigger combination qualifies finalizes
+the flow.
+
+A deferred consequence is an ordinary ask in every other respect. It keeps the
+flow token, the anchor's bindings, `earlier(...)` scope measured from the
+anchor's landing position, request correlation, `by` provenance, firing
+records, and execution-limit accounting. Each watched occurrence produces one
+trigger match; manually registered joint triggers may produce several trigger
+combinations. A combination whose conditions produce no binding remains armed.
+Before a later frontier evaluates it again, the runtime discards it if another
+firing of the same reaction consumed any of its trigger occurrences. Once a
+combination produces one or more bindings, it is retired and each binding is
+dispatched independently. Dispatch failure does not re-arm it.
+
+Settlement follows the tracked flow, so an action must return or await a
+structural `PromiseLike` for work that should delay it. Detached asynchronous
+work remains untracked and a frontier may open before it finishes. An
+interpreter or integrity failure recorded before a frontier prevents deferred
+advancement. Such a failure while a frontier is being qualified or dispatched
+does not cancel its other matches; the engine completes that frontier and opens
+no subsequent one. The flow finalizes with what it has already accepted, and the
+delivery in
+[Failures between action asks](#failures-between-action-asks) applies
+unchanged. A deferred cascade is bounded like any other: the engine does not
+detect cycles, and `maxFiringsPerFlow` and `maxActionsPerFlow` stop a runaway
+one.
+
+Deferred trigger matches are currently qualified sequentially, and prepared
+consequences are dispatched sequentially. A condition or consequence that never
+settles blocks later work in that frontier and prevents the flow from
+finalizing. Applications must not use this order as semantic priority.
+
+`.afterFlowSettles()` also qualifies a later stage of a chain, including an
+endpoint's. Conditions on that stage can identify the terminal state from which
+to form a response:
+
+```ts
+receive({ sequence })
+  .then(Phasing.start({ sequence }).responds({ job }))
+  .afterFlowSettles()
+  .where(
+    no(Phasing._running({ sequence })),
+    Phasing._latest({ sequence }).is({ job, state: "finished" }),
+  )
+  .then(respond({ job }));
+```
+
+The deferred stage is anchored to the ask its own path made, so it answers only
+at a frontier where its conditions hold. If no frontier satisfies them, that
+path produces no answer. The request remains unanswered only if no sibling or
+parallel path answers; the behavior in
+[Sibling paths and endpoint settlement](#sibling-paths-and-endpoint-settlement)
+applies. Because a later stage lowers to a reaction of its own, a chain that
+lowering keeps local cannot defer a later stage; registration rejects that
+composition and names the stage.
+
 ### Portable and local behavior
 
 A definition is **portable** only when its canonical JSON representation can be
@@ -168,8 +247,10 @@ For an instrumented action, the engine performs these steps in order:
 5. Append its returned/refused outcome or fault.
 6. Evaluate reactions for that landed record.
 7. Notify observers after the action settles.
-8. Mark the root flow settled when no active action in the flow remains, then
-   apply automatic window retention.
+8. If this is the flow's outermost ask, process settlement frontiers until no
+   deferred trigger qualifies or the flow fails.
+9. Clear transient matching values, report flow quiescence, and apply automatic
+   window retention.
 
 Requested-posture reactions run after the invocation is recorded and before the
 ordinary action body is released. Same-concept requested consequences use an
@@ -186,9 +267,10 @@ the serial line just as a never-settling promise does. Supplying one raw instanc
 to several engines creates separate queues and query caches and does not
 serialize those engines. Different concept instances and separate root flows
 can overlap.
-Reactions for one landed occurrence are currently evaluated sequentially. Their
-trigger and `where` stages all finish before any matching consequence is
-dispatched, so one sibling consequence cannot change another sibling's guard.
+Ordinary reactions for one landed occurrence are currently evaluated
+sequentially. Their trigger and `where` stages all finish before any matching
+consequence is dispatched, so one sibling consequence cannot change another
+sibling's guard. Deferred conditions run later at settlement frontiers.
 Applications must not use evaluation order as semantic priority. No engine-wide
 lock serializes all concepts or all flows, and the guarantee does not extend
 across processes.
@@ -412,7 +494,10 @@ settles with opaque `INTERNAL_ERROR`. A fault-free unanswered invocation waits
 overrides that wait. Public endpoints should provide explicit complementary
 case branches that answer every admitted case. An unconditional
 sibling is not ordered fall-through and overlaps every conditional sibling that
-can answer.
+can answer. A stage marked
+[`.afterFlowSettles()`](#deferred-triggers-and-settlement-frontiers) answers at
+a settlement frontier instead of where its trigger lands; it is still one
+ordinary answering path under every rule above.
 [Cancellation](#cancellation) defines what timeout and abort do with a pending
 call. Runtime execution does not enforce branch disjointness or endpoint
 coverage. `applicationDiagnostics(...)` traces causal `by` provenance to
@@ -609,7 +694,7 @@ occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
 format and package SemVer. Artifact planning requires
-`sync-engine.application-manifest` version 3, a 1.x core generator identity,
+`sync-engine.application-manifest` version 4, a 1.x core generator identity,
 and SemVer projector provenance. The core generator identity must name
 `@mit-sdg/sync-engine` at a 1.x version. Projector provenance accepts any
 nonblank package name with any valid SemVer version; projector versions
@@ -689,6 +774,10 @@ registering them, then registers the standard fault and refusal reactions. It
 evaluates reactions for one trigger record sequentially. Sibling paths carry no
 priority and do not form a join; each path advances when its own preceding ask
 returns. Applications must not use evaluation order as a priority mechanism.
+Use [`.afterFlowSettles()`](#deferred-triggers-and-settlement-frontiers) to
+observe state after ordinary work already accepted in the same causal flow has
+drained. It does not order consequences prepared at the same settlement
+frontier.
 
 Action bodies run one at a time per concept instance within one engine, in
 arrival order. The queue awaits native promises and structural thenables as
@@ -750,9 +839,12 @@ coverage hole still waits for its invocation deadline and returns `TIMED_OUT`.
 Concepts should represent expected rejection with registered refusals and
 explicit policy alternatives.
 
-A `LogSink` failure is outside this interpreter-failure path. [Logs, concept
-implementations, and restart](#logs-concept-implementations-and-restart) defines
-its ordering and state consequences.
+Invocation and outcome sink failures do not enter this interpreter-failure path.
+A firing-append failure during consequence dispatch is handled as a
+`consequence-dispatch` interpreter failure if the engine can append the resulting
+reaction-failure evidence. [Logs, concept implementations, and
+restart](#logs-concept-implementations-and-restart) defines its ordering and state
+consequences.
 
 ### Cancellation
 
@@ -802,8 +894,12 @@ opaque leaves as read-only sensitive values. `LogSink.append` must return
 `undefined` synchronously. A throw or any other return value prevents the fold.
 An invocation append failure can prevent the action body from running; an
 outcome append failure can occur after the action changed concept state, and the
-engine does not roll that state back. The sink is an audit destination; it does
-not supply matching, retention, or replay. `logSink` and `retention` are
+engine does not roll that state back. A sink failure while appending a deferred
+firing can likewise occur after its consequence changed state. If appending the
+resulting reaction failure also fails, settlement aborts and the outer action
+call rejects. The engine still clears active-flow matching values and reports
+quiescence; it does not roll back concept state. The sink is an audit destination;
+it does not supply matching, retention, or replay. `logSink` and `retention` are
 independent `AssemblyOptions` and may be used together.
 
 Each ordinary assembly creates its own field-name redactor before entries reach

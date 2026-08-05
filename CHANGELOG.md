@@ -5,6 +5,56 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## Unreleased
+
+This entry adds deferred triggers: a composition can hold a consequence until
+tracked ordinary work in the trigger's causal flow has drained, without a host
+idle wait.
+
+### Compatibility
+
+- `when(...)` and every chained stage, including an endpoint's, accept
+  `.afterFlowSettles()`. The stage's conditions are read at each settlement
+  frontier until the trigger match produces one or more bindings or the flow
+  finalizes. Each surviving binding is dispatched independently. Settlement is
+  per causal flow: unrelated root flows neither delay a frontier nor open one.
+  See [Deferred triggers and settlement
+  frontiers](docs/user/reference/semantics.md#deferred-triggers-and-settlement-frontiers).
+- A deferred consequence keeps flow identity, `earlier(...)` scope, request
+  correlation, firing provenance, and execution-limit accounting. Interpreter
+  or integrity failure recorded before a frontier stops deferred advancement.
+  A deferred endpoint path that never qualifies produces no answer; ordinary
+  endpoint settlement still determines whether another path answers, the request
+  times out, or an interpreter failure produces `INTERNAL_ERROR`.
+- Registration rejects `.afterFlowSettles()` on a later stage of a chain that
+  lowering keeps local, naming the stage: a deferred stage must lower into a
+  reaction of its own.
+
+### Migration
+
+- Existing compositions require no authoring changes; a reaction without
+  `.afterFlowSettles()` fires exactly where its trigger lands. Replace
+  `ApplicationManifestV3` and `ManifestEndpointV3` imports with their version-4
+  counterparts, and regenerate checked-in version-3 manifests. Version-4
+  artifact planning rejects version 3.
+- Application workflows that used `whenIdle()` only to wait for ordinary
+  consequences in one causal flow can state that order in the composition
+  instead.
+
+### Generated formats
+
+- `ReactionIR` gains an optional `deferred` flag. It is absent unless a stage
+  states `.afterFlowSettles()`. Because older tooling would otherwise interpret
+  that reaction as immediate, the application manifest format advances to
+  version 4, with `ApplicationManifestV4` and `ManifestEndpointV4` replacing the
+  version-3 public types. Regenerate version-3 manifests when upgrading.
+  Read-back and rendered reactions identify deferred timing as
+  `at the flow's settlement frontier`.
+
+### Runtime and security support
+
+- None.
+
 ## [1.0.0-beta.4] - 2026-08-04
 
 This beta tightens assembly, validation, persistence, client, transport, and

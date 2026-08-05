@@ -11,7 +11,7 @@ import { GENERATOR_IDENTITY, type GeneratorIdentity } from "@engine/utils/packag
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import { applicationDiagnostics } from "./diagnostics.ts";
 
-export interface ManifestEndpointV3 {
+export interface ManifestEndpointV4 {
   name: string;
   path: string;
   reactions: string[];
@@ -19,14 +19,14 @@ export interface ManifestEndpointV3 {
   validators: { input: boolean; output: boolean; domainError?: true };
 }
 
-export interface ApplicationManifestV3 {
+export interface ApplicationManifestV4 {
   format: "sync-engine.application-manifest";
-  version: 3;
+  version: 4;
   generator: GeneratorIdentity;
   digest: string;
   application: AppIR;
   concepts: ConceptInventoryIR[];
-  endpoints: ManifestEndpointV3[];
+  endpoints: ManifestEndpointV4[];
   inputContracts: Record<string, InputContractDecl>;
   wire: WireContractsIR;
   diagnostics: ApplicationDiagnostic[];
@@ -120,7 +120,7 @@ function stableConcepts(concepts: readonly ConceptInventoryIR[]): ConceptInvento
  */
 export function applicationManifest(
   assembly: Assembly<Record<string, new (...args: never[]) => object>>,
-): ApplicationManifestV3 {
+): ApplicationManifestV4 {
   const assembled = assemblyBehind(assembly);
   const application = stableApp(assembled.engine.exportReactions());
   const concepts = stableConcepts(assembled.engine.exportConcepts());
@@ -143,9 +143,9 @@ export function applicationManifest(
       },
     }))
     .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`));
-  const body: Omit<ApplicationManifestV3, "digest"> = {
+  const body: Omit<ApplicationManifestV4, "digest"> = {
     format: "sync-engine.application-manifest",
-    version: 3,
+    version: 4,
     generator: GENERATOR_IDENTITY,
     application,
     concepts,
@@ -154,10 +154,10 @@ export function applicationManifest(
     wire,
     diagnostics: applicationDiagnostics(application, assembled.endpoints, wire),
   };
-  const manifest: ApplicationManifestV3 = { ...body, digest: canonicalDigest(body) };
-  return canonicalValue(manifest) as unknown as ApplicationManifestV3;
+  const manifest: ApplicationManifestV4 = { ...body, digest: canonicalDigest(body) };
+  return canonicalValue(manifest) as unknown as ApplicationManifestV4;
 }
 
-export function renderApplicationManifest(manifest: ApplicationManifestV3): string {
+export function renderApplicationManifest(manifest: ApplicationManifestV4): string {
   return canonicalJson(manifest);
 }

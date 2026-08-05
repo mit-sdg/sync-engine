@@ -130,6 +130,37 @@ reaction(({ value }) =>
   ),
 );
 
+reaction(({ value }) =>
+  when(Answering.start({}).responds())
+    .afterFlowSettles()
+    .where(Answering._answer({}).is({ value }))
+    .then(Answering.record({ value }))
+    .afterFlowSettles()
+    .where(Answering._answer({}).is({ value }))
+    .then(Answering.record({ value })),
+);
+
+reaction(() =>
+  when(Answering.start({}).responds())
+    .afterFlowSettles()
+    // @ts-expect-error A deferred where states at least one condition.
+    .where()
+    .then(Answering.record({ value: 1 })),
+);
+
+reaction(() =>
+  when(Answering.start({}).responds())
+    .then(Answering.record({ value: 1 }))
+    .afterFlowSettles()
+    // @ts-expect-error A chained deferred where states at least one condition.
+    .where()
+    .then(Answering.record({ value: 2 })),
+);
+
+const internalTiming = Answering.record({ value: 1 });
+// @ts-expect-error Deferred timing is authored through afterFlowSettles().
+internalTiming.deferred = true;
+
 reaction(() =>
   when(Answering.start({}).responds())
     // @ts-expect-error Siblings require stable trailing labels.

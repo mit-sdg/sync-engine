@@ -65,6 +65,8 @@ export interface InstrumentationState {
   registerConcept(name: string, instrumented: object): void;
   execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
   react(record: ActionRecord, durationMs?: number): Promise<void>;
+  /** Run the flow's settlement frontiers when this ask is its outermost one. */
+  settle(flow: string): void | Promise<void>;
   emit(record: ActionRecord, durationMs?: number): void;
 }
 
@@ -354,7 +356,15 @@ export function instrumentConcept<T extends object>(
           );
           return output;
         } finally {
-          state.actions._endMatchingInput(flowToken);
+          // The flow's outermost ask reaches its settlement frontier here:
+          // its cascades have drained, and the occurrences and matching
+          // values a deferred trigger reads are still retained below.
+          try {
+            const settling = state.settle(flowToken);
+            if (settling !== undefined) await settling;
+          } finally {
+            state.actions._endMatchingInput(flowToken);
+          }
         }
       } as InstrumentedAction;
 

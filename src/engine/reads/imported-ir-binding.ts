@@ -57,6 +57,9 @@ export class ImportedIrBinder {
   ) {}
 
   bindReaction(reaction: ReactionIR): BoundReaction {
+    if (reaction.deferred !== undefined && reaction.deferred !== true) {
+      throw new Error(`Reaction "${reaction.name}": deferred must be true when present.`);
+    }
     if (reaction.then.length !== 1) {
       throw new Error(`Reaction "${reaction.name}": expected exactly one consequence.`);
     }
@@ -90,6 +93,7 @@ export class ImportedIrBinder {
           undefined,
           reaction.name,
         ),
+        ...(reaction.deferred === true ? { deferred: true as const } : {}),
       } as StepNode,
     };
     const whereFn = liveOf(reaction) as WhereFn | undefined;

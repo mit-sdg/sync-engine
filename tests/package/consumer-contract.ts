@@ -17,11 +17,11 @@ import {
   productionHttpProfile,
   type ProductionHttpProfile,
 } from "@mit-sdg/sync-engine-http/server";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
-import type { ApplicationManifestV3 } from "@mit-sdg/sync-engine/tooling";
+import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+import type { ApplicationManifestV4 } from "@mit-sdg/sync-engine/tooling";
 
-declare const manifestV3: ApplicationManifestV3;
-const manifestVersion: 3 = manifestV3.version;
+declare const manifestV4: ApplicationManifestV4;
+const manifestVersion: 4 = manifestV4.version;
 void manifestVersion;
 
 class QueriedConcept {
@@ -56,6 +56,21 @@ directSet.computations.normalize({ value: "packed" });
 directSet.computations.normalize({ value: false });
 
 const directVocabulary = vocabulary({ concepts: { Direct: DirectConcept }, computations: {} });
+const Direct = directVocabulary.concepts.Direct;
+reaction(({ value }) =>
+  when(Direct.act({ value }).responds({ value })).afterFlowSettles().then(Direct.act({ value })),
+);
+reaction(({ value }) =>
+  when(Direct.act({ value }).responds({ value }))
+    .then(Direct.act({ value }))
+    .afterFlowSettles()
+    // @ts-expect-error A chained deferred stage accepts condition lines, not a frame function.
+    .where((frames: object) => frames)
+    .then(Direct.act({ value })),
+);
+const packedTiming = Direct.act({ value: "packed" });
+// @ts-expect-error Deferred timing is authored through afterFlowSettles().
+packedTiming.deferred = true;
 const occurrenceEntries: LogEntry[] = [];
 const logSink: LogSink = {
   append(entry) {
