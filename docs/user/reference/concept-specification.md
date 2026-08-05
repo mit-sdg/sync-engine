@@ -152,9 +152,10 @@ present fence must be closed.
 
 ## State notation
 
-A `## State` section is optional. When present, all of its contents, including a
-`state` fence, are uninterpreted human notation. The parser and source checker
-ignore arbitrary, malformed, or contradictory state text.
+A `## State` section is optional and has no dedicated grammar. Do not place
+reserved Purpose or Principle headings or `actions` or `queries` fences inside
+State text or a `state` fence. The current parser discovers those markers across
+the document rather than excluding the State section.
 
 State notation is discarded by `parseSpec`, and `ConceptSpec` has no state
 member. Neither `registerConcept` nor `sync-engine check` compares it with class
