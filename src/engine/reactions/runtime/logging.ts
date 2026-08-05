@@ -98,6 +98,13 @@ export class ReactionLogger {
     if (this.level === Logging.VERBOSE && frames.length > 0) logger.debug(message, { frames });
   }
 
+  /** Trace one settlement frontier: the deferred firings it prepared. */
+  settlement(flow: string, firings: number): void {
+    if (this.level === Logging.VERBOSE) {
+      logger.debug("Settlement frontier prepared deferred firings:", { flow, firings });
+    }
+  }
+
   action(record: ActionRecord, durationMs?: number): void {
     if (this.level === Logging.VERBOSE) {
       const { concept, input, output, flow, id, outcome } = record;

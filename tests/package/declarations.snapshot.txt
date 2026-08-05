@@ -1067,6 +1067,21 @@ export declare function faulted(pattern?: Mapping, options?: ChannelOptions): Ch
 export declare function isChannelPattern(value: unknown): value is ChannelPattern;
 export {};
 
+=== dist/engine/reactions/authoring/conditions.d.ts ===
+/**
+ * Normalize the arguments an authored `where` accepts into the two forms the
+ * runtime understands: one frame closure, or a list of declarative condition
+ * ops. Both `when(...)` and a chained stage state conditions the same way, so
+ * the rejection messages stay identical wherever conditions are authored.
+ */
+import type { AnyWhereOp } from "../../reads/where-ops.ts";
+import type { WhereFn } from "../types.ts";
+export interface NormalizedWhere {
+    fn?: WhereFn;
+    ops?: readonly AnyWhereOp[];
+}
+export declare function normalizeWhere(args: unknown[], site: string): NormalizedWhere;
+
 === dist/engine/reactions/authoring/nodes.d.ts ===
 import type { ActionPattern, BranchChain, InstrumentedAction, Mapping, StepNode, ThenNode, UnnamedStepNode } from "../types.ts";
 import type { WhereOp } from "../../reads/where-ops.ts";
@@ -1079,10 +1094,10 @@ export declare function assertReactionNodes(nodes: readonly ThenNode[]): void;
 export declare function actionPattern(action: InstrumentedAction, input: Mapping, output?: Mapping): ActionPattern;
 
 === dist/engine/reactions/authoring/partitions.d.ts ===
-import type { ReactionDeclaration, ReactionPartition, ReactionResult, ThenNode, TriggerPattern } from "../types.ts";
+import type { ReactionDeclaration, ReactionPartition, ReactionResult, StageOptions, ThenNode, TriggerPattern } from "../types.ts";
 export declare function declarationsOf(result: ReactionResult): readonly ReactionDeclaration[];
 /** Build and extend the authored sibling tree as independent flat paths. */
-export declare function siblingTree(patterns: readonly TriggerPattern[], root: Pick<ReactionDeclaration, "where" | "whereOps">, nodes: readonly ThenNode[]): ReactionPartition;
+export declare function siblingTree(patterns: readonly TriggerPattern[], root: Pick<ReactionDeclaration, "where" | "whereOps">, nodes: readonly ThenNode[], stage?: StageOptions): ReactionPartition;
 
 === dist/engine/reactions/authoring/public-words.d.ts ===
 import type { ActionCall, ChannelPattern, RefusedActionLine, RefusedTriggerActionLine, ReturnedActionLine, ReturnedTriggerActionLine, TriggerActionLine, WhenBuilder } from "../types.ts";
@@ -1704,6 +1719,15 @@ export declare class ActionConcept {
     _endMatchingInput(flow: string): void;
     /** Observe fully settled causal flows before occurrence retention is applied. */
     _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void;
+    /**
+     * Whether the caller is the flow's only active ask — its settlement
+     * frontier. Every ordinary cascade the flow started has drained, and the
+     * occurrences, bindings, and transient matching values a deferred trigger
+     * matches against are still retained.
+     */
+    _isFlowOutermost(flow: string): boolean;
+    /** Whether an interpreter or integrity failure has closed this active flow. */
+    _flowFailed(flow: string): boolean;
     /** Serialize and record a sanitized failure produced between instrumented action asks. */
     _recordInterpreterFailure(reaction: string, flow: string, triggerIds: string[], stage: ReactionFailureRecord["stage"], error: unknown, consequence?: Pick<ReactionFailureRecord, "action" | "actionId">): void;
     /** Record durable interpreter evidence and mark its active flow as failed. */
@@ -1750,6 +1774,7 @@ export declare function breachLimit(actions: Pick<ActionConcept, "_recordExecuti
  * triggers, filter the matched frames through `where`, then form, ask, and
  * settle each consequence — recording sanitized failures per stage.
  */
+import { Frames } from "../../reads/frames.ts";
 import { type FormerRef } from "../../reads/former-nodes.ts";
 import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { ExecutableReaction } from "../types.ts";
@@ -1757,6 +1782,26 @@ import { ActionConcept, type ActionRecord } from "./actions.ts";
 import { type FiringBook } from "./firing.ts";
 import type { ReactionLogger } from "./logging.ts";
 import type { TriggerMatcher } from "./matching.ts";
+interface CapturedTriggers {
+    flow: string;
+    triggerIds: string[];
+    frameTriggerIds: string[][];
+}
+interface FrameProvenance extends CapturedTriggers {
+    triggerSignatures?: Set<string>;
+}
+/**
+ * One reaction's trigger stage: the frames its `when` matched on the landed
+ * occurrence, before its conditions are read. A deferred trigger keeps this
+ * between settlement frontiers, so the anchor's landing position and bindings
+ * outlive the moment it landed.
+ */
+export interface MatchedTrigger {
+    actionSymbols: symbol[];
+    frames: Frames;
+    provenance: FrameProvenance;
+    reaction: ExecutableReaction;
+}
 export declare class FiringPipeline {
     private readonly matcher;
     private readonly actions;
@@ -1766,12 +1811,29 @@ export declare class FiringPipeline {
     private readonly react;
     private readonly assertRows;
     private readonly consumeAction;
+    private readonly settlement;
     constructor(matcher: TriggerMatcher, actions: ActionConcept, firingBook: FiringBook, definitions: {
         formerNamed(name: string): FormerRef | undefined;
         readEnv(): ReadEnv;
     }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
     fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void>;
-    private prepare;
+    /**
+     * Open settlement frontiers for one flow until none produces a firing.
+     *
+     * Each frontier qualifies every trigger armed in the flow before dispatching
+     * any of their consequences, exactly as one landed occurrence does for its
+     * siblings, then lets those consequences and the ordinary cascades they
+     * start drain before the next frontier opens. An armed trigger whose
+     * conditions do not hold stays eligible for a later frontier. Interpreter or
+     * integrity failure stops deferred advancement; the flow finalizes with
+     * whatever it has already accepted.
+     */
+    settle(flowToken: string): void | Promise<void>;
+    private openFrontiers;
+    /** Match one reaction's `when` against a landed occurrence. */
+    private matchTrigger;
+    /** Read one matched trigger's conditions against current state. */
+    private qualify;
     private dispatch;
     private capture;
     private assertProvenance;
@@ -1790,6 +1852,7 @@ export declare class FiringPipeline {
     private landFormingFault;
     private resolveFormerInputs;
 }
+export {};
 
 === dist/engine/reactions/runtime/firing.d.ts ===
 import type { MemoryStore } from "./log-store.ts";
@@ -1853,6 +1916,8 @@ export interface InstrumentationState {
     registerConcept(name: string, instrumented: object): void;
     execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
     react(record: ActionRecord, durationMs?: number): Promise<void>;
+    /** Run the flow's settlement frontiers when this ask is its outermost one. */
+    settle(flow: string): void | Promise<void>;
     emit(record: ActionRecord, durationMs?: number): void;
 }
 /**
@@ -2148,6 +2213,8 @@ export declare class ReactionLogger {
     /** Call each observer; log an opaque error class when one throws. */
     emit(record: ActionRecord, durationMs?: number): void;
     frames(message: string, frames: Frames<Frame>): void;
+    /** Trace one settlement frontier: the deferred firings it prepared. */
+    settlement(flow: string, firings: number): void;
     action(record: ActionRecord, durationMs?: number): void;
 }
 
@@ -2378,6 +2445,45 @@ export declare class ReactionCatalog {
     unloweredEntries(): Iterable<UnloweredIR>;
 }
 
+=== dist/engine/reactions/runtime/settlement.d.ts ===
+/**
+ * **Settlement frontiers** — the deferred half of reaction firing.
+ *
+ * An ordinary reaction prepares its firing where its trigger lands. A
+ * *deferred* trigger (`.afterFlowSettles()`) is armed there instead and waits
+ * for a settlement frontier: the moment a flow's outermost ask is about to
+ * settle, when every ordinary cascade the flow started has drained but its
+ * occurrences, bindings, and transient matching values are still alive.
+ *
+ * This book holds one armed list per flow. A frontier qualifies each armed
+ * trigger against current state: one that fires is retired, one whose
+ * conditions do not hold stays armed for a later frontier of the same flow,
+ * and the whole list is discarded when the flow finalizes. The anchor
+ * occurrence a trigger matched keeps supplying the landing position and the
+ * consumption identity, so a deferred reaction fires at most once per anchor
+ * exactly as an ordinary one does.
+ */
+import type { ExecutableReaction } from "../types.ts";
+import type { MatchedTrigger } from "./firing-pipeline.ts";
+/** Whether a reaction holds its consequence for a settlement frontier. */
+export declare function isDeferred(reaction: ExecutableReaction): boolean;
+/** Owns the deferred triggers armed in each active flow. */
+export declare class SettlementBook {
+    private readonly armedByFlow;
+    /** Hold one matched deferred trigger for its flow's next frontier. */
+    arm(flow: string, matched: MatchedTrigger): void;
+    /** Whether the flow still has an armed trigger to consider. */
+    has(flow: string): boolean;
+    /** The triggers one frontier considers, in the order they were armed. */
+    pending(flow: string): MatchedTrigger[];
+    /** Retire one armed trigger whose firing this frontier prepared. */
+    retire(flow: string, matched: MatchedTrigger): void;
+    /** Drop everything armed in a flow that is finalizing. */
+    discard(flow: string): void;
+    /** Number of flows holding an armed trigger. */
+    get size(): number;
+}
+
 === dist/engine/reactions/types.d.ts ===
 /** Core type vocabulary for declarative reactions. */
 import type { Frames } from "../reads/frames.ts";
@@ -2464,6 +2570,12 @@ export interface StepNode {
     linePosture?: "requested" | "returned" | "refused";
     /** Conditions read immediately before this step at its incoming frontier. */
     whereOps?: readonly WhereOp[];
+    /**
+     * Hold this stage until a settlement frontier — the moment the causal work
+     * started by its trigger has drained (see `.afterFlowSettles()`). The
+     * stage's conditions are re-read at each frontier of the same flow.
+     */
+    deferred?: true;
     transform?: WhereFn;
     /** The declarative form of the step's transform, when authored as ops. */
     transformOps?: readonly WhereOp[];
@@ -2597,6 +2709,24 @@ export interface ReactionDeclaration {
 }
 export interface ReactionPartition {
     readonly declarations: readonly ReactionDeclaration[];
+    /** Hold the next stage until this flow's next settlement frontier. */
+    afterFlowSettles(): DeferredStage;
+    then(node: ConsequenceNode): ReactionPartition;
+    then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
+}
+/** One authored stage's deferral and incoming conditions, as the builders pass them down. */
+export interface StageOptions {
+    deferred?: boolean;
+    whereOps?: readonly WhereOp[];
+}
+/** A chained stage after `.afterFlowSettles()`. */
+export interface DeferredStage {
+    where(...conditions: Condition[]): DeferredStageWithWhere;
+    then(node: ConsequenceNode): ReactionPartition;
+    then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
+}
+/** A deferred chained stage after its conditions. */
+export interface DeferredStageWithWhere {
     then(node: ConsequenceNode): ReactionPartition;
     then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
@@ -2626,12 +2756,21 @@ export type Reaction = (vars: Vars) => ReactionResult;
 export type ReactionMap = Record<string, Reaction>;
 /** The canonical no-fields mapping. */
 export type Empty = Record<PropertyKey, never>;
-/** The builder returned by `when(...)`. */
-export interface WhenBuilder {
+/** A `when` builder whose consequence waits for a settlement frontier. */
+export interface DeferredWhenBuilder {
     where(...conditions: Condition[]): WhenBuilderWithWhere;
     where(fn: WhereFn): WhenBuilderWithFunctionWhere;
     then(node: ConsequenceNode): ReactionPartition;
     then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
+}
+/** The builder returned by `when(...)`. */
+export interface WhenBuilder extends DeferredWhenBuilder {
+    /**
+     * Hold the consequence until the causal work started by the trigger has
+     * drained. The conditions stated after it are re-read at each settlement
+     * frontier of the same flow until the reaction fires once.
+     */
+    afterFlowSettles(): DeferredWhenBuilder;
 }
 /** A `when` builder after `.where(...)`. */
 export interface WhenBuilderWithWhere {
@@ -3372,6 +3511,12 @@ export interface ConsequenceIR {
 export interface ReactionIR {
     name: string;
     when: TriggerIR[];
+    /**
+     * A deferred trigger: the firing waits for a settlement frontier in the
+     * trigger's flow, and `where` is re-read at each frontier until it fires.
+     * Absent: the firing is prepared where the trigger lands.
+     */
+    deferred?: true;
     where: WhereOpIR[];
     then: ConsequenceIR[];
 }

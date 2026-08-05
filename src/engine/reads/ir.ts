@@ -263,6 +263,12 @@ export interface ConsequenceIR {
 export interface ReactionIR {
   name: string;
   when: TriggerIR[];
+  /**
+   * A deferred trigger: the firing waits for a settlement frontier in the
+   * trigger's flow, and `where` is re-read at each frontier until it fires.
+   * Absent: the firing is prepared where the trigger lands.
+   */
+  deferred?: true;
   where: WhereOpIR[];
   then: ConsequenceIR[];
   /** Plain reads an authored partition assumes will fill. */

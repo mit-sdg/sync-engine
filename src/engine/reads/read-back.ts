@@ -128,6 +128,9 @@ export function readBackReaction(reaction: ReactionIR, env: ReadBackEnv): string
         : `${trigger.concept}.${trigger.action}`;
     lines.push(`  when ${head}${opens.length > 0 ? ` — opens (${opens.join(", ")})` : ""}`);
   }
+  if (reaction.deferred === true) {
+    lines.push("  after the flow settles — held until the work this trigger started drains");
+  }
   const scheduled = scheduleBlock(reaction.where, bound, `Reaction "${reaction.name}"`);
   for (const op of scheduled.ordered) {
     const opens = scheduled.opens.get(op) ?? [];

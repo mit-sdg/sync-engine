@@ -224,6 +224,7 @@ export function serializeReaction(reaction: LoweredReaction): ReactionIR {
   const ir: ReactionIR = {
     name: reaction.name,
     when,
+    ...(reaction.step.deferred === true ? { deferred: true as const } : {}),
     where,
     then: [encodeConsequence(reaction.step, vars)],
   };

@@ -48,6 +48,7 @@ call shapes:
 | ---------------------- | ---------------------------------------------------------------------------- |
 | `vocabulary`           | `vocabulary({ concepts, computations? })`                                    |
 | `reaction`             | `reaction(vars => when(trigger).where(...conditions).then(...consequences))` |
+| `.afterFlowSettles()`  | `when(trigger).afterFlowSettles().where(...).then(...)`, or before a stage   |
 | `returned` / `refused` | `(pattern?, { by?, except?, exceptBy? }?)`                                   |
 | `where`                | `where(...conditions)`                                                       |
 | `no` / `whether`       | `(readLine)`                                                                 |
@@ -288,7 +289,9 @@ receives exactly the value of the authored response's top-level `error` field.
 [Receive, ask, respond](../guide/authoring.md#receive-ask-respond) shows endpoint
 authoring. [Execution
 semantics](semantics.md#sibling-paths-and-endpoint-settlement) defines
-settlement.
+settlement. A stage may state `.afterFlowSettles()` so its response is formed
+from terminal state; see [deferred triggers and settlement
+frontiers](semantics.md#deferred-triggers-and-settlement-frontiers).
 
 Endpoint paths must be canonical portable absolute URL pathnames. Queries,
 fragments, scheme-relative paths, dot-segment normalization, malformed percent

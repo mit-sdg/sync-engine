@@ -331,6 +331,7 @@ export function renderReaction(reaction: ReactionIR): string {
       index === 0 ? `when ${renderTrigger(trigger)}` : `and jointly when ${renderTrigger(trigger)}`,
     );
   });
+  if (reaction.deferred === true) lines.push("after the flow settles");
   if (reaction.where.length > 0) {
     lines.push("where");
     for (const op of reaction.where) lines.push(`  ${renderWhereOp(op)}`);

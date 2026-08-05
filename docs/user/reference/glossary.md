@@ -58,6 +58,12 @@ returns.
 A tracing identifier carried through gateway and application observation. It is
 not an idempotency key.
 
+## Deferred trigger
+
+A reaction trigger stated with `.afterFlowSettles()`. Its firing is armed where
+the occurrence lands and prepared at a settlement frontier instead, so the
+consequence follows the causal work that occurrence started.
+
 ## Domain error
 
 An application-authored failure value, such as a concept refusal or an endpoint
@@ -192,6 +198,12 @@ not define execution semantics.
 A concept's deliberate rejection of an action. Registered refusal codes are
 expected domain outcomes. Ordinary assembly treats an undeclared advanced
 `Refuse` code as a fault; a manual engine may accept it as a refusal.
+
+## Settlement frontier
+
+The point where a flow's outermost ask is about to settle and every ordinary
+cascade it started has drained. Deferred triggers armed in that flow are read
+there; a frontier that produces no firing finalizes the flow.
 
 ## View
 

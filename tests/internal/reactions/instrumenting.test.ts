@@ -26,6 +26,7 @@ describe("concept instrumentation", () => {
       concepts: new Set(),
       registerConcept: () => {},
       react: async () => {},
+      settle: () => {},
       emit: () => {},
     };
     const counter = instrumentConcept(state, new Counter());
@@ -50,6 +51,7 @@ describe("concept instrumentation", () => {
       concepts: new Set(),
       registerConcept: () => {},
       react: async () => {},
+      settle: () => {},
       emit: () => {},
     };
     const counter = instrumentConcept(state, new Counter(), "Counter");
@@ -104,6 +106,7 @@ describe("concept instrumentation", () => {
         matchedInputs.push(actions._matchingRecord(record).input);
         if (reactions++ === 0) await requested.promise;
       },
+      settle: () => {},
       emit: () => {},
     };
     const raw = new Mutating();

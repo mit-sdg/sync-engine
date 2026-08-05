@@ -46,6 +46,7 @@ import type { ReactionFailureRecord } from "./log-store.ts";
 import type { ReactionLogger } from "./logging.ts";
 import { unifyOutputPattern } from "./matching.ts";
 import type { TriggerMatcher } from "./matching.ts";
+import { isDeferred, SettlementBook } from "./settlement.ts";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
@@ -59,15 +60,26 @@ interface FrameProvenance extends CapturedTriggers {
   triggerSignatures?: Set<string>;
 }
 
-interface PreparedFiring {
+/**
+ * One reaction's trigger stage: the frames its `when` matched on the landed
+ * occurrence, before its conditions are read. A deferred trigger keeps this
+ * between settlement frontiers, so the anchor's landing position and bindings
+ * outlive the moment it landed.
+ */
+export interface MatchedTrigger {
   actionSymbols: symbol[];
-  frameTriggerIds: string[][];
   frames: Frames;
   provenance: FrameProvenance;
   reaction: ExecutableReaction;
 }
 
+interface PreparedFiring extends MatchedTrigger {
+  frameTriggerIds: string[][];
+}
+
 export class FiringPipeline {
+  private readonly settlement = new SettlementBook();
+
   constructor(
     private readonly matcher: TriggerMatcher,
     private readonly actions: ActionConcept,
@@ -85,16 +97,58 @@ export class FiringPipeline {
   async fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void> {
     const prepared: PreparedFiring[] = [];
     for (const reaction of reactions) {
-      const firing = await this.prepare(record, reaction);
+      const matched = this.matchTrigger(record, reaction);
+      if (matched === undefined) continue;
+      if (isDeferred(reaction)) {
+        this.settlement.arm(record.flow, matched);
+        continue;
+      }
+      const firing = await this.qualify(matched);
       if (firing !== undefined) prepared.push(firing);
     }
     for (const firing of prepared) await this.dispatch(firing);
   }
 
-  private async prepare(
+  /**
+   * Open settlement frontiers for one flow until none produces a firing.
+   *
+   * Each frontier qualifies every trigger armed in the flow before dispatching
+   * any of their consequences, exactly as one landed occurrence does for its
+   * siblings, then lets those consequences and the ordinary cascades they
+   * start drain before the next frontier opens. An armed trigger whose
+   * conditions do not hold stays eligible for a later frontier. Interpreter or
+   * integrity failure stops deferred advancement; the flow finalizes with
+   * whatever it has already accepted.
+   */
+  settle(flowToken: string): void | Promise<void> {
+    if (!this.settlement.has(flowToken) || !this.actions._isFlowOutermost(flowToken)) return;
+    return this.openFrontiers(flowToken);
+  }
+
+  private async openFrontiers(flowToken: string): Promise<void> {
+    try {
+      while (this.settlement.has(flowToken) && !this.actions._flowFailed(flowToken)) {
+        const prepared: PreparedFiring[] = [];
+        for (const armed of this.settlement.pending(flowToken)) {
+          const firing = await this.qualify(armed);
+          if (firing === undefined) continue;
+          this.settlement.retire(flowToken, armed);
+          prepared.push(firing);
+        }
+        if (prepared.length === 0) return;
+        this.reactionLogger.settlement(flowToken, prepared.length);
+        for (const firing of prepared) await this.dispatch(firing);
+      }
+    } finally {
+      this.settlement.discard(flowToken);
+    }
+  }
+
+  /** Match one reaction's `when` against a landed occurrence. */
+  private matchTrigger(
     record: ActionRecord,
     reaction: ExecutableReaction,
-  ): Promise<PreparedFiring | undefined> {
+  ): MatchedTrigger | undefined {
     let matched: Frames;
     let actionSymbols: symbol[];
     try {
@@ -114,9 +168,19 @@ export class FiringPipeline {
     if (matched.length === 0) return undefined;
 
     this.reactionLogger.frames(`Matched \`reaction\`: ${reaction.name} with \`when\`:`, matched);
-    const provenance = this.capture(matched, record.flow, actionSymbols);
+    return {
+      actionSymbols,
+      frames: matched,
+      provenance: this.capture(matched, record.flow, actionSymbols),
+      reaction,
+    };
+  }
+
+  /** Read one matched trigger's conditions against current state. */
+  private async qualify(matched: MatchedTrigger): Promise<PreparedFiring | undefined> {
+    const { actionSymbols, provenance, reaction } = matched;
     let frameTriggerIds = provenance.frameTriggerIds;
-    let frames = matched;
+    let frames = matched.frames;
     if (reaction.where !== undefined) {
       try {
         const filtered = reaction.where(frames);
@@ -139,6 +203,7 @@ export class FiringPipeline {
         return undefined;
       }
       this.reactionLogger.frames("After processing `where`:", frames);
+      if (frames.length === 0) return undefined;
     }
     return { actionSymbols, frameTriggerIds, frames, provenance, reaction };
   }

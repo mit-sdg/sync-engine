@@ -5,6 +5,45 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## Unreleased
+
+This entry adds deferred triggers: a composition can hold a consequence until
+the causal work its trigger started has drained, without a host idle wait.
+
+### Compatibility
+
+- `when(...)` and every chained stage, including an endpoint's, accept
+  `.afterFlowSettles()`. The stage's conditions are read at each settlement
+  frontier of the trigger's flow until the reaction fires once. Settlement is
+  per causal flow: unrelated root flows neither delay a frontier nor open one.
+  See [Deferred triggers and settlement
+  frontiers](docs/user/reference/semantics.md#deferred-triggers-and-settlement-frontiers).
+- A deferred consequence keeps flow identity, `earlier(...)` scope, request
+  correlation, firing provenance, and execution-limit accounting. Interpreter
+  or integrity failure stops deferred advancement, and an unanswered endpoint
+  retains its existing timeout and `INTERNAL_ERROR` behavior.
+- Registration rejects `.afterFlowSettles()` on a later stage of a chain that
+  lowering keeps local, naming the stage: a deferred stage must lower into a
+  reaction of its own.
+
+### Migration
+
+- None. Existing compositions are unaffected; a reaction without
+  `.afterFlowSettles()` fires exactly where its trigger lands. Application
+  workflows that alternated `invoke()` with `whenIdle()` to order phases can
+  state that order in the composition instead.
+
+### Generated formats
+
+- `ReactionIR` gains an optional `deferred` flag. It is absent unless a stage
+  states `.afterFlowSettles()`, so existing pinned artifacts are unchanged.
+  Read-back and rendered reactions print `after the flow settles` for a
+  deferred trigger.
+
+### Runtime and security support
+
+- None.
+
 ## [1.0.0-beta.4] - 2026-08-04
 
 This beta tightens assembly, validation, persistence, client, transport, and

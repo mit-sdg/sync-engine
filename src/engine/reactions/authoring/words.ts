@@ -1,6 +1,7 @@
-import { brandWhereOp, conditionOp, isCondition } from "@engine/reads/where-ops";
+import { brandWhereOp } from "@engine/reads/where-ops";
 import type { AnyWhereOp, Condition, EarlierOp, WhereOp } from "@engine/reads/where-ops";
 import { isCountOp, where as viewWhere, type CountOp, type ViewBlock } from "@engine/reads/views";
+import { normalizeWhere } from "./conditions.ts";
 import { assertReactionNodes } from "./nodes.ts";
 import { siblingTree } from "./partitions.ts";
 import { isChannelPattern } from "./channels.ts";
@@ -10,15 +11,16 @@ import type {
   BranchChain,
   UnnamedStepNode,
   ChannelPattern,
+  DeferredWhenBuilder,
   InstrumentedAction,
   Mapping,
+  StageOptions,
   StepNode,
   ThenNode,
   TriggerPattern,
   WhenBuilder,
   WhenBuilderWithWhere,
   WhenBuilderWithFunctionWhere,
-  WhereFn,
 } from "../types.ts";
 
 export { actionPattern } from "./nodes.ts";
@@ -29,26 +31,6 @@ export function earlier(action: InstrumentedAction, input: Mapping, output?: Map
     op: "earlier",
     pattern: { ...actionPattern(action, input, output ?? {}), output: output ?? {} },
   }) as EarlierOp;
-}
-
-function normalizeWhere(
-  args: unknown[],
-  site: string,
-): { fn?: WhereFn; ops?: readonly AnyWhereOp[] } {
-  if (args.length === 1 && typeof args[0] === "function" && !isCondition(args[0])) {
-    return { fn: args[0] as WhereFn };
-  }
-  if (args.some(isCountOp)) {
-    throw new Error(
-      `${site}(...): count(...) cannot be used in a reaction condition. ` +
-        "To return a row count, use each(line).count() in a former. " +
-        "To test a count as policy, define a view and read that view.",
-    );
-  }
-  if (args.length === 0) {
-    throw new Error(`${site}(...) states at least one condition line.`);
-  }
-  return { ops: args.map((arg) => conditionOp(arg as Parameters<typeof conditionOp>[0], site)) };
 }
 
 export function when(channel: ChannelPattern): WhenBuilder;
@@ -66,36 +48,45 @@ export function when(line: StepNode | ChannelPattern): WhenBuilder {
   return createWhenBuilderFromPatterns([pattern]);
 }
 
-function createWhenBuilderFromPatterns(patterns: TriggerPattern[]): WhenBuilder {
-  return {
+function createWhenBuilderFromPatterns(
+  patterns: TriggerPattern[],
+  stage: StageOptions = {},
+): WhenBuilder {
+  const builder = {
     where(...args: unknown[]) {
       const normalized = normalizeWhere(args, "when(...).where");
       if (normalized.fn !== undefined) {
         const functional: WhenBuilderWithFunctionWhere = {
           then(...nodes: ThenNode[]) {
             assertReactionNodes(nodes);
-            return siblingTree(patterns, { where: normalized.fn }, nodes);
+            return siblingTree(patterns, { where: normalized.fn }, nodes, stage);
           },
         } as WhenBuilderWithFunctionWhere;
         return functional;
       }
-      return declarativeWhenBuilder(patterns, normalized.ops ?? []);
+      return declarativeWhenBuilder(patterns, normalized.ops ?? [], stage);
     },
     then(...nodes: ThenNode[]) {
       assertReactionNodes(nodes);
-      return siblingTree(patterns, {}, nodes);
+      return siblingTree(patterns, {}, nodes, stage);
     },
   } as WhenBuilder;
+  if (stage.deferred !== true) {
+    builder.afterFlowSettles = () =>
+      createWhenBuilderFromPatterns(patterns, { deferred: true }) as DeferredWhenBuilder;
+  }
+  return builder;
 }
 
 function declarativeWhenBuilder(
   patterns: TriggerPattern[],
   whereOps: readonly AnyWhereOp[],
+  stage: StageOptions,
 ): WhenBuilderWithWhere {
   return {
     then(...nodes: ThenNode[]) {
       assertReactionNodes(nodes);
-      return siblingTree(patterns, { whereOps }, nodes);
+      return siblingTree(patterns, { whereOps }, nodes, stage);
     },
   } as WhenBuilderWithWhere;
 }

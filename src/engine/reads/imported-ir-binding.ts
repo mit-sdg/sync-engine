@@ -90,6 +90,7 @@ export class ImportedIrBinder {
           undefined,
           reaction.name,
         ),
+        ...(reaction.deferred === true ? { deferred: true as const } : {}),
       } as StepNode,
     };
     const whereFn = liveOf(reaction) as WhereFn | undefined;

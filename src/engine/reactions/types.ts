@@ -87,6 +87,12 @@ export interface StepNode {
   linePosture?: "requested" | "returned" | "refused";
   /** Conditions read immediately before this step at its incoming frontier. */
   whereOps?: readonly WhereOp[];
+  /**
+   * Hold this stage until a settlement frontier — the moment the causal work
+   * started by its trigger has drained (see `.afterFlowSettles()`). The
+   * stage's conditions are re-read at each frontier of the same flow.
+   */
+  deferred?: true;
   transform?: WhereFn;
   /** The declarative form of the step's transform, when authored as ops. */
   transformOps?: readonly WhereOp[];
@@ -285,6 +291,27 @@ export interface ReactionDeclaration {
 
 export interface ReactionPartition {
   readonly declarations: readonly ReactionDeclaration[];
+  /** Hold the next stage until this flow's next settlement frontier. */
+  afterFlowSettles(): DeferredStage;
+  then(node: ConsequenceNode): ReactionPartition;
+  then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
+}
+
+/** One authored stage's deferral and incoming conditions, as the builders pass them down. */
+export interface StageOptions {
+  deferred?: boolean;
+  whereOps?: readonly WhereOp[];
+}
+
+/** A chained stage after `.afterFlowSettles()`. */
+export interface DeferredStage {
+  where(...conditions: Condition[]): DeferredStageWithWhere;
+  then(node: ConsequenceNode): ReactionPartition;
+  then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
+}
+
+/** A deferred chained stage after its conditions. */
+export interface DeferredStageWithWhere {
   then(node: ConsequenceNode): ReactionPartition;
   then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
@@ -321,12 +348,22 @@ export type ReactionMap = Record<string, Reaction>;
 /** The canonical no-fields mapping. */
 export type Empty = Record<PropertyKey, never>;
 
-/** The builder returned by `when(...)`. */
-export interface WhenBuilder {
+/** A `when` builder whose consequence waits for a settlement frontier. */
+export interface DeferredWhenBuilder {
   where(...conditions: Condition[]): WhenBuilderWithWhere;
   where(fn: WhereFn): WhenBuilderWithFunctionWhere;
   then(node: ConsequenceNode): ReactionPartition;
   then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
+}
+
+/** The builder returned by `when(...)`. */
+export interface WhenBuilder extends DeferredWhenBuilder {
+  /**
+   * Hold the consequence until the causal work started by the trigger has
+   * drained. The conditions stated after it are re-read at each settlement
+   * frontier of the same flow until the reaction fires once.
+   */
+  afterFlowSettles(): DeferredWhenBuilder;
 }
 
 /** A `when` builder after `.where(...)`. */

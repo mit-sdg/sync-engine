@@ -87,6 +87,7 @@ export class Reacting {
       requireDeclaredRefusals,
       queryCache,
       react: (record, durationMs) => this.react(record, durationMs),
+      settle: (flowToken) => this.firingPipeline.settle(flowToken),
       emit: (record, durationMs) => this.reactionLogger.emit(record, durationMs),
       registerConcept: (name, instrumented) => this.registry.registerConcept(name, instrumented),
     });
@@ -180,6 +181,16 @@ export class Reacting {
             });
           }
           return;
+        }
+
+        const deferredStage = declaration.then.findIndex((step) => step.deferred === true);
+        if (deferredStage > 0) {
+          const path = declaration.path?.join(" → ") ?? "main";
+          throw new Error(
+            `Reaction "${base}", path "${path}": stage ${deferredStage + 1} states ` +
+              "afterFlowSettles(), which needs its stage to lower into its own reaction — " +
+              `${outcome.reason ?? "not lowerable"}.`,
+          );
         }
 
         const ops = [...(declaration.whereOps ?? []), ...(declaration.then[0]?.whereOps ?? [])];

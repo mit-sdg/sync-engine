@@ -160,6 +160,21 @@ export class ActionConcept {
     return this.flowQuiescenceListeners.add(listener);
   }
 
+  /**
+   * Whether the caller is the flow's only active ask — its settlement
+   * frontier. Every ordinary cascade the flow started has drained, and the
+   * occurrences, bindings, and transient matching values a deferred trigger
+   * matches against are still retained.
+   */
+  _isFlowOutermost(flow: string): boolean {
+    return this.activeFlowValues.get(flow)?.depth === 1;
+  }
+
+  /** Whether an interpreter or integrity failure has closed this active flow. */
+  _flowFailed(flow: string): boolean {
+    return this.activeFlowValues.get(flow)?.interpreterFailed ?? false;
+  }
+
   /** Serialize and record a sanitized failure produced between instrumented action asks. */
   _recordInterpreterFailure(
     reaction: string,
