@@ -5,7 +5,7 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
-## Unreleased
+## [1.0.0-beta.5] - 2026-08-05
 
 This entry adds deferred triggers: a composition can hold a consequence until
 tracked ordinary work in the trigger's causal flow has drained, without a host
@@ -54,6 +54,8 @@ idle wait.
 ### Runtime and security support
 
 - None.
+
+[Release][1.0.0-beta.5] | [Changes since 1.0.0-beta.4][1.0.0-beta.5-compare]
 
 ## [1.0.0-beta.4] - 2026-08-04
 
@@ -440,6 +442,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.5]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.5
+[1.0.0-beta.5-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.4
 [1.0.0-beta.4-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.3
