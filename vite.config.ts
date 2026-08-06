@@ -14,6 +14,10 @@ export default defineConfig({
         find: /^@mit-sdg\/sync-engine-http\/([^/]+)$/,
         replacement: resolve(import.meta.dirname, "packages/http/src/$1/index.ts"),
       },
+      {
+        find: /^@mit-sdg\/sync-engine-analysis\/([^/]+)$/,
+        replacement: resolve(import.meta.dirname, "packages/analysis/src/$1/index.ts"),
+      },
     ],
     tsconfigPaths: true,
   },

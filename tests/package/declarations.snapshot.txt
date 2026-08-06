@@ -4828,11 +4828,12 @@ export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagn
 export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
 export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
 export type { ApplicationManifestV4, ManifestEndpointV4 } from "../engine/tooling/manifest.ts";
+export { parseSpec as parseConceptSpecification } from "../engine/reactions/concepts/concept-spec.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
 export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";
 export { renderInputContracts } from "../engine/boundary/protocol/endpoints.ts";
-export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "../engine/reads/ir.ts";
+export type { ActionTriggerIR, AppIR, ChannelTriggerIR, ConceptInventoryIR, ConceptSpecificationIR, ConsequenceIR, FormerIR, FormerNodeIR, FormerSourceIR, PatternIR, QueryRefIR, ReactionIR, SpecificationActionIR, SpecificationDocumentationIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationTypeIR, SpliceIR, TriggerIR, UnloweredIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR, } from "../engine/reads/ir.ts";
 export type { WireContractsIR, WireEndpoint, WireOptions, } from "../engine/boundary/wire/wire-contracts.ts";
 export type { WireRenderOptions } from "../engine/boundary/wire/wire-renderer.ts";
 export type { WireType } from "../engine/boundary/wire/wire-types.ts";

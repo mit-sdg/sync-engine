@@ -71,16 +71,17 @@ bun install
 `release:update` projects the canonical facts into every owned package
 dependency location:
 
-| Location                                            | Owned version fact                        |
-| --------------------------------------------------- | ----------------------------------------- |
-| `package.json`                                      | Published version and `publishConfig.tag` |
-| `packages/http/package.json`                        | HTTP package version and exact core peer  |
-| `examples/reading-circle/package.json`              | Shipped example dependency                |
-| `examples/operations-room/package.json`             | Shipped example dependency                |
-| `examples/production-http/package.json`             | Shipped example dependency                |
-| `tests/package/application/package.json`            | Standalone packed-application dependency  |
-| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency        |
-| `tests/package/multi-instance/backend/package.json` | Independent backend dependency            |
+| Location                                            | Owned version fact                          |
+| --------------------------------------------------- | ------------------------------------------- |
+| `package.json`                                      | Published version and `publishConfig.tag`   |
+| `packages/http/package.json`                        | HTTP package version and exact core peer    |
+| `packages/analysis/package.json`                    | Private preview version and exact core peer |
+| `examples/reading-circle/package.json`              | Shipped example dependency                  |
+| `examples/operations-room/package.json`             | Shipped example dependency                  |
+| `examples/production-http/package.json`             | Shipped example dependency                  |
+| `tests/package/application/package.json`            | Standalone packed-application dependency    |
+| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency          |
+| `tests/package/multi-instance/backend/package.json` | Independent backend dependency              |
 
 The scaffold keeps placeholders and generation reads the canonical root facts.
 The following `bun install` regenerates `bun.lock` from the projected manifests.
@@ -135,11 +136,12 @@ publication jobs.
 
 Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` invokes npm's real pack lifecycle for each workspace;
-the root package's `prepack` performs their shared build. The check inspects both
-tarballs and policy links, installs core alone and both packages together,
+the root package's `prepack` performs their shared build. The check inspects all
+workspace tarballs and policy links, installs core alone and all packages together,
 exercises the generated scaffold and examples, compiles a separate generated
-client/backend topology, and runs a Node scenario. In the publish workflow it
-exports both exact verified tarballs; the unprivileged job records their digests
+client/backend topology, and runs a Node scenario. The private analysis preview
+is package-tested but is not transferred to publication. In the publish workflow
+the check exports the exact core and HTTP tarballs; the unprivileged job records their digests
 and transfers them to the protected publication job. The core package
 intentionally includes all three complete, independently runnable teaching
 examples; file-count, packed-size, and unpacked-size budgets prevent accidental
@@ -148,9 +150,9 @@ commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
-Core and HTTP are independently published. Each release publishes core first and
-publishes HTTP only after core succeeds. HTTP declares the exact matching core
-beta as its peer dependency.
+Core and HTTP are independently published. The analysis workspace remains
+private. Each release publishes core first and publishes HTTP only after core
+succeeds. HTTP declares the exact matching core beta as its peer dependency.
 The workflow never overwrites an npm version or moves or reuses a release tag or
 tarball.
 

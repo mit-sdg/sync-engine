@@ -45,7 +45,7 @@ jobs:
       - run: bun run declarations:check
 
   package:
-    name: Pack & import both workspaces (${{ matrix.os }}, Node 24)
+    name: Pack & import workspaces (${{ matrix.os }}, Node 24)
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
@@ -60,7 +60,7 @@ jobs:
         with:
           bun-version: "1.3.14"
       - run: bun install --frozen-lockfile
-      - name: Verify core and HTTP tarballs
+      - name: Verify workspace tarballs
         run: bun run package:check
 
   generated:

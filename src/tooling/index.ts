@@ -9,11 +9,40 @@ export type {
 } from "@engine/tooling/diagnostics";
 export { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
 export type { ApplicationManifestV4, ManifestEndpointV4 } from "@engine/tooling/manifest";
+export { parseSpec as parseConceptSpecification } from "@engine/reactions/concepts/concept-spec";
 export { renderApp, renderReaction } from "@engine/reads/render";
 export { wireContracts } from "@engine/boundary/wire/wire-contracts";
 export { renderWireTypes } from "@engine/boundary/wire/wire-renderer";
 export { renderInputContracts } from "@engine/boundary/protocol/endpoints";
-export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
+export type {
+  ActionTriggerIR,
+  AppIR,
+  ChannelTriggerIR,
+  ConceptInventoryIR,
+  ConceptSpecificationIR,
+  ConsequenceIR,
+  FormerIR,
+  FormerNodeIR,
+  FormerSourceIR,
+  PatternIR,
+  QueryRefIR,
+  ReactionIR,
+  SpecificationActionIR,
+  SpecificationDocumentationIR,
+  SpecificationFieldIR,
+  SpecificationLocationIR,
+  SpecificationQueryIR,
+  SpecificationRefusalIR,
+  SpecificationResultIR,
+  SpecificationTypeIR,
+  SpliceIR,
+  TriggerIR,
+  UnloweredIR,
+  ValueIR,
+  ViewIR,
+  ViewOpIR,
+  WhereOpIR,
+} from "@engine/reads/ir";
 export type {
   WireContractsIR,
   WireEndpoint,

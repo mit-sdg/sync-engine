@@ -486,24 +486,25 @@ Neither form weakens generated endpoint input and output types.
 
 <!-- register:tooling:start -->
 
-`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV4`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedApplication`, `ManifestEndpointV4`, `ObservedOccurrence`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `diagnosticsFail`, `inspectAssembly`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
+`ActionTriggerIR`, `AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV4`, `ChannelTriggerIR`, `ConceptInventoryIR`, `ConceptSpecificationIR`, `ConsequenceIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `FormerNodeIR`, `FormerSourceIR`, `GeneratedApplication`, `ManifestEndpointV4`, `ObservedOccurrence`, `PatternIR`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `QueryRefIR`, `ReactionIR`, `SpecificationActionIR`, `SpecificationDocumentationIR`, `SpecificationFieldIR`, `SpecificationLocationIR`, `SpecificationQueryIR`, `SpecificationRefusalIR`, `SpecificationResultIR`, `SpecificationTypeIR`, `SpliceIR`, `TriggerIR`, `UnloweredIR`, `ValueIR`, `ViewIR`, `ViewOpIR`, `WhereOpIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `diagnosticsFail`, `inspectAssembly`, `parseConceptSpecification`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
 
 <!-- register:tooling:end -->
 
 ### Inspection and rendering
 
-| API                         | Compact signature                                            |
-| --------------------------- | ------------------------------------------------------------ |
-| `inspectAssembly`           | `inspectAssembly(assembly)`                                  |
-| `renderApp`                 | `renderApp({ title, concepts, app }): string`                |
-| `renderReaction`            | `renderReaction(reaction): string`                           |
-| `renderInputContracts`      | `renderInputContracts(contracts): string`                    |
-| `wireContracts`             | `wireContracts(app, options?: WireOptions): WireContractsIR` |
-| `renderWireTypes`           | `renderWireTypes(wire, moduleName? \| options?): string`     |
-| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV4`       |
-| `renderApplicationManifest` | `renderApplicationManifest(manifest): string`                |
-| `applicationDiagnostics`    | `applicationDiagnostics(app, endpoints, wire)`               |
-| `diagnosticsFail`           | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`      |
+| API                         | Compact signature                                             |
+| --------------------------- | ------------------------------------------------------------- |
+| `inspectAssembly`           | `inspectAssembly(assembly)`                                   |
+| `renderApp`                 | `renderApp({ title, concepts, app }): string`                 |
+| `renderReaction`            | `renderReaction(reaction): string`                            |
+| `renderInputContracts`      | `renderInputContracts(contracts): string`                     |
+| `wireContracts`             | `wireContracts(app, options?: WireOptions): WireContractsIR`  |
+| `renderWireTypes`           | `renderWireTypes(wire, moduleName? \| options?): string`      |
+| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV4`        |
+| `renderApplicationManifest` | `renderApplicationManifest(manifest): string`                 |
+| `applicationDiagnostics`    | `applicationDiagnostics(app, endpoints, wire)`                |
+| `diagnosticsFail`           | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`       |
+| `parseConceptSpecification` | `parseConceptSpecification(markdown): ConceptSpecificationIR` |
 
 `AppIR`, `ReactionIR`, `ViewIR`, `FormerIR`, `ConceptInventoryIR`, and
 `ObservedOccurrence` name inspected data. `ObservedOccurrence` contains the
@@ -534,6 +535,11 @@ flags, structured diagnostics, and `digest`. The digest covers every other
 manifest field. It excludes occurrences, timestamps, other runtime state, and
 uninterpreted concept State sections. State notation likewise contributes
 nothing to the assembled read-back or generated wire.
+`parseConceptSpecification(...)` exposes the same structured, source-located
+contract used by registration. It parses Purpose, Principle, actions, queries,
+refusals, result declarations, and reader-facing extension sections. It does not
+interpret State prose or turn authored types and behavior sentences into runtime
+schemas or guarantees.
 
 Each concept inventory may carry a
 `sync-engine.concept-specification` version-1 subtree. The subtree includes

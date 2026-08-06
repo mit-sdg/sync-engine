@@ -54,6 +54,8 @@ Do not hand-edit these outputs:
   `bun run declarations:pin` after an intentional declaration change;
 - `packages/http/tests/declarations.snapshot.txt` — update with
   `bun run declarations:pin` after an intentional HTTP-package declaration change;
+- `packages/analysis/tests/declarations.snapshot.txt` — update with
+  `bun run declarations:pin` after an intentional analysis-package declaration change;
 - `examples/*/generated/*.md` and `examples/*/generated/wire.ts` — update through
   the owning example's artifact pin command or the repository generation
   script.

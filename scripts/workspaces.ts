@@ -16,6 +16,7 @@ export interface Workspace {
   readonly internalSourceDirectories: readonly string[];
   readonly publicSubpathContainsOnlyEntrypoint: boolean;
   readonly copiesExamples: boolean;
+  readonly publication: "npm" | "private";
   readonly requiredPackedFiles: readonly string[];
   readonly packageBudget: Readonly<{ files: number; packedBytes: number; unpackedBytes: number }>;
   readonly scaffold?: Readonly<{ source: string; destination: string; executable: string }>;
@@ -34,10 +35,11 @@ export const workspaceCatalog = [
     verifiedTarball: "package.tgz",
     buildAfter: [],
     peerWorkspaceIds: [],
-    forbiddenWorkspaceIds: ["http"],
+    forbiddenWorkspaceIds: ["http", "analysis"],
     internalSourceDirectories: ["command", "engine"],
     publicSubpathContainsOnlyEntrypoint: true,
     copiesExamples: true,
+    publication: "npm",
     requiredPackedFiles: [
       "LICENSE",
       "NOTICE",
@@ -65,12 +67,33 @@ export const workspaceCatalog = [
     verifiedTarball: "http-package.tgz",
     buildAfter: ["core"],
     peerWorkspaceIds: ["core"],
-    forbiddenWorkspaceIds: [],
+    forbiddenWorkspaceIds: ["analysis"],
     internalSourceDirectories: [],
     publicSubpathContainsOnlyEntrypoint: false,
     copiesExamples: false,
+    publication: "npm",
     requiredPackedFiles: ["LICENSE", "NOTICE", "README.md", "public-surface.md", "package.json"],
     packageBudget: { files: 80, packedBytes: 150_000, unpackedBytes: 600_000 },
+  },
+  {
+    id: "analysis",
+    packageName: "@mit-sdg/sync-engine-analysis",
+    directory: "packages/analysis",
+    packageManifest: "packages/analysis/package.json",
+    sourceDirectory: "src",
+    distDirectory: "dist",
+    buildConfig: "tsconfig.build.json",
+    declarationSnapshot: "packages/analysis/tests/declarations.snapshot.txt",
+    verifiedTarball: "analysis-package.tgz",
+    buildAfter: ["core"],
+    peerWorkspaceIds: ["core"],
+    forbiddenWorkspaceIds: ["http"],
+    internalSourceDirectories: [],
+    publicSubpathContainsOnlyEntrypoint: false,
+    copiesExamples: false,
+    publication: "private",
+    requiredPackedFiles: ["LICENSE", "NOTICE", "README.md", "public-surface.md", "package.json"],
+    packageBudget: { files: 40, packedBytes: 100_000, unpackedBytes: 350_000 },
   },
 ] as const satisfies readonly Workspace[];
 

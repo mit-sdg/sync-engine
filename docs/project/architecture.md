@@ -289,6 +289,11 @@ symbol identity, nested constants, unsupported historical names, and
 package-path reachability. The packed-consumer fixture separately checks the
 emitted type graph.
 
+Workspace packaging and npm publication are separate policies. Every cataloged
+workspace builds, packs, and participates in combined-consumer checks. Core and
+HTTP are npm-published; the analysis workspace is private until its source
+provenance and context contracts are ready for a supported release.
+
 ## Dependency rules
 
 Public subpaths under `src/` are export-only. Engine code lives under

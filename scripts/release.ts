@@ -4,8 +4,11 @@ import { activeWorkflowSource, externalWorkflowActions, workflowUses } from "./w
 import { workspaceById, workspaceCatalog, type Workspace } from "./workspaces.ts";
 
 const coreWorkspace = workspaceById("core");
-const publishedWorkspaces: readonly Workspace[] = workspaceCatalog;
-const workspaceReleaseManifests = publishedWorkspaces
+const releaseWorkspaces: readonly Workspace[] = workspaceCatalog;
+const publishedWorkspaces = releaseWorkspaces.filter(
+  (workspace) => workspace.publication === "npm",
+);
+const workspaceReleaseManifests = releaseWorkspaces
   .filter((workspace) => workspace.id !== coreWorkspace.id)
   .map((workspace) => workspace.packageManifest);
 const exampleManifests = [
@@ -178,18 +181,24 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
   const rootDevelopment = object(root.devDependencies) ?? {};
   const projected = new Map<string, string>();
   const workspaceVersions = new Map(
-    publishedWorkspaces.map((workspace) => [workspace.packageName, facts.version]),
+    releaseWorkspaces.map((workspace) => [workspace.packageName, facts.version]),
   );
 
-  for (const workspace of publishedWorkspaces) {
+  for (const workspace of releaseWorkspaces) {
     if (workspace.id === coreWorkspace.id) continue;
     const path = workspace.packageManifest;
     const manifest = object(JSON.parse(sources.get(path) ?? ""));
     if (manifest === undefined) throw new Error(`${path} must contain an object`);
     manifest.version = facts.version;
-    const publishConfig = object(manifest.publishConfig) ?? {};
-    manifest.publishConfig = publishConfig;
-    publishConfig.tag = object(root.publishConfig)?.tag;
+    if (workspace.publication === "npm") {
+      delete manifest.private;
+      const publishConfig = object(manifest.publishConfig) ?? {};
+      manifest.publishConfig = publishConfig;
+      publishConfig.tag = object(root.publishConfig)?.tag;
+    } else {
+      manifest.private = true;
+      delete manifest.publishConfig;
+    }
     const engines = object(manifest.engines) ?? {};
     manifest.engines = engines;
     engines.node = facts.node;
@@ -215,7 +224,7 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
     }
 
     dependencies[coreWorkspace.packageName] = facts.version;
-    for (const workspace of publishedWorkspaces) {
+    for (const workspace of releaseWorkspaces) {
       if (!(workspace.packageName in dependencies)) continue;
       dependencies[workspace.packageName] = workspaceVersions.get(workspace.packageName);
     }
@@ -359,34 +368,56 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
 
   const lock = sources.get("bun.lock") ?? "";
   const lockRoot = /^    "": \{([\s\S]*?)^    \},$/m.exec(lock)?.[1] ?? "";
-  const lockHttp = /^    "packages\/http": \{([\s\S]*?)^    \},?$/m.exec(lock)?.[1] ?? "";
   if (!lockRoot.includes(`"name": "${coreWorkspace.packageName}"`)) {
     failures.push(`bun.lock: root workspace name must be ${coreWorkspace.packageName}`);
   }
-  if (!lockHttp.includes(`"version": "${version}"`)) {
-    failures.push(`bun.lock: HTTP workspace version must equal ${version}`);
-  }
-  if (
-    typeof version === "string" &&
-    !lockHttp.includes(`"${coreWorkspace.packageName}": "${compatiblePeer(version)}"`)
-  ) {
-    failures.push(
-      `bun.lock: HTTP peer ${coreWorkspace.packageName} must equal ${compatiblePeer(version)}`,
-    );
+  for (const workspace of releaseWorkspaces) {
+    if (workspace.id === coreWorkspace.id) continue;
+    const lockWorkspace =
+      new RegExp(
+        `^    "${escapeRegExp(workspace.directory)}": \\{([\\s\\S]*?)^    \\},?$`,
+        "m",
+      ).exec(lock)?.[1] ?? "";
+    if (!lockWorkspace.includes(`"version": "${version}"`)) {
+      failures.push(`bun.lock: ${workspace.id} workspace version must equal ${version}`);
+    }
+    for (const peerId of workspace.peerWorkspaceIds) {
+      const peer = workspaceById(peerId);
+      if (
+        typeof version === "string" &&
+        !lockWorkspace.includes(`"${peer.packageName}": "${compatiblePeer(version)}"`)
+      ) {
+        failures.push(
+          `bun.lock: ${workspace.id} peer ${peer.packageName} must equal ${compatiblePeer(version)}`,
+        );
+      }
+    }
   }
   const coreWorkspaceResolution = `"${coreWorkspace.packageName}": ["${coreWorkspace.packageName}@root:",`;
   if (!lock.includes(coreWorkspaceResolution)) {
     failures.push(`bun.lock: core package must resolve to the root workspace`);
   }
 
-  for (const workspace of publishedWorkspaces) {
+  for (const workspace of releaseWorkspaces) {
     const project = manifest(workspace.packageManifest);
     if (project?.name !== workspace.packageName) {
       failures.push(`${workspace.packageManifest}: name must be ${workspace.packageName}`);
     }
     if (workspace.id === coreWorkspace.id) continue;
-    if (object(project?.publishConfig)?.tag !== "beta") {
-      failures.push(`${workspace.packageManifest}: publishConfig.tag must be "beta"`);
+    if (workspace.publication === "npm") {
+      if (project?.private === true) {
+        failures.push(`${workspace.packageManifest}: published workspaces must not be private`);
+      }
+      if (object(project?.publishConfig)?.tag !== "beta") {
+        failures.push(`${workspace.packageManifest}: publishConfig.tag must be "beta"`);
+      }
+    } else {
+      if (project?.private !== true) {
+        failures.push(`${workspace.packageManifest}: private workspaces must set private to true`);
+      }
+      if (project?.publishConfig !== undefined) {
+        failures.push(`${workspace.packageManifest}: private workspaces must omit publishConfig`);
+      }
     }
   }
 
@@ -511,7 +542,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "/.github/CODEOWNERS",
     "/package.json",
     "/bun.lock",
-    ...publishedWorkspaces
+    ...releaseWorkspaces
       .filter((workspace) => workspace.id !== coreWorkspace.id)
       .map((workspace) => `/${workspace.directory}/`),
     "/CHANGELOG.md",
@@ -565,7 +596,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const ci = activeWorkflowSource(sources.get(".github/workflows/ci.yml") ?? "");
   for (const fact of [
     "permissions:\n  contents: read",
-    "name: Pack & import both workspaces",
+    "name: Pack & import workspaces",
     "run: bun run package:check",
     "name: Generated artifacts",
     "run: bun run examples:check",

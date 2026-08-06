@@ -12,6 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
 const expectedAuthor = "Barish Namazov and Eagon Meng";
 const coreWorkspace = workspaceById("core");
+const multiInstanceWorkspaces = [coreWorkspace, workspaceById("http")];
 
 interface NpmPackResult {
   filename: string;
@@ -261,11 +262,13 @@ async function verifyPackedWorkspace(
     requireEntry(entries, executable.replace(/^\.\//, ""));
     requireExecutable(packed, executable.replace(/^\.\//, ""));
   }
-  if (
-    workspace.id === coreWorkspace.id &&
-    [...entries].some((entry) => entry.startsWith("package/packages/http/"))
-  ) {
-    throw new Error("core package contains the HTTP workspace");
+  if (workspace.id === coreWorkspace.id) {
+    for (const forbiddenId of coreWorkspace.forbiddenWorkspaceIds) {
+      const forbidden = workspaceById(forbiddenId);
+      if ([...entries].some((entry) => entry.startsWith(`package/${forbidden.directory}/`))) {
+        throw new Error(`core package contains the ${forbidden.id} workspace`);
+      }
+    }
   }
   return { workspace, manifest, tarball, entries };
 }
@@ -636,7 +639,7 @@ async function verifyMultiInstance(artifacts: ReadonlyMap<string, PackedWorkspac
   const clientManifestPath = resolve(clientProject, "package.json");
   const clientManifest = await prepareWorkspaceDependencies<
     DependencyManifest & { name: string; version: string }
-  >(clientManifestPath, "multi-instance client", artifacts, workspaceBuildOrder);
+  >(clientManifestPath, "multi-instance client", artifacts, multiInstanceWorkspaces);
   await writePackageManifest(clientManifestPath, clientManifest);
   runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], clientProject);
 
@@ -703,7 +706,7 @@ async function verifyMultiInstance(artifacts: ReadonlyMap<string, PackedWorkspac
     backendManifestPath,
     "multi-instance backend",
     artifacts,
-    workspaceBuildOrder,
+    multiInstanceWorkspaces,
   );
   if (
     backendManifest.dependencies["@sync-engine-fixture/multi-instance-client"] !==
@@ -732,7 +735,9 @@ async function copyVerifiedTarballs(
   if (directory !== undefined) {
     const destinationDirectory = resolve(root, directory);
     await mkdir(destinationDirectory, { recursive: true });
-    for (const workspace of workspaceBuildOrder) {
+    for (const workspace of workspaceBuildOrder.filter(
+      (candidate) => candidate.publication === "npm",
+    )) {
       const artifact = workspaceArtifact(artifacts, workspace);
       await copyFile(artifact.tarball, resolve(destinationDirectory, workspace.verifiedTarball));
     }
