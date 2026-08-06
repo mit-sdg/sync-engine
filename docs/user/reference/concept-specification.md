@@ -1,10 +1,11 @@
 # Concept specification format
 
 A concept specification is a Markdown file passed to `registerConcept` as text.
-The parser extracts the `Purpose`, `Principle`, action names and inputs, query
-names, inputs and cardinalities, and refusal lines. The resulting `ConceptSpec`
-contains only those machine-readable parts. Other text remains in the authored
-file for readers and is not registration data.
+The parser extracts `Purpose`, `Principle`, structured action and query
+signatures, descriptive bodies, refusal branches, and source locations. The
+resulting `ConceptSpec` is independent of TypeScript syntax. Registration uses
+only member names, input names, query cardinalities, and refusal branches for
+runtime behavior; the other parsed fields remain authored contract data.
 
 ## Complete example
 
@@ -48,16 +49,17 @@ _get (note: Note) : optional (text: String)
 ```
 ````
 
-The parser reads the two prose sections, member names, input names, query
-promise, and refusal line. It does not record action steps, query bodies, output
-fields, or type names as registration data.
+The parser reads the two prose sections, complete signatures, member bodies,
+and refusal line. Registration checks the names, inputs, query promise, and
+refusal branch. It does not infer a runtime schema or executable behavior from
+the parsed type expressions, results, or prose.
 
-| Layer                              | Establishes                                                                   |
-| ---------------------------------- | ----------------------------------------------------------------------------- |
-| Specification parser               | Accepted headings, action/query signatures, query promises, and refusal lines |
-| `registerConcept`                  | Agreement with callable runtime methods and refusal mappings                  |
-| `sync-engine check`                | Agreement with supported TypeScript source forms                              |
-| Principle and implementation tests | Behavioral sequence, state changes, returned values, and invariants           |
+| Layer                              | Establishes                                                                  |
+| ---------------------------------- | ---------------------------------------------------------------------------- |
+| Specification parser               | Complete declaration syntax, descriptions, promises, refusals, and locations |
+| `registerConcept`                  | Agreement with callable runtime methods and refusal mappings                 |
+| `sync-engine check`                | Agreement with supported TypeScript source forms                             |
+| Principle and implementation tests | Behavioral sequence, state changes, returned values, and invariants          |
 
 ## Required sections
 
@@ -77,11 +79,40 @@ Describe one concrete sequence that demonstrates the behavior.
 ```
 
 The parser includes all text after each heading up to the next second-level
-heading. Heading text, capitalization, and level are significant.
+heading outside fenced code. Heading text, capitalization, and level are
+significant. Duplicate reserved sections are rejected.
 
-Within each `actions` or `queries` fence, every name must be unique. An indented
+An `actions` fence is recognized only within `## Actions`, and a `queries` fence
+only within `## Queries`. A reserved fence in an example, State notation, or any
+other section cannot replace the declaration block. More than one matching
+fence in a section is rejected.
+
+Within each declaration fence, every member name must be unique. An indented
 declaration body must follow a left-aligned signature; a body before the first
-signature is rejected.
+signature is rejected. Blank body lines are retained after outer blank lines
+and common indentation are removed.
+
+## Signature grammar
+
+Action and query signatures use the following independent grammar:
+
+```text
+action       = name "(" fields? ")" ":" "return" result
+query        = "_" name "(" fields? ")" ":" promise result
+fields       = field ("," field)*
+field        = name "?"? ":" type
+result       = "(" fields? ")" | type
+promise      = "one" | "optional" | "many"
+type         = named-type | "null" | "undefined" | "(" type ")" | type "|" type
+named-type   = qualified-name ("<" type ("," type)* ">")?
+```
+
+Names are ASCII JavaScript-style identifiers. A qualified type name joins such
+identifiers with dots. Commas inside generic arguments and delimiters inside
+parenthesized types do not split the surrounding field list. The parser retains
+field names, optionality, type structure, result structure, and one-based source
+locations. It does not resolve a type name against TypeScript or validate values
+at runtime.
 
 ## Action declarations
 
@@ -97,31 +128,27 @@ join (gathering: Gathering, member: Person) : return (membership: Membership)
 ```
 ````
 
-An action name must be a JavaScript-style identifier and must not begin with
-`_`. The parser splits the parameter list at every comma, then retains the
-identifier before the first `:` in each item. Type text containing a comma is
-therefore unsupported by this parser. The token after the signature colon must
-be `return`.
-
-The signature parser recognizes only the prefix through the `return` token. It
-does not validate an output clause or reject trailing signature text. It also
-does not interpret output names, state changes, `where`, `then`, or other
-indented prose. These fields state the intended contract for readers and
-principle tests; they are outside the parsed grammar.
+An action name must not begin with `_`, and the token after its input list must
+be `: return`. The parser retains an inline output field list or a named result
+type and rejects missing or trailing signature text. It also retains the
+normalized indented body. Registration does not interpret `where`, `then`,
+state changes, operation order, or other prose as executable behavior.
 
 ### Refusal lines
 
-The parser recognizes an indented line with this exact form:
+The parser recognizes an indented line with this form:
 
 ```text
 refuse CODE "Normative sentence."
 ```
 
 The code must occur only once under an action, and the quoted sentence must not
-be empty. `registerConcept` requires one distinct registered `Error` class for
-every refusal code and rejects extra mappings. The quoted sentence supplies the
-registered detail for direct assembled calls; the `Error` instance's message is
-ignored.
+be empty. The sentence uses JSON string escapes, including `\"` for a literal
+double quote. A body line beginning with `refuse` but not matching the grammar is
+rejected. `registerConcept` requires one distinct registered `Error` class for
+every refusal code and rejects extra mappings. The decoded sentence supplies
+the registered detail for direct assembled calls; the `Error` instance's
+message is ignored.
 
 ## Query declarations
 
@@ -146,23 +173,22 @@ A query name must begin with `_`. Its promise is one of:
 | `optional` | an array containing zero or one record        | no more than one record                       |
 | `many`     | an array containing any number of record rows | every element is a non-null, non-array object |
 
-The parser records input names and the promise token. Query bodies are not
-registration data and acquire no refusal or runtime semantics; establish their
-claims in implementation tests. As with actions, the signature parser does not
-validate the output clause or trailing text. It does not parse output fields or
-their types. The engine checks the result container and cardinality when a
-reaction, view, or former reads the query. It does not check row fields against
-the output list in the specification.
+The parser records the structured inputs, promise, inline row fields or named
+row type, and normalized body. Query bodies are not registration data and
+acquire no refusal or runtime semantics; establish their claims in
+implementation tests. The engine checks the result container and cardinality
+when a reaction, view, or former reads the query. It does not check row values
+against the parsed row declaration.
 
-An omitted `actions` or `queries` fence declares no members of that kind. A
-present fence must be closed.
+An omitted `## Actions` or `## Queries` section, or a section without its
+matching fence, declares no members of that kind. A present declaration fence
+must be closed.
 
 ## State notation
 
-A `## State` section is optional and has no dedicated grammar. Do not place
-reserved Purpose or Principle headings or `actions` or `queries` fences inside
-State text or a `state` fence. The current parser discovers those markers across
-the document rather than excluding the State section.
+A `## State` section is optional and has no dedicated grammar. Headings inside
+its fenced notation are not document sections, and declaration fences there are
+not associated with `## Actions` or `## Queries`.
 
 State notation is discarded by `parseSpec`, and `ConceptSpec` has no state
 member. Neither `registerConcept` nor `sync-engine check` compares it with class

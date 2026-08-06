@@ -219,12 +219,16 @@ descriptor. Assembly does not install, own, or call the floor's `close()`
 method. The host owns floor selection and lifecycle.
 
 `RegisteredConcept.specification` is the machine-readable `ConceptSpec`
-extracted from purpose, principle, action, query, and refusal declarations. An
-optional State section is uninterpreted human notation and produces no
-`ConceptSpec` field. Registration and source checking do not compare it with
-class fields, floor implementations, databases, or storage. State properties
-belong in principle, implementation, and backend constraint tests; future
-machine conformance requires a separately designed backend-neutral descriptor.
+extracted from purpose, principle, structured action and query signatures,
+descriptive bodies, refusal declarations, and source locations. Registration
+uses its member names, input names, query promises, and refusals; parsed type,
+result, and prose fields are descriptive contract data rather than runtime
+schemas. An optional State section remains uninterpreted human notation and
+produces no `ConceptSpec` field. Registration and source checking do not compare
+State with class fields, floor implementations, databases, or storage. State
+properties belong in principle, implementation, and backend constraint tests;
+future machine conformance requires a separately designed backend-neutral
+descriptor.
 
 ### Occurrence index and log sinks
 
