@@ -44,6 +44,7 @@ interface AnswerPath {
   name: string;
   request: PatternIR;
   proof?: { operations: readonly WhereOpIR[]; mayDrop: boolean };
+  coverage?: "linear-action";
 }
 
 function isResponse(reaction: ReactionIR): boolean {
@@ -64,7 +65,12 @@ function isRequestTrigger(trigger: ActionTriggerIR): boolean {
 
 function responseCorrelates(answer: ReactionIR, root: ActionTriggerIR): boolean {
   const requestId = root.input.requestId;
-  if (!isVarIR(requestId) || root.posture !== "returned" || Object.keys(root.output).length !== 0) {
+  if (
+    !isVarIR(requestId) ||
+    root.posture !== "returned" ||
+    root.by !== undefined ||
+    Object.keys(root.output).length !== 0
+  ) {
     return false;
   }
   return answer.then.some(({ concept, action, input }) => {
@@ -127,8 +133,169 @@ function operationsMayDrop(trigger: ActionTriggerIR, operations: readonly WhereO
   return false;
 }
 
-function traceAnswer(answer: ReactionIR, reactions: ReadonlyMap<string, ReactionIR>): AnswerPath {
+const STANDARD_REFUSAL_FUNNEL = {
+  name: "DeliverRefusalToAsker",
+  when: [
+    {
+      kind: "channel",
+      channel: "refused",
+      pattern: { message: { $var: "message" } },
+      except: ["RequestBoundary"],
+    },
+  ],
+  where: [
+    {
+      op: "earlier",
+      when: {
+        kind: "action",
+        concept: "RequestBoundary",
+        action: "request",
+        input: { requestId: { $var: "requestId" } },
+        output: {},
+      },
+    },
+  ],
+  then: [
+    {
+      kind: "request",
+      concept: "RequestBoundary",
+      action: "respond",
+      input: { requestId: { $var: "requestId" }, error: { $var: "message" } },
+    },
+  ],
+} satisfies ReactionIR;
+
+const STANDARD_FAULT_FUNNEL = {
+  name: "DeliverFaultToAsker",
+  when: [
+    {
+      kind: "channel",
+      channel: "faulted",
+      pattern: {},
+      except: [],
+      exceptBy: ["DeliverFaultToAsker"],
+    },
+  ],
+  where: [
+    {
+      op: "earlier",
+      when: {
+        kind: "action",
+        concept: "RequestBoundary",
+        action: "request",
+        input: { requestId: { $var: "requestId" } },
+        output: {},
+      },
+    },
+  ],
+  then: [
+    {
+      kind: "request",
+      concept: "RequestBoundary",
+      action: "respondFramework",
+      input: { requestId: { $var: "requestId" }, error: "INTERNAL_ERROR" },
+    },
+  ],
+} satisfies ReactionIR;
+
+function standardBoundaryOutcomesAreCovered(reactions: readonly ReactionIR[]): boolean {
+  const byName = new Map(reactions.map((reaction) => [reaction.name, reaction]));
+  return (
+    structurallyEqual(byName.get(STANDARD_REFUSAL_FUNNEL.name), STANDARD_REFUSAL_FUNNEL) &&
+    structurallyEqual(byName.get(STANDARD_FAULT_FUNNEL.name), STANDARD_FAULT_FUNNEL)
+  );
+}
+
+function literalChainValue(value: ValueIR, nested = false): boolean {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) return value.every((item) => literalChainValue(item, true));
+  const marker = asMarker(value);
+  if (marker !== null) return !nested && marker.tag === "$lit";
+  return Object.values(value).every((item) => literalChainValue(item, true));
+}
+
+function chainInputIsExact(pattern: PatternIR): boolean {
+  return Object.values(pattern).every((value) => isVarIR(value) || literalChainValue(value));
+}
+
+function variablesAreBound(pattern: PatternIR, bound: ReadonlySet<string>): boolean {
+  const required = new Set<string>();
+  for (const value of Object.values(pattern)) addVariables(value, required);
+  return [...required].every((name) => bound.has(name));
+}
+
+function linearActionChainCovers(stages: readonly ReactionIR[]): boolean {
+  if (stages.length < 2 || stages.some(({ deferred }) => deferred === true)) return false;
+  const triggers: ActionTriggerIR[] = [];
+
+  for (let index = 0; index < stages.length; index += 1) {
+    const stage = stages[index];
+    const trigger = actionTrigger(stage);
+    if (trigger === undefined || stage.then.length !== 1) return false;
+    triggers.push(trigger);
+
+    if (index === 0) {
+      if (!isRequestTrigger(trigger) || stage.where.length !== 0) return false;
+    } else {
+      const predecessor = stages[index - 1];
+      const asked = predecessor.then[0];
+      if (
+        trigger.posture !== "returned" ||
+        trigger.by !== predecessor.name ||
+        trigger.concept === "RequestBoundary" ||
+        Object.keys(trigger.output).length !== 0 ||
+        !chainInputIsExact(trigger.input) ||
+        asked.concept !== trigger.concept ||
+        asked.action !== trigger.action ||
+        !structurallyEqual(asked.input, trigger.input)
+      ) {
+        return false;
+      }
+      if (
+        !stage.where.every(
+          (operation) =>
+            operation.op === "earlier" &&
+            triggers.slice(0, -1).some((ancestor) => structurallyEqual(operation.when, ancestor)),
+        )
+      ) {
+        return false;
+      }
+    }
+
+    const bound = new Set<string>();
+    for (const value of [...Object.values(trigger.input), ...Object.values(trigger.output)]) {
+      addVariables(value, bound);
+    }
+    for (const operation of stage.where) {
+      if (operation.op !== "earlier") return false;
+      for (const value of [
+        ...Object.values(operation.when.input),
+        ...Object.values(operation.when.output),
+      ]) {
+        addVariables(value, bound);
+      }
+    }
+    if (!variablesAreBound(stage.then[0].input, bound)) return false;
+  }
+
+  const answer = stages.at(-1)?.then[0];
+  return answer?.concept === "RequestBoundary" && answer.action === "respond";
+}
+
+function traceAnswer(
+  answer: ReactionIR,
+  reactions: ReadonlyMap<string, ReactionIR>,
+  boundaryOutcomesCovered: boolean,
+): AnswerPath {
   const seen = new Set<string>();
+  const traced: ReactionIR[] = [];
   let current: ReactionIR | undefined = answer;
   let root: ActionTriggerIR | undefined;
   let proofEligible = true;
@@ -139,6 +306,7 @@ function traceAnswer(answer: ReactionIR, reactions: ReadonlyMap<string, Reaction
       break;
     }
     seen.add(current.name);
+    traced.push(current);
     const trigger = actionTrigger(current);
     if (trigger === undefined) {
       proofEligible = false;
@@ -165,12 +333,18 @@ function traceAnswer(answer: ReactionIR, reactions: ReadonlyMap<string, Reaction
   }
 
   if (root === undefined || !responseCorrelates(answer, root)) proofEligible = false;
+  const coverageEligible =
+    root !== undefined &&
+    responseCorrelates(answer, root) &&
+    boundaryOutcomesCovered &&
+    linearActionChainCovers([...traced].reverse());
   return {
     name: answer.name,
     request: root?.input ?? {},
     ...(proofEligible && root !== undefined
       ? { proof: { operations: answer.where, mayDrop: operationsMayDrop(root, answer.where) } }
       : {}),
+    ...(coverageEligible ? { coverage: "linear-action" as const } : {}),
   };
 }
 
@@ -337,7 +511,10 @@ function requestIsTotal(pattern: PatternIR, required: ReadonlySet<string>): bool
 }
 
 function totalPath(path: AnswerPath, required: ReadonlySet<string>): boolean {
-  return path.proof !== undefined && requestIsTotal(path.request, required) && !path.proof.mayDrop;
+  return (
+    requestIsTotal(path.request, required) &&
+    (path.coverage === "linear-action" || (path.proof !== undefined && !path.proof.mayDrop))
+  );
 }
 
 function analyzableValue(value: unknown): boolean {
@@ -387,8 +564,8 @@ function overlapReason(
   required: ReadonlySet<string>,
 ): string | undefined {
   if (
-    left.proof === undefined ||
-    right.proof === undefined ||
+    (left.proof === undefined && left.coverage === undefined) ||
+    (right.proof === undefined && right.coverage === undefined) ||
     requestRelation(left.request, right.request) !== "overlaps"
   ) {
     return undefined;
@@ -450,10 +627,11 @@ function endpointDiagnostics(
     namesByPath.set(path, names);
   }
   const byName = new Map(app.reactions.map((reaction) => [reaction.name, reaction]));
+  const boundaryOutcomesCovered = standardBoundaryOutcomesAreCovered(app.reactions);
   const answersByPath = new Map<string, AnswerPath[]>();
   for (const answer of app.reactions
     .filter(isResponse)
-    .map((reaction) => traceAnswer(reaction, byName))) {
+    .map((reaction) => traceAnswer(reaction, byName, boundaryOutcomesCovered))) {
     const answerPath = endpointPathOf(answer);
     if (answerPath === undefined) continue;
     const answers = answersByPath.get(answerPath) ?? [];

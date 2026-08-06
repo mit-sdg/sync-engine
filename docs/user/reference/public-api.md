@@ -587,9 +587,12 @@ failures by default and can promote warnings; informational diagnostics remain
 advisory.
 Endpoint diagnostics trace causal `by` provenance to attribute an eventual
 response to its request path. Only a response that uses the traced request
-identifier on a direct request-to-response answer path contributes to overlap
-or coverage proof. An intermediate action posture makes the path ineligible for
-either proof. On direct paths, the analyzer recognizes canonical
+identifier contributes to a proof. Overlap proof requires a direct
+request-to-response answer path. Coverage proof also recognizes linear action
+chains whose successful postures have exact inputs, empty output patterns, and
+only guaranteed ancestor replays; the standard boundary funnels cover refusal
+and fault outcomes. Coverage does not prove that an action or read eventually
+settles. On direct paths, the analyzer recognizes canonical
 `receive(...)` shapes, disjoint literal request alternatives, non-dropping
 `whether` lines, and fresh computations.
 `ENDPOINT_PATH_OVERLAP` reports bounded potential overlaps such as duplicate
