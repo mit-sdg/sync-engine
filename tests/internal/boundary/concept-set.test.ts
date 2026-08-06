@@ -43,6 +43,9 @@ function specFor(body = ""): string {
 
 const bare = specFor();
 
+const withoutLocations = (value: unknown): unknown =>
+  JSON.parse(JSON.stringify(value, (key, item) => (key === "location" ? undefined : item)));
+
 const catalogingSpec = specFor(`
 ## Actions
 
@@ -172,7 +175,9 @@ describe("parsed declarations and class methods", () => {
       refusals: { ITEM_NOT_FOUND: MissingItem },
     });
 
-    expect(registration.specification).toEqual(cataloging.specification);
+    expect(withoutLocations(registration.specification)).toEqual(
+      withoutLocations(cataloging.specification),
+    );
     expect(registration.specification).not.toHaveProperty("state");
 
     const set = conceptSet({ Cataloging: registration });
@@ -217,7 +222,9 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: specFor("\n```actions\nfind () : return ()\nmisplaced () : return ()\n```\n"),
+        spec: specFor(
+          "\n## Actions\n\n```actions\nfind () : return ()\nmisplaced () : return ()\n```\n",
+        ),
       }),
     ).toThrow(/implements the query `_find`, which the specification does not declare/);
   });
@@ -231,7 +238,9 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Shelving,
-        spec: specFor("\n```actions\nshelve (item: Item, aisle: Aisle) : return ()\n```\n"),
+        spec: specFor(
+          "\n## Actions\n\n```actions\nshelve (item: Item, aisle: Aisle) : return ()\n```\n",
+        ),
       }),
     ).toThrow(/`shelve` declares the inputs `item`, `aisle` but the class takes `item`, `shelf`/);
   });
@@ -242,10 +251,10 @@ describe("parsed declarations and class methods", () => {
       registerConcept({
         class: Cataloging,
         spec: specFor(
-          "\n```actions\nfind () : return ()\n  then\n" +
+          "\n## Actions\n\n```actions\nfind () : return ()\n  then\n" +
             '    refuse ITEM_NOT_FOUND "There is no such item."\n' +
             "misplaced (shelf: Shelf) : return ()\n```\n" +
-            "\n```queries\n_find () : optional (item: Item)\n```\n",
+            "\n## Queries\n\n```queries\n_find () : optional (item: Item)\n```\n",
         ),
         refusals: { ITEM_NOT_FOUND: MissingItem },
       }),
@@ -273,11 +282,11 @@ describe("parsed declarations and class methods", () => {
       registerConcept({
         class: Cataloging,
         spec: specFor(
-          "\n```actions\nfind () : return ()\n  then\n" +
+          "\n## Actions\n\n```actions\nfind () : return ()\n  then\n" +
             '    refuse ITEM_NOT_FOUND "There is no such item."\n' +
             "misplaced () : return ()\n  then\n" +
             '    refuse SHELVED_WRONG "The item sits on the wrong shelf."\n```\n' +
-            "\n```queries\n_find () : optional (item: Item)\n```\n",
+            "\n## Queries\n\n```queries\n_find () : optional (item: Item)\n```\n",
         ),
         refusals: { ITEM_NOT_FOUND: MissingItem, SHELVED_WRONG: MissingItem },
       }),
