@@ -24,9 +24,10 @@
  * ````
  *
  * A signature line starts at the left margin and everything indented under it
- * is the action's authored behavior. The parser reads the signatures and the
- * `refuse CODE "message"` lines; the rest of the body stays prose for a reader.
- * A refusal's message is the normative sentence the boundary reports.
+ * is the member's authored behavior. The parser reads the signatures and the
+ * action `refuse CODE "message"` lines; the rest of each action or query body
+ * stays prose for a reader. A refusal's message is the normative sentence the
+ * boundary reports.
  */
 
 import type { QueryPromise } from "@engine/reads/query-metadata";
@@ -147,8 +148,7 @@ function parseAction(group: readonly string[]): SpecAction {
 }
 
 function parseQuery(group: readonly string[]): SpecQuery {
-  const [signature, ...body] = group;
-  if (body.length > 0) fail(`the query "${signature.trim()}" cannot have a body`, body[0]);
+  const [signature] = group;
   const match = SIGNATURE.exec(signature);
   if (match === null) {
     fail("a query needs a `_name (inputs) : promise (outputs)` signature", signature);

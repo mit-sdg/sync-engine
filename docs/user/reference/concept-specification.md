@@ -44,12 +44,13 @@ discard (note: Note) : return (note: Note)
 
 ```queries
 _get (note: Note) : optional (text: String)
+  answers no row for an unknown Note
 ```
 ````
 
 The parser reads the two prose sections, member names, input names, query
-promise, and refusal line. It does not parse the action steps, output fields, or
-type names into a runtime schema.
+promise, and refusal line. It does not record action steps, query bodies, output
+fields, or type names as registration data.
 
 | Layer                              | Establishes                                                                   |
 | ---------------------------------- | ----------------------------------------------------------------------------- |
@@ -124,12 +125,16 @@ ignored.
 
 ## Query declarations
 
-A `queries` fence contains left-aligned signatures and no indented bodies:
+A `queries` fence contains left-aligned signatures. Indented prose below a
+signature describes its reader-facing behavior:
 
 ````md
 ```queries
 _members (gathering: Gathering) : many (member: Person)
+  answers no rows for an unknown Gathering
+  orders rows by when each Person joined
 _membership (gathering: Gathering, member: Person) : one (joined: Boolean)
+  answers false when the Person is unknown
 ```
 ````
 
@@ -141,11 +146,13 @@ A query name must begin with `_`. Its promise is one of:
 | `optional` | an array containing zero or one record        | no more than one record                       |
 | `many`     | an array containing any number of record rows | every element is a non-null, non-array object |
 
-The parser records input names and the promise token. As with actions, the
-signature parser does not validate the output clause or trailing text. It does
-not parse output fields or their types. The engine checks the result container
-and cardinality when a reaction, view, or former reads the query. It does not
-check row fields against the output list in the specification.
+The parser records input names and the promise token. Query bodies are not
+registration data and acquire no refusal or runtime semantics; establish their
+claims in implementation tests. As with actions, the signature parser does not
+validate the output clause or trailing text. It does not parse output fields or
+their types. The engine checks the result container and cardinality when a
+reaction, view, or former reads the query. It does not check row fields against
+the output list in the specification.
 
 An omitted `actions` or `queries` fence declares no members of that kind. A
 present fence must be closed.

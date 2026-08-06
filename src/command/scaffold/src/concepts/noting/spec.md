@@ -38,6 +38,7 @@ discard (note: Note) : return (note: Note)
 
 ```queries
 _get (note: Note) : optional (text: String)
+  answers no row for an unknown Note
 ```
 
 Noting does not decide what a note means or who may read it.

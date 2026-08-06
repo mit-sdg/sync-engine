@@ -86,8 +86,9 @@ bunx sync-engine artifacts check
 
 `src/concepts/noting/spec.md` is the authored specification. It states the
 concept's purpose and principle, declares action signatures and refusal
-branches, and declares query cardinality. Its optional State section is reader
-notation. [Concept specification
+branches, and declares query cardinality. Indented query bodies document
+reader-facing behavior beside each signature; implementation tests enforce
+those claims. Its optional State section is reader notation. [Concept specification
 format](../reference/concept-specification.md) defines exactly which parts are parsed and
 checked.
 

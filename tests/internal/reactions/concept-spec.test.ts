@@ -219,9 +219,31 @@ describe("the specification's queries", () => {
     );
   });
 
-  test("a query with a body fails", () => {
-    expect(() =>
-      parseSpec(queries("_get (room: Room) : one (name: String)\n  then\n    read")),
-    ).toThrow("cannot have a body");
+  test("query bodies are reader-facing prose and do not change metadata", () => {
+    const withBodies = queries(
+      [
+        "_items (catalog: Catalog) : many (item: Item, position: Number)",
+        "  answers no rows for an unknown Catalog",
+        "  orders rows by ascending position",
+        "_owner (catalog: Catalog) : one (owner: Person)",
+        "_selected () : optional (catalog: Catalog)",
+        "  returns no row until a Catalog is selected",
+      ].join("\n"),
+    );
+    const withoutBodies = queries(
+      [
+        "_items (catalog: Catalog) : many (item: Item, position: Number)",
+        "_owner (catalog: Catalog) : one (owner: Person)",
+        "_selected () : optional (catalog: Catalog)",
+      ].join("\n"),
+    );
+
+    expect(parseSpec(withBodies).queries).toEqual(parseSpec(withoutBodies).queries);
+  });
+
+  test("a query body preceding any signature fails", () => {
+    expect(() => parseSpec(queries("  answers no rows"))).toThrow(
+      "a declaration body precedes its signature",
+    );
   });
 });

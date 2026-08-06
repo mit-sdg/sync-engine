@@ -131,6 +131,20 @@ describe("uninterpreted state notation", () => {
   });
 });
 
+describe("reader-facing query behavior", () => {
+  test("query prose does not participate in source checking", async () => {
+    const where = await concept(
+      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }\n" +
+        "  _get({ session }: { session: string }) {\n    return [{ session }];\n  }",
+      "_get (session: Session) : optional (session: Session)\n" +
+        "  answers no row for an unknown Session",
+    );
+
+    expect(conceptFailures(where)).toEqual([]);
+  });
+});
+
 describe("membership, checked without constructing anything", () => {
   test("an action the class lacks fails by name", async () => {
     const where = await concept(

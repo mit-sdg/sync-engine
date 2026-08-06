@@ -78,8 +78,9 @@ not a supported declaration form.
 
 Within a selected fence, each nonempty left-aligned line starts a declaration.
 Indented lines belong to the preceding declaration; an indented line before a
-signature fails. Blank lines are discarded. Actions may have body lines;
-queries may not.
+signature fails. Blank lines are discarded. Actions and queries may have body
+lines. Query bodies remain reader-facing prose and are not retained in
+`ConceptSpec`.
 
 ### Signatures and refusals
 
@@ -113,7 +114,7 @@ is silently retained as ordinary prose.
 
 The parser does not validate output clauses or trailing signature text. It does
 not interpret type names, `where`, `then`, `return`, state changes, ordering, or
-other action-body text.
+other action- or query-body text.
 
 ## Enforcement stages
 
