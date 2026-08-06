@@ -16,9 +16,9 @@
     },
     "packages/http": {
       "name": "@mit-sdg/sync-engine-http",
-      "version": "1.0.0-beta.5",
+      "version": "1.0.0-beta.6",
       "peerDependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.5",
+        "@mit-sdg/sync-engine": "1.0.0-beta.6",
       },
     },
   },

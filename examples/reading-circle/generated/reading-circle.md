@@ -1,5 +1,5 @@
 <!-- Generated from the Reading circle assembly. Do not edit. -->
-<!-- Manifest producer: @mit-sdg/sync-engine@1.0.0-beta.5; concept specification: sync-engine.concept-specification@1; renderer: @mit-sdg/sync-engine@1.0.0-beta.5. -->
+<!-- Manifest producer: @mit-sdg/sync-engine@1.0.0-beta.6; concept specification: sync-engine.concept-specification@1; renderer: @mit-sdg/sync-engine@1.0.0-beta.6. -->
 
 # Reading circle — assembled read-back
 

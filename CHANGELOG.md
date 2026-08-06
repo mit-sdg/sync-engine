@@ -5,6 +5,53 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.6] - 2026-08-06
+
+This beta makes authored concept contracts structured, preserved, and
+project-aware while keeping their descriptive boundary explicit.
+
+### Compatibility
+
+- Concept specifications now use a balanced, location-aware grammar for action
+  and query signatures. The parser retains structured input and result types,
+  normalized member bodies, refusal sentences, `Types`, and extension sections;
+  query declarations may include indented reader-facing prose.
+- `registerConcept(...)` checks action and query names in both directions,
+  recoverable input names, and exact refusal mappings. Parsed types, results,
+  bodies, and documentation remain descriptive: they do not infer runtime
+  schemas or executable behavior. Engine-evaluated reads continue to enforce
+  declared query cardinality.
+- `sync-engine check` resolves finite TypeScript input shapes through the
+  nearest project, including supported interfaces, aliases, re-exports,
+  intersections, mapped and utility types, and path mappings. Ambiguous,
+  unresolved, open, cyclic, or otherwise unsupported shapes fail closed with
+  source diagnostics.
+
+### Migration
+
+- Correct concept files that relied on partially parsed or malformed signatures,
+  duplicate declaration sections, misplaced declaration fences, invalid refusal
+  lines, or trailing signature text. Ensure each direct class method has one
+  supported finite input shape when using `sync-engine check`.
+- Regenerate checked-in application manifests and Markdown read-back. State
+  notation remains reader-only and is intentionally excluded from parsed
+  contracts and generated artifacts.
+
+### Generated formats
+
+- Application manifests remain at version 4 and may now include a
+  `sync-engine.concept-specification` version-1 subtree for each registered
+  concept. The subtree preserves authored signatures, bodies, refusals,
+  documentation, and source locations. Generated Markdown renders that contract
+  and identifies the manifest producer, concept-specification format, and
+  renderer versions.
+
+### Runtime and security support
+
+- None.
+
+[Release][1.0.0-beta.6] | [Changes since 1.0.0-beta.5][1.0.0-beta.6-compare]
+
 ## [1.0.0-beta.5] - 2026-08-05
 
 This entry adds deferred triggers: a composition can hold a consequence until
@@ -442,6 +489,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.6]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.6
+[1.0.0-beta.6-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.5...v1.0.0-beta.6
 [1.0.0-beta.5]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.5
 [1.0.0-beta.5-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.4
