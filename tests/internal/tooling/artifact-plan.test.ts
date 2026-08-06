@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { assemble } from "@mit-sdg/sync-engine/assembly";
+import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { vocabulary } from "@mit-sdg/sync-engine/language";
 import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
@@ -125,7 +125,7 @@ describe("artifact plans", () => {
       plan.entries
         .find(({ kind }) => kind === "specification")
         ?.content.startsWith(
-          `<!-- Ping specification -->\n<!-- Generator: ${PACKAGE_NAME}@${PACKAGE_VERSION}. -->`,
+          `<!-- Ping specification -->\n<!-- Manifest producer: ${PACKAGE_NAME}@${PACKAGE_VERSION}; concept specification: sync-engine.concept-specification@1; renderer: ${PACKAGE_NAME}@${PACKAGE_VERSION}. -->`,
         ),
     ).toBe(true);
     const wire = plan.entries.find(({ kind }) => kind === "wire")?.content ?? "";
@@ -135,6 +135,105 @@ describe("artifact plans", () => {
     expect(wire).toContain("export type PingProjectedWire = {");
     expect(wire.match(/export type Json =/g)).toHaveLength(1);
     expect(plan.entries.every(({ content }) => content.includes(PACKAGE_VERSION))).toBe(true);
+  });
+
+  test("renders retained authored concept contracts from the manifest", () => {
+    class CatalogingConcept {
+      configure(_: { values: Map<string, unknown>; source?: string }) {
+        return { configuration: "ready" };
+      }
+
+      _items(_: { catalog: string }): { item: string; position: number }[] {
+        return [];
+      }
+    }
+    class InvalidConfiguration extends Error {}
+    const registration = registerConcept({
+      class: CatalogingConcept,
+      spec: `# Cataloging
+
+## Purpose
+
+Keep a configured catalog.
+
+## Principle
+
+Ada configures a catalog and reads its ordered items.
+
+## Types
+
+\`Configuration\` is a durable catalog configuration.
+
+## Actions
+
+\`\`\`actions
+configure (values: Map<Text, Value>, source?: Source | null) : return (configuration: Configuration)
+  validates every supplied value
+  then
+    refuse INVALID_CONFIGURATION "The value \\"unknown\\" is not supported."
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+_items (catalog: Catalog) : many (item: Item, position: Number)
+  answers no rows for an unknown Catalog
+  orders rows by ascending position
+\`\`\`
+
+## Invariants
+
+Positions are unique within a Catalog.
+`,
+      refusals: { INVALID_CONFIGURATION: InvalidConfiguration },
+    });
+    const set = conceptSet({ Cataloging: registration });
+    const manifest = applicationManifest(
+      assemble({ vocabulary: set.vocabulary, instances: set.implementations(), composition: {} }),
+    );
+    const authored = manifest.concepts.find(({ name }) => name === "Cataloging")?.specification;
+
+    expect(authored).toMatchObject({
+      format: "sync-engine.concept-specification",
+      version: 1,
+      actions: [
+        {
+          parameters: [
+            { name: "values", type: { kind: "named", name: "Map" } },
+            { name: "source", optional: true, type: { kind: "union" } },
+          ],
+          result: { kind: "fields", fields: [{ name: "configuration" }] },
+          refusals: [
+            {
+              code: "INVALID_CONFIGURATION",
+              message: 'The value "unknown" is not supported.',
+            },
+          ],
+        },
+      ],
+      queries: [{ body: expect.stringContaining("ascending position") }],
+      documentation: [
+        { kind: "types", name: "Types" },
+        { kind: "extension", name: "Invariants" },
+      ],
+    });
+
+    const content = planGenerated(manifest, { title: "Catalog" }).entries.find(
+      ({ kind }) => kind === "specification",
+    )?.content;
+    expect(content).toContain(
+      "`configure (values: Map<Text, Value>, source?: Source | null) : return (configuration: Configuration)`",
+    );
+    expect(content).toContain("validates every supplied value");
+    expect(content).toContain(
+      'refuse INVALID_CONFIGURATION "The value \\"unknown\\" is not supported."',
+    );
+    expect(content).toContain("**Registered refusal codes:** `INVALID_CONFIGURATION`");
+    expect(content).toContain("`_items (catalog: Catalog) : many (item: Item, position: Number)`");
+    expect(content).toContain("orders rows by ascending position");
+    expect(content).toContain("#### Types");
+    expect(content).toContain("#### Invariants");
+    expect(content).toContain("Registration checks member names, recoverable input names");
   });
 
   test("strict wire planning requires a vocabulary anchor", () => {

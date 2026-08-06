@@ -19,20 +19,19 @@ Keep these sources of truth distinct when changing this path:
 
 The supported format uses Markdown for both machine declarations and human
 explanation. The engine does not infer schemas or behavior from the human
-parts. The current parser is more permissive than the intended format in
-several places; [Known gaps](#known-gaps) records those cases separately.
+parts. [Known gaps](#known-gaps) records the remaining enforcement differences.
 
 ## Processing pipeline
 
-| Stage         | Owner                                                     | Current effect                                                                           |
-| ------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Parse         | `src/engine/reactions/concepts/concept-spec.ts`           | Convert Markdown text to `ConceptSpec`                                                   |
-| Register      | `src/engine/boundary/assembly/concept-set.ts`             | Compare declarations with the class and validate refusal mappings                        |
-| Project       | `conceptSet` in the same file                             | Carry purpose, principle, query promises, and refusal contracts into vocabulary metadata |
-| Source-check  | `src/command/check.ts`                                    | Compare declarations with supported TypeScript source forms                              |
-| Attach        | `src/engine/boundary/assembly/assemble.ts`                | Attach vocabulary metadata to selected instances                                         |
-| Execute reads | `src/engine/reads/queries.ts`                             | Enforce query answer containers and cardinality during reaction, view, and former reads  |
-| Inspect       | `src/engine/reactions/concepts/introspect.ts` and tooling | Emit retained metadata in inventories, manifests, and read-back                          |
+| Stage         | Owner                                                     | Current effect                                                                          |
+| ------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Parse         | `src/engine/reactions/concepts/concept-spec.ts`           | Convert Markdown text to versioned `ConceptSpec`                                        |
+| Register      | `src/engine/boundary/assembly/concept-set.ts`             | Compare declarations with the class and validate refusal mappings                       |
+| Project       | `conceptSet` in the same file                             | Carry the parsed contract plus runtime query/refusal contracts into metadata            |
+| Source-check  | `src/command/check.ts`                                    | Compare declarations with supported TypeScript source forms                             |
+| Attach        | `src/engine/boundary/assembly/assemble.ts`                | Attach vocabulary metadata to selected instances                                        |
+| Execute reads | `src/engine/reads/queries.ts`                             | Enforce query answer containers and cardinality during reaction, view, and former reads |
+| Inspect       | `src/engine/reactions/concepts/introspect.ts` and tooling | Emit the parsed contract in inventories, manifests, and read-back                       |
 
 The lower-level `vocabulary({ class, spec })` path also parses a specification,
 but it is not equivalent to `registerConcept`; see [Vocabulary-only
@@ -40,80 +39,74 @@ parsing](#vocabulary-only-parsing).
 
 ## Parser behavior
 
-`parseSpec(markdown)` is a line-and-regular-expression parser, not a Markdown
-parser. It returns exactly these fields:
+`parseSpec(markdown)` is a purpose-built Markdown section scanner and
+declaration parser, not a general Markdown parser. It returns these top-level
+fields:
 
-| Field       | Retained data                                                     |
-| ----------- | ----------------------------------------------------------------- |
-| `purpose`   | Trimmed text from the first nonempty `## Purpose` section         |
-| `principle` | Trimmed text from the first nonempty `## Principle` section       |
-| `actions`   | Action name, input names, and refusal code/message pairs          |
-| `queries`   | Query name, input names, and `one`, `optional`, or `many` promise |
+| Field            | Retained data                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------- |
+| `format/version` | `sync-engine.concept-specification` version 1                                          |
+| `purpose`        | Trimmed text from the unique nonempty `## Purpose` section                             |
+| `principle`      | Trimmed text from the unique nonempty `## Principle` section                           |
+| `actions`        | Structured parameters/result, body, refusals, compatibility input names, and locations |
+| `queries`        | Structured parameters/result, body, promise, compatibility input names, and locations  |
+| `documentation`  | Ordered Types and extension sections with Markdown bodies and locations                |
 
-`ConceptSpec` retains no source locations, type descriptors, output
-descriptors, State descriptor, or action behavior tree.
+Type expressions are an implementation-language-independent tree of named
+references, generic arguments, unions, `null`, and `undefined`. Results are
+either inline fields or a type expression. `ConceptSpec` retains no State
+descriptor or executable action behavior tree.
 
 The parser has no explicit document-size or declaration-count limit. It holds
 the supplied string and its complete line array while parsing.
 
 ### Sections and fences
 
-`sectionOf` finds the first line whose trimmed text is exactly `## Purpose` or
-`## Principle`. The section ends at the next trimmed line beginning with
-`## `. Heading indentation is accepted; spelling, case, and level are otherwise
-exact. The search does not account for fenced-code context.
+`sectionsOf` recognizes second-level headings outside backtick or tilde fences.
+Heading indentation is accepted; spelling, case, and level are otherwise exact.
+Purpose and Principle are required, nonempty, and unique. Actions and Queries
+are optional but unique when present. Duplicate State sections are not checked
+because State is not parsed.
 
-`fenceOf` searches the entire document for the first trimmed line composed of
-three backticks followed by `actions` or `queries`. The block ends at the next
-trimmed line beginning with three backticks. Fence discovery is not scoped to
-an `Actions` or `Queries` section. An absent fence declares no members; an
-unterminated fence fails. Duplicate, misplaced, and later fences are not
-rejected.
+`fenceOf` finds an `actions` fence only inside `## Actions` and a `queries`
+fence only inside `## Queries`. A declaration fence in an example, State, or an
+unrelated section is ignored. A second matching fence or an unterminated
+matching fence fails with its location.
 
-There is no State parser, and `ConceptSpec` has no State field. Document-global
-discovery still applies inside State text and `state` fences, however. A
-reserved Purpose or Principle heading can participate in section discovery,
-and an `actions` or `queries` fence is parsed. This is an implementation defect,
-not a supported declaration form.
+There is no State parser, and `ConceptSpec` has no State field. Fenced State
+content cannot create document sections or declaration blocks.
+
+`documentationOf` retains `## Types` as a typed documentation block and every
+other non-reserved second-level section as an extension block. Purpose,
+Principle, State, Actions, and Queries are reserved. Documentation blocks retain
+authored order and have no registration semantics.
 
 Within a selected fence, each nonempty left-aligned line starts a declaration.
 Indented lines belong to the preceding declaration; an indented line before a
-signature fails. Blank lines are discarded. Actions may have body lines;
-queries may not.
+signature fails. Actions and queries retain normalized bodies with outer blank
+lines and common indentation removed.
 
 ### Signatures and refusals
 
-Both declaration kinds use this prefix expression:
+`SignatureParser` consumes the complete declaration line. Its balanced grammar
+parses comma-separated fields, optional markers, qualified named types, nested
+generic arguments, parenthesized types, unions, `null`, and `undefined`. It
+retains structured input and result declarations plus a compatibility `inputs`
+name list. Duplicate fields, missing types or results, and trailing text fail at
+the source line and column.
 
-```text
-^(\S+)\s*\(([^)]*)\)\s*:\s*(\S+)
-```
+Action names are ASCII-style identifiers without a leading `_` and resolve with
+`return`. Query names begin with `_` and resolve with `one`, `optional`, or
+`many`. Names must be unique within their declaration fence.
 
-The expression is not anchored at the end. It reads a name, text through the
-first `)`, and one resolution token. Action names are ASCII-style identifiers
-without a leading `_` and must resolve with `return`. Query names begin with
-`_` and resolve with `one`, `optional`, or `many`. Names must be unique within
-their selected fence.
+Action body lines beginning with the literal text `refuse ` must match a code
+followed by a JSON-compatible quoted string. Messages are decoded, must be
+nonempty, and may contain escaped quotes. One action cannot repeat a code;
+several actions may use the same code.
 
-Inputs are split at every comma. For each item, the parser retains the trimmed
-text before the first colon and requires that text to be an identifier. It does
-not require a type, validate type text, or reject duplicate input names. A type
-containing a comma is therefore unsupported.
-
-Each trimmed action-body line is independently matched against:
-
-```text
-^refuse\s+(\S+)\s+"([^"]*)"$
-```
-
-The code may be any non-whitespace token. The message must be nonempty after
-trimming and cannot contain a double quote. One action cannot repeat a code;
-several actions may use the same code. A refusal-like line that does not match
-is silently retained as ordinary prose.
-
-The parser does not validate output clauses or trailing signature text. It does
-not interpret type names, `where`, `then`, `return`, state changes, ordering, or
-other action-body text.
+Parsed type, output, row, and body data remain documentation rather than runtime
+schema or behavior. The parser does not interpret `where`, `then`, `return`,
+state changes, ordering, or other natural-language claims.
 
 ## Enforcement stages
 
@@ -136,17 +129,18 @@ Placeholder, plain, absent, empty, or unsupported destructured parameters skip
 the runtime input comparison. Registration does not inspect return values,
 output declarations, State, action behavior, class fields, or storage.
 
-`conceptSet` converts the parsed data into metadata. Refusals become
+`conceptSet` retains the parsed specification in metadata. Refusals become
 action-specific triples of code, normative specification message, and
 registered `Error` class. Query promises become a map keyed by query name.
 
 ### Vocabulary-only parsing
 
-`specifiedContracts` in `src/engine/reactions/authoring/refs.ts` parses only
-Purpose, Principle, and query promises from a `{ class, spec }` vocabulary
-descriptor. It does not derive action membership or refusal branches. Explicit
-descriptor metadata is spread after parsed metadata and can override it. This
-path does not perform `registerConcept` conformance checks.
+`specifiedContracts` in `src/engine/reactions/authoring/refs.ts` retains the
+parsed contract and derives Purpose, Principle, and query promises from a
+`{ class, spec }` vocabulary descriptor. It does not derive executable refusal
+contracts because those require registered Error classes. Explicit descriptor
+metadata is spread after parsed metadata and can override it. This path does not
+perform `registerConcept` conformance checks.
 
 ### `sync-engine check`
 
@@ -156,19 +150,34 @@ import relative to the registry. The target file must directly declare the
 class. The checker compares direct, non-static, non-TypeScript-`private` methods
 with parsed action/query names.
 
-For inputs, the checker supports no parameter; one untyped object-destructured
-parameter without unsupported nested or rest bindings; one inline object type
-containing identifier-named properties; `Record<..., never>`; or one direct
-same-file alias to a supported typed form. Unsupported syntax fails closed.
-Interfaces, imports, qualified types, alias chains, intersections, unions,
-mapped or utility types, multiple parameters, and plain untyped parameters are
-not resolved.
+`checkerFor` loads the nearest `tsconfig.json`, preserving compiler options,
+module resolution, paths, and project references. Config-included concepts share
+a cached Program; an excluded concept source is added explicitly. Without a
+config, one NodeNext Program starts from the class source. Registry-to-class
+discovery remains syntactic and direct, but parameter type imports and
+re-exports use normal TypeScript resolution.
 
-The checker does not traverse base classes, re-exports, or general TypeScript
-module resolution. Runtime registration can therefore accept an inherited
-member that the source checker rejects. `scripts/check-specs.ts` checks
-`examples` and `tests/package/application`; the installed command defaults to
-`src/concepts`. The repository wrapper does not check the scaffold template.
+For inputs, the checker supports no parameter, one flat untyped destructuring,
+or one typed parameter whose semantic type resolves to a finite object key set.
+The TypeChecker naturally resolves local and imported aliases, interfaces and
+extension, qualified names, re-exports, utility and equivalent mapped types, and
+finite records. Resolution distributes unions and intersections as key-set
+alternatives. An intersection combines each possible set; a union is accepted
+only when every final alternative has the same keys.
+
+Resolution is cycle-safe and bounded to 32 operations and 64 alternatives. It
+fails closed for differing alternatives, open index signatures, unresolved or
+generic mapped shapes, `any`, `unknown`, primitives, arrays, callables, and
+invalid parameter lists. `Record<string, never>` contributes no keys, while
+`Record<"known", never>` contributes its finite key. Diagnostics retain the
+parameter type, first unsupported operation, declaration location, relevant
+TypeScript diagnostic, and differing key sets.
+
+The checker does not traverse base classes. Runtime registration can therefore
+accept an inherited member that the source checker rejects.
+`scripts/check-specs.ts` checks `examples` and `tests/package/application`; the
+installed command defaults to `src/concepts`. The repository wrapper does not
+check the scaffold template.
 
 ### Runtime and tooling
 
@@ -191,17 +200,24 @@ query:
 A direct instrumented query call returns the implementation result without
 passing through `queryRows`; the promise is not checked on that path.
 
-TypeScript class signatures, not Markdown type or output text, drive authoring
-types and wire provenance. Parsing additional Markdown fields would not by
-itself change those type sources.
+TypeScript class signatures, not parsed Markdown types or results, drive
+authoring types and wire provenance.
+
+`ConceptInventoryIR.specification` is optional, so concepts declared without a
+specification retain the narrower inventory. Registered concepts carry the
+version-1 JSON-safe contract. Manifest canonicalization sorts
+runtime inventory members but preserves authored contract arrays, including
+documentation order. The Markdown renderer prefers the authored contract and
+falls back to the narrow legacy inventory when none is present. Generated
+provenance identifies the manifest producer, specification format, and renderer.
 
 ## Deliberately uninterpreted material
 
 The current design leaves these properties to principle, implementation, and
 backend tests:
 
-- action outputs and query row fields;
-- type names and runtime input schemas;
+- runtime validation of action outputs and query rows;
+- resolution of type names and runtime input schemas;
 - State shape, relationships, multiplicity, and invariants;
 - action conditions, effects, and operation order;
 - query purity; and
@@ -213,16 +229,12 @@ them.
 
 ## Known gaps
 
-| Current behavior                                        | Consequence                                                                       |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Fence lookup is global and first-match-only             | A reserved fence outside its intended section is parsed; later fences are ignored |
-| Signature matching accepts a prefix                     | Missing outputs and trailing garbage can pass                                     |
-| Input parsing is textual                                | Types containing commas misparse; missing types and duplicate names pass          |
-| Refusal-like typos become prose                         | An intended branch may produce no contract or diagnostic                          |
-| `ConceptSpec` has no source spans                       | Downstream errors cannot point to exact declaration columns                       |
-| Runtime role recovery reads function text               | Some erased parameter forms skip input comparison                                 |
-| Registration sees inheritance; source checking does not | The two checks can disagree                                                       |
-| Direct query roots bypass `queryRows`                   | Cardinality enforcement depends on the call path                                  |
+| Current behavior                                        | Consequence                                         |
+| ------------------------------------------------------- | --------------------------------------------------- |
+| Named specification types are not resolved              | Parsed references do not prove a declaration exists |
+| Runtime role recovery reads function text               | Runtime registration can skip an erased comparison  |
+| Registration sees inheritance; source checking does not | The two checks can disagree on inherited members    |
+| Direct query roots bypass `queryRows`                   | Cardinality enforcement depends on the call path    |
 
 ## Verification ownership
 
@@ -239,15 +251,12 @@ form; the current tests do not exhaust the gaps above.
 
 ## Extension directions
 
-| Direction                                            | Enables                                                                                                        | Does not establish                                 | Main decision or cost                                                          |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Harden grammar and section scoping first             | Reject misplaced or duplicate fences, malformed signatures, duplicate inputs, and refusal typos with locations | Output or state validation                         | Permissive inputs may exist; define compatibility and migration diagnostics    |
-| Parse explicit output descriptors                    | Better inventories and optional comparison with selected tooling contracts                                     | Runtime value validation or trustworthy wire types | Define grammar, unions, async results, TypeScript bridging, and versioning     |
-| Make direct-query cardinality consistent             | One promise rule across direct and evaluated reads                                                             | Row-field validation                               | Failure timing changes and must account for caching, admission, and row limits |
-| Use a TypeScript program in the source checker       | Resolve inheritance, imports, interfaces, aliases, and richer types                                            | Behavioral verification                            | Own tsconfig selection, module resolution, diagnostics, and performance        |
-| Add a backend-neutral state descriptor when required | Let participating adapters validate shared logical constraints                                                 | Automatic persistence or transaction guarantees    | Define adapter capabilities, migrations, and unsupported constraints           |
+| Direction                                            | Enables                                                        | Does not establish                              | Main decision or cost                                                          |
+| ---------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| Make direct-query cardinality consistent             | One promise rule across direct and evaluated reads             | Row-field validation                            | Failure timing changes and must account for caching, admission, and row limits |
+| Add a backend-neutral state descriptor when required | Let participating adapters validate shared logical constraints | Automatic persistence or transaction guarantees | Define adapter capabilities, migrations, and unsupported constraints           |
 
-Do not parse natural-language behavior into runtime guarantees. If output or
-state data becomes machine-readable, introduce a versioned consumer contract
-and account for its projection, serialization, compatibility, and tests at
-every downstream stage.
+Do not turn natural-language behavior or parsed result declarations into
+runtime guarantees implicitly. Any future enforcement or State descriptor needs
+an explicit, versioned consumer contract with projection, serialization,
+compatibility, and tests at every downstream stage.

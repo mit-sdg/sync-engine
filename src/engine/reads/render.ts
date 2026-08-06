@@ -19,12 +19,18 @@ import type {
   ArrangedIR,
   ChannelTriggerIR,
   ConceptInventoryIR,
+  ConceptSpecificationIR,
   ConsequenceIR,
   FormerIR,
   FormerNodeIR,
   FormerWhereOpIR,
   PatternIR,
   ReactionIR,
+  SpecificationActionIR,
+  SpecificationFieldIR,
+  SpecificationQueryIR,
+  SpecificationResultIR,
+  SpecificationTypeIR,
   TriggerIR,
   ValueIR,
   ViewIR,
@@ -359,7 +365,82 @@ function renderSignature(name: string, roles: readonly string[] | undefined): st
   return roles === undefined ? `${name} (…)` : `${name} (${roles.join(", ")})`;
 }
 
-function renderConcept(concept: ConceptInventoryIR): string {
+function renderSpecificationType(type: SpecificationTypeIR): string {
+  if (type.kind === "null" || type.kind === "undefined") return type.kind;
+  if (type.kind === "union") return type.members.map(renderSpecificationType).join(" | ");
+  const arguments_ =
+    type.arguments.length === 0
+      ? ""
+      : `<${type.arguments.map(renderSpecificationType).join(", ")}>`;
+  return `${type.name}${arguments_}`;
+}
+
+function renderSpecificationFields(fields: readonly SpecificationFieldIR[]): string {
+  return fields
+    .map(
+      ({ name, optional, type }) =>
+        `${name}${optional ? "?" : ""}: ${renderSpecificationType(type)}`,
+    )
+    .join(", ");
+}
+
+function renderSpecificationResult(result: SpecificationResultIR): string {
+  return result.kind === "fields"
+    ? `(${renderSpecificationFields(result.fields)})`
+    : renderSpecificationType(result.type);
+}
+
+function renderActionSignature(action: SpecificationActionIR): string {
+  return `${action.name} (${renderSpecificationFields(action.parameters)}) : return ${renderSpecificationResult(action.result)}`;
+}
+
+function renderQuerySignature(query: SpecificationQueryIR): string {
+  return `${query.name} (${renderSpecificationFields(query.parameters)}) : ${query.promise} ${renderSpecificationResult(query.result)}`;
+}
+
+function pushAuthoredBody(lines: string[], body: string): void {
+  if (body === "") return;
+  lines.push("**Authored behavior:**", "");
+  for (const line of body.split("\n")) lines.push(`    ${line}`);
+  lines.push("");
+}
+
+function renderAuthoredConcept(name: string, specification: ConceptSpecificationIR): string {
+  const lines: string[] = [`### ${name}`, ""];
+  lines.push(`**Purpose.** ${specification.purpose}`, "");
+  lines.push(`**Principle.** ${specification.principle}`, "");
+  lines.push(
+    "_Registration checks member names, recoverable input names, and refusal mappings._",
+    "_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._",
+    "",
+  );
+  if (specification.actions.length > 0) {
+    lines.push("#### Actions", "");
+    for (const action of specification.actions) {
+      lines.push(`##### \`${renderActionSignature(action)}\``, "");
+      pushAuthoredBody(lines, action.body);
+      if (action.refusals.length > 0) {
+        lines.push(
+          `**Registered refusal codes:** ${action.refusals.map(({ code }) => `\`${code}\``).join(", ")}`,
+          "",
+        );
+      }
+    }
+  }
+  if (specification.queries.length > 0) {
+    lines.push("#### Queries", "");
+    for (const query of specification.queries) {
+      lines.push(`##### \`${renderQuerySignature(query)}\``, "");
+      pushAuthoredBody(lines, query.body);
+    }
+  }
+  for (const documentation of specification.documentation) {
+    lines.push(`#### ${documentation.name}`, "", documentation.body, "");
+  }
+  return lines.join("\n");
+}
+
+function renderLegacyConcept(concept: ConceptInventoryIR): string {
   const lines: string[] = [`### ${concept.name}`, ""];
   lines.push(`**Purpose.** ${concept.purpose ?? UNWRITTEN}`, "");
   lines.push(`**Principle.** ${concept.principle ?? UNWRITTEN}`, "");
@@ -392,6 +473,12 @@ function renderConcept(concept: ConceptInventoryIR): string {
     lines.push("");
   }
   return lines.join("\n");
+}
+
+function renderConcept(concept: ConceptInventoryIR): string {
+  return concept.specification === undefined
+    ? renderLegacyConcept(concept)
+    : renderAuthoredConcept(concept.name, concept.specification);
 }
 
 /**

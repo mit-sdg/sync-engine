@@ -1,7 +1,7 @@
 /**
- * The parser extracts only the machine-readable registration contract: purpose,
- * principle, actions and refusal branches, and query promises. State notation
- * remains outside that value.
+ * The parser retains the authored contract, including structured signatures,
+ * member bodies, documentation sections, and source locations. State notation
+ * remains outside that value; registration uses a narrower projection.
  */
 import { describe, expect, test } from "vite-plus/test";
 import { parseSpec } from "@sync-engine/internal/reactions/concepts/concept-spec";
@@ -53,6 +53,19 @@ const prose = (body: string): string =>
   `# X\n\n## Purpose\n\nWhy.\n\n## Principle\n\nHow.\n${body}`;
 const actions = (body: string): string => prose(`\n## Actions\n\n\`\`\`actions\n${body}\n\`\`\`\n`);
 const queries = (body: string): string => prose(`\n## Queries\n\n\`\`\`queries\n${body}\n\`\`\`\n`);
+const registrationData = (markdown: string) => {
+  const spec = parseSpec(markdown);
+  return {
+    purpose: spec.purpose,
+    principle: spec.principle,
+    actions: spec.actions.map(({ name, inputs, refusals }) => ({
+      name,
+      inputs,
+      refusals: refusals.map(({ code, message }) => ({ code, message })),
+    })),
+    queries: spec.queries.map(({ name, inputs, promise }) => ({ name, inputs, promise })),
+  };
+};
 
 describe("the specification's prose", () => {
   test("extracts purpose and principle, whole", () => {
@@ -101,15 +114,23 @@ a set of Invitations
     );
 
     const parsed = parseSpec(contradictoryState);
-    expect(parsed).toEqual(parseSpec(withoutState));
-    expect(Object.keys(parsed)).toEqual(["purpose", "principle", "actions", "queries"]);
+    expect(registrationData(contradictoryState)).toEqual(registrationData(withoutState));
+    expect(Object.keys(parsed)).toEqual([
+      "format",
+      "version",
+      "purpose",
+      "principle",
+      "actions",
+      "queries",
+      "documentation",
+    ]);
     expect(parsed).not.toHaveProperty("state");
   });
 });
 
 describe("the specification's actions", () => {
   test("reads each action's name, inputs, and refusal branches", () => {
-    expect(parseSpec(SPEC).actions).toEqual([
+    expect(parseSpec(SPEC).actions).toMatchObject([
       { name: "invite", inputs: ["workspace", "guest"], refusals: [] },
       {
         name: "accept",
@@ -195,13 +216,15 @@ describe("the specification's actions", () => {
   });
 
   test("an unclosed fence fails", () => {
-    expect(() => parseSpec(prose("\n```actions\nopen () : return ()\n"))).toThrow("never closed");
+    expect(() => parseSpec(prose("\n## Actions\n\n```actions\nopen () : return ()\n"))).toThrow(
+      "never closed",
+    );
   });
 });
 
 describe("the specification's queries", () => {
   test("reads each query's name, inputs, and promise", () => {
-    expect(parseSpec(SPEC).queries).toEqual([
+    expect(parseSpec(SPEC).queries).toMatchObject([
       { name: "_pending", inputs: ["workspace"], promise: "many" },
       { name: "_get", inputs: ["invitation"], promise: "optional" },
     ]);
@@ -219,9 +242,194 @@ describe("the specification's queries", () => {
     );
   });
 
-  test("a query with a body fails", () => {
-    expect(() =>
-      parseSpec(queries("_get (room: Room) : one (name: String)\n  then\n    read")),
-    ).toThrow("cannot have a body");
+  test("query bodies are retained but do not change registration data", () => {
+    const withBodies = queries(
+      [
+        "_items (catalog: Catalog) : many (item: Item, position: Number)",
+        "  answers no rows for an unknown Catalog",
+        "  orders rows by ascending position",
+        "_owner (catalog: Catalog) : one (owner: Person)",
+        "_selected () : optional (catalog: Catalog)",
+        "  returns no row until a Catalog is selected",
+      ].join("\n"),
+    );
+    const withoutBodies = queries(
+      [
+        "_items (catalog: Catalog) : many (item: Item, position: Number)",
+        "_owner (catalog: Catalog) : one (owner: Person)",
+        "_selected () : optional (catalog: Catalog)",
+      ].join("\n"),
+    );
+
+    expect(registrationData(withBodies).queries).toEqual(registrationData(withoutBodies).queries);
+    expect(parseSpec(withBodies).queries.map(({ body }) => body)).toEqual([
+      "answers no rows for an unknown Catalog\norders rows by ascending position",
+      "",
+      "returns no row until a Catalog is selected",
+    ]);
+  });
+
+  test("a query body preceding any signature fails", () => {
+    expect(() => parseSpec(queries("  answers no rows"))).toThrow(
+      "a declaration body precedes its signature",
+    );
+  });
+});
+
+describe("structured signatures", () => {
+  test("retains optional fields, nested generic types, unions, and results", () => {
+    const [action] = parseSpec(
+      actions(
+        "configure (values: Map<Text, Value | undefined>, source?: Box<(Source | null)>) " +
+          ": return (configuration: Configuration, warning?: Text | null)",
+      ),
+    ).actions;
+
+    expect(action.inputs).toEqual(["values", "source"]);
+    expect(action.parameters).toMatchObject([
+      {
+        name: "values",
+        optional: false,
+        type: {
+          kind: "named",
+          name: "Map",
+          arguments: [
+            { kind: "named", name: "Text" },
+            {
+              kind: "union",
+              members: [{ kind: "named", name: "Value" }, { kind: "undefined" }],
+            },
+          ],
+        },
+      },
+      {
+        name: "source",
+        optional: true,
+        type: {
+          kind: "named",
+          name: "Box",
+          arguments: [
+            {
+              kind: "union",
+              members: [{ kind: "named", name: "Source" }, { kind: "null" }],
+            },
+          ],
+        },
+      },
+    ]);
+    expect(action.result).toMatchObject({
+      kind: "fields",
+      fields: [
+        { name: "configuration", optional: false, type: { kind: "named", name: "Configuration" } },
+        {
+          name: "warning",
+          optional: true,
+          type: {
+            kind: "union",
+            members: [{ kind: "named", name: "Text" }, { kind: "null" }],
+          },
+        },
+      ],
+    });
+    expect(action.location).toEqual({ line: 14, column: 1 });
+  });
+
+  test("accepts a named result-row type", () => {
+    const [query] = parseSpec(queries("_report (source?: Source) : one Diagnostic.Row")).queries;
+    expect(query.result).toMatchObject({
+      kind: "type",
+      type: { kind: "named", name: "Diagnostic.Row", arguments: [] },
+    });
+  });
+
+  test("an earlier reserved fence outside its section cannot replace declarations", () => {
+    const markdown = prose(`
+
+\`\`\`actions
+wrong () : return ()
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+right () : return ()
+\`\`\`
+`);
+    expect(parseSpec(markdown).actions.map(({ name }) => name)).toEqual(["right"]);
+  });
+
+  test("escaped refusal quotes are decoded", () => {
+    const [action] = parseSpec(
+      actions('open () : return ()\n  then\n    refuse TAKEN "The name \\"atlas\\" is taken."'),
+    ).actions;
+    expect(action.refusals[0]).toMatchObject({
+      code: "TAKEN",
+      message: 'The name "atlas" is taken.',
+    });
+  });
+
+  test("unsupported trailing signature text gets a migration diagnostic", () => {
+    expect(() => parseSpec(actions("open () : return () ignored"))).toThrow(
+      "unsupported trailing text",
+    );
+  });
+
+  test("duplicate fields and incomplete results fail at their source location", () => {
+    expect(() => parseSpec(actions("open (name: Text, name: Text) : return ()"))).toThrow(
+      /line 14, column .*input parameters declare "name" twice/,
+    );
+    expect(() => parseSpec(actions("open () : return"))).toThrow(
+      /line 14, column .*resolution needs a result declaration/,
+    );
+  });
+
+  test("retains Types and extension sections in authored order", () => {
+    const spec = parseSpec(
+      prose(`
+
+## Types
+
+\`Catalog\` is an opaque identity.
+
+## Actions
+
+\`\`\`actions
+open () : return Catalog
+\`\`\`
+
+## Invariants
+
+Catalog identities are never reused.
+
+## Queries
+
+\`\`\`queries
+_all () : many CatalogRow
+\`\`\`
+
+## Retention
+
+Closed catalogs remain visible for audit.
+`),
+    );
+
+    expect(spec).toMatchObject({
+      format: "sync-engine.concept-specification",
+      version: 1,
+      documentation: [
+        { kind: "types", name: "Types", body: "`Catalog` is an opaque identity." },
+        {
+          kind: "extension",
+          name: "Invariants",
+          body: "Catalog identities are never reused.",
+        },
+        {
+          kind: "extension",
+          name: "Retention",
+          body: "Closed catalogs remain visible for audit.",
+        },
+      ],
+    });
+    expect(spec.documentation.map(({ location }) => location.line)).toEqual([12, 22, 32]);
   });
 });

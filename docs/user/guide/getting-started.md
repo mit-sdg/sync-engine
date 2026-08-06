@@ -86,8 +86,9 @@ bunx sync-engine artifacts check
 
 `src/concepts/noting/spec.md` is the authored specification. It states the
 concept's purpose and principle, declares action signatures and refusal
-branches, and declares query cardinality. Its optional State section is reader
-notation. [Concept specification
+branches, and declares query cardinality. Indented query bodies document
+reader-facing behavior beside each signature; implementation tests enforce
+those claims. Its optional State section is reader notation. [Concept specification
 format](../reference/concept-specification.md) defines exactly which parts are parsed and
 checked.
 
@@ -174,6 +175,11 @@ the HTTP client; it does not expose richer in-process values.
 error contract. Both files are derived and should remain in source control.
 Change the source declaration, run `bun run generate`, and review the resulting
 diff; do not edit generated files directly.
+
+The read-back keeps Noting's authored signatures, descriptions, refusal
+messages, Types, and extension sections beside the assembled composition. It
+separates registration checks and evaluated-read cardinality checks from type,
+result, and behavior prose that the engine does not execute.
 
 Generated TypeScript checks typed callers. Gateway admission only checks the
 route, an outer object, and required-key presence. It does not validate

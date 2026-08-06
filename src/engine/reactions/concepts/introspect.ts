@@ -104,6 +104,7 @@ export function inventoryOf(concept: object): ConceptInventoryIR {
   const principle = metadata?.principle ?? authored?.principle;
   if (typeof purpose === "string") inventory.purpose = purpose;
   if (typeof principle === "string") inventory.principle = principle;
+  if (metadata?.specification !== undefined) inventory.specification = metadata.specification;
 
   const prototype = Object.getPrototypeOf(concept) as object | null;
   const protocol = metadata?.[CONCEPT_PROTOCOL] ?? conceptProtocolOf(prototype ?? concept);

@@ -97,7 +97,7 @@ export interface ConceptRegistration<
   F extends Record<string, FloorFactory<C>> = Record<never, never>,
 > {
   class: C;
-  /** Markdown containing the concept's parsed registration contract and human prose. */
+  /** Markdown containing the concept's parsed authored contract. */
   spec: string;
   /** The Error class that signals each refusal code the specification declares. */
   refusals?: Readonly<Record<string, ErrorConstructor>>;
@@ -111,7 +111,7 @@ export type RegisteredConcept<
   F extends Record<string, FloorFactory<C>> = Record<never, never>,
 > = ConceptRegistration<C, F> & {
   readonly [RegistrationBrand]: true;
-  /** The machine-readable contract extracted from the registration's specification. */
+  /** The machine-readable authored contract extracted from the registration's specification. */
   readonly specification: ConceptSpec;
 };
 
@@ -251,6 +251,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     principle?: string;
     queries?: QueryPromises;
     refusals?: RefusalContracts;
+    specification?: ConceptSpec;
   };
 };
 type VocabularyOf<
@@ -359,6 +360,7 @@ export function conceptSet<
       principle,
       ...(queries.length === 0 ? {} : { queries: promises }),
       ...(Object.keys(refusals).length === 0 ? {} : { refusals }),
+      specification: registration.specification,
     });
   }
   const declared = vocabulary({

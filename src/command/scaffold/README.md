@@ -25,6 +25,15 @@ schema semantics, comparison with class fields or storage, or role in
 generated artifacts or endpoint validators. Establish its properties in
 principle, implementation, and backend constraint tests.
 
+Indented query bodies describe reader-facing behavior beside the signature.
+They are not registration data; establish ordering, missing-input behavior, and
+other query claims in implementation tests.
+
+Generated read-back retains structured signatures, action and query bodies,
+refusal messages, Types, and other second-level documentation sections. It
+distinguishes registration checks and evaluated-read cardinality checks from
+descriptive prose.
+
 Use these commands to isolate a failed check:
 
 ```sh

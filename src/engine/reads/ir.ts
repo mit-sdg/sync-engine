@@ -300,6 +300,99 @@ export interface AppIR {
   unlowered: UnloweredIR[];
 }
 
+/** A one-based position in an authored concept specification. */
+export interface SpecificationLocationIR {
+  line: number;
+  column: number;
+}
+
+/** A specification type expression, independent of an implementation language. */
+export type SpecificationTypeIR =
+  | {
+      kind: "named";
+      name: string;
+      arguments: readonly SpecificationTypeIR[];
+      location: SpecificationLocationIR;
+    }
+  | {
+      kind: "union";
+      members: readonly SpecificationTypeIR[];
+      location: SpecificationLocationIR;
+    }
+  | { kind: "null"; location: SpecificationLocationIR }
+  | { kind: "undefined"; location: SpecificationLocationIR };
+
+/** One named field in a specification input or inline result row. */
+export interface SpecificationFieldIR {
+  name: string;
+  optional: boolean;
+  type: SpecificationTypeIR;
+  location: SpecificationLocationIR;
+}
+
+/** An inline result row or a result type expression. */
+export type SpecificationResultIR =
+  | {
+      kind: "fields";
+      fields: readonly SpecificationFieldIR[];
+      location: SpecificationLocationIR;
+    }
+  | {
+      kind: "type";
+      type: SpecificationTypeIR;
+      location: SpecificationLocationIR;
+    };
+
+/** One authored refusal branch and its normative decoded sentence. */
+export interface SpecificationRefusalIR {
+  code: string;
+  message: string;
+  location: SpecificationLocationIR;
+}
+
+/** One authored action declaration. */
+export interface SpecificationActionIR {
+  name: string;
+  /** Compatibility projection used by registration and source checking. */
+  inputs: readonly string[];
+  parameters: readonly SpecificationFieldIR[];
+  result: SpecificationResultIR;
+  body: string;
+  refusals: readonly SpecificationRefusalIR[];
+  location: SpecificationLocationIR;
+}
+
+/** One authored query declaration. */
+export interface SpecificationQueryIR {
+  name: string;
+  /** Compatibility projection used by registration and source checking. */
+  inputs: readonly string[];
+  parameters: readonly SpecificationFieldIR[];
+  result: SpecificationResultIR;
+  body: string;
+  promise: "one" | "optional" | "many";
+  location: SpecificationLocationIR;
+}
+
+/** A reader-facing Types or extension section, retained in authored order. */
+export interface SpecificationDocumentationIR {
+  kind: "types" | "extension";
+  name: string;
+  body: string;
+  location: SpecificationLocationIR;
+}
+
+/** The JSON-safe authored contract parsed from one concept specification; State is excluded. */
+export interface ConceptSpecificationIR {
+  format: "sync-engine.concept-specification";
+  version: 1;
+  purpose: string;
+  principle: string;
+  actions: readonly SpecificationActionIR[];
+  queries: readonly SpecificationQueryIR[];
+  documentation: readonly SpecificationDocumentationIR[];
+}
+
 /** One action as the inventory reports it: its name, observed input roles, declared refusals. */
 interface ActionInventoryIR {
   name: string;
@@ -327,4 +420,6 @@ export interface ConceptInventoryIR {
   principle?: string;
   actions: ActionInventoryIR[];
   queries: QueryInventoryIR[];
+  /** Parsed authored contract; absent when the vocabulary declaration supplied no specification. */
+  specification?: ConceptSpecificationIR;
 }

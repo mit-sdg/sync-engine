@@ -259,10 +259,11 @@ interface VocabularyDeclaration<
  * each code, so a registration derives those separately.
  */
 function specifiedContracts(spec: string): ConceptMetadata {
-  const { purpose, principle, queries } = parseSpec(spec);
+  const specification = parseSpec(spec);
+  const { purpose, principle, queries } = specification;
   const promises: Record<string, QueryPromise> = {};
   for (const query of queries) setOwn(promises, query.name, query.promise);
-  return { purpose, principle, queries: promises };
+  return { purpose, principle, queries: promises, specification };
 }
 
 function validateConceptMetadata(
