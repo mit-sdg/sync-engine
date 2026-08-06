@@ -150,19 +150,34 @@ import relative to the registry. The target file must directly declare the
 class. The checker compares direct, non-static, non-TypeScript-`private` methods
 with parsed action/query names.
 
-For inputs, the checker supports no parameter; one untyped object-destructured
-parameter without unsupported nested or rest bindings; one inline object type
-containing identifier-named properties; `Record<..., never>`; or one direct
-same-file alias to a supported typed form. Unsupported syntax fails closed.
-Interfaces, imports, qualified types, alias chains, intersections, unions,
-mapped or utility types, multiple parameters, and plain untyped parameters are
-not resolved.
+`checkerFor` loads the nearest `tsconfig.json`, preserving compiler options,
+module resolution, paths, and project references. Config-included concepts share
+a cached Program; an excluded concept source is added explicitly. Without a
+config, one NodeNext Program starts from the class source. Registry-to-class
+discovery remains syntactic and direct, but parameter type imports and
+re-exports use normal TypeScript resolution.
 
-The checker does not traverse base classes, re-exports, or general TypeScript
-module resolution. Runtime registration can therefore accept an inherited
-member that the source checker rejects. `scripts/check-specs.ts` checks
-`examples` and `tests/package/application`; the installed command defaults to
-`src/concepts`. The repository wrapper does not check the scaffold template.
+For inputs, the checker supports no parameter, one flat untyped destructuring,
+or one typed parameter whose semantic type resolves to a finite object key set.
+The TypeChecker naturally resolves local and imported aliases, interfaces and
+extension, qualified names, re-exports, utility and equivalent mapped types, and
+finite records. Resolution distributes unions and intersections as key-set
+alternatives. An intersection combines each possible set; a union is accepted
+only when every final alternative has the same keys.
+
+Resolution is cycle-safe and bounded to 32 operations and 64 alternatives. It
+fails closed for differing alternatives, open index signatures, unresolved or
+generic mapped shapes, `any`, `unknown`, primitives, arrays, callables, and
+invalid parameter lists. `Record<string, never>` contributes no keys, while
+`Record<"known", never>` contributes its finite key. Diagnostics retain the
+parameter type, first unsupported operation, declaration location, relevant
+TypeScript diagnostic, and differing key sets.
+
+The checker does not traverse base classes. Runtime registration can therefore
+accept an inherited member that the source checker rejects.
+`scripts/check-specs.ts` checks `examples` and `tests/package/application`; the
+installed command defaults to `src/concepts`. The repository wrapper does not
+check the scaffold template.
 
 ### Runtime and tooling
 
@@ -217,8 +232,8 @@ them.
 | Current behavior                                        | Consequence                                         |
 | ------------------------------------------------------- | --------------------------------------------------- |
 | Named specification types are not resolved              | Parsed references do not prove a declaration exists |
-| Runtime role recovery reads function text               | Some erased parameter forms skip input comparison   |
-| Registration sees inheritance; source checking does not | The two checks can disagree                         |
+| Runtime role recovery reads function text               | Runtime registration can skip an erased comparison  |
+| Registration sees inheritance; source checking does not | The two checks can disagree on inherited members    |
 | Direct query roots bypass `queryRows`                   | Cardinality enforcement depends on the call path    |
 
 ## Verification ownership
@@ -236,11 +251,10 @@ form; the current tests do not exhaust the gaps above.
 
 ## Extension directions
 
-| Direction                                            | Enables                                                             | Does not establish                              | Main decision or cost                                                          |
-| ---------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| Make direct-query cardinality consistent             | One promise rule across direct and evaluated reads                  | Row-field validation                            | Failure timing changes and must account for caching, admission, and row limits |
-| Use a TypeScript program in the source checker       | Resolve inheritance, imports, interfaces, aliases, and richer types | Behavioral verification                         | Own tsconfig selection, module resolution, diagnostics, and performance        |
-| Add a backend-neutral state descriptor when required | Let participating adapters validate shared logical constraints      | Automatic persistence or transaction guarantees | Define adapter capabilities, migrations, and unsupported constraints           |
+| Direction                                            | Enables                                                        | Does not establish                              | Main decision or cost                                                          |
+| ---------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| Make direct-query cardinality consistent             | One promise rule across direct and evaluated reads             | Row-field validation                            | Failure timing changes and must account for caching, admission, and row limits |
+| Add a backend-neutral state descriptor when required | Let participating adapters validate shared logical constraints | Automatic persistence or transaction guarantees | Define adapter capabilities, migrations, and unsupported constraints           |
 
 Do not turn natural-language behavior or parsed result declarations into
 runtime guarantees implicitly. Any future enforcement or State descriptor needs

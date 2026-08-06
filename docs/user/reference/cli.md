@@ -59,11 +59,14 @@ sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
 is `src/concepts`. Each discovered concept directory must contain `registry.ts`,
 and that registry must call `registerConcept` with a class imported by name.
 
-The command parses the specification and class source, then compares action and
-query names and supported input parameter forms. It does not read State notation
-as grammar or compare it with class fields or storage. [Concept specification
-format](concept-specification.md) defines the accepted machine grammar and
-uninterpreted boundary.
+The command parses the specification, locates the registered class, and compares
+action and query names. It resolves each typed parameter's finite top-level key
+set through the nearest TypeScript project, including imported interfaces,
+aliases, re-exports, intersections, utilities, and path mappings. Ambiguous or
+dynamic shapes fail closed with their type operation and source location. The
+command does not read State notation as grammar or compare it with class fields
+or storage. [Concept specification format](concept-specification.md) defines the
+accepted machine grammar, supported source shapes, and uninterpreted boundary.
 
 `--concepts` consumes one or more paths, ending at the next option. Each of
 `--concepts`, `--config`, and `--fail-on-warnings` may appear at most once.

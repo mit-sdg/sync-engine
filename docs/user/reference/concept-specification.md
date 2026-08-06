@@ -237,32 +237,40 @@ input-name comparison.
 
 `sync-engine check` reads `spec.md`, `registry.ts`, and the registered class's
 TypeScript source. `registry.ts` must use a named import whose module specifier
-resolves directly to the source file that declares the class; the checker does
-not follow re-export chains or perform general TypeScript module resolution. It
-compares methods declared directly in that class with the action and query
-names and fails closed when it cannot interpret a method's parameter syntax. It
-does not traverse a base class, so a specification relying on an inherited
-method can pass `registerConcept` while failing the source check.
+resolves directly to the source file that declares the class; class discovery
+does not follow re-export chains. The checker compares methods declared directly
+in that class with the action and query names. It does not traverse a base class,
+so a specification relying on an inherited method can pass `registerConcept`
+while failing the source check.
 
 Supported method parameter forms are:
 
 - no parameter;
 - one untyped object-destructured parameter with identifier keys and no rest;
-- one parameter typed with an inline object type containing only
-  identifier-named property signatures;
-- one parameter typed as `Record<..., never>`;
-- one parameter using a direct same-file type alias to either supported typed
-  form.
+- one parameter whose TypeScript-resolved type has a finite top-level object
+  shape.
 
-Unsupported forms include interfaces, imported or qualified types, alias
-chains, intersections, unions, mapped and utility types, multiple parameters,
-plain untyped parameters, and nested or rest destructuring. The check reports
-unsupported syntax and requires explicit agreement that it can verify.
+The semantic form includes local and imported aliases, interfaces and interface
+extension, qualified names, re-exports, finite alias chains and intersections,
+`Readonly`, `Pick`, `Omit`, equivalent finite mapped types, and finite
+`Record` keys. A union is accepted only when every alternative exposes the same
+input keys. Optional and readonly properties still contribute their names.
+
+The check fails closed for differing union or distributed-intersection keys,
+open index signatures, unresolved or cyclic aliases, unresolved mapped or
+generic shapes, `any`, `unknown`, primitives, arrays, callables, multiple
+parameters, plain untyped parameters, and nested or rest destructuring. A
+failure names the method and parameter type, first unsupported operation,
+declaration location, and alternative key sets when applicable.
+
+The checker loads the nearest `tsconfig.json`, uses its module resolution and
+path mappings, and adds the concept source when the config excludes it. Without
+a config it uses NodeNext resolution for the concept source and its imports.
 
 The source checker skips methods marked TypeScript `private`, but runtime
 registration can still see those prototype methods and may reject them as
-unspecified actions. TypeScript `protected` prototype methods are visible to both
-checks. Neither modifier hides a runtime helper; use ECMAScript `#private`
+unspecified actions. TypeScript `protected` prototype methods are visible to
+both checks. Neither modifier hides a runtime helper; use ECMAScript `#private`
 methods or module-level functions so both checks observe the same members.
 
 Neither `registerConcept` nor `sync-engine check` validates action output
