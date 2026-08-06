@@ -557,6 +557,10 @@ export function traceApplicationImpact(
       issues.set(issueKey(issue), issue);
       continue;
     }
+    if (reached.size >= maxNodes) {
+      reportLimit();
+      continue;
+    }
     const entry = { ref: known, depth: 0, path: [] } as const;
     reached.set(key, entry);
     queue.push(entry);

@@ -4405,6 +4405,15 @@ export declare function compute<Fn extends ComputationFn, const Input extends In
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
 export {};
 
+=== dist/engine/tooling/application-manifest-format.d.ts ===
+import type { ApplicationManifestV4 } from "./manifest.ts";
+/** Recompute the canonical digest over every manifest field except `digest`. */
+export declare function applicationManifestDigest(manifest: ApplicationManifestV4): string;
+/** Validate untrusted data as one complete canonical version-4 application manifest. */
+export declare function validateApplicationManifest(value: unknown): asserts value is ApplicationManifestV4;
+/** Parse and validate canonical version-4 application-manifest JSON without executing code. */
+export declare function parseApplicationManifest(source: string): ApplicationManifestV4;
+
 === dist/engine/tooling/artifact-plan.d.ts ===
 import type { ApplicationManifestV4 } from "./manifest.ts";
 import type { PlannedWireProjection } from "./wire-projection.ts";
@@ -4827,6 +4836,7 @@ export type { ObservedOccurrence } from "../engine/tooling/inspection.ts";
 export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagnostics.ts";
 export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
 export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
+export { applicationManifestDigest, parseApplicationManifest, validateApplicationManifest, } from "../engine/tooling/application-manifest-format.ts";
 export type { ApplicationManifestV4, ManifestEndpointV4 } from "../engine/tooling/manifest.ts";
 export { parseSpec as parseConceptSpecification } from "../engine/reactions/concepts/concept-spec.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";

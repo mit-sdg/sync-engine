@@ -1,12 +1,21 @@
-import type { ApplicationManifestV4 } from "@mit-sdg/sync-engine/tooling";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  applicationManifestDigest,
+  parseConceptSpecification,
+  type ApplicationManifestV4,
+} from "@mit-sdg/sync-engine/tooling";
 import {
   contextForImpact,
+  designRefsForSourceRange,
   indexApplication,
   indexApplicationSources,
+  loadApplicationProject,
   traceApplicationImpact,
   type DesignRef,
 } from "@mit-sdg/sync-engine-analysis/tooling";
-import { describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test } from "vite-plus/test";
 import ts from "typescript";
 
 function fixture(): ApplicationManifestV4 {
@@ -244,12 +253,141 @@ function programFor(files: Readonly<Record<string, string>>): ts.Program {
       const source = normalized.get(path);
       return source === undefined
         ? base.getSourceFile(path, languageVersion)
-        : ts.createSourceFile(path, source, languageVersion, true, ts.ScriptKind.TS);
+        : ts.createSourceFile(path, source, languageVersion, false, ts.ScriptKind.TS);
     },
     getCurrentDirectory: () => "/project",
     writeFile: () => undefined,
   };
   return ts.createProgram({ rootNames: [...normalized.keys()], options, host });
+}
+
+const temporaryProjects: string[] = [];
+
+afterEach(() => {
+  for (const path of temporaryProjects.splice(0)) rmSync(path, { recursive: true, force: true });
+});
+
+function applicationProject(): string {
+  const root = mkdtempSync(join(tmpdir(), "sync-engine-analysis-"));
+  temporaryProjects.push(root);
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "stubs"));
+  writeFileSync(
+    join(root, "tsconfig.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          strict: true,
+          noEmit: true,
+          skipLibCheck: true,
+          types: [],
+          allowImportingTsExtensions: true,
+          baseUrl: ".",
+          paths: {
+            "@mit-sdg/sync-engine/assembly": ["stubs/core.d.ts"],
+            "@mit-sdg/sync-engine/boundary": ["stubs/core.d.ts"],
+            "@mit-sdg/sync-engine/language": ["stubs/core.d.ts"],
+          },
+        },
+        files: ["src/index.ts", "stubs/core.d.ts", "stubs/text.d.ts"],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(root, "stubs/core.d.ts"),
+    `declare module "@mit-sdg/sync-engine/assembly" {
+  export function registerConcept<T>(registration: T): T;
+}
+declare module "@mit-sdg/sync-engine/boundary" {
+  export function endpoint<T>(path: string, declaration: () => T): T;
+}
+declare module "@mit-sdg/sync-engine/language" {
+  export function reaction<T>(declaration: () => T): T;
+  export function view<T>(name: string, declaration: () => T): T;
+  export function former<T>(name: string, declaration: () => T): T;
+}
+`,
+  );
+  writeFileSync(
+    join(root, "stubs/text.d.ts"),
+    `declare module "*.md" { const text: string; export default text; }\n`,
+  );
+  writeFileSync(join(root, "src/selecting.md"), selectingSpec);
+  writeFileSync(
+    join(root, "src/concept.ts"),
+    `import { registerConcept } from "@mit-sdg/sync-engine/assembly";
+import spec from "./selecting.md" with { type: "text" };
+
+export class SelectingConcept {
+  choose({ item }: { item: string }) { return { item }; }
+  _current() { return []; }
+}
+export class DiscussingConcept { open({ subject }: { subject: string }) { return { subject }; } }
+export class AlertingConcept { raise({ subject }: { subject: string }) { return { subject }; } }
+export class UnrelatedConcept { touch() { return {}; } }
+export const selecting = registerConcept({ class: SelectingConcept, spec });
+export const Selecting = new SelectingConcept();
+export const Discussing = new DiscussingConcept();
+export const Alerting = new AlertingConcept();
+`,
+  );
+  writeFileSync(
+    join(root, "src/reactions.ts"),
+    `import { former, reaction as react, view } from "@mit-sdg/sync-engine/language";
+import { Alerting, Discussing, Selecting } from "./concept.ts";
+
+export const Select = react(() => Selecting.choose({ item: "x" }) && Discussing.open({ subject: "x" }));
+export const ObserveCurrent = react(() => Selecting._current() && Alerting.raise({ subject: "x" }));
+export const LocalRepair = react(() => Alerting.raise({ subject: "x" }) && Selecting.choose({ item: "repair" }));
+export const currentSelection = view("current selection", () => Selecting._current());
+export const selectionSummary = former("selection summary", () => Selecting._current());
+`,
+  );
+  writeFileSync(
+    join(root, "src/endpoint.ts"),
+    `import { endpoint } from "@mit-sdg/sync-engine/boundary";
+import { Selecting } from "./concept.ts";
+export const ChooseEndpoint = endpoint("/selections/choose", () => Selecting.choose({ item: "x" }));
+`,
+  );
+  writeFileSync(join(root, "src/diagnostic.ts"), "export const broken: string = 42;\n");
+  writeFileSync(
+    join(root, "src/index.ts"),
+    `export * from "./concept.ts";
+export * from "./reactions.ts";
+export * from "./endpoint.ts";
+import "./diagnostic.ts";
+`,
+  );
+  return root;
+}
+
+function projectManifest(): ApplicationManifestV4 {
+  const manifest = fixture();
+  manifest.application.reactions.push({
+    name: "ChooseEndpoint",
+    when: [],
+    where: [],
+    then: [],
+  });
+  manifest.endpoints = [
+    {
+      name: "ChooseEndpoint",
+      path: "/selections/choose",
+      reactions: ["ChooseEndpoint"],
+      input: { required: ["item"] },
+      validators: { input: false, output: false },
+    },
+  ];
+  manifest.concepts.find(({ name }) => name === "Selecting")!.specification =
+    parseConceptSpecification(selectingSpec);
+  manifest.digest = applicationManifestDigest(manifest);
+  return manifest;
 }
 
 const applicationSource = `import { registerConcept } from "@mit-sdg/sync-engine/assembly";
@@ -381,6 +519,16 @@ describe("application impact analysis", () => {
     const limited = traceApplicationImpact(index, [choose], { maxDepth: 0, maxNodes: 1 });
     expect(limited.affected).toHaveLength(1);
     expect(limited.issues).toContainEqual(expect.objectContaining({ code: "TRACE_LIMIT_REACHED" }));
+
+    const seedLimited = traceApplicationImpact(
+      index,
+      [choose, { kind: "concept", concept: "Selecting" }],
+      { maxNodes: 1 },
+    );
+    expect(seedLimited.affected).toHaveLength(1);
+    expect(seedLimited.issues).toContainEqual(
+      expect.objectContaining({ code: "TRACE_LIMIT_REACHED" }),
+    );
   });
 
   test("maps logical context to bounded, hashed TypeScript and specification slices", () => {
@@ -454,5 +602,167 @@ describe("application impact analysis", () => {
     expect(
       sourceIndex.entries.some(({ ref }) => ref.kind === "reaction" && ref.reaction === "Select"),
     ).toBe(false);
+  });
+
+  test("compares specifications independent of object key insertion order", () => {
+    const manifest = fixture();
+    const parsed = parseConceptSpecification(selectingSpec);
+    const reordered = {
+      documentation: parsed.documentation,
+      queries: parsed.queries,
+      actions: parsed.actions,
+      principle: parsed.principle,
+      purpose: parsed.purpose,
+      version: parsed.version,
+      format: parsed.format,
+    } as typeof parsed;
+    manifest.concepts.find(({ name }) => name === "Selecting")!.specification = reordered;
+    const sourceIndex = indexApplicationSources({
+      manifest,
+      program: programFor({ "app.ts": applicationSource }),
+      projectRoot: "/project",
+      readFile: (path) => (path === "/project/spec.md" ? selectingSpec : undefined),
+    });
+
+    expect(sourceIndex.issues).not.toContainEqual(
+      expect.objectContaining({ code: "SPECIFICATION_MISMATCH" }),
+    );
+  });
+
+  test("diagnoses a registered specification that cannot be read", () => {
+    const sourceIndex = indexApplicationSources({
+      manifest: fixture(),
+      program: programFor({ "app.ts": applicationSource }),
+      projectRoot: "/project",
+      readFile: () => undefined,
+    });
+
+    expect(sourceIndex.issues).toContainEqual(
+      expect.objectContaining({
+        code: "SPECIFICATION_UNREADABLE",
+        ref: { kind: "concept", concept: "Selecting" },
+      }),
+    );
+  });
+
+  test("loads a real TypeScript project into deterministic plain analysis data", () => {
+    const repositoryRoot = applicationProject();
+    const manifest = projectManifest();
+    const options = {
+      repositoryRoot,
+      tsconfigPath: "tsconfig.json",
+      sourceRevision: "revision-1",
+      manifest,
+      manifestSourceRevision: "revision-1",
+      expectedManifestDigest: manifest.digest,
+    } as const;
+    const first = loadApplicationProject(options);
+    const second = loadApplicationProject(options);
+
+    expect(first).toMatchObject({
+      format: "sync-engine.application-project-analysis",
+      version: 1,
+      provenance: {
+        sourceRevision: "revision-1",
+        manifestSourceRevision: "revision-1",
+        manifestDigest: manifest.digest,
+        tsconfigPath: "tsconfig.json",
+        typescriptVersion: ts.version,
+      },
+      applicationIndex: { format: "sync-engine.application-index", version: 1 },
+      sourceIndex: { format: "sync-engine.application-source-index", version: 1 },
+    });
+    expect(first.provenance.files).toEqual(second.provenance.files);
+    expect(first.provenance.sourceDigest).toBe(second.provenance.sourceDigest);
+    expect(first.provenance.sourceDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.provenance.files.every(({ digest }) => /^[a-f0-9]{64}$/.test(digest))).toBe(true);
+    expect(first.provenance.files.map(({ path }) => path)).toEqual(
+      expect.arrayContaining([
+        "src/concept.ts",
+        "src/diagnostic.ts",
+        "src/endpoint.ts",
+        "src/index.ts",
+        "src/reactions.ts",
+        "src/selecting.md",
+        "tsconfig.json",
+      ]),
+    );
+
+    expect(first.diagnostics).toContainEqual(
+      expect.objectContaining({
+        phase: "semantic",
+        category: "error",
+        code: 2322,
+        path: "src/diagnostic.ts",
+        line: 1,
+      }),
+    );
+    expect(JSON.parse(JSON.stringify(first))).toEqual(first);
+
+    const select = first.sourceIndex.entries.find(
+      ({ ref }) => ref.kind === "reaction" && ref.reaction === "Select",
+    );
+    expect(select?.sources[0]?.range.path).toBe("src/reactions.ts");
+    expect(select?.sources[0]?.text).toContain("export const Select = react");
+
+    const endpoint = first.sourceIndex.entries.find(({ ref }) => ref.kind === "endpoint");
+    const endpointSource = endpoint?.sources[0];
+    expect(endpointSource).toBeDefined();
+    expect(
+      designRefsForSourceRange(first.sourceIndex, {
+        path: endpointSource!.range.path,
+        startOffset: endpointSource!.range.start.offset,
+        endOffset: endpointSource!.range.end.offset,
+      }),
+    ).toEqual([
+      {
+        kind: "endpoint",
+        endpoint: "ChooseEndpoint",
+        path: "/selections/choose",
+      },
+      { kind: "reaction", reaction: "ChooseEndpoint" },
+    ]);
+  });
+
+  test("rejects stale provenance, digest expectations, path escape, and changing reads", () => {
+    const repositoryRoot = applicationProject();
+    const manifest = projectManifest();
+    const options = {
+      repositoryRoot,
+      tsconfigPath: "tsconfig.json",
+      sourceRevision: "revision-1",
+      manifest,
+      manifestSourceRevision: "revision-1",
+      expectedManifestDigest: manifest.digest,
+    } as const;
+
+    expect(() =>
+      loadApplicationProject({ ...options, manifestSourceRevision: "revision-0" }),
+    ).toThrow(/sourceRevision.*manifestSourceRevision/);
+    expect(() =>
+      loadApplicationProject({ ...options, expectedManifestDigest: "stale-digest" }),
+    ).toThrow(/expectedManifestDigest.*manifest digest/);
+    expect(() => loadApplicationProject({ ...options, tsconfigPath: "../tsconfig.json" })).toThrow(
+      /tsconfigPath escapes repositoryRoot/,
+    );
+
+    const changingPath = join(repositoryRoot, "src/reactions.ts");
+    let reactionReads = 0;
+    expect(() =>
+      loadApplicationProject({
+        ...options,
+        readFile: (path) => {
+          let text: string;
+          try {
+            text = readFileSync(path, "utf8");
+          } catch {
+            return undefined;
+          }
+          if (path !== changingPath) return text;
+          reactionReads += 1;
+          return reactionReads === 1 ? text : `${text}\n// changed during analysis\n`;
+        },
+      }),
+    ).toThrow(/project file changed during analysis: src\/reactions\.ts/);
   });
 });

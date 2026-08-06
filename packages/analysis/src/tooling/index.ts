@@ -4,7 +4,8 @@ export {
   indexApplication,
   traceApplicationImpact,
 } from "./application-impact.ts";
-export { indexApplicationSources } from "./source-index.ts";
+export { loadApplicationProject } from "./application-project.ts";
+export { designRefsForSourceRange, indexApplicationSources } from "./source-index.ts";
 export type {
   AnalysisIssue,
   AnalysisIssueCode,
@@ -20,6 +21,16 @@ export type {
   ImpactTraceEntry,
   TraceOptions,
 } from "./application-impact.ts";
+export type {
+  ApplicationProjectAnalysis,
+  ApplicationProjectDiagnostic,
+  ApplicationProjectDiagnosticCategory,
+  ApplicationProjectDiagnosticPhase,
+  ApplicationProjectDiagnosticRelatedInformation,
+  ApplicationProjectFile,
+  ApplicationProjectProvenance,
+  LoadApplicationProjectOptions,
+} from "./application-project.ts";
 export type {
   ApplicationSourceIndex,
   SourceAnchor,

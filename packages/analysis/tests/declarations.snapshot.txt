@@ -116,10 +116,75 @@ export declare function traceApplicationImpact(index: ApplicationIndex, seeds: r
 /** Select complete manifest facts needed to understand one impact trace. */
 export declare function contextForImpact(manifest: ApplicationManifestV4, index: ApplicationIndex, trace: ImpactTrace, sourceIndex?: ApplicationSourceIndex): ContextBundle;
 
+=== packages/analysis/dist/tooling/application-project.d.ts ===
+import { type ApplicationManifestV4 } from "@mit-sdg/sync-engine/tooling";
+import { type ApplicationIndex } from "./application-impact.ts";
+import { type ApplicationSourceIndex } from "./source-index.ts";
+export interface LoadApplicationProjectOptions {
+    readonly repositoryRoot: string;
+    readonly tsconfigPath: string;
+    readonly sourceRevision: string;
+    readonly manifest: ApplicationManifestV4;
+    readonly manifestSourceRevision: string;
+    readonly expectedManifestDigest: string;
+    readonly readFile?: (absolutePath: string) => string | undefined;
+}
+export interface ApplicationProjectFile {
+    /** POSIX path relative to the resolved repository root. */
+    readonly path: string;
+    /** SHA-256 of the exact UTF-8 text observed by analysis. */
+    readonly digest: string;
+}
+export type ApplicationProjectDiagnosticPhase = "config" | "options" | "global" | "syntactic" | "semantic";
+export type ApplicationProjectDiagnosticCategory = "warning" | "error" | "suggestion" | "message";
+export interface ApplicationProjectDiagnosticRelatedInformation {
+    readonly category: ApplicationProjectDiagnosticCategory;
+    readonly code: number;
+    readonly message: string;
+    readonly source?: string;
+    readonly path?: string;
+    readonly startOffset?: number;
+    readonly endOffset?: number;
+    readonly line?: number;
+    readonly column?: number;
+}
+/** Plain-data TypeScript diagnostic with one stable collection phase. */
+export interface ApplicationProjectDiagnostic extends ApplicationProjectDiagnosticRelatedInformation {
+    readonly phase: ApplicationProjectDiagnosticPhase;
+    readonly relatedInformation?: readonly ApplicationProjectDiagnosticRelatedInformation[];
+}
+export interface ApplicationProjectProvenance {
+    readonly sourceRevision: string;
+    readonly manifestSourceRevision: string;
+    readonly manifestDigest: string;
+    /** SHA-256 over the ordered repository-relative file digest records. */
+    readonly sourceDigest: string;
+    readonly tsconfigPath: string;
+    readonly typescriptVersion: string;
+    readonly projectReferences: readonly string[];
+    readonly files: readonly ApplicationProjectFile[];
+}
+/** One static, checkout-bound analysis without an executable project value. */
+export interface ApplicationProjectAnalysis {
+    readonly format: "sync-engine.application-project-analysis";
+    readonly version: 1;
+    readonly provenance: ApplicationProjectProvenance;
+    readonly diagnostics: readonly ApplicationProjectDiagnostic[];
+    readonly applicationIndex: ApplicationIndex;
+    readonly sourceIndex: ApplicationSourceIndex;
+}
+/**
+ * Load and analyze a TypeScript project as source data only. This never imports
+ * the project or interprets a manifest-producing configuration module.
+ */
+export declare function loadApplicationProject(options: LoadApplicationProjectOptions): ApplicationProjectAnalysis;
+
 === packages/analysis/dist/tooling/index.d.ts ===
 export { contextForImpact, designRefKey, indexApplication, traceApplicationImpact, } from "./application-impact.ts";
-export { indexApplicationSources } from "./source-index.ts";
+export { loadApplicationProject } from "./application-project.ts";
+export { designRefsForSourceRange, indexApplicationSources } from "./source-index.ts";
 export type { AnalysisIssue, AnalysisIssueCode, ApplicationIndex, ContextBundle, ContextReaction, ContextSelection, DesignRef, ImpactCertainty, ImpactEdge, ImpactRelation, ImpactTrace, ImpactTraceEntry, TraceOptions, } from "./application-impact.ts";
+export type { ApplicationProjectAnalysis, ApplicationProjectDiagnostic, ApplicationProjectDiagnosticCategory, ApplicationProjectDiagnosticPhase, ApplicationProjectDiagnosticRelatedInformation, ApplicationProjectFile, ApplicationProjectProvenance, LoadApplicationProjectOptions, } from "./application-project.ts";
 export type { ApplicationSourceIndex, SourceAnchor, SourceIndexEntry, SourceIndexIssue, SourceIndexIssueCode, SourcePosition, SourceRange, SourceResolution, SourceRole, } from "./source-index.ts";
 
 === packages/analysis/dist/tooling/source-index.d.ts ===
@@ -156,7 +221,7 @@ export interface SourceIndexEntry {
     readonly ref: DesignRef;
     readonly sources: readonly SourceAnchor[];
 }
-export type SourceIndexIssueCode = "AMBIGUOUS_DESIGN_SOURCE" | "UNRESOLVED_DESIGN_SOURCE" | "SOURCE_OUTSIDE_PROJECT" | "SPECIFICATION_MISMATCH";
+export type SourceIndexIssueCode = "AMBIGUOUS_DESIGN_SOURCE" | "UNRESOLVED_DESIGN_SOURCE" | "SOURCE_OUTSIDE_PROJECT" | "SPECIFICATION_UNREADABLE" | "SPECIFICATION_MISMATCH";
 export interface SourceIndexIssue {
     readonly code: SourceIndexIssueCode;
     readonly message: string;
@@ -172,6 +237,12 @@ export interface ApplicationSourceIndex {
     readonly entries: readonly SourceIndexEntry[];
     readonly issues: readonly SourceIndexIssue[];
 }
+/** Return every design reference with a source anchor overlapping one path range. */
+export declare function designRefsForSourceRange(sourceIndex: ApplicationSourceIndex, query: {
+    readonly path: string;
+    readonly startOffset?: number;
+    readonly endOffset?: number;
+}): DesignRef[];
 /** Attribute one manifest's logical design references to bounded source slices. */
 export declare function indexApplicationSources(options: {
     readonly manifest: ApplicationManifestV4;

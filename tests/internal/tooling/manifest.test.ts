@@ -13,8 +13,11 @@ import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import {
   applicationDiagnostics,
   applicationManifest,
+  applicationManifestDigest,
   diagnosticsFail,
+  parseApplicationManifest,
   renderApplicationManifest,
+  validateApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
 import type { AppIR, ActionTriggerIR } from "@engine/reads/ir";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
@@ -604,6 +607,37 @@ describe("application manifest", () => {
     expect(JSON.parse(forward)).toEqual(JSON.parse(reverse));
     expect(forward).toBe(reverse);
     expect(forward).toMatch(/"defaults": \{\n\s+"a": 2,\n\s+"z": 1/);
+  });
+
+  test("validates, parses, and recomputes the format-owned canonical digest", () => {
+    const manifest = applicationManifest(application());
+    expect(applicationManifestDigest(manifest)).toBe(manifest.digest);
+    expect(parseApplicationManifest(renderApplicationManifest(manifest))).toEqual(manifest);
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+
+    const stale = { ...manifest, digest: "fnv1a64-0000000000000000" };
+    expect(applicationManifestDigest(stale)).toBe(manifest.digest);
+    expect(() => validateApplicationManifest(stale)).toThrow(/\$\.digest.*canonical digest/);
+  });
+
+  test("fails closed on malformed manifest JSON with useful structural paths", () => {
+    const manifest = applicationManifest(application());
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        application: { ...manifest.application, reactions: "not-an-array" },
+      }),
+    ).toThrow("$.application.reactions");
+    expect(() => validateApplicationManifest({ ...manifest, unexpected: true })).toThrow(
+      "$.unexpected",
+    );
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        wire: { ...manifest.wire, hidden: undefined },
+      }),
+    ).toThrow("$.wire.hidden");
+    expect(() => parseApplicationManifest("{")).toThrow(/manifest JSON/);
   });
 
   test("keeps prototype-named defaults in canonical endpoint and contract design data", () => {

@@ -49,6 +49,7 @@ export type SourceIndexIssueCode =
   | "AMBIGUOUS_DESIGN_SOURCE"
   | "UNRESOLVED_DESIGN_SOURCE"
   | "SOURCE_OUTSIDE_PROJECT"
+  | "SPECIFICATION_UNREADABLE"
   | "SPECIFICATION_MISMATCH";
 
 export interface SourceIndexIssue {
@@ -248,31 +249,32 @@ function calledApi(call: ts.CallExpression, apis: ImportedApis): string | undefi
   return undefined;
 }
 
-function enclosingVariable(node: ts.Node): ts.VariableDeclaration | undefined {
-  let current: ts.Node | undefined = node;
-  while (current !== undefined) {
+function enclosingVariable(ancestors: readonly ts.Node[]): ts.VariableDeclaration | undefined {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const current = ancestors[index];
     if (ts.isVariableDeclaration(current)) return current;
     if (ts.isSourceFile(current) || ts.isFunctionLike(current)) return undefined;
-    current = current.parent;
   }
   return undefined;
 }
 
-function enclosingFunction(node: ts.Node): ts.FunctionLikeDeclaration | undefined {
-  let current = node.parent;
-  while (current !== undefined && !ts.isSourceFile(current)) {
+function enclosingFunction(ancestors: readonly ts.Node[]): ts.FunctionLikeDeclaration | undefined {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const current = ancestors[index];
+    if (ts.isSourceFile(current)) return undefined;
     if (ts.isFunctionDeclaration(current) || ts.isMethodDeclaration(current)) return current;
-    current = current.parent;
   }
   return undefined;
 }
 
-function declarationAnchor(call: ts.CallExpression): ts.Node {
-  const factory = enclosingFunction(call);
+function declarationAnchor(call: ts.CallExpression, ancestors: readonly ts.Node[]): ts.Node {
+  const factory = enclosingFunction(ancestors);
   if (factory !== undefined) return factory;
-  const variable = enclosingVariable(call);
-  if (variable?.parent?.parent !== undefined && ts.isVariableStatement(variable.parent.parent)) {
-    return variable.parent.parent;
+  const variable = enclosingVariable(ancestors);
+  if (variable !== undefined) {
+    const index = ancestors.lastIndexOf(variable);
+    const statement = ancestors[index - 2];
+    if (statement !== undefined && ts.isVariableStatement(statement)) return statement;
   }
   return variable ?? call;
 }
@@ -348,6 +350,7 @@ function propertyName(property: ts.ObjectLiteralElementLike): string | undefined
 function registrationOf(
   call: ts.CallExpression,
   source: ts.SourceFile,
+  node: ts.Node,
 ): RegistrationCandidate | undefined {
   const [argument] = call.arguments;
   if (!ts.isObjectLiteralExpression(argument)) return undefined;
@@ -381,14 +384,91 @@ function registrationOf(
       specPath = resolve(source.fileName, "..", statement.moduleSpecifier.text);
     }
   }
-  return { className, source, node: declarationAnchor(call), specPath };
+  return { className, source, node, specPath };
+}
+
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => sameJsonValue(value, right[index]))
+    );
+  }
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
+    return false;
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) => Object.hasOwn(rightRecord, key) && sameJsonValue(leftRecord[key], rightRecord[key]),
+    )
+  );
 }
 
 function sameSpecification(
   left: ConceptSpecificationIR | undefined,
   right: ConceptSpecificationIR,
 ): boolean {
-  return left === undefined || JSON.stringify(left) === JSON.stringify(right);
+  return left === undefined || sameJsonValue(left, right);
+}
+
+function optionalOffset(value: number | undefined, name: string): number | undefined {
+  if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+    throw new Error(`${name} must be a non-negative safe integer`);
+  }
+  return value;
+}
+
+/** Return every design reference with a source anchor overlapping one path range. */
+export function designRefsForSourceRange(
+  sourceIndex: ApplicationSourceIndex,
+  query: {
+    readonly path: string;
+    readonly startOffset?: number;
+    readonly endOffset?: number;
+  },
+): DesignRef[] {
+  if (typeof query.path !== "string" || query.path === "") {
+    throw new Error("path must be a non-empty project-relative source path");
+  }
+  if (
+    isAbsolute(query.path) ||
+    query.path === ".." ||
+    query.path.startsWith("../") ||
+    query.path.includes("/../")
+  ) {
+    throw new Error("path must not escape the source index project root");
+  }
+  const start = optionalOffset(query.startOffset, "startOffset");
+  const end = optionalOffset(query.endOffset, "endOffset");
+  if (start !== undefined && end !== undefined && end < start) {
+    throw new Error("endOffset must be greater than or equal to startOffset");
+  }
+  const point = start !== undefined && end === start;
+  const matches = new Map<string, DesignRef>();
+  for (const entry of sourceIndex.entries) {
+    const matched = entry.sources.some((source) => {
+      if (source.range.path !== query.path) return false;
+      if (point) {
+        return source.range.start.offset <= start && start < source.range.end.offset;
+      }
+      return (
+        (end === undefined || source.range.start.offset < end) &&
+        (start === undefined || source.range.end.offset > start)
+      );
+    });
+    if (matched) matches.set(designRefKey(entry.ref), entry.ref);
+  }
+  return [...matches.entries()]
+    .sort(([left], [right]) => ordinal(left, right))
+    .map(([, ref]) => ref);
 }
 
 /** Attribute one manifest's logical design references to bounded source slices. */
@@ -442,6 +522,7 @@ export function indexApplicationSources(options: {
 
   for (const source of sourceFiles) {
     const apis = importedApis(source);
+    const ancestors: ts.Node[] = [];
     const visit = (node: ts.Node): void => {
       if (ts.isClassDeclaration(node) && node.name !== undefined) {
         const candidates = classes.get(node.name.text) ?? [];
@@ -451,7 +532,7 @@ export function indexApplicationSources(options: {
       if (ts.isCallExpression(node)) {
         const api = calledApi(node, apis);
         if (api !== undefined && DECLARATION_APIS.has(api as DeclarationKind)) {
-          const variable = enclosingVariable(node);
+          const variable = enclosingVariable(ancestors);
           const literal = literalArgument(node);
           declarations.push({
             kind: api as DeclarationKind,
@@ -460,16 +541,18 @@ export function indexApplicationSources(options: {
               : {}),
             ...(literal === undefined ? {} : { literal }),
             source,
-            node: declarationAnchor(node),
+            node: declarationAnchor(node, ancestors),
             footprint: footprintOf(node),
           });
         }
         if (api === "registerConcept") {
-          const registration = registrationOf(node, source);
+          const registration = registrationOf(node, source, declarationAnchor(node, ancestors));
           if (registration !== undefined) registrations.push(registration);
         }
       }
+      ancestors.push(node);
       ts.forEachChild(node, visit);
+      ancestors.pop();
     };
     visit(source);
   }
@@ -573,14 +656,22 @@ export function indexApplicationSources(options: {
       );
       if (registration.specPath !== undefined) {
         const relativeSpec = sourcePath(projectRoot, registration.specPath);
-        const specificationText = readFile(registration.specPath);
         if (relativeSpec === undefined) {
           report({
             code: "SOURCE_OUTSIDE_PROJECT",
             ref,
             message: `The specification for ${concept.name} is outside the supplied project root.`,
           });
-        } else if (specificationText !== undefined) {
+        } else {
+          const specificationText = readFile(registration.specPath);
+          if (specificationText === undefined) {
+            report({
+              code: "SPECIFICATION_UNREADABLE",
+              ref,
+              message: `The specification for ${concept.name} could not be read at ${relativeSpec}.`,
+            });
+            continue;
+          }
           add(ref, anchorForSpecification(relativeSpec, specificationText));
           try {
             const parsed = parseConceptSpecification(specificationText);

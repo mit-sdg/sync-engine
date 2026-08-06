@@ -1,0 +1,896 @@
+import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
+import type { WireType } from "@engine/boundary/wire/wire-types";
+import type {
+  AppIR,
+  ConceptSpecificationIR,
+  FormerNodeIR,
+  PatternIR,
+  ReactionIR,
+  TriggerIR,
+  UnloweredIR,
+  ViewOpIR,
+  WhereOpIR,
+} from "@engine/reads/ir";
+import { canonicalDigest, canonicalValue } from "@engine/utils/canonical-json";
+import { setOwn } from "@engine/utils/own-property";
+import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
+import type { ApplicationDiagnostic } from "./diagnostics.ts";
+import type { ApplicationManifestV4, ManifestEndpointV4 } from "./manifest.ts";
+
+type DataRecord = Record<string, unknown>;
+
+const ACTION_POSTURES = ["requested", "returned", "refused", "faulted"] as const;
+const CHANNEL_POSTURES = ["returned", "refused", "faulted"] as const;
+const DIAGNOSTIC_SEVERITIES = ["info", "warning", "error"] as const;
+const DIAGNOSTIC_CODES = [
+  "UNLOWERED_REACTION",
+  "UNLOWERED_ENDPOINT",
+  "OPAQUE_READ_OPERATION",
+  "OPAQUE_PATTERN",
+  "UNRESOLVED_WIRE_LEAF",
+  "ENDPOINT_PATH_OVERLAP",
+  "MISSING_ENDPOINT_FALLBACK",
+  "ORDER_SENSITIVE_FORMER",
+] as const;
+
+function fail(path: string, message: string): never {
+  throw new TypeError(`Invalid application manifest at ${path}: ${message}.`);
+}
+
+function propertyPath(path: string, key: string): string {
+  return /^[A-Za-z_$][\w$]*$/u.test(key) ? `${path}.${key}` : `${path}[${JSON.stringify(key)}]`;
+}
+
+function assertJsonValue(value: unknown, path: string, seen: WeakSet<object>): void {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) fail(path, "expected a finite JSON number");
+    return;
+  }
+  if (typeof value !== "object") fail(path, `expected JSON data, received ${typeof value}`);
+  if (seen.has(value)) fail(path, "JSON data contains a cycle");
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null && !Array.isArray(value)) {
+    fail(path, "expected a plain JSON object");
+  }
+
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+          fail(`${path}[${index}]`, "expected an enumerable JSON array element");
+        }
+        assertJsonValue(descriptor.value, `${path}[${index}]`, seen);
+      }
+      for (const key of Reflect.ownKeys(value)) {
+        if (key === "length") continue;
+        if (
+          typeof key !== "string" ||
+          !/^(0|[1-9]\d*)$/u.test(key) ||
+          Number(key) >= value.length
+        ) {
+          fail(path, "JSON arrays cannot contain non-index properties");
+        }
+      }
+      return;
+    }
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") fail(path, "JSON objects cannot contain symbol keys");
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+        fail(propertyPath(path, key), "expected an enumerable data property");
+      }
+      assertJsonValue(descriptor.value, propertyPath(path, key), seen);
+    }
+  } finally {
+    seen.delete(value);
+  }
+}
+
+function record(value: unknown, path: string): DataRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail(path, "expected an object");
+  }
+  return value as DataRecord;
+}
+
+function shape(
+  value: unknown,
+  path: string,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): DataRecord {
+  const data = record(value, path);
+  const allowed = new Set([...required, ...optional]);
+  for (const key of required) {
+    if (!Object.hasOwn(data, key)) fail(propertyPath(path, key), "required property is missing");
+  }
+  for (const key of Object.keys(data)) {
+    if (!allowed.has(key))
+      fail(propertyPath(path, key), "property is not part of manifest version 4");
+  }
+  return data;
+}
+
+function array(value: unknown, path: string): unknown[] {
+  if (!Array.isArray(value)) fail(path, "expected an array");
+  return value;
+}
+
+function string(value: unknown, path: string): asserts value is string {
+  if (typeof value !== "string") fail(path, "expected a string");
+}
+
+function nonemptyString(value: unknown, path: string): asserts value is string {
+  string(value, path);
+  if (value.length === 0) fail(path, "expected a non-empty string");
+}
+
+function boolean(value: unknown, path: string): asserts value is boolean {
+  if (typeof value !== "boolean") fail(path, "expected a boolean");
+}
+
+function literal<const Values extends readonly (string | number | boolean)[]>(
+  value: unknown,
+  path: string,
+  values: Values,
+): asserts value is Values[number] {
+  if (!values.some((candidate) => candidate === value)) {
+    fail(
+      path,
+      `expected one of ${values.map((candidate) => JSON.stringify(candidate)).join(", ")}`,
+    );
+  }
+}
+
+function integer(value: unknown, path: string, minimum = 0): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < minimum) {
+    fail(path, `expected a safe integer greater than or equal to ${minimum}`);
+  }
+}
+
+function strings(value: unknown, path: string): asserts value is string[] {
+  for (const [index, item] of array(value, path).entries()) string(item, `${path}[${index}]`);
+}
+
+function assertPattern(value: unknown, path: string): asserts value is PatternIR {
+  record(value, path);
+}
+
+function assertQueryReference(value: unknown, path: string): void {
+  const data = shape(value, path, ["concept", "query"]);
+  nonemptyString(data.concept, `${path}.concept`);
+  nonemptyString(data.query, `${path}.query`);
+}
+
+function assertLineReference(data: DataRecord, path: string): void {
+  const hasQuery = Object.hasOwn(data, "query");
+  const hasView = Object.hasOwn(data, "view");
+  if (hasQuery === hasView) fail(path, 'expected exactly one of "query" or "view"');
+  if (hasQuery) assertQueryReference(data.query, `${path}.query`);
+  if (hasView) nonemptyString(data.view, `${path}.view`);
+}
+
+function assertTrigger(value: unknown, path: string): asserts value is TriggerIR {
+  const candidate = record(value, path);
+  if (candidate.kind === "action") {
+    const data = shape(
+      value,
+      path,
+      ["kind", "concept", "action", "input", "output"],
+      ["posture", "by"],
+    );
+    nonemptyString(data.concept, `${path}.concept`);
+    nonemptyString(data.action, `${path}.action`);
+    assertPattern(data.input, `${path}.input`);
+    assertPattern(data.output, `${path}.output`);
+    if (data.posture !== undefined) literal(data.posture, `${path}.posture`, ACTION_POSTURES);
+    if (data.by !== undefined) nonemptyString(data.by, `${path}.by`);
+    return;
+  }
+  if (candidate.kind === "channel") {
+    const data = shape(value, path, ["kind", "channel", "pattern", "except"], ["exceptBy", "by"]);
+    literal(data.channel, `${path}.channel`, CHANNEL_POSTURES);
+    assertPattern(data.pattern, `${path}.pattern`);
+    strings(data.except, `${path}.except`);
+    if (data.exceptBy !== undefined) strings(data.exceptBy, `${path}.exceptBy`);
+    if (data.by !== undefined) nonemptyString(data.by, `${path}.by`);
+    return;
+  }
+  fail(`${path}.kind`, 'expected "action" or "channel"');
+}
+
+function assertWhereOperation(
+  value: unknown,
+  path: string,
+  options: { readonly earlier: boolean; readonly count: boolean },
+): asserts value is WhereOpIR | ViewOpIR {
+  const candidate = record(value, path);
+  switch (candidate.op) {
+    case "find":
+    case "whether": {
+      const data = shape(value, path, ["op", "in", "out"], ["not", "query", "view"]);
+      assertLineReference(data, path);
+      assertPattern(data.in, `${path}.in`);
+      assertPattern(data.out, `${path}.out`);
+      if (data.not !== undefined) assertPattern(data.not, `${path}.not`);
+      return;
+    }
+    case "no": {
+      const data = shape(value, path, ["op", "in", "out"], ["query", "view"]);
+      assertLineReference(data, path);
+      assertPattern(data.in, `${path}.in`);
+      assertPattern(data.out, `${path}.out`);
+      return;
+    }
+    case "earlier": {
+      if (!options.earlier) fail(`${path}.op`, '"earlier" is not allowed in this location');
+      const data = shape(value, path, ["op", "when"]);
+      assertTrigger(data.when, `${path}.when`);
+      if ((data.when as { kind: string }).kind !== "action") {
+        fail(`${path}.when.kind`, 'expected "action"');
+      }
+      return;
+    }
+    case "holds": {
+      const data = shape(value, path, ["op", "computation", "in"]);
+      nonemptyString(data.computation, `${path}.computation`);
+      assertPattern(data.in, `${path}.in`);
+      return;
+    }
+    case "compute": {
+      const data = shape(value, path, ["op", "computation", "in", "out"]);
+      nonemptyString(data.computation, `${path}.computation`);
+      assertPattern(data.in, `${path}.in`);
+      nonemptyString(data.out, `${path}.out`);
+      return;
+    }
+    case "custom": {
+      const data = shape(value, path, ["op", "fnRef", "opaque", "in", "out"]);
+      nonemptyString(data.fnRef, `${path}.fnRef`);
+      if (data.opaque !== true) fail(`${path}.opaque`, "expected true");
+      strings(data.in, `${path}.in`);
+      strings(data.out, `${path}.out`);
+      return;
+    }
+    case "count": {
+      if (!options.count) fail(`${path}.op`, '"count" is not allowed in this location');
+      const data = shape(value, path, ["op", "query", "in", "out"]);
+      assertQueryReference(data.query, `${path}.query`);
+      assertPattern(data.in, `${path}.in`);
+      nonemptyString(data.out, `${path}.out`);
+      return;
+    }
+    default:
+      fail(`${path}.op`, "expected a recognized read operation");
+  }
+}
+
+function assertConsequence(value: unknown, path: string): void {
+  const data = shape(value, path, ["kind", "concept", "action", "input"]);
+  if (data.kind !== "request") fail(`${path}.kind`, 'expected "request"');
+  nonemptyString(data.concept, `${path}.concept`);
+  nonemptyString(data.action, `${path}.action`);
+  assertPattern(data.input, `${path}.input`);
+}
+
+function assertReactionBody(
+  value: unknown,
+  path: string,
+  options: { readonly named: boolean; readonly patterns: boolean },
+): void {
+  const required = [
+    ...(options.named ? ["name"] : []),
+    "when",
+    "where",
+    "then",
+    ...(options.patterns ? ["patterns"] : []),
+  ];
+  const data = shape(value, path, required, ["deferred"]);
+  if (options.named) nonemptyString(data.name, `${path}.name`);
+  if (data.deferred !== undefined && data.deferred !== true) {
+    fail(`${path}.deferred`, "expected true when present");
+  }
+  for (const [index, trigger] of array(data.when, `${path}.when`).entries()) {
+    assertTrigger(trigger, `${path}.when[${index}]`);
+  }
+  for (const [index, operation] of array(data.where, `${path}.where`).entries()) {
+    assertWhereOperation(operation, `${path}.where[${index}]`, { earlier: true, count: false });
+  }
+  for (const [index, consequence] of array(data.then, `${path}.then`).entries()) {
+    assertConsequence(consequence, `${path}.then[${index}]`);
+  }
+  if (options.patterns) {
+    for (const [index, pattern] of array(data.patterns, `${path}.patterns`).entries()) {
+      assertPattern(pattern, `${path}.patterns[${index}]`);
+    }
+  }
+}
+
+function assertReaction(value: unknown, path: string): asserts value is ReactionIR {
+  assertReactionBody(value, path, { named: true, patterns: false });
+}
+
+function assertUnlowered(value: unknown, path: string): asserts value is UnloweredIR {
+  const data = shape(value, path, ["name", "reason", "known"]);
+  nonemptyString(data.name, `${path}.name`);
+  nonemptyString(data.reason, `${path}.reason`);
+  assertReactionBody(data.known, `${path}.known`, { named: false, patterns: true });
+}
+
+function assertView(value: unknown, path: string): void {
+  const data = shape(
+    value,
+    path,
+    ["name", "alternatives", "ins", "outs", "bindings"],
+    ["promise", "holds"],
+  );
+  nonemptyString(data.name, `${path}.name`);
+  strings(data.ins, `${path}.ins`);
+  strings(data.outs, `${path}.outs`);
+  strings(data.bindings, `${path}.bindings`);
+  if (data.promise !== undefined) {
+    literal(data.promise, `${path}.promise`, ["one", "optional", "many"] as const);
+  }
+  if (data.holds !== undefined && data.holds !== true) fail(`${path}.holds`, "expected true");
+  for (const [alternativeIndex, alternative] of array(
+    data.alternatives,
+    `${path}.alternatives`,
+  ).entries()) {
+    for (const [operationIndex, operation] of array(
+      alternative,
+      `${path}.alternatives[${alternativeIndex}]`,
+    ).entries()) {
+      assertWhereOperation(
+        operation,
+        `${path}.alternatives[${alternativeIndex}][${operationIndex}]`,
+        { earlier: false, count: true },
+      );
+    }
+  }
+}
+
+function assertFormerSource(value: unknown, path: string): void {
+  const data = shape(value, path, ["op", "in", "out"], ["not", "query", "view"]);
+  if (data.op !== "find") fail(`${path}.op`, 'expected "find"');
+  assertLineReference(data, path);
+  assertPattern(data.in, `${path}.in`);
+  assertPattern(data.out, `${path}.out`);
+  if (data.not !== undefined) assertPattern(data.not, `${path}.not`);
+}
+
+function assertFormerWhere(value: unknown, path: string): void {
+  for (const [index, operation] of array(value, path).entries()) {
+    assertWhereOperation(operation, `${path}[${index}]`, { earlier: false, count: false });
+  }
+}
+
+function assertArrangement(value: unknown, path: string): void {
+  const candidate = record(value, path);
+  if (Object.hasOwn(candidate, "by")) {
+    const data = shape(value, path, ["by", "order"]);
+    nonemptyString(data.by, `${path}.by`);
+    literal(data.order, `${path}.order`, ["ascending", "descending"] as const);
+    return;
+  }
+  const data = shape(value, path, ["order"]);
+  literal(data.order, `${path}.order`, ["oldest", "newest"] as const);
+}
+
+function assertFormerNode(value: unknown, path: string): asserts value is FormerNodeIR {
+  const candidate = record(value, path);
+  switch (candidate.node) {
+    case "leaf": {
+      const data = shape(value, path, ["node", "var"]);
+      nonemptyString(data.var, `${path}.var`);
+      return;
+    }
+    case "record": {
+      const data = shape(value, path, ["node", "entries"], ["where", "splices"]);
+      if (data.where !== undefined) assertFormerWhere(data.where, `${path}.where`);
+      for (const [key, entry] of Object.entries(record(data.entries, `${path}.entries`))) {
+        assertFormerNode(entry, propertyPath(`${path}.entries`, key));
+      }
+      if (data.splices !== undefined) {
+        for (const [index, splice] of array(data.splices, `${path}.splices`).entries()) {
+          const splicePath = `${path}.splices[${index}]`;
+          const spliceData = shape(splice, splicePath, ["fragment", "in"], ["whether"]);
+          nonemptyString(spliceData.fragment, `${splicePath}.fragment`);
+          assertPattern(spliceData.in, `${splicePath}.in`);
+          if (spliceData.whether !== undefined && spliceData.whether !== true) {
+            fail(`${splicePath}.whether`, "expected true");
+          }
+        }
+      }
+      return;
+    }
+    case "former": {
+      const data = shape(value, path, ["node", "former", "in"], ["whether"]);
+      nonemptyString(data.former, `${path}.former`);
+      assertPattern(data.in, `${path}.in`);
+      if (data.whether !== undefined && data.whether !== true) {
+        fail(`${path}.whether`, "expected true");
+      }
+      return;
+    }
+    case "each": {
+      const data = shape(value, path, ["node", "from", "as"], ["where", "arranged"]);
+      assertFormerSource(data.from, `${path}.from`);
+      if (data.where !== undefined) assertFormerWhere(data.where, `${path}.where`);
+      if (data.arranged !== undefined) assertArrangement(data.arranged, `${path}.arranged`);
+      assertFormerNode(data.as, `${path}.as`);
+      return;
+    }
+    case "count": {
+      const data = shape(value, path, ["node", "from"], ["where"]);
+      assertFormerSource(data.from, `${path}.from`);
+      if (data.where !== undefined) assertFormerWhere(data.where, `${path}.where`);
+      return;
+    }
+    case "first": {
+      const data = shape(value, path, ["node", "from", "value"], ["where", "arranged"]);
+      assertFormerSource(data.from, `${path}.from`);
+      nonemptyString(data.value, `${path}.value`);
+      if (data.where !== undefined) assertFormerWhere(data.where, `${path}.where`);
+      if (data.arranged !== undefined) assertArrangement(data.arranged, `${path}.arranged`);
+      return;
+    }
+    case "distinct": {
+      const data = shape(value, path, ["node", "from", "value"], ["where"]);
+      assertFormerSource(data.from, `${path}.from`);
+      nonemptyString(data.value, `${path}.value`);
+      if (data.where !== undefined) assertFormerWhere(data.where, `${path}.where`);
+      return;
+    }
+    default:
+      fail(`${path}.node`, "expected a recognized former node");
+  }
+}
+
+function assertFormer(value: unknown, path: string): void {
+  const data = shape(value, path, ["name", "ins", "bindings", "promise", "body"]);
+  nonemptyString(data.name, `${path}.name`);
+  strings(data.ins, `${path}.ins`);
+  strings(data.bindings, `${path}.bindings`);
+  literal(data.promise, `${path}.promise`, ["one", "optional"] as const);
+  assertFormerNode(data.body, `${path}.body`);
+}
+
+function assertApplication(value: unknown, path: string): asserts value is AppIR {
+  const data = shape(value, path, ["reactions", "views", "formers", "unlowered"]);
+  for (const [index, reaction] of array(data.reactions, `${path}.reactions`).entries()) {
+    assertReaction(reaction, `${path}.reactions[${index}]`);
+  }
+  for (const [index, view] of array(data.views, `${path}.views`).entries()) {
+    assertView(view, `${path}.views[${index}]`);
+  }
+  for (const [index, former] of array(data.formers, `${path}.formers`).entries()) {
+    assertFormer(former, `${path}.formers[${index}]`);
+  }
+  for (const [index, unlowered] of array(data.unlowered, `${path}.unlowered`).entries()) {
+    assertUnlowered(unlowered, `${path}.unlowered[${index}]`);
+  }
+}
+
+function assertLocation(value: unknown, path: string): void {
+  const data = shape(value, path, ["line", "column"]);
+  integer(data.line, `${path}.line`, 1);
+  integer(data.column, `${path}.column`, 1);
+}
+
+function assertSpecificationType(value: unknown, path: string): void {
+  const candidate = record(value, path);
+  if (candidate.kind === "named") {
+    const data = shape(value, path, ["kind", "name", "arguments", "location"]);
+    nonemptyString(data.name, `${path}.name`);
+    for (const [index, argument] of array(data.arguments, `${path}.arguments`).entries()) {
+      assertSpecificationType(argument, `${path}.arguments[${index}]`);
+    }
+    assertLocation(data.location, `${path}.location`);
+    return;
+  }
+  if (candidate.kind === "union") {
+    const data = shape(value, path, ["kind", "members", "location"]);
+    for (const [index, member] of array(data.members, `${path}.members`).entries()) {
+      assertSpecificationType(member, `${path}.members[${index}]`);
+    }
+    assertLocation(data.location, `${path}.location`);
+    return;
+  }
+  if (candidate.kind === "null" || candidate.kind === "undefined") {
+    const data = shape(value, path, ["kind", "location"]);
+    assertLocation(data.location, `${path}.location`);
+    return;
+  }
+  fail(`${path}.kind`, "expected a recognized specification type");
+}
+
+function assertSpecificationField(value: unknown, path: string): void {
+  const data = shape(value, path, ["name", "optional", "type", "location"]);
+  nonemptyString(data.name, `${path}.name`);
+  boolean(data.optional, `${path}.optional`);
+  assertSpecificationType(data.type, `${path}.type`);
+  assertLocation(data.location, `${path}.location`);
+}
+
+function assertSpecificationResult(value: unknown, path: string): void {
+  const candidate = record(value, path);
+  if (candidate.kind === "fields") {
+    const data = shape(value, path, ["kind", "fields", "location"]);
+    for (const [index, field] of array(data.fields, `${path}.fields`).entries()) {
+      assertSpecificationField(field, `${path}.fields[${index}]`);
+    }
+    assertLocation(data.location, `${path}.location`);
+    return;
+  }
+  if (candidate.kind === "type") {
+    const data = shape(value, path, ["kind", "type", "location"]);
+    assertSpecificationType(data.type, `${path}.type`);
+    assertLocation(data.location, `${path}.location`);
+    return;
+  }
+  fail(`${path}.kind`, 'expected "fields" or "type"');
+}
+
+function assertSpecification(
+  value: unknown,
+  path: string,
+): asserts value is ConceptSpecificationIR {
+  const data = shape(value, path, [
+    "format",
+    "version",
+    "purpose",
+    "principle",
+    "actions",
+    "queries",
+    "documentation",
+  ]);
+  if (data.format !== "sync-engine.concept-specification") {
+    fail(`${path}.format`, 'expected "sync-engine.concept-specification"');
+  }
+  if (data.version !== 1) fail(`${path}.version`, "expected 1");
+  string(data.purpose, `${path}.purpose`);
+  string(data.principle, `${path}.principle`);
+  for (const [index, action] of array(data.actions, `${path}.actions`).entries()) {
+    const actionPath = `${path}.actions[${index}]`;
+    const actionData = shape(action, actionPath, [
+      "name",
+      "inputs",
+      "parameters",
+      "result",
+      "body",
+      "refusals",
+      "location",
+    ]);
+    nonemptyString(actionData.name, `${actionPath}.name`);
+    strings(actionData.inputs, `${actionPath}.inputs`);
+    for (const [fieldIndex, field] of array(
+      actionData.parameters,
+      `${actionPath}.parameters`,
+    ).entries()) {
+      assertSpecificationField(field, `${actionPath}.parameters[${fieldIndex}]`);
+    }
+    assertSpecificationResult(actionData.result, `${actionPath}.result`);
+    string(actionData.body, `${actionPath}.body`);
+    for (const [refusalIndex, refusal] of array(
+      actionData.refusals,
+      `${actionPath}.refusals`,
+    ).entries()) {
+      const refusalPath = `${actionPath}.refusals[${refusalIndex}]`;
+      const refusalData = shape(refusal, refusalPath, ["code", "message", "location"]);
+      nonemptyString(refusalData.code, `${refusalPath}.code`);
+      string(refusalData.message, `${refusalPath}.message`);
+      assertLocation(refusalData.location, `${refusalPath}.location`);
+    }
+    assertLocation(actionData.location, `${actionPath}.location`);
+  }
+  for (const [index, query] of array(data.queries, `${path}.queries`).entries()) {
+    const queryPath = `${path}.queries[${index}]`;
+    const queryData = shape(query, queryPath, [
+      "name",
+      "inputs",
+      "parameters",
+      "result",
+      "body",
+      "promise",
+      "location",
+    ]);
+    nonemptyString(queryData.name, `${queryPath}.name`);
+    strings(queryData.inputs, `${queryPath}.inputs`);
+    for (const [fieldIndex, field] of array(
+      queryData.parameters,
+      `${queryPath}.parameters`,
+    ).entries()) {
+      assertSpecificationField(field, `${queryPath}.parameters[${fieldIndex}]`);
+    }
+    assertSpecificationResult(queryData.result, `${queryPath}.result`);
+    string(queryData.body, `${queryPath}.body`);
+    literal(queryData.promise, `${queryPath}.promise`, ["one", "optional", "many"] as const);
+    assertLocation(queryData.location, `${queryPath}.location`);
+  }
+  for (const [index, documentation] of array(
+    data.documentation,
+    `${path}.documentation`,
+  ).entries()) {
+    const documentationPath = `${path}.documentation[${index}]`;
+    const documentationData = shape(documentation, documentationPath, [
+      "kind",
+      "name",
+      "body",
+      "location",
+    ]);
+    literal(documentationData.kind, `${documentationPath}.kind`, ["types", "extension"] as const);
+    nonemptyString(documentationData.name, `${documentationPath}.name`);
+    string(documentationData.body, `${documentationPath}.body`);
+    assertLocation(documentationData.location, `${documentationPath}.location`);
+  }
+}
+
+function assertConcept(value: unknown, path: string): void {
+  const data = shape(
+    value,
+    path,
+    ["name", "actions", "queries"],
+    ["purpose", "principle", "specification"],
+  );
+  nonemptyString(data.name, `${path}.name`);
+  if (data.purpose !== undefined) string(data.purpose, `${path}.purpose`);
+  if (data.principle !== undefined) string(data.principle, `${path}.principle`);
+  for (const [index, action] of array(data.actions, `${path}.actions`).entries()) {
+    const actionPath = `${path}.actions[${index}]`;
+    const actionData = shape(action, actionPath, ["name"], ["roles", "refusals"]);
+    nonemptyString(actionData.name, `${actionPath}.name`);
+    if (actionData.roles !== undefined) strings(actionData.roles, `${actionPath}.roles`);
+    if (actionData.refusals !== undefined) strings(actionData.refusals, `${actionPath}.refusals`);
+  }
+  for (const [index, query] of array(data.queries, `${path}.queries`).entries()) {
+    const queryPath = `${path}.queries[${index}]`;
+    const queryData = shape(query, queryPath, ["name"], ["roles", "returns"]);
+    nonemptyString(queryData.name, `${queryPath}.name`);
+    if (queryData.roles !== undefined) strings(queryData.roles, `${queryPath}.roles`);
+    if (queryData.returns !== undefined) {
+      literal(queryData.returns, `${queryPath}.returns`, ["one", "optional", "many"] as const);
+    }
+  }
+  if (data.specification !== undefined) {
+    assertSpecification(data.specification, `${path}.specification`);
+  }
+}
+
+function assertInputContract(value: unknown, path: string): asserts value is InputContractDecl {
+  const data = shape(value, path, [], ["required", "defaults"]);
+  if (data.required !== undefined) strings(data.required, `${path}.required`);
+  if (data.defaults !== undefined) record(data.defaults, `${path}.defaults`);
+}
+
+function assertManifestEndpoint(value: unknown, path: string): asserts value is ManifestEndpointV4 {
+  const data = shape(value, path, ["name", "path", "reactions", "input", "validators"]);
+  nonemptyString(data.name, `${path}.name`);
+  nonemptyString(data.path, `${path}.path`);
+  strings(data.reactions, `${path}.reactions`);
+  assertInputContract(data.input, `${path}.input`);
+  const validators = shape(
+    data.validators,
+    `${path}.validators`,
+    ["input", "output"],
+    ["domainError"],
+  );
+  boolean(validators.input, `${path}.validators.input`);
+  boolean(validators.output, `${path}.validators.output`);
+  if (validators.domainError !== undefined && validators.domainError !== true) {
+    fail(`${path}.validators.domainError`, "expected true when present");
+  }
+}
+
+function assertWireOrigin(value: unknown, path: string): void {
+  const candidate = record(value, path);
+  if (candidate.source === "literal") {
+    const data = shape(value, path, ["source", "value"]);
+    if (
+      data.value !== null &&
+      typeof data.value !== "string" &&
+      typeof data.value !== "number" &&
+      typeof data.value !== "boolean"
+    ) {
+      fail(`${path}.value`, "expected a JSON scalar");
+    }
+    return;
+  }
+  if (candidate.source === "number") {
+    shape(value, path, ["source"]);
+    return;
+  }
+  literal(candidate.source, `${path}.source`, [
+    "action-input",
+    "action-output",
+    "query-input",
+    "query-output",
+  ] as const);
+  const data = shape(value, path, ["source", "concept", "member", "path"]);
+  nonemptyString(data.concept, `${path}.concept`);
+  nonemptyString(data.member, `${path}.member`);
+  strings(data.path, `${path}.path`);
+}
+
+function assertWireType(value: unknown, path: string): asserts value is WireType {
+  const candidate = record(value, path);
+  switch (candidate.kind) {
+    case "json":
+    case "number":
+      shape(value, path, ["kind"]);
+      return;
+    case "literal": {
+      const data = shape(value, path, ["kind", "value"]);
+      if (
+        data.value !== null &&
+        typeof data.value !== "string" &&
+        typeof data.value !== "number" &&
+        typeof data.value !== "boolean"
+      ) {
+        fail(`${path}.value`, "expected a JSON scalar");
+      }
+      return;
+    }
+    case "reference": {
+      const data = shape(value, path, ["kind", "allOf", "sites"]);
+      for (const [index, origin] of array(data.allOf, `${path}.allOf`).entries()) {
+        assertWireOrigin(origin, `${path}.allOf[${index}]`);
+      }
+      strings(data.sites, `${path}.sites`);
+      return;
+    }
+    case "object": {
+      const data = shape(value, path, ["kind", "fields"]);
+      for (const [index, field] of array(data.fields, `${path}.fields`).entries()) {
+        const fieldPath = `${path}.fields[${index}]`;
+        const fieldData = shape(field, fieldPath, ["key", "type"], ["optional"]);
+        nonemptyString(fieldData.key, `${fieldPath}.key`);
+        assertWireType(fieldData.type, `${fieldPath}.type`);
+        if (fieldData.optional !== undefined) boolean(fieldData.optional, `${fieldPath}.optional`);
+      }
+      return;
+    }
+    case "array": {
+      const data = shape(value, path, ["kind", "of"]);
+      assertWireType(data.of, `${path}.of`);
+      return;
+    }
+    case "union": {
+      const data = shape(value, path, ["kind", "of"]);
+      for (const [index, member] of array(data.of, `${path}.of`).entries()) {
+        assertWireType(member, `${path}.of[${index}]`);
+      }
+      return;
+    }
+    default:
+      fail(`${path}.kind`, "expected a recognized wire type");
+  }
+}
+
+function assertWire(value: unknown, path: string): void {
+  const data = shape(value, path, ["endpoints", "appWide"]);
+  strings(data.appWide, `${path}.appWide`);
+  for (const [index, endpoint] of array(data.endpoints, `${path}.endpoints`).entries()) {
+    const endpointPath = `${path}.endpoints[${index}]`;
+    const endpointData = shape(
+      endpoint,
+      endpointPath,
+      ["path", "input", "output", "errors", "openError"],
+      ["inputAdmissionError"],
+    );
+    nonemptyString(endpointData.path, `${endpointPath}.path`);
+    assertWireType(endpointData.input, `${endpointPath}.input`);
+    assertWireType(endpointData.output, `${endpointPath}.output`);
+    strings(endpointData.errors, `${endpointPath}.errors`);
+    boolean(endpointData.openError, `${endpointPath}.openError`);
+    if (endpointData.inputAdmissionError !== undefined) {
+      boolean(endpointData.inputAdmissionError, `${endpointPath}.inputAdmissionError`);
+    }
+  }
+}
+
+function assertDiagnostic(value: unknown, path: string): asserts value is ApplicationDiagnostic {
+  const data = shape(value, path, ["severity", "code", "definition", "message"], ["endpoint"]);
+  literal(data.severity, `${path}.severity`, DIAGNOSTIC_SEVERITIES);
+  literal(data.code, `${path}.code`, DIAGNOSTIC_CODES);
+  string(data.message, `${path}.message`);
+  const definition = shape(data.definition, `${path}.definition`, ["kind", "name"]);
+  literal(definition.kind, `${path}.definition.kind`, [
+    "application",
+    "endpoint",
+    "reaction",
+    "view",
+    "former",
+  ] as const);
+  nonemptyString(definition.name, `${path}.definition.name`);
+  if (data.endpoint !== undefined) {
+    const endpoint = shape(data.endpoint, `${path}.endpoint`, ["name", "path"]);
+    nonemptyString(endpoint.name, `${path}.endpoint.name`);
+    nonemptyString(endpoint.path, `${path}.endpoint.path`);
+  }
+}
+
+function manifestBodyDigest(data: DataRecord): string {
+  const body: DataRecord = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (key !== "digest") setOwn(body, key, value);
+  }
+  return canonicalDigest(body);
+}
+
+function assertManifestStructure(value: unknown): DataRecord {
+  assertJsonValue(value, "$", new WeakSet());
+  const data = shape(value, "$", [
+    "format",
+    "version",
+    "generator",
+    "digest",
+    "application",
+    "concepts",
+    "endpoints",
+    "inputContracts",
+    "wire",
+    "diagnostics",
+  ]);
+  if (data.format !== "sync-engine.application-manifest") {
+    fail("$.format", 'expected "sync-engine.application-manifest"');
+  }
+  if (data.version !== 4) fail("$.version", "expected 4");
+  const generator = shape(data.generator, "$.generator", ["name", "version"]);
+  if (generator.name !== PACKAGE_NAME)
+    fail("$.generator.name", `expected ${JSON.stringify(PACKAGE_NAME)}`);
+  if (!isSemVer(generator.version)) fail("$.generator.version", "expected a semantic version");
+  nonemptyString(data.digest, "$.digest");
+  assertApplication(data.application, "$.application");
+  for (const [index, concept] of array(data.concepts, "$.concepts").entries()) {
+    assertConcept(concept, `$.concepts[${index}]`);
+  }
+  for (const [index, endpoint] of array(data.endpoints, "$.endpoints").entries()) {
+    assertManifestEndpoint(endpoint, `$.endpoints[${index}]`);
+  }
+  for (const [key, contract] of Object.entries(record(data.inputContracts, "$.inputContracts"))) {
+    assertInputContract(contract, propertyPath("$.inputContracts", key));
+  }
+  assertWire(data.wire, "$.wire");
+  for (const [index, diagnostic] of array(data.diagnostics, "$.diagnostics").entries()) {
+    assertDiagnostic(diagnostic, `$.diagnostics[${index}]`);
+  }
+  return data;
+}
+
+/** Recompute the canonical digest over every manifest field except `digest`. */
+export function applicationManifestDigest(manifest: ApplicationManifestV4): string {
+  return manifestBodyDigest(assertManifestStructure(manifest));
+}
+
+/** Validate untrusted data as one complete canonical version-4 application manifest. */
+export function validateApplicationManifest(
+  value: unknown,
+): asserts value is ApplicationManifestV4 {
+  const data = assertManifestStructure(value);
+  const expected = manifestBodyDigest(data);
+  if (data.digest !== expected) {
+    fail(
+      "$.digest",
+      `expected canonical digest ${JSON.stringify(expected)}, received ${JSON.stringify(data.digest)}`,
+    );
+  }
+}
+
+/** Parse and validate canonical version-4 application-manifest JSON without executing code. */
+export function parseApplicationManifest(source: string): ApplicationManifestV4 {
+  if (typeof source !== "string") fail("$", "expected manifest JSON text");
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch (error) {
+    throw new SyntaxError(
+      `Invalid application manifest JSON: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  validateApplicationManifest(value);
+  return canonicalValue(value) as unknown as ApplicationManifestV4;
+}

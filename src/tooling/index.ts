@@ -8,6 +8,11 @@ export type {
   DiagnosticSeverity,
 } from "@engine/tooling/diagnostics";
 export { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
+export {
+  applicationManifestDigest,
+  parseApplicationManifest,
+  validateApplicationManifest,
+} from "@engine/tooling/application-manifest-format";
 export type { ApplicationManifestV4, ManifestEndpointV4 } from "@engine/tooling/manifest";
 export { parseSpec as parseConceptSpecification } from "@engine/reactions/concepts/concept-spec";
 export { renderApp, renderReaction } from "@engine/reads/render";
