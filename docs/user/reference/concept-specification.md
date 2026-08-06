@@ -114,6 +114,18 @@ field names, optionality, type structure, result structure, and one-based source
 locations. It does not resolve a type name against TypeScript or validate values
 at runtime.
 
+## Documentation sections
+
+`## Types` and other non-reserved second-level sections are retained as ordered
+reader-facing documentation blocks. `Types` is identified explicitly; every
+other heading is an extension block. Their Markdown bodies and source locations
+survive in `ConceptSpec`, application manifests, and generated read-back.
+
+`Purpose`, `Principle`, `State`, `Actions`, and `Queries` are reserved and are
+not extension blocks. State remains deliberately excluded. Documentation blocks
+do not add registration or runtime semantics; use tests to establish any claim
+they make.
+
 ## Action declarations
 
 An `actions` fence contains zero or more left-aligned signatures. Indented lines

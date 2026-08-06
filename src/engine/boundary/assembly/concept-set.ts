@@ -251,6 +251,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     principle?: string;
     queries?: QueryPromises;
     refusals?: RefusalContracts;
+    specification?: ConceptSpec;
   };
 };
 type VocabularyOf<
@@ -359,6 +360,7 @@ export function conceptSet<
       principle,
       ...(queries.length === 0 ? {} : { queries: promises }),
       ...(Object.keys(refusals).length === 0 ? {} : { refusals }),
+      specification: registration.specification,
     });
   }
   const declared = vocabulary({

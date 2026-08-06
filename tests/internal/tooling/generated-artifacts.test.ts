@@ -532,7 +532,7 @@ describe("an artifact configuration's defaults", () => {
     expect(resolved.vocabularyFrom.export).toBe("words");
     expect(
       rendered.specification.startsWith(
-        `<!-- Project specification -->\n<!-- Generator: ${PACKAGE_NAME}@${PACKAGE_VERSION}. -->`,
+        `<!-- Project specification -->\n<!-- Manifest producer: ${PACKAGE_NAME}@${PACKAGE_VERSION}; concept specification: sync-engine.concept-specification@1; renderer: ${PACKAGE_NAME}@${PACKAGE_VERSION}. -->`,
       ),
     ).toBe(true);
     expect(

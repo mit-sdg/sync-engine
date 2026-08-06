@@ -29,6 +29,10 @@ Indented query bodies describe reader-facing behavior beside the signature.
 They are not registration data; establish ordering, missing-input behavior, and
 other query claims in implementation tests.
 
+Generated read-back retains structured signatures, action and query bodies,
+refusal messages, Types, and other second-level documentation sections. It
+labels the subset enforced by registration separately from descriptive prose.
+
 Use these commands to isolate a failed check:
 
 ```sh

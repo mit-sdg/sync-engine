@@ -701,6 +701,11 @@ nonblank package name with any valid SemVer version; projector versions
 are not restricted to 1.x. Generator and projector identities may use
 prerelease versions.
 
+Generated Markdown names its manifest producer, the
+`sync-engine.concept-specification` format version, and its renderer package
+version. Each parsed concept contract also carries its own format and version in
+the manifest.
+
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 defines input admission and explicit input, successful-output, and domain-error
 validation. None is inferred from the generated type.

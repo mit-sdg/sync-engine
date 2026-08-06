@@ -31,80 +31,45 @@
  * boundary reports.
  */
 
+import type {
+  ConceptSpecificationIR,
+  SpecificationActionIR,
+  SpecificationDocumentationIR,
+  SpecificationFieldIR,
+  SpecificationLocationIR,
+  SpecificationQueryIR,
+  SpecificationRefusalIR,
+  SpecificationResultIR,
+  SpecificationTypeIR,
+} from "@engine/reads/ir";
 import type { QueryPromise } from "@engine/reads/query-metadata";
 
 /** A one-based position in the specification source. */
-export interface SpecLocation {
-  line: number;
-  column: number;
-}
+export type SpecLocation = SpecificationLocationIR;
 
 /** A type expression independent of any implementation language. */
-export type SpecType =
-  | {
-      kind: "named";
-      name: string;
-      arguments: readonly SpecType[];
-      location: SpecLocation;
-    }
-  | {
-      kind: "union";
-      members: readonly SpecType[];
-      location: SpecLocation;
-    }
-  | { kind: "null" | "undefined"; location: SpecLocation };
+export type SpecType = SpecificationTypeIR;
 
 /** One named field in an input or inline result row. */
-export interface SpecField {
-  name: string;
-  optional: boolean;
-  type: SpecType;
-  location: SpecLocation;
-}
+export type SpecField = SpecificationFieldIR;
 
 /** An inline result row or a named result-row type. */
-export type SpecResult =
-  | { kind: "fields"; fields: readonly SpecField[]; location: SpecLocation }
-  | { kind: "type"; type: SpecType; location: SpecLocation };
+export type SpecResult = SpecificationResultIR;
 
 /** One refusal branch: the code the boundary returns and the sentence it carries. */
-export interface SpecRefusal {
-  code: string;
-  message: string;
-  location: SpecLocation;
-}
+export type SpecRefusal = SpecificationRefusalIR;
 
 /** One action the specification declares. */
-export interface SpecAction {
-  name: string;
-  /** Compatibility projection used by registration and source checking. */
-  inputs: readonly string[];
-  parameters: readonly SpecField[];
-  result: SpecResult;
-  body: string;
-  refusals: readonly SpecRefusal[];
-  location: SpecLocation;
-}
+export type SpecAction = SpecificationActionIR;
 
 /** One query the specification declares, with the row count it promises. */
-export interface SpecQuery {
-  name: string;
-  /** Compatibility projection used by registration and source checking. */
-  inputs: readonly string[];
-  parameters: readonly SpecField[];
-  result: SpecResult;
-  body: string;
-  promise: QueryPromise;
-  location: SpecLocation;
-}
+export type SpecQuery = SpecificationQueryIR;
+
+/** A reader-facing Types or extension section. */
+export type SpecDocumentation = SpecificationDocumentationIR;
 
 /** The machine-readable registration contract extracted from a concept specification. */
-export interface ConceptSpec {
-  purpose: string;
-  principle: string;
-  actions: readonly SpecAction[];
-  queries: readonly SpecQuery[];
-}
+export type ConceptSpec = ConceptSpecificationIR;
 
 const PROMISES = new Set<string>(["one", "optional", "many"]);
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -157,8 +122,8 @@ function closes(marker: FenceMarker, open: FenceMarker): boolean {
 }
 
 /** Divide the document at second-level headings outside fenced code. */
-function sectionsOf(lines: readonly SourceLine[]): Map<string, DocumentSection[]> {
-  const sections = new Map<string, DocumentSection[]>();
+function sectionsOf(lines: readonly SourceLine[]): DocumentSection[] {
+  const sections: DocumentSection[] = [];
   let current: DocumentSection | undefined;
   let open: FenceMarker | undefined;
 
@@ -180,19 +145,17 @@ function sectionsOf(lines: readonly SourceLine[]): Map<string, DocumentSection[]
       continue;
     }
     current = { heading: heading[1], location: at(line), lines: [] };
-    const named = sections.get(current.heading) ?? [];
-    named.push(current);
-    sections.set(current.heading, named);
+    sections.push(current);
   }
   return sections;
 }
 
 function uniqueSection(
-  sections: ReadonlyMap<string, readonly DocumentSection[]>,
+  sections: readonly DocumentSection[],
   heading: string,
   required: boolean,
 ): DocumentSection | undefined {
-  const matches = sections.get(heading) ?? [];
+  const matches = sections.filter((section) => section.heading === heading);
   if (matches.length === 0) {
     if (required) fail(`the document has no "## ${heading}" section`);
     return undefined;
@@ -218,6 +181,19 @@ function proseOf(section: DocumentSection): string {
     });
   }
   return text;
+}
+
+const RESERVED_SECTIONS = new Set(["Purpose", "Principle", "State", "Actions", "Queries"]);
+
+function documentationOf(sections: readonly DocumentSection[]): SpecDocumentation[] {
+  return sections
+    .filter(({ heading }) => !RESERVED_SECTIONS.has(heading))
+    .map((section) => ({
+      kind: section.heading === "Types" ? "types" : "extension",
+      name: section.heading,
+      body: proseOf(section),
+      location: section.location,
+    }));
 }
 
 /** Find a declaration fence only inside its corresponding Markdown section. */
@@ -510,6 +486,8 @@ export function parseSpec(markdown: string): ConceptSpec {
   const lines = markdown.split("\n").map((text, index) => ({ text, number: index + 1 }));
   const sections = sectionsOf(lines);
   return {
+    format: "sync-engine.concept-specification",
+    version: 1,
     purpose: proseOf(uniqueSection(sections, "Purpose", true) as DocumentSection),
     principle: proseOf(uniqueSection(sections, "Principle", true) as DocumentSection),
     actions: parseEach(
@@ -522,5 +500,6 @@ export function parseSpec(markdown: string): ConceptSpec {
       parseQuery,
       "query",
     ),
+    documentation: documentationOf(sections),
   };
 }

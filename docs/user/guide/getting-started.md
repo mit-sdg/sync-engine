@@ -176,6 +176,11 @@ error contract. Both files are derived and should remain in source control.
 Change the source declaration, run `bun run generate`, and review the resulting
 diff; do not edit generated files directly.
 
+The read-back keeps Noting's authored signatures, descriptions, refusal
+messages, Types, and extension sections beside the assembled composition. It
+marks the smaller subset enforced by registration rather than presenting prose
+as an executable guarantee.
+
 Generated TypeScript checks typed callers. Gateway admission only checks the
 route, an outer object, and required-key presence. It does not validate
 primitive or nested values by default. Public endpoints can attach explicit

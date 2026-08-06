@@ -125,7 +125,9 @@ declaration order.
 Prints `sync-engine.application-manifest` version `4` as canonical JSON. The
 manifest contains application design, declaration-owned endpoints, input and
 wire contracts, validator-presence flags, structured diagnostics, and a digest
-over those fields. It excludes occurrences and other runtime state.
+over those fields. Concept inventories include complete authored specifications
+when registered, including source locations. The manifest excludes occurrences
+and other runtime state.
 
 ### `spec`
 
@@ -133,6 +135,11 @@ For a valid assembly, prints assembly counts and the assembled read-back. The
 counts cover registered reactions, views, formers, and serialized `compute`
 operations in the exported IR. The last value counts every operation occurrence,
 including repeated uses of one named computation.
+
+The concept portion renders authored signatures, behavior prose, refusal
+messages, Types, and extension sections. It labels the registration-enforced
+subset separately. Its generated comment identifies the manifest producer,
+concept-specification format, and renderer versions.
 
 ### `wire`
 

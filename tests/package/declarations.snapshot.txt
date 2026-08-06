@@ -297,6 +297,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
         principle?: string;
         queries?: QueryPromises;
         refusals?: RefusalContracts;
+        specification?: ConceptSpec;
     };
 };
 type VocabularyOf<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn> = Record<never, never>> = DeclaredVocabulary<EntriesOf<S>, Computations>;
@@ -1317,6 +1318,7 @@ export declare function where(...conditions: Array<Condition | CountOp>): Author
 
 === dist/engine/reactions/concepts/concept-metadata.d.ts ===
 import type { OutcomeContracts } from "./outcomes.ts";
+import type { ConceptSpecificationIR } from "../../reads/ir.ts";
 import type { QueryPromise } from "../../reads/query-metadata.ts";
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 /** One refusal branch: the code it returns, the class that signals it, and its sentence. */
@@ -1346,6 +1348,8 @@ export interface ConceptMetadata {
     queries?: Readonly<Record<string, QueryPromise>>;
     outcomes?: OutcomeContracts;
     refusals?: RefusalContracts;
+    /** Complete authored contract; registration semantics use only selected fields. */
+    specification?: ConceptSpecificationIR;
 }
 export declare function attachConceptMetadata(concept: object, metadata: ConceptMetadata): void;
 export declare function conceptMetadataOf(concept: object): ConceptMetadata | undefined;
@@ -1371,10 +1375,10 @@ export {};
 /**
  * **The machine-readable parts of a concept specification.**
  *
- * Registration extracts purpose and principle prose, action names, inputs and
- * refusal branches from an `actions` fence, and query names, inputs and
- * cardinality from a `queries` fence. An optional State section is
- * uninterpreted human notation and is not represented by {@link ConceptSpec}.
+ * Registration extracts purpose and principle prose plus structured action and
+ * query declarations from their corresponding Markdown sections. An optional
+ * State section is uninterpreted human notation and is not represented by
+ * {@link ConceptSpec}.
  *
  * ````md
  * ## Actions
@@ -1390,46 +1394,41 @@ export {};
  *
  * ```queries
  * _members (gathering: Gathering) : many (member: Person)
+ *   orders rows by when each Person joined
  * ```
  * ````
  *
  * A signature line starts at the left margin and everything indented under it
- * is the action's authored behavior. The parser reads the signatures and the
- * `refuse CODE "message"` lines; the rest of the body stays prose for a reader.
- * A refusal's message is the normative sentence the boundary reports.
+ * is the member's authored behavior. Names, optionality, type expressions,
+ * results, and source locations are retained without assigning runtime schema
+ * semantics to them. A refusal's message is the normative sentence the
+ * boundary reports.
  */
-import type { QueryPromise } from "../../reads/query-metadata.ts";
+import type { ConceptSpecificationIR, SpecificationActionIR, SpecificationDocumentationIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationTypeIR } from "../../reads/ir.ts";
+/** A one-based position in the specification source. */
+export type SpecLocation = SpecificationLocationIR;
+/** A type expression independent of any implementation language. */
+export type SpecType = SpecificationTypeIR;
+/** One named field in an input or inline result row. */
+export type SpecField = SpecificationFieldIR;
+/** An inline result row or a named result-row type. */
+export type SpecResult = SpecificationResultIR;
 /** One refusal branch: the code the boundary returns and the sentence it carries. */
-interface SpecRefusal {
-    code: string;
-    message: string;
-}
+export type SpecRefusal = SpecificationRefusalIR;
 /** One action the specification declares. */
-interface SpecAction {
-    name: string;
-    inputs: readonly string[];
-    refusals: readonly SpecRefusal[];
-}
+export type SpecAction = SpecificationActionIR;
 /** One query the specification declares, with the row count it promises. */
-interface SpecQuery {
-    name: string;
-    inputs: readonly string[];
-    promise: QueryPromise;
-}
+export type SpecQuery = SpecificationQueryIR;
+/** A reader-facing Types or extension section. */
+export type SpecDocumentation = SpecificationDocumentationIR;
 /** The machine-readable registration contract extracted from a concept specification. */
-export interface ConceptSpec {
-    purpose: string;
-    principle: string;
-    actions: readonly SpecAction[];
-    queries: readonly SpecQuery[];
-}
+export type ConceptSpec = ConceptSpecificationIR;
 /**
  * Extract a concept's machine-readable registration contract from specification
  * markdown (import the document with `{ type: "text" }`). Throws, naming the
  * section or line, when a parsed part is missing or malformed.
  */
 export declare function parseSpec(markdown: string): ConceptSpec;
-export {};
 
 === dist/engine/reactions/concepts/introspect.d.ts ===
 /**
@@ -3555,6 +3554,90 @@ export interface AppIR {
     formers: FormerIR[];
     unlowered: UnloweredIR[];
 }
+/** A one-based position in an authored concept specification. */
+export interface SpecificationLocationIR {
+    line: number;
+    column: number;
+}
+/** A specification type expression, independent of an implementation language. */
+export type SpecificationTypeIR = {
+    kind: "named";
+    name: string;
+    arguments: readonly SpecificationTypeIR[];
+    location: SpecificationLocationIR;
+} | {
+    kind: "union";
+    members: readonly SpecificationTypeIR[];
+    location: SpecificationLocationIR;
+} | {
+    kind: "null";
+    location: SpecificationLocationIR;
+} | {
+    kind: "undefined";
+    location: SpecificationLocationIR;
+};
+/** One named field in a specification input or inline result row. */
+export interface SpecificationFieldIR {
+    name: string;
+    optional: boolean;
+    type: SpecificationTypeIR;
+    location: SpecificationLocationIR;
+}
+/** An inline result row or a named result-row type. */
+export type SpecificationResultIR = {
+    kind: "fields";
+    fields: readonly SpecificationFieldIR[];
+    location: SpecificationLocationIR;
+} | {
+    kind: "type";
+    type: SpecificationTypeIR;
+    location: SpecificationLocationIR;
+};
+/** One authored refusal branch and its normative decoded sentence. */
+export interface SpecificationRefusalIR {
+    code: string;
+    message: string;
+    location: SpecificationLocationIR;
+}
+/** One authored action declaration. */
+export interface SpecificationActionIR {
+    name: string;
+    /** Compatibility projection used by registration and source checking. */
+    inputs: readonly string[];
+    parameters: readonly SpecificationFieldIR[];
+    result: SpecificationResultIR;
+    body: string;
+    refusals: readonly SpecificationRefusalIR[];
+    location: SpecificationLocationIR;
+}
+/** One authored query declaration. */
+export interface SpecificationQueryIR {
+    name: string;
+    /** Compatibility projection used by registration and source checking. */
+    inputs: readonly string[];
+    parameters: readonly SpecificationFieldIR[];
+    result: SpecificationResultIR;
+    body: string;
+    promise: "one" | "optional" | "many";
+    location: SpecificationLocationIR;
+}
+/** A reader-facing Types or extension section, retained in authored order. */
+export interface SpecificationDocumentationIR {
+    kind: "types" | "extension";
+    name: string;
+    body: string;
+    location: SpecificationLocationIR;
+}
+/** The complete JSON-safe authored contract parsed from one concept specification. */
+export interface ConceptSpecificationIR {
+    format: "sync-engine.concept-specification";
+    version: 1;
+    purpose: string;
+    principle: string;
+    actions: readonly SpecificationActionIR[];
+    queries: readonly SpecificationQueryIR[];
+    documentation: readonly SpecificationDocumentationIR[];
+}
 /** One action as the inventory reports it: its name, observed input roles, declared refusals. */
 interface ActionInventoryIR {
     name: string;
@@ -3580,6 +3663,8 @@ export interface ConceptInventoryIR {
     principle?: string;
     actions: ActionInventoryIR[];
     queries: QueryInventoryIR[];
+    /** Complete authored contract; absent for concepts registered without a specification. */
+    specification?: ConceptSpecificationIR;
 }
 export {};
 

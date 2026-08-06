@@ -533,6 +533,13 @@ flags, structured diagnostics, and `digest`. The digest covers every other
 manifest field. It excludes occurrences, timestamps, other runtime state, and
 uninterpreted concept State sections. State notation likewise contributes
 nothing to the assembled read-back or generated wire.
+
+Each concept inventory may carry a
+`sync-engine.concept-specification` version-1 subtree. Registered specifications
+include their structured action/query declarations, normalized descriptions,
+refusal messages, ordered Types and extension blocks, and source locations.
+These additive fields do not change the existing inventory names, observed
+roles, cardinalities, or refusal-code lists used by older Manifest V4 consumers.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
 view-alternative, and former-node sequences retain semantics.

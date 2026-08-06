@@ -115,7 +115,15 @@ a set of Invitations
 
     const parsed = parseSpec(contradictoryState);
     expect(registrationData(contradictoryState)).toEqual(registrationData(withoutState));
-    expect(Object.keys(parsed)).toEqual(["purpose", "principle", "actions", "queries"]);
+    expect(Object.keys(parsed)).toEqual([
+      "format",
+      "version",
+      "purpose",
+      "principle",
+      "actions",
+      "queries",
+      "documentation",
+    ]);
     expect(parsed).not.toHaveProperty("state");
   });
 });
@@ -373,5 +381,55 @@ right () : return ()
     expect(() => parseSpec(actions("open () : return"))).toThrow(
       /line 14, column .*resolution needs a result declaration/,
     );
+  });
+
+  test("retains Types and extension sections in authored order", () => {
+    const spec = parseSpec(
+      prose(`
+
+## Types
+
+\`Catalog\` is an opaque identity.
+
+## Actions
+
+\`\`\`actions
+open () : return Catalog
+\`\`\`
+
+## Invariants
+
+Catalog identities are never reused.
+
+## Queries
+
+\`\`\`queries
+_all () : many CatalogRow
+\`\`\`
+
+## Retention
+
+Closed catalogs remain visible for audit.
+`),
+    );
+
+    expect(spec).toMatchObject({
+      format: "sync-engine.concept-specification",
+      version: 1,
+      documentation: [
+        { kind: "types", name: "Types", body: "`Catalog` is an opaque identity." },
+        {
+          kind: "extension",
+          name: "Invariants",
+          body: "Catalog identities are never reused.",
+        },
+        {
+          kind: "extension",
+          name: "Retention",
+          body: "Closed catalogs remain visible for audit.",
+        },
+      ],
+    });
+    expect(spec.documentation.map(({ location }) => location.line)).toEqual([12, 22, 32]);
   });
 });

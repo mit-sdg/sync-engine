@@ -364,16 +364,18 @@ describe("concept floors", () => {
       instances: set.implementations("persistent", undefined),
     });
 
-    expect(applicationManifest(application).concepts).toContainEqual({
-      name: "Cataloging",
-      purpose: "Keep a catalog.",
-      principle: "A missing item is refused.",
-      actions: [
-        { name: "find", roles: [], refusals: ["ITEM_NOT_FOUND"] },
-        { name: "misplaced", roles: [] },
-      ],
-      queries: [{ name: "_find", roles: [], returns: "optional" }],
-    });
+    expect(applicationManifest(application).concepts).toContainEqual(
+      expect.objectContaining({
+        name: "Cataloging",
+        purpose: "Keep a catalog.",
+        principle: "A missing item is refused.",
+        actions: [
+          { name: "find", roles: [], refusals: ["ITEM_NOT_FOUND"] },
+          { name: "misplaced", roles: [] },
+        ],
+        queries: [{ name: "_find", roles: [], returns: "optional" }],
+      }),
+    );
   });
 
   test("accepts own-method object replacements and inventories them deterministically", () => {
@@ -404,16 +406,18 @@ describe("concept floors", () => {
       instances: set.implementations("structural", undefined),
     });
 
-    expect(applicationManifest(application).concepts).toContainEqual({
-      name: "Cataloging",
-      purpose: "Keep a catalog.",
-      principle: "A missing item is refused.",
-      actions: [
-        { name: "find", roles: [], refusals: ["ITEM_NOT_FOUND"] },
-        { name: "misplaced", roles: [] },
-      ],
-      queries: [{ name: "_find", roles: [], returns: "optional" }],
-    });
+    expect(applicationManifest(application).concepts).toContainEqual(
+      expect.objectContaining({
+        name: "Cataloging",
+        purpose: "Keep a catalog.",
+        principle: "A missing item is refused.",
+        actions: [
+          { name: "find", roles: [], refusals: ["ITEM_NOT_FOUND"] },
+          { name: "misplaced", roles: [] },
+        ],
+        queries: [{ name: "_find", roles: [], returns: "optional" }],
+      }),
+    );
     expect(JSON.stringify(applicationManifest(application).concepts)).not.toContain("freshID");
   });
 
