@@ -31,7 +31,8 @@ other query claims in implementation tests.
 
 Generated read-back retains structured signatures, action and query bodies,
 refusal messages, Types, and other second-level documentation sections. It
-labels the subset enforced by registration separately from descriptive prose.
+distinguishes registration checks and evaluated-read cardinality checks from
+descriptive prose.
 
 Use these commands to isolate a failed check:
 

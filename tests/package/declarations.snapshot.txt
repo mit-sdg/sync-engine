@@ -274,7 +274,7 @@ export declare function conceptFloor<V extends DeclaredVocabulary<Record<string,
 type FloorFactory<C extends ConceptClass = ConceptClass> = (context: never, name: string) => ConceptImplementation<C>;
 export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>> {
     class: C;
-    /** Markdown containing the concept's parsed registration contract and human prose. */
+    /** Markdown containing the concept's parsed authored contract. */
     spec: string;
     /** The Error class that signals each refusal code the specification declares. */
     refusals?: Readonly<Record<string, ErrorConstructor>>;
@@ -283,7 +283,7 @@ export interface ConceptRegistration<C extends ConceptClass, F extends Record<st
 declare const RegistrationBrand: unique symbol;
 export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>> = ConceptRegistration<C, F> & {
     readonly [RegistrationBrand]: true;
-    /** The machine-readable contract extracted from the registration's specification. */
+    /** The machine-readable authored contract extracted from the registration's specification. */
     readonly specification: ConceptSpec;
 };
 export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
@@ -1348,7 +1348,7 @@ export interface ConceptMetadata {
     queries?: Readonly<Record<string, QueryPromise>>;
     outcomes?: OutcomeContracts;
     refusals?: RefusalContracts;
-    /** Complete authored contract; registration semantics use only selected fields. */
+    /** Parsed authored contract; registration semantics use only selected fields. */
     specification?: ConceptSpecificationIR;
 }
 export declare function attachConceptMetadata(concept: object, metadata: ConceptMetadata): void;
@@ -1375,7 +1375,7 @@ export {};
 /**
  * **The machine-readable parts of a concept specification.**
  *
- * Registration extracts purpose and principle prose plus structured action and
+ * The parser extracts purpose and principle prose plus structured action and
  * query declarations from their corresponding Markdown sections. An optional
  * State section is uninterpreted human notation and is not represented by
  * {@link ConceptSpec}.
@@ -1411,7 +1411,7 @@ export type SpecLocation = SpecificationLocationIR;
 export type SpecType = SpecificationTypeIR;
 /** One named field in an input or inline result row. */
 export type SpecField = SpecificationFieldIR;
-/** An inline result row or a named result-row type. */
+/** An inline result row or a result type expression. */
 export type SpecResult = SpecificationResultIR;
 /** One refusal branch: the code the boundary returns and the sentence it carries. */
 export type SpecRefusal = SpecificationRefusalIR;
@@ -1421,12 +1421,13 @@ export type SpecAction = SpecificationActionIR;
 export type SpecQuery = SpecificationQueryIR;
 /** A reader-facing Types or extension section. */
 export type SpecDocumentation = SpecificationDocumentationIR;
-/** The machine-readable registration contract extracted from a concept specification. */
+/** The machine-readable authored contract extracted from a concept specification. */
 export type ConceptSpec = ConceptSpecificationIR;
 /**
- * Extract a concept's machine-readable registration contract from specification
- * markdown (import the document with `{ type: "text" }`). Throws, naming the
- * section or line, when a parsed part is missing or malformed.
+ * Extract a concept's machine-readable authored contract from specification
+ * markdown (import the document with `{ type: "text" }`). Registration assigns
+ * runtime meaning only to selected fields. Throws, naming the section or line,
+ * when a parsed part is missing or malformed.
  */
 export declare function parseSpec(markdown: string): ConceptSpec;
 
@@ -3583,7 +3584,7 @@ export interface SpecificationFieldIR {
     type: SpecificationTypeIR;
     location: SpecificationLocationIR;
 }
-/** An inline result row or a named result-row type. */
+/** An inline result row or a result type expression. */
 export type SpecificationResultIR = {
     kind: "fields";
     fields: readonly SpecificationFieldIR[];
@@ -3628,7 +3629,7 @@ export interface SpecificationDocumentationIR {
     body: string;
     location: SpecificationLocationIR;
 }
-/** The complete JSON-safe authored contract parsed from one concept specification. */
+/** The JSON-safe authored contract parsed from one concept specification; State is excluded. */
 export interface ConceptSpecificationIR {
     format: "sync-engine.concept-specification";
     version: 1;
@@ -3663,7 +3664,7 @@ export interface ConceptInventoryIR {
     principle?: string;
     actions: ActionInventoryIR[];
     queries: QueryInventoryIR[];
-    /** Complete authored contract; absent for concepts registered without a specification. */
+    /** Parsed authored contract; absent when the vocabulary declaration supplied no specification. */
     specification?: ConceptSpecificationIR;
 }
 export {};

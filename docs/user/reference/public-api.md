@@ -221,14 +221,15 @@ method. The host owns floor selection and lifecycle.
 `RegisteredConcept.specification` is the machine-readable `ConceptSpec`
 extracted from purpose, principle, structured action and query signatures,
 descriptive bodies, refusal declarations, and source locations. Registration
-uses its member names, input names, query promises, and refusals; parsed type,
-result, and prose fields are descriptive contract data rather than runtime
-schemas. An optional State section remains uninterpreted human notation and
-produces no `ConceptSpec` field. Registration and source checking do not compare
-State with class fields, floor implementations, databases, or storage. State
-properties belong in principle, implementation, and backend constraint tests;
-future machine conformance requires a separately designed backend-neutral
-descriptor.
+checks its member names, recoverable input names, and refusal mappings. Query
+promises are retained as metadata and enforced when a reaction, view, or former
+evaluates a query. Parsed type, result, and prose fields are descriptive contract
+data rather than runtime schemas. An optional State section remains
+uninterpreted human notation and produces no `ConceptSpec` field. Registration
+and source checking do not compare State with class fields, floor
+implementations, databases, or storage. State properties belong in principle,
+implementation, and backend constraint tests; future machine conformance
+requires a separately designed backend-neutral descriptor.
 
 ### Occurrence index and log sinks
 
@@ -535,11 +536,11 @@ uninterpreted concept State sections. State notation likewise contributes
 nothing to the assembled read-back or generated wire.
 
 Each concept inventory may carry a
-`sync-engine.concept-specification` version-1 subtree. Registered specifications
-include their structured action/query declarations, normalized descriptions,
-refusal messages, ordered Types and extension blocks, and source locations.
-These additive fields do not change the existing inventory names, observed
-roles, cardinalities, or refusal-code lists used by older Manifest V4 consumers.
+`sync-engine.concept-specification` version-1 subtree. The subtree includes
+structured action/query declarations, normalized descriptions, refusal
+messages, ordered Types and extension blocks, and source locations. It excludes
+State. The optional subtree does not change the existing inventory names,
+observed roles, cardinalities, or refusal-code lists.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
 view-alternative, and former-node sequences retain semantics.
@@ -597,25 +598,30 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. `GeneratedApplication` names the
 descriptor type exported from `/tooling`.
 
-| Field                 | Required | Default                                                            |
-| --------------------- | -------- | ------------------------------------------------------------------ |
-| `assemble`            | yes      | Function that builds the application                               |
-| `title`               | yes      | Application title used to derive names                             |
-| `close`               | no       | Runs after the generated assembly drains                           |
-| `directory`           | no       | `new URL("./generated/", configUrl)`                               |
-| `specification`       | no       | Slugged title plus `.md`                                           |
-| `specificationBanner` | no       | HTML generator comment naming package version, title, and assembly |
-| `wire`                | no       | `"wire.ts"`                                                        |
-| `wireName`            | no       | Pascal-cased title plus `Wire`                                     |
-| `wireBanner`          | no       | Exact package/version generator banner                             |
-| `vocabulary.module`   | no       | `new URL("./src/concept-set.ts", configUrl)`                       |
-| `vocabulary.export`   | no       | `"vocabulary"`                                                     |
-| `projections`         | no       | Ordered transport-specific projections                             |
+| Field                 | Required | Default                                                 |
+| --------------------- | -------- | ------------------------------------------------------- |
+| `assemble`            | yes      | Function that builds the application                    |
+| `title`               | yes      | Application title used to derive names                  |
+| `close`               | no       | Runs after the generated assembly drains                |
+| `directory`           | no       | `new URL("./generated/", configUrl)`                    |
+| `specification`       | no       | Slugged title plus `.md`                                |
+| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance |
+| `wire`                | no       | `"wire.ts"`                                             |
+| `wireName`            | no       | Pascal-cased title plus `Wire`                          |
+| `wireBanner`          | no       | Exact package/version generator banner                  |
+| `vocabulary.module`   | no       | `new URL("./src/concept-set.ts", configUrl)`            |
+| `vocabulary.export`   | no       | `"vocabulary"`                                          |
+| `projections`         | no       | Ordered transport-specific projections                  |
 
-The default specification banner is
-`<!-- Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit. -->`.
-A custom specification banner receives a second mandatory HTML generator
-comment. The default wire banner is
+The default specification banner consists of these comments:
+
+```text
+<!-- Generated from the <title> assembly. Do not edit. -->
+<!-- Manifest producer: @mit-sdg/sync-engine@<manifest-version>; concept specification: sync-engine.concept-specification@1; renderer: @mit-sdg/sync-engine@<renderer-version>. -->
+```
+
+A custom specification banner replaces the first comment but still receives
+the mandatory provenance comment. The default wire banner is
 `// Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit.`
 A custom wire banner receives a second mandatory generator line. Artifact
 generation always uses the vocabulary anchor with strict leaves. Every

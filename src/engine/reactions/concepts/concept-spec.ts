@@ -1,7 +1,7 @@
 /**
  * **The machine-readable parts of a concept specification.**
  *
- * Registration extracts purpose and principle prose plus structured action and
+ * The parser extracts purpose and principle prose plus structured action and
  * query declarations from their corresponding Markdown sections. An optional
  * State section is uninterpreted human notation and is not represented by
  * {@link ConceptSpec}.
@@ -53,7 +53,7 @@ export type SpecType = SpecificationTypeIR;
 /** One named field in an input or inline result row. */
 export type SpecField = SpecificationFieldIR;
 
-/** An inline result row or a named result-row type. */
+/** An inline result row or a result type expression. */
 export type SpecResult = SpecificationResultIR;
 
 /** One refusal branch: the code the boundary returns and the sentence it carries. */
@@ -68,7 +68,7 @@ export type SpecQuery = SpecificationQueryIR;
 /** A reader-facing Types or extension section. */
 export type SpecDocumentation = SpecificationDocumentationIR;
 
-/** The machine-readable registration contract extracted from a concept specification. */
+/** The machine-readable authored contract extracted from a concept specification. */
 export type ConceptSpec = ConceptSpecificationIR;
 
 const PROMISES = new Set<string>(["one", "optional", "many"]);
@@ -473,9 +473,10 @@ function parseEach<T extends { name: string }>(
 }
 
 /**
- * Extract a concept's machine-readable registration contract from specification
- * markdown (import the document with `{ type: "text" }`). Throws, naming the
- * section or line, when a parsed part is missing or malformed.
+ * Extract a concept's machine-readable authored contract from specification
+ * markdown (import the document with `{ type: "text" }`). Registration assigns
+ * runtime meaning only to selected fields. Throws, naming the section or line,
+ * when a parsed part is missing or malformed.
  */
 export function parseSpec(markdown: string): ConceptSpec {
   if (typeof markdown !== "string" || markdown.trim() === "") {

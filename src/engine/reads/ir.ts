@@ -330,7 +330,7 @@ export interface SpecificationFieldIR {
   location: SpecificationLocationIR;
 }
 
-/** An inline result row or a named result-row type. */
+/** An inline result row or a result type expression. */
 export type SpecificationResultIR =
   | {
       kind: "fields";
@@ -382,7 +382,7 @@ export interface SpecificationDocumentationIR {
   location: SpecificationLocationIR;
 }
 
-/** The complete JSON-safe authored contract parsed from one concept specification. */
+/** The JSON-safe authored contract parsed from one concept specification; State is excluded. */
 export interface ConceptSpecificationIR {
   format: "sync-engine.concept-specification";
   version: 1;
@@ -420,6 +420,6 @@ export interface ConceptInventoryIR {
   principle?: string;
   actions: ActionInventoryIR[];
   queries: QueryInventoryIR[];
-  /** Complete authored contract; absent for concepts registered without a specification. */
+  /** Parsed authored contract; absent when the vocabulary declaration supplied no specification. */
   specification?: ConceptSpecificationIR;
 }

@@ -3,9 +3,10 @@
 A concept specification is a Markdown file passed to `registerConcept` as text.
 The parser extracts `Purpose`, `Principle`, structured action and query
 signatures, descriptive bodies, refusal branches, and source locations. The
-resulting `ConceptSpec` is independent of TypeScript syntax. Registration uses
-only member names, input names, query cardinalities, and refusal branches for
-runtime behavior; the other parsed fields remain authored contract data.
+resulting `ConceptSpec` is independent of TypeScript syntax. Registration checks
+member names, recoverable input names, and refusal mappings. Query cardinalities
+are enforced later when a reaction, view, or former evaluates a query. The other
+parsed fields remain authored contract data.
 
 ## Complete example
 
@@ -50,16 +51,18 @@ _get (note: Note) : optional (text: String)
 ````
 
 The parser reads the two prose sections, complete signatures, member bodies,
-and refusal line. Registration checks the names, inputs, query promise, and
-refusal branch. It does not infer a runtime schema or executable behavior from
-the parsed type expressions, results, or prose.
+and refusal line. Registration checks the member names, recoverable input names,
+and refusal mapping. Engine-evaluated reads check the query promise. Neither
+stage infers a runtime schema or executable behavior from the parsed type
+expressions, results, or prose.
 
-| Layer                              | Establishes                                                                  |
-| ---------------------------------- | ---------------------------------------------------------------------------- |
-| Specification parser               | Complete declaration syntax, descriptions, promises, refusals, and locations |
-| `registerConcept`                  | Agreement with callable runtime methods and refusal mappings                 |
-| `sync-engine check`                | Agreement with supported TypeScript source forms                             |
-| Principle and implementation tests | Behavioral sequence, state changes, returned values, and invariants          |
+| Layer                              | Establishes                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| Specification parser               | Complete declaration syntax, descriptions, promises, refusals, and locations   |
+| `registerConcept`                  | Agreement with callable methods, recoverable input names, and refusal mappings |
+| `sync-engine check`                | Agreement with direct class methods and supported TypeScript input shapes      |
+| Engine-evaluated reads             | Query result container and declared cardinality                                |
+| Principle and implementation tests | Behavioral sequence, state changes, returned values, and invariants            |
 
 ## Required sections
 
@@ -80,12 +83,15 @@ Describe one concrete sequence that demonstrates the behavior.
 
 The parser includes all text after each heading up to the next second-level
 heading outside fenced code. Heading text, capitalization, and level are
-significant. Duplicate reserved sections are rejected.
+significant. Duplicate `Purpose`, `Principle`, `Actions`, and `Queries` sections
+are rejected. State is not parsed.
 
 An `actions` fence is recognized only within `## Actions`, and a `queries` fence
-only within `## Queries`. A reserved fence in an example, State notation, or any
-other section cannot replace the declaration block. More than one matching
-fence in a section is rejected.
+only within `## Queries`. Fences may use at least three backticks or tildes; the
+closing fence must use the same character, contain at least as many characters,
+and have no trailing text. A declaration fence in an example, State notation,
+or any other section cannot replace the declaration block. More than one
+matching fence in a section is rejected.
 
 Within each declaration fence, every member name must be unique. An indented
 declaration body must follow a left-aligned signature; a body before the first
@@ -118,8 +124,9 @@ at runtime.
 
 `## Types` and other non-reserved second-level sections are retained as ordered
 reader-facing documentation blocks. `Types` is identified explicitly; every
-other heading is an extension block. Their Markdown bodies and source locations
-survive in `ConceptSpec`, application manifests, and generated read-back.
+other heading is an extension block. Each such section must have a nonempty
+body. The Markdown bodies and source locations survive in `ConceptSpec`,
+application manifests, and generated read-back.
 
 `Purpose`, `Principle`, `State`, `Actions`, and `Queries` are reserved and are
 not extension blocks. State remains deliberately excluded. Documentation blocks
@@ -141,8 +148,8 @@ join (gathering: Gathering, member: Person) : return (membership: Membership)
 ````
 
 An action name must not begin with `_`, and the token after its input list must
-be `: return`. The parser retains an inline output field list or a named result
-type and rejects missing or trailing signature text. It also retains the
+be `: return`. The parser retains an inline output field list or a result type
+expression and rejects missing or trailing signature text. It also retains the
 normalized indented body. Registration does not interpret `where`, `then`,
 state changes, operation order, or other prose as executable behavior.
 
@@ -156,11 +163,11 @@ refuse CODE "Normative sentence."
 
 The code must occur only once under an action, and the quoted sentence must not
 be empty. The sentence uses JSON string escapes, including `\"` for a literal
-double quote. A body line beginning with `refuse` but not matching the grammar is
-rejected. `registerConcept` requires one distinct registered `Error` class for
-every refusal code and rejects extra mappings. The decoded sentence supplies
-the registered detail for direct assembled calls; the `Error` instance's
-message is ignored.
+double quote. A body line beginning with the literal text `refuse ` but not
+matching the grammar is rejected. `registerConcept` requires a distinct
+registered `Error` class for every refusal code and rejects extra mappings. The
+decoded sentence supplies the registered detail for direct assembled calls; the
+`Error` instance's message is ignored.
 
 ## Query declarations
 
@@ -185,9 +192,9 @@ A query name must begin with `_`. Its promise is one of:
 | `optional` | an array containing zero or one record        | no more than one record                       |
 | `many`     | an array containing any number of record rows | every element is a non-null, non-array object |
 
-The parser records the structured inputs, promise, inline row fields or named
-row type, and normalized body. Query bodies are not registration data and
-acquire no refusal or runtime semantics; establish their claims in
+The parser records the structured inputs, promise, inline row fields or result
+type expression, and normalized body. Registration does not interpret query
+bodies or give them refusal or runtime semantics; establish their claims in
 implementation tests. The engine checks the result container and cardinality
 when a reaction, view, or former reads the query. It does not check row values
 against the parsed row declaration.
@@ -225,9 +232,11 @@ The function performs these checks against the parsed document:
 - action and query names agree in both directions;
 - every declared refusal code has one distinct `Error` class;
 - no extra refusal mapping exists;
-- floor names are non-empty and floor values are functions;
 - input names agree when runtime reflection can recover a non-empty,
   top-level destructured parameter.
+
+Registration also requires nonempty floor names and function-valued floor
+factories. Those floor checks do not derive from the specification.
 
 Runtime reflection cannot recover every erased TypeScript signature. A
 placeholder, plain, absent, empty, or nested parameter can skip the runtime
@@ -237,11 +246,13 @@ input-name comparison.
 
 `sync-engine check` reads `spec.md`, `registry.ts`, and the registered class's
 TypeScript source. `registry.ts` must use a named import whose module specifier
-resolves directly to the source file that declares the class; class discovery
-does not follow re-export chains. The checker compares methods declared directly
-in that class with the action and query names. It does not traverse a base class,
-so a specification relying on an inherited method can pass `registerConcept`
-while failing the source check.
+resolves as a filesystem path to the source file that declares the class.
+Relative paths are resolved from `registry.ts`; absolute paths remain absolute.
+Class discovery does not use TypeScript module resolution or follow re-export
+chains. The checker compares methods declared directly in that class with the
+action and query names. It does not traverse a base class, so a specification
+relying on an inherited method can pass `registerConcept` while failing the
+source check.
 
 Supported method parameter forms are:
 
@@ -263,6 +274,10 @@ parameters, plain untyped parameters, and nested or rest destructuring. A
 failure names the method and parameter type, first unsupported operation,
 declaration location, and alternative key sets when applicable.
 
+Type resolution is limited to 32 expansion operations and 64 alternative key
+sets. Exceeding either limit fails the check rather than accepting an incomplete
+shape.
+
 The checker loads the nearest `tsconfig.json`, uses its module resolution and
 path mappings, and adds the concept source when the config excludes it. Without
 a config it uses NodeNext resolution for the concept source and its imports.
@@ -280,8 +295,10 @@ runtime endpoint values.
 ## Caller obligations
 
 Import the Markdown file as text and pass that string to `registerConcept`.
-Keep `spec.md`, the class, refusal mappings, and the principle test in the same
-concept directory so the default CLI search can discover them. Run
+Place `spec.md` and `registry.ts` together under a CLI concept root. Keeping the
+class, refusal mappings, and principle test in that concept directory is the
+project convention, but the checker follows the class path imported by
+`registry.ts`. Run
 `sync-engine check` after changing a parsed action or query signature, and run
 the relevant principle, implementation, and backend constraint tests after
 changing behavior or state notation.

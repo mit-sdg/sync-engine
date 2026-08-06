@@ -706,6 +706,12 @@ Generated Markdown names its manifest producer, the
 version. Each parsed concept contract also carries its own format and version in
 the manifest.
 
+The concept read-back reproduces parsed signatures, member bodies, refusals,
+Types, and extension sections, but excludes State. Its labels distinguish
+registration checks from query cardinality checks performed during evaluated
+reads. Type expressions, result declarations, and behavior prose do not become
+runtime validation or executable assertions.
+
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 defines input admission and explicit input, successful-output, and domain-error
 validation. None is inferred from the generated type.

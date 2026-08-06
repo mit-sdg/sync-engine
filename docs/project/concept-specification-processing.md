@@ -19,8 +19,7 @@ Keep these sources of truth distinct when changing this path:
 
 The supported format uses Markdown for both machine declarations and human
 explanation. The engine does not infer schemas or behavior from the human
-parts. The current parser is more permissive than the intended format in
-several places; [Known gaps](#known-gaps) records those cases separately.
+parts. [Known gaps](#known-gaps) records the remaining enforcement differences.
 
 ## Processing pipeline
 
@@ -28,11 +27,11 @@ several places; [Known gaps](#known-gaps) records those cases separately.
 | ------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Parse         | `src/engine/reactions/concepts/concept-spec.ts`           | Convert Markdown text to versioned `ConceptSpec`                                        |
 | Register      | `src/engine/boundary/assembly/concept-set.ts`             | Compare declarations with the class and validate refusal mappings                       |
-| Project       | `conceptSet` in the same file                             | Carry the complete contract plus runtime query/refusal contracts into metadata          |
+| Project       | `conceptSet` in the same file                             | Carry the parsed contract plus runtime query/refusal contracts into metadata            |
 | Source-check  | `src/command/check.ts`                                    | Compare declarations with supported TypeScript source forms                             |
 | Attach        | `src/engine/boundary/assembly/assemble.ts`                | Attach vocabulary metadata to selected instances                                        |
 | Execute reads | `src/engine/reads/queries.ts`                             | Enforce query answer containers and cardinality during reaction, view, and former reads |
-| Inspect       | `src/engine/reactions/concepts/introspect.ts` and tooling | Emit the complete contract in inventories, manifests, and read-back                     |
+| Inspect       | `src/engine/reactions/concepts/introspect.ts` and tooling | Emit the parsed contract in inventories, manifests, and read-back                       |
 
 The lower-level `vocabulary({ class, spec })` path also parses a specification,
 but it is not equivalent to `registerConcept`; see [Vocabulary-only
@@ -55,7 +54,7 @@ fields:
 
 Type expressions are an implementation-language-independent tree of named
 references, generic arguments, unions, `null`, and `undefined`. Results are
-either inline fields or a named type expression. `ConceptSpec` retains no State
+either inline fields or a type expression. `ConceptSpec` retains no State
 descriptor or executable action behavior tree.
 
 The parser has no explicit document-size or declaration-count limit. It holds
@@ -66,7 +65,8 @@ the supplied string and its complete line array while parsing.
 `sectionsOf` recognizes second-level headings outside backtick or tilde fences.
 Heading indentation is accepted; spelling, case, and level are otherwise exact.
 Purpose and Principle are required, nonempty, and unique. Actions and Queries
-are optional but unique when present.
+are optional but unique when present. Duplicate State sections are not checked
+because State is not parsed.
 
 `fenceOf` finds an `actions` fence only inside `## Actions` and a `queries`
 fence only inside `## Queries`. A declaration fence in an example, State, or an
@@ -99,10 +99,10 @@ Action names are ASCII-style identifiers without a leading `_` and resolve with
 `return`. Query names begin with `_` and resolve with `one`, `optional`, or
 `many`. Names must be unique within their declaration fence.
 
-Action body lines beginning with `refuse` must match a code followed by a
-JSON-compatible quoted string. Messages are decoded, must be nonempty, and may
-contain escaped quotes. One action cannot repeat a code; several actions may use
-the same code.
+Action body lines beginning with the literal text `refuse ` must match a code
+followed by a JSON-compatible quoted string. Messages are decoded, must be
+nonempty, and may contain escaped quotes. One action cannot repeat a code;
+several actions may use the same code.
 
 Parsed type, output, row, and body data remain documentation rather than runtime
 schema or behavior. The parser does not interpret `where`, `then`, `return`,
@@ -129,14 +129,14 @@ Placeholder, plain, absent, empty, or unsupported destructured parameters skip
 the runtime input comparison. Registration does not inspect return values,
 output declarations, State, action behavior, class fields, or storage.
 
-`conceptSet` retains the complete parsed specification in metadata. Refusals become
+`conceptSet` retains the parsed specification in metadata. Refusals become
 action-specific triples of code, normative specification message, and
 registered `Error` class. Query promises become a map keyed by query name.
 
 ### Vocabulary-only parsing
 
 `specifiedContracts` in `src/engine/reactions/authoring/refs.ts` retains the
-complete contract and derives Purpose, Principle, and query promises from a
+parsed contract and derives Purpose, Principle, and query promises from a
 `{ class, spec }` vocabulary descriptor. It does not derive executable refusal
 contracts because those require registered Error classes. Explicit descriptor
 metadata is spread after parsed metadata and can override it. This path does not
@@ -203,9 +203,9 @@ passing through `queryRows`; the promise is not checked on that path.
 TypeScript class signatures, not parsed Markdown types or results, drive
 authoring types and wire provenance.
 
-`ConceptInventoryIR.specification` is optional so manually instrumented concepts
-and existing Manifest V4 consumers retain their prior subset. Registered
-concepts carry the version-1 JSON-safe contract. Manifest canonicalization sorts
+`ConceptInventoryIR.specification` is optional, so concepts declared without a
+specification retain the narrower inventory. Registered concepts carry the
+version-1 JSON-safe contract. Manifest canonicalization sorts
 runtime inventory members but preserves authored contract arrays, including
 documentation order. The Markdown renderer prefers the authored contract and
 falls back to the narrow legacy inventory when none is present. Generated

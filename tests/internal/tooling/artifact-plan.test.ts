@@ -137,7 +137,7 @@ describe("artifact plans", () => {
     expect(plan.entries.every(({ content }) => content.includes(PACKAGE_VERSION))).toBe(true);
   });
 
-  test("renders complete authored concept contracts from the manifest", () => {
+  test("renders retained authored concept contracts from the manifest", () => {
     class CatalogingConcept {
       configure(_: { values: Map<string, unknown>; source?: string }) {
         return { configuration: "ready" };
@@ -226,13 +226,14 @@ Positions are unique within a Catalog.
     );
     expect(content).toContain("validates every supplied value");
     expect(content).toContain(
-      '`INVALID_CONFIGURATION`: "The value \\"unknown\\" is not supported."',
+      'refuse INVALID_CONFIGURATION "The value \\"unknown\\" is not supported."',
     );
+    expect(content).toContain("**Registered refusal codes:** `INVALID_CONFIGURATION`");
     expect(content).toContain("`_items (catalog: Catalog) : many (item: Item, position: Number)`");
     expect(content).toContain("orders rows by ascending position");
     expect(content).toContain("#### Types");
     expect(content).toContain("#### Invariants");
-    expect(content).toContain("Registration enforces member and input names");
+    expect(content).toContain("Registration checks member names, recoverable input names");
   });
 
   test("strict wire planning requires a vocabulary anchor", () => {

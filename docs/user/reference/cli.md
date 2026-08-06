@@ -60,13 +60,14 @@ is `src/concepts`. Each discovered concept directory must contain `registry.ts`,
 and that registry must call `registerConcept` with a class imported by name.
 
 The command parses the specification, locates the registered class, and compares
-action and query names. It resolves each typed parameter's finite top-level key
-set through the nearest TypeScript project, including imported interfaces,
-aliases, re-exports, intersections, utilities, and path mappings. Ambiguous or
-dynamic shapes fail closed with their type operation and source location. The
-command does not read State notation as grammar or compare it with class fields
-or storage. [Concept specification format](concept-specification.md) defines the
-accepted machine grammar, supported source shapes, and uninterpreted boundary.
+action and query names and input keys. It resolves typed parameters through the
+nearest TypeScript project, including supported imported interfaces, aliases,
+re-exports, intersections, mapped and utility types, and path mappings.
+Ambiguous or dynamic shapes fail closed with their type operation and source
+location. The command does not read State notation as grammar or compare it with
+class fields or storage. [Concept specification
+format](concept-specification.md) defines the accepted grammar, supported source
+shapes, and uninterpreted boundary.
 
 `--concepts` consumes one or more paths, ending at the next option. Each of
 `--concepts`, `--config`, and `--fail-on-warnings` may appear at most once.
@@ -128,9 +129,9 @@ declaration order.
 Prints `sync-engine.application-manifest` version `4` as canonical JSON. The
 manifest contains application design, declaration-owned endpoints, input and
 wire contracts, validator-presence flags, structured diagnostics, and a digest
-over those fields. Concept inventories include complete authored specifications
-when registered, including source locations. The manifest excludes occurrences
-and other runtime state.
+over those fields. Concept inventories include the parsed authored contract and
+source locations when a specification is present. The manifest excludes
+occurrences, concept State sections, and other runtime state.
 
 ### `spec`
 
@@ -140,9 +141,10 @@ operations in the exported IR. The last value counts every operation occurrence,
 including repeated uses of one named computation.
 
 The concept portion renders authored signatures, behavior prose, refusal
-messages, Types, and extension sections. It labels the registration-enforced
-subset separately. Its generated comment identifies the manifest producer,
-concept-specification format, and renderer versions.
+messages, Types, and extension sections. It distinguishes registration checks,
+evaluated-read cardinality checks, and descriptive fields. Its generated comment
+identifies the manifest producer, concept-specification format, and renderer
+versions.
 
 ### `wire`
 

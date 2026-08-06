@@ -15,8 +15,8 @@ _specifications and composition source, then regenerate this file._
 **Principle.** An application reserves atlas once. A second claim of atlas is refused because
 namespace labels are unique; the label is not a person's authenticated identity.
 
-_Registration enforces member and input names, query cardinalities, and refusal codes._
-_Types, results, and behavior prose are authored documentation; verify them in application tests._
+_Registration checks member names, recoverable input names, and refusal mappings._
+_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
 
 #### Actions
 
@@ -32,9 +32,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
       add name
       return name
 
-**Registration-enforced refusals:**
-
-- `NAME_TAKEN`: "This name is already claimed."
+**Registered refusal codes:** `NAME_TAKEN`
 
 ### RequestBoundary
 
@@ -56,8 +54,8 @@ policy or accepting an identity claim.
 At expiry it is removed and refused, just like an unknown or ended session.
 Ending an active session makes it unknown.
 
-_Registration enforces member and input names, query cardinalities, and refusal codes._
-_Types, results, and behavior prose are authored documentation; verify them in application tests._
+_Registration checks member names, recoverable input names, and refusal mappings._
+_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
 
 #### Actions
 
@@ -81,9 +79,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
     then
       return active true
 
-**Registration-enforced refusals:**
-
-- `UNKNOWN_SESSION`: "This session is not active."
+**Registered refusal codes:** `UNKNOWN_SESSION`
 
 ##### `end (session: Session) : return (ended: Flag)`
 
@@ -98,9 +94,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
       delete that session
       return ended true
 
-**Registration-enforced refusals:**
-
-- `UNKNOWN_SESSION`: "This session is not active."
+**Registered refusal codes:** `UNKNOWN_SESSION`
 
 ## Reactions
 

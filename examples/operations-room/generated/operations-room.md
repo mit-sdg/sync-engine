@@ -19,8 +19,8 @@ change Mina's alerts. Mina acknowledges the failed-checkout alert; her delayed-
 deployment alert and Jo's alert remain. Trying to acknowledge the first alert
 again is refused because it is no longer open.
 
-_Registration enforces member and input names, query cardinalities, and refusal codes._
-_Types, results, and behavior prose are authored documentation; verify them in application tests._
+_Registration checks member names, recoverable input names, and refusal mappings._
+_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
 
 #### Actions
 
@@ -44,9 +44,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
       delete alert
       return alert
 
-**Registration-enforced refusals:**
-
-- `ALERT_NOT_FOUND`: "There is no such open alert."
+**Registered refusal codes:** `ALERT_NOT_FOUND`
 
 #### Queries
 
@@ -62,8 +60,8 @@ shown in the order it arrived. Mina closes the discussion. A later response is
 refused because the discussion is closed, as is an attempt to open a second
 discussion about the same subject while the first one is open.
 
-_Registration enforces member and input names, query cardinalities, and refusal codes._
-_Types, results, and behavior prose are authored documentation; verify them in application tests._
+_Registration checks member names, recoverable input names, and refusal mappings._
+_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
 
 #### Actions
 
@@ -80,9 +78,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
     then
       refuse DISCUSSION_ALREADY_OPEN "This subject already has an open discussion."
 
-**Registration-enforced refusals:**
-
-- `DISCUSSION_ALREADY_OPEN`: "This subject already has an open discussion."
+**Registered refusal codes:** `DISCUSSION_ALREADY_OPEN`
 
 ##### `respond (discussion: Discussion, author: Person, text: String) : return (response: Response)`
 
@@ -96,9 +92,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
     then
       refuse DISCUSSION_NOT_OPEN "This discussion is not open."
 
-**Registration-enforced refusals:**
-
-- `DISCUSSION_NOT_OPEN`: "This discussion is not open."
+**Registered refusal codes:** `DISCUSSION_NOT_OPEN`
 
 ##### `close (discussion: Discussion) : return ()`
 
@@ -112,9 +106,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
     then
       refuse DISCUSSION_NOT_OPEN "This discussion is not open."
 
-**Registration-enforced refusals:**
-
-- `DISCUSSION_NOT_OPEN`: "This discussion is not open."
+**Registered refusal codes:** `DISCUSSION_NOT_OPEN`
 
 #### Queries
 
@@ -133,8 +125,8 @@ duplicate. Bo leaves; a second attempt to leave is refused because Bo no longer
 belongs. When Cy tries to join an unknown gathering, it is refused because the
 gathering does not exist.
 
-_Registration enforces member and input names, query cardinalities, and refusal codes._
-_Types, results, and behavior prose are authored documentation; verify them in application tests._
+_Registration checks member names, recoverable input names, and refusal mappings._
+_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
 
 #### Actions
 
@@ -162,10 +154,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
       add a new membership with gathering and member
       return membership
 
-**Registration-enforced refusals:**
-
-- `GATHERING_NOT_FOUND`: "There is no such gathering."
-- `ALREADY_JOINED`: "This person already belongs to the gathering."
+**Registered refusal codes:** `GATHERING_NOT_FOUND`, `ALREADY_JOINED`
 
 ##### `leave (gathering: Gathering, member: Person) : return (membership: Membership)`
 
@@ -182,10 +171,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
       delete that membership
       return membership
 
-**Registration-enforced refusals:**
-
-- `GATHERING_NOT_FOUND`: "There is no such gathering."
-- `NOT_JOINED`: "This person does not belong to the gathering."
+**Registered refusal codes:** `GATHERING_NOT_FOUND`, `NOT_JOINED`
 
 #### Queries
 
@@ -217,8 +203,8 @@ changing another workshop's selection. Clearing the workshop removes its
 current selection. A second clear is refused because there is nothing left to
 clear.
 
-_Registration enforces member and input names, query cardinalities, and refusal codes._
-_Types, results, and behavior prose are authored documentation; verify them in application tests._
+_Registration checks member names, recoverable input names, and refusal mappings._
+_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
 
 #### Actions
 
@@ -244,9 +230,7 @@ _Types, results, and behavior prose are authored documentation; verify them in a
     then
       refuse NO_CURRENT_SELECTION "This scope has no current selection."
 
-**Registration-enforced refusals:**
-
-- `NO_CURRENT_SELECTION`: "This scope has no current selection."
+**Registered refusal codes:** `NO_CURRENT_SELECTION`
 
 #### Queries
 

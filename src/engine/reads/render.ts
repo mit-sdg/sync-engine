@@ -410,8 +410,8 @@ function renderAuthoredConcept(name: string, specification: ConceptSpecification
   lines.push(`**Purpose.** ${specification.purpose}`, "");
   lines.push(`**Principle.** ${specification.principle}`, "");
   lines.push(
-    "_Registration enforces member and input names, query cardinalities, and refusal codes._",
-    "_Types, results, and behavior prose are authored documentation; verify them in application tests._",
+    "_Registration checks member names, recoverable input names, and refusal mappings._",
+    "_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._",
     "",
   );
   if (specification.actions.length > 0) {
@@ -420,11 +420,10 @@ function renderAuthoredConcept(name: string, specification: ConceptSpecification
       lines.push(`##### \`${renderActionSignature(action)}\``, "");
       pushAuthoredBody(lines, action.body);
       if (action.refusals.length > 0) {
-        lines.push("**Registration-enforced refusals:**", "");
-        for (const refusal of action.refusals) {
-          lines.push(`- \`${refusal.code}\`: ${JSON.stringify(refusal.message)}`);
-        }
-        lines.push("");
+        lines.push(
+          `**Registered refusal codes:** ${action.refusals.map(({ code }) => `\`${code}\``).join(", ")}`,
+          "",
+        );
       }
     }
   }

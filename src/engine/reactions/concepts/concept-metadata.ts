@@ -68,7 +68,7 @@ export interface ConceptMetadata {
   queries?: Readonly<Record<string, QueryPromise>>;
   outcomes?: OutcomeContracts;
   refusals?: RefusalContracts;
-  /** Complete authored contract; registration semantics use only selected fields. */
+  /** Parsed authored contract; registration semantics use only selected fields. */
   specification?: ConceptSpecificationIR;
 }
 

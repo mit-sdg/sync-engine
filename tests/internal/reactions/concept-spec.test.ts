@@ -1,7 +1,7 @@
 /**
- * The parser extracts only the machine-readable registration contract: purpose,
- * principle, actions and refusal branches, and query promises. State notation
- * remains outside that value.
+ * The parser retains the authored contract, including structured signatures,
+ * member bodies, documentation sections, and source locations. State notation
+ * remains outside that value; registration uses a narrower projection.
  */
 import { describe, expect, test } from "vite-plus/test";
 import { parseSpec } from "@sync-engine/internal/reactions/concepts/concept-spec";
@@ -242,7 +242,7 @@ describe("the specification's queries", () => {
     );
   });
 
-  test("query bodies are reader-facing prose and do not change metadata", () => {
+  test("query bodies are retained but do not change registration data", () => {
     const withBodies = queries(
       [
         "_items (catalog: Catalog) : many (item: Item, position: Number)",

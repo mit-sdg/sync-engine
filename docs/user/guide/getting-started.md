@@ -178,8 +178,8 @@ diff; do not edit generated files directly.
 
 The read-back keeps Noting's authored signatures, descriptions, refusal
 messages, Types, and extension sections beside the assembled composition. It
-marks the smaller subset enforced by registration rather than presenting prose
-as an executable guarantee.
+separates registration checks and evaluated-read cardinality checks from type,
+result, and behavior prose that the engine does not execute.
 
 Generated TypeScript checks typed callers. Gateway admission only checks the
 route, an outer object, and required-key presence. It does not validate
