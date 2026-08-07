@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -1232,7 +1232,7 @@ describe("application impact analysis", () => {
       loadApplicationProject({ ...options, limits: { maxProjectFileBytes: 1 } }),
     ).toThrow(AnalysisLimitError);
 
-    const changingPath = join(repositoryRoot, "src/reactions.ts");
+    const changingPath = realpathSync(join(repositoryRoot, "src/reactions.ts"));
     let reactionReads = 0;
     expect(() =>
       loadApplicationProject({

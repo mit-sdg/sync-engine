@@ -260,6 +260,32 @@ export const application = assemble({ vocabulary: words, composition: { nested }
     expect(sourceIndex.entries.some(({ ref }) => designRefKey(ref).includes("shadow"))).toBe(false);
   });
 
+  test("uses exact public imports when resolved module exports omit declarations", () => {
+    const manifest = manifestFor({ concepts: [], reactions: ["React"] });
+    const sourceIndex = index(manifest, {
+      "core.d.ts": `declare module "@mit-sdg/sync-engine/assembly" {
+  export const placeholder: unknown;
+}
+declare module "@mit-sdg/sync-engine/language" {
+  export const placeholder: unknown;
+}
+`,
+      "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
+import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+const React = reaction(() => null);
+const words = vocabulary({ concepts: {}, computations: {} });
+export const application = assemble({ vocabulary: words, composition: { React } });
+`,
+    });
+
+    expect(sourceIndex.issues).toEqual([]);
+    expect(
+      sourcesFor(sourceIndex, { kind: "reaction", reaction: "React" }).some(
+        ({ resolution }) => resolution === "literal-name",
+      ),
+    ).toBe(true);
+  });
+
   test("maps arbitrary logical concept names without class spelling or unrelated-registration ambiguity", () => {
     const manifest = manifestFor({
       concepts: [

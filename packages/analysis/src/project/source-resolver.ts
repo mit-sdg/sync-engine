@@ -187,7 +187,6 @@ export class SourceResolver {
             );
           }
         }
-        continue;
       }
       if (!ts.isImportDeclaration(statement)) continue;
       const imports = statement.importClause?.namedBindings;
