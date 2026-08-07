@@ -23,6 +23,14 @@ interface ConceptProtocol {
 
 export const CONCEPT_PROTOCOL: unique symbol = Symbol("conceptProtocol");
 
+/** Input roles observed from the canonical vocabulary class at declaration. */
+interface ConceptMemberRoles {
+  readonly actions: Readonly<Record<string, readonly string[] | undefined>>;
+  readonly queries: Readonly<Record<string, readonly string[] | undefined>>;
+}
+
+export const CONCEPT_MEMBER_ROLES: unique symbol = Symbol("conceptMemberRoles");
+
 /** Resolve one own or inherited protocol method without invoking accessors. */
 export function callableConceptMember(
   value: object,
@@ -63,6 +71,7 @@ export function conceptProtocolOf(prototype: object): ConceptProtocol {
 /** Contracts owned by a vocabulary name rather than embedded in its class. */
 export interface ConceptMetadata {
   readonly [CONCEPT_PROTOCOL]?: ConceptProtocol;
+  readonly [CONCEPT_MEMBER_ROLES]?: ConceptMemberRoles;
   purpose?: string;
   principle?: string;
   queries?: Readonly<Record<string, QueryPromise>>;

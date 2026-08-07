@@ -27,6 +27,7 @@ import { declarationsOf } from "@engine/reactions/authoring/partitions";
 import { $vars } from "@engine/reactions/authoring/vars";
 import { when } from "@engine/reactions/authoring/words";
 import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metadata";
+import { rolesOf } from "@engine/reactions/concepts/introspect";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
 import type { InstrumentedConcept, QueryCacheMode } from "@engine/reactions/runtime/instrumenting";
 import {
@@ -48,12 +49,14 @@ import type {
   Vars,
   WhenBuilder,
 } from "@engine/reactions/types";
-import type { ComputationFn } from "@engine/reads/computations";
+import { standardComputations, type ComputationFn } from "@engine/reads/computations";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
+import type { ComputationInventoryIR, ConceptImplementationProvenanceIR } from "@engine/reads/ir";
 import { isRelationView } from "@engine/reads/lines";
 import type { RelationView } from "@engine/reads/lines";
 import { canonicalValue } from "@engine/utils/canonical-json";
 import { logger } from "@engine/utils/logger";
+import { ordinal } from "@engine/utils/ordinal";
 import { createRedactor } from "@engine/utils/redaction";
 import type { RedactionPolicy } from "@engine/utils/redaction";
 import { setOwn } from "@engine/utils/own-property";
@@ -79,6 +82,7 @@ import {
 import type { EndpointDeclaration } from "./endpoint-portability.ts";
 import { assertApplicationLocality } from "./locality-validation.ts";
 import { validateConceptImplementation } from "./concept-set.ts";
+import { implementationFloorOf } from "./implementation-registry.ts";
 
 // Endpoints author against these request-boundary references.
 
@@ -238,6 +242,10 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   invoker: Invoker<ContractShape>;
   /** The instrumented concepts, by vocabulary name — the canonical class types them. */
   concepts: { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> };
+  /** Portable facts for every installed standard and vocabulary computation. */
+  computations: readonly ComputationInventoryIR[];
+  /** Portable canonical/selected implementation facts, including the request boundary. */
+  conceptImplementations: readonly ConceptImplementationProvenanceIR[];
   contracts: Record<string, InputContractDecl>;
   validators: Readonly<Record<string, EndpointValidators>>;
   beginDrain(): Promise<void>;
@@ -270,6 +278,28 @@ function portableInputContract(path: string, contract: InputContractDecl): Input
     ...(contract.required === undefined ? {} : { required: [...contract.required] }),
     ...(defaults === undefined ? {} : { defaults }),
   };
+}
+
+function portableConstructorName(name: string | undefined): string | undefined {
+  return name === undefined || name === "" || name === "Object" ? undefined : name;
+}
+
+function classConstructorName(cls: ConceptClass): string | undefined {
+  return portableConstructorName(cls.name);
+}
+
+function instanceConstructorName(instance: object): string | undefined {
+  let prototype = Object.getPrototypeOf(instance) as object | null;
+  while (prototype !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "constructor");
+    if (descriptor !== undefined) {
+      return portableConstructorName(
+        typeof descriptor.value === "function" ? descriptor.value.name : undefined,
+      );
+    }
+    prototype = Object.getPrototypeOf(prototype) as object | null;
+  }
+  return undefined;
 }
 
 /**
@@ -334,7 +364,23 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.queryCache,
   );
   engine.logging = options.logging ?? Logging.OFF;
-  engine.registerComputations(vocabularyComputations(options.vocabulary));
+  const declaredComputations = vocabularyComputations(options.vocabulary);
+  engine.registerComputations(declaredComputations);
+  const computations: ComputationInventoryIR[] = [
+    ...standardComputations,
+    ...Object.values(declaredComputations),
+  ]
+    .map((ref) => {
+      const observed = rolesOf(ref.fn);
+      const inputs =
+        observed !== undefined && new Set(observed).size === observed.length ? observed : undefined;
+      return {
+        name: ref.computationName,
+        source: ref.source,
+        ...(inputs === undefined ? {} : { inputs }),
+      };
+    })
+    .sort((left, right) => ordinal(left.name, right.name));
 
   const boundary = new Requesting();
   engine.Action._onFlowQuiescent(({ flow, interpreterFailed }) => {
@@ -342,9 +388,25 @@ export function assemble<T extends Record<string, ConceptClass>>(
     lifecycle.flowSettled(flow);
   });
   const instrumentedBoundary = engine.instrumentConcept(boundary, "RequestBoundary");
+  const boundaryConstructorName = instanceConstructorName(boundary);
+  const conceptImplementations: ConceptImplementationProvenanceIR[] = [
+    {
+      concept: "RequestBoundary",
+      canonical: {
+        owner: "core",
+        ...(boundaryConstructorName === undefined
+          ? {}
+          : { constructorName: boundaryConstructorName }),
+      },
+      selected: { via: "core" },
+    },
+  ];
 
   // ── Concepts: instances win, initialize supplies args, no-arg classes default-construct ──
   const classes = vocabularyClasses(options.vocabulary);
+  if (Object.hasOwn(classes, "RequestBoundary")) {
+    throw new Error('assemble: "RequestBoundary" is reserved for the core request boundary.');
+  }
   for (const source of [options.instances, options.initialize]) {
     for (const name of Object.keys(source ?? {})) {
       if (!Object.hasOwn(classes, name)) {
@@ -360,12 +422,14 @@ export function assemble<T extends Record<string, ConceptClass>>(
       supplied !== undefined && Object.hasOwn(supplied, name) ? supplied[name] : undefined;
     const metadata = Object.hasOwn(metadataByName, name) ? metadataByName[name] : undefined;
     let instance = provided;
+    let selectedVia: "default" | "initialize" | "instances" = "instances";
     if (instance === undefined) {
       const initialization = options.initialize as Record<string, readonly unknown[]> | undefined;
       const args =
         initialization !== undefined && Object.hasOwn(initialization, name)
           ? initialization[name]
           : undefined;
+      selectedVia = args === undefined ? "default" : "initialize";
       if (args === undefined && cls.length > 0) {
         throw new Error(
           `assemble: concept "${name}" requires constructor arguments; supply initialize or instances.`,
@@ -375,6 +439,35 @@ export function assemble<T extends Record<string, ConceptClass>>(
       instance = new Constructor(...(args ?? []));
     }
     validateConceptImplementation("assemble", name, cls, instance);
+    const canonicalConstructorName = classConstructorName(cls);
+    const selectedConstructorName =
+      selectedVia === "instances" ? instanceConstructorName(instance) : undefined;
+    const floor =
+      selectedVia === "instances" && supplied !== undefined
+        ? implementationFloorOf(supplied, name, instance)
+        : undefined;
+    const selected: ConceptImplementationProvenanceIR["selected"] =
+      selectedVia === "instances"
+        ? {
+            via: "instances",
+            ...(selectedConstructorName === undefined
+              ? {}
+              : { constructorName: selectedConstructorName }),
+            ...(floor === undefined ? {} : { floor }),
+          }
+        : {
+            via: selectedVia,
+          };
+    conceptImplementations.push({
+      concept: name,
+      canonical: {
+        owner: "application",
+        ...(canonicalConstructorName === undefined
+          ? {}
+          : { constructorName: canonicalConstructorName }),
+      },
+      selected,
+    });
     if (metadata !== undefined) attachConceptMetadata(instance, metadata);
     setOwn(concepts, name, engine.instrumentConcept(instance, name));
   }
@@ -509,6 +602,10 @@ export function assemble<T extends Record<string, ConceptClass>>(
     engine,
     invoker,
     concepts: concepts as { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> },
+    computations,
+    conceptImplementations: conceptImplementations.sort((left, right) =>
+      ordinal(left.concept, right.concept),
+    ),
     contracts,
     validators,
     beginDrain: () => lifecycle.beginDrain(),

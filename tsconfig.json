@@ -21,6 +21,7 @@
       "@examples/*": ["./examples/*"],
       "@mit-sdg/sync-engine/*": ["./src/*/index.ts"],
       "@mit-sdg/sync-engine-http/*": ["./packages/http/src/*/index.ts"],
+      "@mit-sdg/sync-engine-analysis/*": ["./packages/analysis/src/*/index.ts"],
       "@root/*": ["./*"],
       "@scripts/*": ["./scripts/*"],
       "@sync-engine/*": ["./src/*/index.ts"],

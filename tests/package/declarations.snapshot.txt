@@ -115,8 +115,9 @@ import { Logging } from "../../reactions/runtime/logging.ts";
 import type { OperationalObserver, RawFaultReporter } from "../../reactions/runtime/operational.ts";
 import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
-import type { ComputationFn } from "../../reads/computations.ts";
+import { type ComputationFn } from "../../reads/computations.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
+import type { ComputationInventoryIR, ConceptImplementationProvenanceIR } from "../../reads/ir.ts";
 import type { RedactionPolicy } from "../../utils/redaction.ts";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
 import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
@@ -203,6 +204,10 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     concepts: {
         [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>>;
     };
+    /** Portable facts for every installed standard and vocabulary computation. */
+    computations: readonly ComputationInventoryIR[];
+    /** Portable canonical/selected implementation facts, including the request boundary. */
+    conceptImplementations: readonly ConceptImplementationProvenanceIR[];
     contracts: Record<string, InputContractDecl>;
     validators: Readonly<Record<string, EndpointValidators>>;
     beginDrain(): Promise<void>;
@@ -332,6 +337,12 @@ export interface EndpointDeclaration {
     readonly path: string;
     readonly reactions: readonly string[];
 }
+
+=== dist/engine/boundary/assembly/implementation-registry.d.ts ===
+/** Associate a generated implementation map and each value without changing either. */
+export declare function rememberImplementations(implementations: Record<string, object>, floor?: string): void;
+/** Recover a floor from the exact map first, then from a safely spread instance. */
+export declare function implementationFloorOf(implementations: object, concept: string, instance: object): string | undefined;
 
 === dist/engine/boundary/assembly/locality-validation.d.ts ===
 /** Fail closed when ordinary assembly contains behavior that cannot travel as data. */
@@ -1336,6 +1347,12 @@ interface ConceptProtocol {
     readonly queries: readonly string[];
 }
 export declare const CONCEPT_PROTOCOL: unique symbol;
+/** Input roles observed from the canonical vocabulary class at declaration. */
+interface ConceptMemberRoles {
+    readonly actions: Readonly<Record<string, readonly string[] | undefined>>;
+    readonly queries: Readonly<Record<string, readonly string[] | undefined>>;
+}
+export declare const CONCEPT_MEMBER_ROLES: unique symbol;
 /** Resolve one own or inherited protocol method without invoking accessors. */
 export declare function callableConceptMember(value: object, name: string): ((...args: never[]) => unknown) | undefined;
 /** Read the callable protocol declared by a class prototype and its bases. */
@@ -1343,6 +1360,7 @@ export declare function conceptProtocolOf(prototype: object): ConceptProtocol;
 /** Contracts owned by a vocabulary name rather than embedded in its class. */
 export interface ConceptMetadata {
     readonly [CONCEPT_PROTOCOL]?: ConceptProtocol;
+    readonly [CONCEPT_MEMBER_ROLES]?: ConceptMemberRoles;
     purpose?: string;
     principle?: string;
     queries?: Readonly<Record<string, QueryPromise>>;
@@ -3546,13 +3564,45 @@ export interface UnloweredIR {
         patterns: PatternIR[];
     };
 }
-/** Everything the engine knows about its registered reactions, as data. */
+/** One installed pure computation, without its runtime function. */
+export interface ComputationInventoryIR {
+    name: string;
+    source: "standard" | "vocabulary";
+    /** Input roles observed from the function's destructuring; absent when unreadable. */
+    inputs?: string[];
+}
+/** The canonical and assembly-selected implementation of one concept name. */
+export interface ConceptImplementationProvenanceIR {
+    concept: string;
+    canonical: {
+        owner: "core" | "application";
+        constructorName?: string;
+    };
+    selected: {
+        via: "core";
+    } | {
+        via: "default";
+    } | {
+        via: "initialize";
+    } | {
+        via: "instances";
+        constructorName?: string;
+        floor?: string;
+    };
+}
+/**
+ * Everything the engine knows about registered application definitions, as
+ * data. Concept and computation names inside those definitions are references;
+ * their complete inventories live outside `AppIR`.
+ */
 export interface AppIR {
+    /** Reaction definitions. */
     reactions: ReactionIR[];
-    /** Views the reactions reference, dependencies before dependents. */
+    /** Referenced view definitions, dependencies before dependents. */
     views: ViewIR[];
-    /** Formers the reactions reference or the app declares, in registration order. */
+    /** Referenced or explicitly declared former definitions, in registration order. */
     formers: FormerIR[];
+    /** Reaction definitions retained only as non-portable inspection data. */
     unlowered: UnloweredIR[];
 }
 /** A one-based position in an authored concept specification. */
@@ -4405,8 +4455,17 @@ export declare function compute<Fn extends ComputationFn, const Input extends In
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
 export {};
 
+=== dist/engine/tooling/application-manifest-format.d.ts ===
+import type { ApplicationManifestV5 } from "./manifest.ts";
+/** Recompute the canonical digest over every manifest field except `digest`. */
+export declare function applicationManifestDigest(manifest: ApplicationManifestV5): string;
+/** Validate untrusted data as one complete canonical version-5 application manifest. */
+export declare function validateApplicationManifest(value: unknown): asserts value is ApplicationManifestV5;
+/** Parse and validate canonical version-5 application-manifest JSON without executing code. */
+export declare function parseApplicationManifest(source: string): ApplicationManifestV5;
+
 === dist/engine/tooling/artifact-plan.d.ts ===
-import type { ApplicationManifestV4 } from "./manifest.ts";
+import type { ApplicationManifestV5 } from "./manifest.ts";
 import type { PlannedWireProjection } from "./wire-projection.ts";
 type ArtifactKind = "specification" | "wire";
 interface ArtifactPlanEntry {
@@ -4447,7 +4506,7 @@ export interface ArtifactFilesystem {
     writeAtomic(path: string, content: string): Promise<void>;
 }
 export declare function artifactPlan(entries: readonly ArtifactPlanEntry[]): ArtifactPlan;
-export declare function planGenerated(manifest: ApplicationManifestV4, options: GeneratedPlanOptions): ArtifactPlan;
+export declare function planGenerated(manifest: ApplicationManifestV5, options: GeneratedPlanOptions): ArtifactPlan;
 export declare function checkArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export declare function applyArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export {};
@@ -4571,10 +4630,10 @@ export declare function inspectAssembly(assembly: Assembly<Record<string, new (.
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
 import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
-import type { AppIR, ConceptInventoryIR } from "../reads/ir.ts";
+import type { AppIR, ComputationInventoryIR, ConceptImplementationProvenanceIR, ConceptInventoryIR } from "../reads/ir.ts";
 import { type GeneratorIdentity } from "../utils/package-version.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
-export interface ManifestEndpointV4 {
+export interface ManifestEndpointV5 {
     name: string;
     path: string;
     reactions: string[];
@@ -4585,14 +4644,16 @@ export interface ManifestEndpointV4 {
         domainError?: true;
     };
 }
-export interface ApplicationManifestV4 {
+export interface ApplicationManifestV5 {
     format: "sync-engine.application-manifest";
-    version: 4;
+    version: 5;
     generator: GeneratorIdentity;
     digest: string;
     application: AppIR;
     concepts: ConceptInventoryIR[];
-    endpoints: ManifestEndpointV4[];
+    computations: ComputationInventoryIR[];
+    conceptImplementations: ConceptImplementationProvenanceIR[];
+    endpoints: ManifestEndpointV5[];
     inputContracts: Record<string, InputContractDecl>;
     wire: WireContractsIR;
     diagnostics: ApplicationDiagnostic[];
@@ -4601,8 +4662,8 @@ export interface ApplicationManifestV4 {
  * Snapshot one assembly's static design. Retained runtime state and uninterpreted concept State
  * sections are excluded.
  */
-export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV4;
-export declare function renderApplicationManifest(manifest: ApplicationManifestV4): string;
+export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV5;
+export declare function renderApplicationManifest(manifest: ApplicationManifestV5): string;
 
 === dist/engine/tooling/wire-projection.d.ts ===
 import type { WireProjectionFacts } from "../boundary/gateway/transport-binding.ts";
@@ -4827,12 +4888,14 @@ export type { ObservedOccurrence } from "../engine/tooling/inspection.ts";
 export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagnostics.ts";
 export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
 export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
-export type { ApplicationManifestV4, ManifestEndpointV4 } from "../engine/tooling/manifest.ts";
+export { applicationManifestDigest, parseApplicationManifest, validateApplicationManifest, } from "../engine/tooling/application-manifest-format.ts";
+export type { ApplicationManifestV5, ManifestEndpointV5 } from "../engine/tooling/manifest.ts";
+export { parseSpec as parseConceptSpecification } from "../engine/reactions/concepts/concept-spec.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
 export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";
 export { renderInputContracts } from "../engine/boundary/protocol/endpoints.ts";
-export type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "../engine/reads/ir.ts";
+export type { ActionTriggerIR, AppIR, ChannelTriggerIR, ComputationInventoryIR, ConceptImplementationProvenanceIR, ConceptInventoryIR, ConceptSpecificationIR, ConsequenceIR, FormerIR, FormerNodeIR, FormerSourceIR, PatternIR, QueryRefIR, ReactionIR, SpecificationActionIR, SpecificationDocumentationIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationTypeIR, SpliceIR, TriggerIR, UnloweredIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR, } from "../engine/reads/ir.ts";
 export type { WireContractsIR, WireEndpoint, WireOptions, } from "../engine/boundary/wire/wire-contracts.ts";
 export type { WireRenderOptions } from "../engine/boundary/wire/wire-renderer.ts";
 export type { WireType } from "../engine/boundary/wire/wire-types.ts";

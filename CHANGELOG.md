@@ -5,6 +5,114 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.7] - 2026-08-07
+
+This beta advances the canonical application manifest and publishes a lean,
+two-surface analysis companion for the first time.
+
+### Compatibility
+
+- The canonical `sync-engine.application-manifest` format advances to V5.
+  `ApplicationManifestV5` and `ManifestEndpointV5` replace the version-4 public
+  type names; V4 input is rejected rather than upgraded.
+- `@mit-sdg/sync-engine-analysis` is now a public package with supported
+  `/ir` and `/project` entrypoints and an exact
+  `@mit-sdg/sync-engine@1.0.0-beta.7` peer.
+  There was no published analysis beta.6; beta.7 is its first public release.
+- `/ir` provides compiler-free manifest, graph, source-data, and neutral facade
+  queries. `/project` owns TypeScript-backed source indexing, filesystem and
+  worker analysis, project diagnostics and producer options, and strict project
+  codecs. TypeScript `>=6 <7` is an analysis runtime dependency, not a peer, but
+  importing `/ir` does not evaluate it.
+- The unpublished oversized preview surface has been removed without aliases:
+  there is no `/tooling`, `/guidance`, persisted granular-result codec, impact
+  context bundle, change target, review orchestration, packaged guidance, or
+  workflow-shaped supporting API.
+- Durable source indexes retain only document and anchor metadata, ranges, and
+  digests. Source-text search, retained anchor/excerpt text, full-text
+  descriptions, source content modes, facade contract rendering, and
+  caller-supplied wire projections are removed.
+- Project-backed facade construction recomputes the canonical manifest index and
+  rejects even a structurally self-consistent project index when its semantic
+  composition differs from the supplied manifest. Supplying a project now also
+  requires a caller-held `expectedProjectDigest`; optional `limits` govern the
+  canonical recomputation.
+
+### Migration
+
+- Upgrade core and HTTP to `1.0.0-beta.7` together. When adopting analysis,
+  install `@mit-sdg/sync-engine-analysis@1.0.0-beta.7` alongside that exact core
+  beta; do not infer an analysis beta.6 package from the core release history.
+- Regenerate checked-in application manifests, assembled Markdown, and wire
+  TypeScript. Replace V4 manifest type imports with V5. Preview analysis clients
+  must replace `/tooling` imports with `/ir` and/or `/project` and move prompts,
+  guidance, context packing, targeting, review, observations, and coverage policy
+  into their own application.
+- Use `readApplicationSourceDocument(...)` with a caller reader to obtain and
+  verify a complete source document, then slice it with returned anchor ranges.
+  Replace facade source models with `ApplicationSourceQuery` and
+  `SourceQueryMatchMode`; consume raw logical contracts without render modes or
+  projection evidence.
+- Retain `applicationProjectAnalysisDigest(project)` at the point where a project
+  artifact is trusted, then pass it as `expectedProjectDigest` when constructing
+  a project-backed facade. Computing both artifact and digest from the same
+  untrusted input chooses that artifact rather than authenticating it.
+
+### Generated formats
+
+- Manifest V5 adds complete standard and vocabulary computation inventory plus
+  canonical-versus-selected concept implementation provenance. It records
+  serializable attribution, not functions, constructor arguments, resources,
+  source paths, object identity, concept state, or other runtime state.
+- `sync-engine.application-index` version 2,
+  `sync-engine.impact-trace` version 2,
+  `sync-engine.application-source-index` version 2, and
+  `sync-engine.application-project-analysis` version 2 carry exact manifest,
+  analyzer, core-generator, and, where available, source-revision and
+  source-digest identity. Format versions govern structural compatibility;
+  exact producer versions remain provenance.
+- Granular facade results are immutable and byte-bounded with one canonical size
+  pass, but are not a persisted format and have no parse, render, validate, or
+  digest API. The V2 project snapshot remains the durable analysis artifact.
+- Project V2 snapshots have strict canonical JSON validation, parsing,
+  rendering, and SHA-256 identity. Validation binds nested index/source data,
+  source metadata and ranges, all read-file digests, TypeScript versions,
+  diagnostics, ordering, and resource usage. Snapshots contain no source bytes.
+  File records add exact UTF-8 `byteLength`; `projectBytes` is the sum of the
+  ordered unique records. Source issue refs must be inventory refs, and candidate
+  ranges must belong to indexed documents.
+
+### Runtime and security support
+
+- Source attribution uses the supplied TypeScript program without importing or
+  executing project modules or manifest-producing configuration. Static-flow,
+  AST, traversal, pagination, source-document, source-read, and result-byte limits fail closed or
+  report incomplete evidence instead of silently claiming completeness.
+- Filesystem analysis follows complete transitive TypeScript project references
+  from source, rejects config/source/extends/symlink escapes and cycles, and does
+  not require built declarations. The async API runs in an emitted Node worker;
+  abort terminates it without returning a partial snapshot. Synchronous compiler
+  parsing and program creation remain checkpoint-bounded rather than
+  timer-preemptive.
+- Analysis is generic, deterministic inspection infrastructure. Possible-impact
+  and source attribution remain evidence with explicit limits; no analysis API
+  proves runtime behavior, packages workflow advice, authorizes a change, or
+  returns an approval verdict.
+- Packed Node 24 verification imports `/ir` in isolation and rejects any runtime
+  load of TypeScript, `fs`, `fs/promises`, `node:fs`, `node:fs/promises`, worker,
+  project-loader, or source-index-builder modules. Exact-tarball Node 24 and Bun
+  consumers exercise `/project`.
+- Revision strings are caller assertions rather than Git verification. Project
+  parsing synchronously consumes a complete supplied string without its own size
+  bound; hosts must bound untrusted input before calling it.
+- Codec validation proves shape and derivable consistency, not semantic source
+  attribution. AST counts remain producer-reported. Only comparison with a
+  previously trusted complete project digest authenticates an unchanged
+  artifact; an attacker-chosen artifact and digest remain attacker-chosen unless
+  TypeScript analysis is rerun from trusted inputs.
+
+[Release][1.0.0-beta.7] | [Changes since 1.0.0-beta.6][1.0.0-beta.7-compare]
+
 ## [1.0.0-beta.6] - 2026-08-06
 
 This beta makes authored concept contracts structured, preserved, and
@@ -489,6 +597,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.7]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.7
+[1.0.0-beta.7-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.6...v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.6
 [1.0.0-beta.6-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.5...v1.0.0-beta.6
 [1.0.0-beta.5]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.5

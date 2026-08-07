@@ -18,11 +18,23 @@ import {
   type ProductionHttpProfile,
 } from "@mit-sdg/sync-engine-http/server";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
-import type { ApplicationManifestV4 } from "@mit-sdg/sync-engine/tooling";
+import type {
+  ApplicationManifestV5,
+  ComputationInventoryIR,
+  ConceptImplementationProvenanceIR,
+} from "@mit-sdg/sync-engine/tooling";
 
-declare const manifestV4: ApplicationManifestV4;
-const manifestVersion: 4 = manifestV4.version;
+declare const manifestV5: ApplicationManifestV5;
+const manifestVersion: 5 = manifestV5.version;
 void manifestVersion;
+declare const computationInventory: ComputationInventoryIR;
+const computationSource: "standard" | "vocabulary" = computationInventory.source;
+void computationSource;
+declare const implementationProvenance: ConceptImplementationProvenanceIR;
+if (implementationProvenance.selected.via === "instances") {
+  const selectedFloor: string | undefined = implementationProvenance.selected.floor;
+  void selectedFloor;
+}
 
 class QueriedConcept {
   _answer({ key }: { key: string }): { value: string }[] {

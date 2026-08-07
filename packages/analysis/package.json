@@ -1,0 +1,57 @@
+{
+  "name": "@mit-sdg/sync-engine-analysis",
+  "version": "1.0.0-beta.7",
+  "description": "Deterministic IR queries and optional TypeScript project evidence for sync-engine",
+  "keywords": [
+    "analysis",
+    "reaction",
+    "sync-engine",
+    "typescript"
+  ],
+  "homepage": "https://github.com/mit-sdg/sync-engine#readme",
+  "bugs": "https://github.com/mit-sdg/sync-engine/issues",
+  "license": "Apache-2.0",
+  "author": "Barish Namazov and Eagon Meng",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mit-sdg/sync-engine",
+    "directory": "packages/analysis"
+  },
+  "files": [
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "public-surface.md",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "./dist/project/application-project-worker.js"
+  ],
+  "exports": {
+    "./ir": {
+      "types": "./dist/ir/index.d.ts",
+      "import": "./dist/ir/index.js"
+    },
+    "./project": {
+      "types": "./dist/project/index.d.ts",
+      "import": "./dist/project/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "scripts": {
+    "prepack": "bun ../../scripts/build.ts"
+  },
+  "dependencies": {
+    "typescript": ">=6 <7"
+  },
+  "peerDependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

@@ -45,6 +45,14 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 - Put public domain-error mappings on the reused HTTP profile or floor. Generate the public contract with `projections: [httpWire({ policy, name })]`.
 - Core contains no HTTP handler or fetch-client exports. Use `bindTransport` and `createClient` for a custom transport without the companion package.
 
+## Analysis
+
+- [Analysis Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/analysis/public-surface.md): compiler-free IR queries, strict project codecs, and optional TypeScript source evidence
+- Install the exact same beta of `@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine`; import plain-data analysis from `/ir` and TypeScript-backed producers and project codecs from `/project`.
+- Project snapshots retain source metadata and digests, not source bytes. Read and verify complete documents through `readApplicationSourceDocument(...)` before slicing anchor ranges. Revision labels are caller assertions, not Git verification.
+- A project-backed `createApplicationAnalysis(...)` call requires a previously trusted `applicationProjectAnalysisDigest(...)` value as `expectedProjectDigest`. Shape validation is not authentication, and recomputing a digest from attacker-chosen input does not prove semantic source attribution.
+- Keep prompts, guidance, context packing, change targeting, review orchestration, and verdict policy in the client rather than the analysis package.
+
 ## Working rules
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.

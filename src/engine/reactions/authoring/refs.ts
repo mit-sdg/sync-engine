@@ -40,10 +40,13 @@ import type {
   ComputationRef,
 } from "@engine/reads/computations";
 import {
+  callableConceptMember,
+  CONCEPT_MEMBER_ROLES,
   CONCEPT_PROTOCOL,
   conceptProtocolOf,
   type ConceptMetadata,
 } from "../concepts/concept-metadata.ts";
+import { rolesOf } from "../concepts/introspect.ts";
 import type {
   ActionCall,
   InstrumentedAction,
@@ -266,6 +269,25 @@ function specifiedContracts(spec: string): ConceptMetadata {
   return { purpose, principle, queries: promises, specification };
 }
 
+function classContracts(cls: ConceptClass): ConceptMetadata {
+  const canonical = cls as unknown as {
+    purpose?: unknown;
+    principle?: unknown;
+    queries?: unknown;
+    outcomes?: unknown;
+  };
+  return {
+    ...(typeof canonical.purpose === "string" ? { purpose: canonical.purpose } : {}),
+    ...(typeof canonical.principle === "string" ? { principle: canonical.principle } : {}),
+    ...(canonical.queries === undefined
+      ? {}
+      : { queries: canonical.queries as ConceptMetadata["queries"] }),
+    ...(canonical.outcomes === undefined
+      ? {}
+      : { outcomes: canonical.outcomes as ConceptMetadata["outcomes"] }),
+  };
+}
+
 function validateConceptMetadata(
   conceptName: string,
   cls: ConceptClass,
@@ -382,15 +404,30 @@ export function vocabulary(
       throw new Error(`Vocabulary: "${name}" must be a concept class.`);
     }
     setOwn(classes, name, cls);
-    let declaredContracts: ConceptMetadata = {};
+    let declaredContracts: ConceptMetadata = classContracts(cls);
     if (descriptor !== undefined) {
       const { class: _class, spec, ...contracts } = descriptor;
       declaredContracts =
-        spec === undefined ? contracts : { ...specifiedContracts(spec), ...contracts };
+        spec === undefined
+          ? { ...declaredContracts, ...contracts }
+          : { ...declaredContracts, ...specifiedContracts(spec), ...contracts };
+    }
+    const protocol = conceptProtocolOf(cls.prototype as object);
+    const actionRoles: Record<string, readonly string[] | undefined> = {};
+    const queryRoles: Record<string, readonly string[] | undefined> = {};
+    for (const [names, roles] of [
+      [protocol.actions, actionRoles],
+      [protocol.queries, queryRoles],
+    ] as const) {
+      for (const memberName of names) {
+        const member = callableConceptMember(cls.prototype as object, memberName);
+        setOwn(roles, memberName, member === undefined ? undefined : rolesOf(member));
+      }
     }
     const declaredMetadata: ConceptMetadata = {
       ...declaredContracts,
-      [CONCEPT_PROTOCOL]: conceptProtocolOf(cls.prototype as object),
+      [CONCEPT_PROTOCOL]: protocol,
+      [CONCEPT_MEMBER_ROLES]: { actions: actionRoles, queries: queryRoles },
     };
     validateConceptMetadata(name, cls, declaredMetadata);
     setOwn(metadata, name, declaredMetadata);

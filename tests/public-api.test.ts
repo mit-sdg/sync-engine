@@ -335,21 +335,45 @@ const register = {
     "createLocalClient",
   ],
   tooling: [
+    "ActionTriggerIR",
     "AppIR",
     "ApplicationDiagnostic",
-    "ApplicationManifestV4",
+    "ApplicationManifestV5",
+    "ChannelTriggerIR",
+    "ComputationInventoryIR",
+    "ConceptImplementationProvenanceIR",
     "ConceptInventoryIR",
+    "ConceptSpecificationIR",
+    "ConsequenceIR",
     "DiagnosticCode",
     "DiagnosticSeverity",
     "FormerIR",
+    "FormerNodeIR",
+    "FormerSourceIR",
     "GeneratedApplication",
-    "ManifestEndpointV4",
+    "ManifestEndpointV5",
     "ObservedOccurrence",
+    "PatternIR",
     "PlannedWireProjection",
     "ProjectionProvenance",
     "ProjectionRenderOptions",
+    "QueryRefIR",
     "ReactionIR",
+    "SpecificationActionIR",
+    "SpecificationDocumentationIR",
+    "SpecificationFieldIR",
+    "SpecificationLocationIR",
+    "SpecificationQueryIR",
+    "SpecificationRefusalIR",
+    "SpecificationResultIR",
+    "SpecificationTypeIR",
+    "SpliceIR",
+    "TriggerIR",
+    "UnloweredIR",
+    "ValueIR",
     "ViewIR",
+    "ViewOpIR",
+    "WhereOpIR",
     "WireContractsIR",
     "WireEndpoint",
     "WireOptions",
@@ -359,13 +383,17 @@ const register = {
     "WireType",
     "applicationDiagnostics",
     "applicationManifest",
+    "applicationManifestDigest",
     "diagnosticsFail",
     "inspectAssembly",
+    "parseApplicationManifest",
+    "parseConceptSpecification",
     "renderApp",
     "renderApplicationManifest",
     "renderInputContracts",
     "renderReaction",
     "renderWireTypes",
+    "validateApplicationManifest",
     "wireContracts",
   ],
   advanced: [
@@ -402,6 +430,124 @@ const httpRegister = {
     "productionHttpProfile",
   ],
   tooling: ["HttpWireOptions", "httpWire"],
+} as const;
+
+const analysisRegister = {
+  ir: [
+    "AnalysisAbortedError",
+    "AnalysisAnalyzerIdentity",
+    "AnalysisDiagnostic",
+    "AnalysisDiagnosticOrigin",
+    "AnalysisDiagnosticRaw",
+    "AnalysisError",
+    "AnalysisErrorCode",
+    "AnalysisErrorData",
+    "AnalysisIssue",
+    "AnalysisIssueCode",
+    "AnalysisLimitError",
+    "AnalysisLimits",
+    "AnalysisManifestProvenance",
+    "AnalysisOptions",
+    "AnalysisPage",
+    "AnalysisPageRequest",
+    "AnalysisProvenance",
+    "AnalysisResourceUsage",
+    "AnalysisSeverity",
+    "ApplicationAnalysis",
+    "ApplicationAnalysisIdentity",
+    "ApplicationAnalysisOperationOptions",
+    "ApplicationAnalysisProvenanceFacts",
+    "ApplicationIndex",
+    "ApplicationSourceDocumentRead",
+    "ApplicationSourceIndex",
+    "ApplicationSourceQuery",
+    "ApplicationSourceReadError",
+    "ApplicationSourceReadErrorCode",
+    "CatalogFilters",
+    "CatalogRequest",
+    "CatalogResult",
+    "ContractDeclaration",
+    "ContractFilters",
+    "ContractsRequest",
+    "ContractsResult",
+    "CreateApplicationAnalysisOptions",
+    "DEFAULT_ANALYSIS_RESOURCE_LIMITS",
+    "DescriptionDetail",
+    "DescriptionResult",
+    "DesignDefinition",
+    "DesignRef",
+    "DesignRefInput",
+    "DesignSummary",
+    "DiagnosticSeverityCounts",
+    "DiagnosticsFilters",
+    "DiagnosticsRequest",
+    "DiagnosticsResult",
+    "ImpactCertainty",
+    "ImpactEdge",
+    "ImpactRelation",
+    "ImpactRequest",
+    "ImpactResult",
+    "ImpactTrace",
+    "ImpactTraceEntry",
+    "IndexedSourceDocument",
+    "NavigateRequest",
+    "NavigationDirection",
+    "NavigationNode",
+    "NavigationResult",
+    "ProvenanceRequest",
+    "ProvenanceResult",
+    "ReadApplicationSourceDocumentOptions",
+    "ReactionPortability",
+    "SearchField",
+    "SearchHit",
+    "SearchRequest",
+    "SearchResult",
+    "SourceAnchor",
+    "SourceAvailability",
+    "SourceIndexEntry",
+    "SourceIndexIssue",
+    "SourceIndexIssueCode",
+    "SourcePosition",
+    "SourceQueryMatch",
+    "SourceQueryMatchMode",
+    "SourceQueryOptions",
+    "SourceQueryResult",
+    "SourceRange",
+    "SourceResolution",
+    "SourceRole",
+    "SourceSpecificity",
+    "SourcesRequest",
+    "SourcesResult",
+    "TraceOptions",
+    "createApplicationAnalysis",
+    "designRefKey",
+    "designRefsForSourceRange",
+    "indexApplication",
+    "parseDesignRefKey",
+    "queryApplicationSources",
+    "readApplicationSourceDocument",
+    "traceApplicationImpact",
+  ],
+  project: [
+    "AnalyzeApplicationProjectOptions",
+    "ApplicationProjectAnalysis",
+    "ApplicationProjectDiagnostic",
+    "ApplicationProjectDiagnosticCategory",
+    "ApplicationProjectDiagnosticPhase",
+    "ApplicationProjectDiagnosticRelatedInformation",
+    "ApplicationProjectFile",
+    "ApplicationProjectProvenance",
+    "IndexApplicationSourcesOptions",
+    "LoadApplicationProjectOptions",
+    "SourceAttributionRoot",
+    "analyzeApplicationProject",
+    "applicationProjectAnalysisDigest",
+    "indexApplicationSources",
+    "loadApplicationProject",
+    "parseApplicationProjectAnalysis",
+    "renderApplicationProjectAnalysis",
+    "validateApplicationProjectAnalysis",
+  ],
 } as const;
 
 const packageJson = JSON.parse(
@@ -441,6 +587,17 @@ function referenceHttpSubpathBlock(subpath: keyof typeof httpRegister): string {
     exports,
     "",
     `<!-- register:http-${subpath}:end -->`,
+  ].join("\n");
+}
+
+function referenceAnalysisSubpathBlock(subpath: keyof typeof analysisRegister): string {
+  const exports = analysisRegister[subpath].map((name) => `\`${name}\``).join(", ");
+  return [
+    `<!-- register:analysis-${subpath}:start -->`,
+    "",
+    exports,
+    "",
+    `<!-- register:analysis-${subpath}:end -->`,
   ].join("\n");
 }
 
@@ -536,6 +693,65 @@ describe("public API register", () => {
       const block = referenceHttpSubpathBlock(subpath);
       expect(reference, `${subpath} full package path`).toContain(
         `@mit-sdg/sync-engine-http/${subpath}`,
+      );
+      expect(reference, `${subpath} reference unit`).toContain(block);
+      expect(reference.indexOf(block), `${subpath} reference unit is unique`).toBe(
+        reference.lastIndexOf(block),
+      );
+    }
+  });
+
+  test("the analysis companion barrels and reference have their exact exports", () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const packageRoot = resolve(root, "packages/analysis");
+    const corePackage = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as {
+      dependencies: { typescript: string };
+      version: string;
+    };
+    const analysisPackage = JSON.parse(
+      readFileSync(resolve(packageRoot, "package.json"), "utf8"),
+    ) as {
+      dependencies: Record<string, string>;
+      exports: Record<string, unknown>;
+      peerDependencies: Record<string, string>;
+      private?: boolean;
+      publishConfig: { access: string; tag: string };
+      repository: { directory: string };
+      sideEffects: readonly string[];
+    };
+    expect(analysisPackage.private).toBeUndefined();
+    expect(analysisPackage.publishConfig).toEqual({ access: "public", tag: "beta" });
+    expect(analysisPackage.repository.directory).toBe("packages/analysis");
+    expect(analysisPackage.sideEffects).toEqual(["./dist/project/application-project-worker.js"]);
+    expect(analysisPackage.peerDependencies).toEqual({
+      "@mit-sdg/sync-engine": corePackage.version,
+    });
+    expect(analysisPackage.dependencies).toEqual({
+      typescript: corePackage.dependencies.typescript,
+    });
+    expect(Object.keys(analysisPackage.exports).sort()).toEqual(
+      Object.keys(analysisRegister)
+        .map((subpath) => `./${subpath}`)
+        .sort(),
+    );
+
+    const reference = readFileSync(resolve(packageRoot, "public-surface.md"), "utf8");
+    for (const subpath of Object.keys(analysisRegister) as Array<keyof typeof analysisRegister>) {
+      const sourceText = readFileSync(resolve(packageRoot, "src", subpath, "index.ts"), "utf8");
+      const source = ts.createSourceFile("index.ts", sourceText, ts.ScriptTarget.Latest, true);
+      expect(source.statements.every(ts.isExportDeclaration), `${subpath} exports only`).toBe(true);
+      const actual = source.statements.flatMap((statement) =>
+        ts.isExportDeclaration(statement) &&
+        statement.exportClause !== undefined &&
+        ts.isNamedExports(statement.exportClause)
+          ? statement.exportClause.elements.map(({ name }) => name.text)
+          : [],
+      );
+      expect(actual.sort(), subpath).toEqual([...analysisRegister[subpath]].sort());
+
+      const block = referenceAnalysisSubpathBlock(subpath);
+      expect(reference, `${subpath} full package path`).toContain(
+        `@mit-sdg/sync-engine-analysis/${subpath}`,
       );
       expect(reference, `${subpath} reference unit`).toContain(block);
       expect(reference.indexOf(block), `${subpath} reference unit is unique`).toBe(

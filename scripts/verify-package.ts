@@ -12,6 +12,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
 const expectedAuthor = "Barish Namazov and Eagon Meng";
 const coreWorkspace = workspaceById("core");
+const analysisWorkspace = workspaceById("analysis");
+const multiInstanceWorkspaces = [coreWorkspace, workspaceById("http")];
 
 interface NpmPackResult {
   filename: string;
@@ -30,6 +32,9 @@ interface PackageManifest {
   name: string;
   optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  private?: boolean;
+  publishConfig?: { access?: string; tag?: string };
+  repository?: { directory?: string };
   version: string;
 }
 
@@ -180,6 +185,43 @@ function rejectForbiddenManifestDependencies(
   }
 }
 
+function verifyManifestPolicy(workspace: Workspace, manifest: PackageManifest): void {
+  if (manifest.license !== "Apache-2.0") {
+    throw new Error(`${workspace.id} package license is ${manifest.license}; expected Apache-2.0`);
+  }
+  if (manifest.author !== expectedAuthor) {
+    throw new Error(
+      `${workspace.id} package author is ${manifest.author}; expected ${expectedAuthor}`,
+    );
+  }
+  if (workspace.publication === "npm") {
+    if (manifest.private !== undefined) {
+      throw new Error(`${workspace.id} published package must omit private`);
+    }
+    if (manifest.publishConfig?.access !== "public" || manifest.publishConfig.tag !== "beta") {
+      throw new Error(`${workspace.id} published package must use public access and the beta tag`);
+    }
+  } else if (manifest.private !== true) {
+    throw new Error(`${workspace.id} private package must set private to true`);
+  }
+  for (const dependencies of workspaceDependencies(manifest)) {
+    for (const [name, range] of Object.entries(dependencies ?? {})) {
+      if (/^(?:file|workspace):/.test(range)) {
+        throw new Error(`${workspace.id} packed package uses local range ${name}@${range}`);
+      }
+    }
+  }
+  if (
+    workspace.id === analysisWorkspace.id &&
+    manifest.repository?.directory !== analysisWorkspace.directory
+  ) {
+    throw new Error(
+      `${workspace.id} package repository.directory must be ${analysisWorkspace.directory}`,
+    );
+  }
+  rejectForbiddenManifestDependencies(workspace, manifest);
+}
+
 async function verifyPackedWorkspace(
   workspace: Workspace,
   manifest: PackageManifest,
@@ -210,17 +252,17 @@ async function verifyPackedWorkspace(
   if (packed.filename !== expectedFilename) {
     throw new Error(`npm packed ${packed.filename}; expected ${expectedFilename}`);
   }
-  if (manifest.license !== "Apache-2.0") {
-    throw new Error(`${workspace.id} package license is ${manifest.license}; expected Apache-2.0`);
-  }
-  if (manifest.author !== expectedAuthor) {
-    throw new Error(
-      `${workspace.id} package author is ${manifest.author}; expected ${expectedAuthor}`,
-    );
-  }
-  rejectForbiddenManifestDependencies(workspace, manifest);
+  verifyManifestPolicy(workspace, manifest);
 
   const tarball = resolve(temporary, packed.filename);
+  const packedManifest = JSON.parse(
+    execFileSync("tar", ["-xOzf", tarball, "package/package.json"], { encoding: "utf8" }),
+  ) as PackageManifest;
+  if (packedManifest.name !== manifest.name || packedManifest.version !== manifest.version) {
+    throw new Error(`${workspace.id} packed manifest identity differs from its source manifest`);
+  }
+  verifyManifestPolicy(workspace, packedManifest);
+  manifest = packedManifest;
   const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
   const entries = new Set(listing.trim().split(/\r?\n/));
   if (
@@ -261,11 +303,13 @@ async function verifyPackedWorkspace(
     requireEntry(entries, executable.replace(/^\.\//, ""));
     requireExecutable(packed, executable.replace(/^\.\//, ""));
   }
-  if (
-    workspace.id === coreWorkspace.id &&
-    [...entries].some((entry) => entry.startsWith("package/packages/http/"))
-  ) {
-    throw new Error("core package contains the HTTP workspace");
+  if (workspace.id === coreWorkspace.id) {
+    for (const forbiddenId of coreWorkspace.forbiddenWorkspaceIds) {
+      const forbidden = workspaceById(forbiddenId);
+      if ([...entries].some((entry) => entry.startsWith(`package/${forbidden.directory}/`))) {
+        throw new Error(`core package contains the ${forbidden.id} workspace`);
+      }
+    }
   }
   return { workspace, manifest, tarball, entries };
 }
@@ -306,6 +350,19 @@ function assertWorkspacePeers(
     if (manifest.peerDependencies?.[peer.workspace.packageName] !== expected) {
       throw new Error(
         `${workspace.id} must declare peer ${peer.workspace.packageName}@${expected}`,
+      );
+    }
+  }
+  const core = workspaceArtifact(artifacts, coreWorkspace);
+  for (const dependency of workspace.rootRuntimeDependencies) {
+    const expected = core.manifest.dependencies?.[dependency];
+    if (
+      expected === undefined ||
+      manifest.dependencies?.[dependency] !== expected ||
+      manifest.peerDependencies?.[dependency] !== undefined
+    ) {
+      throw new Error(
+        `${workspace.id} must declare runtime dependency ${dependency}@${String(expected)}`,
       );
     }
   }
@@ -565,6 +622,14 @@ async function verifyCombinedConsumer(
     resolve(root, "tests/package/consumer-contract.ts"),
     resolve(consumer, "consumer-contract.ts"),
   );
+  await copyFile(
+    resolve(root, "tests/package/analysis-consumer-scenario.mjs"),
+    resolve(consumer, "analysis-consumer-scenario.mjs"),
+  );
+  await copyFile(
+    resolve(root, "tests/package/analysis-ir-import-isolation.mjs"),
+    resolve(consumer, "analysis-ir-import-isolation.mjs"),
+  );
   await writeTypeScriptConfig(resolve(consumer, "tsconfig.json"), [
     "all-entrypoints.ts",
     "consumer-contract.ts",
@@ -574,7 +639,11 @@ async function verifyCombinedConsumer(
     [resolve(consumer, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.json"],
     consumer,
   );
+  run("node", [resolve(consumer, "analysis-ir-import-isolation.mjs")], consumer);
   run("node", [resolve(consumer, "runtime-import.mjs")], consumer);
+  const analysisScenario = resolve(consumer, "analysis-consumer-scenario.mjs");
+  run("node", [analysisScenario], consumer, 30_000);
+  run("bun", [analysisScenario], consumer, 30_000);
 }
 
 async function verifyScaffoldAndExamples(
@@ -636,7 +705,7 @@ async function verifyMultiInstance(artifacts: ReadonlyMap<string, PackedWorkspac
   const clientManifestPath = resolve(clientProject, "package.json");
   const clientManifest = await prepareWorkspaceDependencies<
     DependencyManifest & { name: string; version: string }
-  >(clientManifestPath, "multi-instance client", artifacts, workspaceBuildOrder);
+  >(clientManifestPath, "multi-instance client", artifacts, multiInstanceWorkspaces);
   await writePackageManifest(clientManifestPath, clientManifest);
   runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], clientProject);
 
@@ -703,7 +772,7 @@ async function verifyMultiInstance(artifacts: ReadonlyMap<string, PackedWorkspac
     backendManifestPath,
     "multi-instance backend",
     artifacts,
-    workspaceBuildOrder,
+    multiInstanceWorkspaces,
   );
   if (
     backendManifest.dependencies["@sync-engine-fixture/multi-instance-client"] !==
@@ -732,7 +801,9 @@ async function copyVerifiedTarballs(
   if (directory !== undefined) {
     const destinationDirectory = resolve(root, directory);
     await mkdir(destinationDirectory, { recursive: true });
-    for (const workspace of workspaceBuildOrder) {
+    for (const workspace of workspaceBuildOrder.filter(
+      (candidate) => candidate.publication === "npm",
+    )) {
       const artifact = workspaceArtifact(artifacts, workspace);
       await copyFile(artifact.tarball, resolve(destinationDirectory, workspace.verifiedTarball));
     }

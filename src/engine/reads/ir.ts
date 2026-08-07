@@ -290,13 +290,41 @@ export interface UnloweredIR {
   };
 }
 
-/** Everything the engine knows about its registered reactions, as data. */
+/** One installed pure computation, without its runtime function. */
+export interface ComputationInventoryIR {
+  name: string;
+  source: "standard" | "vocabulary";
+  /** Input roles observed from the function's destructuring; absent when unreadable. */
+  inputs?: string[];
+}
+
+/** The canonical and assembly-selected implementation of one concept name. */
+export interface ConceptImplementationProvenanceIR {
+  concept: string;
+  canonical: {
+    owner: "core" | "application";
+    constructorName?: string;
+  };
+  selected:
+    | { via: "core" }
+    | { via: "default" }
+    | { via: "initialize" }
+    | { via: "instances"; constructorName?: string; floor?: string };
+}
+
+/**
+ * Everything the engine knows about registered application definitions, as
+ * data. Concept and computation names inside those definitions are references;
+ * their complete inventories live outside `AppIR`.
+ */
 export interface AppIR {
+  /** Reaction definitions. */
   reactions: ReactionIR[];
-  /** Views the reactions reference, dependencies before dependents. */
+  /** Referenced view definitions, dependencies before dependents. */
   views: ViewIR[];
-  /** Formers the reactions reference or the app declares, in registration order. */
+  /** Referenced or explicitly declared former definitions, in registration order. */
   formers: FormerIR[];
+  /** Reaction definitions retained only as non-portable inspection data. */
   unlowered: UnloweredIR[];
 }
 

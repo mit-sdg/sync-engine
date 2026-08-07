@@ -3,7 +3,14 @@ import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
 import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 import { wireContracts } from "@engine/boundary/wire/wire-contracts";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
-import type { AppIR, ConceptInventoryIR, FormerIR, ViewIR } from "@engine/reads/ir";
+import type {
+  AppIR,
+  ComputationInventoryIR,
+  ConceptImplementationProvenanceIR,
+  ConceptInventoryIR,
+  FormerIR,
+  ViewIR,
+} from "@engine/reads/ir";
 import { foldFormerNode } from "@engine/reads/schema";
 import { canonicalDigest, canonicalJson, canonicalValue } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
@@ -11,7 +18,7 @@ import { GENERATOR_IDENTITY, type GeneratorIdentity } from "@engine/utils/packag
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import { applicationDiagnostics } from "./diagnostics.ts";
 
-export interface ManifestEndpointV4 {
+export interface ManifestEndpointV5 {
   name: string;
   path: string;
   reactions: string[];
@@ -19,14 +26,16 @@ export interface ManifestEndpointV4 {
   validators: { input: boolean; output: boolean; domainError?: true };
 }
 
-export interface ApplicationManifestV4 {
+export interface ApplicationManifestV5 {
   format: "sync-engine.application-manifest";
-  version: 4;
+  version: 5;
   generator: GeneratorIdentity;
   digest: string;
   application: AppIR;
   concepts: ConceptInventoryIR[];
-  endpoints: ManifestEndpointV4[];
+  computations: ComputationInventoryIR[];
+  conceptImplementations: ConceptImplementationProvenanceIR[];
+  endpoints: ManifestEndpointV5[];
   inputContracts: Record<string, InputContractDecl>;
   wire: WireContractsIR;
   diagnostics: ApplicationDiagnostic[];
@@ -104,14 +113,29 @@ function stableConcepts(concepts: readonly ConceptInventoryIR[]): ConceptInvento
       )
       .map((action) => ({
         ...action,
-        ...(action.roles === undefined ? {} : { roles: [...action.roles].sort(ordinal) }),
+        ...(action.roles === undefined ? {} : { roles: [...new Set(action.roles)].sort(ordinal) }),
         ...(action.refusals === undefined ? {} : { refusals: [...action.refusals].sort(ordinal) }),
       })),
     queries: sortByName(concept.queries).map((query) => ({
       ...query,
-      ...(query.roles === undefined ? {} : { roles: [...query.roles].sort(ordinal) }),
+      ...(query.roles === undefined ? {} : { roles: [...new Set(query.roles)].sort(ordinal) }),
     })),
   }));
+}
+
+function stableComputations(
+  computations: readonly ComputationInventoryIR[],
+): ComputationInventoryIR[] {
+  return sortByName(computations).map((computation) => ({
+    ...computation,
+    ...(computation.inputs === undefined ? {} : { inputs: [...computation.inputs] }),
+  }));
+}
+
+function stableConceptImplementations(
+  implementations: readonly ConceptImplementationProvenanceIR[],
+): ConceptImplementationProvenanceIR[] {
+  return [...implementations].sort((left, right) => ordinal(left.concept, right.concept));
 }
 
 /**
@@ -120,10 +144,12 @@ function stableConcepts(concepts: readonly ConceptInventoryIR[]): ConceptInvento
  */
 export function applicationManifest(
   assembly: Assembly<Record<string, new (...args: never[]) => object>>,
-): ApplicationManifestV4 {
+): ApplicationManifestV5 {
   const assembled = assemblyBehind(assembly);
   const application = stableApp(assembled.engine.exportReactions());
   const concepts = stableConcepts(assembled.engine.exportConcepts());
+  const computations = stableComputations(assembled.computations);
+  const conceptImplementations = stableConceptImplementations(assembled.conceptImplementations);
   const wire = wireContracts(application, {
     contracts: assembled.contracts,
     inventories: concepts,
@@ -143,21 +169,23 @@ export function applicationManifest(
       },
     }))
     .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`));
-  const body: Omit<ApplicationManifestV4, "digest"> = {
+  const body: Omit<ApplicationManifestV5, "digest"> = {
     format: "sync-engine.application-manifest",
-    version: 4,
+    version: 5,
     generator: GENERATOR_IDENTITY,
     application,
     concepts,
+    computations,
+    conceptImplementations,
     endpoints,
     inputContracts: assembled.contracts,
     wire,
     diagnostics: applicationDiagnostics(application, assembled.endpoints, wire),
   };
-  const manifest: ApplicationManifestV4 = { ...body, digest: canonicalDigest(body) };
-  return canonicalValue(manifest) as unknown as ApplicationManifestV4;
+  const manifest: ApplicationManifestV5 = { ...body, digest: canonicalDigest(body) };
+  return canonicalValue(manifest) as unknown as ApplicationManifestV5;
 }
 
-export function renderApplicationManifest(manifest: ApplicationManifestV4): string {
+export function renderApplicationManifest(manifest: ApplicationManifestV5): string {
   return canonicalJson(manifest);
 }

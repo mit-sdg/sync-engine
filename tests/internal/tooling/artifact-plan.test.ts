@@ -137,6 +137,19 @@ describe("artifact plans", () => {
     expect(plan.entries.every(({ content }) => content.includes(PACKAGE_VERSION))).toBe(true);
   });
 
+  test("requires manifest version 5", () => {
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: vocabulary({ concepts: {}, computations: {} }),
+        composition: {},
+      }),
+    );
+
+    expect(() =>
+      planGenerated({ ...manifest, version: 4 } as never, { title: "Old manifest" }),
+    ).toThrow("requires an application manifest at version 5");
+  });
+
   test("renders retained authored concept contracts from the manifest", () => {
     class CatalogingConcept {
       configure(_: { values: Map<string, unknown>; source?: string }) {

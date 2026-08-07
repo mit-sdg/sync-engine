@@ -21,7 +21,7 @@
  * against this declaration.
  */
 
-import { conceptMetadataOf } from "./concept-metadata.ts";
+import { CONCEPT_MEMBER_ROLES, conceptMetadataOf } from "./concept-metadata.ts";
 
 /** The declared resolution contract of one action. */
 export interface ActionContract {
@@ -40,6 +40,7 @@ export function contractOf(concept: object, action: string): ActionContract | un
   if (declared !== undefined || refusalCodes !== undefined) {
     return { ...declared, ...(refusalCodes !== undefined ? { refusals: refusalCodes } : {}) };
   }
+  if (metadata?.[CONCEPT_MEMBER_ROLES] !== undefined) return undefined;
   const outcomes = (concept.constructor as { outcomes?: OutcomeContracts }).outcomes;
   if (outcomes === undefined || typeof outcomes !== "object") return undefined;
   return outcomes[action];

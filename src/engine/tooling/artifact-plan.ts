@@ -9,7 +9,7 @@ import {
   PACKAGE_NAME,
   PACKAGE_VERSION,
 } from "@engine/utils/package-version";
-import type { ApplicationManifestV4 } from "./manifest.ts";
+import type { ApplicationManifestV5 } from "./manifest.ts";
 import type { PlannedWireProjection } from "./wire-projection.ts";
 
 type ArtifactKind = "specification" | "wire";
@@ -85,11 +85,11 @@ export function artifactPlan(entries: readonly ArtifactPlanEntry[]): ArtifactPla
 }
 
 export function planGenerated(
-  manifest: ApplicationManifestV4,
+  manifest: ApplicationManifestV5,
   options: GeneratedPlanOptions,
 ): ArtifactPlan {
-  if (manifest.format !== "sync-engine.application-manifest" || manifest.version !== 4) {
-    throw new Error("generated artifacts: requires an application manifest at version 4.");
+  if (manifest.format !== "sync-engine.application-manifest" || manifest.version !== 5) {
+    throw new Error("generated artifacts: requires an application manifest at version 5.");
   }
   assertCompatibleGenerator(manifest.generator, "generated artifacts");
   assertApplicationLocality("generated artifacts", manifest.application);

@@ -771,6 +771,10 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       const sourceDirectory = workspaceRepositoryPath(workspace, workspace.sourceDirectory);
       return [...subpaths].map((subpath) => `${sourceDirectory}/${subpath}/index.ts`);
     }),
+    ...workspaceCatalog.flatMap((workspace) => {
+      const sourceDirectory = workspaceRepositoryPath(workspace, workspace.sourceDirectory);
+      return workspace.runtimeEntrypoints.map((path) => `${sourceDirectory}/${path}`);
+    }),
     ...internalEntrypoints,
     "src/command/main.ts",
   ];

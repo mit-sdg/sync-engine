@@ -13,8 +13,11 @@ import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import {
   applicationDiagnostics,
   applicationManifest,
+  applicationManifestDigest,
   diagnosticsFail,
+  parseApplicationManifest,
   renderApplicationManifest,
+  validateApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
 import type { AppIR, ActionTriggerIR } from "@engine/reads/ir";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
@@ -93,7 +96,7 @@ describe("application manifest", () => {
 
     expect(manifest).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 4,
+      version: 5,
       generator: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
       digest: expect.stringMatching(/^fnv1a64-[0-9a-f]{16}$/),
       endpoints: [
@@ -117,6 +120,147 @@ describe("application manifest", () => {
     );
     expect(diagnosticsFail(manifest.diagnostics)).toBe(false);
     expect(diagnosticsFail(manifest.diagnostics, "warnings")).toBe(true);
+  });
+
+  test("inventories every standard and unused vocabulary computation in name order", () => {
+    const complete = vocabulary({
+      concepts: {},
+      computations: {
+        unused: ({ right, left }: { right: string; left: string }) => `${left}:${right}`,
+        unreadable: (input: { value: string }) => input.value,
+      },
+    });
+    const manifest = applicationManifest(assemble({ vocabulary: complete, composition: {} }));
+
+    expect(manifest.computations).toEqual([
+      { name: "among", source: "standard", inputs: ["value", "collection"] },
+      { name: "ge", source: "standard", inputs: ["left", "right"] },
+      { name: "gt", source: "standard", inputs: ["left", "right"] },
+      { name: "le", source: "standard", inputs: ["left", "right"] },
+      { name: "lt", source: "standard", inputs: ["left", "right"] },
+      { name: "unreadable", source: "vocabulary" },
+      { name: "unused", source: "vocabulary", inputs: ["right", "left"] },
+    ]);
+  });
+
+  test("uses canonical member roles and contracts under a structural replacement", () => {
+    class CanonicalContract {
+      static readonly purpose = "Keep the canonical contract.";
+      static readonly queries = { _lookup: "optional" } as const;
+      static readonly outcomes = { save: { refusals: ["DENIED"] } } as const;
+
+      save({ item, shelf }: { item: string; shelf: string }) {
+        return { item, shelf };
+      }
+
+      _lookup({ item }: { item: string }): { item: string }[] {
+        return [{ item }];
+      }
+    }
+    const declared = vocabulary({
+      concepts: { Contract: CanonicalContract },
+      computations: {},
+    });
+    class ReplacementContract {
+      static readonly purpose = "Do not replace the canonical purpose.";
+      static readonly queries = { _lookup: "many" } as const;
+      static readonly outcomes = { save: { refusals: ["REPLACEMENT_ONLY"] } } as const;
+
+      save({ replacement }: { replacement: string }) {
+        return { replacement };
+      }
+
+      _lookup({ replacement }: { replacement: string }) {
+        return [{ item: replacement }];
+      }
+    }
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: declared,
+        instances: { Contract: new ReplacementContract() as never },
+        composition: {},
+      }),
+    );
+
+    expect(manifest.concepts.find(({ name }) => name === "Contract")).toEqual({
+      name: "Contract",
+      purpose: "Keep the canonical contract.",
+      actions: [{ name: "save", roles: ["item", "shelf"], refusals: ["DENIED"] }],
+      queries: [{ name: "_lookup", roles: ["item"], returns: "optional" }],
+    });
+    expect(manifest.conceptImplementations.find(({ concept }) => concept === "Contract")).toEqual({
+      concept: "Contract",
+      canonical: { owner: "application", constructorName: "CanonicalContract" },
+      selected: { via: "instances", constructorName: "ReplacementContract" },
+    });
+  });
+
+  test("records core, default, initialize, class-instance, and structural selections", () => {
+    class DefaultImplementation {}
+    class InitializedImplementation {
+      constructor(readonly connection: string) {}
+    }
+    class SuppliedCanonical {}
+    class SuppliedReplacement {}
+    class StructuralCanonical {}
+    const declared = vocabulary({
+      concepts: {
+        Supplied: SuppliedCanonical,
+        Structural: StructuralCanonical,
+        Initialized: InitializedImplementation,
+        Default: DefaultImplementation,
+      },
+      computations: {},
+    });
+    const manifest = applicationManifest(
+      assemble({
+        vocabulary: declared,
+        initialize: { Initialized: ["primary"] },
+        instances: { Supplied: new SuppliedReplacement(), Structural: {} },
+        composition: {},
+      }),
+    );
+
+    expect(manifest.conceptImplementations).toEqual([
+      {
+        concept: "Default",
+        canonical: { owner: "application", constructorName: "DefaultImplementation" },
+        selected: { via: "default" },
+      },
+      {
+        concept: "Initialized",
+        canonical: { owner: "application", constructorName: "InitializedImplementation" },
+        selected: { via: "initialize" },
+      },
+      {
+        concept: "RequestBoundary",
+        canonical: { owner: "core", constructorName: "Requesting" },
+        selected: { via: "core" },
+      },
+      {
+        concept: "Structural",
+        canonical: { owner: "application", constructorName: "StructuralCanonical" },
+        selected: { via: "instances" },
+      },
+      {
+        concept: "Supplied",
+        canonical: { owner: "application", constructorName: "SuppliedCanonical" },
+        selected: { via: "instances", constructorName: "SuppliedReplacement" },
+      },
+    ]);
+    expect(JSON.stringify(manifest.conceptImplementations)).not.toContain("primary");
+  });
+
+  test("reserves RequestBoundary for its core inventory and provenance", () => {
+    class ApplicationBoundary {}
+    const declared = vocabulary({
+      concepts: { RequestBoundary: ApplicationBoundary },
+      computations: {},
+    });
+
+    expect(() => assemble({ vocabulary: declared, composition: {} })).toThrow(
+      '"RequestBoundary" is reserved for the core request boundary',
+    );
   });
 
   test("does not assume sibling reads share one state snapshot", () => {
@@ -606,6 +750,180 @@ describe("application manifest", () => {
     expect(forward).toMatch(/"defaults": \{\n\s+"a": 2,\n\s+"z": 1/);
   });
 
+  test("validates, parses, and recomputes the format-owned canonical digest", () => {
+    const manifest = applicationManifest(application());
+    expect(applicationManifestDigest(manifest)).toBe(manifest.digest);
+    expect(parseApplicationManifest(renderApplicationManifest(manifest))).toEqual(manifest);
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+
+    const stale = { ...manifest, digest: "fnv1a64-0000000000000000" };
+    expect(applicationManifestDigest(stale)).toBe(manifest.digest);
+    expect(() => validateApplicationManifest(stale)).toThrow(/\$\.digest.*canonical digest/);
+
+    const inventoryTampered = {
+      ...manifest,
+      computations: manifest.computations.map((computation, index) =>
+        index === 0 && computation.inputs !== undefined
+          ? { ...computation, inputs: [...computation.inputs].reverse() }
+          : computation,
+      ),
+    };
+    expect(applicationManifestDigest(inventoryTampered)).not.toBe(manifest.digest);
+    expect(() => validateApplicationManifest(inventoryTampered)).toThrow(
+      /\$\.digest.*canonical digest/,
+    );
+  });
+
+  test("rejects version 4 rather than upconverting it", () => {
+    const {
+      computations: _computations,
+      conceptImplementations: _conceptImplementations,
+      ...previousShape
+    } = applicationManifest(application());
+    const version4 = { ...previousShape, version: 4 };
+
+    expect(() => validateApplicationManifest(version4)).toThrow(/\$\.version.*expected 5/);
+    expect(() => parseApplicationManifest(JSON.stringify(version4))).toThrow(
+      /\$\.version.*expected 5/,
+    );
+  });
+
+  test("rejects malformed computation and implementation inventories", () => {
+    const manifest = applicationManifest(application());
+    const [first, ...rest] = manifest.computations;
+
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        computations: [{ ...first, inputs: ["value", "value"] }, ...rest],
+      }),
+    ).toThrow("$.computations[0].inputs[1]");
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        computations: [{ ...first, inputs: [""] }, ...rest],
+      }),
+    ).toThrow("$.computations[0].inputs[0]");
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        computations: [...manifest.computations, first],
+      }),
+    ).toThrow(/\$\.computations\[5\]\.name.*duplicates/);
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        application: {
+          ...manifest.application,
+          reactions: manifest.application.reactions.map((reaction, index) =>
+            index === 0
+              ? {
+                  ...reaction,
+                  where: [{ op: "holds", computation: "missing", in: {} }],
+                }
+              : reaction,
+          ),
+        },
+      }),
+    ).toThrow("$.application.reactions[0].where[0].computation");
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        conceptImplementations: [],
+      }),
+    ).toThrow(/\$\.conceptImplementations.*RequestBoundary/);
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        conceptImplementations: [
+          ...manifest.conceptImplementations,
+          manifest.conceptImplementations[0],
+        ],
+      }),
+    ).toThrow(/\$\.conceptImplementations\[1\]\.concept.*duplicates/);
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        conceptImplementations: manifest.conceptImplementations.map((entry) => ({
+          ...entry,
+          selected: { ...entry.selected, floor: "forged" },
+        })),
+      }),
+    ).toThrow("$.conceptImplementations[0].selected.floor");
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        conceptImplementations: manifest.conceptImplementations.map((entry) => ({
+          ...entry,
+          selected: { ...entry.selected, constructorName: "ForgedBoundary" },
+        })),
+      }),
+    ).toThrow("$.conceptImplementations[0].selected.constructorName");
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        conceptImplementations: manifest.conceptImplementations.map((entry) => ({
+          ...entry,
+          canonical: { ...entry.canonical, constructorName: "Object" },
+        })),
+      }),
+    ).toThrow("$.conceptImplementations[0].canonical.constructorName");
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        conceptImplementations: manifest.conceptImplementations.map((entry) => ({
+          ...entry,
+          canonical: { ...entry.canonical, owner: "application" },
+        })),
+      }),
+    ).toThrow("$.conceptImplementations[0].canonical.owner");
+  });
+
+  test("rejects endpoint, input-contract, and logical-wire drift", () => {
+    const manifest = applicationManifest(application());
+
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        endpoints: manifest.endpoints.map((endpoint, index) =>
+          index === 0 ? { ...endpoint, input: {} } : endpoint,
+        ),
+      }),
+    ).toThrow("$.endpoints[0].input");
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        inputContracts: { ...manifest.inputContracts, "/forged": {} },
+      }),
+    ).toThrow('$.inputContracts["/forged"]');
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        wire: { ...manifest.wire, endpoints: [] },
+      }),
+    ).toThrow(/\$\.wire\.endpoints.*\/shared/);
+  });
+
+  test("fails closed on malformed manifest JSON with useful structural paths", () => {
+    const manifest = applicationManifest(application());
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        application: { ...manifest.application, reactions: "not-an-array" },
+      }),
+    ).toThrow("$.application.reactions");
+    expect(() => validateApplicationManifest({ ...manifest, unexpected: true })).toThrow(
+      "$.unexpected",
+    );
+    expect(() =>
+      validateApplicationManifest({
+        ...manifest,
+        wire: { ...manifest.wire, hidden: undefined },
+      }),
+    ).toThrow("$.wire.hidden");
+    expect(() => parseApplicationManifest("{")).toThrow(/manifest JSON/);
+  });
+
   test("keeps prototype-named defaults in canonical endpoint and contract design data", () => {
     const defaults = JSON.parse(
       '{"__proto__":{"constructor":1,"prototype":2},"constructor":3,"prototype":4}',
@@ -655,7 +973,7 @@ describe("application manifest", () => {
     expect(printed.status).toBe(0);
     expect(JSON.parse(printed.stdout)).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 4,
+      version: 5,
     });
     expect(printed.stdout.endsWith("\n")).toBe(true);
 

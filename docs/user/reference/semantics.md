@@ -694,12 +694,24 @@ occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
 format and package SemVer. Artifact planning requires
-`sync-engine.application-manifest` version 4, a 1.x core generator identity,
+`sync-engine.application-manifest` version 5, a 1.x core generator identity,
 and SemVer projector provenance. The core generator identity must name
 `@mit-sdg/sync-engine` at a 1.x version. Projector provenance accepts any
 nonblank package name with any valid SemVer version; projector versions
 are not restricted to 1.x. Generator and projector identities may use
 prerelease versions.
+
+Manifest V5 inventories every installed computation, including the five standard
+relations and vocabulary computations that no registered definition references.
+It records only the computation name, its standard/vocabulary source, and input
+roles when conservative function inspection can recover them. It does not retain
+the function. For concepts, the vocabulary class remains the canonical contract:
+its action/query roles, query cardinalities, and refusal declarations stay
+authoritative when assembly selects a structural replacement. A separate
+implementation inventory records `default`, `initialize`, or `instances`
+selection, plus the core-owned RequestBoundary. A named floor is retained only
+when WeakMap provenance identifies it without ambiguity; omission does not imply
+that no floor was used.
 
 Generated Markdown names its manifest producer, the
 `sync-engine.concept-specification` format version, and its renderer package

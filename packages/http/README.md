@@ -1,122 +1,250 @@
 # @mit-sdg/sync-engine-http
 
-`@mit-sdg/sync-engine-http` is the maintained Fetch-based HTTP transport for
-`@mit-sdg/sync-engine`. It provides a server adapter, a fetch client, and a
-generated-wire projection. It does not provide an HTTP listener or web
-framework integration.
+Use `@mit-sdg/sync-engine-http` to expose an assembled sync-engine application as
+POST/JSON endpoints and call those endpoints through a generated, typed Fetch
+client. The package adapts Fetch `Request` objects to `Response` objects and
+provides a client; it does not own an HTTP listener, web framework, or server
+lifecycle.
 
-The current 1.x beta requires Node.js 24 and ESM. This independently published package
-declares an exact matching beta core peer dependency. Install both packages with
-the current release:
+## Mental model
 
-```sh
-bun add @mit-sdg/sync-engine@beta @mit-sdg/sync-engine-http@beta
+```text
+caller -> typed Fetch client -> HTTP -> Fetch handler -> gateway -> application
+                 ^                         ^
+                 |                         |
+      generated HTTP wire type      immutable HTTP profile
+                 ^                         |
+                 +------ httpWire(profile)-+
 ```
 
-For reproducibility, replace `@beta` with the same pinned beta version.
+The handler and client exchange JSON over HTTP. `httpWire(...)` applies the same
+public profile as the handler to the application's logical wire contract. The
+generated HTTP wire type then supplies the client's endpoint names, inputs,
+outputs, and public error categories.
 
-The package has no root export. Use only these subpaths:
+## What you get
 
-- `@mit-sdg/sync-engine-http/server`
-- `@mit-sdg/sync-engine-http/client`
-- `@mit-sdg/sync-engine-http/tooling`
+| Part                      | Main export                   | Purpose                                                                         |
+| ------------------------- | ----------------------------- | ------------------------------------------------------------------------------- |
+| Fetch handler             | `createHttpHandler(...)`      | Routes a Fetch `Request` through a sync-engine gateway and returns a `Response` |
+| Typed Fetch client        | `createHttpClient<Wire>(...)` | Exposes generated paths as typed methods and sends JSON `POST` requests         |
+| HTTP wire projection      | `httpWire(...)`               | Generates the transport-visible contract from the logical wire                  |
+| Production profile/policy | `productionHttpProfile(...)`  | Freezes the origin, route prefix, and public domain-error mapping               |
+| Optional credential floor | `httpFloor(...)`              | Binds one logical credential to an `HttpOnly` cookie                            |
 
-## Production profile
+`createHttpTransport(...)` is also available when an application needs the HTTP
+transport without the `createHttpClient(...)` convenience composition.
 
-`productionHttpProfile(...)` defines the public origin, optional route prefix,
-and domain errors that may cross the HTTP boundary. Pass the same immutable
-profile to the handler and wire projector.
+## Install
+
+The HTTP package is published separately and declares an exact peer dependency
+on the matching core beta. Pin both packages to the same exact version and
+upgrade them together:
+
+```sh
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.7 @mit-sdg/sync-engine-http@1.0.0-beta.7
+```
+
+The current beta is ESM-only and supports Node.js 24 (`>=24 <25`).
+
+## Import paths
+
+The package has no root export. Deep imports are not supported; use one of these
+public subpaths:
+
+| Subpath                             | Contains                                      |
+| ----------------------------------- | --------------------------------------------- |
+| `@mit-sdg/sync-engine-http/server`  | Handler, production profile, credential floor |
+| `@mit-sdg/sync-engine-http/client`  | Fetch client and lower-level HTTP transport   |
+| `@mit-sdg/sync-engine-http/tooling` | Generated HTTP wire projection                |
+
+## Quickstart
+
+This quickstart assumes the application already exports `assembleApplication()`
+and declares a `/names/claim` endpoint with a `{ name: string }` input and a
+`NAME_TAKEN` refusal. The local module and generated type names below belong to
+the application.
+
+### 1. Create the profile and handler
 
 ```ts
+// src/http-edge.ts
 import { createGateway } from "@mit-sdg/sync-engine/boundary";
 import { createHttpHandler, productionHttpProfile } from "@mit-sdg/sync-engine-http/server";
-import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
-import { assembleApplication } from "./src/assembly.ts";
+import { assembleApplication } from "./assembly.ts";
 
-export const httpPolicy = productionHttpProfile({
+export const httpProfile = productionHttpProfile({
   origin: "https://app.example",
   basePath: "/api",
-  publicErrors: { DUPLICATE_NAME: "CONFLICT" },
+  publicErrors: { NAME_TAKEN: "CONFLICT" },
 });
 
-const application = assembleApplication();
-const gateway = createGateway({ application });
-export const handler = createHttpHandler({
-  application,
-  gateway,
-  profile: httpPolicy,
-});
+export function buildHttpEdge() {
+  const application = assembleApplication();
+  const gateway = createGateway({ application });
+  const handler = createHttpHandler({
+    application,
+    gateway,
+    profile: httpProfile,
+  });
+
+  return { application, gateway, handler };
+}
+```
+
+`origin` declares the public HTTP or HTTPS origin, and production requires HTTPS;
+it does not configure CORS. `basePath` exposes `/names/claim` at
+`POST /api/names/claim`. `publicErrors` is an allowlist: `NAME_TAKEN` becomes
+`CONFLICT`/409, while an unmapped domain error becomes opaque
+`INTERNAL_ERROR`/500.
+
+### 2. Give Fetch requests to the handler
+
+A Fetch-native host can pass each request directly to the handler. The host then
+sends the returned `Response` to the caller.
+
+```ts
+import { buildHttpEdge } from "./src/http-edge.ts";
+
+const edge = buildHttpEdge();
+
+export function respondToRequest(request: Request): Promise<Response> {
+  return edge.handler(request);
+}
+```
+
+Register `respondToRequest` with the host. No framework-specific adapter is
+required when the host already uses Fetch interfaces.
+
+### 3. Generate the HTTP wire type
+
+Use the same immutable `httpProfile` value for the handler and `httpWire(...)`:
+
+```ts
+// generated.config.ts
+import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
+import { assembleApplication } from "./src/assembly.ts";
+import { httpProfile } from "./src/http-edge.ts";
 
 export default {
   assemble: assembleApplication,
   title: "Application",
-  projections: [httpWire({ policy: httpPolicy, name: "ApplicationWireHttp" })],
+  wireName: "ApplicationWire",
+  projections: [httpWire({ policy: httpProfile, name: "ApplicationWireHttp" })],
 };
 ```
 
-The profile projects only mapped domain errors and opaque protocol categories.
-The [server reference](public-surface.md#server) defines request limits, status
-mapping, origin rules, correlation, and failure behavior.
+Generate or update the checked-in artifacts:
 
-## Fetch client
+```sh
+bunx sync-engine artifacts pin --config generated.config.ts
+```
+
+The projection emits `ApplicationWireHttp` in `generated/wire.ts` and replaces
+private domain refusal names with the profile's public categories.
+
+### 4. Call an endpoint through the typed client
 
 ```ts
 import { createHttpClient } from "@mit-sdg/sync-engine-http/client";
 import type { ApplicationWireHttp } from "./generated/wire.ts";
 
 const client = createHttpClient<ApplicationWireHttp>({ baseUrl: "/api" });
-const result = await client.names.claim({ name: "Ada" });
+const result = await client.names.claim({ name: "atlas" });
+
+if ("error" in result) {
+  console.error("Name claim failed:", result.error);
+} else {
+  console.log("Claimed:", result.name);
+}
 ```
 
-`baseUrl` defaults to `API_BASE_URL`, then `/api`; `/` selects the origin root.
-Per-call options carry abort, timeout, and correlation values. Optional headers,
-response-size limits, and response validation belong in `HttpClientOptions`.
-Calls resolve handled transport failures as error envelopes. The [client
-reference](public-surface.md#client) lists every default, limit, and error code.
+The client appends each generated endpoint path to `baseUrl`. If `baseUrl` is
+omitted, the client uses `API_BASE_URL`, then `/api`; an explicit `/` selects the
+origin root. Per-call options carry abort, timeout, and correlation values.
+Headers, response-size limits, credentials mode, and optional response
+validation belong in `HttpClientOptions`.
 
-## Cookie credential floor
+## Results and exceptions
 
-`httpFloor(...)` adds one cookie-provided logical credential. Its declaration
-names the credential input, the endpoint and output fields that issue the
-credential, and successful endpoints that clear it:
+Handled server failures become JSON `Response` objects. Public categories use
+status 400 (`INVALID_REQUEST`), 401 (`UNAUTHORIZED`), 403 (`FORBIDDEN`), 404
+(`NOT_FOUND`), or 409 (`CONFLICT`). Private domain errors and internal failures
+use the opaque `INTERNAL_ERROR` category with status 500.
+
+Endpoint calls resolve handled HTTP and client transport failures as error
+envelopes. These include network failure, bad JSON, an unexpected status,
+header-provider failure, response-size overflow, abort, and timeout. Check the
+result's `error` property rather than relying on a rejected promise for these
+conditions.
+
+Invalid setup is a programmer or configuration error and throws while the
+profile, floor, handler, or client is constructed. Examples include an invalid
+origin or base path, a gateway for another application, an inconsistent
+credential floor, or an invalid `maxResponseBytes`. Errors in the listener or
+framework outside the Fetch adapter remain host errors.
+
+## Optional cookie credential floor
+
+Use `httpFloor(...)` when one required logical input should come from a browser
+cookie instead of the JSON body. The application still owns the credential's
+meaning, expiry, and authorization decisions.
 
 ```ts
+// Alternative policy in src/http-edge.ts
 import { httpFloor } from "@mit-sdg/sync-engine-http/server";
 
-export const httpPolicy = httpFloor({
+export const sessionFloor = httpFloor({
   origin: "https://app.example",
   basePath: "/api",
-  publicErrors: { INVALID_SESSION: "UNAUTHORIZED" },
+  publicErrors: { UNKNOWN_SESSION: "UNAUTHORIZED" },
   credential: {
     name: "session",
-    input: "sessionToken",
-    issue: { path: "/sessions/start", output: "sessionToken", expires: "expiresAt" },
+    input: "session",
+    issue: {
+      path: "/sessions/start",
+      output: "session",
+      expires: "expiresAt",
+    },
     clear: ["/sessions/end"],
   },
 });
 ```
 
-An endpoint is protected only when its input contract lists the credential input
-as required. The handler replaces that input with the cookie value and never
-trusts a body-supplied value. The projector removes the credential input and
-consumed issue outputs from the public generated contract.
+Pass `floor: sessionFloor` instead of `profile: httpProfile` to
+`createHttpHandler(...)`, and pass the same `sessionFloor` as the `policy` for
+`httpWire(...)`.
 
-The [credential-floor reference](public-surface.md#credential-floor) defines
-origin checks, cookie attributes, issuance, clearing, and validation. Browsers
-own their cookie storage; a Node.js or custom `fetch` must supply persistence
-when calls depend on the floor.
+An endpoint is protected only when its input contract lists `session` as
+required. For such an endpoint, the handler replaces the input with the cookie
+value or `null`; it never trusts a body-supplied value. The wire projection
+removes that input from protected endpoints and removes `session` and
+`expiresAt` from the issuing endpoint's public output.
 
-## Host responsibilities
+The handler sets the cookie after successful issuance and clears it after a
+successful configured clear endpoint or an `UNAUTHORIZED` result from a
+protected endpoint. Browsers own cookie storage. `createHttpClient(...)` uses
+`credentials: "include"` by default, but Node.js and custom Fetch
+implementations must provide a cookie store when later calls depend on the
+credential.
 
-The handler adds no listener lifecycle, TLS termination, CORS, HSTS, proxy
-trust, connection limits, rate limits, retries, deduplication, or idempotency.
-Handler calls may overlap, and client header providers may run concurrently.
-The handler and client have no disposal method and do not own application,
-gateway, store, listener, or fetch-agent lifetime.
+## Your host still owns
 
-See the [HTTP API reference](public-surface.md),
-[execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client),
-[host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md#http-host-responsibilities),
-[support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md),
-[security policy and private vulnerability reporting](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md),
-and [complete production example](https://github.com/mit-sdg/sync-engine/tree/main/examples/production-http).
+The host owns the listener, TLS termination, HSTS, CORS and preflight handling,
+proxy trust, connection limits, rate limits, retries, idempotency, and startup,
+drain, and shutdown policy. Handler calls may overlap, and client header
+providers for concurrent calls may run concurrently; the host and application
+must provide any required serialization.
+
+The handler and client have no disposal method. They do not close the
+application, gateway, concept store, listener, selected Fetch implementation, or
+Fetch agent.
+
+## Related documentation
+
+- [HTTP public API reference](public-surface.md)
+- [Complete production HTTP example](https://github.com/mit-sdg/sync-engine/tree/main/examples/production-http)
+- [Boundary, gateway, and client semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client)
+- [HTTP host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md#http-host-responsibilities)
+- [Support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md)
+- [Security policy and private vulnerability reporting](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md)

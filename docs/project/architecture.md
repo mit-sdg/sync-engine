@@ -242,8 +242,11 @@ and optional named computation functions into a vocabulary, typed computation
 references, default implementations, floor-specific implementation factories,
 complete implementation maps, and refusal metadata. A host-created
 `ConceptFloor` descriptor separately groups one such map with resources and a
-`close()` operation. `src/engine/boundary/assembly/assemble.ts` creates one engine,
-its internal occurrence index, and an optional independent audit sink;
+`close()` operation. Private process-wide WeakMap associations retain named-floor
+hints across complete implementation maps and, when unambiguous, object-preserving
+spreads without mutating application objects.
+`src/engine/boundary/assembly/assemble.ts` creates one engine, its internal
+occurrence index, and an optional independent audit sink;
 instruments its selected instances; collects tagged composition exports; and
 returns the application-facing invoker/form interface. It also selects query
 memoization, installs privileged raw-fault reporting, and makes ordinary
@@ -268,8 +271,12 @@ index, load an existing file, replay entries, or expose a close operation.
 
 `src/engine/tooling/inspection.ts` projects one assembly into app IR, concept
 inventories, input contracts, retained occurrence summaries, and diagnostic
-read-back. `manifest.ts` emits manifest V4 and its digest. `artifact-plan.ts` is
-the single specification and wire renderer. `generated-artifacts.ts` resolves a
+read-back. Assembly also retains JSON-safe computation and selected-implementation
+inventories; `manifest.ts` emits manifest V5 from those same assembly facts and
+its digest. Canonical vocabulary metadata, rather than a replacement instance,
+owns manifest action/query roles, query promises, and refusal contracts.
+`artifact-plan.ts` is the single specification and wire renderer.
+`generated-artifacts.ts` resolves a
 project descriptor, gives its ordered projections immutable logical facts, and
 checks or writes the two pinned files only after the complete plan succeeds.
 
@@ -288,6 +295,40 @@ snapshot, tarball checks, and exact peer rules. The public API test checks exact
 symbol identity, nested constants, unsupported historical names, and
 package-path reachability. The packed-consumer fixture separately checks the
 emitted type graph.
+
+Workspace packaging and npm publication are separate policies. Every cataloged
+workspace builds, packs, and participates in combined-consumer checks. Core,
+analysis, and HTTP are independently npm-published. Analysis consumes only
+supported core subpaths and exposes generic, non-verdict surfaces through
+`@mit-sdg/sync-engine-analysis/ir` and
+`@mit-sdg/sync-engine-analysis/project`. Plain source/project models and pure
+queries live on the compiler-free `/ir` side. The package still declares
+TypeScript as a runtime dependency, but an isolated packed `/ir` import is
+checked not to load TypeScript, filesystem or filesystem-promise entrypoints,
+worker, project-loader, or source index-builder modules.
+
+The `/project` loader resolves the complete TypeScript reference graph through
+one immutable repository-bounded host, creates one program per config, and
+merges canonical owned source evidence. Its public async entrypoint runs that
+loader in an emitted Node worker; source tests explicitly select the TypeScript
+worker and packed ESM selects its JavaScript sibling. Packed-consumer verification
+executes the worker and codecs from exact tarballs under Node 24 and Bun rather
+than workspace paths. The package intentionally contains no workflow guidance,
+prompts, context packing, targeting, or review orchestration.
+
+Durable source indexes contain document and anchor metadata, ranges, and
+digests, never source bytes. `readApplicationSourceDocument(...)` is the
+reader-backed document verification boundary; clients slice verified text by
+anchor range. Project-backed facade construction recomputes the application
+index from the supplied manifest and compares exact semantic composition before
+using that index. It also requires a previously trusted digest of the complete
+project artifact. Codec validation enforces inventory ownership, indexed paths,
+file byte lengths, and derivable resource totals, but cannot prove semantic
+source attribution without rerunning TypeScript. AST work remains
+producer-reported. An attacker who chooses both an artifact and its digest still
+chooses the evidence. Revision labels remain caller assertions rather than VCS
+verification. The project parser is deliberately synchronous and whole-string;
+hosts own the byte bound for untrusted serialized input.
 
 ## Dependency rules
 

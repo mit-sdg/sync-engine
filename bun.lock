@@ -14,16 +14,27 @@
         "vite-plus": "0.2.6",
       },
     },
+    "packages/analysis": {
+      "name": "@mit-sdg/sync-engine-analysis",
+      "version": "1.0.0-beta.7",
+      "dependencies": {
+        "typescript": ">=6 <7",
+      },
+      "peerDependencies": {
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+      },
+    },
     "packages/http": {
       "name": "@mit-sdg/sync-engine-http",
-      "version": "1.0.0-beta.6",
+      "version": "1.0.0-beta.7",
       "peerDependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.6",
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
       },
     },
   },
   "overrides": {
     "@mit-sdg/sync-engine": "file:.",
+    "nanoid": "3.3.17",
   },
   "packages": {
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
@@ -55,6 +66,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
+
+    "@mit-sdg/sync-engine-analysis": ["@mit-sdg/sync-engine-analysis@workspace:packages/analysis"],
 
     "@mit-sdg/sync-engine-http": ["@mit-sdg/sync-engine-http@workspace:packages/http"],
 
@@ -366,7 +379,7 @@
 
     "mrmime": ["mrmime@2.0.1", "", {}, "sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ=="],
 
-    "nanoid": ["nanoid@3.3.16", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q=="],
+    "nanoid": ["nanoid@3.3.17", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g=="],
 
     "obug": ["obug@2.1.4", "", {}, "sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA=="],
 

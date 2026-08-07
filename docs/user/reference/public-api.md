@@ -486,24 +486,28 @@ Neither form weakens generated endpoint input and output types.
 
 <!-- register:tooling:start -->
 
-`AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV4`, `ConceptInventoryIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `GeneratedApplication`, `ManifestEndpointV4`, `ObservedOccurrence`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `ReactionIR`, `ViewIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `diagnosticsFail`, `inspectAssembly`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `wireContracts`
+`ActionTriggerIR`, `AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV5`, `ChannelTriggerIR`, `ComputationInventoryIR`, `ConceptImplementationProvenanceIR`, `ConceptInventoryIR`, `ConceptSpecificationIR`, `ConsequenceIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `FormerNodeIR`, `FormerSourceIR`, `GeneratedApplication`, `ManifestEndpointV5`, `ObservedOccurrence`, `PatternIR`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `QueryRefIR`, `ReactionIR`, `SpecificationActionIR`, `SpecificationDocumentationIR`, `SpecificationFieldIR`, `SpecificationLocationIR`, `SpecificationQueryIR`, `SpecificationRefusalIR`, `SpecificationResultIR`, `SpecificationTypeIR`, `SpliceIR`, `TriggerIR`, `UnloweredIR`, `ValueIR`, `ViewIR`, `ViewOpIR`, `WhereOpIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `applicationManifestDigest`, `diagnosticsFail`, `inspectAssembly`, `parseApplicationManifest`, `parseConceptSpecification`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `validateApplicationManifest`, `wireContracts`
 
 <!-- register:tooling:end -->
 
 ### Inspection and rendering
 
-| API                         | Compact signature                                            |
-| --------------------------- | ------------------------------------------------------------ |
-| `inspectAssembly`           | `inspectAssembly(assembly)`                                  |
-| `renderApp`                 | `renderApp({ title, concepts, app }): string`                |
-| `renderReaction`            | `renderReaction(reaction): string`                           |
-| `renderInputContracts`      | `renderInputContracts(contracts): string`                    |
-| `wireContracts`             | `wireContracts(app, options?: WireOptions): WireContractsIR` |
-| `renderWireTypes`           | `renderWireTypes(wire, moduleName? \| options?): string`     |
-| `applicationManifest`       | `applicationManifest(assembly): ApplicationManifestV4`       |
-| `renderApplicationManifest` | `renderApplicationManifest(manifest): string`                |
-| `applicationDiagnostics`    | `applicationDiagnostics(app, endpoints, wire)`               |
-| `diagnosticsFail`           | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`      |
+| API                           | Compact signature                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `inspectAssembly`             | `inspectAssembly(assembly)`                                                  |
+| `renderApp`                   | `renderApp({ title, concepts, app }): string`                                |
+| `renderReaction`              | `renderReaction(reaction): string`                                           |
+| `renderInputContracts`        | `renderInputContracts(contracts): string`                                    |
+| `wireContracts`               | `wireContracts(app, options?: WireOptions): WireContractsIR`                 |
+| `renderWireTypes`             | `renderWireTypes(wire, moduleName? \| options?): string`                     |
+| `applicationManifest`         | `applicationManifest(assembly): ApplicationManifestV5`                       |
+| `applicationManifestDigest`   | `applicationManifestDigest(manifest): string`                                |
+| `parseApplicationManifest`    | `parseApplicationManifest(source): ApplicationManifestV5`                    |
+| `renderApplicationManifest`   | `renderApplicationManifest(manifest): string`                                |
+| `validateApplicationManifest` | `validateApplicationManifest(value): asserts value is ApplicationManifestV5` |
+| `applicationDiagnostics`      | `applicationDiagnostics(app, endpoints, wire)`                               |
+| `diagnosticsFail`             | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`                      |
+| `parseConceptSpecification`   | `parseConceptSpecification(markdown): ConceptSpecificationIR`                |
 
 `AppIR`, `ReactionIR`, `ViewIR`, `FormerIR`, `ConceptInventoryIR`, and
 `ObservedOccurrence` name inspected data. `ObservedOccurrence` contains the
@@ -522,18 +526,50 @@ qualifies or the flow finalizes. When absent, qualification happens where the
 trigger lands. Imported IR with another value is rejected. Standalone deferred
 `ReactionIR` must be consumed by a package version that recognizes the field;
 during beta, use the same package version to produce and consume IR. The
-version-4 manifest protects application IR carried inside a manifest from older
+version-5 manifest protects application IR carried inside a manifest from older
 tooling.
 
-`ApplicationManifestV4` has format `sync-engine.application-manifest`, version
-`4`, and is static canonical JSON-round-trippable application data. Its
+`ApplicationManifestV5` has format `sync-engine.application-manifest`, version
+`5`, and is static canonical JSON-round-trippable application data. Its
 `generator` records the exact `@mit-sdg/sync-engine` package version. It
-contains the application IR, concept inventories, declaration-owned
-`ManifestEndpointV4` entries, input contracts, wire IR, validator-presence
-flags, structured diagnostics, and `digest`. The digest covers every other
-manifest field. It excludes occurrences, timestamps, other runtime state, and
+contains the application IR, concept inventories, computation inventory,
+concept-implementation provenance, declaration-owned `ManifestEndpointV5`
+entries, input contracts, wire IR, validator-presence flags, structured
+diagnostics, and `digest`. The digest covers every other manifest field. It
+excludes runtime functions, constructor arguments, resources, source paths,
+object identity, occurrences, timestamps, other runtime state, and
 uninterpreted concept State sections. State notation likewise contributes
 nothing to the assembled read-back or generated wire.
+
+`ComputationInventoryIR` contains every installed computation, including all
+five standard computations and unused vocabulary computations. `source`
+distinguishes `standard` from `vocabulary`; `inputs` is present only when the
+function's top-level destructuring can be read conservatively. The manifest
+sorts entries by name and never carries the function itself.
+
+`ConceptImplementationProvenanceIR` separates a vocabulary concept's canonical
+class from the implementation selected by assembly. RequestBoundary is
+core-owned and selected through `core`, and an application vocabulary cannot
+reuse that name. Application concepts report `default`, `initialize`, or
+`instances`. Constructor names are descriptive and omitted for anonymous or
+structural `Object` values; selected constructor names and `floor` can occur only
+with `instances`. A floor is omitted when provenance is ambiguous. Concept
+member roles, query cardinalities, and refusal semantics come from the canonical
+vocabulary declaration rather than a replacement instance.
+`applicationManifestDigest(...)` recomputes the digest while ignoring the
+supplied `digest` field. `validateApplicationManifest(...)` treats its input as
+untrusted data: it checks the complete top-level version-5 shape, the nested IR
+needed by tooling, inventory uniqueness and cross-field consistency, endpoint,
+input-contract, and logical-wire path agreement, plain JSON portability, and
+exact canonical digest equality. Version 4 is rejected without upconversion.
+Failures identify the offending `$` path. `parseApplicationManifest(...)`
+performs the same checks after JSON parsing and returns data in canonical record-key
+order; neither function imports application code or a manifest-producing config.
+`parseConceptSpecification(...)` exposes the same structured, source-located
+contract used by registration. It parses Purpose, Principle, actions, queries,
+refusals, result declarations, and reader-facing extension sections. It does not
+interpret State prose or turn authored types and behavior sentences into runtime
+schemas or guarantees.
 
 Each concept inventory may carry a
 `sync-engine.concept-specification` version-1 subtree. The subtree includes
