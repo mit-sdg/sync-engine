@@ -8,8 +8,6 @@ member names, recoverable input names, and refusal mappings. Query cardinalities
 are enforced later when a reaction, view, or former evaluates a query. The other
 parsed fields remain authored contract data.
 
-<!-- sync-engine-guidance: {"id":"concept-specification-example","anchor":"complete-example","authority":"reference","topics":["actions-queries","concept-design","concept-specification","verification"],"stages":["design","implementation","verification"]} -->
-
 ## Complete example
 
 This document declares two actions, one optional query, and one refusal:
@@ -222,8 +220,6 @@ Establish state properties and invariants in principle tests, direct
 implementation tests, and backend constraint tests. Any future machine state
 conformance requires an explicit, separately designed, backend-neutral
 descriptor; prose in a State section will not be inferred as that descriptor.
-
-<!-- sync-engine-guidance: {"id":"concept-specification-registration-checks","anchor":"registerconcept-checks","authority":"reference","topics":["actions-queries","concept-specification","verification"],"stages":["implementation","verification"]} -->
 
 ## `registerConcept` checks
 

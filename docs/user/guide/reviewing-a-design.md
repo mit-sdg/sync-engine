@@ -16,8 +16,6 @@ A purpose that cannot be stated in one line often contains several mechanisms. A
 reaction whose decision cannot be stated often reconstructs a missing action or
 connects an artificial split.
 
-<!-- sync-engine-guidance: {"id":"review-each-concept","anchor":"2-review-each-concept","authority":"procedure","topics":["actions-queries","concept-boundaries","concept-design","state-ownership","verification"],"stages":["design","review","verification"]} -->
-
 ## 2. Review each concept
 
 Stop at the first failed criterion; later detail cannot repair an earlier
@@ -44,8 +42,6 @@ Use [Choosing concept boundaries](../design.md#choosing-concept-boundaries) when
 state partitions, several purposes appear, or reactions mostly pass calls between
 the same pair of concepts.
 
-<!-- sync-engine-guidance: {"id":"review-composition","anchor":"3-review-the-composition","authority":"procedure","topics":["composition","reactions","reads","verification"],"stages":["review","verification"]} -->
-
 ## 3. Review the composition
 
 For every reaction and endpoint:
@@ -62,8 +58,6 @@ For every reaction and endpoint:
 Trace cycles from effects back to triggers. For each cross-concept invariant,
 record its false interval and repair behavior. Consolidate duplicated policy into
 a named view.
-
-<!-- sync-engine-guidance: {"id":"review-scenarios","anchor":"4-trace-scenarios-end-to-end","authority":"procedure","topics":["failure-recovery","operations","runtime-semantics","security","verification"],"stages":["repair","review","verification"]} -->
 
 ## 4. Trace scenarios end to end
 
@@ -103,8 +97,6 @@ early denial; exact enforcement belongs in the owner action and storage.
 Review what leaves the boundary. Generated types are not runtime validators, and
 the production HTTP policy exposes only its configured public categories. See
 the [HTTP server contract](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server).
-
-<!-- sync-engine-guidance: {"id":"review-record-revisions","anchor":"6-record-revisions-and-evidence","authority":"procedure","topics":["concept-boundaries","state-ownership","verification"],"stages":["repair","review","verification"]} -->
 
 ## 6. Record revisions and evidence
 

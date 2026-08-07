@@ -7,15 +7,18 @@ import {
   AnalysisAbortedError,
   AnalysisLimitError,
   ApplicationSourceReadError,
+  designRefKey,
   designRefsForSourceRange,
-  indexApplicationSources,
   queryApplicationSources,
   readApplicationSourceDocument,
   type ApplicationSourceIndex,
   type DesignRef,
-  type SourceAttributionRoot,
   type SourceIndexIssueCode,
-} from "@mit-sdg/sync-engine-analysis/tooling";
+} from "@mit-sdg/sync-engine-analysis/ir";
+import {
+  indexApplicationSources,
+  type SourceAttributionRoot,
+} from "@mit-sdg/sync-engine-analysis/project";
 import { describe, expect, test } from "vite-plus/test";
 import ts from "typescript";
 
@@ -245,8 +248,8 @@ export const application = assemble({ vocabulary: words, composition: { nested }
 
     expect(sourceIndex.issues).toEqual([]);
     expect(
-      sourcesFor(sourceIndex, { kind: "reaction", reaction: "nested.React" })[0]?.text,
-    ).toContain("React = react");
+      sourcesFor(sourceIndex, { kind: "reaction", reaction: "nested.React" })[0]?.range.path,
+    ).toBe("composition.ts");
     expect(
       sourcesFor(sourceIndex, {
         kind: "endpoint",
@@ -254,9 +257,7 @@ export const application = assemble({ vocabulary: words, composition: { nested }
         path: "/same",
       })[0]?.range.path,
     ).toBe("composition.ts");
-    expect(
-      sourceIndex.entries.flatMap(({ sources }) => sources.map(({ text }) => text)).join("\n"),
-    ).not.toContain("not a declaration");
+    expect(sourceIndex.entries.some(({ ref }) => designRefKey(ref).includes("shadow"))).toBe(false);
   });
 
   test("maps arbitrary logical concept names without class spelling or unrelated-registration ambiguity", () => {
@@ -290,7 +291,7 @@ void unrelated;
         "selected-implementation",
         "selection",
       ]);
-      expect(sources.some(({ text }) => text.includes("class Shared"))).toBe(true);
+      expect(sources.some(({ range }) => range.path === "app.ts")).toBe(true);
     }
   });
 
@@ -384,20 +385,20 @@ assemble({
       "canonical-contract",
       "selected-implementation",
     ]);
-    expect(defaultRun.every(({ text }) => text.includes('return "base"'))).toBe(true);
+    expect(defaultRun.every(({ range }) => range.path === "app.ts")).toBe(true);
     expect(
       sourcesFor(sourceIndex, { kind: "action", concept: "Explicit", action: "run" }).find(
         ({ role }) => role === "selected-implementation",
-      )?.text,
-    ).toContain('return "selected"');
+      )?.range.path,
+    ).toBe("app.ts");
     expect(
       sourcesFor(sourceIndex, { kind: "action", concept: "Objected", action: "run" }).find(
         ({ role }) => role === "selected-implementation",
-      )?.text,
-    ).toContain('return "object"');
+      )?.range.path,
+    ).toBe("app.ts");
     expect(
       sourcesFor(sourceIndex, { kind: "concept", concept: "Initialized" }).some(
-        ({ role, text }) => role === "selection" && text.includes("Initialized"),
+        ({ role, range }) => role === "selection" && range.path === "app.ts",
       ),
     ).toBe(true);
   });
@@ -426,8 +427,8 @@ assemble({ vocabulary, instances: set.implementations("production", {}), composi
     expect(
       sourcesFor(floor, { kind: "action", concept: "Storage", action: "run" }).find(
         ({ role }) => role === "selected-implementation",
-      )?.text,
-    ).toContain('return "floor"');
+      )?.range.path,
+    ).toBe("app.ts");
 
     const unresolvedManifest = manifestFor({
       concepts: [
@@ -526,12 +527,12 @@ export function buildTwo() { return assemble({ vocabulary: set.vocabulary, compo
       endpoint: "nested.second",
       path: "/same",
     });
-    expect(first[0]?.text).toContain("firstEndpoint = endpoint");
-    expect(second[0]?.text).toContain('second: endpoint("/same"');
+    expect(first[0]?.range.path).toBe("shared.ts");
+    expect(second[0]?.range.path).toBe("shared.ts");
     expect(first[0]?.range.start.offset).not.toBe(second[0]?.range.start.offset);
     expect(sourcesFor(sourceIndex, { kind: "reaction", reaction: "event:manual" })).not.toEqual([]);
-    expect(sourcesFor(sourceIndex, { kind: "reaction", reaction: "first#2" })[0]?.text).toContain(
-      "firstEndpoint = endpoint",
+    expect(sourcesFor(sourceIndex, { kind: "reaction", reaction: "first#2" })[0]?.range.path).toBe(
+      "shared.ts",
     );
 
     const choose = sourcesFor(sourceIndex, {
@@ -546,15 +547,25 @@ export function buildTwo() { return assemble({ vocabulary: set.vocabulary, compo
       { kind: "cursor", path: "shared.ts", offset: method.focusRange!.start.offset },
       { match: "best" },
     );
+    expect(Object.isFrozen(ranked)).toBe(true);
+    expect(Object.isFrozen(ranked.matches)).toBe(true);
     expect(ranked.matches[0].specificity).toBe("focus");
     expect(ranked.matches[0].ref).toEqual({ kind: "action", concept: "Odd", action: "choose" });
 
     const specificationAnchor = choose.find(({ role }) => role === "specification")!;
-    expect(specificationAnchor.text).toContain("choose (value: Text)");
     expect(specificationAnchor.range.end.offset).toBeGreaterThan(
       specificationAnchor.focusRange!.end.offset,
     );
     expect(specificationAnchor.range.end.line).toBe(15);
+    const specificationRead = await readApplicationSourceDocument(sourceIndex, "odd.md", {
+      readFile: () => specification,
+    });
+    expect(
+      specificationRead.text.slice(
+        specificationAnchor.range.start.offset,
+        specificationAnchor.range.end.offset,
+      ),
+    ).toContain("choose (value: Text)");
 
     const shared = files["shared.ts"];
     await expect(
@@ -603,7 +614,6 @@ assemble({ vocabulary: words, composition: { React } });
     for (const [limit, maximum] of [
       ["maxSourceDocuments", baseline.resourceUsage.sourceDocuments - 1],
       ["maxSourceAnchors", baseline.resourceUsage.sourceAnchors - 1],
-      ["maxSourceTextBytes", baseline.resourceUsage.sourceTextBytes - 1],
       ["maxAstCandidates", baseline.resourceUsage.astNodes - 1],
       ["maxAstNodes", baseline.resourceUsage.astNodes - 1],
     ] as const) {
@@ -828,15 +838,12 @@ assemble({
 `,
     });
 
-    for (const [concept, implementation] of [
-      ["ObjectFactory", 'return "object"'],
-      ["DefaultFactory", 'return "default"'],
-    ] as const) {
+    for (const concept of ["ObjectFactory", "DefaultFactory"]) {
       expect(
         sourcesFor(sourceIndex, { kind: "action", concept, action: "run" }).find(
           ({ role }) => role === "selected-implementation",
-        )?.text,
-      ).toContain(implementation);
+        )?.range.path,
+      ).toBe("app.ts");
       expect(sourceIndex.issues).not.toContainEqual(
         expect.objectContaining({
           code: "UNRESOLVED_IMPLEMENTATION_SELECTION",
@@ -938,6 +945,30 @@ assemble({ vocabulary: words, composition: { React } });
       [
         "invalid query path",
         () => queryApplicationSources(sourceIndex, { kind: "file", path: "../app.ts" }),
+      ],
+      [
+        "unknown query discriminant",
+        () =>
+          queryApplicationSources(sourceIndex, {
+            kind: "unknown",
+            path: "app.ts",
+          } as never),
+      ],
+      [
+        "malformed ref",
+        () =>
+          queryApplicationSources(sourceIndex, {
+            kind: "ref",
+            ref: { kind: "reaction", reaction: "React", extra: true },
+          } as never),
+      ],
+      [
+        "unknown ref discriminant",
+        () =>
+          queryApplicationSources(sourceIndex, {
+            kind: "ref",
+            ref: { kind: "unknown", reaction: "React" },
+          } as never),
       ],
       [
         "negative cursor",

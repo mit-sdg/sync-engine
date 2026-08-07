@@ -1,47 +1,66 @@
 # @mit-sdg/sync-engine-analysis
 
-This independently published public companion provides deterministic static
-application indexing, possible-impact tracing, source attribution, durable
-project snapshots, bounded context selection, and revision-bound canonical
-guidance for sync-engine tooling. It consumes a canonical V5
-application manifest and never executes project modules, reactions, or
-manifest-producing configuration.
+This independently published public companion provides deterministic access to
+sync-engine application IR and optional checkout-bound source evidence. It
+consumes canonical V5 application manifests and never imports project modules or
+executes manifest-producing configuration.
 
-The package has no root export. Its supported entrypoints are
-`@mit-sdg/sync-engine-analysis/tooling` and
-`@mit-sdg/sync-engine-analysis/guidance`, and it requires the exact matching
-core beta as a peer dependency. TypeScript `>=6 <7` is installed as a normal
-runtime dependency because source attribution uses the compiler API. The
-published package supports Node.js `>=24 <25`.
+The package has no root export. It has exactly two supported entrypoints:
 
-Comprehensive application, impact, context, source, and project snapshots use
-their V2 formats. Granular façade operations return V1
-`sync-engine.application-analysis-result` envelopes. All source attribution and
-possible-impact outputs carry explicit provenance and limits; they are generic
-inspection evidence, not a semantic proof, authorization decision, or approval
-verdict.
+- `@mit-sdg/sync-engine-analysis/ir` contains portable manifest indexing,
+  possible-impact tracing, plain source/project data types, pure source queries,
+  neutral diagnostics, and the optional `createApplicationAnalysis(...)` query
+  facade. Importing this entrypoint does not evaluate TypeScript, filesystem,
+  worker, project-loader, or source-index-builder modules.
+- `@mit-sdg/sync-engine-analysis/project` contains the TypeScript-backed source
+  indexer, bounded filesystem project loader, cancellable Node worker, project
+  diagnostics and producer options, and strict project snapshot codecs.
 
-Filesystem project analysis follows complete, transitive TypeScript project
-references and analyzes each config from source, including solution roots with
-no files and projects whose declarations have not been built. The synchronous
-`loadApplicationProject` primitive supports expert custom readers;
-`analyzeApplicationProject` runs filesystem-backed work in a Node worker and
-terminates that worker on abort. Project and granular results both have strict
-canonical JSON validators, parsers, renderers, and SHA-256 identities.
+TypeScript `>=6 <7` remains a normal runtime dependency because this is one npm
+package, but clients that only import `/ir` do not load the compiler. The package
+requires the exact matching core beta as a peer dependency and supports Node.js
+`>=24 <25`.
 
-The `/guidance` entrypoint loads a packaged V1 resource generated from exact
-marked H2/H3 sections of the shipped core documentation. It provides strict
-resource and selection codecs plus deterministic `ids`, `topics`, `stages`, and
-`authority` filtering under entry and UTF-8 content-byte bounds. The loader
-reads only its adjacent package JSON, validates and recursively freezes it, and
-performs no network or repository lookup.
+The small facade exposes only `catalog`, `search`, `describe`, `sources`,
+`impact`, `navigate`, `diagnostics`, `contracts`, and `provenance`. Granular
+results are bounded immutable values, not a second persisted wire format. Search
+uses locale-invariant lowercase token matching over identity, raw contract, and
+source-path fields. Descriptions return summaries or raw definitions. Contracts
+return raw logical endpoint/input/wire IR without rendering or projections.
 
-Guidance identity includes the analysis and core versions, repository, exact
-document digests, and source revision. Clean release builds use exact Git
-`HEAD`; dirty development builds use `development:<documentsDigest>` rather
-than claiming the commit. `ApplicationAnalysis.guidance()` may receive a
-validated selection and returns its canonical IDs, paths, and resource identity
-alongside the existing issue-derived rules. Neither entrypoint defines prompts,
-workflow roles, budgets, gates, or verdicts.
+The persisted formats are `sync-engine.application-index` version 2,
+`sync-engine.impact-trace` version 2,
+`sync-engine.application-source-index` version 2, and
+`sync-engine.application-project-analysis` version 2. The project format carries
+exact analyzer, core generator, TypeScript, revision-label, and file-digest
+provenance. Source indexes retain paths, ranges, lengths, and digests, never
+source bytes or excerpts. Call `readApplicationSourceDocument(...)` with a
+reader to verify a complete document before slicing an anchor range.
 
-See [the public surface](public-surface.md) for the exact API and boundaries.
+Project-backed facade construction recomputes the canonical index from the
+supplied manifest and rejects a snapshot whose semantic composition differs. It
+also requires `expectedProjectDigest`, previously retained from
+`applicationProjectAnalysisDigest(project)`. Shape validation is not
+authentication: computing a fresh digest from attacker-chosen data explicitly
+trusts a different artifact, and no codec can prove semantic source attribution
+without rerunning TypeScript.
+
+Project file records include exact UTF-8 byte lengths; `projectBytes` is their
+sum. Derivable counters and source/document relationships are integrity-checked,
+while AST work remains producer-reported and gains authenticity only through a
+previously trusted complete project digest. Revision strings are caller
+assertions, not Git verification. The project JSON parser synchronously consumes
+a complete supplied string without an input-size limit, so hosts must bound
+untrusted input before calling it.
+
+`DEFAULT_ANALYSIS_RESOURCE_LIMITS` is exported from `/ir` with literal member
+types. The complete table in [the public surface](public-surface.md#ir)
+documents defaults for graph, diagnostics, source attribution, static
+resolution, AST work, and project file counts and bytes.
+
+This package intentionally contains no prompts, canonical guidance, workflow
+stages, context packing, change targeting, review orchestration, observations,
+coverage labels, rendered advice, authorization decisions, or approval verdicts.
+Clients own those policies outside the package.
+
+See [the public surface](public-surface.md) for exact exports and behavior.

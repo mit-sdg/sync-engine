@@ -299,33 +299,36 @@ emitted type graph.
 Workspace packaging and npm publication are separate policies. Every cataloged
 workspace builds, packs, and participates in combined-consumer checks. Core,
 analysis, and HTTP are independently npm-published. Analysis consumes only
-supported core subpaths, imports TypeScript as a runtime dependency for compiler
-API source attribution, and exposes generic, non-verdict surfaces through
-`@mit-sdg/sync-engine-analysis/tooling` and
-`@mit-sdg/sync-engine-analysis/guidance`.
-Its project loader resolves the complete TypeScript reference graph through one
-immutable repository-bounded host, creates one program per config, and merges
-canonical owned source evidence. The public async entrypoint runs that loader in
-an emitted Node worker; source tests explicitly select the TypeScript worker and
-packed ESM selects its JavaScript sibling. Packed-consumer verification executes
-the worker and codecs from exact tarballs rather than workspace paths.
+supported core subpaths and exposes generic, non-verdict surfaces through
+`@mit-sdg/sync-engine-analysis/ir` and
+`@mit-sdg/sync-engine-analysis/project`. Plain source/project models and pure
+queries live on the compiler-free `/ir` side. The package still declares
+TypeScript as a runtime dependency, but an isolated packed `/ir` import is
+checked not to load TypeScript, filesystem or filesystem-promise entrypoints,
+worker, project-loader, or source index-builder modules.
 
-`scripts/guidance.ts` owns the fixed catalog of authoritative consumer
-documents and extracts only H2/H3 sections carrying exact machine-readable
-markers. It validates marker JSON, heading adjacency and anchors, closed tags,
-IDs, non-overlap, path coverage, and topic/stage coverage before hashing exact
-UTF-8 document and entry bytes. Records and entries use explicit ordinal order;
-the generated data contains no timestamp or absolute path.
+The `/project` loader resolves the complete TypeScript reference graph through
+one immutable repository-bounded host, creates one program per config, and
+merges canonical owned source evidence. Its public async entrypoint runs that
+loader in an emitted Node worker; source tests explicitly select the TypeScript
+worker and packed ESM selects its JavaScript sibling. Packed-consumer verification
+executes the worker and codecs from exact tarballs under Node 24 and Bun rather
+than workspace paths. The package intentionally contains no workflow guidance,
+prompts, context packing, targeting, or review orchestration.
 
-The source-adjacent `guidance-resource.json` is ignored generated output so it
-can truthfully identify a dirty checkout without creating Git dirtiness itself.
-Source test commands generate it first. The shared build regenerates it, emits
-the export-only `/guidance` barrel and implementation, and copies that exact JSON
-beside `dist/guidance/index.js`. A clean checkout uses exact Git `HEAD`; a dirty
-or non-Git checkout uses `development:<documentsDigest>`. The release workflow
-supplies and verifies its exact tagged commit. Packed verification extracts the
-JSON, regenerates from the marked documents, compares canonical bytes, then the
-Node 24 consumer loads and selects it through the public subpath.
+Durable source indexes contain document and anchor metadata, ranges, and
+digests, never source bytes. `readApplicationSourceDocument(...)` is the
+reader-backed document verification boundary; clients slice verified text by
+anchor range. Project-backed facade construction recomputes the application
+index from the supplied manifest and compares exact semantic composition before
+using that index. It also requires a previously trusted digest of the complete
+project artifact. Codec validation enforces inventory ownership, indexed paths,
+file byte lengths, and derivable resource totals, but cannot prove semantic
+source attribution without rerunning TypeScript. AST work remains
+producer-reported. An attacker who chooses both an artifact and its digest still
+chooses the evidence. Revision labels remain caller assertions rather than VCS
+verification. The project parser is deliberately synchronous and whole-string;
+hosts own the byte bound for untrusted serialized input.
 
 ## Dependency rules
 

@@ -7,7 +7,6 @@ export interface AnalysisLimits {
   readonly maxDiagnostics?: number;
   readonly maxSourceDocuments?: number;
   readonly maxSourceAnchors?: number;
-  readonly maxSourceTextBytes?: number;
   /** Maximum recursive static-value/symbol steps. Defaults to 32. */
   readonly maxStaticResolutionDepth?: number;
   /** Maximum alternatives retained before a value is reported unresolved. Defaults to 32. */
@@ -34,9 +33,10 @@ export interface AnalysisResourceUsage {
   readonly diagnostics: number;
   readonly sourceDocuments: number;
   readonly sourceAnchors: number;
-  readonly sourceTextBytes: number;
+  /** Producer-reported AST work; not independently derivable from the durable snapshot. */
   readonly astNodes: number;
   readonly projectFiles: number;
+  /** For project artifacts, the exact sum of provenance file `byteLength` records. */
   readonly projectBytes: number;
 }
 
@@ -44,21 +44,21 @@ type ResolvedAnalysisLimits = Required<AnalysisLimits>;
 type UsageCounter = keyof AnalysisResourceUsage;
 type AnalysisLimitName = keyof AnalysisLimits;
 
-const DEFAULT_LIMITS: ResolvedAnalysisLimits = {
+/** Exact defaults applied to omitted analysis construction limits. */
+export const DEFAULT_ANALYSIS_RESOURCE_LIMITS = {
   maxGraphNodes: 100_000,
   maxGraphEdges: 500_000,
   maxDiagnostics: 10_000,
   maxSourceDocuments: 20_000,
   maxSourceAnchors: 100_000,
-  maxSourceTextBytes: 64 * 1024 * 1024,
   maxStaticResolutionDepth: 32,
   maxStaticResolutionAlternatives: 32,
   maxAstCandidates: 100_000,
   maxAstNodes: 1_000_000,
   maxProjectFiles: 20_000,
-  maxProjectFileBytes: 16 * 1024 * 1024,
-  maxProjectTotalBytes: 256 * 1024 * 1024,
-};
+  maxProjectFileBytes: 16_777_216,
+  maxProjectTotalBytes: 268_435_456,
+} as const satisfies ResolvedAnalysisLimits;
 
 const EMPTY_USAGE: AnalysisResourceUsage = {
   graphNodes: 0,
@@ -66,7 +66,6 @@ const EMPTY_USAGE: AnalysisResourceUsage = {
   diagnostics: 0,
   sourceDocuments: 0,
   sourceAnchors: 0,
-  sourceTextBytes: 0,
   astNodes: 0,
   projectFiles: 0,
   projectBytes: 0,
@@ -108,63 +107,62 @@ function resolveLimits(limits: AnalysisLimits = {}): ResolvedAnalysisLimits {
   return {
     maxGraphNodes: resolvedLimit(
       limits.maxGraphNodes,
-      DEFAULT_LIMITS.maxGraphNodes,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxGraphNodes,
       "maxGraphNodes",
     ),
     maxGraphEdges: resolvedLimit(
       limits.maxGraphEdges,
-      DEFAULT_LIMITS.maxGraphEdges,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxGraphEdges,
       "maxGraphEdges",
     ),
     maxDiagnostics: resolvedLimit(
       limits.maxDiagnostics,
-      DEFAULT_LIMITS.maxDiagnostics,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxDiagnostics,
       "maxDiagnostics",
     ),
     maxSourceDocuments: resolvedLimit(
       limits.maxSourceDocuments,
-      DEFAULT_LIMITS.maxSourceDocuments,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxSourceDocuments,
       "maxSourceDocuments",
     ),
     maxSourceAnchors: resolvedLimit(
       limits.maxSourceAnchors,
-      DEFAULT_LIMITS.maxSourceAnchors,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxSourceAnchors,
       "maxSourceAnchors",
-    ),
-    maxSourceTextBytes: resolvedLimit(
-      limits.maxSourceTextBytes,
-      DEFAULT_LIMITS.maxSourceTextBytes,
-      "maxSourceTextBytes",
     ),
     maxStaticResolutionDepth: resolvedLimit(
       limits.maxStaticResolutionDepth,
-      DEFAULT_LIMITS.maxStaticResolutionDepth,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxStaticResolutionDepth,
       "maxStaticResolutionDepth",
     ),
     maxStaticResolutionAlternatives: resolvedLimit(
       limits.maxStaticResolutionAlternatives,
-      DEFAULT_LIMITS.maxStaticResolutionAlternatives,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxStaticResolutionAlternatives,
       "maxStaticResolutionAlternatives",
     ),
     maxAstCandidates: resolvedLimit(
       limits.maxAstCandidates,
-      DEFAULT_LIMITS.maxAstCandidates,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxAstCandidates,
       "maxAstCandidates",
     ),
-    maxAstNodes: resolvedLimit(limits.maxAstNodes, DEFAULT_LIMITS.maxAstNodes, "maxAstNodes"),
+    maxAstNodes: resolvedLimit(
+      limits.maxAstNodes,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxAstNodes,
+      "maxAstNodes",
+    ),
     maxProjectFiles: resolvedLimit(
       limits.maxProjectFiles,
-      DEFAULT_LIMITS.maxProjectFiles,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxProjectFiles,
       "maxProjectFiles",
     ),
     maxProjectFileBytes: resolvedLimit(
       limits.maxProjectFileBytes,
-      DEFAULT_LIMITS.maxProjectFileBytes,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxProjectFileBytes,
       "maxProjectFileBytes",
     ),
     maxProjectTotalBytes: resolvedLimit(
       limits.maxProjectTotalBytes,
-      DEFAULT_LIMITS.maxProjectTotalBytes,
+      DEFAULT_ANALYSIS_RESOURCE_LIMITS.maxProjectTotalBytes,
       "maxProjectTotalBytes",
     ),
   };
@@ -209,18 +207,8 @@ export class AnalysisController {
     this.add("sourceDocuments", 1, "maxSourceDocuments");
   }
 
-  addSourceAnchor(byteLength: number): void {
-    this.checkpoint();
-    const anchors = this.counts.sourceAnchors + 1;
-    if (anchors > this.limits.maxSourceAnchors) {
-      throw new AnalysisLimitError("maxSourceAnchors", this.limits.maxSourceAnchors, anchors);
-    }
-    const bytes = this.counts.sourceTextBytes + byteLength;
-    if (bytes > this.limits.maxSourceTextBytes) {
-      throw new AnalysisLimitError("maxSourceTextBytes", this.limits.maxSourceTextBytes, bytes);
-    }
-    this.counts.sourceAnchors = anchors;
-    this.counts.sourceTextBytes = bytes;
+  addSourceAnchor(): void {
+    this.add("sourceAnchors", 1, "maxSourceAnchors");
   }
 
   addAstNode(): void {
@@ -263,7 +251,6 @@ export function usageDelta(
     diagnostics: after.diagnostics - before.diagnostics,
     sourceDocuments: after.sourceDocuments - before.sourceDocuments,
     sourceAnchors: after.sourceAnchors - before.sourceAnchors,
-    sourceTextBytes: after.sourceTextBytes - before.sourceTextBytes,
     astNodes: after.astNodes - before.astNodes,
     projectFiles: after.projectFiles - before.projectFiles,
     projectBytes: after.projectBytes - before.projectBytes,

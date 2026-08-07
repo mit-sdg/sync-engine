@@ -53,7 +53,6 @@ jobs:
       - name: Verify packed artifacts
         run: bun run package:check
         env:
-          SYNC_ENGINE_SOURCE_REVISION: ${{ github.sha }}
           SYNC_ENGINE_VERIFIED_TARBALLS: release
       - run: bun audit
       - run: sha256sum release/package.tgz > release/package.tgz.sha256

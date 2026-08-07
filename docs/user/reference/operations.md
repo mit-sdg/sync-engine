@@ -4,8 +4,6 @@ This page states the deployment properties that determine whether sync-engine is
 suitable for an application. It applies to the current beta. [Execution
 semantics](semantics.md) defines the underlying runtime contract.
 
-<!-- sync-engine-guidance: {"id":"operations-deployment-fit","anchor":"deployment-fit-at-a-glance","authority":"reference","topics":["boundaries","failure-recovery","operations","security","state-ownership"],"stages":["design","operation","review"]} -->
-
 ## Deployment fit at a glance
 
 | Requirement                                     | Engine contract              | Required owner or action                                            |
@@ -34,8 +32,6 @@ traffic. Use another architecture, or add host-level coordination, when
 correctness requires a transaction across concepts, distributed serialization,
 synchronous cancellation of accepted work, occurrence replay, automatic restart
 recovery, or exactly-once processing.
-
-<!-- sync-engine-guidance: {"id":"operations-beta-compatibility","anchor":"beta-compatibility","authority":"reference","topics":["release-compatibility"],"stages":["operation","review"]} -->
 
 ## Beta compatibility
 
@@ -199,8 +195,6 @@ lifecycle are host responsibilities.
 `rawFaultReporter` receives original thrown values outside the sanitized
 occurrence path. Treat it as privileged application code, restrict access, and
 keep its output out of public errors and ordinary logs.
-
-<!-- sync-engine-guidance: {"id":"operations-checklist","anchor":"operational-checklist","authority":"procedure","topics":["operations","security","verification"],"stages":["operation","repair","review","verification"]} -->
 
 ## Operational checklist
 

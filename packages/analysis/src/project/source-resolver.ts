@@ -1,5 +1,5 @@
 import ts from "typescript";
-import type { AnalysisController } from "./analysis-foundation.ts";
+import type { AnalysisController } from "../ir/analysis-foundation.ts";
 
 export type PublicSourceApi =
   | "assemble"

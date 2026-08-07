@@ -12,8 +12,6 @@ queries. Its specification can be understood without reading another concept. A
 does not enforce these design constraints against arbitrary TypeScript imports;
 peer imports remain a design-review finding.
 
-<!-- sync-engine-guidance: {"id":"design-concepts-composition","anchor":"concepts-and-composition","authority":"criteria","topics":["composition","concept-boundaries","concept-design"],"stages":["design","review"]} -->
-
 ## Concepts and composition
 
 Concept boundaries follow behavior, not implementation layout.
@@ -72,8 +70,6 @@ allows another person to join and leave, refuses duplicate membership, and makes
 membership visible. The scenario needs no selecting, discussing, or alerting
 behavior.
 
-<!-- sync-engine-guidance: {"id":"design-state-ownership","anchor":"state-identity-and-ownership","authority":"criteria","topics":["concept-boundaries","state-ownership"],"stages":["design","repair","review"]} -->
-
 ## State, identity, and ownership
 
 Abstract state records the identities and relationships a concept knows, the
@@ -119,8 +115,6 @@ A historical snapshot is not a cache: an invoice price captured at purchase may
 remain authoritative even after the catalog price changes. Store derived state
 only when materialization has a stated refresh rule, historical meaning requires
 the old value, or recomputation would change semantics.
-
-<!-- sync-engine-guidance: {"id":"design-actions-queries-lifecycle","anchor":"actions-queries-and-lifecycle","authority":"criteria","topics":["actions-queries","concept-design","failure-recovery"],"stages":["design","implementation","repair","review"]} -->
 
 ## Actions, queries, and lifecycle
 
@@ -233,8 +227,6 @@ candidate equally suitable in every domain is often a utility or data structure.
 Test change containment by naming likely changes and the concepts or rules each
 would touch.
 
-<!-- sync-engine-guidance: {"id":"design-reactions","anchor":"designing-reactions","authority":"criteria","topics":["composition","reactions","reads","runtime-semantics"],"stages":["design","implementation","review"]} -->
-
 ## Designing reactions
 
 A reaction states one application decision through three parts:
@@ -291,8 +283,6 @@ actions atomic. For every cross-concept relation, record:
 If no false interval or failed repair is acceptable, combine ownership or use a
 storage transaction that enforces both facts.
 
-<!-- sync-engine-guidance: {"id":"design-cross-concept-authorization","anchor":"authorization-across-concept-boundaries","authority":"criteria","topics":["boundaries","security","state-ownership"],"stages":["design","review"]} -->
-
 ## Authorization across concept boundaries
 
 For each protected effect, identify the requesting actor, authenticated identity,
@@ -305,8 +295,6 @@ and [responder](../../examples/operations-room/src/composition/responders-may-co
 implementations of the same policy contract without changing concepts or
 endpoints. A security-critical or race-sensitive decision must still be enforced
 by the owner action and, for shared durable state, its storage transaction.
-
-<!-- sync-engine-guidance: {"id":"design-composition-hazards","anchor":"composition-hazards","authority":"criteria","topics":["failure-recovery","operations","reactions","runtime-semantics"],"stages":["design","repair","review"]} -->
 
 ## Composition hazards
 

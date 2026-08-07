@@ -6,8 +6,6 @@ model](../overview.md). The linked source belongs to the standalone Operations
 Room example. Use the [Public API](../reference/public-api.md) for signatures and
 [Execution semantics](../reference/semantics.md) for runtime guarantees.
 
-<!-- sync-engine-guidance: {"id":"authoring-define-behavior","anchor":"define-one-behavior","authority":"procedure","topics":["actions-queries","concept-design","concept-specification"],"stages":["implementation","verification"]} -->
-
 ## Define one behavior
 
 Design the concept's purpose, principle, owned state, actions, queries, and
@@ -109,8 +107,6 @@ grammar and registration checks. [Registration and
 floors](../reference/public-api.md#registration-and-floors) defines implementation
 factory context and lifecycle.
 
-<!-- sync-engine-guidance: {"id":"authoring-connect-behaviors","anchor":"connect-independent-behaviors","authority":"procedure","topics":["composition","reactions","reads"],"stages":["implementation","verification"]} -->
-
 ## Connect independent behaviors
 
 Put cross-concept decisions in composition. Operations Room installs two
@@ -181,8 +177,6 @@ defines production behavior.
 
 ## Application boundary
 
-<!-- sync-engine-guidance: {"id":"authoring-boundary","anchor":"receive-ask-respond","authority":"procedure","topics":["boundaries","reactions"],"stages":["implementation","verification"]} -->
-
 ### Receive, ask, respond
 
 An endpoint binds admitted input with `receive(...)`, asks concept actions, and
@@ -250,8 +244,6 @@ rejects local executable declarations before exposing routes.
 limits, observation, timeout and abort waiting, and ordered drain without
 creating another reaction engine.
 
-<!-- sync-engine-guidance: {"id":"authoring-generate-wire","anchor":"generate-the-wire-contract","authority":"procedure","topics":["generated-artifacts","release-compatibility","verification"],"stages":["implementation","verification"]} -->
-
 ### Generate the wire contract
 
 The application-owned descriptor identifies the assembly and generated title:
@@ -308,8 +300,6 @@ export async function loadRoomDashboard(client: OperationsRoomClient, room: stri
 
 The `error` check narrows the generated success-or-error union. The [`client`
 API](../reference/public-api.md#client) defines local and custom transports.
-
-<!-- sync-engine-guidance: {"id":"authoring-verify-application","anchor":"verify-the-application","authority":"procedure","topics":["operations","verification"],"stages":["operation","verification"]} -->
 
 ## Verify the application
 

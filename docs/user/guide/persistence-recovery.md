@@ -19,8 +19,6 @@ import { FileLogSink, assemble } from "@mit-sdg/sync-engine/assembly";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 ```
 
-<!-- sync-engine-guidance: {"id":"persistence-ownership","anchor":"ownership","authority":"procedure","topics":["failure-recovery","operations","state-ownership"],"stages":["design","implementation","operation"]} -->
-
 ## Ownership
 
 Keep domain state, occurrence evidence, and recovery policy separate. This
@@ -105,8 +103,6 @@ async function recoverSearchIndex(
   }
 }
 ```
-
-<!-- sync-engine-guidance: {"id":"persistence-recovery-sequence","anchor":"recovery-sequence","authority":"procedure","topics":["failure-recovery","operations","verification"],"stages":["operation","repair","verification"]} -->
 
 ## Recovery sequence
 

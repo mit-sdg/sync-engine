@@ -26,12 +26,14 @@ transports and server adapters.
 
 `@mit-sdg/sync-engine-analysis` is an independently published first-party
 analysis package. Its supported subpaths are
-`@mit-sdg/sync-engine-analysis/guidance` and
-`@mit-sdg/sync-engine-analysis/tooling`; its root and deep imports are
+`@mit-sdg/sync-engine-analysis/ir` and
+`@mit-sdg/sync-engine-analysis/project`; its root and deep imports are
 unsupported. The analysis package requires the exact matching core beta as a peer dependency.
 TypeScript is a normal runtime dependency of the analysis package, because its
-source attribution uses the compiler API. The supported TypeScript range is
-still the one listed under [Runtime and toolchain](#runtime-and-toolchain).
+project source attribution uses the compiler API. Importing `/ir` does not
+evaluate TypeScript, `fs`, `fs/promises`, `node:fs`, `node:fs/promises`, worker,
+project-loader, or source-index-builder modules. The supported TypeScript range
+is still the one listed under [Runtime and toolchain](#runtime-and-toolchain).
 
 ## Beta compatibility
 
@@ -74,30 +76,49 @@ prereleases.
 
 The analysis package's comprehensive persisted formats are
 `sync-engine.application-index` version 2,
-`sync-engine.impact-trace` version 2, `sync-engine.impact-context` version 2,
+`sync-engine.impact-trace` version 2,
 `sync-engine.application-source-index` version 2, and
-`sync-engine.application-project-analysis` version 2. Its granular query façade
-returns `sync-engine.application-analysis-result` version 1. These formats carry
-manifest and analyzer provenance and, where applicable, exact source revision
-and digest identity. Pagination offsets are valid only for the same snapshot.
-Project and granular result parsers validate canonical composition before data
-is accepted or hashed.
+`sync-engine.application-project-analysis` version 2. These formats carry
+manifest and exact producer provenance and, where applicable, source revision
+and digest identity. Format versions govern structural compatibility; a strict
+V2 project snapshot is not rejected solely because its analyzer package version
+differs. Pagination offsets are valid only for the same snapshot. The project
+parser validates canonical composition before data is accepted or hashed.
+Granular facade results are bounded immutable data and intentionally have no
+second persisted format or codec.
 
-Canonical package guidance uses `sync-engine.guidance-resource` version 1 and
-`sync-engine.guidance-selection` version 1. The resource embeds exact marked
-sections from the shipped consumer documentation, not `docs/user/llms.txt`, and
-carries analysis/core producer versions, document digests, and a truthful source
-revision. A clean release artifact must use the exact 40-hex release commit. A
-dirty development checkout uses `development:<documentsDigest>` and never
-claims `HEAD`. Selection remains deterministic and reports `complete: false`
-when an entry or content-byte bound omits matching guidance.
+Project-backed facade construction independently recomputes the canonical index
+from the supplied manifest and requires the snapshot index to have the same
+semantic inventory, graph, issues, and resource composition. A project also
+requires a caller-held `expectedProjectDigest` previously returned by
+`applicationProjectAnalysisDigest(...)`. Validation alone checks shape and
+derivable consistency; it is not authentication. Recomputing a digest from an
+attacker-chosen artifact at ingestion means explicitly trusting that different
+artifact, and cannot prove semantic source attribution without rerunning
+TypeScript.
+
+Source indexes and project snapshots retain source paths, ranges, lengths, and
+digests, but no source bytes or excerpts. Issue refs and source entry refs must be
+inventory refs; anchors and candidate ranges must name indexed documents.
+Project file records carry UTF-8 byte lengths, and `projectBytes` is their exact
+sum. Derivable counters are integrity-checked; AST work remains
+producer-reported and is authenticated only by comparison with the previously
+trusted complete artifact digest. A host must use
+`readApplicationSourceDocument(...)` to read and digest-verify a complete
+document before slicing an anchor range. `sourceRevision` and
+`manifestSourceRevision` are caller assertions; analysis does not inspect Git or
+prove those labels identify the observed files. Project JSON parsing consumes
+the complete supplied string synchronously and has no input-size option, so
+hosts must bound untrusted strings before parsing.
 
 Source attribution is bounded static evidence. It does not import or execute a
 project module or manifest-producing configuration, and unresolved, ambiguous,
 dynamic, cyclic, or over-limit flows are reported rather than guessed. The
-analysis package is generic infrastructure and does not return approval verdicts.
-Possible-impact results do not prove that behavior will run, and no analysis
-result is an authorization allowlist or correctness decision.
+analysis package is generic infrastructure and does not package guidance,
+prompts, workflow stages, context packing, change targeting, review
+orchestration, observations, coverage verdicts, rendered advice, or approval
+verdicts. Possible-impact results do not prove that behavior will run, and no
+analysis result is an authorization allowlist or correctness decision.
 
 Filesystem project analysis supports solution-style roots and transitive
 TypeScript project references without prebuilt declarations. The async API is a

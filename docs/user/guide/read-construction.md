@@ -63,8 +63,6 @@ discussion collects responses. Its queries declare every promise used here:
 The entries register as one composition named `book`, so reactions print under
 `book.` in the read-backs quoted below.
 
-<!-- sync-engine-guidance: {"id":"reads-plain-reaction","anchor":"1--a-plain-line","authority":"procedure","topics":["actions-queries","reactions","reads"],"stages":["implementation","verification"]} -->
-
 ## 1 · A plain line
 
 _When a circle clears its reading, close the discussion that was open for it._
@@ -396,8 +394,6 @@ Former "the member card (circle)": this record's where may match many rows; wrap
 
 A record's `where` matches one case. Use `each` when the result needs rows:
 `each(Gathering._members({ gathering: circle }).is({ member })).form({ member })`.
-
-<!-- sync-engine-guidance: {"id":"reads-whole-endpoint","anchor":"10--a-whole-endpoint-read-end-to-end","authority":"procedure","topics":["boundaries","reactions","reads","security"],"stages":["implementation","review","verification"]} -->
 
 ## 10 · A whole endpoint, read end to end
 

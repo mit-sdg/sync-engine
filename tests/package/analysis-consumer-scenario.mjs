@@ -1,4 +1,5 @@
-import { lstatSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
@@ -9,24 +10,16 @@ import {
   renderApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
 import {
-  analyzeApplicationProject,
-  applicationAnalysisResultDigest,
-  applicationProjectAnalysisDigest,
   createApplicationAnalysis,
-  loadApplicationProject,
-  parseApplicationAnalysisResult,
-  parseApplicationProjectAnalysis,
-  renderApplicationAnalysisResult,
-  renderApplicationProjectAnalysis,
-} from "@mit-sdg/sync-engine-analysis/tooling";
+  readApplicationSourceDocument,
+} from "@mit-sdg/sync-engine-analysis/ir";
 import {
-  guidanceResourceDigest,
-  guidanceSelectionDigest,
-  loadGuidanceResource,
-  selectGuidance,
-  validateGuidanceResource,
-  validateGuidanceSelection,
-} from "@mit-sdg/sync-engine-analysis/guidance";
+  analyzeApplicationProject,
+  applicationProjectAnalysisDigest,
+  loadApplicationProject,
+  parseApplicationProjectAnalysis,
+  renderApplicationProjectAnalysis,
+} from "@mit-sdg/sync-engine-analysis/project";
 
 const bunVersion = process.versions.bun;
 const runtime = bunVersion === undefined ? `Node ${process.versions.node}` : `Bun ${bunVersion}`;
@@ -116,6 +109,14 @@ export const application = assemble({ vocabulary: words, composition: { RecordNo
     project.provenance.analyzer.version === "1.0.0-beta.7",
     "packed analyzer provenance is not beta.7",
   );
+  assert(project.version === 2, "packed project analysis is not V2");
+  assert(project.applicationIndex.version === 2, "packed application index is not V2");
+  assert(project.sourceIndex.version === 2, "packed source index is not V2");
+  assert(
+    project.provenance.files.reduce((total, file) => total + file.byteLength, 0) ===
+      project.resourceUsage.projectBytes,
+    "packed project byte usage is not derivable from file records",
+  );
   assert(
     project.provenance.manifest.generator.version === "1.0.0-beta.7",
     "packed project core provenance is not beta.7",
@@ -124,76 +125,64 @@ export const application = assemble({ vocabulary: words, composition: { RecordNo
     project.provenance.files.every(({ path }) => !path.startsWith("..")),
     "packed analysis escaped its consumer root",
   );
+  assert(
+    project.sourceIndex.entries.every(({ sources }) =>
+      sources.every((anchor) => !("text" in anchor) && !("excerpt" in anchor)),
+    ),
+    "packed project snapshot retained source text",
+  );
 
+  const trustedProjectDigest = applicationProjectAnalysisDigest(project);
   const renderedProject = renderApplicationProjectAnalysis(project);
   const parsedProject = parseApplicationProjectAnalysis(renderedProject);
   assert(
-    applicationProjectAnalysisDigest(parsedProject) === applicationProjectAnalysisDigest(project),
+    applicationProjectAnalysisDigest(parsedProject) === trustedProjectDigest,
     "packed project codec round trip changed its digest",
   );
 
-  const facade = createApplicationAnalysis({ manifest, project: parsedProject });
+  const facade = createApplicationAnalysis({
+    manifest,
+    project: parsedProject,
+    expectedProjectDigest: trustedProjectDigest,
+  });
   const catalog = await facade.catalog();
   assert(
     catalog.items.some(({ ref }) => ref.kind === "reaction" && ref.reaction === "RecordNote"),
     "packed catalog omitted RecordNote",
   );
   const action = { kind: "action", concept: "Notes", action: "add" };
-  const description = await facade.describe({ ref: action, detail: "full" });
+  const description = await facade.describe({ ref: action, detail: "definition" });
   assert(
-    description.sources?.some(({ text }) => text?.includes("add(")),
-    "packed description omitted source",
+    description.definition?.kind === "action",
+    "packed description omitted the action definition",
   );
-  const sources = await facade.sources({ query: { kind: "ref", ref: action }, content: "text" });
+  const sources = await facade.sources({ query: { kind: "ref", ref: action } });
+  assert(sources.items.length > 0, "packed source lookup omitted action metadata");
+  const anchor = sources.items[0].anchor;
+  const sourceRead = await readApplicationSourceDocument(
+    parsedProject.sourceIndex,
+    anchor.range.path,
+    {
+      readFile: (path) => readFileSync(resolve(consumer, path), "utf8"),
+    },
+  );
+  const sourceText = sourceRead.text.slice(anchor.range.start.offset, anchor.range.end.offset);
+  assert(sourceText.includes("add("), "verified source slice omitted action text");
   assert(
-    sources.items.some(({ text }) => text?.includes("add(")),
-    "packed source lookup omitted action text",
+    createHash("sha256").update(sourceText, "utf8").digest("hex") === anchor.digest,
+    "verified source slice did not match the anchor digest",
   );
   const impact = await facade.impact({ seeds: [action] });
+  assert(impact.trace.version === 2, "packed impact trace is not V2");
   assert(impact.trace.seeds.length === 1, "packed impact did not retain its seed");
 
-  const guidanceResource = await loadGuidanceResource();
-  validateGuidanceResource(guidanceResource);
-  assert(
-    guidanceResource.producer.analysis.version === "1.0.0-beta.7",
-    "packed guidance analyzer producer is not beta.7",
-  );
-  assert(
-    guidanceResource.producer.coreVersion === "1.0.0-beta.7",
-    "packed guidance core producer is not beta.7",
-  );
-  assert(
-    guidanceResourceDigest(guidanceResource) === guidanceResource.digest &&
-      /^[a-f0-9]{64}$/.test(guidanceResource.source.documentsDigest),
-    "packed guidance resource digests are invalid",
-  );
-  const guidanceSelection = selectGuidance(guidanceResource, {
-    ids: ["design-reactions", "review-scenarios"],
-  });
-  validateGuidanceSelection(guidanceSelection);
-  assert(
-    guidanceSelectionDigest(guidanceSelection) === guidanceSelection.digest,
-    "packed guidance selection digest is invalid",
-  );
-  const guidanceResult = await facade.guidance({ selection: guidanceSelection });
-  assert(
-    guidanceResult.canonicalGuidance?.resourceDigest === guidanceResource.digest &&
-      guidanceResult.canonicalGuidance.entries.map(({ id }) => id).join(",") ===
-        "design-reactions,review-scenarios",
-    "packed analysis guidance did not retain canonical selection identity",
-  );
-
-  const renderedResult = renderApplicationAnalysisResult(catalog);
-  const parsedResult = parseApplicationAnalysisResult(renderedResult);
-  assert(
-    applicationAnalysisResultDigest(parsedResult) === applicationAnalysisResultDigest(catalog),
-    "packed result codec round trip changed its digest",
-  );
+  assert(!("format" in catalog), "granular results must not expose a persisted wire format");
+  assert(Object.isFrozen(catalog), "granular results must be immutable");
 
   for (const specifier of [
     "@mit-sdg/sync-engine/tooling",
-    "@mit-sdg/sync-engine-analysis/guidance",
-    "@mit-sdg/sync-engine-analysis/tooling",
+    "@mit-sdg/sync-engine-analysis/ir",
+    "@mit-sdg/sync-engine-analysis/project",
   ]) {
     const entrypoint = fileURLToPath(import.meta.resolve(specifier));
     const packageRoot = resolve(entrypoint, "../../..");

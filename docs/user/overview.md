@@ -36,8 +36,6 @@ Assembly installs one combination. Tooling and a generated client are optional;
 the lower-level `vocabulary(...)` path may also assemble concepts without
 specification registration.
 
-<!-- sync-engine-guidance: {"id":"overview-concepts-own-state","anchor":"concepts-own-behavior-and-state","authority":"reference","topics":["actions-queries","application-model","concept-boundaries","concept-design","state-ownership"],"stages":["design","implementation","review"]} -->
-
 ## Concepts own behavior and state
 
 A **concept** is an ordinary TypeScript class paired, in the registered path,
@@ -68,8 +66,6 @@ the [`language` API](reference/public-api.md#language) for accepted entries.
 Calling an action through a concept reference while authoring composition creates
 declaration data. Execution begins only after assembly instruments concrete
 concept instances.
-
-<!-- sync-engine-guidance: {"id":"overview-composition","anchor":"composition-connects-concepts","authority":"reference","topics":["application-model","composition","reactions"],"stages":["design","implementation","review"]} -->
 
 ## Composition connects concepts
 
@@ -137,8 +133,6 @@ reactions from occurrence output. Applications that require durable state and
 restart recovery implement both in concept storage and host procedures. See
 [logs, concept implementations, and restart](reference/semantics.md#logs-concept-implementations-and-restart)
 and [persistence, restart, and recovery](guide/persistence-recovery.md).
-
-<!-- sync-engine-guidance: {"id":"overview-guarantee-boundaries","anchor":"guarantee-boundaries","authority":"reference","topics":["boundaries","failure-recovery","operations","runtime-semantics"],"stages":["operation","review","verification"]} -->
 
 ## Guarantee boundaries
 

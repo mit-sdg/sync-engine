@@ -38,21 +38,28 @@ bun add @mit-sdg/sync-engine@beta
 
 ## Packages
 
-| Package                                                                                               | Role                                                                                 |
-| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `@mit-sdg/sync-engine`                                                                                | Concepts, composition, assembly, boundaries, clients, tooling, and CLI               |
-| [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Deterministic indexing, durable codecs, bounded queries, and revision-bound guidance |
-| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | Maintained HTTP handler, fetch client, and generated wire projection                 |
+| Package                                                                                               | Role                                                                     |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `@mit-sdg/sync-engine`                                                                                | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
+| [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Deterministic IR queries and optional TypeScript project/source evidence |
+| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | Maintained HTTP handler, fetch client, and generated wire projection     |
 
 The analysis and HTTP companions each require the exact matching core beta.
-Analysis imports TypeScript at runtime and exposes
-`@mit-sdg/sync-engine-analysis/tooling` plus
-`@mit-sdg/sync-engine-analysis/guidance`; its results are inspection evidence,
-not correctness, authorization, or approval verdicts. The guidance subpath
-loads and selects exact marked package documentation bound to producer,
-document, and source-revision identity. Its filesystem API uses a Node worker
-for abortable project analysis while preserving a synchronous custom-reader
-primitive for expert hosts.
+Analysis exposes a lightweight `@mit-sdg/sync-engine-analysis/ir` surface and a
+TypeScript-backed `@mit-sdg/sync-engine-analysis/project` producer surface.
+TypeScript remains an analysis runtime dependency, but importing `/ir` does not
+evaluate the compiler, filesystem project loader, source index builder, or
+worker. Analysis results are inspection evidence, not correctness,
+authorization, workflow guidance, or approval verdicts. The project surface
+uses a Node worker for abortable filesystem analysis while preserving a
+synchronous custom-reader primitive for expert hosts. Project snapshots retain
+source metadata and digests, not source bytes; verified bytes come from a caller
+reader. A project-backed facade recomputes the manifest index before accepting
+the snapshot's semantic composition and requires a previously trusted complete
+project digest. Shape validation is not source-attribution authentication;
+trusting an attacker-chosen artifact and freshly computed digest still trusts
+attacker-chosen evidence. Revision labels remain caller assertions rather than
+Git verification.
 
 ## Create an application
 

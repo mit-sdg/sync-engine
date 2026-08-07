@@ -9,15 +9,18 @@ import {
 import {
   AnalysisAbortedError,
   AnalysisLimitError,
-  applicationProjectAnalysisDigest,
-  contextForImpact,
+  DEFAULT_ANALYSIS_RESOURCE_LIMITS,
+  createApplicationAnalysis,
   designRefsForSourceRange,
   indexApplication,
-  indexApplicationSources,
-  loadApplicationProject,
   traceApplicationImpact,
   type DesignRef,
-} from "@mit-sdg/sync-engine-analysis/tooling";
+} from "@mit-sdg/sync-engine-analysis/ir";
+import {
+  applicationProjectAnalysisDigest,
+  indexApplicationSources,
+  loadApplicationProject,
+} from "@mit-sdg/sync-engine-analysis/project";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import ts from "typescript";
 
@@ -538,6 +541,23 @@ export const application = assemble({
 `;
 
 describe("application impact analysis", () => {
+  test("publishes every literal construction default", () => {
+    expect(DEFAULT_ANALYSIS_RESOURCE_LIMITS).toEqual({
+      maxGraphNodes: 100_000,
+      maxGraphEdges: 500_000,
+      maxDiagnostics: 10_000,
+      maxSourceDocuments: 20_000,
+      maxSourceAnchors: 100_000,
+      maxStaticResolutionDepth: 32,
+      maxStaticResolutionAlternatives: 32,
+      maxAstCandidates: 100_000,
+      maxAstNodes: 1_000_000,
+      maxProjectFiles: 20_000,
+      maxProjectFileBytes: 16_777_216,
+      maxProjectTotalBytes: 268_435_456,
+    });
+  });
+
   test("indexes structural, conservative, causal, endpoint, and opaque dependencies", () => {
     const manifest = fixture();
     const index = indexApplication(manifest);
@@ -560,6 +580,8 @@ describe("application impact analysis", () => {
       kind: "computation",
       computation: "unused vocabulary",
     });
+    expect(Object.isFrozen(index)).toBe(true);
+    expect(Object.isFrozen(index.edges)).toBe(true);
     expect(index.nodes).toEqual(index.inventory);
     expect(index.referencedOnly).toEqual([]);
 
@@ -645,8 +667,7 @@ describe("application impact analysis", () => {
     );
 
     const trace = traceApplicationImpact(index, [missing]);
-    const context = contextForImpact(manifest, index, trace);
-    expect(context.referencedOnly).toEqual([missing]);
+    expect(trace.seeds).toEqual([missing]);
   });
 
   test("owns only listed endpoint stages and generated hash descendants", () => {
@@ -688,24 +709,19 @@ describe("application impact analysis", () => {
     );
   });
 
-  test("rejects malformed V5 and mismatched result compositions", () => {
+  test("rejects malformed V5 and malformed index provenance", () => {
     const malformed = fixture();
     malformed.digest = "stale";
     expect(() => indexApplication(malformed)).toThrow(/canonical digest/);
 
     const firstManifest = fixture();
     const firstIndex = indexApplication(firstManifest);
-    const firstTrace = traceApplicationImpact(firstIndex, [choose]);
-    const secondManifest = fixture();
-    secondManifest.computations.push({ name: "another computation", source: "vocabulary" });
-    redigest(secondManifest);
-    expect(() => contextForImpact(secondManifest, firstIndex, firstTrace)).toThrow(
-      /different application manifest/,
-    );
-
     const malformedIndex = structuredClone(firstIndex);
     (malformedIndex.provenance.analyzer as { version: string }).version = "0.0.0";
-    expect(() => traceApplicationImpact(malformedIndex, [choose])).toThrow(/different analyzer/);
+    expect(() => traceApplicationImpact(malformedIndex, [choose])).not.toThrow();
+    const wrongName = structuredClone(firstIndex);
+    (wrongName.provenance.analyzer as { name: string }).name = "other";
+    expect(() => traceApplicationImpact(wrongName, [choose])).toThrow(/malformed analyzer/);
   });
 
   test("enforces pre-abort and every hard graph construction limit without partial results", () => {
@@ -754,51 +770,8 @@ describe("application impact analysis", () => {
       manifestDigest: index.manifestDigest,
       complete: true,
     });
-  });
-
-  test("preloads only traced facts and their direct supporting contracts", () => {
-    const manifest = fixture();
-    const index = indexApplication(manifest);
-    const trace = traceApplicationImpact(index, [choose]);
-    const context = contextForImpact(manifest, index, trace);
-
-    expect(context.concepts.map(({ name }) => name)).toEqual([
-      "Alerting",
-      "Discussing",
-      "Selecting",
-    ]);
-    expect(context.concepts.map(({ name }) => name)).not.toContain("Unrelated");
-    expect(context.reactions.map(({ name }) => name)).toEqual([
-      "LocalRepair",
-      "ObserveCurrent",
-      "Select",
-      "Select#2",
-    ]);
-    expect(context.reactions.find(({ name }) => name === "Select")?.rendered).toContain(
-      "Discussing.open (subject: item)",
-    );
-    expect(context.selection).toContainEqual({
-      ref: choose,
-      roles: ["seed", "affected", "support"],
-    });
-    expect(context).toMatchObject({
-      format: "sync-engine.impact-context",
-      version: 2,
-      complete: true,
-      wire: {
-        endpoints: [{ path: "/selections/choose" }],
-        appWide: ["UNAVAILABLE"],
-      },
-    });
-    expect(context.computations).toContainEqual(
-      expect.objectContaining({ name: "ge", source: "standard" }),
-    );
-    expect(context.computations.map(({ name }) => name)).not.toContain("unused vocabulary");
-    expect(context.conceptImplementations.map(({ concept }) => concept)).toEqual([
-      "Alerting",
-      "Discussing",
-      "Selecting",
-    ]);
+    expect(Object.isFrozen(trace)).toBe(true);
+    expect(Object.isFrozen(trace.affected)).toBe(true);
   });
 
   test("reports unknown seeds and explicit trace limits", () => {
@@ -825,7 +798,6 @@ describe("application impact analysis", () => {
       expect.objectContaining({ code: "TRACE_LIMIT_REACHED", severity: "warning" }),
     );
     expect(limited.complete).toBe(false);
-    expect(contextForImpact(manifest, index, limited).complete).toBe(false);
 
     const seedLimited = traceApplicationImpact(
       index,
@@ -900,9 +872,10 @@ describe("application impact analysis", () => {
     const select = sourceIndex.entries.find(
       ({ ref }) => ref.kind === "reaction" && ref.reaction === "Select",
     );
-    expect(select?.sources[0]?.text).toContain("SelectReaction = react");
+    expect(select?.sources[0]?.range.path).toBe("app.ts");
+    expect(select?.sources[0]).not.toHaveProperty("text");
     const endpoint = sourceIndex.entries.find(({ ref }) => ref.kind === "endpoint");
-    expect(endpoint?.sources[0]?.text).toContain("ChooseEndpoint = endpoint");
+    expect(endpoint?.sources[0]?.range.path).toBe("app.ts");
     expect(
       sourceIndex.entries.find(
         ({ ref }) => ref.kind === "concept" && ref.concept === "RequestBoundary",
@@ -917,11 +890,10 @@ describe("application impact analysis", () => {
       expect.objectContaining({ ref: { kind: "concept", concept: "RequestBoundary" } }),
     );
 
-    const index = indexApplication(manifest);
-    const trace = traceApplicationImpact(index, [choose]);
-    const context = contextForImpact(manifest, index, trace, sourceIndex);
-    expect(context.sources.some(({ ref }) => ref.kind === "action")).toBe(true);
-    expect(context.sourceIssues).not.toContainEqual(
+    expect(
+      sourceIndex.entries.some(({ ref, sources }) => ref.kind === "action" && sources.length > 0),
+    ).toBe(true);
+    expect(sourceIndex.issues).not.toContainEqual(
       expect.objectContaining({ code: "AMBIGUOUS_DESIGN_SOURCE" }),
     );
   });
@@ -990,9 +962,6 @@ describe("application impact analysis", () => {
     expect(() => indexApplicationSources({ ...options, limits: { maxSourceAnchors: 10 } })).toThrow(
       AnalysisLimitError,
     );
-    expect(() =>
-      indexApplicationSources({ ...options, limits: { maxSourceTextBytes: 1 } }),
-    ).toThrow(AnalysisLimitError);
   });
 
   test("diagnoses a registered specification that cannot be read", () => {
@@ -1012,7 +981,7 @@ describe("application impact analysis", () => {
     );
   });
 
-  test("loads a real TypeScript project into deterministic plain analysis data", () => {
+  test("loads a real TypeScript project into deterministic plain analysis data", async () => {
     const repositoryRoot = applicationProject();
     const manifest = projectManifest();
     const options = {
@@ -1100,7 +1069,7 @@ describe("application impact analysis", () => {
       ({ ref }) => ref.kind === "reaction" && ref.reaction === "Select",
     );
     expect(select?.sources[0]?.range.path).toBe("src/reactions.ts");
-    expect(select?.sources[0]?.text).toContain("Select = react");
+    expect(select?.sources[0]).not.toHaveProperty("text");
 
     const endpoint = first.sourceIndex.entries.find(({ ref }) => ref.kind === "endpoint");
     const endpointSource = endpoint?.sources[0];
@@ -1119,6 +1088,115 @@ describe("application impact analysis", () => {
       },
       { kind: "reaction", reaction: "ChooseEndpoint" },
     ]);
+
+    const analysis = createApplicationAnalysis({
+      manifest,
+      project: first,
+      expectedProjectDigest: applicationProjectAnalysisDigest(first),
+    });
+    const definitions = await Promise.all(
+      analysis.index.inventory.map((ref) => analysis.describe({ ref })),
+    );
+    expect(new Set(definitions.map(({ definition }) => definition?.kind))).toEqual(
+      new Set([
+        "concept",
+        "action",
+        "query",
+        "reaction",
+        "view",
+        "former",
+        "computation",
+        "endpoint",
+      ]),
+    );
+
+    const catalogResults = await Promise.all([
+      analysis.catalog({ filters: { kinds: ["reaction"], portability: ["unlowered"] } }),
+      analysis.catalog({ filters: { concepts: ["Selecting"] } }),
+      analysis.catalog({ filters: { sourceAvailability: ["available"] } }),
+      analysis.catalog({ filters: { diagnosticSeverities: ["info"] } }),
+    ]);
+    expect(catalogResults.every(({ complete }) => complete)).toBe(true);
+
+    const searches = await Promise.all([
+      analysis.search({ query: "choose", fields: ["identity"] }),
+      analysis.search({ query: "Selec", fields: ["identity"] }),
+      analysis.search({ query: "Selecting choose", fields: ["identity"] }),
+      analysis.search({ query: "uses a local closure", fields: ["contract"] }),
+      analysis.search({ query: "src/reactions.ts", fields: ["source-path"] }),
+    ]);
+    expect(searches[0].items[0]).toMatchObject({ ref: choose, rank: 1 });
+    expect(searches.some(({ total }) => total > 0)).toBe(true);
+
+    const reactionSource = first.sourceIndex.entries.find(
+      ({ ref }) => ref.kind === "reaction" && ref.reaction === "Select",
+    )!.sources[0];
+    const sourceResults = await Promise.all([
+      analysis.sources({ query: { kind: "file", path: reactionSource.range.path } }),
+      analysis.sources({
+        query: {
+          kind: "range",
+          path: reactionSource.range.path,
+          start: reactionSource.range.start.offset,
+          end: reactionSource.range.end.offset,
+        },
+        roles: [reactionSource.role],
+        resolutions: [reactionSource.resolution],
+        match: "best",
+      }),
+    ]);
+    expect(sourceResults.every(({ total }) => total > 0)).toBe(true);
+
+    const limitedImpact = await analysis.impact({
+      seeds: [choose],
+      relations: ["action-trigger"],
+      certainties: ["structural"],
+      maxDepth: 0,
+      maxNodes: 1,
+    });
+    expect(limitedImpact.complete).toBe(false);
+    expect(limitedImpact.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "TRACE_LIMIT_REACHED" }),
+    );
+    const incoming = await analysis.navigate({
+      ref: choose,
+      direction: "incoming",
+      relations: ["concept-member"],
+      certainties: ["structural"],
+      maxEdges: 0,
+    });
+    expect(incoming.complete).toBe(false);
+
+    const projectDiagnostics = await analysis.diagnostics({
+      filters: {
+        origins: ["typescript"],
+        severities: ["error"],
+        codes: ["2322"],
+        pathPrefixes: ["src/"],
+      },
+    });
+    expect(projectDiagnostics.items).toHaveLength(1);
+    expect(
+      (
+        await analysis.diagnostics({
+          filters: { refs: [{ kind: "reaction", reaction: "LocalRepair" }] },
+        })
+      ).total,
+    ).toBeGreaterThan(0);
+
+    const contracts = await analysis.contracts({
+      filters: { endpoints: ["ChooseEndpoint"], paths: ["/selections/choose"] },
+    });
+    expect(contracts).toMatchObject({
+      total: 1,
+      appWide: manifest.wire.appWide,
+    });
+    expect(contracts.items[0]).toMatchObject({
+      endpoint: { name: "ChooseEndpoint", path: "/selections/choose" },
+      inputContract: manifest.inputContracts["/selections/choose"],
+    });
+    expect(contracts).not.toHaveProperty("rendered");
+    expect(contracts).not.toHaveProperty("projections");
   });
 
   test("rejects stale provenance, digest expectations, path escape, and changing reads", () => {

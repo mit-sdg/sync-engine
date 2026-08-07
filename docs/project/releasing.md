@@ -50,8 +50,8 @@ replace this external-setting verification.
 
 Work from a clean checkout of `origin/main` after all intended changes are
 merged. Fetch tags, verify the release commit is on `origin/main`, and do not
-publish from disconnected history. Guidance generation must therefore resolve
-to that exact 40-hex `HEAD`, never a `development:<documentsDigest>` identity.
+publish from disconnected history. Every verified tarball must come from that
+exact tagged commit.
 
 ### Registry version
 
@@ -136,23 +136,21 @@ the gates as separate steps so GitHub identifies the failing gate and so
 `package:check` can receive the verified-tarball output directory used by the
 publication jobs.
 
-The publish verification job sets `SYNC_ENGINE_SOURCE_REVISION` to the exact
-GitHub commit SHA for package verification. The generator rejects a value that
-is not 40 hex characters or differs from Git `HEAD`. Package verification then
-requires the analysis tarball's V1 guidance resource to carry that exact
-revision, recomputes every document, entry, aggregate, and top-level digest from
-the marked package docs, and compares canonical JSON bytes.
-
 Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` invokes npm's real pack lifecycle for each workspace;
 the root package's `prepack` performs their shared build. The check inspects all
 workspace tarballs and policy links, installs core alone and all packages together,
 exercises the generated scaffold and examples, compiles a separate generated
-client/backend topology, and runs Node scenarios. The combined exact-tarball
-consumer also generates and parses Manifest V5, executes worker-backed project
-analysis, exercises the analysis façade and source/impact queries, and
-loads, validates, selects, and links revision-bound guidance before round-tripping
-project and result codecs without workspace symlinks. In the publish workflow the
+client/backend topology, and runs Node scenarios. An isolated Node 24 import
+first proves that analysis `/ir` does not load TypeScript, `fs`, `fs/promises`,
+`node:fs`, `node:fs/promises`, worker, project-loader, or source-index-builder
+modules. The combined exact-tarball
+consumer then generates and parses Manifest V5, executes project analysis under
+Node 24 and Bun, verifies source bytes through a caller reader before slicing an
+anchor, retains and supplies the complete project digest to the neutral facade,
+exercises source/impact queries, checks derivable file-byte resource accounting,
+and round-trips the strict project codec without workspace symlinks. In the
+publish workflow the
 check exports the exact core, analysis, and HTTP tarballs; the unprivileged job
 records their digests and transfers them unchanged to the protected publication
 jobs. The core package

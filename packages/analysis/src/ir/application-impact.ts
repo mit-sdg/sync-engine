@@ -1,21 +1,14 @@
 import {
-  renderReaction,
   validateApplicationManifest,
   type ApplicationManifestV5,
-  type ComputationInventoryIR,
-  type ConceptImplementationProvenanceIR,
-  type FormerIR,
   type FormerNodeIR,
   type ManifestEndpointV5,
   type ReactionIR,
   type TriggerIR,
   type UnloweredIR,
-  type ViewIR,
   type ViewOpIR,
   type WhereOpIR,
-  type WireContractsIR,
 } from "@mit-sdg/sync-engine/tooling";
-import type { ApplicationSourceIndex, SourceIndexEntry, SourceIndexIssue } from "./source-index.ts";
 import {
   AnalysisController,
   usageDelta,
@@ -26,7 +19,7 @@ import {
 import {
   analysisProvenance,
   assertArtifactProvenance,
-  assertSameProvenance,
+  freezeAnalysisData,
   type AnalysisProvenance,
 } from "./analysis-provenance.ts";
 
@@ -126,48 +119,11 @@ export interface ImpactTrace {
   readonly resourceUsage: AnalysisResourceUsage;
 }
 
-export interface ContextSelection {
-  readonly ref: DesignRef;
-  readonly roles: readonly ("seed" | "affected" | "support")[];
-}
-
-export interface ContextReaction {
-  readonly name: string;
-  readonly portable: boolean;
-  readonly definition: ReactionIR | UnloweredIR;
-  readonly rendered?: string;
-}
-
-/** Preselected manifest context suitable for an agent or another inspection tool. */
-export interface ContextBundle {
-  readonly format: "sync-engine.impact-context";
-  readonly version: 2;
-  readonly provenance: AnalysisProvenance;
-  readonly manifestDigest: string;
-  readonly complete: boolean;
-  readonly selection: readonly ContextSelection[];
-  readonly concepts: ApplicationManifestV5["concepts"];
-  readonly conceptImplementations: readonly ConceptImplementationProvenanceIR[];
-  readonly reactions: readonly ContextReaction[];
-  readonly views: readonly ViewIR[];
-  readonly formers: readonly FormerIR[];
-  readonly endpoints: readonly ManifestEndpointV5[];
-  readonly computations: readonly ComputationInventoryIR[];
-  readonly wire: WireContractsIR;
-  readonly referencedOnly: readonly DesignRef[];
-  readonly sources: readonly SourceIndexEntry[];
-  readonly trace: ImpactTrace;
-  readonly issues: readonly AnalysisIssue[];
-  readonly sourceIssues: readonly SourceIndexIssue[];
-  readonly resourceUsage: AnalysisResourceUsage;
-}
-
 type ConsumerRef =
   | Extract<DesignRef, { kind: "reaction" }>
   | Extract<DesignRef, { kind: "view" }>
   | Extract<DesignRef, { kind: "former" }>;
 
-const ROLE_ORDER = ["seed", "affected", "support"] as const;
 const CERTAINTY_RANK: Record<ImpactCertainty, number> = {
   structural: 0,
   conservative: 1,
@@ -660,7 +616,7 @@ export function indexApplicationWithController(
     }
   }
 
-  return {
+  return freezeAnalysisData({
     format: "sync-engine.application-index",
     version: 2,
     provenance: analysisProvenance(manifest),
@@ -677,7 +633,7 @@ export function indexApplicationWithController(
     edges: [...edges.values()].sort((left, right) => ordinal(edgeKey(left), edgeKey(right))),
     issues: [...issues.values()].sort((left, right) => ordinal(issueKey(left), issueKey(right))),
     resourceUsage: usageDelta(before, controller.usage()),
-  };
+  });
 }
 
 function boundedInteger(
@@ -727,9 +683,9 @@ export function traceApplicationImpact(
   for (const outgoing of adjacency.values())
     outgoing.sort((left, right) => ordinal(edgeKey(left), edgeKey(right)));
 
-  const normalizedSeeds = [...new Map(seeds.map((ref) => [designRefKey(ref), ref])).values()].sort(
-    (left, right) => ordinal(designRefKey(left), designRefKey(right)),
-  );
+  const normalizedSeeds = [
+    ...new Map(seeds.map((ref) => [designRefKey(ref), { ...ref } as DesignRef])).values(),
+  ].sort((left, right) => ordinal(designRefKey(left), designRefKey(right)));
   const issues = new Map<string, AnalysisIssue>();
   const reached = new Map<string, ImpactTraceEntry>();
   const queue: ImpactTraceEntry[] = [];
@@ -802,208 +758,19 @@ export function traceApplicationImpact(
     }
   }
 
-  return {
-    format: "sync-engine.impact-trace",
-    version: 2,
-    provenance: index.provenance,
-    manifestDigest: index.manifestDigest,
-    seeds: normalizedSeeds,
-    affected: [...reached.values()].sort((left, right) =>
-      ordinal(designRefKey(left.ref), designRefKey(right.ref)),
-    ),
-    issues: [...issues.values()].sort((left, right) => ordinal(issueKey(left), issueKey(right))),
-    complete: !limited && ![...issues.values()].some(({ code }) => code === "UNKNOWN_SEED"),
-    resourceUsage: usageDelta(before, controller.usage()),
-  };
-}
-
-/** Select complete manifest facts needed to understand one impact trace. */
-export function contextForImpact(
-  manifest: ApplicationManifestV5,
-  index: ApplicationIndex,
-  trace: ImpactTrace,
-  sourceIndex?: ApplicationSourceIndex,
-  options: AnalysisOptions = {},
-): ContextBundle {
-  const controller = new AnalysisController(options);
-  const before = controller.usage();
-  validateApplicationManifest(manifest);
-  assertArtifactProvenance(index, "application index", manifest);
-  if (
-    index.format !== "sync-engine.application-index" ||
-    index.version !== 2 ||
-    !Array.isArray(index.inventory) ||
-    !Array.isArray(index.referencedOnly) ||
-    !Array.isArray(index.nodes) ||
-    !Array.isArray(index.edges) ||
-    !Array.isArray(index.issues)
-  ) {
-    throw new TypeError("application index is not a version-2 application index");
-  }
-  assertSameProvenance(index, trace, "impact trace");
-  if (
-    trace.format !== "sync-engine.impact-trace" ||
-    trace.version !== 2 ||
-    typeof trace.complete !== "boolean" ||
-    !Array.isArray(trace.seeds) ||
-    !Array.isArray(trace.affected) ||
-    !Array.isArray(trace.issues)
-  ) {
-    throw new TypeError("impact trace is not a version-2 impact trace");
-  }
-  if (sourceIndex !== undefined) {
-    assertSameProvenance(index, sourceIndex, "source index");
-    if (
-      sourceIndex.format !== "sync-engine.application-source-index" ||
-      sourceIndex.version !== 2 ||
-      !Array.isArray(sourceIndex.entries) ||
-      !Array.isArray(sourceIndex.issues)
-    ) {
-      throw new TypeError("source index is not a version-2 application source index");
-    }
-  }
-
-  const refs = new Map(index.nodes.map((ref) => [designRefKey(ref), ref]));
-  const roles = new Map<string, Set<(typeof ROLE_ORDER)[number]>>();
-  const queue: string[] = [];
-  const queued = new Set<string>();
-
-  const select = (ref: DesignRef, role: (typeof ROLE_ORDER)[number]): void => {
-    const key = designRefKey(ref);
-    const selected = roles.get(key) ?? new Set<(typeof ROLE_ORDER)[number]>();
-    const wasSelected = selected.size > 0;
-    selected.add(role);
-    roles.set(key, selected);
-    if (!wasSelected && !queued.has(key)) {
-      queued.add(key);
-      queue.push(key);
-    }
-  };
-
-  for (const seed of trace.seeds) select(seed, "seed");
-  for (const entry of trace.affected) select(entry.ref, "affected");
-
-  const incoming = new Map<string, ImpactEdge[]>();
-  const outgoing = new Map<string, ImpactEdge[]>();
-  for (const edge of index.edges) {
-    const fromKey = designRefKey(edge.from);
-    const toKey = designRefKey(edge.to);
-    const fromEdges = outgoing.get(fromKey) ?? [];
-    fromEdges.push(edge);
-    outgoing.set(fromKey, fromEdges);
-    const toEdges = incoming.get(toKey) ?? [];
-    toEdges.push(edge);
-    incoming.set(toKey, toEdges);
-  }
-
-  for (let position = 0; position < queue.length; position += 1) {
-    controller.checkpoint();
-    const key = queue[position];
-    const ref = refs.get(key);
-    if (ref === undefined) continue;
-    if (ref.kind === "action" || ref.kind === "query") {
-      select(conceptRef(ref.concept), "support");
-    }
-    if (["reaction", "view", "former"].includes(ref.kind)) {
-      for (const edge of incoming.get(key) ?? []) select(edge.from, "support");
-    }
-    if (ref.kind === "reaction") {
-      for (const edge of outgoing.get(key) ?? []) {
-        if (edge.relation === "reaction-asks" || edge.relation === "stage-affects-endpoint") {
-          select(edge.to, "support");
-        }
-      }
-    }
-    if (ref.kind === "endpoint") {
-      for (const edge of outgoing.get(key) ?? []) {
-        if (edge.relation === "endpoint-stage") select(edge.to, "support");
-      }
-    }
-  }
-
-  const selected = new Set(roles.keys());
-  const has = (ref: DesignRef): boolean => selected.has(designRefKey(ref));
-  const reactions: ContextReaction[] = [
-    ...manifest.application.reactions
-      .filter(({ name }) => has(reactionRef(name)))
-      .map((definition) => ({
-        name: definition.name,
-        portable: true,
-        definition,
-        rendered: renderReaction(definition),
-      })),
-    ...manifest.application.unlowered
-      .filter(({ name }) => has(reactionRef(name)))
-      .map((definition) => ({ name: definition.name, portable: false, definition })),
-  ].sort((left, right) => ordinal(left.name, right.name));
-
-  const combinedIssues = new Map<string, AnalysisIssue>();
-  for (const issue of [...index.issues, ...trace.issues]) {
-    const key = issueKey(issue);
-    if (combinedIssues.has(key)) continue;
-    controller.addDiagnostic();
-    combinedIssues.set(key, issue);
-  }
-  const selectedEndpoints = manifest.endpoints
-    .filter((endpoint) => has(endpointRef(endpoint)))
-    .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`));
-  const selectedPaths = new Set(selectedEndpoints.map(({ path }) => path));
-  const sources =
-    sourceIndex?.entries
-      .filter(({ ref }) => selected.has(designRefKey(ref)))
-      .sort((left, right) => ordinal(designRefKey(left.ref), designRefKey(right.ref))) ?? [];
-  for (const entry of sources) {
-    for (const source of entry.sources) {
-      controller.addSourceAnchor(Buffer.byteLength(source.text, "utf8"));
-    }
-  }
-  const sourceIssues =
-    sourceIndex?.issues.filter(({ ref }) => ref === undefined || selected.has(designRefKey(ref))) ??
-    [];
-  for (const _issue of sourceIssues) controller.addDiagnostic();
-
-  return {
-    format: "sync-engine.impact-context",
-    version: 2,
-    provenance: analysisProvenance(manifest),
-    manifestDigest: manifest.digest,
-    complete: trace.complete,
-    selection: [...roles.entries()]
-      .map(([key, selectedRoles]) => ({
-        ref: refs.get(key) ?? trace.seeds.find((ref) => designRefKey(ref) === key)!,
-        roles: ROLE_ORDER.filter((role) => selectedRoles.has(role)),
-      }))
-      .sort((left, right) => ordinal(designRefKey(left.ref), designRefKey(right.ref))),
-    concepts: manifest.concepts
-      .filter(({ name }) => has(conceptRef(name)))
-      .sort((left, right) => ordinal(left.name, right.name)),
-    conceptImplementations: manifest.conceptImplementations
-      .filter(({ concept }) => has(conceptRef(concept)))
-      .sort((left, right) => ordinal(left.concept, right.concept)),
-    reactions,
-    views: manifest.application.views
-      .filter(({ name }) => has(viewRef(name)))
-      .sort((left, right) => ordinal(left.name, right.name)),
-    formers: manifest.application.formers
-      .filter(({ name }) => has(formerRef(name)))
-      .sort((left, right) => ordinal(left.name, right.name)),
-    endpoints: selectedEndpoints,
-    computations: manifest.computations
-      .filter(({ name }) => has(computationRef(name)))
-      .sort((left, right) => ordinal(left.name, right.name)),
-    wire: {
-      endpoints: manifest.wire.endpoints
-        .filter(({ path }) => selectedPaths.has(path))
-        .sort((left, right) => ordinal(left.path, right.path)),
-      appWide: selectedEndpoints.length === 0 ? [] : [...manifest.wire.appWide].sort(ordinal),
-    },
-    referencedOnly: index.referencedOnly.filter((ref) => selected.has(designRefKey(ref))),
-    sources,
-    trace,
-    issues: [...combinedIssues.values()].sort((left, right) =>
-      ordinal(issueKey(left), issueKey(right)),
-    ),
-    sourceIssues,
-    resourceUsage: usageDelta(before, controller.usage()),
-  };
+  return freezeAnalysisData(
+    structuredClone({
+      format: "sync-engine.impact-trace" as const,
+      version: 2 as const,
+      provenance: index.provenance,
+      manifestDigest: index.manifestDigest,
+      seeds: normalizedSeeds,
+      affected: [...reached.values()].sort((left, right) =>
+        ordinal(designRefKey(left.ref), designRefKey(right.ref)),
+      ),
+      issues: [...issues.values()].sort((left, right) => ordinal(issueKey(left), issueKey(right))),
+      complete: !limited && ![...issues.values()].some(({ code }) => code === "UNKNOWN_SEED"),
+      resourceUsage: usageDelta(before, controller.usage()),
+    }),
+  );
 }

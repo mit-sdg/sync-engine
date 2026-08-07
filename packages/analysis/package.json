@@ -1,12 +1,12 @@
 {
   "name": "@mit-sdg/sync-engine-analysis",
   "version": "1.0.0-beta.7",
-  "description": "Static application indexing, impact tracing, and deterministic context for sync-engine",
+  "description": "Deterministic IR queries and optional TypeScript project evidence for sync-engine",
   "keywords": [
     "analysis",
     "reaction",
     "sync-engine",
-    "tooling"
+    "typescript"
   ],
   "homepage": "https://github.com/mit-sdg/sync-engine#readme",
   "bugs": "https://github.com/mit-sdg/sync-engine/issues",
@@ -25,15 +25,17 @@
     "dist"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/project/application-project-worker.js"
+  ],
   "exports": {
-    "./guidance": {
-      "types": "./dist/guidance/index.d.ts",
-      "import": "./dist/guidance/index.js"
+    "./ir": {
+      "types": "./dist/ir/index.d.ts",
+      "import": "./dist/ir/index.js"
     },
-    "./tooling": {
-      "types": "./dist/tooling/index.d.ts",
-      "import": "./dist/tooling/index.js"
+    "./project": {
+      "types": "./dist/project/index.d.ts",
+      "import": "./dist/project/index.js"
     }
   },
   "publishConfig": {

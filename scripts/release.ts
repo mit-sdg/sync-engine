@@ -78,7 +78,6 @@ export const releaseSourcePaths = [
   "scripts/verify-release.ts",
   "scripts/verify-package.ts",
   "scripts/build.ts",
-  "scripts/guidance.ts",
   "scripts/release.ts",
   "scripts/workspaces.ts",
 ] as const;
@@ -596,19 +595,23 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
 
   const support = sources.get("SUPPORT.md") ?? "";
+  const analysisFormatFacts = [
+    "sync-engine.application-index` version 2",
+    "sync-engine.impact-trace` version 2",
+    "sync-engine.application-source-index` version 2",
+    "sync-engine.application-project-analysis` version 2",
+  ] as const;
   const supportFacts = [
     "Only the newest beta is supported.",
     "sync-engine.application-manifest` version 5",
-    "@mit-sdg/sync-engine-analysis/tooling",
-    "@mit-sdg/sync-engine-analysis/guidance",
+    "@mit-sdg/sync-engine-analysis/ir",
+    "@mit-sdg/sync-engine-analysis/project",
     "analysis package requires the exact matching core beta as a peer dependency",
     "TypeScript is a normal runtime dependency of the analysis package",
-    "sync-engine.application-index` version 2",
-    "sync-engine.application-analysis-result` version 1",
-    "sync-engine.guidance-resource` version 1",
-    "sync-engine.guidance-selection` version 1",
-    "exact 40-hex release commit",
-    "analysis package is generic infrastructure and does not return approval verdicts",
+    ...analysisFormatFacts,
+    "expectedProjectDigest",
+    "Granular facade results are bounded immutable data",
+    "analysis package is generic infrastructure and does not package guidance",
   ];
   if (facts.node !== undefined) supportFacts.push(`Node.js \`${facts.node}\``);
   if (facts.bun !== undefined) supportFacts.push(`Bun \`${facts.bun}\``);
@@ -622,16 +625,20 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       "packages/analysis/README.md",
       [
         "independently published public",
-        "@mit-sdg/sync-engine-analysis/guidance",
-        "@mit-sdg/sync-engine-analysis/tooling",
+        "@mit-sdg/sync-engine-analysis/ir",
+        "@mit-sdg/sync-engine-analysis/project",
+        ...analysisFormatFacts,
+        "expectedProjectDigest",
       ],
     ],
     [
       "packages/analysis/public-surface.md",
       [
         "public package",
-        "@mit-sdg/sync-engine-analysis/guidance",
-        "@mit-sdg/sync-engine-analysis/tooling",
+        "@mit-sdg/sync-engine-analysis/ir",
+        "@mit-sdg/sync-engine-analysis/project",
+        ...analysisFormatFacts,
+        "expectedProjectDigest",
       ],
     ],
   ] as const) {
@@ -924,11 +931,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       }
     }
   }
-  for (const fact of [
-    "SYNC_ENGINE_SOURCE_REVISION: ${{ github.sha }}",
-    "SYNC_ENGINE_VERIFIED_TARBALLS: release",
-    "name: verified-npm-package",
-  ]) {
+  for (const fact of ["SYNC_ENGINE_VERIFIED_TARBALLS: release", "name: verified-npm-package"]) {
     if (!verify.includes(fact)) {
       failures.push(`.github/workflows/publish.yml: verified artifact flow is missing ${fact}`);
     }

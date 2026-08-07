@@ -3,14 +3,16 @@ import { dirname, join, relative } from "node:path";
 import {
   AnalysisError,
   AnalysisLimitError,
+  type SourceAnchor,
+} from "@mit-sdg/sync-engine-analysis/ir";
+import {
   applicationProjectAnalysisDigest,
   loadApplicationProject,
   parseApplicationProjectAnalysis,
   renderApplicationProjectAnalysis,
   validateApplicationProjectAnalysis,
   type ApplicationProjectAnalysis,
-  type SourceAnchor,
-} from "@mit-sdg/sync-engine-analysis/tooling";
+} from "@mit-sdg/sync-engine-analysis/project";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   applicationProjectFixture,
@@ -56,6 +58,8 @@ describe("application project format", () => {
   test("loads solution roots and transitive source projects without declarations", () => {
     const project = analysis();
 
+    expect(Object.isFrozen(project)).toBe(true);
+    expect(Object.isFrozen(project.sourceIndex.entries)).toBe(true);
     expect(project.provenance.tsconfigPath).toBe("tsconfig.json");
     expect(project.provenance.projectReferences).toEqual([
       "app/tsconfig.json",
@@ -72,6 +76,9 @@ describe("application project format", () => {
       ]),
     );
     expect(project.provenance.files.some(({ path }) => path.includes("/dist/"))).toBe(false);
+    expect(
+      project.provenance.files.every(({ byteLength }) => Number.isSafeInteger(byteLength)),
+    ).toBe(true);
     expect(project.sourceIndex.documents.map(({ path }) => path)).toEqual(
       expect.arrayContaining(["app/src/app.ts", "domain/src/index.ts", "domain/src/notes.ts"]),
     );
@@ -134,20 +141,6 @@ describe("application project format", () => {
     expect(() => validateApplicationProjectAnalysis(parsed)).not.toThrow();
     expect(() => parseApplicationProjectAnalysis("{")).toThrow(AnalysisError);
 
-    const withExcerpt = structuredClone(project);
-    const anchor = firstAnchor(withExcerpt);
-    const start = anchor.range.start;
-    (anchor as { excerpt?: unknown }).excerpt = {
-      range: {
-        path: anchor.range.path,
-        start,
-        end: { offset: start.offset + 1, line: start.line, column: start.column + 1 },
-      },
-      text: anchor.text.slice(0, 1),
-      complete: false,
-    };
-    expect(() => validateApplicationProjectAnalysis(withExcerpt)).not.toThrow();
-
     const mutations: Array<[string, (value: ApplicationProjectAnalysis) => void]> = [
       ["format", (value) => ((value as { format: string }).format = "stale")],
       ["version", (value) => ((value as { version: number }).version = 1)],
@@ -184,6 +177,10 @@ describe("application project format", () => {
             structuredClone(value.provenance.files[0]),
           ),
       ],
+      [
+        "file byte length",
+        (value) => ((value.provenance.files[0] as { byteLength: number }).byteLength = -1),
+      ],
       ["index version", (value) => ((value.applicationIndex as { version: number }).version = 1)],
       [
         "index provenance",
@@ -216,6 +213,10 @@ describe("application project format", () => {
         (value) => ((value.sourceIndex.documents[0] as { digest: string }).digest = "0".repeat(64)),
       ],
       [
+        "document byte length",
+        (value) => ((value.sourceIndex.documents[0] as { byteLength: number }).byteLength += 1),
+      ],
+      [
         "document order",
         (value) => (value.sourceIndex.documents as unknown as unknown[]).reverse(),
       ],
@@ -231,14 +232,24 @@ describe("application project format", () => {
         (value) =>
           ((value.sourceIndex.resourceUsage as { sourceDocuments: number }).sourceDocuments += 1),
       ],
-      ["anchor text", (value) => ((firstAnchor(value) as { text: string }).text += "x")],
       [
-        "anchor digest",
-        (value) => ((firstAnchor(value) as { digest: string }).digest = "0".repeat(64)),
+        "anchor text",
+        (value) => ((firstAnchor(value) as unknown as Record<string, unknown>).text = "forged"),
       ],
       [
+        "anchor excerpt",
+        (value) => ((firstAnchor(value) as unknown as Record<string, unknown>).excerpt = {}),
+      ],
+      ["anchor digest", (value) => ((firstAnchor(value) as { digest: string }).digest = "stale")],
+      [
         "anchor range",
-        (value) => ((firstAnchor(value).range.end as { offset: number }).offset += 1),
+        (value) => {
+          const anchor = firstAnchor(value);
+          const document = value.sourceIndex.documents.find(
+            ({ path }) => path === anchor.range.path,
+          )!;
+          (anchor.range.end as { offset: number }).offset = document.length + 1;
+        },
       ],
       [
         "focus range",
@@ -270,6 +281,82 @@ describe("application project format", () => {
         },
       ],
       [
+        "issue phantom ref",
+        (value) => {
+          (value.sourceIndex.issues[0] as unknown as Record<string, unknown>).ref = {
+            kind: "concept",
+            concept: "Phantom",
+          };
+        },
+      ],
+      [
+        "issue ghost candidate",
+        (value) => {
+          (value.sourceIndex.issues[0] as unknown as Record<string, unknown>).candidates = [
+            {
+              path: "ghost.ts",
+              start: { offset: 0, line: 1, column: 1 },
+              end: { offset: 1, line: 1, column: 2 },
+            },
+          ];
+        },
+      ],
+      [
+        "issue candidate beyond document",
+        (value) => {
+          const document = value.sourceIndex.documents[0];
+          (value.sourceIndex.issues[0] as unknown as Record<string, unknown>).candidates = [
+            {
+              path: document.path,
+              start: { offset: document.length, line: 1, column: 1 },
+              end: { offset: document.length + 1, line: 1, column: 2 },
+            },
+          ];
+        },
+      ],
+      [
+        "blank analyzer version",
+        (value) => {
+          for (const provenance of [
+            value.provenance,
+            value.applicationIndex.provenance,
+            value.sourceIndex.provenance,
+          ]) {
+            (provenance.analyzer as { version: string }).version = "   ";
+          }
+        },
+      ],
+      [
+        "blank generator version",
+        (value) => {
+          for (const provenance of [
+            value.provenance,
+            value.applicationIndex.provenance,
+            value.sourceIndex.provenance,
+          ]) {
+            (provenance.manifest.generator as { version: string }).version = "   ";
+          }
+        },
+      ],
+      [
+        "blank revisions",
+        (value) => {
+          (value.provenance as { sourceRevision: string }).sourceRevision = "   ";
+          (value.provenance as { manifestSourceRevision: string }).manifestSourceRevision = "   ";
+        },
+      ],
+      [
+        "blank tsconfig path",
+        (value) => ((value.provenance as { tsconfigPath: string }).tsconfigPath = "   "),
+      ],
+      [
+        "blank TypeScript version",
+        (value) => {
+          (value.provenance as { typescriptVersion: string }).typescriptVersion = "   ";
+          (value.sourceIndex as { typescriptVersion: string }).typescriptVersion = "   ";
+        },
+      ],
+      [
         "resource usage",
         (value) => ((value.resourceUsage as { graphNodes: number }).graphNodes += 1),
       ],
@@ -280,10 +367,6 @@ describe("application project format", () => {
       expectInvalid(tampered);
       expect(() => applicationProjectAnalysisDigest(tampered), label).toThrow(AnalysisError);
     }
-
-    const badExcerpt = structuredClone(withExcerpt);
-    (firstAnchor(badExcerpt).excerpt as { text: string }).text = "tampered";
-    expectInvalid(badExcerpt);
   });
 
   test("rejects non-JSON persistence shapes and malformed scalar contracts", () => {
@@ -404,61 +487,8 @@ describe("application project format", () => {
     }
   });
 
-  test("validates complete excerpts and optional diagnostic evidence", () => {
+  test("validates optional diagnostic evidence", () => {
     const project = analysis();
-    const completeExcerpt = structuredClone(project);
-    const completeAnchor = firstAnchor(completeExcerpt);
-    (completeAnchor as { excerpt?: unknown }).excerpt = {
-      range: structuredClone(completeAnchor.range),
-      text: completeAnchor.text,
-      complete: true,
-    };
-    expect(() => validateApplicationProjectAnalysis(completeExcerpt)).not.toThrow();
-
-    const invalidExcerpts: readonly [string, (anchor: SourceAnchor) => void][] = [
-      [
-        "complete partial excerpt",
-        (anchor) => {
-          (anchor as { excerpt?: unknown }).excerpt = {
-            range: {
-              ...structuredClone(anchor.range),
-              end: { ...anchor.range.end, offset: anchor.range.end.offset - 1 },
-            },
-            text: anchor.text.slice(0, -1),
-            complete: true,
-          };
-        },
-      ],
-      [
-        "excerpt outside anchor",
-        (anchor) => {
-          (anchor as { excerpt?: unknown }).excerpt = {
-            range: {
-              ...structuredClone(anchor.range),
-              end: { ...anchor.range.end, offset: anchor.range.end.offset + 1 },
-            },
-            text: `${anchor.text}x`,
-            complete: false,
-          };
-        },
-      ],
-      [
-        "non-boolean completeness",
-        (anchor) => {
-          (anchor as { excerpt?: unknown }).excerpt = {
-            range: structuredClone(anchor.range),
-            text: anchor.text,
-            complete: "yes",
-          };
-        },
-      ],
-    ];
-    for (const [label, mutate] of invalidExcerpts) {
-      const malformed = structuredClone(project);
-      mutate(firstAnchor(malformed));
-      expect(() => validateApplicationProjectAnalysis(malformed), label).toThrow(AnalysisError);
-    }
-
     const withRelated = structuredClone(project);
     (withRelated.diagnostics[0] as { relatedInformation?: unknown }).relatedInformation = [
       {
@@ -582,6 +612,9 @@ describe("application project format", () => {
     const exactBytes = fileBytes.reduce((total, bytes) => total + bytes, 0);
     expect(baseline.resourceUsage.projectFiles).toBe(baseline.provenance.files.length);
     expect(baseline.resourceUsage.projectBytes).toBe(exactBytes);
+    expect(baseline.provenance.files.reduce((total, file) => total + file.byteLength, 0)).toBe(
+      exactBytes,
+    );
     expect(baseline.resourceUsage.astNodes).toBe(baseline.sourceIndex.resourceUsage.astNodes);
 
     for (const [limit, maximum] of [

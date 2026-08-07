@@ -54,8 +54,12 @@ export function analysisProvenance(manifest: ApplicationManifestV5): AnalysisPro
 function assertProvenance(value: unknown, label: string): asserts value is AnalysisProvenance {
   const provenance = record(value, `${label}.provenance`);
   const analyzer = record(provenance.analyzer, `${label}.provenance.analyzer`);
-  if (analyzer.name !== ANALYSIS_PACKAGE_NAME || analyzer.version !== ANALYSIS_PACKAGE_VERSION) {
-    throw new TypeError(`${label} was produced by a different analyzer`);
+  if (
+    analyzer.name !== ANALYSIS_PACKAGE_NAME ||
+    typeof analyzer.version !== "string" ||
+    analyzer.version.trim() === ""
+  ) {
+    throw new TypeError(`${label} has malformed analyzer provenance`);
   }
   const manifest = record(provenance.manifest, `${label}.provenance.manifest`);
   if (
@@ -67,7 +71,12 @@ function assertProvenance(value: unknown, label: string): asserts value is Analy
     throw new TypeError(`${label} has malformed manifest provenance`);
   }
   const generator = record(manifest.generator, `${label}.provenance.manifest.generator`);
-  if (typeof generator.name !== "string" || typeof generator.version !== "string") {
+  if (
+    typeof generator.name !== "string" ||
+    generator.name.trim() === "" ||
+    typeof generator.version !== "string" ||
+    generator.version.trim() === ""
+  ) {
     throw new TypeError(`${label} has malformed manifest generator provenance`);
   }
 }
@@ -153,4 +162,16 @@ export function canonicalAnalysisJson(value: unknown): string {
 
 export function canonicalAnalysisDigest(value: unknown): string {
   return createHash("sha256").update(canonicalAnalysisJson(value), "utf8").digest("hex");
+}
+
+/** Recursively freeze analysis-owned plain data without cloning it. */
+export function freezeAnalysisData<Value>(value: Value, seen = new WeakSet<object>()): Value {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) return value;
+  const object = value as object;
+  if (seen.has(object)) return value;
+  seen.add(object);
+  for (const key of Reflect.ownKeys(object)) {
+    freezeAnalysisData((object as Record<PropertyKey, unknown>)[key], seen);
+  }
+  return Object.freeze(value);
 }

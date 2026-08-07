@@ -388,13 +388,15 @@ describe("release source facts", () => {
   test.each([
     ["SUPPORT.md", "Only the newest beta is supported."],
     ["SUPPORT.md", `Node.js \`${packageManifest.engines.node}\``],
-    ["SUPPORT.md", "@mit-sdg/sync-engine-analysis/tooling"],
-    ["SUPPORT.md", "@mit-sdg/sync-engine-analysis/guidance"],
-    ["SUPPORT.md", "sync-engine.application-analysis-result` version 1"],
-    ["SUPPORT.md", "sync-engine.guidance-resource` version 1"],
-    ["SUPPORT.md", "sync-engine.guidance-selection` version 1"],
-    ["SUPPORT.md", "exact 40-hex release commit"],
-    ["SUPPORT.md", "does not return approval verdicts"],
+    ["SUPPORT.md", "@mit-sdg/sync-engine-analysis/ir"],
+    ["SUPPORT.md", "@mit-sdg/sync-engine-analysis/project"],
+    ["SUPPORT.md", "sync-engine.application-index` version 2"],
+    ["SUPPORT.md", "sync-engine.impact-trace` version 2"],
+    ["SUPPORT.md", "sync-engine.application-source-index` version 2"],
+    ["SUPPORT.md", "sync-engine.application-project-analysis` version 2"],
+    ["SUPPORT.md", "expectedProjectDigest"],
+    ["SUPPORT.md", "Granular facade results are bounded immutable data"],
+    ["SUPPORT.md", "does not package guidance"],
     ["SECURITY.md", "security/advisories/new"],
     ["SECURITY.md", "acknowledgement within three business days"],
   ])("requires the policy fact %s: %s", (path, fact) => {
@@ -663,19 +665,6 @@ describe("release source facts", () => {
     );
     expect(checkRelease(sources)).toContain(
       ".github/workflows/publish.yml: verified artifact flow is missing sha256sum release/analysis-package.tgz > release/analysis-package.tgz.sha256",
-    );
-  });
-
-  test("requires package verification to bind guidance to the exact release commit", () => {
-    const sources = fixture();
-    replaceSource(
-      sources,
-      ".github/workflows/publish.yml",
-      "SYNC_ENGINE_SOURCE_REVISION: ${{ github.sha }}",
-      "SYNC_ENGINE_SOURCE_REVISION: development",
-    );
-    expect(checkRelease(sources)).toContain(
-      ".github/workflows/publish.yml: verified artifact flow is missing SYNC_ENGINE_SOURCE_REVISION: ${{ github.sha }}",
     );
   });
 

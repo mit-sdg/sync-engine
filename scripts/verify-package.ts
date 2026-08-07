@@ -5,12 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { applicationExamples } from "../examples/register.ts";
-import {
-  parseGuidanceResource,
-  renderGuidanceResource,
-} from "../packages/analysis/src/guidance/guidance.ts";
 import { filesBelow } from "../src/command/files-below.ts";
-import { generateGuidanceResource } from "./guidance.ts";
 import { workspaceBuildOrder, workspaceById, workspacePath, type Workspace } from "./workspaces.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -281,34 +276,6 @@ async function verifyPackedWorkspace(
     throw new Error("packed package contains source maps whose implementation sources are omitted");
   }
   for (const path of workspace.requiredPackedFiles) requireEntry(entries, path);
-  if (workspace.id === analysisWorkspace.id) {
-    const resourcePath = "dist/guidance/guidance-resource.json";
-    const packedSource = execFileSync("tar", ["-xOzf", tarball, `package/${resourcePath}`], {
-      encoding: "utf8",
-    });
-    const resource = parseGuidanceResource(packedSource);
-    const expected = await generateGuidanceResource(root);
-    if (
-      packedSource !== renderGuidanceResource(resource) ||
-      packedSource !== renderGuidanceResource(expected)
-    ) {
-      throw new Error("analysis packed guidance differs from the canonical marked documents");
-    }
-    const releaseRevision = process.env.SYNC_ENGINE_SOURCE_REVISION;
-    if (
-      releaseRevision !== undefined &&
-      (!/^[a-f0-9]{40}$/i.test(releaseRevision) ||
-        resource.source.revision !== releaseRevision.toLowerCase())
-    ) {
-      throw new Error("analysis release guidance must carry the exact requested 40-hex revision");
-    }
-    if (
-      process.env.SYNC_ENGINE_VERIFIED_TARBALLS !== undefined &&
-      !/^[a-f0-9]{40}$/.test(resource.source.revision)
-    ) {
-      throw new Error("verified release tarballs require an exact 40-hex guidance revision");
-    }
-  }
   if (workspace.id === coreWorkspace.id) {
     for (const path of await filesBelow(resolve(root, "docs"))) {
       const documentationPath = portablePath(relative(root, path));
@@ -659,6 +626,10 @@ async function verifyCombinedConsumer(
     resolve(root, "tests/package/analysis-consumer-scenario.mjs"),
     resolve(consumer, "analysis-consumer-scenario.mjs"),
   );
+  await copyFile(
+    resolve(root, "tests/package/analysis-ir-import-isolation.mjs"),
+    resolve(consumer, "analysis-ir-import-isolation.mjs"),
+  );
   await writeTypeScriptConfig(resolve(consumer, "tsconfig.json"), [
     "all-entrypoints.ts",
     "consumer-contract.ts",
@@ -668,6 +639,7 @@ async function verifyCombinedConsumer(
     [resolve(consumer, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.json"],
     consumer,
   );
+  run("node", [resolve(consumer, "analysis-ir-import-isolation.mjs")], consumer);
   run("node", [resolve(consumer, "runtime-import.mjs")], consumer);
   const analysisScenario = resolve(consumer, "analysis-consumer-scenario.mjs");
   run("node", [analysisScenario], consumer, 30_000);

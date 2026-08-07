@@ -2,11 +2,12 @@ import { createHash } from "node:crypto";
 import { realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import ts from "typescript";
-import type { AnalysisController } from "./analysis-foundation.ts";
+import type { AnalysisController } from "../ir/analysis-foundation.ts";
 
 export interface TypeScriptProjectFile {
   readonly path: string;
   readonly digest: string;
+  readonly byteLength: number;
 }
 
 export interface LoadedTypeScriptProject {
@@ -191,7 +192,11 @@ export class TypeScriptProjectGraph {
         (snapshot): snapshot is ReadSnapshot & { text: string; digest: string } =>
           snapshot.repositoryFile && snapshot.text !== undefined && snapshot.digest !== undefined,
       )
-      .map((snapshot) => ({ path: this.projectPath(snapshot.absolute), digest: snapshot.digest }))
+      .map((snapshot) => ({
+        path: this.projectPath(snapshot.absolute),
+        digest: snapshot.digest,
+        byteLength: Buffer.byteLength(snapshot.text, "utf8"),
+      }))
       .sort((left, right) => ordinal(left.path, right.path));
   }
 

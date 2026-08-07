@@ -282,8 +282,6 @@ recovery.
 
 <!-- register:boundary:end -->
 
-<!-- sync-engine-guidance: {"id":"public-api-endpoints","anchor":"endpoints","authority":"reference","topics":["boundaries","security","verification"],"stages":["implementation","verification"]} -->
-
 ### Endpoints
 
 | API        | Compact signature                                                                        |
@@ -492,8 +490,6 @@ Neither form weakens generated endpoint input and output types.
 
 <!-- register:tooling:end -->
 
-<!-- sync-engine-guidance: {"id":"public-api-inspection-rendering","anchor":"inspection-and-rendering","authority":"reference","topics":["generated-artifacts","release-compatibility","verification"],"stages":["implementation","verification"]} -->
-
 ### Inspection and rendering
 
 | API                           | Compact signature                                                            |
@@ -631,8 +627,6 @@ A render with `preamble: false` emits no imports or shared helper types. The
 earlier render that emits the module preamble must receive every later
 `preamble: false` contract in `sharedWires`; otherwise `renderWireTypes` can omit
 a helper alias used by a later contract.
-
-<!-- sync-engine-guidance: {"id":"public-api-generated-descriptor","anchor":"generated-descriptor","authority":"reference","topics":["generated-artifacts","operations","release-compatibility"],"stages":["implementation","operation","verification"]} -->
 
 ### Generated descriptor
 

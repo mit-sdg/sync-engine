@@ -64,7 +64,7 @@ grouped under `guide/`.
 | Resource                                                                                                    | Scope                                                              |
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)         | HTTP companion exports and transport behavior                      |
-| [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md) | Static analysis and revision-bound canonical guidance              |
+| [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md) | Compiler-free IR queries and optional TypeScript project evidence  |
 | [Reading Circle](../../examples/reading-circle/README.md)                                                   | Shortest complete multi-concept application                        |
 | [Operations Room](../../examples/operations-room/README.md)                                                 | Selectable reactions, replaceable policy, and staged formers       |
 | [Production HTTP](../../examples/production-http/README.md)                                                 | Validation, public errors, limits, correlation, and credentials    |

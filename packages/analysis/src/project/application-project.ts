@@ -6,20 +6,25 @@ import {
   type ApplicationManifestV5,
 } from "@mit-sdg/sync-engine/tooling";
 import ts from "typescript";
-import { indexApplicationWithController, type ApplicationIndex } from "./application-impact.ts";
+import { indexApplicationWithController } from "../ir/application-impact.ts";
 import {
   AnalysisAbortedError,
   AnalysisController,
   AnalysisLimitError,
   type AnalysisOptions,
-  type AnalysisResourceUsage,
   type AnalysisSeverity,
-} from "./analysis-foundation.ts";
-import { validateApplicationProjectAnalysis } from "./application-project-format.ts";
-import { analysisProvenance, type AnalysisProvenance } from "./analysis-provenance.ts";
+} from "../ir/analysis-foundation.ts";
+import type {
+  ApplicationProjectAnalysis,
+  ApplicationProjectDiagnostic,
+  ApplicationProjectDiagnosticCategory,
+  ApplicationProjectDiagnosticPhase,
+  ApplicationProjectDiagnosticRelatedInformation,
+} from "../ir/project-data.ts";
+import { validateApplicationProjectAnalysis } from "../ir/application-project-format.ts";
+import { analysisProvenance, freezeAnalysisData } from "../ir/analysis-provenance.ts";
 import {
   indexApplicationSourcesWithController,
-  type ApplicationSourceIndex,
   type SourceAttributionRoot,
 } from "./source-index.ts";
 import { loadTypeScriptProjectGraph } from "./typescript-project.ts";
@@ -37,71 +42,6 @@ export interface LoadApplicationProjectOptions extends AnalysisOptions {
 
 /** Filesystem-backed options accepted by the cancellable worker API. */
 export type AnalyzeApplicationProjectOptions = Omit<LoadApplicationProjectOptions, "readFile">;
-
-export interface ApplicationProjectFile {
-  /** POSIX path relative to the resolved repository root. */
-  readonly path: string;
-  /** SHA-256 of the exact UTF-8 text observed by analysis. */
-  readonly digest: string;
-}
-
-export type ApplicationProjectDiagnosticPhase =
-  | "config"
-  | "options"
-  | "global"
-  | "syntactic"
-  | "semantic";
-
-export type ApplicationProjectDiagnosticCategory = "warning" | "error" | "suggestion" | "message";
-
-export interface ApplicationProjectDiagnosticRelatedInformation {
-  /** Normalized analysis severity. */
-  readonly severity: AnalysisSeverity;
-  /** Exact TypeScript diagnostic category. */
-  readonly category: ApplicationProjectDiagnosticCategory;
-  readonly code: number;
-  readonly message: string;
-  readonly source?: string;
-  readonly path?: string;
-  readonly startOffset?: number;
-  readonly endOffset?: number;
-  readonly line?: number;
-  readonly column?: number;
-}
-
-/** Plain-data TypeScript diagnostic with one stable collection phase. */
-export interface ApplicationProjectDiagnostic extends ApplicationProjectDiagnosticRelatedInformation {
-  readonly phase: ApplicationProjectDiagnosticPhase;
-  /** Project-relative config that produced this diagnostic. */
-  readonly projectConfigPath?: string;
-  readonly relatedInformation?: readonly ApplicationProjectDiagnosticRelatedInformation[];
-}
-
-export interface ApplicationProjectProvenance extends AnalysisProvenance {
-  readonly sourceRevision: string;
-  readonly manifestSourceRevision: string;
-  readonly manifestDigest: string;
-  /** SHA-256 over the ordered repository-relative file digest records. */
-  readonly sourceDigest: string;
-  readonly tsconfigPath: string;
-  readonly typescriptVersion: string;
-  /** Every transitive referenced config in deterministic ordinal path order. */
-  readonly projectReferences: readonly string[];
-  readonly files: readonly ApplicationProjectFile[];
-}
-
-/** One static, checkout-bound analysis without an executable project value. */
-export interface ApplicationProjectAnalysis {
-  readonly format: "sync-engine.application-project-analysis";
-  readonly version: 2;
-  readonly manifestDigest: string;
-  readonly provenance: ApplicationProjectProvenance;
-  readonly diagnostics: readonly ApplicationProjectDiagnostic[];
-  readonly manifestDiagnostics: readonly ApplicationDiagnostic[];
-  readonly applicationIndex: ApplicationIndex;
-  readonly sourceIndex: ApplicationSourceIndex;
-  readonly resourceUsage: AnalysisResourceUsage;
-}
 
 interface WorkerSuccess {
   readonly type: "success";
@@ -230,7 +170,7 @@ export function loadApplicationProject(
     ...new Map(
       [...manifest.diagnostics]
         .sort((left, right) => ordinal(manifestDiagnosticKey(left), manifestDiagnosticKey(right)))
-        .map((diagnostic) => [manifestDiagnosticKey(diagnostic), diagnostic]),
+        .map((diagnostic) => [manifestDiagnosticKey(diagnostic), structuredClone(diagnostic)]),
     ).values(),
   ];
   for (const _diagnostic of manifestDiagnostics) controller.addDiagnostic();
@@ -370,7 +310,7 @@ export function loadApplicationProject(
     resourceUsage: controller.usage(),
   };
   validateApplicationProjectAnalysis(analysis);
-  return analysis;
+  return freezeAnalysisData(analysis);
 }
 
 function plainCloneable(value: unknown, path: string, active = new WeakSet<object>()): void {
@@ -517,7 +457,7 @@ export async function analyzeApplicationProject(
       }
       settled = true;
       cleanup();
-      resolve(message.analysis);
+      resolve(freezeAnalysisData(message.analysis));
     });
     worker.once("error", fail);
     worker.once("exit", (code) => {
@@ -527,4 +467,4 @@ export async function analyzeApplicationProject(
   });
 }
 
-export { applicationProjectAnalysisDigest } from "./application-project-format.ts";
+export { applicationProjectAnalysisDigest } from "../ir/application-project-format.ts";

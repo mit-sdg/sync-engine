@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ApplicationDiagnostic } from "@mit-sdg/sync-engine/tooling";
-import { ANALYSIS_PACKAGE_NAME, ANALYSIS_PACKAGE_VERSION } from "../package-version.ts";
+import { ANALYSIS_PACKAGE_NAME } from "../package-version.ts";
 import {
   designRefKey,
   type AnalysisIssue,
@@ -14,10 +14,11 @@ import type {
   ApplicationProjectAnalysis,
   ApplicationProjectDiagnostic,
   ApplicationProjectDiagnosticRelatedInformation,
-} from "./application-project.ts";
+} from "./project-data.ts";
 import {
   canonicalAnalysisDigest,
   canonicalAnalysisJson,
+  freezeAnalysisData,
   type AnalysisProvenance,
 } from "./analysis-provenance.ts";
 import type {
@@ -25,7 +26,7 @@ import type {
   SourceAnchor,
   SourceIndexIssue,
   SourceRange,
-} from "./source-index.ts";
+} from "./source-data.ts";
 
 type DataRecord = Record<string, unknown>;
 
@@ -38,7 +39,6 @@ const USAGE_KEYS = [
   "diagnostics",
   "sourceDocuments",
   "sourceAnchors",
-  "sourceTextBytes",
   "astNodes",
   "projectFiles",
   "projectBytes",
@@ -160,7 +160,7 @@ function exact(
 }
 
 function string(value: unknown, path: string, empty = false): string {
-  if (typeof value !== "string" || (!empty && value.length === 0)) {
+  if (typeof value !== "string" || (!empty && value.trim().length === 0)) {
     fail(`${path} must be ${empty ? "a string" : "a non-empty string"}`, path);
   }
   return value;
@@ -271,9 +271,10 @@ function provenance(value: unknown, path: string): AnalysisProvenance {
   exact(result, ["analyzer", "manifest"], [], path);
   const analyzer = object(result.analyzer, `${path}.analyzer`);
   exact(analyzer, ["name", "version"], [], `${path}.analyzer`);
-  if (analyzer.name !== ANALYSIS_PACKAGE_NAME || analyzer.version !== ANALYSIS_PACKAGE_VERSION) {
-    fail(`${path}.analyzer does not match this analyzer`, `${path}.analyzer`, "SNAPSHOT_MISMATCH");
+  if (analyzer.name !== ANALYSIS_PACKAGE_NAME) {
+    fail(`${path}.analyzer has an unsupported name`, `${path}.analyzer.name`);
   }
+  string(analyzer.version, `${path}.analyzer.version`);
   const manifest = object(result.manifest, `${path}.manifest`);
   exact(manifest, ["format", "version", "digest", "generator"], [], `${path}.manifest`);
   if (manifest.format !== "sync-engine.application-manifest") {
@@ -492,7 +493,6 @@ function applicationIndex(
     usage.diagnostics !== issues.length ||
     usage.sourceDocuments !== 0 ||
     usage.sourceAnchors !== 0 ||
-    usage.sourceTextBytes !== 0 ||
     usage.astNodes !== 0 ||
     usage.projectFiles !== 0 ||
     usage.projectBytes !== 0
@@ -565,7 +565,7 @@ function sourceIndex(
   expectedProvenance: AnalysisProvenance,
   manifestDigest: string,
   index: ApplicationIndex,
-  files: ReadonlyMap<string, string>,
+  files: ReadonlyMap<string, { readonly digest: string; readonly byteLength: number }>,
   typescriptVersion: string,
   path: string,
 ): ApplicationSourceIndex {
@@ -613,7 +613,12 @@ function sourceIndex(
     const documentDigest = hash(document.digest, `${path}.documents[${position}].digest`);
     integer(document.length, `${path}.documents[${position}].length`);
     integer(document.byteLength, `${path}.documents[${position}].byteLength`);
-    if (files.get(documentPath) !== documentDigest) {
+    const projectFile = files.get(documentPath);
+    if (
+      projectFile === undefined ||
+      projectFile.digest !== documentDigest ||
+      projectFile.byteLength !== document.byteLength
+    ) {
       fail(
         `${path}.documents[${position}] differs from project files`,
         `${path}.documents[${position}]`,
@@ -625,7 +630,6 @@ function sourceIndex(
   orderedUnique(documents, (document) => document.path, `${path}.documents`);
   const documentsByPath = new Map(documents.map((document) => [document.path, document]));
   let anchorCount = 0;
-  let anchorBytes = 0;
   const entries = array(source.entries, `${path}.entries`).map((entry, position) => {
     const sourceEntry = object(entry, `${path}.entries[${position}]`);
     exact(sourceEntry, ["ref", "sources"], [], `${path}.entries[${position}]`);
@@ -638,8 +642,8 @@ function sourceIndex(
         );
         exact(
           anchor,
-          ["role", "range", "text", "digest", "resolution"],
-          ["focusRange", "excerpt"],
+          ["role", "range", "digest", "resolution"],
+          ["focusRange"],
           `${path}.entries[${position}].sources[${anchorPosition}]`,
         );
         const role = oneOf(
@@ -656,28 +660,10 @@ function sourceIndex(
           anchor.range,
           `${path}.entries[${position}].sources[${anchorPosition}].range`,
         );
-        const text = string(
-          anchor.text,
-          `${path}.entries[${position}].sources[${anchorPosition}].text`,
-          true,
+        const anchorDigest = hash(
+          anchor.digest,
+          `${path}.entries[${position}].sources[${anchorPosition}].digest`,
         );
-        if (anchorRange.end.offset - anchorRange.start.offset !== text.length) {
-          fail(
-            `source anchor text length differs from its range`,
-            `${path}.entries[${position}].sources[${anchorPosition}]`,
-            "SNAPSHOT_MISMATCH",
-          );
-        }
-        if (
-          hash(anchor.digest, `${path}.entries[${position}].sources[${anchorPosition}].digest`) !==
-          sha256(text)
-        ) {
-          fail(
-            `source anchor digest is stale`,
-            `${path}.entries[${position}].sources[${anchorPosition}].digest`,
-            "SNAPSHOT_MISMATCH",
-          );
-        }
         const document = documentsByPath.get(anchorRange.path);
         if (document === undefined || anchorRange.end.offset > document.length) {
           fail(
@@ -700,70 +686,13 @@ function sourceIndex(
             "SNAPSHOT_MISMATCH",
           );
         }
-        let excerpt: SourceAnchor["excerpt"];
-        if (anchor.excerpt !== undefined) {
-          const excerptValue = object(
-            anchor.excerpt,
-            `${path}.entries[${position}].sources[${anchorPosition}].excerpt`,
-          );
-          exact(
-            excerptValue,
-            ["range", "text", "complete"],
-            [],
-            `${path}.entries[${position}].sources[${anchorPosition}].excerpt`,
-          );
-          const excerptRange = range(
-            excerptValue.range,
-            `${path}.entries[${position}].sources[${anchorPosition}].excerpt.range`,
-          );
-          const excerptText = string(
-            excerptValue.text,
-            `${path}.entries[${position}].sources[${anchorPosition}].excerpt.text`,
-            true,
-          );
-          if (!containsRange(anchorRange, excerptRange)) {
-            fail(
-              `source excerpt escapes its anchor`,
-              `${path}.entries[${position}].sources[${anchorPosition}].excerpt.range`,
-              "SNAPSHOT_MISMATCH",
-            );
-          }
-          const expectedText = text.slice(
-            excerptRange.start.offset - anchorRange.start.offset,
-            excerptRange.end.offset - anchorRange.start.offset,
-          );
-          if (excerptText !== expectedText) {
-            fail(
-              `source excerpt text differs from its range`,
-              `${path}.entries[${position}].sources[${anchorPosition}].excerpt.text`,
-              "SNAPSHOT_MISMATCH",
-            );
-          }
-          if (typeof excerptValue.complete !== "boolean") {
-            fail(
-              `source excerpt complete must be a boolean`,
-              `${path}.entries[${position}].sources[${anchorPosition}].excerpt.complete`,
-            );
-          }
-          if (excerptValue.complete && !same(excerptRange, anchorRange)) {
-            fail(
-              `a complete source excerpt must cover its anchor`,
-              `${path}.entries[${position}].sources[${anchorPosition}].excerpt`,
-              "SNAPSHOT_MISMATCH",
-            );
-          }
-          excerpt = { range: excerptRange, text: excerptText, complete: excerptValue.complete };
-        }
         anchorCount += 1;
-        anchorBytes += Buffer.byteLength(text, "utf8");
         return {
           role,
           range: anchorRange,
-          text,
-          digest: anchor.digest as string,
+          digest: anchorDigest,
           resolution,
           ...(focusRange === undefined ? {} : { focusRange }),
-          ...(excerpt === undefined ? {} : { excerpt }),
         };
       },
     );
@@ -778,6 +707,7 @@ function sourceIndex(
       "SNAPSHOT_MISMATCH",
     );
   }
+  const inventoryKeys = new Set(entryKeys);
   const issues = array(source.issues, `${path}.issues`).map((entry, position): SourceIndexIssue => {
     const issue = object(entry, `${path}.issues[${position}]`);
     exact(
@@ -791,6 +721,13 @@ function sourceIndex(
     const message = string(issue.message, `${path}.issues[${position}].message`, true);
     const selectedRef =
       issue.ref === undefined ? undefined : ref(issue.ref, `${path}.issues[${position}].ref`);
+    if (selectedRef !== undefined && !inventoryKeys.has(designRefKey(selectedRef))) {
+      fail(
+        `${path}.issues[${position}].ref is not in the application inventory`,
+        `${path}.issues[${position}].ref`,
+        "SNAPSHOT_MISMATCH",
+      );
+    }
     const role =
       issue.role === undefined
         ? undefined
@@ -804,6 +741,16 @@ function sourceIndex(
           );
     if (candidates !== undefined)
       orderedUnique(candidates, rangeKey, `${path}.issues[${position}].candidates`);
+    for (const [candidatePosition, candidate] of (candidates ?? []).entries()) {
+      const document = documentsByPath.get(candidate.path);
+      if (document === undefined || candidate.end.offset > document.length) {
+        fail(
+          `${path}.issues[${position}].candidates[${candidatePosition}] references an unknown or shorter document`,
+          `${path}.issues[${position}].candidates[${candidatePosition}]`,
+          "SNAPSHOT_MISMATCH",
+        );
+      }
+    }
     return {
       code,
       severity,
@@ -821,7 +768,6 @@ function sourceIndex(
     usage.diagnostics !== issues.length ||
     usage.sourceDocuments !== documents.length ||
     usage.sourceAnchors !== anchorCount ||
-    usage.sourceTextBytes !== anchorBytes ||
     usage.projectFiles !== 0 ||
     usage.projectBytes !== 0
   ) {
@@ -1016,7 +962,11 @@ function validate(value: unknown, roundTrip: boolean): asserts value is Applicat
     "$.provenance",
   );
   const sourceRevision = string(projectProvenance.sourceRevision, "$.provenance.sourceRevision");
-  if (projectProvenance.manifestSourceRevision !== sourceRevision) {
+  const manifestSourceRevision = string(
+    projectProvenance.manifestSourceRevision,
+    "$.provenance.manifestSourceRevision",
+  );
+  if (manifestSourceRevision !== sourceRevision) {
     fail(
       "project source and manifest revisions differ",
       "$.provenance.manifestSourceRevision",
@@ -1048,14 +998,15 @@ function validate(value: unknown, roundTrip: boolean): asserts value is Applicat
   }
   const files = array(projectProvenance.files, "$.provenance.files").map((entry, position) => {
     const file = object(entry, `$.provenance.files[${position}]`);
-    exact(file, ["path", "digest"], [], `$.provenance.files[${position}]`);
+    exact(file, ["path", "digest", "byteLength"], [], `$.provenance.files[${position}]`);
     return {
       path: relativePath(file.path, `$.provenance.files[${position}].path`),
       digest: hash(file.digest, `$.provenance.files[${position}].digest`),
+      byteLength: integer(file.byteLength, `$.provenance.files[${position}].byteLength`),
     };
   });
   orderedUnique(files, (file) => file.path, "$.provenance.files");
-  const filesByPath = new Map(files.map((file) => [file.path, file.digest]));
+  const filesByPath = new Map(files.map((file) => [file.path, file]));
   for (const config of [tsconfigPath, ...references]) {
     if (!filesByPath.has(config))
       fail(
@@ -1111,10 +1062,9 @@ function validate(value: unknown, roundTrip: boolean): asserts value is Applicat
     usage.diagnostics !== expectedDiagnostics ||
     usage.sourceDocuments !== source.resourceUsage.sourceDocuments ||
     usage.sourceAnchors !== source.resourceUsage.sourceAnchors ||
-    usage.sourceTextBytes !== source.resourceUsage.sourceTextBytes ||
     usage.astNodes !== source.resourceUsage.astNodes ||
     usage.projectFiles !== files.length ||
-    (files.length > 0 && usage.projectBytes === 0)
+    usage.projectBytes !== files.reduce((total, file) => total + file.byteLength, 0)
   ) {
     fail("project resourceUsage is inconsistent", "$.resourceUsage", "SNAPSHOT_MISMATCH");
   }
@@ -1135,14 +1085,17 @@ function validate(value: unknown, roundTrip: boolean): asserts value is Applicat
   }
 }
 
-/** Validate untrusted durable application-project analysis data. */
+/** Validate durable shape and derivable integrity, not semantic source attribution. */
 export function validateApplicationProjectAnalysis(
   value: unknown,
 ): asserts value is ApplicationProjectAnalysis {
   validate(value, true);
 }
 
-/** Parse canonical or non-canonical JSON and strictly validate one project analysis. */
+/**
+ * Parse and synchronously validate one complete supplied JSON string. This API
+ * has no streaming or byte limit; hosts must bound untrusted input before use.
+ */
 export function parseApplicationProjectAnalysis(source: string): ApplicationProjectAnalysis {
   if (typeof source !== "string") {
     throw new AnalysisError(
@@ -1159,7 +1112,7 @@ export function parseApplicationProjectAnalysis(source: string): ApplicationProj
     });
   }
   validateApplicationProjectAnalysis(value);
-  return value;
+  return freezeAnalysisData(value);
 }
 
 /** Render canonical stable JSON for one validated project analysis. */
@@ -1168,7 +1121,7 @@ export function renderApplicationProjectAnalysis(analysis: ApplicationProjectAna
   return canonicalAnalysisJson(analysis);
 }
 
-/** SHA-256 over canonical stable JSON for one validated project analysis. */
+/** SHA-256 over the complete canonical validated artifact; trust requires prior possession. */
 export function applicationProjectAnalysisDigest(analysis: ApplicationProjectAnalysis): string {
   validateApplicationProjectAnalysis(analysis);
   return canonicalAnalysisDigest(analysis);

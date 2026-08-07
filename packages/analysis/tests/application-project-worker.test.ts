@@ -1,11 +1,10 @@
+import { AnalysisAbortedError, AnalysisLimitError } from "@mit-sdg/sync-engine-analysis/ir";
 import {
-  AnalysisAbortedError,
-  AnalysisLimitError,
   analyzeApplicationProject,
   applicationProjectAnalysisDigest,
   loadApplicationProject,
   renderApplicationProjectAnalysis,
-} from "@mit-sdg/sync-engine-analysis/tooling";
+} from "@mit-sdg/sync-engine-analysis/project";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   applicationProjectFixture,

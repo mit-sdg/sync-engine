@@ -97,7 +97,7 @@ export const workspaceCatalog = [
     rootRuntimeDependencies: ["typescript"],
     forbiddenWorkspaceIds: ["http"],
     internalSourceDirectories: [],
-    runtimeEntrypoints: ["tooling/application-project-worker.ts"],
+    runtimeEntrypoints: ["project/application-project-worker.ts"],
     publicSubpathContainsOnlyEntrypoint: false,
     copiesExamples: false,
     publication: "npm",
@@ -107,10 +107,9 @@ export const workspaceCatalog = [
       "README.md",
       "public-surface.md",
       "package.json",
-      "dist/guidance/guidance-resource.json",
-      "dist/tooling/application-project-worker.js",
+      "dist/project/application-project-worker.js",
     ],
-    packageBudget: { files: 40, packedBytes: 150_000, unpackedBytes: 650_000 },
+    packageBudget: { files: 40, packedBytes: 78_000, unpackedBytes: 380_000 },
   },
 ] as const satisfies readonly Workspace[];
 
