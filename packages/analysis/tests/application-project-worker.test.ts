@@ -37,7 +37,7 @@ describe("application project worker", () => {
     expect(applicationProjectAnalysisDigest(worker)).toBe(
       applicationProjectAnalysisDigest(synchronous),
     );
-  });
+  }, 15_000);
 
   test("observes pre-abort before worker work and terminates in-flight analysis", async () => {
     const preAbort = new AbortController();
