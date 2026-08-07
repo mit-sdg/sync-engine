@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   parseConceptSpecification,
@@ -122,13 +123,15 @@ function projectPath(projectRoot: string, fileName: string): string | undefined 
     : undefined;
 }
 
+function canonicalPath(path: string): string {
+  const absolute = resolve(path);
+  return ts.sys.fileExists(absolute) || ts.sys.directoryExists(absolute)
+    ? realpathSync(absolute)
+    : absolute;
+}
+
 function canonicalSourcePath(projectRoot: string, fileName: string): string | undefined {
-  const absolute = resolve(fileName);
-  const canonical =
-    ts.sys.fileExists(absolute) && ts.sys.realpath !== undefined
-      ? ts.sys.realpath(absolute)
-      : absolute;
-  return projectPath(projectRoot, canonical);
+  return projectPath(projectRoot, canonicalPath(fileName));
 }
 
 function validSourcePath(path: unknown, label: string): asserts path is string {
@@ -417,7 +420,7 @@ export function indexApplicationSourcesWithController<
       ]);
     return ordinal(key(left), key(right));
   });
-  const projectRoot = resolve(options.projectRoot);
+  const projectRoot = canonicalPath(options.projectRoot);
   const readFile = options.readFile ?? ts.sys.readFile;
   const contextBySource = new WeakMap<ts.SourceFile, SourceProgramContext>();
   const contexts = programs.map((program): SourceProgramContext => {

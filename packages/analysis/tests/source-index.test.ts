@@ -19,6 +19,7 @@ import {
   indexApplicationSources,
   type SourceAttributionRoot,
 } from "@mit-sdg/sync-engine-analysis/project";
+import { resolve } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import ts from "typescript";
 
@@ -534,7 +535,7 @@ export function buildTwo() { return assemble({ vocabulary: set.vocabulary, compo
     };
     const sourceIndex = index(manifest, files, {
       sourceRoots: [{ path: "root.ts", exportName: "selected" }],
-      readFile: (path) => (path === "/project/odd.md" ? specification : undefined),
+      readFile: (path) => (path === resolve("/project/odd.md") ? specification : undefined),
     });
 
     expect(sourceIndex.issues).toEqual([]);
@@ -1217,7 +1218,7 @@ assemble({ vocabulary: words, composition: {} });
       SPECIFICATION_MISMATCH: {
         manifest: { concepts: [{ name: "Logical", constructorName: "LogicalCanonical" }] },
         files: { "app.ts": registeredSpecification("./logical.md") },
-        readFile: (path) => (path.endsWith("/logical.md") ? "# Logical\n" : undefined),
+        readFile: (path) => (path === resolve("/project/logical.md") ? "# Logical\n" : undefined),
       },
     } satisfies Record<SourceIndexIssueCode, IssueFixture>;
 
@@ -1316,7 +1317,8 @@ _read () : optional (value: Text)
       mismatchManifest,
       { "app.ts": registered("./logical.md") },
       {
-        readFile: (path) => (path.endsWith("/logical.md") ? actualSpecification : undefined),
+        readFile: (path) =>
+          path === resolve("/project/logical.md") ? actualSpecification : undefined,
       },
     );
     expect(mismatch.issues).toContainEqual(

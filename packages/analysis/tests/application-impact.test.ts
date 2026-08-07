@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   applicationManifestDigest,
   parseConceptSpecification,
@@ -308,6 +308,7 @@ choose (item: Item) : return (item: Item)
 _current () : optional (item: Item)
 \`\`\`
 `;
+const virtualSpecificationPath = resolve("/project/spec.md");
 
 function programFor(files: Readonly<Record<string, string>>): ts.Program {
   const normalized = new Map(
@@ -837,7 +838,7 @@ describe("application impact analysis", () => {
       manifest,
       program,
       projectRoot: "/project",
-      readFile: (path) => (path === "/project/spec.md" ? selectingSpec : undefined),
+      readFile: (path) => (path === virtualSpecificationPath ? selectingSpec : undefined),
     });
 
     const action = sourceIndex.entries.find(
@@ -908,7 +909,7 @@ describe("application impact analysis", () => {
       manifest,
       program: programFor({ "a.ts": applicationSource, "b.ts": duplicate }),
       projectRoot: "/project",
-      readFile: (path) => (path === "/project/spec.md" ? selectingSpec : undefined),
+      readFile: (path) => (path === virtualSpecificationPath ? selectingSpec : undefined),
     });
 
     expect(sourceIndex.issues).toContainEqual(
@@ -941,7 +942,7 @@ describe("application impact analysis", () => {
       manifest,
       program: programFor({ "app.ts": applicationSource }),
       projectRoot: "/project",
-      readFile: (path) => (path === "/project/spec.md" ? selectingSpec : undefined),
+      readFile: (path) => (path === virtualSpecificationPath ? selectingSpec : undefined),
     });
 
     expect(sourceIndex.issues).not.toContainEqual(
@@ -954,7 +955,7 @@ describe("application impact analysis", () => {
       manifest: fixture(),
       program: programFor({ "app.ts": applicationSource }),
       projectRoot: "/project",
-      readFile: (path: string) => (path === "/project/spec.md" ? selectingSpec : undefined),
+      readFile: (path: string) => (path === virtualSpecificationPath ? selectingSpec : undefined),
     };
     expect(() => indexApplicationSources({ ...options, limits: { maxSourceAnchors: 0 } })).toThrow(
       AnalysisLimitError,
