@@ -44,7 +44,7 @@ The consumer document owners are:
 - Progressive application authoring: `docs/user/guide/`
 - Application model explanation: `docs/user/overview.md`
 - Small tested read constructions: `docs/user/guide/read-construction.md`
-- Exact core exports and API summaries: `docs/user/reference/public-api.md`; HTTP exports and API summaries: `packages/http/public-surface.md`; analysis preview exports and API summaries: `packages/analysis/public-surface.md`
+- Exact core exports and API summaries: `docs/user/reference/public-api.md`; HTTP exports and API summaries: `packages/http/public-surface.md`; analysis exports and API summaries: `packages/analysis/public-surface.md`
 - Concept file grammar: `docs/user/reference/concept-specification.md`
 - Installed command behavior: `docs/user/reference/cli.md`
 - Execution guarantees: `docs/user/reference/semantics.md`
@@ -78,29 +78,29 @@ the book.
 
 ## Project Structure
 
-| Directory                        | Purpose                                                                                                                             |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `src/language/` … `src/tooling/` | Public package subpaths; each directory contains one export-only `index.ts` file                                                    |
-| `src/command/`                   | Source for the installed `sync-engine` executable                                                                                   |
-| `src/engine/reactions/`          | Reaction capabilities nested under `authoring/`, `concepts/`, and `runtime/`, plus shared concern contracts and facades at the root |
-| `src/engine/reads/`              | Where operations, views, formers, lowering, evaluation, IR, and rendering                                                           |
-| `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, and `wire/`                      |
-| `packages/http/`                 | Independently published first-party HTTP transport; imports only supported core subpaths                                            |
-| `packages/analysis/`             | Private static-analysis preview; indexes manifests and returns deterministic impact/context data through supported core subpaths    |
-| `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
-| `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
-| `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |
-| `docs/user/`                     | Consumer guide, API reference, execution semantics, and design guidance                                                             |
-| `docs/project/`                  | Contributor-only implementation architecture and release procedure                                                                  |
-| `examples/`                      | Runnable applications, shared example concepts, and pinned generated artifacts                                                      |
-| `scripts/`                       | Build, package, architecture, declaration, and maintenance commands                                                                 |
-| `.github/`                       | Continuous integration using the same named package commands contributors run                                                       |
-| `tests/internal/`                | Focused units mirroring reactions, reads, boundary, and hosting                                                                     |
-| `tests/package/`                 | Source and packed type contracts, the isolated consumer fixture, and generated declarations                                         |
-| `examples/*/tests/`              | End-to-end coverage colocated with each self-contained example                                                                      |
-| `tests/docs/`                    | Guide source-link and excerpt verification                                                                                          |
-| `tests/internal/utils/`          | Shared utility implementation coverage                                                                                              |
-| `tests/public-api.test.ts`       | Exact core export register, public-package-subpath check, and unsupported-entrypoint check                                          |
+| Directory                        | Purpose                                                                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/language/` … `src/tooling/` | Public package subpaths; each directory contains one export-only `index.ts` file                                                     |
+| `src/command/`                   | Source for the installed `sync-engine` executable                                                                                    |
+| `src/engine/reactions/`          | Reaction capabilities nested under `authoring/`, `concepts/`, and `runtime/`, plus shared concern contracts and facades at the root  |
+| `src/engine/reads/`              | Where operations, views, formers, lowering, evaluation, IR, and rendering                                                            |
+| `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, and `wire/`                       |
+| `packages/http/`                 | Independently published first-party HTTP transport; imports only supported core subpaths                                             |
+| `packages/analysis/`             | Public analysis companion; exposes deterministic inspection through `/tooling` and revision-bound canonical docs through `/guidance` |
+| `src/engine/hosting/`            | Log retention and persistence                                                                                                        |
+| `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                            |
+| `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                         |
+| `docs/user/`                     | Consumer guide, API reference, execution semantics, and design guidance                                                              |
+| `docs/project/`                  | Contributor-only implementation architecture and release procedure                                                                   |
+| `examples/`                      | Runnable applications, shared example concepts, and pinned generated artifacts                                                       |
+| `scripts/`                       | Build, package, architecture, declaration, and maintenance commands                                                                  |
+| `.github/`                       | Continuous integration using the same named package commands contributors run                                                        |
+| `tests/internal/`                | Focused units mirroring reactions, reads, boundary, and hosting                                                                      |
+| `tests/package/`                 | Source and packed type contracts, the isolated consumer fixture, and generated declarations                                          |
+| `examples/*/tests/`              | End-to-end coverage colocated with each self-contained example                                                                       |
+| `tests/docs/`                    | Guide source-link and excerpt verification                                                                                           |
+| `tests/internal/utils/`          | Shared utility implementation coverage                                                                                               |
+| `tests/public-api.test.ts`       | Exact core export register, public-package-subpath check, and unsupported-entrypoint check                                           |
 
 Public entrypoints contain exports only. Code under `src/engine/` imports other
 engine modules directly. The architecture check enforces

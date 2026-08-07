@@ -4,9 +4,12 @@ import { join } from "node:path";
 import {
   applicationManifestDigest,
   parseConceptSpecification,
-  type ApplicationManifestV4,
+  type ApplicationManifestV5,
 } from "@mit-sdg/sync-engine/tooling";
 import {
+  AnalysisAbortedError,
+  AnalysisLimitError,
+  applicationProjectAnalysisDigest,
   contextForImpact,
   designRefsForSourceRange,
   indexApplication,
@@ -18,13 +21,26 @@ import {
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import ts from "typescript";
 
-function fixture(): ApplicationManifestV4 {
-  return {
+function redigest(manifest: ApplicationManifestV5): ApplicationManifestV5 {
+  manifest.digest = applicationManifestDigest(manifest);
+  return manifest;
+}
+
+function fixture(): ApplicationManifestV5 {
+  const manifest: ApplicationManifestV5 = {
     format: "sync-engine.application-manifest",
-    version: 4,
-    generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.5" },
-    digest: "fixture-manifest",
+    version: 5,
+    generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.6" },
+    digest: "pending",
     concepts: [
+      {
+        name: "RequestBoundary",
+        actions: [
+          { name: "request", roles: ["path", "requestId"] },
+          { name: "respond", roles: ["requestId"] },
+        ],
+        queries: [],
+      },
       {
         name: "Alerting",
         actions: [{ name: "raise", roles: ["subject"] }],
@@ -119,6 +135,7 @@ function fixture(): ApplicationManifestV4 {
               in: {},
               out: {},
             },
+            { op: "holds", computation: "ge", in: { left: 1, right: 0 } },
           ],
           then: [],
         },
@@ -191,6 +208,41 @@ function fixture(): ApplicationManifestV4 {
         },
       ],
     },
+    computations: [
+      { name: "among", source: "standard" },
+      { name: "ge", source: "standard", inputs: ["left", "right"] },
+      { name: "gt", source: "standard" },
+      { name: "le", source: "standard" },
+      { name: "lt", source: "standard" },
+      { name: "unused vocabulary", source: "vocabulary", inputs: ["value"] },
+    ],
+    conceptImplementations: [
+      {
+        concept: "RequestBoundary",
+        canonical: { owner: "core", constructorName: "RequestBoundaryConcept" },
+        selected: { via: "core" },
+      },
+      {
+        concept: "Alerting",
+        canonical: { owner: "application", constructorName: "AlertingConcept" },
+        selected: { via: "default" },
+      },
+      {
+        concept: "Discussing",
+        canonical: { owner: "application", constructorName: "DiscussingConcept" },
+        selected: { via: "default" },
+      },
+      {
+        concept: "Selecting",
+        canonical: { owner: "application", constructorName: "SelectingConcept" },
+        selected: { via: "default" },
+      },
+      {
+        concept: "Unrelated",
+        canonical: { owner: "application", constructorName: "UnrelatedConcept" },
+        selected: { via: "default" },
+      },
+    ],
     endpoints: [
       {
         name: "Select",
@@ -201,9 +253,32 @@ function fixture(): ApplicationManifestV4 {
       },
     ],
     inputContracts: { "/selections/choose": { required: ["item"] } },
-    wire: { endpoints: [], appWide: [] },
-    diagnostics: [],
+    wire: {
+      endpoints: [
+        {
+          path: "/selections/choose",
+          input: {
+            kind: "object",
+            fields: [{ key: "item", type: { kind: "json" } }],
+          },
+          output: { kind: "json" },
+          errors: ["INVALID_INPUT"],
+          inputAdmissionError: true,
+          openError: false,
+        },
+      ],
+      appWide: ["UNAVAILABLE"],
+    },
+    diagnostics: [
+      {
+        severity: "info",
+        code: "UNLOWERED_REACTION",
+        definition: { kind: "reaction", name: "LocalRepair" },
+        message: "LocalRepair retains only known structure.",
+      },
+    ],
   };
+  return redigest(manifest);
 }
 
 const choose: DesignRef = { kind: "action", concept: "Selecting", action: "choose" };
@@ -301,6 +376,8 @@ function applicationProject(): string {
   writeFileSync(
     join(root, "stubs/core.d.ts"),
     `declare module "@mit-sdg/sync-engine/assembly" {
+  export function assemble<T>(options: T): T;
+  export function conceptSet<T, U>(registrations: T, computations?: U): { vocabulary: unknown; concepts: any };
   export function registerConcept<T>(registration: T): T;
 }
 declare module "@mit-sdg/sync-engine/boundary" {
@@ -358,7 +435,32 @@ export const ChooseEndpoint = endpoint("/selections/choose", () => Selecting.cho
   writeFileSync(join(root, "src/diagnostic.ts"), "export const broken: string = 42;\n");
   writeFileSync(
     join(root, "src/index.ts"),
-    `export * from "./concept.ts";
+    `import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
+import {
+  AlertingConcept,
+  DiscussingConcept,
+  SelectingConcept,
+  UnrelatedConcept,
+  selecting,
+} from "./concept.ts";
+import * as reactions from "./reactions.ts";
+import * as boundary from "./endpoint.ts";
+
+const projectConcepts = conceptSet(
+  {
+    Alerting: registerConcept({ class: AlertingConcept, spec: "# Alerting" }),
+    Discussing: registerConcept({ class: DiscussingConcept, spec: "# Discussing" }),
+    Selecting: selecting,
+    Unrelated: registerConcept({ class: UnrelatedConcept, spec: "# Unrelated" }),
+  },
+  { "unused vocabulary": ({ value }: { value: unknown }) => value },
+);
+const { vocabulary } = projectConcepts;
+export const application = assemble({
+  vocabulary,
+  composition: { ...reactions, ...boundary },
+});
+export * from "./concept.ts";
 export * from "./reactions.ts";
 export * from "./endpoint.ts";
 import "./diagnostic.ts";
@@ -367,7 +469,7 @@ import "./diagnostic.ts";
   return root;
 }
 
-function projectManifest(): ApplicationManifestV4 {
+function projectManifest(): ApplicationManifestV5 {
   const manifest = fixture();
   manifest.application.reactions.push({
     name: "ChooseEndpoint",
@@ -386,11 +488,10 @@ function projectManifest(): ApplicationManifestV4 {
   ];
   manifest.concepts.find(({ name }) => name === "Selecting")!.specification =
     parseConceptSpecification(selectingSpec);
-  manifest.digest = applicationManifestDigest(manifest);
-  return manifest;
+  return redigest(manifest);
 }
 
-const applicationSource = `import { registerConcept } from "@mit-sdg/sync-engine/assembly";
+const applicationSource = `import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { endpoint } from "@mit-sdg/sync-engine/boundary";
 import { former, reaction as react, view } from "@mit-sdg/sync-engine/language";
 import spec from "./spec.md" with { type: "text" };
@@ -404,21 +505,63 @@ export class AlertingConcept { raise({ subject }: { subject: string }) { return 
 export class UnrelatedConcept { touch() { return {}; } }
 
 export const selecting = registerConcept({ class: SelectingConcept, spec });
-const Selecting = new SelectingConcept();
-const Discussing = new DiscussingConcept();
-const Alerting = new AlertingConcept();
+const applicationConcepts = conceptSet(
+  {
+    Alerting: registerConcept({ class: AlertingConcept, spec: "# Alerting" }),
+    Discussing: registerConcept({ class: DiscussingConcept, spec: "# Discussing" }),
+    Selecting: selecting,
+    Unrelated: registerConcept({ class: UnrelatedConcept, spec: "# Unrelated" }),
+  },
+  { "unused vocabulary": ({ value }: { value: unknown }) => value },
+);
+const { concepts, vocabulary } = applicationConcepts;
+const { Selecting, Discussing, Alerting } = concepts;
 
-export const Select = react(() => Selecting.choose({ item: "x" }) && Discussing.open({ subject: "x" }));
 export const ObserveCurrent = react(() => Selecting._current() && Alerting.raise({ subject: "x" }));
 export const LocalRepair = react(() => Alerting.raise({ subject: "x" }) && Selecting.choose({ item: "repair" }));
 export const currentSelection = view("current selection", () => Selecting._current());
 export const selectionSummary = former("selection summary", () => Selecting._current());
+export const SelectReaction = react(() => Selecting.choose({ item: "x" }) && Discussing.open({ subject: "x" }));
+export const SelectEndpoint = endpoint("/selections/choose", () => Selecting.choose({ item: "x" }) && Discussing.open({ subject: "x" }));
 export const ChooseEndpoint = endpoint("/selections/choose", () => Selecting.choose({ item: "x" }));
+export const application = assemble({
+  vocabulary,
+  composition: {
+    Select,
+    ObserveCurrent,
+    LocalRepair,
+    currentSelection,
+    selectionSummary,
+    Select: SelectEndpoint,
+  },
+});
 `;
 
 describe("application impact analysis", () => {
   test("indexes structural, conservative, causal, endpoint, and opaque dependencies", () => {
-    const index = indexApplication(fixture());
+    const manifest = fixture();
+    const index = indexApplication(manifest);
+
+    expect(index).toMatchObject({
+      format: "sync-engine.application-index",
+      version: 2,
+      manifestDigest: manifest.digest,
+      provenance: {
+        analyzer: { name: "@mit-sdg/sync-engine-analysis" },
+        manifest: {
+          format: "sync-engine.application-manifest",
+          version: 5,
+          digest: manifest.digest,
+          generator: manifest.generator,
+        },
+      },
+    });
+    expect(index.inventory).toContainEqual({
+      kind: "computation",
+      computation: "unused vocabulary",
+    });
+    expect(index.nodes).toEqual(index.inventory);
+    expect(index.referencedOnly).toEqual([]);
 
     expect(index.edges).toContainEqual({
       from: choose,
@@ -447,6 +590,7 @@ describe("application impact analysis", () => {
     expect(index.issues).toContainEqual(
       expect.objectContaining({
         code: "OPAQUE_DEFINITION",
+        severity: "info",
         ref: { kind: "reaction", reaction: "LocalRepair" },
       }),
     );
@@ -460,9 +604,131 @@ describe("application impact analysis", () => {
     second.application.views.reverse();
     second.application.formers.reverse();
     second.application.unlowered.reverse();
+    second.computations.reverse();
     second.endpoints.reverse();
+    redigest(second);
 
-    expect(indexApplication(second)).toEqual(indexApplication(first));
+    const firstIndex = indexApplication(first);
+    const secondIndex = indexApplication(second);
+    expect(secondIndex.inventory).toEqual(firstIndex.inventory);
+    expect(secondIndex.referencedOnly).toEqual(firstIndex.referencedOnly);
+    expect(secondIndex.nodes).toEqual(firstIndex.nodes);
+    expect(secondIndex.edges).toEqual(firstIndex.edges);
+    expect(secondIndex.issues).toEqual(firstIndex.issues);
+    expect(secondIndex.resourceUsage).toEqual(firstIndex.resourceUsage);
+  });
+
+  test("separates V5 inventory from exact references reached only through IR", () => {
+    const manifest = fixture();
+    manifest.application.reactions.push({
+      name: "UnknownRead",
+      when: [],
+      where: [
+        {
+          op: "find",
+          query: { concept: "Selecting", query: "_missing" },
+          in: {},
+          out: {},
+        },
+      ],
+      then: [],
+    });
+    redigest(manifest);
+
+    const index = indexApplication(manifest);
+    const missing: DesignRef = { kind: "query", concept: "Selecting", query: "_missing" };
+    expect(index.inventory).not.toContainEqual(missing);
+    expect(index.referencedOnly).toEqual([missing]);
+    expect(index.nodes).toContainEqual(missing);
+    expect(index.issues).toContainEqual(
+      expect.objectContaining({ code: "UNKNOWN_REFERENCE", severity: "error", ref: missing }),
+    );
+
+    const trace = traceApplicationImpact(index, [missing]);
+    const context = contextForImpact(manifest, index, trace);
+    expect(context.referencedOnly).toEqual([missing]);
+  });
+
+  test("owns only listed endpoint stages and generated hash descendants", () => {
+    const manifest = fixture();
+    manifest.application.reactions.push({
+      name: "Select:manual",
+      when: [],
+      where: [],
+      then: [],
+    });
+    redigest(manifest);
+
+    const endpointStages = indexApplication(manifest).edges.filter(
+      ({ relation }) => relation === "endpoint-stage",
+    );
+    expect(endpointStages.map(({ to }) => to)).toEqual(
+      expect.arrayContaining([
+        { kind: "reaction", reaction: "Select" },
+        { kind: "reaction", reaction: "Select#2" },
+      ]),
+    );
+    expect(endpointStages).toHaveLength(2);
+    expect(endpointStages).not.toContainEqual(
+      expect.objectContaining({ to: { kind: "reaction", reaction: "Select:manual" } }),
+    );
+  });
+
+  test("diagnoses an endpoint whose declared stage family is absent", () => {
+    const manifest = fixture();
+    manifest.endpoints[0].reactions = ["MissingStage"];
+    redigest(manifest);
+
+    expect(indexApplication(manifest).issues).toContainEqual(
+      expect.objectContaining({
+        code: "UNRESOLVED_ENDPOINT_STAGE",
+        severity: "warning",
+        ref: { kind: "endpoint", endpoint: "Select", path: "/selections/choose" },
+      }),
+    );
+  });
+
+  test("rejects malformed V5 and mismatched result compositions", () => {
+    const malformed = fixture();
+    malformed.digest = "stale";
+    expect(() => indexApplication(malformed)).toThrow(/canonical digest/);
+
+    const firstManifest = fixture();
+    const firstIndex = indexApplication(firstManifest);
+    const firstTrace = traceApplicationImpact(firstIndex, [choose]);
+    const secondManifest = fixture();
+    secondManifest.computations.push({ name: "another computation", source: "vocabulary" });
+    redigest(secondManifest);
+    expect(() => contextForImpact(secondManifest, firstIndex, firstTrace)).toThrow(
+      /different application manifest/,
+    );
+
+    const malformedIndex = structuredClone(firstIndex);
+    (malformedIndex.provenance.analyzer as { version: string }).version = "0.0.0";
+    expect(() => traceApplicationImpact(malformedIndex, [choose])).toThrow(/different analyzer/);
+  });
+
+  test("enforces pre-abort and every hard graph construction limit without partial results", () => {
+    const abort = new AbortController();
+    abort.abort("stop");
+    expect(() => indexApplication(fixture(), { signal: abort.signal })).toThrow(
+      AnalysisAbortedError,
+    );
+    const baseline = indexApplication(fixture());
+    for (const [limit, maximum] of [
+      ["maxGraphNodes", baseline.resourceUsage.graphNodes - 1],
+      ["maxGraphEdges", baseline.resourceUsage.graphEdges - 1],
+      ["maxDiagnostics", baseline.resourceUsage.diagnostics - 1],
+    ] as const) {
+      let caught: unknown;
+      try {
+        indexApplication(fixture(), { limits: { [limit]: maximum } });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(AnalysisLimitError);
+      expect(caught).toMatchObject({ limit, maximum, attempted: maximum + 1 });
+    }
   });
 
   test("traces one deterministic causal and standing-state impact closure", () => {
@@ -482,6 +748,12 @@ describe("application impact analysis", () => {
       expect.objectContaining({ relation: "action-trigger" }),
       expect.objectContaining({ relation: "provenance-trigger" }),
     ]);
+    expect(trace).toMatchObject({
+      format: "sync-engine.impact-trace",
+      version: 2,
+      manifestDigest: index.manifestDigest,
+      complete: true,
+    });
   });
 
   test("preloads only traced facts and their direct supporting contracts", () => {
@@ -509,16 +781,51 @@ describe("application impact analysis", () => {
       ref: choose,
       roles: ["seed", "affected", "support"],
     });
+    expect(context).toMatchObject({
+      format: "sync-engine.impact-context",
+      version: 2,
+      complete: true,
+      wire: {
+        endpoints: [{ path: "/selections/choose" }],
+        appWide: ["UNAVAILABLE"],
+      },
+    });
+    expect(context.computations).toContainEqual(
+      expect.objectContaining({ name: "ge", source: "standard" }),
+    );
+    expect(context.computations.map(({ name }) => name)).not.toContain("unused vocabulary");
+    expect(context.conceptImplementations.map(({ concept }) => concept)).toEqual([
+      "Alerting",
+      "Discussing",
+      "Selecting",
+    ]);
   });
 
   test("reports unknown seeds and explicit trace limits", () => {
-    const index = indexApplication(fixture());
+    const manifest = fixture();
+    const index = indexApplication(manifest);
     const unknown = traceApplicationImpact(index, [{ kind: "reaction", reaction: "Missing" }]);
-    expect(unknown.issues).toContainEqual(expect.objectContaining({ code: "UNKNOWN_SEED" }));
+    expect(unknown.issues).toContainEqual(
+      expect.objectContaining({
+        code: "UNKNOWN_SEED",
+        severity: "error",
+        suggestions: expect.arrayContaining([{ kind: "reaction", reaction: "Select" }]),
+      }),
+    );
+    expect(
+      unknown.issues
+        .find(({ code }) => code === "UNKNOWN_SEED")
+        ?.suggestions?.every(({ kind }) => kind === "reaction"),
+    ).toBe(true);
+    expect(unknown.complete).toBe(false);
 
     const limited = traceApplicationImpact(index, [choose], { maxDepth: 0, maxNodes: 1 });
     expect(limited.affected).toHaveLength(1);
-    expect(limited.issues).toContainEqual(expect.objectContaining({ code: "TRACE_LIMIT_REACHED" }));
+    expect(limited.issues).toContainEqual(
+      expect.objectContaining({ code: "TRACE_LIMIT_REACHED", severity: "warning" }),
+    );
+    expect(limited.complete).toBe(false);
+    expect(contextForImpact(manifest, index, limited).complete).toBe(false);
 
     const seedLimited = traceApplicationImpact(
       index,
@@ -548,7 +855,12 @@ describe("application impact analysis", () => {
         validators: { input: false, output: false },
       },
     ];
-    const program = programFor({ "app.ts": applicationSource });
+    redigest(manifest);
+    const selectedSource = applicationSource.replace(
+      "Select: SelectEndpoint,",
+      "Select: SelectReaction,\n    ChooseEndpoint,",
+    );
+    const program = programFor({ "app.ts": selectedSource });
     const sourceIndex = indexApplicationSources({
       manifest,
       program,
@@ -559,16 +871,51 @@ describe("application impact analysis", () => {
     const action = sourceIndex.entries.find(
       ({ ref }) => ref.kind === "action" && ref.concept === "Selecting" && ref.action === "choose",
     );
-    expect(action?.sources.map(({ role }) => role)).toEqual(["implementation", "specification"]);
+    expect(action?.sources.map(({ role }) => role)).toEqual([
+      "canonical-contract",
+      "selected-implementation",
+      "specification",
+    ]);
     expect(action?.sources.every(({ range }) => !range.path.startsWith("/"))).toBe(true);
     expect(action?.sources.every(({ digest }) => /^[a-f0-9]{64}$/.test(digest))).toBe(true);
+    expect(sourceIndex).toMatchObject({
+      format: "sync-engine.application-source-index",
+      version: 2,
+      manifestDigest: manifest.digest,
+      provenance: { manifest: { version: 5, digest: manifest.digest } },
+    });
+    expect(sourceIndex.documents).toEqual([
+      expect.objectContaining({
+        path: "app.ts",
+        length: selectedSource.length,
+        byteLength: Buffer.byteLength(selectedSource, "utf8"),
+      }),
+      expect.objectContaining({
+        path: "spec.md",
+        length: selectingSpec.length,
+        byteLength: Buffer.byteLength(selectingSpec, "utf8"),
+      }),
+    ]);
 
     const select = sourceIndex.entries.find(
       ({ ref }) => ref.kind === "reaction" && ref.reaction === "Select",
     );
-    expect(select?.sources[0]?.text).toContain("export const Select = react");
+    expect(select?.sources[0]?.text).toContain("SelectReaction = react");
     const endpoint = sourceIndex.entries.find(({ ref }) => ref.kind === "endpoint");
-    expect(endpoint?.sources[0]?.text).toContain("export const ChooseEndpoint = endpoint");
+    expect(endpoint?.sources[0]?.text).toContain("ChooseEndpoint = endpoint");
+    expect(
+      sourceIndex.entries.find(
+        ({ ref }) => ref.kind === "concept" && ref.concept === "RequestBoundary",
+      )?.sources,
+    ).toEqual([]);
+    expect(
+      sourceIndex.entries.find(
+        ({ ref }) => ref.kind === "computation" && ref.computation === "among",
+      )?.sources,
+    ).toEqual([]);
+    expect(sourceIndex.issues).not.toContainEqual(
+      expect.objectContaining({ ref: { kind: "concept", concept: "RequestBoundary" } }),
+    );
 
     const index = indexApplication(manifest);
     const trace = traceApplicationImpact(index, [choose]);
@@ -581,10 +928,9 @@ describe("application impact analysis", () => {
 
   test("reports ambiguous declarations rather than selecting by source order", () => {
     const manifest = fixture();
-    manifest.endpoints = [];
     const duplicate = applicationSource.replace(
-      "export const Select = react",
-      "export const Select = react",
+      "export const SelectReaction = react",
+      "export const SelectReaction = react",
     );
     const sourceIndex = indexApplicationSources({
       manifest,
@@ -595,13 +941,14 @@ describe("application impact analysis", () => {
 
     expect(sourceIndex.issues).toContainEqual(
       expect.objectContaining({
-        code: "AMBIGUOUS_DESIGN_SOURCE",
-        ref: { kind: "reaction", reaction: "Select" },
+        code: "AMBIGUOUS_ASSEMBLY_SOURCE",
+        severity: "warning",
       }),
     );
     expect(
-      sourceIndex.entries.some(({ ref }) => ref.kind === "reaction" && ref.reaction === "Select"),
-    ).toBe(false);
+      sourceIndex.entries.find(({ ref }) => ref.kind === "reaction" && ref.reaction === "Select")
+        ?.sources,
+    ).toEqual([]);
   });
 
   test("compares specifications independent of object key insertion order", () => {
@@ -617,6 +964,7 @@ describe("application impact analysis", () => {
       format: parsed.format,
     } as typeof parsed;
     manifest.concepts.find(({ name }) => name === "Selecting")!.specification = reordered;
+    redigest(manifest);
     const sourceIndex = indexApplicationSources({
       manifest,
       program: programFor({ "app.ts": applicationSource }),
@@ -627,6 +975,24 @@ describe("application impact analysis", () => {
     expect(sourceIndex.issues).not.toContainEqual(
       expect.objectContaining({ code: "SPECIFICATION_MISMATCH" }),
     );
+  });
+
+  test("enforces deduplicated source anchor and UTF-8 text limits", () => {
+    const options = {
+      manifest: fixture(),
+      program: programFor({ "app.ts": applicationSource }),
+      projectRoot: "/project",
+      readFile: (path: string) => (path === "/project/spec.md" ? selectingSpec : undefined),
+    };
+    expect(() => indexApplicationSources({ ...options, limits: { maxSourceAnchors: 0 } })).toThrow(
+      AnalysisLimitError,
+    );
+    expect(() => indexApplicationSources({ ...options, limits: { maxSourceAnchors: 10 } })).toThrow(
+      AnalysisLimitError,
+    );
+    expect(() =>
+      indexApplicationSources({ ...options, limits: { maxSourceTextBytes: 1 } }),
+    ).toThrow(AnalysisLimitError);
   });
 
   test("diagnoses a registered specification that cannot be read", () => {
@@ -640,6 +1006,7 @@ describe("application impact analysis", () => {
     expect(sourceIndex.issues).toContainEqual(
       expect.objectContaining({
         code: "SPECIFICATION_UNREADABLE",
+        severity: "warning",
         ref: { kind: "concept", concept: "Selecting" },
       }),
     );
@@ -661,16 +1028,24 @@ describe("application impact analysis", () => {
 
     expect(first).toMatchObject({
       format: "sync-engine.application-project-analysis",
-      version: 1,
+      version: 2,
+      manifestDigest: manifest.digest,
       provenance: {
+        analyzer: { name: "@mit-sdg/sync-engine-analysis" },
+        manifest: {
+          format: "sync-engine.application-manifest",
+          version: 5,
+          digest: manifest.digest,
+          generator: manifest.generator,
+        },
         sourceRevision: "revision-1",
         manifestSourceRevision: "revision-1",
         manifestDigest: manifest.digest,
         tsconfigPath: "tsconfig.json",
         typescriptVersion: ts.version,
       },
-      applicationIndex: { format: "sync-engine.application-index", version: 1 },
-      sourceIndex: { format: "sync-engine.application-source-index", version: 1 },
+      applicationIndex: { format: "sync-engine.application-index", version: 2 },
+      sourceIndex: { format: "sync-engine.application-source-index", version: 2 },
     });
     expect(first.provenance.files).toEqual(second.provenance.files);
     expect(first.provenance.sourceDigest).toBe(second.provenance.sourceDigest);
@@ -691,19 +1066,41 @@ describe("application impact analysis", () => {
     expect(first.diagnostics).toContainEqual(
       expect.objectContaining({
         phase: "semantic",
+        severity: "error",
         category: "error",
         code: 2322,
         path: "src/diagnostic.ts",
         line: 1,
       }),
     );
+    expect(first.manifestDiagnostics).toEqual(manifest.diagnostics);
+    expect(first.resourceUsage).toMatchObject({
+      graphNodes: first.applicationIndex.nodes.length,
+      graphEdges: first.applicationIndex.edges.length,
+      projectFiles: first.provenance.files.length,
+    });
+    expect(first.sourceIndex.documents).toContainEqual(
+      expect.objectContaining({
+        path: "src/selecting.md",
+        length: selectingSpec.length,
+        byteLength: Buffer.byteLength(selectingSpec, "utf8"),
+      }),
+    );
+    expect(applicationProjectAnalysisDigest(first)).toBe(applicationProjectAnalysisDigest(second));
+    expect(applicationProjectAnalysisDigest(first)).toMatch(/^[a-f0-9]{64}$/);
+    expect(() =>
+      applicationProjectAnalysisDigest({
+        ...first,
+        provenance: { ...first.provenance, sourceRevision: "revision-2" },
+      }),
+    ).toThrow(/revisions differ/);
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
 
     const select = first.sourceIndex.entries.find(
       ({ ref }) => ref.kind === "reaction" && ref.reaction === "Select",
     );
     expect(select?.sources[0]?.range.path).toBe("src/reactions.ts");
-    expect(select?.sources[0]?.text).toContain("export const Select = react");
+    expect(select?.sources[0]?.text).toContain("Select = react");
 
     const endpoint = first.sourceIndex.entries.find(({ ref }) => ref.kind === "endpoint");
     const endpointSource = endpoint?.sources[0];
@@ -745,6 +1142,17 @@ describe("application impact analysis", () => {
     expect(() => loadApplicationProject({ ...options, tsconfigPath: "../tsconfig.json" })).toThrow(
       /tsconfigPath escapes repositoryRoot/,
     );
+    const abort = new AbortController();
+    abort.abort();
+    expect(() => loadApplicationProject({ ...options, signal: abort.signal })).toThrow(
+      AnalysisAbortedError,
+    );
+    expect(() => loadApplicationProject({ ...options, limits: { maxProjectFiles: 1 } })).toThrow(
+      AnalysisLimitError,
+    );
+    expect(() =>
+      loadApplicationProject({ ...options, limits: { maxProjectFileBytes: 1 } }),
+    ).toThrow(AnalysisLimitError);
 
     const changingPath = join(repositoryRoot, "src/reactions.ts");
     let reactionReads = 0;

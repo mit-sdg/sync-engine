@@ -3,6 +3,7 @@ import { chmod, cp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { filesBelow } from "../src/command/files-below.ts";
+import { writeGuidanceResource } from "./guidance.ts";
 import { workspaceBuildOrder, workspaceById, workspacePath, type Workspace } from "./workspaces.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -69,6 +70,9 @@ async function rewriteCoreAliases(workspace: Workspace): Promise<void> {
 async function buildWorkspace(workspace: Workspace): Promise<void> {
   const source = workspacePath(root, workspace, workspace.sourceDirectory);
   const dist = workspacePath(root, workspace, workspace.distDirectory);
+  const guidanceResource =
+    workspace.id === "analysis" ? resolve(source, "guidance/guidance-resource.json") : undefined;
+  if (guidanceResource !== undefined) await writeGuidanceResource(root, guidanceResource);
   await rejectForbiddenWorkspaceImports(workspace, source, [".ts"]);
   await rm(dist, { recursive: true, force: true });
   execFileSync(
@@ -85,6 +89,9 @@ async function buildWorkspace(workspace: Workspace): Promise<void> {
   );
   await rewriteCoreAliases(workspace);
   await rejectForbiddenWorkspaceImports(workspace, dist, [".js", ".d.ts"]);
+  if (guidanceResource !== undefined) {
+    await cp(guidanceResource, resolve(dist, "guidance/guidance-resource.json"));
+  }
 
   if (workspace.scaffold !== undefined) {
     await cp(

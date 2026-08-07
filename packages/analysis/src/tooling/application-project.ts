@@ -1,23 +1,42 @@
 import { createHash } from "node:crypto";
-import { realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { Worker } from "node:worker_threads";
 import {
   validateApplicationManifest,
-  type ApplicationManifestV4,
+  type ApplicationDiagnostic,
+  type ApplicationManifestV5,
 } from "@mit-sdg/sync-engine/tooling";
 import ts from "typescript";
-import { indexApplication, type ApplicationIndex } from "./application-impact.ts";
-import { indexApplicationSources, type ApplicationSourceIndex } from "./source-index.ts";
+import { indexApplicationWithController, type ApplicationIndex } from "./application-impact.ts";
+import {
+  AnalysisAbortedError,
+  AnalysisController,
+  AnalysisLimitError,
+  type AnalysisOptions,
+  type AnalysisResourceUsage,
+  type AnalysisSeverity,
+} from "./analysis-foundation.ts";
+import { validateApplicationProjectAnalysis } from "./application-project-format.ts";
+import { analysisProvenance, type AnalysisProvenance } from "./analysis-provenance.ts";
+import {
+  indexApplicationSourcesWithController,
+  type ApplicationSourceIndex,
+  type SourceAttributionRoot,
+} from "./source-index.ts";
+import { loadTypeScriptProjectGraph } from "./typescript-project.ts";
 
-export interface LoadApplicationProjectOptions {
+export interface LoadApplicationProjectOptions extends AnalysisOptions {
   readonly repositoryRoot: string;
   readonly tsconfigPath: string;
   readonly sourceRevision: string;
-  readonly manifest: ApplicationManifestV4;
+  readonly manifest: ApplicationManifestV5;
   readonly manifestSourceRevision: string;
   readonly expectedManifestDigest: string;
   readonly readFile?: (absolutePath: string) => string | undefined;
+  readonly sourceRoots?: readonly SourceAttributionRoot[];
 }
+
+/** Filesystem-backed options accepted by the cancellable worker API. */
+export type AnalyzeApplicationProjectOptions = Omit<LoadApplicationProjectOptions, "readFile">;
 
 export interface ApplicationProjectFile {
   /** POSIX path relative to the resolved repository root. */
@@ -36,6 +55,9 @@ export type ApplicationProjectDiagnosticPhase =
 export type ApplicationProjectDiagnosticCategory = "warning" | "error" | "suggestion" | "message";
 
 export interface ApplicationProjectDiagnosticRelatedInformation {
+  /** Normalized analysis severity. */
+  readonly severity: AnalysisSeverity;
+  /** Exact TypeScript diagnostic category. */
   readonly category: ApplicationProjectDiagnosticCategory;
   readonly code: number;
   readonly message: string;
@@ -50,10 +72,12 @@ export interface ApplicationProjectDiagnosticRelatedInformation {
 /** Plain-data TypeScript diagnostic with one stable collection phase. */
 export interface ApplicationProjectDiagnostic extends ApplicationProjectDiagnosticRelatedInformation {
   readonly phase: ApplicationProjectDiagnosticPhase;
+  /** Project-relative config that produced this diagnostic. */
+  readonly projectConfigPath?: string;
   readonly relatedInformation?: readonly ApplicationProjectDiagnosticRelatedInformation[];
 }
 
-export interface ApplicationProjectProvenance {
+export interface ApplicationProjectProvenance extends AnalysisProvenance {
   readonly sourceRevision: string;
   readonly manifestSourceRevision: string;
   readonly manifestDigest: string;
@@ -61,6 +85,7 @@ export interface ApplicationProjectProvenance {
   readonly sourceDigest: string;
   readonly tsconfigPath: string;
   readonly typescriptVersion: string;
+  /** Every transitive referenced config in deterministic ordinal path order. */
   readonly projectReferences: readonly string[];
   readonly files: readonly ApplicationProjectFile[];
 }
@@ -68,22 +93,35 @@ export interface ApplicationProjectProvenance {
 /** One static, checkout-bound analysis without an executable project value. */
 export interface ApplicationProjectAnalysis {
   readonly format: "sync-engine.application-project-analysis";
-  readonly version: 1;
+  readonly version: 2;
+  readonly manifestDigest: string;
   readonly provenance: ApplicationProjectProvenance;
   readonly diagnostics: readonly ApplicationProjectDiagnostic[];
+  readonly manifestDiagnostics: readonly ApplicationDiagnostic[];
   readonly applicationIndex: ApplicationIndex;
   readonly sourceIndex: ApplicationSourceIndex;
+  readonly resourceUsage: AnalysisResourceUsage;
 }
 
-interface ReadPath {
-  readonly absolute: string;
-  readonly repositoryFile: boolean;
+interface WorkerSuccess {
+  readonly type: "success";
+  readonly analysis: ApplicationProjectAnalysis;
 }
 
-interface ReadSnapshot extends ReadPath {
-  readonly text: string | undefined;
-  readonly digest: string | undefined;
+interface WorkerFailure {
+  readonly type: "error";
+  readonly error: {
+    readonly name: string;
+    readonly message: string;
+    readonly stack?: string;
+    readonly code?: string;
+    readonly limit?: keyof NonNullable<LoadApplicationProjectOptions["limits"]>;
+    readonly maximum?: number;
+    readonly attempted?: number;
+  };
 }
+
+type WorkerResponse = WorkerSuccess | WorkerFailure;
 
 const PHASE_RANK: Record<ApplicationProjectDiagnosticPhase, number> = {
   config: 0,
@@ -100,32 +138,19 @@ const CATEGORY_NAME: Record<ts.DiagnosticCategory, ApplicationProjectDiagnosticC
   [ts.DiagnosticCategory.Message]: "message",
 };
 
+const CATEGORY_SEVERITY: Record<ts.DiagnosticCategory, AnalysisSeverity> = {
+  [ts.DiagnosticCategory.Warning]: "warning",
+  [ts.DiagnosticCategory.Error]: "error",
+  [ts.DiagnosticCategory.Suggestion]: "info",
+  [ts.DiagnosticCategory.Message]: "info",
+};
+
 function ordinal(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function portablePath(path: string): string {
-  return path.split(sep).join("/");
-}
-
 function digest(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
-}
-
-function scriptKind(fileName: string): ts.ScriptKind {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith(".tsx")) return ts.ScriptKind.TSX;
-  if (lower.endsWith(".jsx")) return ts.ScriptKind.JSX;
-  if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs")) {
-    return ts.ScriptKind.JS;
-  }
-  if (lower.endsWith(".json")) return ts.ScriptKind.JSON;
-  return ts.ScriptKind.TS;
-}
-
-function pathInside(root: string, candidate: string): boolean {
-  const path = relative(root, candidate);
-  return path === "" || (!path.startsWith(`..${sep}`) && path !== ".." && !isAbsolute(path));
 }
 
 function requiredString(value: unknown, name: string): asserts value is string {
@@ -134,39 +159,52 @@ function requiredString(value: unknown, name: string): asserts value is string {
   }
 }
 
-function resolveExisting(path: string, label: string): string {
-  try {
-    return realpathSync(resolve(path));
-  } catch (error) {
-    throw new Error(`${label} could not be resolved: ${resolve(path)}`, { cause: error });
-  }
-}
-
-function projectPath(repositoryRoot: string, path: string): string {
-  return portablePath(relative(repositoryRoot, path)) || ".";
+function diagnosticDetailKey(detail: ApplicationProjectDiagnosticRelatedInformation): string {
+  return JSON.stringify([
+    detail.path ?? "",
+    detail.startOffset ?? -1,
+    detail.endOffset ?? -1,
+    detail.code,
+    detail.severity,
+    detail.category,
+    detail.source ?? "",
+    detail.message,
+    detail.line ?? -1,
+    detail.column ?? -1,
+  ]);
 }
 
 function diagnosticKey(diagnostic: ApplicationProjectDiagnostic): string {
   return JSON.stringify([
     PHASE_RANK[diagnostic.phase],
-    diagnostic.path ?? "",
-    diagnostic.startOffset ?? -1,
-    diagnostic.endOffset ?? -1,
+    diagnostic.projectConfigPath ?? "",
+    diagnosticDetailKey(diagnostic),
+    diagnostic.relatedInformation?.map(diagnosticDetailKey) ?? [],
+  ]);
+}
+
+function manifestDiagnosticKey(diagnostic: ApplicationDiagnostic): string {
+  return JSON.stringify([
+    diagnostic.severity,
     diagnostic.code,
-    diagnostic.category,
-    diagnostic.source ?? "",
+    diagnostic.definition.kind,
+    diagnostic.definition.name,
+    diagnostic.endpoint?.name ?? "",
+    diagnostic.endpoint?.path ?? "",
     diagnostic.message,
-    diagnostic.relatedInformation ?? [],
   ]);
 }
 
 /**
- * Load and analyze a TypeScript project as source data only. This never imports
- * the project or interprets a manifest-producing configuration module.
+ * Load and analyze a TypeScript project as source data only. This synchronous
+ * expert primitive supports custom reads and observes cancellation at compiler
+ * and deterministic checkpoints; `createProgram` and config parsing are not
+ * timer-preemptive.
  */
 export function loadApplicationProject(
   options: LoadApplicationProjectOptions,
 ): ApplicationProjectAnalysis {
+  const controller = new AnalysisController(options);
   requiredString(options.repositoryRoot, "repositoryRoot");
   requiredString(options.tsconfigPath, "tsconfigPath");
   requiredString(options.sourceRevision, "sourceRevision");
@@ -174,21 +212,6 @@ export function loadApplicationProject(
   requiredString(options.expectedManifestDigest, "expectedManifestDigest");
   if (options.readFile !== undefined && typeof options.readFile !== "function") {
     throw new Error("readFile must be a function when supplied");
-  }
-
-  const repositoryRoot = resolveExisting(options.repositoryRoot, "repositoryRoot");
-  if (!statSync(repositoryRoot).isDirectory()) {
-    throw new Error(`repositoryRoot is not a directory: ${repositoryRoot}`);
-  }
-  const unresolvedConfig = isAbsolute(options.tsconfigPath)
-    ? resolve(options.tsconfigPath)
-    : resolve(repositoryRoot, options.tsconfigPath);
-  if (!pathInside(repositoryRoot, unresolvedConfig)) {
-    throw new Error(`tsconfigPath escapes repositoryRoot: ${options.tsconfigPath}`);
-  }
-  const configPath = resolveExisting(unresolvedConfig, "tsconfigPath");
-  if (!pathInside(repositoryRoot, configPath)) {
-    throw new Error(`tsconfigPath resolves outside repositoryRoot: ${options.tsconfigPath}`);
   }
 
   const manifest = options.manifest;
@@ -203,224 +226,38 @@ export function loadApplicationProject(
       `expectedManifestDigest ${JSON.stringify(options.expectedManifestDigest)} does not match manifest digest ${JSON.stringify(manifest.digest)}`,
     );
   }
-
-  const compilerLibraryRoot = resolveExisting(
-    dirname(ts.getDefaultLibFilePath({})),
-    "TypeScript library root",
-  );
-  const underlyingRead = options.readFile ?? ((path: string) => ts.sys.readFile(path));
-  const snapshots = new Map<string, ReadSnapshot>();
-
-  const readablePath = (path: string, rejectOutside: boolean): ReadPath | undefined => {
-    const absolute = isAbsolute(path) ? resolve(path) : resolve(repositoryRoot, path);
-    const inRepository = pathInside(repositoryRoot, absolute);
-    const inCompiler = pathInside(compilerLibraryRoot, absolute);
-    if (!inRepository && !inCompiler) {
-      if (rejectOutside) throw new Error(`project read escapes repositoryRoot: ${absolute}`);
-      return undefined;
-    }
-
-    let canonical = absolute;
-    if (ts.sys.fileExists(absolute) || ts.sys.directoryExists(absolute)) {
-      canonical = realpathSync(absolute);
-      if (inRepository && !pathInside(repositoryRoot, canonical)) {
-        throw new Error(`project path resolves outside repositoryRoot: ${absolute}`);
-      }
-      if (!inRepository && !pathInside(compilerLibraryRoot, canonical)) {
-        if (rejectOutside)
-          throw new Error(`TypeScript library path resolves outside its root: ${absolute}`);
-        return undefined;
-      }
-    }
-    return {
-      absolute: canonical,
-      repositoryFile:
-        pathInside(repositoryRoot, canonical) && !pathInside(compilerLibraryRoot, canonical),
-    };
-  };
-
-  const immutableRead = (path: string): string | undefined => {
-    const resolved = readablePath(path, true)!;
-    const current = underlyingRead(resolved.absolute);
-    if (current !== undefined && typeof current !== "string") {
-      throw new Error(`readFile returned a non-string value for ${resolved.absolute}`);
-    }
-    const currentDigest = current === undefined ? undefined : digest(current);
-    const previous = snapshots.get(resolved.absolute);
-    if (
-      previous !== undefined &&
-      (previous.digest !== currentDigest || previous.text !== current)
-    ) {
-      const pathLabel = previous.repositoryFile
-        ? projectPath(repositoryRoot, previous.absolute)
-        : previous.absolute;
-      throw new Error(`project file changed during analysis: ${pathLabel}`);
-    }
-    if (previous !== undefined) return previous.text;
-    snapshots.set(resolved.absolute, { ...resolved, text: current, digest: currentDigest });
-    return current;
-  };
-
-  const fileExists = (path: string): boolean => {
-    const candidate = readablePath(path, false);
-    if (candidate === undefined) return false;
-    if (ts.sys.fileExists(candidate.absolute)) return true;
-    return options.readFile === undefined ? false : immutableRead(candidate.absolute) !== undefined;
-  };
-
-  const directoryPath = (path: string): string | undefined => {
-    const candidate = readablePath(path, false);
-    if (candidate === undefined || !ts.sys.directoryExists(candidate.absolute)) return undefined;
-    return candidate.absolute;
-  };
-
-  const readDirectory = (
-    rootDir: string,
-    extensions: readonly string[],
-    excludes: readonly string[] | undefined,
-    includes: readonly string[],
-    depth?: number,
-  ): string[] => {
-    const root = directoryPath(rootDir);
-    return root === undefined
-      ? []
-      : ts.sys.readDirectory(root, extensions, excludes, includes, depth);
-  };
-
-  const parseHost: ts.ParseConfigHost = {
-    useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
-    fileExists,
-    readFile: immutableRead,
-    readDirectory,
-  };
-  const loaded = ts.readConfigFile(configPath, immutableRead);
-  const parsed = ts.parseJsonConfigFileContent(
-    loaded.config ?? {},
-    parseHost,
-    dirname(configPath),
-    undefined,
-    configPath,
-  );
-  const configDiagnostics = [
-    ...(loaded.error === undefined ? [] : [loaded.error]),
-    ...parsed.errors,
+  const manifestDiagnostics = [
+    ...new Map(
+      [...manifest.diagnostics]
+        .sort((left, right) => ordinal(manifestDiagnosticKey(left), manifestDiagnosticKey(right)))
+        .map((diagnostic) => [manifestDiagnosticKey(diagnostic), diagnostic]),
+    ).values(),
   ];
+  for (const _diagnostic of manifestDiagnostics) controller.addDiagnostic();
 
-  const assertProjectPath = (path: string, label: string): void => {
-    const absolute = isAbsolute(path) ? resolve(path) : resolve(dirname(configPath), path);
-    if (!pathInside(repositoryRoot, absolute)) {
-      throw new Error(`${label} escapes repositoryRoot: ${path}`);
-    }
-    if (ts.sys.fileExists(absolute) || ts.sys.directoryExists(absolute)) {
-      const canonical = realpathSync(absolute);
-      if (!pathInside(repositoryRoot, canonical)) {
-        throw new Error(`${label} resolves outside repositoryRoot: ${path}`);
-      }
-    }
-  };
-  for (const fileName of parsed.fileNames) assertProjectPath(fileName, "tsconfig source file");
-  for (const reference of parsed.projectReferences ?? []) {
-    assertProjectPath(reference.path, "tsconfig project reference");
-  }
-  for (const [name, value] of [
-    ["baseUrl", parsed.options.baseUrl],
-    ["rootDir", parsed.options.rootDir],
-    ["outDir", parsed.options.outDir],
-    ["declarationDir", parsed.options.declarationDir],
-    ["outFile", parsed.options.outFile],
-    ["tsBuildInfoFile", parsed.options.tsBuildInfoFile],
-  ] as const) {
-    if (value !== undefined) assertProjectPath(value, `compilerOptions.${name}`);
-  }
-  for (const [name, values] of [
-    ["rootDirs", parsed.options.rootDirs],
-    ["typeRoots", parsed.options.typeRoots],
-  ] as const) {
-    for (const value of values ?? []) assertProjectPath(value, `compilerOptions.${name}`);
-  }
-  const pathsBase = parsed.options.baseUrl ?? dirname(configPath);
-  for (const [alias, targets] of Object.entries(parsed.options.paths ?? {})) {
-    for (const target of targets) {
-      const fixedPrefix = target.slice(
-        0,
-        target.indexOf("*") < 0 ? undefined : target.indexOf("*"),
-      );
-      assertProjectPath(
-        resolve(pathsBase, fixedPrefix || "."),
-        `compilerOptions.paths[${JSON.stringify(alias)}]`,
-      );
-    }
-  }
-
-  const baseHost = ts.createCompilerHost(parsed.options, true);
-  const getSourceFile: ts.CompilerHost["getSourceFile"] = (
-    fileName,
-    languageVersionOrOptions,
-    onError,
-  ) => {
-    let text: string | undefined;
-    try {
-      text = immutableRead(fileName);
-    } catch (error) {
-      onError?.(error instanceof Error ? error.message : String(error));
-      throw error;
-    }
-    if (text === undefined) {
-      onError?.(`File not found: ${fileName}`);
-      return undefined;
-    }
-    return ts.createSourceFile(
-      fileName,
-      text,
-      languageVersionOrOptions,
-      true,
-      scriptKind(fileName),
-    );
-  };
-  const host: ts.CompilerHost = {
-    ...baseHost,
-    getSourceFile,
-    getSourceFileByPath: (fileName, _path, languageVersionOrOptions, onError) =>
-      getSourceFile(fileName, languageVersionOrOptions, onError),
-    getCurrentDirectory: () => repositoryRoot,
-    fileExists,
-    readFile: immutableRead,
-    readDirectory,
-    directoryExists: (path) => directoryPath(path) !== undefined,
-    getDirectories: (path) => {
-      const directory = directoryPath(path);
-      return directory === undefined ? [] : ts.sys.getDirectories(directory);
-    },
-    realpath: (path) => readablePath(path, true)!.absolute,
-  };
-  const program = ts.createProgram({
-    rootNames: parsed.fileNames,
-    options: parsed.options,
-    host,
-    projectReferences: parsed.projectReferences,
-    configFileParsingDiagnostics: configDiagnostics,
+  const graph = loadTypeScriptProjectGraph({
+    repositoryRoot: options.repositoryRoot,
+    tsconfigPath: options.tsconfigPath,
+    readFile: options.readFile,
+    controller,
   });
-
-  const diagnosticPath = (fileName: string): string => {
-    const absolute = isAbsolute(fileName) ? resolve(fileName) : resolve(repositoryRoot, fileName);
-    if (pathInside(repositoryRoot, absolute)) return projectPath(repositoryRoot, absolute);
-    if (pathInside(compilerLibraryRoot, absolute)) {
-      return `typescript/${portablePath(relative(compilerLibraryRoot, absolute))}`;
-    }
-    return portablePath(absolute);
+  const cancellationToken: ts.CancellationToken = {
+    isCancellationRequested: () => controller.signal?.aborted === true,
+    throwIfCancellationRequested: () => controller.checkpoint(),
   };
   const diagnosticDetail = (
     diagnostic: ts.DiagnosticRelatedInformation | ts.Diagnostic,
   ): ApplicationProjectDiagnosticRelatedInformation => {
     const source = "source" in diagnostic ? diagnostic.source : undefined;
     const base = {
+      severity: CATEGORY_SEVERITY[diagnostic.category],
       category: CATEGORY_NAME[diagnostic.category],
       code: diagnostic.code,
       message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
       ...(source === undefined ? {} : { source }),
     };
     if (diagnostic.file === undefined) return base;
-    const path = diagnosticPath(diagnostic.file.fileName);
+    const path = graph.diagnosticPath(diagnostic.file.fileName);
     if (diagnostic.start === undefined) return { ...base, path };
     const start = diagnostic.start;
     const location = diagnostic.file.getLineAndCharacterOfPosition(start);
@@ -435,37 +272,55 @@ export function loadApplicationProject(
   };
   const serializeDiagnostic = (
     phase: ApplicationProjectDiagnosticPhase,
+    projectConfigPath: string,
     diagnostic: ts.Diagnostic,
   ): ApplicationProjectDiagnostic => {
     const detail = diagnosticDetail(diagnostic);
-    const relatedInformation = diagnostic.relatedInformation
-      ?.map(diagnosticDetail)
-      .sort((left, right) => ordinal(JSON.stringify(left), JSON.stringify(right)));
+    const relatedInformation =
+      diagnostic.relatedInformation === undefined
+        ? undefined
+        : [
+            ...new Map(
+              diagnostic.relatedInformation
+                .map(diagnosticDetail)
+                .sort((left, right) =>
+                  ordinal(diagnosticDetailKey(left), diagnosticDetailKey(right)),
+                )
+                .map((related) => [diagnosticDetailKey(related), related]),
+            ).values(),
+          ];
     return {
       phase,
+      projectConfigPath,
       ...detail,
       ...(relatedInformation === undefined || relatedInformation.length === 0
         ? {}
         : { relatedInformation }),
     };
   };
-  const collected: ApplicationProjectDiagnostic[] = [
-    ...program
-      .getConfigFileParsingDiagnostics()
-      .map((diagnostic) => serializeDiagnostic("config", diagnostic)),
-    ...program
-      .getOptionsDiagnostics()
-      .map((diagnostic) => serializeDiagnostic("options", diagnostic)),
-    ...program
-      .getGlobalDiagnostics()
-      .map((diagnostic) => serializeDiagnostic("global", diagnostic)),
-    ...program
-      .getSyntacticDiagnostics()
-      .map((diagnostic) => serializeDiagnostic("syntactic", diagnostic)),
-    ...program
-      .getSemanticDiagnostics()
-      .map((diagnostic) => serializeDiagnostic("semantic", diagnostic)),
-  ];
+  const collected: ApplicationProjectDiagnostic[] = [];
+  for (const { configPath, program } of graph.projects) {
+    controller.checkpoint();
+    const projectConfigPath = graph.projectPath(configPath);
+    collected.push(
+      ...program
+        .getConfigFileParsingDiagnostics()
+        .map((diagnostic) => serializeDiagnostic("config", projectConfigPath, diagnostic)),
+      ...program
+        .getOptionsDiagnostics(cancellationToken)
+        .map((diagnostic) => serializeDiagnostic("options", projectConfigPath, diagnostic)),
+      ...program
+        .getGlobalDiagnostics(cancellationToken)
+        .map((diagnostic) => serializeDiagnostic("global", projectConfigPath, diagnostic)),
+      ...program
+        .getSyntacticDiagnostics(undefined, cancellationToken)
+        .map((diagnostic) => serializeDiagnostic("syntactic", projectConfigPath, diagnostic)),
+      ...program
+        .getSemanticDiagnostics(undefined, cancellationToken)
+        .map((diagnostic) => serializeDiagnostic("semantic", projectConfigPath, diagnostic)),
+    );
+    controller.checkpoint();
+  }
   const diagnostics = [
     ...new Map(
       collected
@@ -473,51 +328,203 @@ export function loadApplicationProject(
         .map((diagnostic) => [diagnosticKey(diagnostic), diagnostic]),
     ).values(),
   ];
+  for (const _diagnostic of diagnostics) controller.addDiagnostic();
 
-  const applicationIndex = indexApplication(manifest);
-  const sourceIndex = indexApplicationSources({
-    manifest,
-    program,
-    projectRoot: repositoryRoot,
-    readFile: immutableRead,
-  });
+  const applicationIndex = indexApplicationWithController(manifest, controller);
+  const sourceIndex = indexApplicationSourcesWithController(
+    {
+      manifest,
+      program: graph.projects.map(({ program }) => program),
+      projectRoot: graph.repositoryRoot,
+      readFile: graph.readFile,
+      sourceRoots: options.sourceRoots,
+      limits: options.limits,
+      signal: options.signal,
+    },
+    applicationIndex,
+    controller,
+  );
 
-  for (const snapshot of snapshots.values()) {
-    if (snapshot.text !== undefined) immutableRead(snapshot.absolute);
-  }
-  const files = [...snapshots.values()]
-    .filter(
-      (snapshot): snapshot is ReadSnapshot & { text: string; digest: string } =>
-        snapshot.repositoryFile && snapshot.text !== undefined && snapshot.digest !== undefined,
-    )
-    .map((snapshot) => ({
-      path: projectPath(repositoryRoot, snapshot.absolute),
-      digest: snapshot.digest,
-    }))
-    .sort((left, right) => ordinal(left.path, right.path));
+  graph.verifyReads();
+  const files = graph.files();
   const sourceDigest = digest(JSON.stringify(files));
-  const projectReferences = (parsed.projectReferences ?? [])
-    .map(({ path }) => {
-      const absolute = isAbsolute(path) ? resolve(path) : resolve(dirname(configPath), path);
-      return projectPath(repositoryRoot, absolute);
-    })
-    .sort(ordinal);
-
-  return {
+  const analysis: ApplicationProjectAnalysis = {
     format: "sync-engine.application-project-analysis",
-    version: 1,
+    version: 2,
+    manifestDigest: manifest.digest,
     provenance: {
+      ...analysisProvenance(manifest),
       sourceRevision: options.sourceRevision,
       manifestSourceRevision: options.manifestSourceRevision,
       manifestDigest: manifest.digest,
       sourceDigest,
-      tsconfigPath: projectPath(repositoryRoot, configPath),
+      tsconfigPath: graph.projectPath(graph.rootConfigPath),
       typescriptVersion: ts.version,
-      projectReferences,
+      projectReferences: graph.projectReferences,
       files,
     },
     diagnostics,
+    manifestDiagnostics,
     applicationIndex,
     sourceIndex,
+    resourceUsage: controller.usage(),
   };
+  validateApplicationProjectAnalysis(analysis);
+  return analysis;
 }
+
+function plainCloneable(value: unknown, path: string, active = new WeakSet<object>()): void {
+  if (
+    value === undefined ||
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new TypeError(`${path} must contain only finite numbers`);
+    return;
+  }
+  if (typeof value !== "object") {
+    throw new TypeError(`${path} must contain only structured-cloneable plain data`);
+  }
+  if (active.has(value)) throw new TypeError(`${path} must not contain cycles`);
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(`${path} must contain only plain objects and arrays`);
+  }
+  active.add(value);
+  try {
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => plainCloneable(entry, `${path}[${index}]`, active));
+      return;
+    }
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") throw new TypeError(`${path} must not contain symbol fields`);
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable) {
+        throw new TypeError(`${path}.${key} must be an enumerable data field`);
+      }
+      plainCloneable(descriptor.value, `${path}.${key}`, active);
+    }
+  } finally {
+    active.delete(value);
+  }
+}
+
+function workerError(value: WorkerFailure["error"]): Error {
+  if (
+    value.code === "ANALYSIS_LIMIT_EXCEEDED" &&
+    value.limit !== undefined &&
+    value.maximum !== undefined &&
+    value.attempted !== undefined
+  ) {
+    return new AnalysisLimitError(value.limit, value.maximum, value.attempted);
+  }
+  const error = new Error(value.message);
+  error.name = value.name || "Error";
+  if (value.stack !== undefined) error.stack = value.stack;
+  if (value.code !== undefined) {
+    Object.defineProperty(error, "code", { value: value.code, enumerable: true });
+  }
+  return error;
+}
+
+/**
+ * Analyze a filesystem project in a Node worker. Aborting terminates the worker,
+ * so no partial snapshot can be returned or retained by this API.
+ */
+export async function analyzeApplicationProject(
+  options: AnalyzeApplicationProjectOptions,
+): Promise<ApplicationProjectAnalysis> {
+  if (options === null || typeof options !== "object" || Array.isArray(options)) {
+    throw new TypeError("options must be a plain object");
+  }
+  const optionsPrototype = Object.getPrototypeOf(options);
+  if (optionsPrototype !== Object.prototype && optionsPrototype !== null) {
+    throw new TypeError("options must be a plain object");
+  }
+  for (const key of Reflect.ownKeys(options)) {
+    if (typeof key !== "string") throw new TypeError("options must not contain symbol fields");
+    const descriptor = Object.getOwnPropertyDescriptor(options, key);
+    if (descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable) {
+      throw new TypeError(`options.${key} must be an enumerable data field`);
+    }
+  }
+  if (Object.hasOwn(options, "readFile")) {
+    throw new TypeError("analyzeApplicationProject does not accept readFile");
+  }
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
+    throw new TypeError("signal must be an AbortSignal when supplied");
+  }
+  if (options.signal?.aborted === true) throw new AnalysisAbortedError(options.signal.reason);
+  const { signal, ...workerOptions } = options;
+  plainCloneable(workerOptions, "options");
+  const clonedOptions = structuredClone(workerOptions);
+  const sourceWorker = new URL(import.meta.url).pathname.endsWith(".ts");
+  const workerUrl = new URL(
+    sourceWorker ? "./application-project-worker.ts" : "./application-project-worker.js",
+    import.meta.url,
+  );
+
+  return await new Promise<ApplicationProjectAnalysis>((resolve, reject) => {
+    const worker = new Worker(workerUrl, {
+      ...(sourceWorker ? { execArgv: ["--experimental-transform-types", "--no-warnings"] } : {}),
+      name: "sync-engine-project-analysis",
+    });
+    let settled = false;
+    const cleanup = (): void => {
+      signal?.removeEventListener("abort", onAbort);
+      worker.removeAllListeners();
+    };
+    const fail = (error: unknown): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const onAbort = (): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      const error = new AnalysisAbortedError(signal?.reason);
+      void worker.terminate().then(
+        () => reject(error),
+        () => reject(error),
+      );
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted === true) {
+      onAbort();
+      return;
+    }
+    worker.once("message", (message: WorkerResponse) => {
+      if (settled) return;
+      if (message === null || typeof message !== "object") {
+        fail(new Error("Project analysis worker returned a malformed response"));
+        return;
+      }
+      if (message.type === "error") {
+        fail(workerError(message.error));
+        return;
+      }
+      try {
+        validateApplicationProjectAnalysis(message.analysis);
+      } catch (error) {
+        fail(error);
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve(message.analysis);
+    });
+    worker.once("error", fail);
+    worker.once("exit", (code) => {
+      if (!settled) fail(new Error(`Project analysis worker exited before responding (${code})`));
+    });
+    worker.postMessage(clonedOptions);
+  });
+}
+
+export { applicationProjectAnalysisDigest } from "./application-project-format.ts";

@@ -61,12 +61,13 @@ grouped under `guide/`.
 
 ## Packages, examples, and policies
 
-| Resource                                                                                            | Scope                                                              |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md) | HTTP companion exports and transport behavior                      |
-| [Reading Circle](../../examples/reading-circle/README.md)                                           | Shortest complete multi-concept application                        |
-| [Operations Room](../../examples/operations-room/README.md)                                         | Selectable reactions, replaceable policy, and staged formers       |
-| [Production HTTP](../../examples/production-http/README.md)                                         | Validation, public errors, limits, correlation, and credentials    |
-| [Support policy](../../SUPPORT.md)                                                                  | Supported versions, runtimes, toolchains, and generated formats    |
-| [Security policy](../../SECURITY.md)                                                                | Vulnerability reporting and the host/application security boundary |
-| [Changelog](../../CHANGELOG.md)                                                                     | Release-specific compatibility and migration                       |
+| Resource                                                                                                    | Scope                                                              |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)         | HTTP companion exports and transport behavior                      |
+| [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md) | Static analysis and revision-bound canonical guidance              |
+| [Reading Circle](../../examples/reading-circle/README.md)                                                   | Shortest complete multi-concept application                        |
+| [Operations Room](../../examples/operations-room/README.md)                                                 | Selectable reactions, replaceable policy, and staged formers       |
+| [Production HTTP](../../examples/production-http/README.md)                                                 | Validation, public errors, limits, correlation, and credentials    |
+| [Support policy](../../SUPPORT.md)                                                                          | Supported versions, runtimes, toolchains, and generated formats    |
+| [Security policy](../../SECURITY.md)                                                                        | Vulnerability reporting and the host/application security boundary |
+| [Changelog](../../CHANGELOG.md)                                                                             | Release-specific compatibility and migration                       |

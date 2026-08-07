@@ -126,12 +126,17 @@ declaration order.
 
 ### `manifest`
 
-Prints `sync-engine.application-manifest` version `4` as canonical JSON. The
+Prints `sync-engine.application-manifest` version `5` as canonical JSON. The
 manifest contains application design, declaration-owned endpoints, input and
 wire contracts, validator-presence flags, structured diagnostics, and a digest
-over those fields. Concept inventories include the parsed authored contract and
-source locations when a specification is present. The manifest excludes
-occurrences, concept State sections, and other runtime state.
+over those fields. It inventories all standard and vocabulary computations,
+including unused vocabulary computations, and records each canonical concept
+class separately from the implementation selected by assembly. Concept member
+roles come from the canonical vocabulary class even when `instances` selects a
+replacement. Concept inventories include the parsed authored contract and source
+locations when a specification is present. The manifest excludes computation
+functions, constructor arguments, floor resources, occurrences, concept State
+sections, source paths, object identity, and other runtime state.
 
 ### `spec`
 

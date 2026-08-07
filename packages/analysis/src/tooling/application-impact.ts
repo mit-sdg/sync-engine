@@ -1,17 +1,34 @@
 import {
   renderReaction,
-  type ApplicationManifestV4,
+  validateApplicationManifest,
+  type ApplicationManifestV5,
+  type ComputationInventoryIR,
+  type ConceptImplementationProvenanceIR,
   type FormerIR,
   type FormerNodeIR,
-  type ManifestEndpointV4,
+  type ManifestEndpointV5,
   type ReactionIR,
   type TriggerIR,
   type UnloweredIR,
   type ViewIR,
   type ViewOpIR,
   type WhereOpIR,
+  type WireContractsIR,
 } from "@mit-sdg/sync-engine/tooling";
 import type { ApplicationSourceIndex, SourceIndexEntry, SourceIndexIssue } from "./source-index.ts";
+import {
+  AnalysisController,
+  usageDelta,
+  type AnalysisOptions,
+  type AnalysisResourceUsage,
+  type AnalysisSeverity,
+} from "./analysis-foundation.ts";
+import {
+  analysisProvenance,
+  assertArtifactProvenance,
+  assertSameProvenance,
+  type AnalysisProvenance,
+} from "./analysis-provenance.ts";
 
 /** One named part of an assembled sync-engine design. */
 export type DesignRef =
@@ -55,27 +72,34 @@ export interface ImpactEdge {
 export type AnalysisIssueCode =
   | "OPAQUE_DEFINITION"
   | "UNRESOLVED_ENDPOINT_STAGE"
+  | "UNKNOWN_REFERENCE"
   | "UNKNOWN_SEED"
   | "TRACE_LIMIT_REACHED";
 
 /** A bounded-analysis limitation that callers should make visible. */
 export interface AnalysisIssue {
   readonly code: AnalysisIssueCode;
+  readonly severity: AnalysisSeverity;
   readonly message: string;
   readonly ref?: DesignRef;
+  readonly suggestions?: readonly DesignRef[];
 }
 
 /** Deterministic dependency and possible-impact data for one exact manifest. */
 export interface ApplicationIndex {
   readonly format: "sync-engine.application-index";
-  readonly version: 1;
+  readonly version: 2;
+  readonly provenance: AnalysisProvenance;
   readonly manifestDigest: string;
+  readonly inventory: readonly DesignRef[];
+  readonly referencedOnly: readonly DesignRef[];
   readonly nodes: readonly DesignRef[];
   readonly edges: readonly ImpactEdge[];
   readonly issues: readonly AnalysisIssue[];
+  readonly resourceUsage: AnalysisResourceUsage;
 }
 
-export interface TraceOptions {
+export interface TraceOptions extends AnalysisOptions {
   /** Maximum number of edges in one witness path. Defaults to 12. */
   readonly maxDepth?: number;
   /** Maximum number of distinct reached nodes, including seeds. Defaults to 500. */
@@ -92,11 +116,14 @@ export interface ImpactTraceEntry {
 /** Bounded possible impact from explicit design seeds. */
 export interface ImpactTrace {
   readonly format: "sync-engine.impact-trace";
-  readonly version: 1;
+  readonly version: 2;
+  readonly provenance: AnalysisProvenance;
   readonly manifestDigest: string;
   readonly seeds: readonly DesignRef[];
   readonly affected: readonly ImpactTraceEntry[];
   readonly issues: readonly AnalysisIssue[];
+  readonly complete: boolean;
+  readonly resourceUsage: AnalysisResourceUsage;
 }
 
 export interface ContextSelection {
@@ -114,19 +141,25 @@ export interface ContextReaction {
 /** Preselected manifest context suitable for an agent or another inspection tool. */
 export interface ContextBundle {
   readonly format: "sync-engine.impact-context";
-  readonly version: 1;
+  readonly version: 2;
+  readonly provenance: AnalysisProvenance;
   readonly manifestDigest: string;
+  readonly complete: boolean;
   readonly selection: readonly ContextSelection[];
-  readonly concepts: ApplicationManifestV4["concepts"];
+  readonly concepts: ApplicationManifestV5["concepts"];
+  readonly conceptImplementations: readonly ConceptImplementationProvenanceIR[];
   readonly reactions: readonly ContextReaction[];
   readonly views: readonly ViewIR[];
   readonly formers: readonly FormerIR[];
-  readonly endpoints: readonly ManifestEndpointV4[];
-  readonly computations: readonly string[];
+  readonly endpoints: readonly ManifestEndpointV5[];
+  readonly computations: readonly ComputationInventoryIR[];
+  readonly wire: WireContractsIR;
+  readonly referencedOnly: readonly DesignRef[];
   readonly sources: readonly SourceIndexEntry[];
   readonly trace: ImpactTrace;
   readonly issues: readonly AnalysisIssue[];
   readonly sourceIssues: readonly SourceIndexIssue[];
+  readonly resourceUsage: AnalysisResourceUsage;
 }
 
 type ConsumerRef =
@@ -179,8 +212,10 @@ function edgeKey(edge: ImpactEdge): string {
 function issueKey(issue: AnalysisIssue): string {
   return JSON.stringify([
     issue.code,
+    issue.severity,
     issue.ref === undefined ? "" : designRefKey(issue.ref),
     issue.message,
+    issue.suggestions?.map(designRefKey) ?? [],
   ]);
 }
 
@@ -216,25 +251,84 @@ function computationRef(computation: string): Extract<DesignRef, { kind: "comput
   return { kind: "computation", computation };
 }
 
-function endpointRef(endpoint: ManifestEndpointV4): Extract<DesignRef, { kind: "endpoint" }> {
+function endpointRef(endpoint: ManifestEndpointV5): Extract<DesignRef, { kind: "endpoint" }> {
   return { kind: "endpoint", endpoint: endpoint.name, path: endpoint.path };
 }
 
-function assertManifest(manifest: ApplicationManifestV4): void {
-  if (manifest.format !== "sync-engine.application-manifest" || manifest.version !== 4) {
-    throw new Error("analysis requires a sync-engine application manifest at version 4");
-  }
-  if (manifest.digest.trim() === "") throw new Error("analysis requires a manifest digest");
+function refKind(ref: DesignRef): DesignRef["kind"] {
+  return ref.kind;
 }
 
-function assertSameManifest(
-  manifestDigest: string,
-  value: { readonly manifestDigest: string },
-  label: string,
-): void {
-  if (manifestDigest !== value.manifestDigest) {
-    throw new Error(`${label} belongs to a different application manifest`);
+function refSearchText(ref: DesignRef): string {
+  switch (ref.kind) {
+    case "concept":
+      return ref.concept;
+    case "action":
+      return `${ref.concept}.${ref.action}`;
+    case "query":
+      return `${ref.concept}.${ref.query}`;
+    case "reaction":
+      return ref.reaction;
+    case "view":
+      return ref.view;
+    case "former":
+      return ref.former;
+    case "computation":
+      return ref.computation;
+    case "endpoint":
+      return `${ref.endpoint} ${ref.path}`;
   }
+}
+
+function editDistance(left: string, right: string): number {
+  const prior = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = prior[0];
+    prior[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const above = prior[rightIndex];
+      prior[rightIndex] = Math.min(
+        prior[rightIndex] + 1,
+        prior[rightIndex - 1] + 1,
+        diagonal + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+      diagonal = above;
+    }
+  }
+  return prior[right.length];
+}
+
+function suggestionScope(seed: DesignRef, candidate: DesignRef): number {
+  if (seed.kind !== candidate.kind) return 2;
+  if (seed.kind === "action" && candidate.kind === "action") {
+    return seed.concept === candidate.concept ? 0 : 1;
+  }
+  if (seed.kind === "query" && candidate.kind === "query") {
+    return seed.concept === candidate.concept ? 0 : 1;
+  }
+  if (seed.kind === "endpoint" && candidate.kind === "endpoint") {
+    return seed.path === candidate.path ? 0 : 1;
+  }
+  return 0;
+}
+
+function suggestionsFor(seed: DesignRef, candidates: Iterable<DesignRef>): DesignRef[] {
+  const needle = refSearchText(seed).toLowerCase();
+  return [...candidates]
+    .filter((candidate) => refKind(candidate) === refKind(seed))
+    .map((candidate) => ({
+      candidate,
+      scope: suggestionScope(seed, candidate),
+      distance: editDistance(needle, refSearchText(candidate).toLowerCase()),
+    }))
+    .sort(
+      (left, right) =>
+        left.scope - right.scope ||
+        left.distance - right.distance ||
+        ordinal(designRefKey(left.candidate), designRefKey(right.candidate)),
+    )
+    .slice(0, 3)
+    .map(({ candidate }) => candidate);
 }
 
 function forEachFormerUse(value: unknown, use: (name: string) => void): void {
@@ -258,17 +352,54 @@ function forEachFormerUse(value: unknown, use: (name: string) => void): void {
 }
 
 /** Build the stable possible-impact graph for one assembled application manifest. */
-export function indexApplication(manifest: ApplicationManifestV4): ApplicationIndex {
-  assertManifest(manifest);
+export function indexApplication(
+  manifest: ApplicationManifestV5,
+  options: AnalysisOptions = {},
+): ApplicationIndex {
+  return indexApplicationWithController(manifest, new AnalysisController(options));
+}
+
+export function indexApplicationWithController(
+  manifest: ApplicationManifestV5,
+  controller: AnalysisController,
+): ApplicationIndex {
+  controller.checkpoint();
+  validateApplicationManifest(manifest);
+  const before = controller.usage();
+  const inventory = new Map<string, DesignRef>();
+  const referencedOnly = new Map<string, DesignRef>();
   const nodes = new Map<string, DesignRef>();
   const edges = new Map<string, ImpactEdge>();
   const issues = new Map<string, AnalysisIssue>();
 
-  const addNode = (ref: DesignRef): void => {
-    nodes.set(designRefKey(ref), ref);
+  const addInventory = (ref: DesignRef): void => {
+    const key = designRefKey(ref);
+    if (!inventory.has(key)) inventory.set(key, ref);
+    if (!nodes.has(key)) {
+      controller.addGraphNode();
+      nodes.set(key, ref);
+    }
   };
   const addIssue = (issue: AnalysisIssue): void => {
-    issues.set(issueKey(issue), issue);
+    const key = issueKey(issue);
+    if (issues.has(key)) return;
+    controller.addDiagnostic();
+    issues.set(key, issue);
+  };
+  const addReference = (ref: DesignRef): void => {
+    const key = designRefKey(ref);
+    if (nodes.has(key)) return;
+    controller.addGraphNode();
+    nodes.set(key, ref);
+    referencedOnly.set(key, ref);
+    const suggestions = suggestionsFor(ref, inventory.values());
+    addIssue({
+      code: "UNKNOWN_REFERENCE",
+      severity: "error",
+      ref,
+      ...(suggestions.length === 0 ? {} : { suggestions }),
+      message: `The reference ${key} occurs in application IR but is absent from manifest inventory.`,
+    });
   };
   const addEdge = (
     from: DesignRef,
@@ -276,11 +407,46 @@ export function indexApplication(manifest: ApplicationManifestV4): ApplicationIn
     relation: ImpactRelation,
     certainty: ImpactCertainty,
   ): void => {
-    addNode(from);
-    addNode(to);
+    addReference(from);
+    addReference(to);
     const edge = { from, to, relation, certainty } as const;
-    edges.set(edgeKey(edge), edge);
+    const key = edgeKey(edge);
+    if (edges.has(key)) return;
+    controller.addGraphEdge();
+    edges.set(key, edge);
   };
+
+  // Inventory must be complete before an IR reference can be classified as referenced-only.
+  for (const concept of manifest.concepts) {
+    controller.checkpoint();
+    addInventory(conceptRef(concept.name));
+    for (const action of concept.actions) addInventory(actionRef(concept.name, action.name));
+    for (const query of concept.queries) addInventory(queryRef(concept.name, query.name));
+  }
+  for (const computation of manifest.computations) {
+    controller.checkpoint();
+    addInventory(computationRef(computation.name));
+  }
+  for (const reaction of manifest.application.reactions) {
+    controller.checkpoint();
+    addInventory(reactionRef(reaction.name));
+  }
+  for (const reaction of manifest.application.unlowered) {
+    controller.checkpoint();
+    addInventory(reactionRef(reaction.name));
+  }
+  for (const view of manifest.application.views) {
+    controller.checkpoint();
+    addInventory(viewRef(view.name));
+  }
+  for (const former of manifest.application.formers) {
+    controller.checkpoint();
+    addInventory(formerRef(former.name));
+  }
+  for (const endpoint of manifest.endpoints) {
+    controller.checkpoint();
+    addInventory(endpointRef(endpoint));
+  }
 
   const addFormerUses = (
     value: unknown,
@@ -350,7 +516,7 @@ export function indexApplication(manifest: ApplicationManifestV4): ApplicationIn
 
   const addReaction = (definition: ReactionIR | UnloweredIR, certainty: ImpactCertainty): void => {
     const owner = reactionRef(definition.name);
-    addNode(owner);
+    addReference(owner);
     const body = "known" in definition ? definition.known : definition;
     for (const trigger of body.when) addTrigger(owner, trigger, certainty);
     for (const operation of body.where) addRead(owner, operation, certainty);
@@ -414,8 +580,9 @@ export function indexApplication(manifest: ApplicationManifestV4): ApplicationIn
   };
 
   for (const concept of manifest.concepts) {
+    controller.checkpoint();
     const conceptNode = conceptRef(concept.name);
-    addNode(conceptNode);
+    addReference(conceptNode);
     for (const action of concept.actions) {
       const actionNode = actionRef(concept.name, action.name);
       addEdge(conceptNode, actionNode, "concept-member", "structural");
@@ -434,24 +601,31 @@ export function indexApplication(manifest: ApplicationManifestV4): ApplicationIn
   }
 
   for (const view of manifest.application.views) {
+    controller.checkpoint();
     const owner = viewRef(view.name);
-    addNode(owner);
+    addReference(owner);
     for (const alternative of view.alternatives) {
       for (const operation of alternative) addRead(owner, operation, "structural");
     }
   }
 
   for (const former of manifest.application.formers) {
+    controller.checkpoint();
     const owner = formerRef(former.name);
-    addNode(owner);
+    addReference(owner);
     addFormerNode(owner, former.body);
   }
 
-  for (const reaction of manifest.application.reactions) addReaction(reaction, "structural");
+  for (const reaction of manifest.application.reactions) {
+    controller.checkpoint();
+    addReaction(reaction, "structural");
+  }
   for (const reaction of manifest.application.unlowered) {
+    controller.checkpoint();
     addReaction(reaction, "opaque");
     addIssue({
       code: "OPAQUE_DEFINITION",
+      severity: "info",
       ref: reactionRef(reaction.name),
       message: `Reaction ${reaction.name} contains local behavior; only its retained known structure is indexed.`,
     });
@@ -461,13 +635,15 @@ export function indexApplication(manifest: ApplicationManifestV4): ApplicationIn
     ({ name }) => name,
   );
   for (const endpoint of manifest.endpoints) {
+    controller.checkpoint();
     const endpointNode = endpointRef(endpoint);
-    addNode(endpointNode);
-    const bases = [...new Set([endpoint.name, ...endpoint.reactions])];
+    addReference(endpointNode);
+    const bases = [...new Set(endpoint.reactions)];
+    for (const base of bases) {
+      if (!reactionNames.includes(base)) addReference(reactionRef(base));
+    }
     const family = reactionNames.filter((name) =>
-      bases.some(
-        (base) => name === base || name.startsWith(`${base}#`) || name.startsWith(`${base}:`),
-      ),
+      bases.some((base) => name === base || name.startsWith(`${base}#`)),
     );
     for (const reaction of family) {
       const reactionNode = reactionRef(reaction);
@@ -477,6 +653,7 @@ export function indexApplication(manifest: ApplicationManifestV4): ApplicationIn
     if (family.length === 0) {
       addIssue({
         code: "UNRESOLVED_ENDPOINT_STAGE",
+        severity: "warning",
         ref: endpointNode,
         message: `Endpoint ${endpoint.name} at ${endpoint.path} has no reaction family in the manifest.`,
       });
@@ -485,13 +662,21 @@ export function indexApplication(manifest: ApplicationManifestV4): ApplicationIn
 
   return {
     format: "sync-engine.application-index",
-    version: 1,
+    version: 2,
+    provenance: analysisProvenance(manifest),
     manifestDigest: manifest.digest,
+    inventory: [...inventory.values()].sort((left, right) =>
+      ordinal(designRefKey(left), designRefKey(right)),
+    ),
+    referencedOnly: [...referencedOnly.values()].sort((left, right) =>
+      ordinal(designRefKey(left), designRefKey(right)),
+    ),
     nodes: [...nodes.values()].sort((left, right) =>
       ordinal(designRefKey(left), designRefKey(right)),
     ),
     edges: [...edges.values()].sort((left, right) => ordinal(edgeKey(left), edgeKey(right))),
     issues: [...issues.values()].sort((left, right) => ordinal(issueKey(left), issueKey(right))),
+    resourceUsage: usageDelta(before, controller.usage()),
   };
 }
 
@@ -514,6 +699,21 @@ export function traceApplicationImpact(
   seeds: readonly DesignRef[],
   options: TraceOptions = {},
 ): ImpactTrace {
+  const controller = new AnalysisController(options);
+  const before = controller.usage();
+  assertArtifactProvenance(index, "application index");
+  if (
+    index.format !== "sync-engine.application-index" ||
+    index.version !== 2 ||
+    !Array.isArray(index.inventory) ||
+    !Array.isArray(index.referencedOnly) ||
+    !Array.isArray(index.nodes) ||
+    !Array.isArray(index.edges) ||
+    !Array.isArray(index.issues)
+  ) {
+    throw new TypeError("application index is not a version-2 application index");
+  }
+  if (!Array.isArray(seeds)) throw new TypeError("seeds must be an array");
   const maxDepth = boundedInteger(options.maxDepth, 12, 0, "maxDepth");
   const maxNodes = boundedInteger(options.maxNodes, 500, 1, "maxNodes");
   const nodes = new Map(index.nodes.map((ref) => [designRefKey(ref), ref]));
@@ -535,26 +735,37 @@ export function traceApplicationImpact(
   const queue: ImpactTraceEntry[] = [];
   let limited = false;
 
+  const addIssue = (issue: AnalysisIssue): void => {
+    const key = issueKey(issue);
+    if (issues.has(key)) return;
+    controller.addDiagnostic();
+    issues.set(key, issue);
+  };
+
   const reportLimit = (): void => {
     if (limited) return;
     limited = true;
     const issue: AnalysisIssue = {
       code: "TRACE_LIMIT_REACHED",
+      severity: "warning",
       message: `Impact tracing stopped at maxDepth ${maxDepth} or maxNodes ${maxNodes}.`,
     };
-    issues.set(issueKey(issue), issue);
+    addIssue(issue);
   };
 
   for (const seed of normalizedSeeds) {
+    controller.checkpoint();
     const key = designRefKey(seed);
     const known = nodes.get(key);
     if (known === undefined) {
       const issue: AnalysisIssue = {
         code: "UNKNOWN_SEED",
+        severity: "error",
         ref: seed,
+        suggestions: suggestionsFor(seed, index.inventory),
         message: `The seed ${key} does not occur in this application index.`,
       };
-      issues.set(issueKey(issue), issue);
+      addIssue(issue);
       continue;
     }
     if (reached.size >= maxNodes) {
@@ -567,6 +778,7 @@ export function traceApplicationImpact(
   }
 
   for (let position = 0; position < queue.length; position += 1) {
+    controller.checkpoint();
     const current = queue[position];
     const outgoing = adjacency.get(designRefKey(current.ref)) ?? [];
     if (current.depth >= maxDepth) {
@@ -592,27 +804,64 @@ export function traceApplicationImpact(
 
   return {
     format: "sync-engine.impact-trace",
-    version: 1,
+    version: 2,
+    provenance: index.provenance,
     manifestDigest: index.manifestDigest,
     seeds: normalizedSeeds,
     affected: [...reached.values()].sort((left, right) =>
       ordinal(designRefKey(left.ref), designRefKey(right.ref)),
     ),
     issues: [...issues.values()].sort((left, right) => ordinal(issueKey(left), issueKey(right))),
+    complete: !limited && ![...issues.values()].some(({ code }) => code === "UNKNOWN_SEED"),
+    resourceUsage: usageDelta(before, controller.usage()),
   };
 }
 
 /** Select complete manifest facts needed to understand one impact trace. */
 export function contextForImpact(
-  manifest: ApplicationManifestV4,
+  manifest: ApplicationManifestV5,
   index: ApplicationIndex,
   trace: ImpactTrace,
   sourceIndex?: ApplicationSourceIndex,
+  options: AnalysisOptions = {},
 ): ContextBundle {
-  assertManifest(manifest);
-  assertSameManifest(manifest.digest, index, "application index");
-  assertSameManifest(manifest.digest, trace, "impact trace");
-  if (sourceIndex !== undefined) assertSameManifest(manifest.digest, sourceIndex, "source index");
+  const controller = new AnalysisController(options);
+  const before = controller.usage();
+  validateApplicationManifest(manifest);
+  assertArtifactProvenance(index, "application index", manifest);
+  if (
+    index.format !== "sync-engine.application-index" ||
+    index.version !== 2 ||
+    !Array.isArray(index.inventory) ||
+    !Array.isArray(index.referencedOnly) ||
+    !Array.isArray(index.nodes) ||
+    !Array.isArray(index.edges) ||
+    !Array.isArray(index.issues)
+  ) {
+    throw new TypeError("application index is not a version-2 application index");
+  }
+  assertSameProvenance(index, trace, "impact trace");
+  if (
+    trace.format !== "sync-engine.impact-trace" ||
+    trace.version !== 2 ||
+    typeof trace.complete !== "boolean" ||
+    !Array.isArray(trace.seeds) ||
+    !Array.isArray(trace.affected) ||
+    !Array.isArray(trace.issues)
+  ) {
+    throw new TypeError("impact trace is not a version-2 impact trace");
+  }
+  if (sourceIndex !== undefined) {
+    assertSameProvenance(index, sourceIndex, "source index");
+    if (
+      sourceIndex.format !== "sync-engine.application-source-index" ||
+      sourceIndex.version !== 2 ||
+      !Array.isArray(sourceIndex.entries) ||
+      !Array.isArray(sourceIndex.issues)
+    ) {
+      throw new TypeError("source index is not a version-2 application source index");
+    }
+  }
 
   const refs = new Map(index.nodes.map((ref) => [designRefKey(ref), ref]));
   const roles = new Map<string, Set<(typeof ROLE_ORDER)[number]>>();
@@ -648,6 +897,7 @@ export function contextForImpact(
   }
 
   for (let position = 0; position < queue.length; position += 1) {
+    controller.checkpoint();
     const key = queue[position];
     const ref = refs.get(key);
     if (ref === undefined) continue;
@@ -688,13 +938,36 @@ export function contextForImpact(
   ].sort((left, right) => ordinal(left.name, right.name));
 
   const combinedIssues = new Map<string, AnalysisIssue>();
-  for (const issue of [...index.issues, ...trace.issues])
-    combinedIssues.set(issueKey(issue), issue);
+  for (const issue of [...index.issues, ...trace.issues]) {
+    const key = issueKey(issue);
+    if (combinedIssues.has(key)) continue;
+    controller.addDiagnostic();
+    combinedIssues.set(key, issue);
+  }
+  const selectedEndpoints = manifest.endpoints
+    .filter((endpoint) => has(endpointRef(endpoint)))
+    .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`));
+  const selectedPaths = new Set(selectedEndpoints.map(({ path }) => path));
+  const sources =
+    sourceIndex?.entries
+      .filter(({ ref }) => selected.has(designRefKey(ref)))
+      .sort((left, right) => ordinal(designRefKey(left.ref), designRefKey(right.ref))) ?? [];
+  for (const entry of sources) {
+    for (const source of entry.sources) {
+      controller.addSourceAnchor(Buffer.byteLength(source.text, "utf8"));
+    }
+  }
+  const sourceIssues =
+    sourceIndex?.issues.filter(({ ref }) => ref === undefined || selected.has(designRefKey(ref))) ??
+    [];
+  for (const _issue of sourceIssues) controller.addDiagnostic();
 
   return {
     format: "sync-engine.impact-context",
-    version: 1,
+    version: 2,
+    provenance: analysisProvenance(manifest),
     manifestDigest: manifest.digest,
+    complete: trace.complete,
     selection: [...roles.entries()]
       .map(([key, selectedRoles]) => ({
         ref: refs.get(key) ?? trace.seeds.find((ref) => designRefKey(ref) === key)!,
@@ -704,6 +977,9 @@ export function contextForImpact(
     concepts: manifest.concepts
       .filter(({ name }) => has(conceptRef(name)))
       .sort((left, right) => ordinal(left.name, right.name)),
+    conceptImplementations: manifest.conceptImplementations
+      .filter(({ concept }) => has(conceptRef(concept)))
+      .sort((left, right) => ordinal(left.concept, right.concept)),
     reactions,
     views: manifest.application.views
       .filter(({ name }) => has(viewRef(name)))
@@ -711,27 +987,23 @@ export function contextForImpact(
     formers: manifest.application.formers
       .filter(({ name }) => has(formerRef(name)))
       .sort((left, right) => ordinal(left.name, right.name)),
-    endpoints: manifest.endpoints
-      .filter((endpoint) => has(endpointRef(endpoint)))
-      .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`)),
-    computations: [...selected]
-      .map((key) => refs.get(key))
-      .filter(
-        (ref): ref is Extract<DesignRef, { kind: "computation" }> => ref?.kind === "computation",
-      )
-      .map(({ computation }) => computation)
-      .sort(ordinal),
-    sources:
-      sourceIndex?.entries
-        .filter(({ ref }) => selected.has(designRefKey(ref)))
-        .sort((left, right) => ordinal(designRefKey(left.ref), designRefKey(right.ref))) ?? [],
+    endpoints: selectedEndpoints,
+    computations: manifest.computations
+      .filter(({ name }) => has(computationRef(name)))
+      .sort((left, right) => ordinal(left.name, right.name)),
+    wire: {
+      endpoints: manifest.wire.endpoints
+        .filter(({ path }) => selectedPaths.has(path))
+        .sort((left, right) => ordinal(left.path, right.path)),
+      appWide: selectedEndpoints.length === 0 ? [] : [...manifest.wire.appWide].sort(ordinal),
+    },
+    referencedOnly: index.referencedOnly.filter((ref) => selected.has(designRefKey(ref))),
+    sources,
     trace,
     issues: [...combinedIssues.values()].sort((left, right) =>
       ordinal(issueKey(left), issueKey(right)),
     ),
-    sourceIssues:
-      sourceIndex?.issues.filter(
-        ({ ref }) => ref === undefined || selected.has(designRefKey(ref)),
-      ) ?? [],
+    sourceIssues,
+    resourceUsage: usageDelta(before, controller.usage()),
   };
 }

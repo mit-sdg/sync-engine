@@ -28,6 +28,8 @@ this contract.
 | Timeout and abort                           | [Cancellation](#cancellation)                                                             |
 | Occurrence logs and restart                 | [Logs, concept implementations, and restart](#logs-concept-implementations-and-restart)   |
 
+<!-- sync-engine-guidance: {"id":"semantics-actions-outcomes","anchor":"actions-refusals-and-faults","authority":"reference","topics":["actions-queries","failure-recovery","runtime-semantics"],"stages":["implementation","operation","repair","verification"]} -->
+
 ## Actions, refusals, and faults
 
 An action occurrence begins when the engine records its ask, before the action
@@ -82,6 +84,8 @@ reaction output patterns cannot bind fields from that scalar. Concept action
 contracts should return object mappings when composition needs their outputs.
 An action return remains successful when its object has a top-level `error`
 field; only a registered refusal produces the refused posture.
+
+<!-- sync-engine-guidance: {"id":"semantics-reactions","anchor":"reactions","authority":"reference","topics":["composition","reactions","reads","runtime-semantics"],"stages":["design","implementation","operation","review","verification"]} -->
 
 ## Reactions
 
@@ -275,6 +279,8 @@ Applications must not use evaluation order as semantic priority. No engine-wide
 lock serializes all concepts or all flows, and the guarantee does not extend
 across processes.
 
+<!-- sync-engine-guidance: {"id":"semantics-reading","anchor":"reading-declarations-govern","authority":"reference","topics":["actions-queries","reads","runtime-semantics"],"stages":["implementation","review","verification"]} -->
+
 ## Reading: declarations govern
 
 A reaction or former `where` block is an orderless conjunction of lines.
@@ -457,6 +463,8 @@ A uniqueness, capacity, first-come, or answer-once decision belongs in the
 action that owns the state. A reaction's `where` is a current observation, not
 an atomic guard. [Ordering and state-read timing](#ordering-and-state-read-timing)
 defines the in-process serialization and cross-process limits.
+
+<!-- sync-engine-guidance: {"id":"semantics-sibling-settlement","anchor":"sibling-paths-and-endpoint-settlement","authority":"reference","topics":["boundaries","reactions","runtime-semantics"],"stages":["design","implementation","review","verification"]} -->
 
 ## Sibling paths and endpoint settlement
 
@@ -657,6 +665,8 @@ The local client serializes and parses input and output before returning it.
 Dates become strings and undefined object fields disappear. Other transports
 define their own projection failures and error codes.
 
+<!-- sync-engine-guidance: {"id":"semantics-generated-wire","anchor":"generated-wire","authority":"reference","topics":["boundaries","generated-artifacts","release-compatibility","verification"],"stages":["implementation","operation","verification"]} -->
+
 ## Generated wire
 
 The authoring guide explains how to [generate the wire
@@ -694,12 +704,24 @@ occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
 format and package SemVer. Artifact planning requires
-`sync-engine.application-manifest` version 4, a 1.x core generator identity,
+`sync-engine.application-manifest` version 5, a 1.x core generator identity,
 and SemVer projector provenance. The core generator identity must name
 `@mit-sdg/sync-engine` at a 1.x version. Projector provenance accepts any
 nonblank package name with any valid SemVer version; projector versions
 are not restricted to 1.x. Generator and projector identities may use
 prerelease versions.
+
+Manifest V5 inventories every installed computation, including the five standard
+relations and vocabulary computations that no registered definition references.
+It records only the computation name, its standard/vocabulary source, and input
+roles when conservative function inspection can recover them. It does not retain
+the function. For concepts, the vocabulary class remains the canonical contract:
+its action/query roles, query cardinalities, and refusal declarations stay
+authoritative when assembly selects a structural replacement. A separate
+implementation inventory records `default`, `initialize`, or `instances`
+selection, plus the core-owned RequestBoundary. A named floor is retained only
+when WeakMap provenance identifies it without ambiguity; omission does not imply
+that no floor was used.
 
 Generated Markdown names its manifest producer, the
 `sync-engine.concept-specification` format version, and its renderer package
@@ -816,6 +838,8 @@ If two reactions answer the same outside request, the boundary accepts the
 first answer and refuses the next with `NOT_PENDING`. Keep race-sensitive
 decisions in concept actions and treat all matching answer paths as live.
 
+<!-- sync-engine-guidance: {"id":"semantics-interpreter-failures","anchor":"failures-between-action-asks","authority":"reference","topics":["failure-recovery","reactions","runtime-semantics"],"stages":["operation","repair","verification"]} -->
+
 ### Failures between action asks
 
 Action faults and former-evaluation faults while forming a consequence have an
@@ -857,6 +881,8 @@ reaction-failure evidence. [Logs, concept implementations, and
 restart](#logs-concept-implementations-and-restart) defines its ordering and state
 consequences.
 
+<!-- sync-engine-guidance: {"id":"semantics-cancellation","anchor":"cancellation","authority":"reference","topics":["boundaries","failure-recovery","operations","runtime-semantics"],"stages":["operation","repair","verification"]} -->
+
 ### Cancellation
 
 An invocation already aborted when it begins does not reach the gateway. While
@@ -884,6 +910,8 @@ when their layer begins waiting. The option is not an absolute deadline shared
 across every layer. Routing or admission time can therefore precede a newly
 started application timeout, and total gateway call time can exceed one stated
 duration.
+
+<!-- sync-engine-guidance: {"id":"semantics-logs-restart","anchor":"logs-concept-implementations-and-restart","authority":"reference","topics":["failure-recovery","operations","security","state-ownership"],"stages":["operation","repair","verification"]} -->
 
 ### Logs, concept implementations, and restart
 

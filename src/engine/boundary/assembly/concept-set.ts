@@ -19,6 +19,7 @@ import { rolesOf } from "@engine/reactions/concepts/introspect";
 import type { CheckedComputationFns, ComputationFn } from "@engine/reads/computations";
 import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
 import { setOwn } from "@engine/utils/own-property";
+import { rememberImplementations } from "./implementation-registry.ts";
 
 type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result
   ? (...args: Args) => Result | PromiseLike<Awaited<Result>>
@@ -79,6 +80,7 @@ export function conceptFloor<
   for (const name of expected) {
     validateConceptImplementation("conceptFloor", name, classes[name], floor.instances[name]);
   }
+  rememberImplementations(floor.instances as Record<string, object>, floor.name);
   return floor;
 }
 
@@ -408,6 +410,7 @@ export function conceptSet<
       );
       setOwn(result, name, implementation);
     }
+    rememberImplementations(result, floor);
     return result;
   };
 

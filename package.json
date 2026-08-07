@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0-beta.7",
   "description": "A TypeScript library for composing independent application behaviors declaratively",
   "keywords": [
     "concept",
@@ -67,21 +67,22 @@
   },
   "scripts": {
     "build": "bun scripts/build.ts",
-    "check": "bun scripts/check-architecture.ts && bun scripts/check-specs.ts && vp check",
-    "coverage": "LOG_LEVEL=error vp test --coverage",
+    "check": "bun scripts/guidance.ts --check && bun scripts/check-architecture.ts && bun scripts/check-specs.ts && vp check",
+    "coverage": "bun scripts/guidance.ts && LOG_LEVEL=error vp test --coverage",
     "declarations:check": "bun run build && bun scripts/declarations.ts check",
     "declarations:pin": "bun run build && bun scripts/declarations.ts pin",
     "example": "bun run build && bun scripts/examples.ts scenario readingCircle",
     "example:http": "bun run build && bun scripts/examples.ts scenario productionHttp",
     "example:operations": "bun run build && bun scripts/examples.ts scenario operationsRoom",
     "examples:check": "bun scripts/examples.ts check",
+    "guidance:generate": "bun scripts/guidance.ts",
     "package:check": "bun scripts/verify-package.ts",
     "prepack": "bun run build",
     "release:check": "bun scripts/check-release.ts",
     "release:update": "bun scripts/update-release-manifests.ts",
     "release:verify": "bun scripts/verify-release.ts",
     "scenario": "bun run build && bun scripts/examples.ts scenario",
-    "test": "LOG_LEVEL=error vp test",
+    "test": "bun scripts/guidance.ts && LOG_LEVEL=error vp test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

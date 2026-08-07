@@ -12,6 +12,7 @@ import type { ConceptInventoryIR } from "@engine/reads/ir";
 import { contractOf } from "./outcomes.ts";
 import {
   callableConceptMember,
+  CONCEPT_MEMBER_ROLES,
   CONCEPT_PROTOCOL,
   conceptMetadataOf,
   conceptProtocolOf,
@@ -100,8 +101,13 @@ export function inventoryOf(concept: object): ConceptInventoryIR {
     } | null
   )?.constructor;
   const metadata = conceptMetadataOf(concept);
-  const purpose = metadata?.purpose ?? authored?.purpose;
-  const principle = metadata?.principle ?? authored?.principle;
+  const canonicalRoles = metadata?.[CONCEPT_MEMBER_ROLES];
+  const purpose =
+    canonicalRoles === undefined ? (metadata?.purpose ?? authored?.purpose) : metadata?.purpose;
+  const principle =
+    canonicalRoles === undefined
+      ? (metadata?.principle ?? authored?.principle)
+      : metadata?.principle;
   if (typeof purpose === "string") inventory.purpose = purpose;
   if (typeof principle === "string") inventory.principle = principle;
   if (metadata?.specification !== undefined) inventory.specification = metadata.specification;
@@ -111,22 +117,24 @@ export function inventoryOf(concept: object): ConceptInventoryIR {
   for (const name of protocol.actions) {
     const member = callableConceptMember(concept, name);
     if (member === undefined) continue;
-    const roles = rolesOf(member);
+    const roles =
+      canonicalRoles?.actions[name] ?? (canonicalRoles === undefined ? rolesOf(member) : undefined);
     const refusals = contractOf(concept, name)?.refusals;
     inventory.actions.push({
       name,
-      ...(roles !== undefined ? { roles } : {}),
+      ...(roles !== undefined ? { roles: [...roles] } : {}),
       ...(refusals !== undefined ? { refusals: [...refusals] } : {}),
     });
   }
   for (const name of protocol.queries) {
     const member = callableConceptMember(concept, name);
     if (member === undefined) continue;
-    const roles = rolesOf(member);
+    const roles =
+      canonicalRoles?.queries[name] ?? (canonicalRoles === undefined ? rolesOf(member) : undefined);
     const promise = queryPromiseOf(concept, name);
     inventory.queries.push({
       name,
-      ...(roles !== undefined ? { roles } : {}),
+      ...(roles !== undefined ? { roles: [...roles] } : {}),
       ...(promise !== undefined ? { returns: promise } : {}),
     });
   }

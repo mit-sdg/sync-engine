@@ -19,6 +19,7 @@ const packageManifest = JSON.parse(validSources.get("package.json") ?? "") as {
   packageManager: string;
 };
 const currentVersion = packageManifest.version;
+const analysisManifest = "packages/analysis/package.json";
 const currentChangelog = validSources.get("CHANGELOG.md") ?? "";
 const changelogVersions = [...currentChangelog.matchAll(/^## \[([^\]]+)\]/gm)].map(
   (match) => match[1] ?? "",
@@ -93,10 +94,16 @@ describe("release source facts", () => {
       manifest.engines.node = "stale";
       manifest.packageManager = "stale";
     });
+    editManifest(sources, analysisManifest, (manifest) => {
+      manifest.private = true;
+      delete manifest.publishConfig;
+      delete manifest.dependencies;
+      manifest.peerDependencies.typescript = "stale";
+    });
 
     expect(checkRelease(sources)).toEqual(
       expect.arrayContaining(
-        [releaseManifestPaths[0], ownedDependencyManifests[0]].map(
+        [releaseManifestPaths[0], analysisManifest, ownedDependencyManifests[0]].map(
           (path) => `${path}: release-owned facts are stale; run bun run release:update`,
         ),
       ),
@@ -105,6 +112,16 @@ describe("release source facts", () => {
     expect(
       JSON.parse(projected.get(ownedDependencyManifests[0]) ?? "").dependencies,
     ).not.toHaveProperty("typescript");
+    const projectedAnalysis = JSON.parse(projected.get(analysisManifest) ?? "") as Record<
+      string,
+      any
+    >;
+    expect(projectedAnalysis).not.toHaveProperty("private");
+    expect(projectedAnalysis.publishConfig).toEqual({ access: "public", tag: "beta" });
+    expect(projectedAnalysis.peerDependencies).toEqual({
+      "@mit-sdg/sync-engine": currentVersion,
+    });
+    expect(projectedAnalysis.dependencies).toEqual({ typescript: ">=6 <7" });
     for (const [path, source] of projected) sources.set(path, source);
     expect(checkRelease(sources)).toEqual([]);
   });
@@ -145,6 +162,16 @@ describe("release source facts", () => {
       "HTTP peer range",
       `        "@mit-sdg/sync-engine": "${currentVersion}"`,
       `        "@mit-sdg/sync-engine": "^${currentVersion}"`,
+    ],
+    [
+      "analysis workspace version",
+      `    "packages/analysis": {\n      "name": "@mit-sdg/sync-engine-analysis",\n      "version": "${currentVersion}"`,
+      `    "packages/analysis": {\n      "name": "@mit-sdg/sync-engine-analysis",\n      "version": "1.0.1"`,
+    ],
+    [
+      "analysis TypeScript runtime dependency",
+      `    "packages/analysis": {\n      "name": "@mit-sdg/sync-engine-analysis",\n      "version": "${currentVersion}",\n      "dependencies": {\n        "typescript": ">=6 <7"`,
+      `    "packages/analysis": {\n      "name": "@mit-sdg/sync-engine-analysis",\n      "version": "${currentVersion}",\n      "dependencies": {\n        "typescript": "workspace:*"`,
     ],
     [
       "core registry resolution",
@@ -192,6 +219,43 @@ describe("release source facts", () => {
     );
   });
 
+  test.each([
+    [
+      "private marker",
+      (manifest: Record<string, any>): void => {
+        manifest.private = true;
+      },
+    ],
+    [
+      "public access",
+      (manifest: Record<string, any>): void => {
+        manifest.publishConfig.access = "restricted";
+      },
+    ],
+    [
+      "repository directory",
+      (manifest: Record<string, any>): void => {
+        manifest.repository.directory = "packages/stale";
+      },
+    ],
+    [
+      "only the core peer",
+      (manifest: Record<string, any>): void => {
+        manifest.peerDependencies.typescript = ">=6 <7";
+      },
+    ],
+    [
+      "TypeScript runtime dependency",
+      (manifest: Record<string, any>): void => {
+        delete manifest.dependencies.typescript;
+      },
+    ],
+  ] as const)("requires the public analysis manifest %s", (_name, edit) => {
+    const sources = fixture();
+    editManifest(sources, analysisManifest, edit);
+    expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`${analysisManifest}:`));
+  });
+
   test.each(ownedDependencyManifests)("rejects a stale owned dependency in %s", (path) => {
     const sources = fixture();
     editManifest(sources, path, (manifest) => {
@@ -234,6 +298,9 @@ describe("release source facts", () => {
   });
 
   test.each([
+    ["1.0.0-beta.6", "This beta makes authored concept contracts structured"],
+    ["1.0.0-beta.5", "This entry adds deferred triggers"],
+    ["1.0.0-beta.4", "This beta tightens assembly, validation, persistence"],
     ["1.0.0-alpha.0", "The first v1 alpha replaces, rather than extends, the 0.3 architecture."],
     ["0.3.0", "Replaced the sequencing and branching DSL"],
     ["0.2.0", "Removed the devtools package surface"],
@@ -293,6 +360,16 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining(expected));
   });
 
+  test.each([
+    "packages/analysis/package.json",
+    "packages/analysis/README.md",
+    "packages/analysis/public-surface.md",
+  ])("requires the analysis release source %s", (path) => {
+    const sources = fixture();
+    sources.delete(path);
+    expect(checkRelease(sources)).toContain(`${path}: required release source is missing`);
+  });
+
   test.each(["SUPPORT.md", "SECURITY.md"])(
     "requires %s in release sources and the package",
     (path) => {
@@ -311,6 +388,13 @@ describe("release source facts", () => {
   test.each([
     ["SUPPORT.md", "Only the newest beta is supported."],
     ["SUPPORT.md", `Node.js \`${packageManifest.engines.node}\``],
+    ["SUPPORT.md", "@mit-sdg/sync-engine-analysis/tooling"],
+    ["SUPPORT.md", "@mit-sdg/sync-engine-analysis/guidance"],
+    ["SUPPORT.md", "sync-engine.application-analysis-result` version 1"],
+    ["SUPPORT.md", "sync-engine.guidance-resource` version 1"],
+    ["SUPPORT.md", "sync-engine.guidance-selection` version 1"],
+    ["SUPPORT.md", "exact 40-hex release commit"],
+    ["SUPPORT.md", "does not return approval verdicts"],
     ["SECURITY.md", "security/advisories/new"],
     ["SECURITY.md", "acknowledgement within three business days"],
   ])("requires the policy fact %s: %s", (path, fact) => {
@@ -394,6 +478,19 @@ describe("release source facts", () => {
     );
   });
 
+  test("allows id-token permission on exactly the three publication jobs", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "  verify:\n",
+      "  verify:\n    permissions:\n      id-token: write\n",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: only publication jobs may receive id-token: write",
+    );
+  });
+
   test("requires the publish scenario gate to reuse the existing build", () => {
     const sources = fixture();
     replaceSource(
@@ -415,9 +512,11 @@ describe("release source facts", () => {
   test.each([
     "needs: verify",
     "needs: [verify, publish-core]",
+    "needs: [verify, publish-core, publish-analysis]",
     "id-token: write",
     "name: npm",
     "npm publish ./release/package.tgz --provenance --tag beta --access public",
+    "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
     "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
   ])("requires the publish-only fact %s", (fact) => {
     const sources = fixture();
@@ -430,6 +529,11 @@ describe("release source facts", () => {
       "publish-core",
       "sha256sum --check release/package.tgz.sha256",
       "npm publish ./release/package.tgz --provenance --tag beta --access public",
+    ],
+    [
+      "publish-analysis",
+      "sha256sum --check release/analysis-package.tgz.sha256",
+      "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
     ],
     [
       "publish-http",
@@ -455,6 +559,10 @@ describe("release source facts", () => {
   test.each([
     ["publish-core", "npm publish ./release/package.tgz --provenance --tag beta --access public"],
     [
+      "publish-analysis",
+      "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
+    ],
+    [
       "publish-http",
       "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
     ],
@@ -471,16 +579,119 @@ describe("release source facts", () => {
     );
   });
 
-  test("requires HTTP publication to depend on core publication", () => {
+  test("requires HTTP publication to depend on core and analysis publication", () => {
     const sources = fixture();
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "needs: [verify, publish-core]",
+      "needs: [verify, publish-core, publish-analysis]",
       "needs: verify",
     );
     expect(checkRelease(sources)).toContain(
-      ".github/workflows/publish.yml: publish-http job is missing needs: [verify, publish-core]",
+      ".github/workflows/publish.yml: publish-http job is missing needs: [verify, publish-core, publish-analysis]",
+    );
+  });
+
+  test("requires verify, core, analysis, and HTTP jobs in reviewed order", () => {
+    const sources = fixture();
+    const path = ".github/workflows/publish.yml";
+    const source = sources.get(path) ?? "";
+    sources.set(
+      path,
+      source
+        .replace("\n  publish-core:", "\n  publish-temporary:")
+        .replace("\n  publish-analysis:", "\n  publish-core:")
+        .replace("\n  publish-temporary:", "\n  publish-analysis:"),
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: verify and publication jobs must remain in reviewed order",
+    );
+  });
+
+  test("restricts publication jobs to checkout, setup-node, and artifact download actions", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+      "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6\n      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+    );
+    expect(checkRelease(sources)).toContainEqual(
+      expect.stringContaining(
+        "publish-core must use checkout, setup-node, and download-artifact only",
+      ),
+    );
+  });
+
+  test("rejects rebuilding in a publication job", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "      - run: sha256sum --check release/analysis-package.tgz.sha256",
+      "      - run: bun run build\n      - run: sha256sum --check release/analysis-package.tgz.sha256",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: publish-analysis job must not rebuild (bun run)",
+    );
+  });
+
+  test.each(["./package.json", "./packages/analysis/package.json", "./packages/http/package.json"])(
+    "requires every source check to read %s",
+    (manifestPath) => {
+      const sources = fixture();
+      sources.set(
+        ".github/workflows/publish.yml",
+        (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
+          manifestPath,
+          "./omitted-package.json",
+        ),
+      );
+      expect(
+        checkRelease(sources).filter((failure) => failure.includes("source validation is missing")),
+      ).toHaveLength(4);
+    },
+  );
+
+  test("requires the unprivileged job to checksum the analysis tarball", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "sha256sum release/analysis-package.tgz > release/analysis-package.tgz.sha256",
+      "sha256sum omitted-analysis-package.tgz",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: verified artifact flow is missing sha256sum release/analysis-package.tgz > release/analysis-package.tgz.sha256",
+    );
+  });
+
+  test("requires package verification to bind guidance to the exact release commit", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "SYNC_ENGINE_SOURCE_REVISION: ${{ github.sha }}",
+      "SYNC_ENGINE_SOURCE_REVISION: development",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: verified artifact flow is missing SYNC_ENGINE_SOURCE_REVISION: ${{ github.sha }}",
+    );
+  });
+
+  test("requires the unprivileged job to upload the analysis tarball and checksum", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "            release/analysis-package.tgz\n            release/analysis-package.tgz.sha256",
+      "            release/omitted-analysis-package.tgz\n            release/omitted-analysis-package.tgz.sha256",
+    );
+    expect(checkRelease(sources)).toEqual(
+      expect.arrayContaining([
+        ".github/workflows/publish.yml: verified artifact upload omits release/analysis-package.tgz",
+        ".github/workflows/publish.yml: verified artifact upload omits release/analysis-package.tgz.sha256",
+      ]),
     );
   });
 
@@ -492,6 +703,7 @@ describe("release source facts", () => {
     ["Number.isSafeInteger(Number(beta[1]))", "safe numeric components"],
     ["`v${core.version}`", "`v${core.version}`"],
     ["core.version !== http.version", "core.version !== http.version"],
+    ["core.version !== analysis.version", "core.version !== analysis.version"],
   ])("requires source validation fact %s", (source, fact) => {
     const sources = fixture();
     sources.set(
@@ -508,6 +720,7 @@ describe("release source facts", () => {
     ).toEqual([
       `.github/workflows/publish.yml: verify source validation is missing ${fact}`,
       `.github/workflows/publish.yml: publish-core source validation is missing ${fact}`,
+      `.github/workflows/publish.yml: publish-analysis source validation is missing ${fact}`,
       `.github/workflows/publish.yml: publish-http source validation is missing ${fact}`,
     ]);
   });

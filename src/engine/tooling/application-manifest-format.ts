@@ -2,6 +2,8 @@ import type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 import type { WireType } from "@engine/boundary/wire/wire-types";
 import type {
   AppIR,
+  ComputationInventoryIR,
+  ConceptImplementationProvenanceIR,
   ConceptSpecificationIR,
   FormerNodeIR,
   PatternIR,
@@ -15,7 +17,7 @@ import { canonicalDigest, canonicalValue } from "@engine/utils/canonical-json";
 import { setOwn } from "@engine/utils/own-property";
 import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
-import type { ApplicationManifestV4, ManifestEndpointV4 } from "./manifest.ts";
+import type { ApplicationManifestV5, ManifestEndpointV5 } from "./manifest.ts";
 
 type DataRecord = Record<string, unknown>;
 
@@ -109,7 +111,7 @@ function shape(
   }
   for (const key of Object.keys(data)) {
     if (!allowed.has(key))
-      fail(propertyPath(path, key), "property is not part of manifest version 4");
+      fail(propertyPath(path, key), "property is not part of manifest version 5");
   }
   return data;
 }
@@ -153,6 +155,15 @@ function integer(value: unknown, path: string, minimum = 0): asserts value is nu
 
 function strings(value: unknown, path: string): asserts value is string[] {
   for (const [index, item] of array(value, path).entries()) string(item, `${path}[${index}]`);
+}
+
+function uniqueNonemptyStrings(value: unknown, path: string): asserts value is string[] {
+  const seen = new Set<string>();
+  for (const [index, item] of array(value, path).entries()) {
+    nonemptyString(item, `${path}[${index}]`);
+    if (seen.has(item)) fail(`${path}[${index}]`, `duplicate value ${JSON.stringify(item)}`);
+    seen.add(item);
+  }
 }
 
 function assertPattern(value: unknown, path: string): asserts value is PatternIR {
@@ -565,7 +576,7 @@ function assertSpecification(
       "location",
     ]);
     nonemptyString(actionData.name, `${actionPath}.name`);
-    strings(actionData.inputs, `${actionPath}.inputs`);
+    uniqueNonemptyStrings(actionData.inputs, `${actionPath}.inputs`);
     for (const [fieldIndex, field] of array(
       actionData.parameters,
       `${actionPath}.parameters`,
@@ -598,7 +609,7 @@ function assertSpecification(
       "location",
     ]);
     nonemptyString(queryData.name, `${queryPath}.name`);
-    strings(queryData.inputs, `${queryPath}.inputs`);
+    uniqueNonemptyStrings(queryData.inputs, `${queryPath}.inputs`);
     for (const [fieldIndex, field] of array(
       queryData.parameters,
       `${queryPath}.parameters`,
@@ -642,14 +653,18 @@ function assertConcept(value: unknown, path: string): void {
     const actionPath = `${path}.actions[${index}]`;
     const actionData = shape(action, actionPath, ["name"], ["roles", "refusals"]);
     nonemptyString(actionData.name, `${actionPath}.name`);
-    if (actionData.roles !== undefined) strings(actionData.roles, `${actionPath}.roles`);
+    if (actionData.roles !== undefined) {
+      uniqueNonemptyStrings(actionData.roles, `${actionPath}.roles`);
+    }
     if (actionData.refusals !== undefined) strings(actionData.refusals, `${actionPath}.refusals`);
   }
   for (const [index, query] of array(data.queries, `${path}.queries`).entries()) {
     const queryPath = `${path}.queries[${index}]`;
     const queryData = shape(query, queryPath, ["name"], ["roles", "returns"]);
     nonemptyString(queryData.name, `${queryPath}.name`);
-    if (queryData.roles !== undefined) strings(queryData.roles, `${queryPath}.roles`);
+    if (queryData.roles !== undefined) {
+      uniqueNonemptyStrings(queryData.roles, `${queryPath}.roles`);
+    }
     if (queryData.returns !== undefined) {
       literal(queryData.returns, `${queryPath}.returns`, ["one", "optional", "many"] as const);
     }
@@ -659,17 +674,59 @@ function assertConcept(value: unknown, path: string): void {
   }
 }
 
+function assertComputation(value: unknown, path: string): asserts value is ComputationInventoryIR {
+  const data = shape(value, path, ["name", "source"], ["inputs"]);
+  nonemptyString(data.name, `${path}.name`);
+  literal(data.source, `${path}.source`, ["standard", "vocabulary"] as const);
+  if (data.inputs !== undefined) uniqueNonemptyStrings(data.inputs, `${path}.inputs`);
+}
+
+function assertConstructorName(value: unknown, path: string): void {
+  nonemptyString(value, path);
+  if (value === "Object") fail(path, 'expected structural "Object" values to omit constructorName');
+}
+
+function assertConceptImplementation(
+  value: unknown,
+  path: string,
+): asserts value is ConceptImplementationProvenanceIR {
+  const data = shape(value, path, ["concept", "canonical", "selected"]);
+  nonemptyString(data.concept, `${path}.concept`);
+  const canonical = shape(data.canonical, `${path}.canonical`, ["owner"], ["constructorName"]);
+  literal(canonical.owner, `${path}.canonical.owner`, ["core", "application"] as const);
+  if (canonical.constructorName !== undefined) {
+    assertConstructorName(canonical.constructorName, `${path}.canonical.constructorName`);
+  }
+
+  const selectedPath = `${path}.selected`;
+  const candidate = record(data.selected, selectedPath);
+  if (candidate.via === "instances") {
+    const selected = shape(data.selected, selectedPath, ["via"], ["constructorName", "floor"]);
+    if (selected.constructorName !== undefined) {
+      assertConstructorName(selected.constructorName, `${selectedPath}.constructorName`);
+    }
+    if (selected.floor !== undefined) nonemptyString(selected.floor, `${selectedPath}.floor`);
+    return;
+  }
+  if (["core", "default", "initialize"].includes(candidate.via as string)) {
+    const selected = shape(data.selected, selectedPath, ["via"]);
+    literal(selected.via, `${selectedPath}.via`, ["core", "default", "initialize"] as const);
+    return;
+  }
+  fail(`${selectedPath}.via`, "expected a recognized implementation selection");
+}
+
 function assertInputContract(value: unknown, path: string): asserts value is InputContractDecl {
   const data = shape(value, path, [], ["required", "defaults"]);
-  if (data.required !== undefined) strings(data.required, `${path}.required`);
+  if (data.required !== undefined) uniqueNonemptyStrings(data.required, `${path}.required`);
   if (data.defaults !== undefined) record(data.defaults, `${path}.defaults`);
 }
 
-function assertManifestEndpoint(value: unknown, path: string): asserts value is ManifestEndpointV4 {
+function assertManifestEndpoint(value: unknown, path: string): asserts value is ManifestEndpointV5 {
   const data = shape(value, path, ["name", "path", "reactions", "input", "validators"]);
   nonemptyString(data.name, `${path}.name`);
   nonemptyString(data.path, `${path}.path`);
-  strings(data.reactions, `${path}.reactions`);
+  uniqueNonemptyStrings(data.reactions, `${path}.reactions`);
   assertInputContract(data.input, `${path}.input`);
   const validators = shape(
     data.validators,
@@ -812,6 +869,193 @@ function assertDiagnostic(value: unknown, path: string): asserts value is Applic
   }
 }
 
+function uniqueFieldIndexes(value: unknown, path: string, field: string): Map<string, number> {
+  const indexes = new Map<string, number>();
+  for (const [index, item] of array(value, path).entries()) {
+    const itemPath = `${path}[${index}]`;
+    const name = record(item, itemPath)[field];
+    nonemptyString(name, `${itemPath}.${field}`);
+    const prior = indexes.get(name);
+    if (prior !== undefined) {
+      fail(`${itemPath}.${field}`, `duplicates ${path}[${prior}].${field}`);
+    }
+    indexes.set(name, index);
+  }
+  return indexes;
+}
+
+function sameCanonicalValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(canonicalValue(left)) === JSON.stringify(canonicalValue(right));
+}
+
+function assertComputationReferences(
+  application: AppIR,
+  names: Pick<ReadonlySet<string>, "has">,
+): void {
+  const operations = (values: readonly (WhereOpIR | ViewOpIR)[], path: string): void => {
+    for (const [index, operation] of values.entries()) {
+      if (
+        (operation.op === "holds" || operation.op === "compute") &&
+        !names.has(operation.computation)
+      ) {
+        fail(`${path}[${index}].computation`, "computation is absent from $.computations");
+      }
+    }
+  };
+  const formerNode = (node: FormerNodeIR, path: string): void => {
+    if (node.node === "record") {
+      operations(node.where ?? [], `${path}.where`);
+      for (const [name, entry] of Object.entries(node.entries)) {
+        formerNode(entry, propertyPath(`${path}.entries`, name));
+      }
+      return;
+    }
+    if (node.node === "each") {
+      operations(node.where ?? [], `${path}.where`);
+      formerNode(node.as, `${path}.as`);
+      return;
+    }
+    if (node.node === "count" || node.node === "first" || node.node === "distinct") {
+      operations(node.where ?? [], `${path}.where`);
+    }
+  };
+
+  for (const [index, reaction] of application.reactions.entries()) {
+    operations(reaction.where, `$.application.reactions[${index}].where`);
+  }
+  for (const [viewIndex, view] of application.views.entries()) {
+    for (const [alternativeIndex, alternative] of view.alternatives.entries()) {
+      operations(
+        alternative,
+        `$.application.views[${viewIndex}].alternatives[${alternativeIndex}]`,
+      );
+    }
+  }
+  for (const [index, former] of application.formers.entries()) {
+    formerNode(former.body, `$.application.formers[${index}].body`);
+  }
+  for (const [index, unlowered] of application.unlowered.entries()) {
+    operations(unlowered.known.where, `$.application.unlowered[${index}].known.where`);
+  }
+}
+
+function assertManifestCrossFields(data: DataRecord): void {
+  const conceptIndexes = uniqueFieldIndexes(data.concepts, "$.concepts", "name");
+  if (!conceptIndexes.has("RequestBoundary")) {
+    fail("$.concepts", 'expected the assembled "RequestBoundary" concept inventory');
+  }
+  for (const [index, concept] of array(data.concepts, "$.concepts").entries()) {
+    const conceptData = record(concept, `$.concepts[${index}]`);
+    uniqueFieldIndexes(conceptData.actions, `$.concepts[${index}].actions`, "name");
+    uniqueFieldIndexes(conceptData.queries, `$.concepts[${index}].queries`, "name");
+  }
+
+  const implementationIndexes = uniqueFieldIndexes(
+    data.conceptImplementations,
+    "$.conceptImplementations",
+    "concept",
+  );
+  for (const concept of conceptIndexes.keys()) {
+    if (!implementationIndexes.has(concept)) {
+      fail(
+        "$.conceptImplementations",
+        `missing the implementation selected for ${JSON.stringify(concept)}`,
+      );
+    }
+  }
+  for (const [concept, index] of implementationIndexes) {
+    if (!conceptIndexes.has(concept)) {
+      fail(`$.conceptImplementations[${index}].concept`, "has no matching concept inventory");
+    }
+    const implementation = record(
+      array(data.conceptImplementations, "$.conceptImplementations")[index],
+      `$.conceptImplementations[${index}]`,
+    );
+    const canonical = record(
+      implementation.canonical,
+      `$.conceptImplementations[${index}].canonical`,
+    );
+    const selected = record(implementation.selected, `$.conceptImplementations[${index}].selected`);
+    if (concept === "RequestBoundary") {
+      if (canonical.owner !== "core") {
+        fail(`$.conceptImplementations[${index}].canonical.owner`, 'expected "core"');
+      }
+      if (selected.via !== "core") {
+        fail(`$.conceptImplementations[${index}].selected.via`, 'expected "core"');
+      }
+    } else {
+      if (canonical.owner !== "application") {
+        fail(`$.conceptImplementations[${index}].canonical.owner`, 'expected "application"');
+      }
+      if (selected.via === "core") {
+        fail(`$.conceptImplementations[${index}].selected.via`, "core selection is boundary-owned");
+      }
+    }
+  }
+
+  const computationIndexes = uniqueFieldIndexes(data.computations, "$.computations", "name");
+  const standardNames = new Set(["among", "ge", "gt", "le", "lt"]);
+  for (const [index, computation] of array(data.computations, "$.computations").entries()) {
+    const computationData = record(computation, `$.computations[${index}]`);
+    if (
+      computationData.source === "standard" &&
+      !standardNames.has(computationData.name as string)
+    ) {
+      fail(`$.computations[${index}].name`, "is not a standard computation");
+    }
+  }
+  for (const name of standardNames) {
+    const index = computationIndexes.get(name);
+    if (index === undefined)
+      fail("$.computations", `missing standard computation ${JSON.stringify(name)}`);
+    const computation = record(
+      array(data.computations, "$.computations")[index],
+      `$.computations[${index}]`,
+    );
+    if (computation.source !== "standard") {
+      fail(`$.computations[${index}].source`, `expected "standard" for ${JSON.stringify(name)}`);
+    }
+  }
+  assertComputationReferences(data.application as unknown as AppIR, computationIndexes);
+
+  uniqueFieldIndexes(data.endpoints, "$.endpoints", "name");
+  const endpointPaths = new Set<string>();
+  const contracts = record(data.inputContracts, "$.inputContracts");
+  for (const [index, endpoint] of array(data.endpoints, "$.endpoints").entries()) {
+    const endpointData = record(endpoint, `$.endpoints[${index}]`);
+    const path = endpointData.path as string;
+    endpointPaths.add(path);
+    if (!Object.hasOwn(contracts, path)) {
+      fail(`$.endpoints[${index}].path`, "has no matching input contract");
+    }
+    if (!sameCanonicalValue(endpointData.input, contracts[path])) {
+      fail(
+        `$.endpoints[${index}].input`,
+        `does not match $.inputContracts[${JSON.stringify(path)}]`,
+      );
+    }
+  }
+  for (const path of Object.keys(contracts)) {
+    if (path === "") fail('$.inputContracts[""]', "expected a non-empty endpoint path");
+    if (!endpointPaths.has(path)) {
+      fail(propertyPath("$.inputContracts", path), "has no matching endpoint declaration");
+    }
+  }
+
+  const wire = record(data.wire, "$.wire");
+  const wirePathIndexes = uniqueFieldIndexes(wire.endpoints, "$.wire.endpoints", "path");
+  for (const path of endpointPaths) {
+    if (!wirePathIndexes.has(path)) {
+      fail("$.wire.endpoints", `missing the logical wire for ${JSON.stringify(path)}`);
+    }
+  }
+  for (const [path, index] of wirePathIndexes) {
+    if (!endpointPaths.has(path)) {
+      fail(`$.wire.endpoints[${index}].path`, "has no matching endpoint declaration");
+    }
+  }
+}
+
 function manifestBodyDigest(data: DataRecord): string {
   const body: DataRecord = {};
   for (const [key, value] of Object.entries(data)) {
@@ -822,6 +1066,10 @@ function manifestBodyDigest(data: DataRecord): string {
 
 function assertManifestStructure(value: unknown): DataRecord {
   assertJsonValue(value, "$", new WeakSet());
+  const candidate = record(value, "$");
+  if (Object.hasOwn(candidate, "version") && candidate.version !== 5) {
+    fail("$.version", "expected 5");
+  }
   const data = shape(value, "$", [
     "format",
     "version",
@@ -829,6 +1077,8 @@ function assertManifestStructure(value: unknown): DataRecord {
     "digest",
     "application",
     "concepts",
+    "computations",
+    "conceptImplementations",
     "endpoints",
     "inputContracts",
     "wire",
@@ -837,7 +1087,7 @@ function assertManifestStructure(value: unknown): DataRecord {
   if (data.format !== "sync-engine.application-manifest") {
     fail("$.format", 'expected "sync-engine.application-manifest"');
   }
-  if (data.version !== 4) fail("$.version", "expected 4");
+  if (data.version !== 5) fail("$.version", "expected 5");
   const generator = shape(data.generator, "$.generator", ["name", "version"]);
   if (generator.name !== PACKAGE_NAME)
     fail("$.generator.name", `expected ${JSON.stringify(PACKAGE_NAME)}`);
@@ -846,6 +1096,15 @@ function assertManifestStructure(value: unknown): DataRecord {
   assertApplication(data.application, "$.application");
   for (const [index, concept] of array(data.concepts, "$.concepts").entries()) {
     assertConcept(concept, `$.concepts[${index}]`);
+  }
+  for (const [index, computation] of array(data.computations, "$.computations").entries()) {
+    assertComputation(computation, `$.computations[${index}]`);
+  }
+  for (const [index, implementation] of array(
+    data.conceptImplementations,
+    "$.conceptImplementations",
+  ).entries()) {
+    assertConceptImplementation(implementation, `$.conceptImplementations[${index}]`);
   }
   for (const [index, endpoint] of array(data.endpoints, "$.endpoints").entries()) {
     assertManifestEndpoint(endpoint, `$.endpoints[${index}]`);
@@ -857,18 +1116,19 @@ function assertManifestStructure(value: unknown): DataRecord {
   for (const [index, diagnostic] of array(data.diagnostics, "$.diagnostics").entries()) {
     assertDiagnostic(diagnostic, `$.diagnostics[${index}]`);
   }
+  assertManifestCrossFields(data);
   return data;
 }
 
 /** Recompute the canonical digest over every manifest field except `digest`. */
-export function applicationManifestDigest(manifest: ApplicationManifestV4): string {
+export function applicationManifestDigest(manifest: ApplicationManifestV5): string {
   return manifestBodyDigest(assertManifestStructure(manifest));
 }
 
-/** Validate untrusted data as one complete canonical version-4 application manifest. */
+/** Validate untrusted data as one complete canonical version-5 application manifest. */
 export function validateApplicationManifest(
   value: unknown,
-): asserts value is ApplicationManifestV4 {
+): asserts value is ApplicationManifestV5 {
   const data = assertManifestStructure(value);
   const expected = manifestBodyDigest(data);
   if (data.digest !== expected) {
@@ -879,8 +1139,8 @@ export function validateApplicationManifest(
   }
 }
 
-/** Parse and validate canonical version-4 application-manifest JSON without executing code. */
-export function parseApplicationManifest(source: string): ApplicationManifestV4 {
+/** Parse and validate canonical version-5 application-manifest JSON without executing code. */
+export function parseApplicationManifest(source: string): ApplicationManifestV5 {
   if (typeof source !== "string") fail("$", "expected manifest JSON text");
   let value: unknown;
   try {
@@ -892,5 +1152,5 @@ export function parseApplicationManifest(source: string): ApplicationManifestV4 
     );
   }
   validateApplicationManifest(value);
-  return canonicalValue(value) as unknown as ApplicationManifestV4;
+  return canonicalValue(value) as unknown as ApplicationManifestV5;
 }

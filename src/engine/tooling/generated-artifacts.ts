@@ -13,7 +13,7 @@ import {
   type ArtifactStatus,
   planGenerated,
 } from "./artifact-plan.ts";
-import { applicationManifest, type ApplicationManifestV4 } from "./manifest.ts";
+import { applicationManifest, type ApplicationManifestV5 } from "./manifest.ts";
 import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
@@ -111,7 +111,7 @@ function completeGeneratedPlan(
   application: ResolvedApplication,
   assembled: InspectableAssembly,
 ): {
-  manifest: ApplicationManifestV4;
+  manifest: ApplicationManifestV5;
   plan: ArtifactPlan;
 } {
   const manifest = applicationManifest(assembled);

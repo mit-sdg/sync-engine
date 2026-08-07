@@ -331,6 +331,72 @@ describe("concept floors", () => {
     expect(mongo.Cataloging).toEqual(new PersistentCataloging("primary"));
   });
 
+  test("retains named-floor provenance through exact and safely spread implementation maps", () => {
+    const set = conceptSet({
+      Remembering: registerConcept({
+        class: Remembering,
+        spec: bare,
+        floors: { mongo: ({ store }: { store: string }) => new Remembering(store) },
+      }),
+    });
+    const mongo = set.implementations("mongo", { store: "primary" });
+    const selected = (instances: typeof mongo) =>
+      applicationManifest(
+        assembleApplication({ vocabulary: set.vocabulary, instances, composition: {} }),
+      ).conceptImplementations.find(({ concept }) => concept === "Remembering")?.selected;
+
+    expect(selected(mongo)).toEqual({
+      via: "instances",
+      constructorName: "Remembering",
+      floor: "mongo",
+    });
+    expect(selected({ ...mongo })).toEqual({
+      via: "instances",
+      constructorName: "Remembering",
+      floor: "mongo",
+    });
+
+    const hosted = conceptFloor(set.vocabulary, {
+      name: "hosted",
+      instances: { Remembering: new Remembering("hosted") },
+      resources: [],
+      async close() {},
+    });
+    expect(selected({ ...hosted.instances })).toEqual({
+      via: "instances",
+      constructorName: "Remembering",
+      floor: "hosted",
+    });
+  });
+
+  test("omits a spread floor when one instance has conflicting named-floor hints", () => {
+    const set = conceptSet({
+      Remembering: registerConcept({ class: Remembering, spec: bare }),
+    });
+    const shared = new Remembering("shared");
+    const first = conceptFloor(set.vocabulary, {
+      name: "first",
+      instances: { Remembering: shared },
+      resources: [],
+      async close() {},
+    });
+    conceptFloor(set.vocabulary, {
+      name: "second",
+      instances: { Remembering: shared },
+      resources: [],
+      async close() {},
+    });
+
+    const selected = applicationManifest(
+      assembleApplication({
+        vocabulary: set.vocabulary,
+        instances: { ...first.instances },
+        composition: {},
+      }),
+    ).conceptImplementations.find(({ concept }) => concept === "Remembering")?.selected;
+    expect(selected).toEqual({ via: "instances", constructorName: "Remembering" });
+  });
+
   test("requires a named floor for a concept with required constructor arguments", () => {
     const set = conceptSet({
       Cataloging: registerConcept({

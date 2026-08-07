@@ -242,8 +242,11 @@ and optional named computation functions into a vocabulary, typed computation
 references, default implementations, floor-specific implementation factories,
 complete implementation maps, and refusal metadata. A host-created
 `ConceptFloor` descriptor separately groups one such map with resources and a
-`close()` operation. `src/engine/boundary/assembly/assemble.ts` creates one engine,
-its internal occurrence index, and an optional independent audit sink;
+`close()` operation. Private process-wide WeakMap associations retain named-floor
+hints across complete implementation maps and, when unambiguous, object-preserving
+spreads without mutating application objects.
+`src/engine/boundary/assembly/assemble.ts` creates one engine, its internal
+occurrence index, and an optional independent audit sink;
 instruments its selected instances; collects tagged composition exports; and
 returns the application-facing invoker/form interface. It also selects query
 memoization, installs privileged raw-fault reporting, and makes ordinary
@@ -268,8 +271,12 @@ index, load an existing file, replay entries, or expose a close operation.
 
 `src/engine/tooling/inspection.ts` projects one assembly into app IR, concept
 inventories, input contracts, retained occurrence summaries, and diagnostic
-read-back. `manifest.ts` emits manifest V4 and its digest. `artifact-plan.ts` is
-the single specification and wire renderer. `generated-artifacts.ts` resolves a
+read-back. Assembly also retains JSON-safe computation and selected-implementation
+inventories; `manifest.ts` emits manifest V5 from those same assembly facts and
+its digest. Canonical vocabulary metadata, rather than a replacement instance,
+owns manifest action/query roles, query promises, and refusal contracts.
+`artifact-plan.ts` is the single specification and wire renderer.
+`generated-artifacts.ts` resolves a
 project descriptor, gives its ordered projections immutable logical facts, and
 checks or writes the two pinned files only after the complete plan succeeds.
 
@@ -290,9 +297,35 @@ package-path reachability. The packed-consumer fixture separately checks the
 emitted type graph.
 
 Workspace packaging and npm publication are separate policies. Every cataloged
-workspace builds, packs, and participates in combined-consumer checks. Core and
-HTTP are npm-published; the analysis workspace is private until its source
-provenance and context contracts are ready for a supported release.
+workspace builds, packs, and participates in combined-consumer checks. Core,
+analysis, and HTTP are independently npm-published. Analysis consumes only
+supported core subpaths, imports TypeScript as a runtime dependency for compiler
+API source attribution, and exposes generic, non-verdict surfaces through
+`@mit-sdg/sync-engine-analysis/tooling` and
+`@mit-sdg/sync-engine-analysis/guidance`.
+Its project loader resolves the complete TypeScript reference graph through one
+immutable repository-bounded host, creates one program per config, and merges
+canonical owned source evidence. The public async entrypoint runs that loader in
+an emitted Node worker; source tests explicitly select the TypeScript worker and
+packed ESM selects its JavaScript sibling. Packed-consumer verification executes
+the worker and codecs from exact tarballs rather than workspace paths.
+
+`scripts/guidance.ts` owns the fixed catalog of authoritative consumer
+documents and extracts only H2/H3 sections carrying exact machine-readable
+markers. It validates marker JSON, heading adjacency and anchors, closed tags,
+IDs, non-overlap, path coverage, and topic/stage coverage before hashing exact
+UTF-8 document and entry bytes. Records and entries use explicit ordinal order;
+the generated data contains no timestamp or absolute path.
+
+The source-adjacent `guidance-resource.json` is ignored generated output so it
+can truthfully identify a dirty checkout without creating Git dirtiness itself.
+Source test commands generate it first. The shared build regenerates it, emits
+the export-only `/guidance` barrel and implementation, and copies that exact JSON
+beside `dist/guidance/index.js`. A clean checkout uses exact Git `HEAD`; a dirty
+or non-Git checkout uses `development:<documentsDigest>`. The release workflow
+supplies and verifies its exact tagged commit. Packed verification extracts the
+JSON, regenerates from the marked documents, compares canonical bytes, then the
+Node 24 consumer loads and selects it through the public subpath.
 
 ## Dependency rules
 

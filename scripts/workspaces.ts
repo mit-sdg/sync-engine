@@ -12,8 +12,11 @@ export interface Workspace {
   readonly verifiedTarball: string;
   readonly buildAfter: readonly string[];
   readonly peerWorkspaceIds: readonly string[];
+  readonly rootRuntimeDependencies: readonly string[];
   readonly forbiddenWorkspaceIds: readonly string[];
   readonly internalSourceDirectories: readonly string[];
+  /** Shipped runtime roots reached by URL/process launch rather than static imports. */
+  readonly runtimeEntrypoints: readonly string[];
   readonly publicSubpathContainsOnlyEntrypoint: boolean;
   readonly copiesExamples: boolean;
   readonly publication: "npm" | "private";
@@ -35,8 +38,10 @@ export const workspaceCatalog = [
     verifiedTarball: "package.tgz",
     buildAfter: [],
     peerWorkspaceIds: [],
+    rootRuntimeDependencies: [],
     forbiddenWorkspaceIds: ["http", "analysis"],
     internalSourceDirectories: ["command", "engine"],
+    runtimeEntrypoints: [],
     publicSubpathContainsOnlyEntrypoint: true,
     copiesExamples: true,
     publication: "npm",
@@ -67,8 +72,10 @@ export const workspaceCatalog = [
     verifiedTarball: "http-package.tgz",
     buildAfter: ["core"],
     peerWorkspaceIds: ["core"],
+    rootRuntimeDependencies: [],
     forbiddenWorkspaceIds: ["analysis"],
     internalSourceDirectories: [],
+    runtimeEntrypoints: [],
     publicSubpathContainsOnlyEntrypoint: false,
     copiesExamples: false,
     publication: "npm",
@@ -87,13 +94,23 @@ export const workspaceCatalog = [
     verifiedTarball: "analysis-package.tgz",
     buildAfter: ["core"],
     peerWorkspaceIds: ["core"],
+    rootRuntimeDependencies: ["typescript"],
     forbiddenWorkspaceIds: ["http"],
     internalSourceDirectories: [],
+    runtimeEntrypoints: ["tooling/application-project-worker.ts"],
     publicSubpathContainsOnlyEntrypoint: false,
     copiesExamples: false,
-    publication: "private",
-    requiredPackedFiles: ["LICENSE", "NOTICE", "README.md", "public-surface.md", "package.json"],
-    packageBudget: { files: 40, packedBytes: 100_000, unpackedBytes: 350_000 },
+    publication: "npm",
+    requiredPackedFiles: [
+      "LICENSE",
+      "NOTICE",
+      "README.md",
+      "public-surface.md",
+      "package.json",
+      "dist/guidance/guidance-resource.json",
+      "dist/tooling/application-project-worker.js",
+    ],
+    packageBudget: { files: 40, packedBytes: 150_000, unpackedBytes: 650_000 },
   },
 ] as const satisfies readonly Workspace[];
 

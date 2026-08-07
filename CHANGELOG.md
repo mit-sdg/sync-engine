@@ -5,6 +5,74 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.7] - 2026-08-07
+
+This beta advances the canonical application manifest and publishes the static
+analysis companion for the first time.
+
+### Compatibility
+
+- The canonical `sync-engine.application-manifest` format advances to V5.
+  `ApplicationManifestV5` and `ManifestEndpointV5` replace the version-4 public
+  type names; V4 input is rejected rather than upgraded.
+- `@mit-sdg/sync-engine-analysis` is now a public package with supported
+  `/tooling` and `/guidance` entrypoints and an exact
+  `@mit-sdg/sync-engine@1.0.0-beta.7` peer.
+  There was no published analysis beta.6; beta.7 is its first public release.
+- Analysis consumes canonical V5 manifests. Its comprehensive application,
+  impact, context, source, and project snapshots are V2, while bounded granular
+  query results use the V1 `sync-engine.application-analysis-result` envelope.
+  TypeScript `>=6 <7` is an analysis runtime dependency, not a peer.
+
+### Migration
+
+- Upgrade core and HTTP to `1.0.0-beta.7` together. When adopting analysis,
+  install `@mit-sdg/sync-engine-analysis@1.0.0-beta.7` alongside that exact core
+  beta; do not infer an analysis beta.6 package from the core release history.
+- Regenerate checked-in application manifests, assembled Markdown, and wire
+  TypeScript. Replace V4 manifest type imports with V5 and recreate any data
+  persisted from repository-private V1 analysis snapshots as the V2 formats.
+
+### Generated formats
+
+- Manifest V5 adds complete standard and vocabulary computation inventory plus
+  canonical-versus-selected concept implementation provenance. It records
+  serializable attribution, not functions, constructor arguments, resources,
+  source paths, object identity, concept state, or other runtime state.
+- Analysis V2 snapshots and V1 query results carry exact manifest, analyzer,
+  core-generator, and, where available, source-revision and source-digest
+  identity. Offset pagination is valid only against the same snapshot identity.
+- Canonical `sync-engine.guidance-resource` V1 embeds exact marked package
+  documentation with producer, document, entry, source-revision, and top-level
+  digests. `sync-engine.guidance-selection` V1 records normalized filters,
+  selected entries, bounds, completeness, and its own digest.
+- Project V2 snapshots have strict canonical JSON validation, parsing,
+  rendering, and SHA-256 identity. Validation binds nested index/source data,
+  source ranges and text, all read-file digests, TypeScript versions,
+  diagnostics, ordering, and resource usage.
+
+### Runtime and security support
+
+- Source attribution uses the supplied TypeScript program without importing or
+  executing project modules or manifest-producing configuration. Static-flow,
+  AST, traversal, pagination, source-read, and result-byte limits fail closed or
+  report incomplete evidence instead of silently claiming completeness.
+- Filesystem analysis follows complete transitive TypeScript project references
+  from source, rejects config/source/extends/symlink escapes and cycles, and does
+  not require built declarations. The async API runs in an emitted Node worker;
+  abort terminates it without returning a partial snapshot. Synchronous compiler
+  parsing and program creation remain checkpoint-bounded rather than
+  timer-preemptive.
+- Analysis is generic, deterministic inspection infrastructure. Possible-impact
+  and source attribution remain evidence with explicit limits; no analysis API
+  proves runtime behavior, authorizes a change, or returns an approval verdict.
+- Guidance selection is deterministic and policy-free. Dirty development builds
+  use a document-derived non-release identity; release tarballs require the
+  exact 40-hex tagged commit. The loader reads only its adjacent packaged JSON
+  and does not fetch network or repository content.
+
+[Release][1.0.0-beta.7] | [Changes since 1.0.0-beta.6][1.0.0-beta.7-compare]
+
 ## [1.0.0-beta.6] - 2026-08-06
 
 This beta makes authored concept contracts structured, preserved, and
@@ -489,6 +557,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.7]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.7
+[1.0.0-beta.7-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.6...v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.6
 [1.0.0-beta.6-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.5...v1.0.0-beta.6
 [1.0.0-beta.5]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.5

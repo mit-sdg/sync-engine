@@ -1,5 +1,6 @@
 import {
   callableConceptMember,
+  CONCEPT_MEMBER_ROLES,
   conceptMetadataOf,
 } from "@engine/reactions/concepts/concept-metadata";
 import type { QueryPromise } from "./query-metadata.ts";
@@ -13,7 +14,11 @@ function staticQueryPromisesOf(concept: object): unknown {
 
 /** The optional promise declared for one query. An undeclared query may answer one record or an array. */
 export function queryPromiseOf(concept: object, query: string): QueryPromise | undefined {
-  const contracts = conceptMetadataOf(concept)?.queries ?? staticQueryPromisesOf(concept);
+  const metadata = conceptMetadataOf(concept);
+  const contracts =
+    metadata?.[CONCEPT_MEMBER_ROLES] === undefined
+      ? (metadata?.queries ?? staticQueryPromisesOf(concept))
+      : metadata.queries;
   if (contracts === undefined || contracts === null || typeof contracts !== "object")
     return undefined;
   return (contracts as Record<string, QueryPromise>)[query];
@@ -51,7 +56,11 @@ export function validateQueryContracts(concept: object, conceptName: string): vo
   const cls = (
     Object.getPrototypeOf(concept) as { constructor?: { name?: string; queries?: unknown } }
   )?.constructor;
-  const contracts = conceptMetadataOf(concept)?.queries ?? cls?.queries;
+  const metadata = conceptMetadataOf(concept);
+  const contracts =
+    metadata?.[CONCEPT_MEMBER_ROLES] === undefined
+      ? (metadata?.queries ?? cls?.queries)
+      : metadata.queries;
   validateQueryContractMap(
     contracts,
     concept as Record<string, unknown>,

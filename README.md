@@ -2,6 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
 [![HTTP npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
+[![Analysis npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-analysis/beta?label=analysis%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-analysis)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is a TypeScript library for composing independently implemented
@@ -37,10 +38,21 @@ bun add @mit-sdg/sync-engine@beta
 
 ## Packages
 
-| Package                                                                                       | Role                                                                   |
-| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `@mit-sdg/sync-engine`                                                                        | Concepts, composition, assembly, boundaries, clients, tooling, and CLI |
-| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http) | Maintained HTTP handler, fetch client, and generated wire projection   |
+| Package                                                                                               | Role                                                                                 |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `@mit-sdg/sync-engine`                                                                                | Concepts, composition, assembly, boundaries, clients, tooling, and CLI               |
+| [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Deterministic indexing, durable codecs, bounded queries, and revision-bound guidance |
+| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | Maintained HTTP handler, fetch client, and generated wire projection                 |
+
+The analysis and HTTP companions each require the exact matching core beta.
+Analysis imports TypeScript at runtime and exposes
+`@mit-sdg/sync-engine-analysis/tooling` plus
+`@mit-sdg/sync-engine-analysis/guidance`; its results are inspection evidence,
+not correctness, authorization, or approval verdicts. The guidance subpath
+loads and selects exact marked package documentation bound to producer,
+document, and source-revision identity. Its filesystem API uses a Node worker
+for abortable project analysis while preserving a synchronous custom-reader
+primitive for expert hosts.
 
 ## Create an application
 
@@ -162,7 +174,7 @@ contributors use these repository documents:
 
 A newer beta may make incompatible changes. Before changing a pinned version,
 read the [changelog](CHANGELOG.md), regenerate and review pinned artifacts, keep
-the core and HTTP packages on the exact same beta, and typecheck consumers. The
+core and every installed companion on the exact same beta, and typecheck consumers. The
 [support policy](SUPPORT.md) defines the current window.
 
 ## License

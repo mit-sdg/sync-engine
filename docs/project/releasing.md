@@ -31,10 +31,11 @@ before every tag:
 - Keep the GitHub environment identity `npm`. Restrict it to the
   `v1.0.0-beta.*` tag policy, require an independent reviewer, and verify
   `prevent_self_review=true` and `can_admins_bypass=false`.
-- Configure npm trusted publishing for packages `@mit-sdg/sync-engine` and
-  `@mit-sdg/sync-engine-http`, GitHub organization `mit-sdg`, repository
-  `sync-engine`, workflow `.github/workflows/publish.yml`, and environment
-  `npm`. Verify each publisher identity before every release.
+- Configure npm trusted publishing for packages `@mit-sdg/sync-engine`,
+  `@mit-sdg/sync-engine-analysis`, and `@mit-sdg/sync-engine-http`, GitHub
+  organization `mit-sdg`, repository `sync-engine`, workflow
+  `.github/workflows/publish.yml`, and environment `npm`. Verify each publisher
+  identity before every release.
 - Verify npm package and organization ownership, require 2FA for owners and
   maintainers, remove stale owners, and confirm recovery access is controlled.
   Beta publications use the `beta` dist-tag and must not create or move
@@ -49,7 +50,8 @@ replace this external-setting verification.
 
 Work from a clean checkout of `origin/main` after all intended changes are
 merged. Fetch tags, verify the release commit is on `origin/main`, and do not
-publish from disconnected history.
+publish from disconnected history. Guidance generation must therefore resolve
+to that exact 40-hex `HEAD`, never a `development:<documentsDigest>` identity.
 
 ### Registry version
 
@@ -71,17 +73,17 @@ bun install
 `release:update` projects the canonical facts into every owned package
 dependency location:
 
-| Location                                            | Owned version fact                          |
-| --------------------------------------------------- | ------------------------------------------- |
-| `package.json`                                      | Published version and `publishConfig.tag`   |
-| `packages/http/package.json`                        | HTTP package version and exact core peer    |
-| `packages/analysis/package.json`                    | Private preview version and exact core peer |
-| `examples/reading-circle/package.json`              | Shipped example dependency                  |
-| `examples/operations-room/package.json`             | Shipped example dependency                  |
-| `examples/production-http/package.json`             | Shipped example dependency                  |
-| `tests/package/application/package.json`            | Standalone packed-application dependency    |
-| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency          |
-| `tests/package/multi-instance/backend/package.json` | Independent backend dependency              |
+| Location                                            | Owned version fact                                                   |
+| --------------------------------------------------- | -------------------------------------------------------------------- |
+| `package.json`                                      | Published version and `publishConfig.tag`                            |
+| `packages/http/package.json`                        | HTTP package version and exact core peer                             |
+| `packages/analysis/package.json`                    | Analysis version, exact core peer, and TypeScript runtime dependency |
+| `examples/reading-circle/package.json`              | Shipped example dependency                                           |
+| `examples/operations-room/package.json`             | Shipped example dependency                                           |
+| `examples/production-http/package.json`             | Shipped example dependency                                           |
+| `tests/package/application/package.json`            | Standalone packed-application dependency                             |
+| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
+| `tests/package/multi-instance/backend/package.json` | Independent backend dependency                                       |
 
 The scaffold keeps placeholders and generation reads the canonical root facts.
 The following `bun install` regenerates `bun.lock` from the projected manifests.
@@ -134,15 +136,26 @@ the gates as separate steps so GitHub identifies the failing gate and so
 `package:check` can receive the verified-tarball output directory used by the
 publication jobs.
 
+The publish verification job sets `SYNC_ENGINE_SOURCE_REVISION` to the exact
+GitHub commit SHA for package verification. The generator rejects a value that
+is not 40 hex characters or differs from Git `HEAD`. Package verification then
+requires the analysis tarball's V1 guidance resource to carry that exact
+revision, recomputes every document, entry, aggregate, and top-level digest from
+the marked package docs, and compares canonical JSON bytes.
+
 Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` invokes npm's real pack lifecycle for each workspace;
 the root package's `prepack` performs their shared build. The check inspects all
 workspace tarballs and policy links, installs core alone and all packages together,
 exercises the generated scaffold and examples, compiles a separate generated
-client/backend topology, and runs a Node scenario. The private analysis preview
-is package-tested but is not transferred to publication. In the publish workflow
-the check exports the exact core and HTTP tarballs; the unprivileged job records their digests
-and transfers them to the protected publication job. The core package
+client/backend topology, and runs Node scenarios. The combined exact-tarball
+consumer also generates and parses Manifest V5, executes worker-backed project
+analysis, exercises the analysis façade and source/impact queries, and
+loads, validates, selects, and links revision-bound guidance before round-tripping
+project and result codecs without workspace symlinks. In the publish workflow the
+check exports the exact core, analysis, and HTTP tarballs; the unprivileged job
+records their digests and transfers them unchanged to the protected publication
+jobs. The core package
 intentionally includes all three complete, independently runnable teaching
 examples; file-count, packed-size, and unpacked-size budgets prevent accidental
 growth. Wait for **CI required** on the final `main`
@@ -150,9 +163,10 @@ commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
-Core and HTTP are independently published. The analysis workspace remains
-private. Each release publishes core first and publishes HTTP only after core
-succeeds. HTTP declares the exact matching core beta as its peer dependency.
+Core, analysis, and HTTP are independently published. Each release publishes
+core first, analysis only after core succeeds, and HTTP only after both core and
+analysis succeed. Both companions declare the exact matching core beta as their
+peer dependency. Analysis declares TypeScript as a normal runtime dependency.
 The workflow never overwrites an npm version or moves or reuses a release tag or
 tarball.
 
@@ -166,12 +180,14 @@ tarball.
    no OIDC permission.
 3. Approve the protected `npm` environment only after `verify` succeeds and an
    independent reviewer has repeated the source and external-setting checks.
-   The two publication jobs are the only jobs with the `npm` environment and
+   The three publication jobs are the only jobs with the `npm` environment and
    `id-token: write`. Each checks out the same commit, refetches and verifies the
    live annotated tag and main ancestry, downloads the verified tarballs, and
-   checks their recorded digests. The core job publishes under `beta`; the HTTP
-   job runs only after core succeeds and also publishes under `beta`.
-   Neither job installs dependencies or rebuilds a package.
+   checks its recorded digest. The core job publishes under `beta`; analysis
+   runs only after core succeeds; HTTP runs only after both predecessors
+   succeed. All three publish under `beta` with public access. No publication
+   job installs dependencies, runs Bun, packs, prepackages, or rebuilds a
+   package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.
    After npm verification, manually create a GitHub prerelease from the same
@@ -193,12 +209,14 @@ tarball.
 
 - Confirm `npm view @mit-sdg/sync-engine dist-tags versions` shows the new exact
   version under `beta` and that `latest` did not move.
+- Confirm `npm view @mit-sdg/sync-engine-analysis dist-tags versions` shows its
+  new matching exact version under `beta` and that `latest` did not move.
 - Confirm `npm view @mit-sdg/sync-engine-http dist-tags versions` shows its new
   matching exact version under `beta` and that `latest` did not move.
 - Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` shows alpha
   versions as unsupported, with historical messages pointing at the exact beta
   or `@beta`, never `@alpha`.
-- Check the npm package page for GitHub Actions provenance and verify tarball
+- Check each npm package page for GitHub Actions provenance and verify tarball
   integrity, repository, license, executable, policy files, and file metadata.
 - In clean directories, install the exact registry version with npm and Bun,
   import every public subpath under the supported Node major, and typecheck with
@@ -214,12 +232,13 @@ tarball.
 ## Bad release response
 
 Stop or reject the environment deployment if publication has not happened. If
-npm accepted either package version, do not retag, overwrite, recreate, or
+npm accepted any package version, do not retag, overwrite, recreate, or
 republish it. Mark any GitHub release and npm version as affected, deprecate the
 exact version with a clear message, move `beta` back to the last known-good beta
 when appropriate, and publish a new incremented beta
-containing the fix and migration notes. If core succeeded but HTTP failed, do
-not rerun or manually replace core; use new versions for the corrected release.
+containing the fix and migration notes. If any earlier package succeeded but a
+later package failed, do not rerun or manually replace the accepted package; use
+new versions for the corrected release.
 Use npm unpublish only when package owners agree it meets npm policy; prefer
 deprecation because consumers may already depend on the immutable tarball. If
 credentials or provenance may be compromised, disable the trusted publisher

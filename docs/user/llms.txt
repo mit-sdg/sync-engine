@@ -45,6 +45,12 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 - Put public domain-error mappings on the reused HTTP profile or floor. Generate the public contract with `projections: [httpWire({ policy, name })]`.
 - Core contains no HTTP handler or fetch-client exports. Use `bindTransport` and `createClient` for a custom transport without the companion package.
 
+## Analysis and canonical guidance
+
+- [Analysis Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/analysis/public-surface.md): static analysis, strict codecs, and revision-bound canonical guidance
+- Install the exact same beta of `@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine`; import application analysis from `/tooling` and packaged guidance resources and selections from `/guidance`.
+- The canonical guidance resource embeds exact marked sections from the package documentation with producer, document, and revision digests. This `llms.txt` file is an index and is not embedded as authority.
+
 ## Working rules
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
