@@ -33,7 +33,7 @@ export default defineConfig({
   ],
   fmt: {
     ignorePatterns: [
-      "src/command/scaffold/**",
+      "packages/catalog/entries/**",
       ...Object.values(applicationExamples).flatMap((example) =>
         example.generated.map((path) => `examples/${example.directory}/${path}`),
       ),
@@ -41,7 +41,7 @@ export default defineConfig({
   },
   lint: {
     ignorePatterns: [
-      "src/command/scaffold/**",
+      "packages/catalog/entries/**",
       "tests/package/application/**",
       "tests/package/multi-instance/**",
       ...Object.values(applicationExamples).flatMap((example) =>

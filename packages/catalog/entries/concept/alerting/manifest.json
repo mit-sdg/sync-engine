@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "concept/alerting",
+  "kind": "concept",
+  "summary": "Keep ordered recipient alerts open until explicit acknowledgement.",
+  "files": [
+    { "source": "spec.md", "target": "$concepts/alerting/spec.md" },
+    { "source": "registry.ts", "target": "$concepts/alerting/registry.ts" }
+  ],
+  "variants": {
+    "memory": {
+      "summary": "Dependency-free in-memory state with injectable identity generation.",
+      "files": [
+        { "source": "alerting.ts", "target": "$concepts/alerting/alerting.ts" },
+        { "source": "alerting.test.ts", "target": "$concepts/alerting/alerting.test.ts" }
+      ]
+    }
+  },
+  "concept": {
+    "name": "Alerting",
+    "registration": "$concepts/alerting/registry.ts",
+    "export": "alerting"
+  }
+}

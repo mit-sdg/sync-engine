@@ -9,5 +9,5 @@
     "rootDir": "src"
   },
   "include": ["src"],
-  "exclude": ["src/command/scaffold", "tests"]
+  "exclude": ["tests"]
 }

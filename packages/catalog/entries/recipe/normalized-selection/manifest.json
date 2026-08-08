@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "recipe/normalized-selection",
+  "kind": "recipe",
+  "summary": "Turn a new gathering's normalized name into its initial shared selection.",
+  "requires": ["computation/normalize-label", "concept/gathering", "concept/selecting"],
+  "files": [
+    {
+      "source": "normalized-selection.ts",
+      "target": "$recipes/normalized-selection.ts"
+    },
+    {
+      "source": "normalized-selection.test.ts",
+      "target": "$recipes/normalized-selection.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/normalized-selection.ts",
+    "test": "$recipes/normalized-selection.test.ts",
+    "members": ["GatheringNameBecomesInitialSelection"]
+  }
+}

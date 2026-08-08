@@ -36,7 +36,6 @@ async function rejectForbiddenWorkspaceImports(
 }
 
 async function rewriteCoreAliases(workspace: Workspace): Promise<void> {
-  if (workspace.scaffold === undefined) return;
   const dist = workspacePath(root, workspace, workspace.distDirectory);
   for (const path of await filesBelow(
     dist,
@@ -86,15 +85,15 @@ async function buildWorkspace(workspace: Workspace): Promise<void> {
   await rewriteCoreAliases(workspace);
   await rejectForbiddenWorkspaceImports(workspace, dist, [".js", ".d.ts"]);
 
-  if (workspace.scaffold !== undefined) {
+  for (const asset of workspace.assets ?? []) {
     await cp(
-      resolve(root, workspace.scaffold.source),
-      resolve(root, workspace.scaffold.destination),
-      {
-        recursive: true,
-      },
+      workspacePath(root, workspace, asset.source),
+      workspacePath(root, workspace, asset.destination),
+      { recursive: true },
     );
-    await chmod(resolve(root, workspace.scaffold.executable), 0o755);
+  }
+  for (const executable of Object.values(workspace.bins ?? {})) {
+    await chmod(workspacePath(root, workspace, executable), 0o755);
   }
 }
 

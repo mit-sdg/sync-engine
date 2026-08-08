@@ -480,7 +480,7 @@ describe("release source facts", () => {
     );
   });
 
-  test("allows id-token permission on exactly the three publication jobs", () => {
+  test("allows id-token permission on exactly the four publication jobs", () => {
     const sources = fixture();
     replaceSource(
       sources,
@@ -520,6 +520,7 @@ describe("release source facts", () => {
     "npm publish ./release/package.tgz --provenance --tag beta --access public",
     "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
     "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+    "npm publish ./release/catalog-package.tgz --provenance --tag beta --access public",
   ])("requires the publish-only fact %s", (fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-publish-fact");
@@ -541,6 +542,11 @@ describe("release source facts", () => {
       "publish-http",
       "sha256sum --check release/http-package.tgz.sha256",
       "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+    ],
+    [
+      "publish-catalog",
+      "sha256sum --check release/catalog-package.tgz.sha256",
+      "npm publish ./release/catalog-package.tgz --provenance --tag beta --access public",
     ],
   ] as const)(
     "requires checksum verification before publication in %s",
@@ -568,6 +574,10 @@ describe("release source facts", () => {
       "publish-http",
       "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
     ],
+    [
+      "publish-catalog",
+      "npm publish ./release/catalog-package.tgz --provenance --tag beta --access public",
+    ],
   ] as const)("rejects an extra npm publish command in %s", (name, publish) => {
     const sources = fixture();
     replaceSource(
@@ -594,7 +604,20 @@ describe("release source facts", () => {
     );
   });
 
-  test("requires verify, core, analysis, and HTTP jobs in reviewed order", () => {
+  test("requires catalog publication to depend on core publication", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "  publish-catalog:\n    needs: [verify, publish-core]",
+      "  publish-catalog:\n    needs: verify",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: publish-catalog job is missing needs: [verify, publish-core]",
+    );
+  });
+
+  test("requires verify and all four publication jobs in reviewed order", () => {
     const sources = fixture();
     const path = ".github/workflows/publish.yml";
     const source = sources.get(path) ?? "";
@@ -638,22 +661,24 @@ describe("release source facts", () => {
     );
   });
 
-  test.each(["./package.json", "./packages/analysis/package.json", "./packages/http/package.json"])(
-    "requires every source check to read %s",
-    (manifestPath) => {
-      const sources = fixture();
-      sources.set(
-        ".github/workflows/publish.yml",
-        (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
-          manifestPath,
-          "./omitted-package.json",
-        ),
-      );
-      expect(
-        checkRelease(sources).filter((failure) => failure.includes("source validation is missing")),
-      ).toHaveLength(4);
-    },
-  );
+  test.each([
+    "./package.json",
+    "./packages/analysis/package.json",
+    "./packages/http/package.json",
+    "./packages/catalog/package.json",
+  ])("requires every source check to read %s", (manifestPath) => {
+    const sources = fixture();
+    sources.set(
+      ".github/workflows/publish.yml",
+      (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
+        manifestPath,
+        "./omitted-package.json",
+      ),
+    );
+    expect(
+      checkRelease(sources).filter((failure) => failure.includes("source validation is missing")),
+    ).toHaveLength(5);
+  });
 
   test("requires the unprivileged job to checksum the analysis tarball", () => {
     const sources = fixture();
@@ -693,6 +718,7 @@ describe("release source facts", () => {
     ["`v${core.version}`", "`v${core.version}`"],
     ["core.version !== http.version", "core.version !== http.version"],
     ["core.version !== analysis.version", "core.version !== analysis.version"],
+    ["core.version !== catalog.version", "core.version !== catalog.version"],
   ])("requires source validation fact %s", (source, fact) => {
     const sources = fixture();
     sources.set(
@@ -711,6 +737,7 @@ describe("release source facts", () => {
       `.github/workflows/publish.yml: publish-core source validation is missing ${fact}`,
       `.github/workflows/publish.yml: publish-analysis source validation is missing ${fact}`,
       `.github/workflows/publish.yml: publish-http source validation is missing ${fact}`,
+      `.github/workflows/publish.yml: publish-catalog source validation is missing ${fact}`,
     ]);
   });
 

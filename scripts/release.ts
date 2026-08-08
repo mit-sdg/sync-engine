@@ -6,6 +6,7 @@ import { workspaceById, workspaceCatalog, type Workspace } from "./workspaces.ts
 const coreWorkspace = workspaceById("core");
 const httpWorkspace = workspaceById("http");
 const analysisWorkspace = workspaceById("analysis");
+const catalogWorkspace = workspaceById("catalog");
 const releaseWorkspaces: readonly Workspace[] = workspaceCatalog;
 const publishedWorkspaces = releaseWorkspaces.filter(
   (workspace) => workspace.publication === "npm",
@@ -33,7 +34,6 @@ export const releaseManifestPaths = [
   ...ownedDependencyManifests,
 ] as const;
 const bunProjectManifests = [...exampleManifests, ...bunFixtureManifests] as const;
-const scaffoldManifest = "src/command/scaffold/package.json";
 const sharedDevelopmentDependencies = [
   ["@types/node", [...exampleManifests, "tests/package/multi-instance/backend/package.json"]],
   ["vite", exampleManifests],
@@ -48,6 +48,7 @@ export const releaseSourcePaths = [
   "packages/http/public-surface.md",
   "packages/analysis/README.md",
   "packages/analysis/public-surface.md",
+  "packages/catalog/README.md",
   "README.md",
   "CHANGELOG.md",
   "docs/project/releasing.md",
@@ -67,7 +68,6 @@ export const releaseSourcePaths = [
   "docs/user/guide/getting-started.md",
   "SUPPORT.md",
   "SECURITY.md",
-  scaffoldManifest,
   ...ownedDependencyManifests,
   ".github/workflows/ci.yml",
   ".github/workflows/publish.yml",
@@ -523,18 +523,6 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     }
   }
 
-  const scaffold = manifest(scaffoldManifest);
-  const scaffoldDevelopment = object(scaffold?.devDependencies);
-  const scaffoldEngines = object(scaffold?.engines);
-  for (const [owner, actual, expected] of [
-    ["TypeScript range", scaffoldDevelopment?.typescript, "{{typescript}}"],
-    ["engines.node", scaffoldEngines?.node, "{{node}}"],
-    ["engines.bun", scaffoldEngines?.bun, "{{bun}}"],
-    ["packageManager", scaffold?.packageManager, "{{packageManager}}"],
-  ] as const) {
-    if (actual !== expected) failures.push(`${scaffoldManifest}: ${owner} must be ${expected}`);
-  }
-
   const changelog = sources.get("CHANGELOG.md") ?? "";
   if (typeof version === "string") {
     const heading = new RegExp(
@@ -763,6 +751,11 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       jobName: "publish-http",
       needs: "needs: [verify, publish-core, publish-analysis]",
     },
+    {
+      workspace: catalogWorkspace,
+      jobName: "publish-catalog",
+      needs: "needs: [verify, publish-core]",
+    },
   ] as const;
   const publicationJobs = publicationPolicies.map((policy) => ({
     ...policy,
@@ -911,6 +904,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     ["`v${core.version}`", "`v${core.version}`"],
     ["core.version !== http.version", "core.version !== http.version"],
     ["core.version !== analysis.version", "core.version !== analysis.version"],
+    ["core.version !== catalog.version", "core.version !== catalog.version"],
   ] as const;
   for (const [fact, source] of sourceValidation) {
     for (const [jobName, job] of checkedPublishJobs) {

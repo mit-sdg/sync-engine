@@ -1,0 +1,51 @@
+{
+  "name": "@mit-sdg/catalog",
+  "version": "1.0.0-beta.7",
+  "description": "Curated, copy-owned concepts and composition for sync-engine applications",
+  "keywords": [
+    "catalog",
+    "concept",
+    "scaffold",
+    "sync-engine"
+  ],
+  "homepage": "https://github.com/mit-sdg/sync-engine#readme",
+  "bugs": "https://github.com/mit-sdg/sync-engine/issues",
+  "license": "Apache-2.0",
+  "author": "Barish Namazov and Eagon Meng",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mit-sdg/sync-engine",
+    "directory": "packages/catalog"
+  },
+  "bin": {
+    "catalog": "./dist/command.js"
+  },
+  "files": [
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {},
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "scripts": {
+    "prepack": "bun ../../scripts/build.ts"
+  },
+  "peerDependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7"
+  },
+  "peerDependenciesMeta": {
+    "@mit-sdg/sync-engine": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "bun": ">=1.3.14 <1.4",
+    "node": ">=24 <25"
+  }
+}

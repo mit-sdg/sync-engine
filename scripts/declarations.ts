@@ -7,7 +7,7 @@ import { workspaceBuildOrder, workspacePath, type Workspace } from "./workspaces
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 interface PackageManifest {
-  exports: Record<string, { types?: string }>;
+  exports?: Record<string, { types?: string }>;
 }
 
 async function declarationsFor(workspace: Workspace): Promise<string[]> {
@@ -31,7 +31,7 @@ async function validateDeclarations(workspace: Workspace): Promise<void> {
   const manifest = JSON.parse(
     await readFile(resolve(root, workspace.packageManifest), "utf8"),
   ) as PackageManifest;
-  for (const [entrypoint, target] of Object.entries(manifest.exports)) {
+  for (const [entrypoint, target] of Object.entries(manifest.exports ?? {})) {
     if (typeof target.types !== "string") {
       throw new Error(`${workspace.id} export ${entrypoint} does not declare a types target`);
     }

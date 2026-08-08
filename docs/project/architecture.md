@@ -281,17 +281,19 @@ project descriptor, gives its ordered projections immutable logical facts, and
 checks or writes the two pinned files only after the complete plan succeeds.
 
 The installed executable under `src/command/` is an adapter over those
-capabilities. `check.ts` parses supported TypeScript method signatures;
-`artifacts.ts` imports an application descriptor; `scaffold.ts` renders the
-project template. Command code may import engine concerns through `@engine`,
-but engine concerns do not import the command.
+capabilities. `check.ts` parses supported TypeScript method signatures and
+`artifacts.ts` imports an application descriptor. Command code may import
+engine concerns through `@engine`, but engine concerns do not import the
+command. The separately packed `@mit-sdg/catalog` CLI copies application-owned
+source and does not import engine internals.
 
 ## Public package boundary
 
 Each supported core subpath has one export-only file under `src/<subpath>/index.ts`.
 The workspace catalog also describes independently packed companion packages
-under `packages/`; each has its own export-only entrypoints, declaration
-snapshot, tarball checks, and exact peer rules. The public API test checks exact
+under `packages/`; each has its own tarball checks and peer rules, plus
+export-only entrypoints and declaration snapshots where it exposes an import
+surface. The public API test checks exact
 symbol identity, nested constants, unsupported historical names, and
 package-path reachability. The packed-consumer fixture separately checks the
 emitted type graph.

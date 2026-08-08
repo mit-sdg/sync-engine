@@ -1,14 +1,10 @@
 #!/usr/bin/env bun
 
 import { artifactsCommand } from "./artifacts.ts";
-import { scaffoldProject } from "./scaffold.ts";
 import { checkCommand } from "./check.ts";
 import { describeError } from "@engine/utils/redaction";
 
 const usage = `Usage: sync-engine <command> [arguments]
-
-  sync-engine new <directory>
-    Write a runnable project: one concept, its composition, and its config.
 
   sync-engine artifacts <command> [--config path]
     check      Verify the assembled read-back and wire contract against the assembly.
@@ -30,17 +26,6 @@ async function main(): Promise<void> {
   if (HELP.has(topic)) {
     if (rest.length > 0) throw new Error(usage);
     console.log(usage);
-    return;
-  }
-
-  if (topic === "new") {
-    if (rest.length !== 1 || rest[0].startsWith("-")) throw new Error(usage);
-    const written = await scaffoldProject(rest[0]);
-    console.log(`Wrote ${written.length} files into ${rest[0]}:`);
-    for (const path of written) console.log(`  ${path}`);
-    console.log(
-      `\nNext: cd ${rest[0]} && bun install && bun run generate && bun run check && bun run start`,
-    );
     return;
   }
 

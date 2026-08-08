@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "bundle/operations-room",
+  "kind": "bundle",
+  "summary": "A runnable incident-coordination application assembled from reusable catalog entries.",
+  "requires": [
+    "recipe/member-contributions",
+    "recipe/normalized-selection",
+    "recipe/operations-dashboard",
+    "recipe/selection-alerts-members",
+    "recipe/selection-opens-discussion"
+  ],
+  "variantConstraints": {
+    "concept/gathering": ["memory"]
+  },
+  "files": [
+    { "source": "concept-set.ts", "target": "$concept-set" },
+    { "source": "assembly.ts", "target": "$root/src/assembly.ts" },
+    { "source": "edge.ts", "target": "$root/src/edge.ts" },
+    { "source": "scenario.ts", "target": "$root/src/scenario.ts" },
+    { "source": "generated.config.ts", "target": "$root/generated.config.ts" },
+    { "source": "CATALOG.md", "target": "$root/CATALOG.md" }
+  ]
+}

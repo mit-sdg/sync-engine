@@ -22,7 +22,8 @@ export interface Workspace {
   readonly publication: "npm" | "private";
   readonly requiredPackedFiles: readonly string[];
   readonly packageBudget: Readonly<{ files: number; packedBytes: number; unpackedBytes: number }>;
-  readonly scaffold?: Readonly<{ source: string; destination: string; executable: string }>;
+  readonly assets?: readonly Readonly<{ source: string; destination: string }>[];
+  readonly bins?: Readonly<Record<string, string>>;
 }
 
 export const workspaceCatalog = [
@@ -54,11 +55,37 @@ export const workspaceCatalog = [
       "package.json",
     ],
     packageBudget: { files: 420, packedBytes: 500_000, unpackedBytes: 1_500_000 },
-    scaffold: {
-      source: "src/command/scaffold",
-      destination: "dist/command/scaffold",
-      executable: "dist/command/main.js",
-    },
+    bins: { "sync-engine": "dist/command/main.js" },
+  },
+  {
+    id: "catalog",
+    packageName: "@mit-sdg/catalog",
+    directory: "packages/catalog",
+    packageManifest: "packages/catalog/package.json",
+    sourceDirectory: "src",
+    distDirectory: "dist",
+    buildConfig: "tsconfig.build.json",
+    verifiedTarball: "catalog-package.tgz",
+    buildAfter: [],
+    peerWorkspaceIds: ["core"],
+    rootRuntimeDependencies: [],
+    forbiddenWorkspaceIds: ["http", "analysis"],
+    internalSourceDirectories: [],
+    runtimeEntrypoints: ["command.ts"],
+    publicSubpathContainsOnlyEntrypoint: false,
+    copiesExamples: false,
+    publication: "npm",
+    requiredPackedFiles: [
+      "LICENSE",
+      "NOTICE",
+      "README.md",
+      "package.json",
+      "dist/command.js",
+      "dist/entries/index.json",
+    ],
+    packageBudget: { files: 100, packedBytes: 180_000, unpackedBytes: 700_000 },
+    assets: [{ source: "entries", destination: "dist/entries" }],
+    bins: { catalog: "dist/command.js" },
   },
   {
     id: "http",

@@ -24,6 +24,19 @@
         "@mit-sdg/sync-engine": "1.0.0-beta.7",
       },
     },
+    "packages/catalog": {
+      "name": "@mit-sdg/catalog",
+      "version": "1.0.0-beta.7",
+      "bin": {
+        "catalog": "./dist/command.js",
+      },
+      "peerDependencies": {
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+      },
+      "optionalPeers": [
+        "@mit-sdg/sync-engine",
+      ],
+    },
     "packages/http": {
       "name": "@mit-sdg/sync-engine-http",
       "version": "1.0.0-beta.7",
@@ -64,6 +77,8 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@mit-sdg/catalog": ["@mit-sdg/catalog@workspace:packages/catalog"],
 
     "@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
 

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "recipe/selection-alerts-members",
+  "kind": "recipe",
+  "summary": "Raise one alert for every current member when a scoped selection changes.",
+  "requires": ["concept/alerting", "concept/gathering", "concept/selecting"],
+  "files": [
+    {
+      "source": "selection-alerts-members.ts",
+      "target": "$recipes/selection-alerts-members.ts"
+    },
+    {
+      "source": "selection-alerts-members.test.ts",
+      "target": "$recipes/selection-alerts-members.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/selection-alerts-members.ts",
+    "test": "$recipes/selection-alerts-members.test.ts",
+    "members": ["SelectionAlertsMembers"]
+  }
+}

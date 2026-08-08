@@ -41,10 +41,11 @@ bun add @mit-sdg/sync-engine@beta
 | Package                                                                                               | Role                                                                     |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `@mit-sdg/sync-engine`                                                                                | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
+| [`@mit-sdg/catalog`](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)               | Copy-owned concepts, computations, recipes, and application bundles      |
 | [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Deterministic IR queries and optional TypeScript project/source evidence |
 | [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | Maintained HTTP handler, fetch client, and generated wire projection     |
 
-The analysis and HTTP companions each require the exact matching core beta.
+The catalog, analysis, and HTTP companions each require the exact matching core beta.
 Analysis exposes a lightweight `@mit-sdg/sync-engine-analysis/ir` surface and a
 TypeScript-backed `@mit-sdg/sync-engine-analysis/project` producer surface.
 TypeScript remains an analysis runtime dependency, but importing `/ir` does not
@@ -61,22 +62,25 @@ trusting an attacker-chosen artifact and freshly computed digest still trusts
 attacker-chosen evidence. Revision labels remain caller assertions rather than
 Git verification.
 
-## Create an application
+## Create an application from the catalog
 
 ```sh
-bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
-cd note-keeper
-bun install
+mkdir operations-room
+cd operations-room
+bun init -y
+bun add --exact @mit-sdg/sync-engine@beta
+bun add --dev "typescript@>=6 <7"
+bunx --package @mit-sdg/catalog@beta catalog init bundle/operations-room --variant concept/gathering=memory
 ```
 
-For a reproducible evaluation, replace `@beta` with a pinned version.
+For a reproducible evaluation, replace both `@beta` selectors with matching
+pinned versions.
 
-The generated project declares its own package dependency and contains one
-complete behavior: a specification, plain TypeScript class, principle test,
-registry, concept set, composition, assembly, gateway scenario, and
-generated-artifact configuration. Continue with [Getting
-started](docs/user/guide/getting-started.md#run-the-complete-lifecycle) to run and
-inspect it.
+The catalog copies four independent concepts, one vocabulary computation, five
+composition recipes, executable evidence, and a complete application boundary.
+Your application owns every copied source file. Continue with [Getting
+started](docs/user/guide/getting-started.md) to generate its contracts and run
+the incident-coordination scenario.
 
 ## Documentation
 
