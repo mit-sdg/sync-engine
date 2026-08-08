@@ -656,6 +656,19 @@ async function verifyScaffoldAndExamples(
   const executable = core.manifest.bin?.["sync-engine"];
   if (executable === undefined) throw new Error("core package does not provide sync-engine");
   run("bun", [resolve(installed, executable), "new", scaffold], temporary);
+  const catalog = JSON.parse(
+    execFileSync("bun", [resolve(installed, executable), "catalog"], {
+      cwd: scaffold,
+      env: commandEnv(),
+      encoding: "utf8",
+    }),
+  ) as Record<string, { format?: string }>;
+  if (
+    Object.keys(catalog).join() !== "src/concepts/noting/spec.md" ||
+    catalog["src/concepts/noting/spec.md"]?.format !== "sync-engine.concept-specification"
+  ) {
+    throw new Error("packed sync-engine catalog did not emit the scaffold specification");
+  }
   const scaffoldManifestPath = resolve(scaffold, "package.json");
   const scaffoldManifest = await prepareWorkspaceDependencies(
     scaffoldManifestPath,

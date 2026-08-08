@@ -138,6 +138,10 @@ describe("generated application artifacts", () => {
 
   sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
     Check parsed action/query declarations against class source and optionally inspect application diagnostics.
+    Defaults to src/concepts.
+
+  sync-engine catalog [--concepts <path...>]
+    Parse authored concept specifications into canonical path-keyed JSON.
     Defaults to src/concepts.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,

@@ -282,9 +282,10 @@ checks or writes the two pinned files only after the complete plan succeeds.
 
 The installed executable under `src/command/` is an adapter over those
 capabilities. `check.ts` parses supported TypeScript method signatures;
-`artifacts.ts` imports an application descriptor; `scaffold.ts` renders the
-project template. Command code may import engine concerns through `@engine`,
-but engine concerns do not import the command.
+`catalog.ts` discovers and parses authored specifications without loading
+source; `artifacts.ts` imports an application descriptor; `scaffold.ts` renders
+the project template. Command code may import engine concerns through
+`@engine`, but engine concerns do not import the command.
 
 ## Public package boundary
 

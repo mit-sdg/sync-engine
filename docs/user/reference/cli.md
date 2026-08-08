@@ -1,8 +1,8 @@
 # Command-line reference
 
-The installed `sync-engine` executable scaffolds projects, compares parsed
-concept action/query declarations with class source, and checks or generates
-assembly artifacts. Commands follow the [runtime and toolchain support
+The installed `sync-engine` executable scaffolds projects, catalogs authored
+concept specifications, compares parsed declarations with class source, and
+checks or generates assembly artifacts. Commands follow the [runtime and toolchain support
 policy](../../../SUPPORT.md) and run relative to the current working directory unless
 a path says otherwise.
 
@@ -21,6 +21,7 @@ before a command applies defaults, imports configuration, or writes files.
 | Command                                | Result                                                                                | Writes files                                    |
 | -------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | `new <directory>`                      | Creates the runnable one-concept scaffold                                             | Yes; never overwrites an intended template file |
+| `catalog`                              | Prints parsed authored specifications as canonical path-keyed JSON                    | No                                              |
 | `check`                                | Compares concept specifications with class source and optionally inspects an assembly | No                                              |
 | `artifacts check`                      | Compares both configured artifacts with the assembly                                  | No                                              |
 | `artifacts pin`                        | Regenerates both configured artifacts                                                 | Yes                                             |
@@ -48,6 +49,34 @@ does not provide a transactional rollback.
 
 On success, the command lists the written paths and prints a `Next:` command for
 installing, generating, checking, and running the project.
+
+## `sync-engine catalog`
+
+```text
+sync-engine catalog [--concepts <path...>]
+```
+
+`catalog` recursively finds files named exactly `spec.md` under each supplied
+root and parses them with the concept specification parser. The default root is
+`src/concepts`. `--concepts` consumes one or more paths and may appear once.
+Roots must be nonblank directories within the current working directory.
+Overlapping and symlink-aliased roots are deduplicated by their canonical paths.
+Symlinks nested below a root are rejected rather than silently omitted or
+followed.
+
+Success writes one canonical JSON object to standard output. Each key is the
+portable, current-working-directory-relative path to an authored `spec.md`; its
+value is that file's `ConceptSpecificationIR`. Keys are ordered by path, object
+keys are canonicalized, authored arrays retain their order, and output ends with
+one newline. Source locations remain the one-based positions reported by the
+parser. LF, CRLF, and CR Markdown line endings produce the same catalog bytes.
+
+The command needs no `package.json`, registry, concept class, concept set,
+assembly, or generated config. It does not import TypeScript or application
+modules and does not write files. An empty search, malformed specification,
+filesystem failure, unknown option, repeated option, or missing option value
+fails with status 1. The complete catalog is built before output, so failure
+produces no partial standard output.
 
 ## `sync-engine check`
 

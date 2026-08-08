@@ -484,7 +484,10 @@ export function parseSpec(markdown: string): ConceptSpec {
       'spec takes the specification\'s markdown text — import it with { type: "text" }.',
     );
   }
-  const lines = markdown.split("\n").map((text, index) => ({ text, number: index + 1 }));
+  const lines = markdown
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((text, index) => ({ text, number: index + 1 }));
   const sections = sectionsOf(lines);
   return {
     format: "sync-engine.concept-specification",

@@ -1,8 +1,5 @@
 #!/usr/bin/env bun
 
-import { artifactsCommand } from "./artifacts.ts";
-import { scaffoldProject } from "./scaffold.ts";
-import { checkCommand } from "./check.ts";
 import { describeError } from "@engine/utils/redaction";
 
 const usage = `Usage: sync-engine <command> [arguments]
@@ -21,6 +18,10 @@ const usage = `Usage: sync-engine <command> [arguments]
 
   sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
     Check parsed action/query declarations against class source and optionally inspect application diagnostics.
+    Defaults to src/concepts.
+
+  sync-engine catalog [--concepts <path...>]
+    Parse authored concept specifications into canonical path-keyed JSON.
     Defaults to src/concepts.`;
 
 const HELP = new Set([undefined, "help", "--help", "-h"]);
@@ -35,6 +36,7 @@ async function main(): Promise<void> {
 
   if (topic === "new") {
     if (rest.length !== 1 || rest[0].startsWith("-")) throw new Error(usage);
+    const { scaffoldProject } = await import("./scaffold.ts");
     const written = await scaffoldProject(rest[0]);
     console.log(`Wrote ${written.length} files into ${rest[0]}:`);
     for (const path of written) console.log(`  ${path}`);
@@ -45,12 +47,20 @@ async function main(): Promise<void> {
   }
 
   if (topic === "artifacts") {
+    const { artifactsCommand } = await import("./artifacts.ts");
     await artifactsCommand(rest);
     return;
   }
 
   if (topic === "check") {
+    const { checkCommand } = await import("./check.ts");
     await checkCommand(rest);
+    return;
+  }
+
+  if (topic === "catalog") {
+    const { catalogCommand } = await import("./catalog.ts");
+    await catalogCommand(rest);
     return;
   }
 

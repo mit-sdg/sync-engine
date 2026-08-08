@@ -59,6 +59,7 @@ expressions, results, or prose.
 | Layer                              | Establishes                                                                    |
 | ---------------------------------- | ------------------------------------------------------------------------------ |
 | Specification parser               | Complete declaration syntax, descriptions, promises, refusals, and locations   |
+| `sync-engine catalog`              | Canonical path-keyed JSON for authored specifications, without loading source  |
 | `registerConcept`                  | Agreement with callable methods, recoverable input names, and refusal mappings |
 | `sync-engine check`                | Agreement with direct class methods and supported TypeScript input shapes      |
 | Engine-evaluated reads             | Query result container and declared cardinality                                |
