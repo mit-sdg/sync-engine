@@ -13,7 +13,7 @@ import type { Empty } from "@sync-engine/internal/reactions/types";
 import {
   FAULT_REPLY,
   FAULT_REACTION,
-  refusalFunnel,
+  standardBoundaryOutcomeReactions,
 } from "@sync-engine/internal/boundary/invocation/funnel";
 import { Requesting } from "@sync-engine/internal/boundary/invocation/invoke";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
@@ -279,10 +279,8 @@ describe("faults while forming response input", () => {
       when(refs.RequestBoundary.request({ path: "/seats/audit", requestId }).responds())
         .then(refs.Seating.audit({}))
         .then(refs.RequestBoundary.respond({ ok: true, requestId }));
-    reaction.register({
-      Audit,
-      ...refusalFunnel(instrumented),
-    });
+    reaction.register({ Audit });
+    reaction.registerReactions(standardBoundaryOutcomeReactions());
 
     const reqFn = instrumented.request as unknown as (
       args: Record<string, unknown>,

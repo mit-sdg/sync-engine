@@ -66,7 +66,7 @@ import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
 import { assertPortableRoutePath } from "../protocol/route-path.ts";
 import { assertEndpointValidators } from "../protocol/validation.ts";
 import type { EndpointValidators } from "../protocol/validation.ts";
-import { refusalFunnel } from "../invocation/funnel.ts";
+import { standardBoundaryOutcomeReactions } from "../invocation/funnel.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import {
   createInvoker,
@@ -549,6 +549,16 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   const app = engine.exportReactions();
   assertApplicationLocality("assemble", app);
+  const boundaryOutcomes = standardBoundaryOutcomeReactions();
+  const reservedOutcomeNames = new Set(boundaryOutcomes.map(({ name }) => name));
+  const outcomeCollision = [...app.reactions, ...app.unlowered].find(({ name }) =>
+    reservedOutcomeNames.has(name),
+  );
+  if (outcomeCollision !== undefined) {
+    throw new Error(
+      `assemble: reaction name "${outcomeCollision.name}" is reserved for boundary outcome delivery.`,
+    );
+  }
 
   // Declared contracts take precedence; receive patterns fill missing entries.
   assertInputContractsMatchReceivePatterns(app, contracts);
@@ -556,7 +566,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     if (!Object.hasOwn(contracts, path)) setOwn(contracts, path, decl);
   }
 
-  engine.register(refusalFunnel(instrumentedBoundary as unknown as RequestBoundaryActions));
+  engine.registerReactions(boundaryOutcomes);
   engine.addObserver(respondRaceObserver);
 
   const endpointPaths = new Set(endpoints.map(({ path }) => path));

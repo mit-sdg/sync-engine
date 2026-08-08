@@ -502,10 +502,17 @@ ordinary answering path under every rule above.
 call. Runtime execution does not enforce branch disjointness or endpoint
 coverage. `applicationDiagnostics(...)` traces causal `by` provenance to
 attribute an eventual response to its request path. Only a response that uses
-the traced request identifier on a direct request-to-response answer path
-contributes to overlap or coverage proof. An intermediate action posture makes
-the path ineligible for either proof.
-On direct paths, the analyzer recognizes canonical `receive(...)` shapes,
+the traced request identifier contributes to an endpoint proof. Direct response
+paths and recognized total action chains contribute to overlap proof; chain
+overlaps are attributed to their root reactions. Coverage recognizes a linear
+chain of successful action postures when every action input exactly follows the
+preceding ask, every output pattern is empty, and the only intervening reads
+replay guaranteed ancestors. The standard boundary funnels cover refusals and
+faults with correlated response attempts. Deferred stages remain eligible. This
+proof concerns portable JSON-shaped boundary values, not live object identity
+or accessor behavior. It proves guard coverage after each watched posture lands,
+not that an action or read eventually settles. Other intermediate action paths remain ineligible. On direct paths, the analyzer
+recognizes canonical `receive(...)` shapes,
 disjoint literal request alternatives, non-dropping `whether` lines, and fresh
 computations. It can report a bounded set of potential overlaps and warn when
 it recognizes no non-dropping total answer path. Complementary state reads

@@ -15,12 +15,7 @@
  * response, because those faults must answer the root request when possible.
  */
 
-import { faulted, refused } from "@engine/reactions/authoring/channels";
-import { actionLine } from "@engine/reactions/authoring/nodes";
-import { reaction } from "@engine/reactions/authoring/refs";
-import { earlier, when } from "@engine/reactions/authoring/words";
-import type { InstrumentedAction, Reaction, Vars } from "@engine/reactions/types";
-import type { RequestBoundaryActions } from "../protocol/endpoints.ts";
+import type { ActionTriggerIR, ChannelTriggerIR, PatternIR, ReactionIR } from "@engine/reads/ir";
 
 /** The generic public reply for an internal runtime fault. */
 export const FAULT_REPLY = "INTERNAL_ERROR";
@@ -28,28 +23,50 @@ export const FAULT_REPLY = "INTERNAL_ERROR";
 /** The registered fault-delivery reaction name used by its provenance guard. */
 export const FAULT_REACTION = "DeliverFaultToAsker";
 
-export function refusalFunnel(boundary: RequestBoundaryActions): Record<string, Reaction> {
-  const respondFramework = (
-    boundary as RequestBoundaryActions & { respondFramework: InstrumentedAction }
-  ).respondFramework;
-  const except = [boundary.request, boundary.respond, respondFramework];
-
-  const DeliverRefusalToAsker = reaction(({ requestId, message }: Vars) =>
-    when(refused({ message }, { except }))
-      .where(earlier(boundary.request, { requestId }))
-      .then(actionLine(boundary.respond, { requestId, error: message }) as never),
-  );
-
-  const DeliverFaultToAsker = reaction(({ requestId }: Vars) =>
-    when(faulted({}, { exceptBy: [FAULT_REACTION] }))
-      .where(earlier(boundary.request, { requestId }))
-      .then(
-        actionLine(respondFramework, {
-          requestId,
-          error: FAULT_REPLY,
-        }) as never,
-      ),
-  );
-
-  return { DeliverRefusalToAsker, [FAULT_REACTION]: DeliverFaultToAsker };
+/** Fresh canonical IR used for both runtime registration and static proof. */
+export function standardBoundaryOutcomeReactions(): ReactionIR[] {
+  const requestId = { $var: "requestId" } as const;
+  const request: ActionTriggerIR = {
+    kind: "action",
+    concept: "RequestBoundary",
+    action: "request",
+    input: { requestId },
+    output: {},
+  };
+  const outcome = (
+    name: string,
+    when: ChannelTriggerIR,
+    action: string,
+    input: PatternIR,
+  ): ReactionIR => ({
+    name,
+    when: [when],
+    where: [{ op: "earlier", when: request }],
+    then: [{ kind: "request", concept: "RequestBoundary", action, input }],
+  });
+  return [
+    outcome(
+      "DeliverRefusalToAsker",
+      {
+        kind: "channel",
+        channel: "refused",
+        pattern: { message: { $var: "message" } },
+        except: ["RequestBoundary"],
+      },
+      "respond",
+      { requestId, error: { $var: "message" } },
+    ),
+    outcome(
+      FAULT_REACTION,
+      {
+        kind: "channel",
+        channel: "faulted",
+        pattern: {},
+        except: [],
+        exceptBy: [FAULT_REACTION],
+      },
+      "respondFramework",
+      { requestId, error: FAULT_REPLY },
+    ),
+  ];
 }

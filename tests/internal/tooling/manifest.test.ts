@@ -65,6 +65,10 @@ class LookingConcept {
   open({ item }: { item: string }) {
     return { item };
   }
+
+  pair({ first, second }: { first: string; second: string }) {
+    return { first, second };
+  }
 }
 
 const lookup = vocabulary({
@@ -602,6 +606,28 @@ describe("application manifest", () => {
     ).toContain("MISSING_ENDPOINT_FALLBACK");
   });
 
+  test("does not treat a provenance-pinned boundary request as externally total", () => {
+    const Direct = endpoint("/pinned-request", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(assemble({ vocabulary: lookup, composition: { Direct } }));
+    const pinned: AppIR = {
+      ...manifest.application,
+      reactions: manifest.application.reactions.map((reaction) =>
+        reaction.name === "Direct"
+          ? {
+              ...reaction,
+              when: reaction.when.map((trigger) =>
+                trigger.kind === "action" ? { ...trigger, by: "Ghost" } : trigger,
+              ),
+            }
+          : reaction,
+      ),
+    };
+
+    expect(
+      applicationDiagnostics(pinned, manifest.endpoints, manifest.wire).map(({ code }) => code),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
   test("requires a complementary read pair to cover admitted request shapes", () => {
     const OptionalInput = endpoint(
       "/optional-input",
@@ -672,8 +698,100 @@ describe("application manifest", () => {
     expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
   });
 
-  test("does not prove coverage through an intermediate action posture", () => {
-    const Chained = endpoint("/chained", ({ item, opened }) =>
+  test("proves coverage through canonical linear action continuations", () => {
+    const Chained = endpoint("/chained", ({ item }) =>
+      receive({ item }).then(Looking.open({ item }).responds()).then(respond({ item })),
+    );
+    const MultiHop = endpoint("/multi-hop", ({ item }) =>
+      receive({ item })
+        .then(Looking.open({ item }).responds())
+        .then(Looking.open({ item }).responds())
+        .then(respond({ item })),
+    );
+    const first = Symbol("value");
+    const second = Symbol("value");
+    const AlphaNamed = endpoint("/alpha-chain", () =>
+      receive({ first, second })
+        .then(Looking.pair({ second, first }).responds())
+        .then(respond({ ok: true })),
+    );
+    const Deferred = endpoint("/deferred-chain", () =>
+      receive()
+        .then(Looking.open({ item: "later" }).responds())
+        .afterFlowSettles()
+        .then(respond({ ok: true })),
+    );
+
+    expect(
+      applicationManifest(
+        assemble({
+          vocabulary: lookup,
+          composition: { AlphaNamed, Chained, Deferred, MultiHop },
+        }),
+      ).diagnostics,
+    ).toEqual([]);
+  });
+
+  test("reserves standard boundary outcome names across lowered families", () => {
+    const Reserved = endpoint("/reserved-outcome", () => {
+      const answer = respond({ ok: true });
+      answer.stepName = "DeliverFaultToAsker";
+      return receive()
+        .then(Looking.open({ item: "reserved" }).responds())
+        .then(answer);
+    });
+
+    expect(() => assemble({ vocabulary: lookup, composition: { Reserved } })).toThrow(
+      'reaction name "DeliverFaultToAsker" is reserved for boundary outcome delivery',
+    );
+  });
+
+  test("preserves overlap diagnostics for competing total action chains", () => {
+    const FirstChain = endpoint("/chain-race", ({ item }) =>
+      receive({ item }).then(Looking.open({ item }).responds()).then(respond({ item })),
+    );
+    const SecondChain = endpoint("/chain-race", ({ item }) =>
+      receive({ item })
+        .then(Looking.open({ item }).responds())
+        .then(respond({ item, source: "second" })),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { FirstChain, SecondChain } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["ENDPOINT_PATH_OVERLAP"]);
+    expect(diagnostics[0]?.message).toContain('"FirstChain" and "SecondChain"');
+    expect(diagnostics[0]?.message).toContain("one root action chain covers every settled outcome");
+  });
+
+  test("recognizes only action literals whose representation survives dispatch", () => {
+    const LiteralChain = endpoint("/literal-chain", () =>
+      receive()
+        .then(Looking.open({ item: { $kind: "literal" } as never }).responds())
+        .then(respond({ ok: true })),
+    );
+    const manifest = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { LiteralChain } }),
+    );
+    expect(manifest.diagnostics).toEqual([]);
+
+    const literal = Object.assign(Object.create(null) as Record<string, unknown>, { safe: true });
+    const root = manifest.application.reactions.find(({ name }) => name === "LiteralChain")!;
+    root.then[0].input.item = literal as never;
+    const continuation = manifest.application.reactions.find(
+      ({ name }) => name === "LiteralChain#2",
+    )!;
+    (continuation.when[0] as ActionTriggerIR).input.item = literal as never;
+
+    expect(
+      applicationDiagnostics(manifest.application, manifest.endpoints, manifest.wire).map(
+        ({ code }) => code,
+      ),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("keeps intermediate output patterns as endpoint guards", () => {
+    const Filtered = endpoint("/filtered-chain", ({ item, opened }) =>
       receive({ item })
         .then(Looking.open({ item }).responds({ item: opened }))
         .then(respond({ opened })),
@@ -681,8 +799,90 @@ describe("application manifest", () => {
 
     expect(
       applicationManifest(
-        assemble({ vocabulary: lookup, composition: { Chained } }),
+        assemble({ vocabulary: lookup, composition: { Filtered } }),
       ).diagnostics.map(({ code }) => code),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("keeps guards at every stage of an action chain", () => {
+    const RootGuard = endpoint("/root-guard", ({ item }) =>
+      receive({ item })
+        .where(Looking._get({ item }))
+        .then(Looking.open({ item }).responds())
+        .then(respond({ item })),
+    );
+    const LaterGuard = endpoint("/later-guard", ({ item }) =>
+      receive({ item })
+        .then(Looking.open({ item }).responds())
+        .then(where(Looking._get({ item })).then(respond({ item })).named("found")),
+    );
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { RootGuard, LaterGuard } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual([
+      "MISSING_ENDPOINT_FALLBACK",
+      "MISSING_ENDPOINT_FALLBACK",
+    ]);
+  });
+
+  test("requires standard refusal and fault delivery for action-chain coverage", () => {
+    const Chained = endpoint("/chained", ({ item }) =>
+      receive({ item }).then(Looking.open({ item }).responds()).then(respond({ item })),
+    );
+    const manifest = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Chained } }),
+    );
+    for (const missing of ["DeliverRefusalToAsker", "DeliverFaultToAsker"]) {
+      const withoutFunnel: AppIR = {
+        ...manifest.application,
+        reactions: manifest.application.reactions.filter(({ name }) => name !== missing),
+      };
+
+      expect(
+        applicationDiagnostics(withoutFunnel, manifest.endpoints, manifest.wire).map(
+          ({ code }) => code,
+        ),
+      ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+    }
+
+    const fault = manifest.application.reactions.find(
+      ({ name }) => name === "DeliverFaultToAsker",
+    )!;
+    const faultTrigger = fault.when[0];
+    if (faultTrigger.kind !== "channel") throw new Error("expected the standard fault channel");
+    faultTrigger.exceptBy = [];
+    expect(
+      applicationDiagnostics(manifest.application, manifest.endpoints, manifest.wire).map(
+        ({ code }) => code,
+      ),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("analyzes only the active definition when imported reaction names repeat", () => {
+    const Chained = endpoint("/shadowed-answer", ({ item }) =>
+      receive({ item }).then(Looking.open({ item }).responds()).then(respond({ item })),
+    );
+    const manifest = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Chained } }),
+    );
+    const answer = manifest.application.reactions.find(({ name }) => name === "Chained#2")!;
+    manifest.application.reactions.push({
+      ...answer,
+      then: [
+        {
+          kind: "request",
+          concept: "Looking",
+          action: "open",
+          input: { item: "shadow" },
+        },
+      ],
+    });
+
+    expect(
+      applicationDiagnostics(manifest.application, manifest.endpoints, manifest.wire).map(
+        ({ code }) => code,
+      ),
     ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
   });
 
