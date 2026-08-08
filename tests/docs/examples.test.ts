@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,11 +43,13 @@ function shellLines(markdown: string): string[] {
 
 async function json(path: string): Promise<{
   name?: string;
+  version?: string;
   publishConfig?: { tag?: string };
   scripts?: Record<string, string>;
 }> {
   return JSON.parse(await readFile(new URL(path, root), "utf8")) as {
     name?: string;
+    version?: string;
     publishConfig?: { tag?: string };
     scripts?: Record<string, string>;
   };
@@ -82,7 +84,7 @@ describe("executable documentation examples", () => {
       [documents.readme, [await json("package.json")]],
       [
         new URL("docs/user/guide/getting-started.md", root),
-        [await json("src/command/scaffold/package.json")],
+        [await json("package.json"), await json("packages/catalog/package.json")],
       ],
       [
         new URL("docs/user/guide/authoring.md", root),
@@ -104,35 +106,55 @@ describe("executable documentation examples", () => {
     }
   });
 
-  test("the package-qualified first-run command works through the local CLI", async () => {
+  test("the package-qualified first-run command works through the local catalog CLI", async () => {
     const readme = await readFile(documents.readme, "utf8");
-    const manifest = await json("package.json");
-    const command = shellLines(readme).find((line) => line.includes(" sync-engine new "));
+    const manifest = await json("packages/catalog/package.json");
+    const core = await json("package.json");
+    const command = shellLines(readme).find((line) => line.includes(" catalog init "));
     expect(command).toBeDefined();
 
     const words = command?.split(/\s+/) ?? [];
-    const executable = words.indexOf("sync-engine");
+    const executable = words.indexOf("catalog");
     expect(words.slice(0, executable)).toEqual([
       "bunx",
       "--package",
       `${manifest.name}@${manifest.publishConfig?.tag}`,
     ]);
-    expect(words.slice(executable + 1)).toEqual(["new", "note-keeper"]);
+    expect(words.slice(executable + 1)).toEqual([
+      "init",
+      "bundle/operations-room",
+      "--variant",
+      "concept/gathering=memory",
+    ]);
 
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-docs-"));
-    const project = join(temporary, "note-keeper");
+    const project = join(temporary, "operations-room");
     try {
+      await mkdir(project);
+      await writeFile(
+        join(project, "package.json"),
+        `${JSON.stringify({
+          private: true,
+          dependencies: { [core.name ?? ""]: core.version },
+        })}\n`,
+      );
       const result = spawnSync(
         "bun",
-        [fileURLToPath(new URL("src/command/main.ts", root)), "new", project],
-        { cwd: fileURLToPath(root), encoding: "utf8" },
+        [
+          fileURLToPath(new URL("packages/catalog/src/command.ts", root)),
+          "init",
+          "bundle/operations-room",
+          "--variant",
+          "concept/gathering=memory",
+        ],
+        { cwd: project, encoding: "utf8" },
       );
       expect({ status: result.status, stderr: result.stderr }, result.stdout).toEqual({
         status: 0,
         stderr: "",
       });
       await expect(readFile(join(project, "generated.config.ts"), "utf8")).resolves.toContain(
-        'title: "Note keeper"',
+        'title: "Operations room"',
       );
     } finally {
       await rm(temporary, { recursive: true, force: true });

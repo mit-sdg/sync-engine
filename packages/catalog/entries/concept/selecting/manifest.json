@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "concept/selecting",
+  "kind": "concept",
+  "summary": "Maintain one current item per scope while retaining selection history.",
+  "files": [
+    { "source": "spec.md", "target": "$concepts/selecting/spec.md" },
+    { "source": "registry.ts", "target": "$concepts/selecting/registry.ts" }
+  ],
+  "variants": {
+    "memory": {
+      "summary": "Dependency-free in-memory state with injectable identity generation.",
+      "files": [
+        { "source": "selecting.ts", "target": "$concepts/selecting/selecting.ts" },
+        { "source": "selecting.test.ts", "target": "$concepts/selecting/selecting.test.ts" }
+      ]
+    }
+  },
+  "concept": {
+    "name": "Selecting",
+    "registration": "$concepts/selecting/registry.ts",
+    "export": "selecting"
+  }
+}

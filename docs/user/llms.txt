@@ -12,7 +12,8 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 
 - [Documentation index](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/index.md) — reader paths by task
 - [Application model](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/overview.md) — concepts, composition, assembly, clients, and occurrence evidence
-- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/getting-started.md) — scaffold and run one complete application
+- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/getting-started.md) — install and run one complete catalog application
+- [Source catalog](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/README.md) — copy-owned concepts, computations, recipes, bundles, and lifecycle commands
 - [Core Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/public-api.md) — supported core subpaths, exports, signatures, and defaults
 - [Execution semantics](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/semantics.md) — authoritative runtime behavior
 - [Operational limits](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/operations.md) — deployment suitability and host responsibilities

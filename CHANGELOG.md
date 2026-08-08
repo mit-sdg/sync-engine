@@ -7,8 +7,9 @@ an exact version, follow the [support policy](SUPPORT.md), and review the
 
 ## [1.0.0-beta.7] - 2026-08-07
 
-This beta advances the canonical application manifest and publishes a lean,
-two-surface analysis companion for the first time.
+This beta advances the canonical application manifest, publishes a lean
+two-surface analysis companion, and introduces a copy-owned application source
+catalog.
 
 ### Compatibility
 
@@ -24,6 +25,13 @@ two-surface analysis companion for the first time.
   worker analysis, project diagnostics and producer options, and strict project
   codecs. TypeScript `>=6 <7` is an analysis runtime dependency, not a peer, but
   importing `/ir` does not evaluate it.
+- `@mit-sdg/catalog` is now a separately published, CLI-only source catalog
+  with an exact matching core peer. Its `catalog` executable installs curated
+  concepts, computations, composition recipes, and bundles without creating a
+  runtime dependency in copied applications.
+- The core `sync-engine new` command and its one-concept template are removed.
+  Core retains only source checking and generated-artifact commands; first-run
+  application source now comes from reusable catalog entries.
 - The unpublished oversized preview surface has been removed without aliases:
   there is no `/tooling`, `/guidance`, persisted granular-result codec, impact
   context bundle, change target, review orchestration, packaged guidance, or
@@ -43,6 +51,11 @@ two-surface analysis companion for the first time.
 - Upgrade core and HTTP to `1.0.0-beta.7` together. When adopting analysis,
   install `@mit-sdg/sync-engine-analysis@1.0.0-beta.7` alongside that exact core
   beta; do not infer an analysis beta.6 package from the core release history.
+- Replace `sync-engine new <directory>` with an ordinary Bun/TypeScript package
+  shell followed by `bunx --package @mit-sdg/catalog@1.0.0-beta.7 catalog init
+bundle/operations-room --variant concept/gathering=memory`. Commit
+  `catalog.json` and `catalog.lock`; copied concept and composition source is
+  application-owned.
 - Regenerate checked-in application manifests, assembled Markdown, and wire
   TypeScript. Replace V4 manifest type imports with V5. Preview analysis clients
   must replace `/tooling` imports with `/ir` and/or `/project` and move prompts,

@@ -87,6 +87,7 @@ the book.
 | `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, and `wire/`                      |
 | `packages/http/`                 | Independently published first-party HTTP transport; imports only supported core subpaths                                            |
 | `packages/analysis/`             | Public analysis companion; exposes compiler-free queries through `/ir` and TypeScript-backed producers through `/project`           |
+| `packages/catalog/`              | CLI-only source catalog; copies curated concepts, computations, recipes, and bundles into applications                              |
 | `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
 | `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
 | `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |

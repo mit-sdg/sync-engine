@@ -398,9 +398,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     const sourceDirectory = workspaceRepositoryPath(workspace, workspace.sourceDirectory);
     if (workspace.id !== "core") return filesBelow(files, sourceDirectory);
     return [
-      ...filesBelow(files, `${sourceDirectory}/command`).filter(
-        (path) => !path.startsWith(`${sourceDirectory}/command/scaffold/`),
-      ),
+      ...filesBelow(files, `${sourceDirectory}/command`),
       ...[...subpaths].flatMap((subpath) => filesBelow(files, `${sourceDirectory}/${subpath}`)),
       ...filesBelow(files, `${sourceDirectory}/engine`),
     ];
@@ -689,7 +687,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       hashes.set(hash, path);
     }
 
-    const workspace = workspaceCatalog.find(
+    const workspace: Workspace | undefined = workspaceCatalog.find(
       (candidate) =>
         candidate.directory !== "." &&
         (path === candidate.directory || path.startsWith(`${candidate.directory}/`)),
@@ -701,6 +699,10 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       workspaceRelative !== undefined &&
       (workspace.declarationSnapshot === path ||
         (workspace.requiredPackedFiles as readonly string[]).includes(workspaceRelative) ||
+        (workspace.assets ?? []).some(
+          ({ source }) =>
+            workspaceRelative === source || workspaceRelative.startsWith(`${source}/`),
+        ) ||
         ["tsconfig.json", "tsconfig.build.json"].includes(workspaceRelative) ||
         (workspaceRelative.startsWith("src/") && workspaceRelative.endsWith(".ts")) ||
         (workspaceRelative.startsWith("tests/") && workspaceRelative.endsWith(".ts")));
@@ -711,9 +713,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
           path === ".github/CODEOWNERS" ||
           path === ".github/dependabot.yml")) ||
       (head === "src" &&
-        ((parts[1] === "command" &&
-          ((parts.length === 3 && path.endsWith(".ts")) ||
-            (parts.length >= 3 && parts[2] === "scaffold"))) ||
+        ((parts[1] === "command" && parts.length === 3 && path.endsWith(".ts")) ||
           (publicSubpaths.has(parts[1] ?? "") && parts.length === 3 && parts[2] === "index.ts") ||
           (parts[1] === "engine" && path.endsWith(".ts")))) ||
       (head === "docs" &&

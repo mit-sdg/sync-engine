@@ -124,9 +124,6 @@ describe("generated application artifacts", () => {
     const root = fileURLToPath(new URL("../../../", import.meta.url));
     const expected = `Usage: sync-engine <command> [arguments]
 
-  sync-engine new <directory>
-    Write a runnable project: one concept, its composition, and its config.
-
   sync-engine artifacts <command> [--config path]
     check      Verify the assembled read-back and wire contract against the assembly.
     pin        Regenerate the assembled read-back and wire contract.

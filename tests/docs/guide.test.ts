@@ -24,14 +24,6 @@ const sourceLabel = /^(?:_Source|Source): \[[^\]]+\]\([^)]+\)_?$/gm;
 const typeScriptBlock = /^```ts\n([\s\S]*?)\n```$/gm;
 const repositoryOnlySources = new Map<string, URL[]>([
   [persistenceRecovery.pathname, [new URL("../docs/advanced-recipes.test.ts", import.meta.url)]],
-  [
-    new URL("getting-started.md", guideDirectory).pathname,
-    [
-      new URL("../../src/command/scaffold/src/concept-set.ts", import.meta.url),
-      new URL("../../src/command/scaffold/src/composition.ts", import.meta.url),
-      new URL("../../src/command/scaffold/src/assembly.ts", import.meta.url),
-    ],
-  ],
   [readConstruction.pathname, [new URL("../docs/book.test.ts", import.meta.url)]],
 ]);
 
@@ -98,24 +90,21 @@ async function documentationFiles(directory: URL): Promise<URL[]> {
 }
 
 describe("guided curriculum", () => {
-  test("the getting-started guide describes the scaffold output", async () => {
+  test("the getting-started guide describes the catalog bundle output", async () => {
     const guide = await readFile(new URL("getting-started.md", guideDirectory), "utf8");
 
-    expect(guide).toContain("sync-engine new note-keeper");
-    expect(guide).toContain("Noting");
-    expect(guide).toContain("src/concepts/noting/spec.md");
-    expect(guide).toContain("src/concepts/noting/noting.ts");
-    expect(guide).toContain("src/concepts/noting/registry.ts");
-    expect(guide).toContain("src/concepts/noting/noting.test.ts");
-    expect(guide).toContain("src/concept-set.ts");
-    expect(guide).toContain("src/composition.ts");
-    expect(guide).toContain("src/assembly.ts");
+    expect(guide).toContain("catalog init bundle/operations-room");
+    expect(guide).toContain("Gathering");
+    expect(guide).toContain("src/concepts/gathering/");
+    expect(guide).toContain("src/computations/");
+    expect(guide).toContain("concept-set.ts");
+    expect(guide).toContain("composition/");
+    expect(guide).toContain("assembly.ts");
     expect(guide).toContain("edge.ts");
     expect(guide).toContain("scenario.ts");
-    expect(guide).toContain("bun run generate");
-    expect(guide).toContain("bun run typecheck");
-    expect(guide).toContain("bun run principle");
-    expect(guide).toContain("bun run start");
+    expect(guide).toContain("sync-engine artifacts pin");
+    expect(guide).toContain("bunx tsc --noEmit");
+    expect(guide).toContain("bun src/scenario.ts");
   });
 
   test("every stated excerpt remains byte-exact with its stated source", async () => {

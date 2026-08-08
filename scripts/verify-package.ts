@@ -12,6 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
 const expectedAuthor = "Barish Namazov and Eagon Meng";
 const coreWorkspace = workspaceById("core");
+const catalogWorkspace = workspaceById("catalog");
 const analysisWorkspace = workspaceById("analysis");
 const multiInstanceWorkspaces = [coreWorkspace, workspaceById("http")];
 
@@ -27,7 +28,7 @@ interface PackageManifest {
   bin?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
-  exports: Record<string, { import: string; types: string }>;
+  exports?: Record<string, { import: string; types: string }>;
   license: string;
   name: string;
   optionalDependencies?: Record<string, string>;
@@ -291,17 +292,17 @@ async function verifyPackedWorkspace(
       requireEntry(entries, portablePath(relative(root, path)));
     }
   }
-  for (const target of Object.values(manifest.exports)) {
+  for (const target of Object.values(manifest.exports ?? {})) {
     requireEntry(entries, target.import.replace(/^\.\//, ""));
     requireEntry(entries, target.types.replace(/^\.\//, ""));
   }
-  if (workspace.scaffold !== undefined) {
-    const executable = manifest.bin?.["sync-engine"];
-    if (executable !== `./${workspace.scaffold.executable}`) {
-      throw new Error(`package must expose sync-engine as ./${workspace.scaffold.executable}`);
+  for (const [name, path] of Object.entries(workspace.bins ?? {})) {
+    const executable = manifest.bin?.[name];
+    if (executable !== `./${path}`) {
+      throw new Error(`${workspace.id} package must expose ${name} as ./${path}`);
     }
-    requireEntry(entries, executable.replace(/^\.\//, ""));
-    requireExecutable(packed, executable.replace(/^\.\//, ""));
+    requireEntry(entries, path);
+    requireExecutable(packed, path);
   }
   if (workspace.id === coreWorkspace.id) {
     for (const forbiddenId of coreWorkspace.forbiddenWorkspaceIds) {
@@ -415,7 +416,7 @@ function restoreWorkspaceDependencyVersions(
 function entrypointImports(artifacts: readonly PackedWorkspace[]): string {
   return artifacts
     .flatMap((artifact) =>
-      Object.keys(artifact.manifest.exports).map((entrypoint) => {
+      Object.keys(artifact.manifest.exports ?? {}).map((entrypoint) => {
         const specifier = packageEntrypoint(artifact.workspace, entrypoint);
         return `import type * as ${specifier.replace(/[^a-z]/gi, "_")} from ${JSON.stringify(specifier)};`;
       }),
@@ -426,7 +427,7 @@ function entrypointImports(artifacts: readonly PackedWorkspace[]): string {
 function runtimeEntrypointImports(artifacts: readonly PackedWorkspace[]): string {
   return `await Promise.all(${JSON.stringify(
     artifacts.flatMap((artifact) =>
-      Object.keys(artifact.manifest.exports).map((entrypoint) =>
+      Object.keys(artifact.manifest.exports ?? {}).map((entrypoint) =>
         packageEntrypoint(artifact.workspace, entrypoint),
       ),
     ),
@@ -646,28 +647,139 @@ async function verifyCombinedConsumer(
   run("bun", [analysisScenario], consumer, 30_000);
 }
 
-async function verifyScaffoldAndExamples(
+async function verifyCatalogAndExamples(
   artifacts: ReadonlyMap<string, PackedWorkspace>,
   coreConsumer: string,
 ): Promise<void> {
   const core = workspaceArtifact(artifacts, coreWorkspace);
   const installed = resolve(coreConsumer, "node_modules", ...core.workspace.packageName.split("/"));
-  const scaffold = resolve(temporary, "scaffold");
   const executable = core.manifest.bin?.["sync-engine"];
   if (executable === undefined) throw new Error("core package does not provide sync-engine");
-  run("bun", [resolve(installed, executable), "new", scaffold], temporary);
-  const scaffoldManifestPath = resolve(scaffold, "package.json");
-  const scaffoldManifest = await prepareWorkspaceDependencies(
-    scaffoldManifestPath,
-    "packed scaffold",
-    artifacts,
+
+  const catalog = workspaceArtifact(artifacts, catalogWorkspace);
+  const catalogOnly = resolve(temporary, "catalog-only");
+  await mkdir(catalogOnly);
+  await writeFile(
+    resolve(catalogOnly, "package.json"),
+    `${JSON.stringify({
+      private: true,
+      dependencies: {
+        [catalog.workspace.packageName]: tarballSpecifier(catalogOnly, catalog.tarball),
+      },
+    })}\n`,
   );
-  await writePackageManifest(scaffoldManifestPath, scaffoldManifest);
-  run("bun", ["install", "--ignore-scripts"], scaffold);
-  run("bun", ["run", "generate"], scaffold);
-  run("bun", ["run", "check"], scaffold);
-  run("bun", ["run", "principle"], scaffold);
-  run("bun", ["run", "start"], scaffold);
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], catalogOnly);
+  const catalogOnlyInstalled = resolve(
+    catalogOnly,
+    "node_modules",
+    ...catalog.workspace.packageName.split("/"),
+  );
+  const catalogExecutable = catalog.manifest.bin?.catalog;
+  if (catalogExecutable === undefined) throw new Error("catalog package does not provide catalog");
+  run("bun", [resolve(catalogOnlyInstalled, catalogExecutable), "list", "concept"], catalogOnly);
+
+  const catalogApplication = resolve(temporary, "catalog-application");
+  await mkdir(catalogApplication);
+  await writeFile(
+    resolve(catalogApplication, "package.json"),
+    `${JSON.stringify(
+      {
+        private: true,
+        type: "module",
+        scripts: {
+          check:
+            "sync-engine check --config generated.config.ts && sync-engine artifacts check && tsc --noEmit",
+          generate: "sync-engine artifacts pin",
+          start: "bun src/scenario.ts",
+          typecheck: "tsc --noEmit",
+        },
+        dependencies: {
+          [core.workspace.packageName]: tarballSpecifier(catalogApplication, core.tarball),
+          [catalog.workspace.packageName]: tarballSpecifier(catalogApplication, catalog.tarball),
+        },
+        devDependencies: { typescript: core.manifest.dependencies?.typescript },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  await writeFile(
+    resolve(catalogApplication, "tsconfig.json"),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          lib: ["ESNext", "DOM"],
+          target: "ESNext",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          allowImportingTsExtensions: true,
+          noEmit: true,
+          strict: true,
+          skipLibCheck: true,
+        },
+        include: ["src", "generated", "generated.config.ts", "*.d.ts"],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], catalogApplication);
+  const installedCatalog = resolve(
+    catalogApplication,
+    "node_modules",
+    ...catalog.workspace.packageName.split("/"),
+  );
+  const repositoryVariant = resolve(
+    installedCatalog,
+    "dist/entries/concept/gathering/variants/repository",
+  );
+  run(
+    "node",
+    [
+      resolve(catalogApplication, "node_modules/typescript/bin/tsc"),
+      "--ignoreConfig",
+      "--noEmit",
+      "--strict",
+      "--target",
+      "ESNext",
+      "--module",
+      "NodeNext",
+      "--moduleResolution",
+      "NodeNext",
+      "--allowImportingTsExtensions",
+      resolve(repositoryVariant, "gathering.ts"),
+      resolve(repositoryVariant, "gathering.test.ts"),
+    ],
+    catalogApplication,
+  );
+  run(
+    "bun",
+    [resolve(installedCatalog, catalogExecutable), "init", "concept/selecting"],
+    catalogApplication,
+  );
+  run("bun", ["run", "typecheck"], catalogApplication);
+  run(
+    "bun",
+    [
+      resolve(installedCatalog, catalogExecutable),
+      "add",
+      "bundle/operations-room",
+      "--variant",
+      "concept/gathering=memory",
+    ],
+    catalogApplication,
+  );
+  run("bun", ["run", "generate"], catalogApplication);
+  run("bun", ["run", "check"], catalogApplication);
+  const catalogLock = JSON.parse(
+    await readFile(resolve(catalogApplication, "catalog.lock"), "utf8"),
+  ) as { entries: Record<string, { files: Array<{ target: string }> }> };
+  const evidence = Object.values(catalogLock.entries)
+    .flatMap(({ files }) => files.map(({ target }) => target))
+    .filter((path) => path.endsWith(".test.ts"))
+    .sort();
+  for (const path of evidence) run("bun", [path], catalogApplication);
+  run("bun", ["run", "start"], catalogApplication);
 
   for (const { directory } of Object.values(applicationExamples)) {
     const isolated = resolve(temporary, directory);
@@ -828,7 +940,7 @@ try {
   const coreConsumer = await verifyCoreOnlyConsumer(artifacts);
   await verifyCombinedConsumer(artifacts);
   await verifyMultiInstance(artifacts);
-  await verifyScaffoldAndExamples(artifacts, coreConsumer);
+  await verifyCatalogAndExamples(artifacts, coreConsumer);
   await copyVerifiedTarballs(artifacts);
 } finally {
   await rm(temporary, { recursive: true, force: true });

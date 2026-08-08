@@ -5,6 +5,7 @@
 /bun.lock @BarishNamazov @eagonmeng
 /packages/http/ @BarishNamazov @eagonmeng
 /packages/analysis/ @BarishNamazov @eagonmeng
+/packages/catalog/ @BarishNamazov @eagonmeng
 /CHANGELOG.md @BarishNamazov @eagonmeng
 /SUPPORT.md @BarishNamazov @eagonmeng
 /SECURITY.md @BarishNamazov @eagonmeng

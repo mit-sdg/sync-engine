@@ -78,6 +78,7 @@ dependency location:
 | `package.json`                                      | Published version and `publishConfig.tag`                            |
 | `packages/http/package.json`                        | HTTP package version and exact core peer                             |
 | `packages/analysis/package.json`                    | Analysis version, exact core peer, and TypeScript runtime dependency |
+| `packages/catalog/package.json`                     | Catalog version and exact core peer                                  |
 | `examples/reading-circle/package.json`              | Shipped example dependency                                           |
 | `examples/operations-room/package.json`             | Shipped example dependency                                           |
 | `examples/production-http/package.json`             | Shipped example dependency                                           |
@@ -85,8 +86,8 @@ dependency location:
 | `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
 | `tests/package/multi-instance/backend/package.json` | Independent backend dependency                                       |
 
-The scaffold keeps placeholders and generation reads the canonical root facts.
-The following `bun install` regenerates `bun.lock` from the projected manifests.
+Catalog entry manifests contain no release version copies. The following
+`bun install` regenerates `bun.lock` from the projected package manifests.
 Review the lockfile and manifest diffs together. `bun run release:check` rejects
 stale projections; review and commit every updated manifest and `bun.lock`.
 Publication uses that committed package metadata unchanged. Run frozen
@@ -140,7 +141,7 @@ Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` invokes npm's real pack lifecycle for each workspace;
 the root package's `prepack` performs their shared build. The check inspects all
 workspace tarballs and policy links, installs core alone and all packages together,
-exercises the generated scaffold and examples, compiles a separate generated
+installs and runs the catalog bundle and shipped examples, compiles a separate generated
 client/backend topology, and runs Node scenarios. An isolated Node 24 import
 first proves that analysis `/ir` does not load TypeScript, `fs`, `fs/promises`,
 `node:fs`, `node:fs/promises`, worker, project-loader, or source-index-builder
@@ -151,9 +152,9 @@ anchor, retains and supplies the complete project digest to the neutral facade,
 exercises source/impact queries, checks derivable file-byte resource accounting,
 and round-trips the strict project codec without workspace symlinks. In the
 publish workflow the
-check exports the exact core, analysis, and HTTP tarballs; the unprivileged job
-records their digests and transfers them unchanged to the protected publication
-jobs. The core package
+check exports the exact core, catalog, analysis, and HTTP tarballs; the
+unprivileged job records their digests and transfers them unchanged to the
+protected publication jobs. The core package
 intentionally includes all three complete, independently runnable teaching
 examples; file-count, packed-size, and unpacked-size budgets prevent accidental
 growth. Wait for **CI required** on the final `main`
@@ -161,12 +162,12 @@ commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
-Core, analysis, and HTTP are independently published. Each release publishes
-core first, analysis only after core succeeds, and HTTP only after both core and
-analysis succeed. Both companions declare the exact matching core beta as their
-peer dependency. Analysis declares TypeScript as a normal runtime dependency.
-The workflow never overwrites an npm version or moves or reuses a release tag or
-tarball.
+Core, catalog, analysis, and HTTP are independently published. Each release
+publishes core first, catalog and analysis only after core succeeds, and HTTP
+only after both core and analysis succeed. All three companions declare the
+exact matching core beta as their peer dependency. Analysis declares TypeScript
+as a normal runtime dependency. The workflow never overwrites an npm version or
+moves or reuses a release tag or tarball.
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
    of `origin/main`, then create and push one annotated `v$VERSION` tag. Never
@@ -178,14 +179,13 @@ tarball.
    no OIDC permission.
 3. Approve the protected `npm` environment only after `verify` succeeds and an
    independent reviewer has repeated the source and external-setting checks.
-   The three publication jobs are the only jobs with the `npm` environment and
+   The four publication jobs are the only jobs with the `npm` environment and
    `id-token: write`. Each checks out the same commit, refetches and verifies the
    live annotated tag and main ancestry, downloads the verified tarballs, and
-   checks its recorded digest. The core job publishes under `beta`; analysis
-   runs only after core succeeds; HTTP runs only after both predecessors
-   succeed. All three publish under `beta` with public access. No publication
-   job installs dependencies, runs Bun, packs, prepackages, or rebuilds a
-   package.
+   checks its recorded digest. The core job publishes under `beta`; catalog and
+   analysis run only after core succeeds; HTTP runs only after core and analysis
+   succeed. All four publish under `beta` with public access. No publication job
+   installs dependencies, runs Bun, packs, prepackages, or rebuilds a package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.
    After npm verification, manually create a GitHub prerelease from the same
@@ -211,6 +211,8 @@ tarball.
   new matching exact version under `beta` and that `latest` did not move.
 - Confirm `npm view @mit-sdg/sync-engine-http dist-tags versions` shows its new
   matching exact version under `beta` and that `latest` did not move.
+- Confirm `npm view @mit-sdg/catalog dist-tags versions` shows its new matching
+  exact version under `beta` and that `latest` did not move.
 - Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` shows alpha
   versions as unsupported, with historical messages pointing at the exact beta
   or `@beta`, never `@alpha`.
@@ -220,9 +222,10 @@ tarball.
   import every public subpath under the supported Node major, and typecheck with
   the supported TypeScript major.
 - Run `bunx --package @mit-sdg/sync-engine@$VERSION sync-engine --help` and
-  scaffold a project from that exact version. Run its generation, check,
-  principle, and scenario commands. Check artifacts from an application-owned
-  copy and leave `node_modules` unchanged.
+  `bunx --package @mit-sdg/catalog@$VERSION catalog --help`. Install
+  `bundle/operations-room` from that exact catalog version, then run generation,
+  checks, entry evidence, and its scenario. Confirm copied source is
+  application-owned and leave unrelated `node_modules` content unchanged.
 - Reconfirm the npm trusted publisher identity, ownership/2FA, GitHub
   environment controls, protected tag, and private vulnerability reporting
   after publication.

@@ -1,0 +1,13 @@
+[
+  "bundle/operations-room/manifest.json",
+  "computation/normalize-label/manifest.json",
+  "concept/alerting/manifest.json",
+  "concept/discussing/manifest.json",
+  "concept/gathering/manifest.json",
+  "concept/selecting/manifest.json",
+  "recipe/member-contributions/manifest.json",
+  "recipe/normalized-selection/manifest.json",
+  "recipe/operations-dashboard/manifest.json",
+  "recipe/selection-alerts-members/manifest.json",
+  "recipe/selection-opens-discussion/manifest.json"
+]

@@ -1,10 +1,11 @@
 # Command-line reference
 
-The installed `sync-engine` executable scaffolds projects, compares parsed
-concept action/query declarations with class source, and checks or generates
-assembly artifacts. Commands follow the [runtime and toolchain support
-policy](../../../SUPPORT.md) and run relative to the current working directory unless
-a path says otherwise.
+The installed `sync-engine` executable compares parsed concept action/query
+declarations with class source and checks or generates assembly artifacts.
+Commands follow the [runtime and toolchain support policy](../../../SUPPORT.md)
+and run relative to the current working directory unless a path says otherwise.
+Source installation belongs to the separately published
+[`@mit-sdg/catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md).
 
 ```text
 sync-engine <command> [arguments]
@@ -18,36 +19,13 @@ Commands accept only the operands and options shown below. Unknown options,
 repeated options, missing option values, and trailing operands are rejected
 before a command applies defaults, imports configuration, or writes files.
 
-| Command                                | Result                                                                                | Writes files                                    |
-| -------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `new <directory>`                      | Creates the runnable one-concept scaffold                                             | Yes; never overwrites an intended template file |
-| `check`                                | Compares concept specifications with class source and optionally inspects an assembly | No                                              |
-| `artifacts check`                      | Compares both configured artifacts with the assembly                                  | No                                              |
-| `artifacts pin`                        | Regenerates both configured artifacts                                                 | Yes                                             |
-| `artifacts pin-spec` / `pin-wire`      | Regenerates one configured artifact                                                   | Yes                                             |
-| `artifacts manifest` / `spec` / `wire` | Prints one derived representation to standard output                                  | No                                              |
-
-## `sync-engine new`
-
-```text
-sync-engine new <directory>
-```
-
-`new` writes the one-concept project used by [Getting
-started](../guide/getting-started.md). The basename of `<directory>` determines
-the package name, generated application title, TypeScript identifiers, and
-specification filename. It must begin with a lowercase letter and contain only
-lowercase letters, digits, and single hyphens. Invalid names are rejected before
-the destination directory is created.
-
-The command may create `<directory>` and missing subdirectories. Before writing,
-it checks every intended template path. If any intended file already exists,
-the command fails and lists the collisions. It does not overwrite those files.
-A filesystem failure during writing can leave a partial project; the command
-does not provide a transactional rollback.
-
-On success, the command lists the written paths and prints a `Next:` command for
-installing, generating, checking, and running the project.
+| Command                                | Result                                                                                | Writes files |
+| -------------------------------------- | ------------------------------------------------------------------------------------- | ------------ |
+| `check`                                | Compares concept specifications with class source and optionally inspects an assembly | No           |
+| `artifacts check`                      | Compares both configured artifacts with the assembly                                  | No           |
+| `artifacts pin`                        | Regenerates both configured artifacts                                                 | Yes          |
+| `artifacts pin-spec` / `pin-wire`      | Regenerates one configured artifact                                                   | Yes          |
+| `artifacts manifest` / `spec` / `wire` | Prints one derived representation to standard output                                  | No           |
 
 ## `sync-engine check`
 
