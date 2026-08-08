@@ -558,13 +558,13 @@ export {};
  * {@link FAULT_REACTION}. It also observes faults while forming a boundary
  * response, because those faults must answer the root request when possible.
  */
-import type { Reaction } from "../../reactions/types.ts";
-import type { RequestBoundaryActions } from "../protocol/endpoints.ts";
+import type { ReactionIR } from "../../reads/ir.ts";
 /** The generic public reply for an internal runtime fault. */
 export declare const FAULT_REPLY = "INTERNAL_ERROR";
 /** The registered fault-delivery reaction name used by its provenance guard. */
 export declare const FAULT_REACTION = "DeliverFaultToAsker";
-export declare function refusalFunnel(boundary: RequestBoundaryActions): Record<string, Reaction>;
+/** Fresh canonical IR used for both runtime registration and static proof. */
+export declare function standardBoundaryOutcomeReactions(): ReactionIR[];
 
 === dist/engine/boundary/invocation/invoke.d.ts ===
 import type { OutcomeContracts } from "../../reactions/concepts/outcomes.ts";
@@ -3966,8 +3966,8 @@ interface LowerOutcome {
 }
 /** Lower one registered reaction into reaction IR, or report why it remains a pipeline. */
 export declare function lowerReaction(name: string, decl: ReactionDeclaration): LowerOutcome;
-/** Serialize one lowered reaction to JSON-safe IR. */
-export declare function serializeReaction(reaction: LoweredReaction): ReactionIR;
+/** Serialize one lowered family with stable variable names across its continuation stages. */
+export declare function serializeReactionFamily(reactions: readonly LoweredReaction[]): ReactionIR[];
 /** Keep every inspectable dependency fact from a reaction whose whole pipeline stays local. */
 export declare function serializeUnloweredReaction(name: string, reason: string, declaration: ReactionDeclaration): UnloweredIR;
 export {};

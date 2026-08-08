@@ -11,7 +11,7 @@ import type { AppIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
 import {
   type LoweredReaction,
   lowerReaction,
-  serializeReaction,
+  serializeReactionFamily,
   serializeUnloweredReaction,
 } from "@engine/reads/reaction-lowering";
 import { readBackReaction } from "@engine/reads/read-back";
@@ -160,8 +160,9 @@ export class Reacting {
         }
         this.registry.indexDeclarationReads(declaration);
         if (outcome.reactions !== undefined) {
-          for (const live of outcome.reactions) {
-            const encoded = serializeReaction(live);
+          const encodedFamily = serializeReactionFamily(outcome.reactions);
+          for (const [stage, live] of outcome.reactions.entries()) {
+            const encoded = encodedFamily[stage];
             const serialized = canonicalJson(encoded);
             const previous = storedByName.get(encoded.name);
             if (previous !== undefined) {
@@ -319,6 +320,9 @@ export class Reacting {
       const bound = this.registry.bindReaction(reaction);
       this.catalog.unregisterBase(this.catalog.ownerOf(reaction.name) ?? reaction.name);
       this.catalog.index(this.compileReaction(bound));
+      if (this.logging !== Logging.OFF) {
+        logger.info(readBackReaction(reaction, this.registry.readBackEnv()));
+      }
       this.catalog.finishBase(reaction.name, [reaction.name], [reaction]);
     }
   }

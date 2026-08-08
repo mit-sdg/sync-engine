@@ -219,9 +219,7 @@ function encodeConsequence(step: StepNode, vars: PatternVariables): ConsequenceI
   };
 }
 
-/** Serialize one lowered reaction to JSON-safe IR. */
-export function serializeReaction(reaction: LoweredReaction): ReactionIR {
-  const vars = new PatternVariables();
+function serializeReactionWith(reaction: LoweredReaction, vars: PatternVariables): ReactionIR {
   const when = reaction.when.map((clause) => encodeTrigger(clause, vars));
   const where: WhereOpIR[] =
     reaction.whereFn !== undefined
@@ -236,6 +234,12 @@ export function serializeReaction(reaction: LoweredReaction): ReactionIR {
   };
   if (reaction.whereFn !== undefined) withLive(ir, reaction.whereFn);
   return ir;
+}
+
+/** Serialize one lowered family with stable variable names across its continuation stages. */
+export function serializeReactionFamily(reactions: readonly LoweredReaction[]): ReactionIR[] {
+  const vars = new PatternVariables();
+  return reactions.map((reaction) => serializeReactionWith(reaction, vars));
 }
 
 /** Keep every inspectable dependency fact from a reaction whose whole pipeline stays local. */

@@ -65,6 +65,10 @@ class LookingConcept {
   open({ item }: { item: string }) {
     return { item };
   }
+
+  pair({ first, second }: { first: string; second: string }) {
+    return { first, second };
+  }
 }
 
 const lookup = vocabulary({
@@ -694,7 +698,7 @@ describe("application manifest", () => {
     expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
   });
 
-  test("proves coverage through unfiltered linear action continuations", () => {
+  test("proves coverage through canonical linear action continuations", () => {
     const Chained = endpoint("/chained", ({ item }) =>
       receive({ item }).then(Looking.open({ item }).responds()).then(respond({ item })),
     );
@@ -704,11 +708,42 @@ describe("application manifest", () => {
         .then(Looking.open({ item }).responds())
         .then(respond({ item })),
     );
+    const first = Symbol("value");
+    const second = Symbol("value");
+    const AlphaNamed = endpoint("/alpha-chain", () =>
+      receive({ first, second })
+        .then(Looking.pair({ second, first }).responds())
+        .then(respond({ ok: true })),
+    );
+    const Deferred = endpoint("/deferred-chain", () =>
+      receive()
+        .then(Looking.open({ item: "later" }).responds())
+        .afterFlowSettles()
+        .then(respond({ ok: true })),
+    );
 
     expect(
-      applicationManifest(assemble({ vocabulary: lookup, composition: { Chained, MultiHop } }))
-        .diagnostics,
+      applicationManifest(
+        assemble({
+          vocabulary: lookup,
+          composition: { AlphaNamed, Chained, Deferred, MultiHop },
+        }),
+      ).diagnostics,
     ).toEqual([]);
+  });
+
+  test("reserves standard boundary outcome names across lowered families", () => {
+    const Reserved = endpoint("/reserved-outcome", () => {
+      const answer = respond({ ok: true });
+      answer.stepName = "DeliverFaultToAsker";
+      return receive()
+        .then(Looking.open({ item: "reserved" }).responds())
+        .then(answer);
+    });
+
+    expect(() => assemble({ vocabulary: lookup, composition: { Reserved } })).toThrow(
+      'reaction name "DeliverFaultToAsker" is reserved for boundary outcome delivery',
+    );
   });
 
   test("preserves overlap diagnostics for competing total action chains", () => {
@@ -725,20 +760,34 @@ describe("application manifest", () => {
     ).diagnostics;
 
     expect(diagnostics.map(({ code }) => code)).toEqual(["ENDPOINT_PATH_OVERLAP"]);
-    expect(diagnostics[0]?.message).toContain("one answer path is unconditional");
+    expect(diagnostics[0]?.message).toContain('"FirstChain" and "SecondChain"');
+    expect(diagnostics[0]?.message).toContain("one root action chain covers every settled outcome");
   });
 
-  test("recognizes escaped literal action inputs", () => {
+  test("recognizes only action literals whose representation survives dispatch", () => {
     const LiteralChain = endpoint("/literal-chain", () =>
       receive()
         .then(Looking.open({ item: { $kind: "literal" } as never }).responds())
         .then(respond({ ok: true })),
     );
+    const manifest = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { LiteralChain } }),
+    );
+    expect(manifest.diagnostics).toEqual([]);
+
+    const literal = Object.assign(Object.create(null) as Record<string, unknown>, { safe: true });
+    const root = manifest.application.reactions.find(({ name }) => name === "LiteralChain")!;
+    root.then[0].input.item = literal as never;
+    const continuation = manifest.application.reactions.find(
+      ({ name }) => name === "LiteralChain#2",
+    )!;
+    (continuation.when[0] as ActionTriggerIR).input.item = literal as never;
 
     expect(
-      applicationManifest(assemble({ vocabulary: lookup, composition: { LiteralChain } }))
-        .diagnostics,
-    ).toEqual([]);
+      applicationDiagnostics(manifest.application, manifest.endpoints, manifest.wire).map(
+        ({ code }) => code,
+      ),
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
   });
 
   test("keeps intermediate output patterns as endpoint guards", () => {
@@ -784,15 +833,54 @@ describe("application manifest", () => {
     const manifest = applicationManifest(
       assemble({ vocabulary: lookup, composition: { Chained } }),
     );
-    const withoutFunnels: AppIR = {
-      ...manifest.application,
-      reactions: manifest.application.reactions.filter(
-        ({ name }) => name !== "DeliverRefusalToAsker" && name !== "DeliverFaultToAsker",
+    for (const missing of ["DeliverRefusalToAsker", "DeliverFaultToAsker"]) {
+      const withoutFunnel: AppIR = {
+        ...manifest.application,
+        reactions: manifest.application.reactions.filter(({ name }) => name !== missing),
+      };
+
+      expect(
+        applicationDiagnostics(withoutFunnel, manifest.endpoints, manifest.wire).map(
+          ({ code }) => code,
+        ),
+      ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+    }
+
+    const fault = manifest.application.reactions.find(
+      ({ name }) => name === "DeliverFaultToAsker",
+    )!;
+    const faultTrigger = fault.when[0];
+    if (faultTrigger.kind !== "channel") throw new Error("expected the standard fault channel");
+    faultTrigger.exceptBy = [];
+    expect(
+      applicationDiagnostics(manifest.application, manifest.endpoints, manifest.wire).map(
+        ({ code }) => code,
       ),
-    };
+    ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
+  test("analyzes only the active definition when imported reaction names repeat", () => {
+    const Chained = endpoint("/shadowed-answer", ({ item }) =>
+      receive({ item }).then(Looking.open({ item }).responds()).then(respond({ item })),
+    );
+    const manifest = applicationManifest(
+      assemble({ vocabulary: lookup, composition: { Chained } }),
+    );
+    const answer = manifest.application.reactions.find(({ name }) => name === "Chained#2")!;
+    manifest.application.reactions.push({
+      ...answer,
+      then: [
+        {
+          kind: "request",
+          concept: "Looking",
+          action: "open",
+          input: { item: "shadow" },
+        },
+      ],
+    });
 
     expect(
-      applicationDiagnostics(withoutFunnels, manifest.endpoints, manifest.wire).map(
+      applicationDiagnostics(manifest.application, manifest.endpoints, manifest.wire).map(
         ({ code }) => code,
       ),
     ).toEqual(["MISSING_ENDPOINT_FALLBACK"]);

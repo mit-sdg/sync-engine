@@ -1,4 +1,5 @@
 import type { EndpointDeclaration } from "@engine/boundary/assembly/endpoint-portability";
+import { standardBoundaryOutcomeReactions } from "@engine/boundary/invocation/funnel";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import { unresolvedWireLeaves } from "@engine/boundary/wire/wire-types";
 import type { WireType } from "@engine/boundary/wire/wire-types";
@@ -44,7 +45,7 @@ interface AnswerPath {
   name: string;
   request: PatternIR;
   proof?: { operations: readonly WhereOpIR[]; mayDrop: boolean };
-  coverage?: "linear-action";
+  coverage?: { kind: "linear-action"; root: string };
 }
 
 function isResponse(reaction: ReactionIR): boolean {
@@ -133,76 +134,10 @@ function operationsMayDrop(trigger: ActionTriggerIR, operations: readonly WhereO
   return false;
 }
 
-const STANDARD_REFUSAL_FUNNEL = {
-  name: "DeliverRefusalToAsker",
-  when: [
-    {
-      kind: "channel",
-      channel: "refused",
-      pattern: { message: { $var: "message" } },
-      except: ["RequestBoundary"],
-    },
-  ],
-  where: [
-    {
-      op: "earlier",
-      when: {
-        kind: "action",
-        concept: "RequestBoundary",
-        action: "request",
-        input: { requestId: { $var: "requestId" } },
-        output: {},
-      },
-    },
-  ],
-  then: [
-    {
-      kind: "request",
-      concept: "RequestBoundary",
-      action: "respond",
-      input: { requestId: { $var: "requestId" }, error: { $var: "message" } },
-    },
-  ],
-} satisfies ReactionIR;
-
-const STANDARD_FAULT_FUNNEL = {
-  name: "DeliverFaultToAsker",
-  when: [
-    {
-      kind: "channel",
-      channel: "faulted",
-      pattern: {},
-      except: [],
-      exceptBy: ["DeliverFaultToAsker"],
-    },
-  ],
-  where: [
-    {
-      op: "earlier",
-      when: {
-        kind: "action",
-        concept: "RequestBoundary",
-        action: "request",
-        input: { requestId: { $var: "requestId" } },
-        output: {},
-      },
-    },
-  ],
-  then: [
-    {
-      kind: "request",
-      concept: "RequestBoundary",
-      action: "respondFramework",
-      input: { requestId: { $var: "requestId" }, error: "INTERNAL_ERROR" },
-    },
-  ],
-} satisfies ReactionIR;
-
 function standardBoundaryOutcomesAreCovered(reactions: readonly ReactionIR[]): boolean {
   const byName = new Map(reactions.map((reaction) => [reaction.name, reaction]));
-  return (
-    structurallyEqual(byName.get(STANDARD_REFUSAL_FUNNEL.name), STANDARD_REFUSAL_FUNNEL) &&
-    structurallyEqual(byName.get(STANDARD_FAULT_FUNNEL.name), STANDARD_FAULT_FUNNEL)
+  return standardBoundaryOutcomeReactions().every((expected) =>
+    structurallyEqual(byName.get(expected.name), expected),
   );
 }
 
@@ -216,6 +151,7 @@ function literalChainValue(value: ValueIR, nested = false): boolean {
     return true;
   }
   if (Array.isArray(value)) return value.every((item) => literalChainValue(item, true));
+  if (Object.getPrototypeOf(value) !== Object.prototype) return false;
   const marker = asMarker(value);
   if (marker !== null) return !nested && marker.tag === "$lit";
   return Object.values(value).every((item) => literalChainValue(item, true));
@@ -232,7 +168,7 @@ function variablesAreBound(pattern: PatternIR, bound: ReadonlySet<string>): bool
 }
 
 function linearActionChainCovers(stages: readonly ReactionIR[]): boolean {
-  if (stages.length < 2 || stages.some(({ deferred }) => deferred === true)) return false;
+  if (stages.length < 2) return false;
   const triggers: ActionTriggerIR[] = [];
 
   for (let index = 0; index < stages.length; index += 1) {
@@ -298,25 +234,21 @@ function traceAnswer(
   const traced: ReactionIR[] = [];
   let current: ReactionIR | undefined = answer;
   let root: ActionTriggerIR | undefined;
-  let proofEligible = true;
 
   while (current !== undefined) {
     if (seen.has(current.name)) {
-      proofEligible = false;
       break;
     }
     seen.add(current.name);
     traced.push(current);
     const trigger = actionTrigger(current);
     if (trigger === undefined) {
-      proofEligible = false;
       break;
     }
     if (isRequestTrigger(trigger)) {
       root = trigger;
       break;
     }
-    proofEligible = false;
     if (trigger.by === undefined) {
       break;
     }
@@ -332,19 +264,22 @@ function traceAnswer(
     current = predecessor;
   }
 
-  if (root === undefined || !responseCorrelates(answer, root)) proofEligible = false;
-  const coverageEligible =
+  const direct = traced.length === 1 && root !== undefined && responseCorrelates(answer, root);
+  const stages = [...traced].reverse();
+  const coverage =
     root !== undefined &&
     responseCorrelates(answer, root) &&
     boundaryOutcomesCovered &&
-    linearActionChainCovers([...traced].reverse());
+    linearActionChainCovers(stages)
+      ? { kind: "linear-action" as const, root: stages[0].name }
+      : undefined;
   return {
     name: answer.name,
     request: root?.input ?? {},
-    ...(proofEligible && root !== undefined
+    ...(direct && root !== undefined
       ? { proof: { operations: answer.where, mayDrop: operationsMayDrop(root, answer.where) } }
       : {}),
-    ...(coverageEligible ? { coverage: "linear-action" as const } : {}),
+    ...(coverage === undefined ? {} : { coverage }),
   };
 }
 
@@ -513,7 +448,7 @@ function requestIsTotal(pattern: PatternIR, required: ReadonlySet<string>): bool
 function totalPath(path: AnswerPath, required: ReadonlySet<string>): boolean {
   return (
     requestIsTotal(path.request, required) &&
-    (path.coverage === "linear-action" || (path.proof !== undefined && !path.proof.mayDrop))
+    (path.coverage !== undefined || (path.proof !== undefined && !path.proof.mayDrop))
   );
 }
 
@@ -570,8 +505,12 @@ function overlapReason(
   ) {
     return undefined;
   }
-  if (totalPath(left, required) || totalPath(right, required)) {
+  const total = [left, right].filter((path) => totalPath(path, required));
+  if (total.some((path) => path.proof !== undefined && !path.proof.mayDrop)) {
     return "one answer path is unconditional";
+  }
+  if (total.some((path) => path.coverage !== undefined)) {
+    return "one root action chain covers every settled outcome";
   }
   if (sameGuard(left, right)) return "the complete answer guards are identical";
   const first = singleFind(left);
@@ -593,6 +532,11 @@ function overlapReason(
     return "a bare existence read also admits the more specific answer path";
   }
   return undefined;
+}
+
+function overlapName(path: AnswerPath, other: AnswerPath): string {
+  const root = path.coverage?.root;
+  return root !== undefined && root !== other.coverage?.root ? root : path.name;
 }
 
 function firstOverlap(
@@ -629,7 +573,7 @@ function endpointDiagnostics(
   const byName = new Map(app.reactions.map((reaction) => [reaction.name, reaction]));
   const boundaryOutcomesCovered = standardBoundaryOutcomesAreCovered(app.reactions);
   const answersByPath = new Map<string, AnswerPath[]>();
-  for (const answer of app.reactions
+  for (const answer of [...byName.values()]
     .filter(isResponse)
     .map((reaction) => traceAnswer(reaction, byName, boundaryOutcomesCovered))) {
     const answerPath = endpointPathOf(answer);
@@ -652,7 +596,9 @@ function endpointDiagnostics(
         endpoint: { name, path },
         message:
           `Endpoint "${name}" at "${path}" has potentially overlapping answer paths ` +
-          `"${overlap.left.name}" and "${overlap.right.name}": ${overlap.reason}; all matching paths run.`,
+          `"${overlapName(overlap.left, overlap.right)}" and ` +
+          `"${overlapName(overlap.right, overlap.left)}": ` +
+          `${overlap.reason}; all matching paths run.`,
       });
     }
     if (!answers.some((answer) => totalPath(answer, required))) {
