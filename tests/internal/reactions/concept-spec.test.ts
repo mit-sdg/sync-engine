@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from "vite-plus/test";
 import { parseSpec } from "@sync-engine/internal/reactions/concepts/concept-spec";
+import { parseConceptSpecification } from "@sync-engine/tooling";
 
 const SPEC = `# Inviting
 
@@ -74,6 +75,14 @@ describe("the specification's prose", () => {
     expect(spec.principle).toBe(
       "Priya invites Sam; a pending invitation now exists.\nSam accepts it, and it becomes accepted.",
     );
+  });
+
+  test("normalizes Markdown line endings for internal and public parsing", () => {
+    const expected = parseSpec(SPEC);
+    for (const markdown of [SPEC.replace(/\n/g, "\r\n"), SPEC.replace(/\n/g, "\r")]) {
+      expect(parseSpec(markdown)).toEqual(expected);
+      expect(parseConceptSpecification(markdown)).toEqual(expected);
+    }
   });
 
   test("a missing section fails by name", () => {

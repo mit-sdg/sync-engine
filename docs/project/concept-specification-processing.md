@@ -26,6 +26,7 @@ parts. [Known gaps](#known-gaps) records the remaining enforcement differences.
 | Stage         | Owner                                                     | Current effect                                                                          |
 | ------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Parse         | `src/engine/reactions/concepts/concept-spec.ts`           | Convert Markdown text to versioned `ConceptSpec`                                        |
+| Catalog       | `src/command/catalog.ts`                                  | Discover specs and emit canonical path-keyed parsed contracts without loading source    |
 | Register      | `src/engine/boundary/assembly/concept-set.ts`             | Compare declarations with the class and validate refusal mappings                       |
 | Project       | `conceptSet` in the same file                             | Carry the parsed contract plus runtime query/refusal contracts into metadata            |
 | Source-check  | `src/command/check.ts`                                    | Compare declarations with supported TypeScript source forms                             |

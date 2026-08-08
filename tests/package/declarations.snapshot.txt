@@ -51,6 +51,11 @@ export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientReque
 === dist/command/artifacts.d.ts ===
 export declare function artifactsCommand(args: readonly string[]): Promise<void>;
 
+=== dist/command/catalog.d.ts ===
+import type { ConceptSpecificationIR } from "../engine/reads/ir.ts";
+export declare function specificationCatalog(roots: readonly string[], projectRoot?: string): Promise<Record<string, ConceptSpecificationIR>>;
+export declare function catalogCommand(args: readonly string[]): Promise<void>;
+
 === dist/command/check.d.ts ===
 export declare function conceptFailures(directory: string, projectRoot?: string): string[];
 export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;

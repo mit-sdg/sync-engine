@@ -162,6 +162,21 @@ describe("external concept registration", () => {
 });
 
 describe("parsed declarations and class methods", () => {
+  test("registration normalizes Markdown line endings", () => {
+    const expected = cataloging.specification;
+    for (const spec of [
+      catalogingSpec.replace(/\n/g, "\r\n"),
+      catalogingSpec.replace(/\n/g, "\r"),
+    ]) {
+      const registration = registerConcept({
+        class: Cataloging,
+        spec,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+      });
+      expect(registration.specification).toEqual(expected);
+    }
+  });
+
   test("state notation is absent from registration and every generated design surface", () => {
     const marker = "STATE_ONLY_SENTINEL";
     const registration = registerConcept({
