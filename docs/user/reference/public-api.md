@@ -592,8 +592,9 @@ action chains contribute to overlap proof; chain overlaps name their root
 reactions. Coverage recognizes linear action chains whose successful postures
 have exact inputs, empty output patterns, and only guaranteed ancestor replays;
 the standard boundary funnels cover refusal and fault outcomes. Deferred stages
-remain eligible. Coverage does not prove that an action or read eventually
-settles. On direct paths, the analyzer recognizes canonical
+remain eligible. Proofs concern portable JSON-shaped boundary values, not live
+object identity or accessor behavior. Coverage does not prove that an action or
+read eventually settles. On direct paths, the analyzer recognizes canonical
 `receive(...)` shapes, disjoint literal request alternatives, non-dropping
 `whether` lines, and fresh computations.
 `ENDPOINT_PATH_OVERLAP` reports bounded potential overlaps such as duplicate

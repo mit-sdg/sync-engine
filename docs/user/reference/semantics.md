@@ -509,8 +509,9 @@ chain of successful action postures when every action input exactly follows the
 preceding ask, every output pattern is empty, and the only intervening reads
 replay guaranteed ancestors. The standard boundary funnels cover refusals and
 faults with correlated response attempts. Deferred stages remain eligible. This
-proves guard coverage after each watched posture lands, not that an action or
-read eventually settles. Other intermediate action paths remain ineligible. On direct paths, the analyzer
+proof concerns portable JSON-shaped boundary values, not live object identity
+or accessor behavior. It proves guard coverage after each watched posture lands,
+not that an action or read eventually settles. Other intermediate action paths remain ineligible. On direct paths, the analyzer
 recognizes canonical `receive(...)` shapes,
 disjoint literal request alternatives, non-dropping `whether` lines, and fresh
 computations. It can report a bounded set of potential overlaps and warn when
