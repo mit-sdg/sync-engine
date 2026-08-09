@@ -58,7 +58,7 @@ describe("catalog documentation", () => {
     const readme = await text("README.md");
     expect(readme).toContain("(public-surface.md)");
     expect(readme).toContain("(CONTRIBUTING.md)");
-    expect(readme).toContain("catalog init bundle/account-center");
+    expect(readme).toContain("catalog init recipe/account-center");
     expect(readme).not.toContain("catalog.json");
   });
 });

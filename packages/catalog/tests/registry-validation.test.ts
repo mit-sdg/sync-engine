@@ -18,13 +18,15 @@ afterEach(async () => {
   );
 });
 
-function bundle(id = "bundle/sample") {
+function recipeEntry(id = "recipe/sample") {
+  const name = id.slice("recipe/".length);
   return {
     schema: 1,
     id,
-    kind: "bundle",
-    summary: "A useful bundle.",
-    files: [{ source: "file.ts", target: "$root/file.ts" }],
+    kind: "recipe",
+    summary: "A useful recipe.",
+    files: [{ source: "file.ts", target: `$recipes/${name}.ts` }],
+    recipe: { module: `$recipes/${name}.ts`, members: ["Sample"] },
   };
 }
 
@@ -98,7 +100,7 @@ describe("catalog manifest validation", () => {
     ["schema", { edit: (value: any) => (value.schema = 2) }, "schema must be 1"],
     ["entry ID", { edit: (value: any) => (value.id = "bad") }, "supported lowercase catalog ID"],
     ["kind", { edit: (value: any) => (value.kind = "unknown") }, "kind is not supported"],
-    ["kind mismatch", { edit: (value: any) => (value.kind = "recipe") }, "id kind does not match"],
+    ["kind mismatch", { edit: (value: any) => (value.kind = "concept") }, "id kind does not match"],
     ["summary", { edit: (value: any) => (value.summary = "") }, "summary must be non-empty"],
     ["file list", { edit: (value: any) => (value.files = {}) }, "files must be an array"],
     ["file record", { edit: (value: any) => (value.files = [null]) }, "must be an object"],
@@ -117,9 +119,9 @@ describe("catalog manifest validation", () => {
       );
       return;
     }
-    const value: any = "value" in setup ? setup.value : bundle();
+    const value: any = "value" in setup ? setup.value : recipeEntry();
     if ("edit" in setup) setup.edit(value);
-    await expect(loadCatalog(await registry([{ path: "bundle/sample", value }]))).rejects.toThrow(
+    await expect(loadCatalog(await registry([{ path: "recipe/sample", value }]))).rejects.toThrow(
       message,
     );
   });
@@ -128,8 +130,8 @@ describe("catalog manifest validation", () => {
     [
       "non-concept variants",
       (value: any) => {
-        value.id = "bundle/sample";
-        value.kind = "bundle";
+        value.id = "recipe/sample";
+        value.kind = "recipe";
       },
       "only concepts may declare variants",
     ],
@@ -290,28 +292,28 @@ describe("catalog manifest validation", () => {
   });
 
   test("rejects missing, repeated, and cyclic dependencies", async () => {
-    const missing = { ...bundle(), requires: ["concept/missing"] };
+    const missing = { ...recipeEntry(), requires: ["concept/missing"] };
     await expect(
-      loadCatalog(await registry([{ path: "bundle/sample", value: missing }])),
+      loadCatalog(await registry([{ path: "recipe/sample", value: missing }])),
     ).rejects.toThrow("requires missing entry");
 
-    const repeated = { ...bundle(), requires: ["bundle/other", "bundle/other"] };
+    const repeated = { ...recipeEntry(), requires: ["recipe/other", "recipe/other"] };
     await expect(
       loadCatalog(
         await registry([
-          { path: "bundle/sample", value: repeated },
-          { path: "bundle/other", value: bundle("bundle/other") },
+          { path: "recipe/sample", value: repeated },
+          { path: "recipe/other", value: recipeEntry("recipe/other") },
         ]),
       ),
     ).rejects.toThrow("repeats a dependency");
 
-    const first = { ...bundle("bundle/first"), requires: ["bundle/second"] };
-    const second = { ...bundle("bundle/second"), requires: ["bundle/first"] };
+    const first = { ...recipeEntry("recipe/first"), requires: ["recipe/second"] };
+    const second = { ...recipeEntry("recipe/second"), requires: ["recipe/first"] };
     await expect(
       loadCatalog(
         await registry([
-          { path: "bundle/first", value: first },
-          { path: "bundle/second", value: second },
+          { path: "recipe/first", value: first },
+          { path: "recipe/second", value: second },
         ]),
       ),
     ).rejects.toThrow("dependency cycle");
@@ -329,25 +331,20 @@ describe("catalog manifest validation", () => {
 
     await expect(
       loadCatalog(
-        await registry([{ path: "bundle/sample", value: bundle() }], { writeSources: false }),
+        await registry([{ path: "recipe/sample", value: recipeEntry() }], {
+          writeSources: false,
+        }),
       ),
     ).rejects.toThrow();
   });
 
-  test("rejects invalid constraints and unavailable concept variants", async () => {
-    const constrained = {
-      ...bundle(),
-      requires: ["concept/sample"],
-      variantConstraints: { "concept/sample": ["missing"] },
-    };
+  test("rejects cross-kind targets and unavailable concept variants", async () => {
+    const misplaced = recipeEntry();
+    misplaced.files[0].target = "$concepts/sample.ts";
+    misplaced.recipe.module = "$concepts/sample.ts";
     await expect(
-      loadCatalog(
-        await registry([
-          { path: "bundle/sample", value: constrained },
-          { path: "concept/sample", value: concept() },
-        ]),
-      ),
-    ).rejects.toThrow("invalid variant constraint");
+      loadCatalog(await registry([{ path: "recipe/sample", value: misplaced }])),
+    ).rejects.toThrow("may copy files only below $recipes/");
 
     const catalog = await loadCatalog(
       await registry([{ path: "concept/sample", value: concept() }]),

@@ -290,11 +290,6 @@ describe("catalog selection failures", () => {
       }),
     ).rejects.toThrow("has variants");
     await expect(
-      addEntries(directory, ["bundle/account-center"], {
-        variants: new Map([["concept/profiling", "repository"]]),
-      }),
-    ).rejects.toThrow("requires concept/profiling variant memory");
-    await expect(
       addEntries(directory, ["recipe/account-center"], {
         variants: new Map([["concept/profiling", "memory"]]),
         recipeFile: "Bad.ts",

@@ -11,11 +11,11 @@ import type {
   EntryManifest,
 } from "./types.ts";
 
-const ENTRY_ID = /^(?:bundle|computation|concept|recipe)\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const ENTRY_ID = /^(?:computation|concept|recipe)\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const NAME = /^[A-Za-z][A-Za-z0-9]*$/;
-const TARGET = /^(?:\$concept-set|\$(?:concepts|computations|recipes|root)\/.+)$/;
+const TARGET = /^\$(?:concepts|computations|recipes)\/.+$/;
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
-const KINDS = new Set<EntryKind>(["bundle", "computation", "concept", "recipe"]);
+const KINDS = new Set<EntryKind>(["computation", "concept", "recipe"]);
 
 function entriesDirectory(): string {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -117,7 +117,6 @@ function parseManifest(value: unknown, path: string): EntryManifest {
       "packages",
       "files",
       "variants",
-      "variantConstraints",
       "concept",
       "computation",
       "recipe",
@@ -167,16 +166,6 @@ function parseManifest(value: unknown, path: string): EntryManifest {
     }
     if (Object.keys(parsed).length === 0) throw new Error(`${path}: variants must not be empty`);
     manifest.variants = parsed;
-  }
-
-  if (found.variantConstraints !== undefined) {
-    const constraints: Record<string, string[]> = {};
-    for (const [id, names] of Object.entries(
-      record(found.variantConstraints, `${path}.variantConstraints`),
-    )) {
-      constraints[id] = stringArray(names, `${path}.variantConstraints.${id}`);
-    }
-    manifest.variantConstraints = constraints;
   }
 
   if (found.concept !== undefined) {
@@ -274,15 +263,6 @@ export async function loadCatalog(root = entriesDirectory()): Promise<Map<string
         throw new Error(`${entry.manifest.id} requires missing entry ${dependency}`);
       }
     }
-    for (const [conceptId, variants] of Object.entries(entry.manifest.variantConstraints ?? {})) {
-      const concept = entries.get(conceptId);
-      if (
-        concept?.manifest.kind !== "concept" ||
-        !variants.every((name) => concept.manifest.variants?.[name] !== undefined)
-      ) {
-        throw new Error(`${entry.manifest.id} has an invalid variant constraint for ${conceptId}`);
-      }
-    }
     const common = entry.manifest.files ?? [];
     const selections =
       entry.manifest.variants === undefined
@@ -294,6 +274,12 @@ export async function loadCatalog(root = entriesDirectory()): Promise<Map<string
         throw new Error(`${entry.manifest.id} has duplicate copied targets`);
       }
       for (const file of selection) await readFile(resolve(entry.directory, file.source));
+    }
+    const targetRoot = `$${entry.manifest.kind}s/`;
+    if (
+      selections.some((selection) => selection.some(({ target }) => !target.startsWith(targetRoot)))
+    ) {
+      throw new Error(`${entry.manifest.id} may copy files only below ${targetRoot}`);
     }
     if (
       entry.manifest.concept !== undefined &&
@@ -367,7 +353,6 @@ export async function sourceDigest(entry: CatalogEntry, variant?: string): Promi
       requires: manifest.requires ?? [],
       packages: manifest.packages ?? {},
       variantPackages: variant === undefined ? {} : (manifest.variants?.[variant]?.packages ?? {}),
-      variantConstraints: manifest.variantConstraints ?? {},
       concept: manifest.concept,
       computation: manifest.computation,
       recipe: manifest.recipe,

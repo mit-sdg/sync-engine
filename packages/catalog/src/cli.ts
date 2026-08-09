@@ -14,7 +14,7 @@ const usage = `Usage: catalog <command> [arguments]
   catalog init [entry...] [path options] [selection options]
     Initialize catalog.lock and optionally install entries.
 
-  catalog list [concept|computation|recipe|bundle]
+  catalog list [concept|computation|recipe]
     List available catalog entries.
 
   catalog show <entry>
@@ -42,7 +42,7 @@ Selection options:
   --variant <concept-id>=<variant>  Repeat for multiple concepts.
   --file <name.ts>                  Rename one explicitly added recipe module.`;
 
-const KINDS = new Set<EntryKind>(["bundle", "computation", "concept", "recipe"]);
+const KINDS = new Set<EntryKind>(["computation", "concept", "recipe"]);
 const HELP = new Set([undefined, "help", "--help", "-h"]);
 
 export interface CatalogIO {
@@ -126,7 +126,7 @@ function printMutation(result: MutationResult, cwd: string, io: CatalogIO): void
 
 async function listEntries(kind: string | undefined, io: CatalogIO): Promise<void> {
   if (kind !== undefined && !KINDS.has(kind as EntryKind)) {
-    throw new Error(`catalog list kind must be concept, computation, recipe, or bundle`);
+    throw new Error(`catalog list kind must be concept, computation, or recipe`);
   }
   const catalog = await loadCatalog();
   const entries = [...catalog.values()]

@@ -1,4 +1,4 @@
-export type EntryKind = "bundle" | "computation" | "concept" | "recipe";
+export type EntryKind = "computation" | "concept" | "recipe";
 
 export interface CatalogFile {
   source: string;
@@ -37,7 +37,6 @@ export interface EntryManifest {
   packages?: Record<string, string>;
   files?: CatalogFile[];
   variants?: Record<string, ConceptVariant>;
-  variantConstraints?: Record<string, string[]>;
   concept?: ConceptIntegration;
   computation?: ComputationIntegration;
   recipe?: RecipeIntegration;

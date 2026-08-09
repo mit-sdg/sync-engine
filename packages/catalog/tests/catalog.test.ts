@@ -39,7 +39,6 @@ describe("catalog registry", () => {
   test("loads a coherent useful entry graph", async () => {
     const catalog = await loadCatalog();
     expect([...catalog.keys()].sort()).toEqual([
-      "bundle/account-center",
       "concept/notifying",
       "concept/preferring",
       "concept/profiling",
@@ -95,33 +94,23 @@ describe("catalog project installation", () => {
       registrations: "app/generated/registrations.ts",
       composition: "app/generated/composition.ts",
     });
+    expect(result.integration).toEqual([
+      "Import catalogRegistrations and catalogComputations from app/generated/registrations.ts, then pass them to conceptSet(...).",
+      "Import catalogComposition from app/generated/composition.ts, then spread it into assembled composition.",
+    ]);
+    await expect(readFile(join(directory, "app/system/vocabulary.ts"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(directory, "src/assembly.ts"), "utf8")).rejects.toThrow();
   });
 
-  test("recognizes a bundle's complete one-command integration", async () => {
-    const result = await initializeProject(directory, {}, ["bundle/account-center"], noSelections);
-    expect(result.integration).toEqual([]);
+  test("keeps multi-variant choices with the application", async () => {
+    await expect(
+      initializeProject(directory, {}, ["recipe/account-center"], noSelections),
+    ).rejects.toThrow("--variant concept/profiling=<variant>");
+    await initializeProject(directory, {}, ["recipe/account-center"], profilingMemory);
     const lock = JSON.parse(await readFile(join(directory, "catalog.lock"), "utf8")) as {
-      paths: unknown;
       entries: Record<string, { variant?: string }>;
     };
-    expect(lock.paths).toEqual({});
     expect(lock.entries["concept/profiling"]?.variant).toBe("memory");
-  });
-
-  test("renders a bundle against a custom concept-set path", async () => {
-    await initializeProject(
-      directory,
-      { conceptSet: "app/vocabulary.ts" },
-      ["bundle/account-center"],
-      noSelections,
-    );
-
-    await expect(readFile(join(directory, "app/vocabulary.ts"), "utf8")).resolves.toContain(
-      "accountCenterConcepts",
-    );
-    await expect(readFile(join(directory, "src/assembly.ts"), "utf8")).resolves.toContain(
-      'from "../app/vocabulary.ts"',
-    );
   });
 
   test("installs and executes the repository-backed concept variant", async () => {
@@ -332,8 +321,8 @@ describe("catalog CLI", () => {
     await runCatalog(["list"], directory, io);
     expect(output.join("\n")).toContain("recipe/account-center");
     output.length = 0;
-    await runCatalog(["show", "bundle/account-center"], directory, io);
-    expect(output.join("\n")).toContain("profile-backed account center");
+    await runCatalog(["show", "recipe/account-center"], directory, io);
+    expect(output.join("\n")).toContain("validated account boundary");
     output.length = 0;
     await runCatalog(["show", "concept/profiling"], directory, io);
     expect(output.join("\n")).toContain(
