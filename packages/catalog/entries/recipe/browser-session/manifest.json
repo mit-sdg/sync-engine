@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "id": "recipe/browser-session",
+  "kind": "recipe",
+  "summary": "Compose identifier-secret authentication, profiles, and server-side sessions behind a same-origin browser cookie boundary.",
+  "requires": ["concept/authenticating", "concept/sessioning", "concept/profiling"],
+  "packages": {
+    "@mit-sdg/sync-engine-http": "1.0.0-beta.8"
+  },
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$recipes/browser-session.spec.md"
+    },
+    {
+      "source": "browser-session.ts",
+      "target": "$recipes/browser-session.ts"
+    },
+    {
+      "source": "browser-session.test.ts",
+      "target": "$recipes/browser-session.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/browser-session.ts",
+    "test": "$recipes/browser-session.test.ts",
+    "members": [
+      "Register",
+      "SignIn",
+      "CurrentSession",
+      "RotateSession",
+      "SignOut",
+      "SignOutAll"
+    ]
+  }
+}

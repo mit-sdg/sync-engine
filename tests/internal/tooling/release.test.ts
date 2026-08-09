@@ -20,6 +20,8 @@ const packageManifest = JSON.parse(validSources.get("package.json") ?? "") as {
 };
 const currentVersion = packageManifest.version;
 const analysisManifest = "packages/analysis/package.json";
+const authenticatingManifest = "packages/catalog/entries/concept/authenticating/manifest.json";
+const browserSessionManifest = "packages/catalog/entries/recipe/browser-session/manifest.json";
 const currentChangelog = validSources.get("CHANGELOG.md") ?? "";
 const changelogVersions = [...currentChangelog.matchAll(/^## \[([^\]]+)\]/gm)].map(
   (match) => match[1] ?? "",
@@ -102,12 +104,22 @@ describe("release source facts", () => {
       delete manifest.dependencies;
       manifest.peerDependencies.typescript = "stale";
     });
+    editManifest(sources, authenticatingManifest, (manifest) => {
+      manifest.variants.memory.packages["@types/node"] = "stale";
+    });
+    editManifest(sources, browserSessionManifest, (manifest) => {
+      manifest.packages["@mit-sdg/sync-engine-http"] = "stale";
+    });
 
     expect(checkRelease(sources)).toEqual(
       expect.arrayContaining(
-        [releaseManifestPaths[0], analysisManifest, ownedDependencyManifests[0]].map(
-          (path) => `${path}: release-owned facts are stale; run bun run release:update`,
-        ),
+        [
+          releaseManifestPaths[0],
+          analysisManifest,
+          authenticatingManifest,
+          browserSessionManifest,
+          ownedDependencyManifests[0],
+        ].map((path) => `${path}: release-owned facts are stale; run bun run release:update`),
       ),
     );
     const projected = projectReleaseManifests(sources);

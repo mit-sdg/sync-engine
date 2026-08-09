@@ -25,6 +25,11 @@ const nodeFixtureManifests = [
   "tests/package/multi-instance/client/package.json",
   "tests/package/multi-instance/backend/package.json",
 ] as const;
+const catalogEntryDependencyManifests = [
+  "packages/catalog/entries/concept/authenticating/manifest.json",
+  "packages/catalog/entries/concept/sessioning/manifest.json",
+  "packages/catalog/entries/recipe/browser-session/manifest.json",
+] as const;
 export const ownedDependencyManifests = [
   ...exampleManifests,
   ...bunFixtureManifests,
@@ -52,6 +57,7 @@ export const releaseSourcePaths = [
   "packages/catalog/README.md",
   "packages/catalog/public-surface.md",
   "packages/catalog/CONTRIBUTING.md",
+  ...catalogEntryDependencyManifests,
   "README.md",
   "CHANGELOG.md",
   "docs/project/releasing.md",
@@ -246,6 +252,23 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
         }
         dependencies[dependency] = range;
         delete peerDependencies[dependency];
+      }
+    }
+    projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+
+  for (const path of catalogEntryDependencyManifests) {
+    const manifest = object(JSON.parse(sources.get(path) ?? ""));
+    if (manifest === undefined) throw new Error(`${path} must contain an object`);
+    const packages = object(manifest.packages);
+    if (packages?.[httpWorkspace.packageName] !== undefined) {
+      packages[httpWorkspace.packageName] = facts.version;
+    }
+    const variants = object(manifest.variants) ?? {};
+    for (const variant of Object.values(variants)) {
+      const variantPackages = object(object(variant)?.packages);
+      if (variantPackages?.["@types/node"] !== undefined) {
+        variantPackages["@types/node"] = rootDevelopment["@types/node"];
       }
     }
     projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);

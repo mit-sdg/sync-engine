@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "id": "concept/sessioning",
+  "kind": "concept",
+  "summary": "Own short-lived opaque sessions, rotation, and principal-wide revocation.",
+  "files": [
+    { "source": "spec.md", "target": "$concepts/sessioning/spec.md" },
+    { "source": "registry.ts", "target": "$concepts/sessioning/registry.ts" }
+  ],
+  "variants": {
+    "memory": {
+      "summary": "Process-local indexed sessions with injectable clock, credential source, and lifetime.",
+      "packages": {
+        "@types/node": "^24.0.0"
+      },
+      "files": [
+        {
+          "source": "variants/memory/sessioning.ts",
+          "target": "$concepts/sessioning/sessioning.ts"
+        },
+        {
+          "source": "variants/memory/sessioning.test.ts",
+          "target": "$concepts/sessioning/sessioning.test.ts"
+        }
+      ]
+    }
+  },
+  "concept": {
+    "name": "Sessioning",
+    "registration": "$concepts/sessioning/registry.ts",
+    "export": "sessioning"
+  }
+}

@@ -12,6 +12,21 @@ let directory = "";
 const noSelections = { variants: new Map<string, string>() };
 const profilingMemory = { variants: new Map([["concept/profiling", "memory"]]) };
 const coreVersion = await supportedCoreVersion();
+const httpVersion = (
+  JSON.parse(await readFile(new URL("../../http/package.json", import.meta.url), "utf8")) as {
+    version: string;
+  }
+).version;
+
+async function declareBrowserRequirements(httpRange = httpVersion): Promise<void> {
+  const path = join(directory, "package.json");
+  const manifest = JSON.parse(await readFile(path, "utf8")) as {
+    dependencies: Record<string, string>;
+  };
+  manifest.dependencies["@mit-sdg/sync-engine-http"] = httpRange;
+  manifest.dependencies["@types/node"] = "^24.0.0";
+  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+}
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), "sync-engine-catalog-"));
@@ -39,10 +54,13 @@ describe("catalog registry", () => {
   test("loads a coherent useful entry graph", async () => {
     const catalog = await loadCatalog();
     expect([...catalog.keys()].sort()).toEqual([
+      "concept/authenticating",
       "concept/notifying",
       "concept/preferring",
       "concept/profiling",
+      "concept/sessioning",
       "recipe/account-center",
+      "recipe/browser-session",
     ]);
     expect(catalog.get("concept/profiling")?.manifest.variants).toHaveProperty("repository");
   });
@@ -54,6 +72,29 @@ describe("catalog project installation", () => {
       initializeProject(directory, {}, ["concept/profiling"], noSelections),
     ).rejects.toThrow("--variant concept/profiling=<variant>");
     await expect(readFile(join(directory, "catalog.lock"), "utf8")).rejects.toThrow();
+  });
+
+  test("reports the browser recipe's exact HTTP package requirement before writing", async () => {
+    await expect(
+      initializeProject(directory, {}, ["recipe/browser-session"], profilingMemory),
+    ).rejects.toThrow(`bun add --exact @mit-sdg/sync-engine-http@${httpVersion}`);
+    await expect(readFile(join(directory, "catalog.lock"), "utf8")).rejects.toThrow();
+
+    await declareBrowserRequirements(`^${httpVersion}`);
+    await expect(
+      initializeProject(directory, {}, ["recipe/browser-session"], profilingMemory),
+    ).rejects.toThrow(`bun add --exact @mit-sdg/sync-engine-http@${httpVersion}`);
+
+    await declareBrowserRequirements();
+    await expect(
+      initializeProject(directory, {}, ["recipe/browser-session"], profilingMemory),
+    ).resolves.toMatchObject({ initialized: true });
+    const lock = JSON.parse(await readFile(join(directory, "catalog.lock"), "utf8")) as {
+      entries: Record<string, { packages: Record<string, string> }>;
+    };
+    expect(lock.entries["recipe/browser-session"]?.packages).toEqual({
+      "@mit-sdg/sync-engine-http": httpVersion,
+    });
   });
 
   test("renders a recipe into a customized application layout", async () => {
@@ -204,6 +245,28 @@ describe("catalog project installation", () => {
     await expect(
       readFile(join(directory, "src/composition/account-policy.test.ts"), "utf8"),
     ).resolves.toContain('from "./account-policy.ts"');
+  });
+
+  test("composes only manifest members from a renamed recipe module", async () => {
+    await declareBrowserRequirements();
+    await initializeProject(directory, {}, [], noSelections);
+    await addEntries(directory, ["recipe/browser-session"], {
+      variants: new Map([["concept/profiling", "memory"]]),
+      recipeFile: "browser-policy.ts",
+    });
+
+    await expect(
+      readFile(join(directory, "src/composition/browser-policy.test.ts"), "utf8"),
+    ).resolves.toContain('from "./browser-policy.ts"');
+    const composition = await readFile(
+      join(directory, "src/catalog/composition.generated.ts"),
+      "utf8",
+    );
+    expect(composition).toContain('from "../composition/browser-policy.ts"');
+    expect(composition).toContain("Register as catalogRecipe0_0");
+    expect(composition).toContain("SignOutAll: catalogRecipe0_5");
+    expect(composition).not.toContain("browserSessionHttpPolicy");
+    expect(composition).not.toContain("import * as");
   });
 
   test("does not rename tracked recipes or switch tracked concept variants", async () => {

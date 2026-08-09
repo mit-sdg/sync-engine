@@ -59,15 +59,19 @@ tokens. An unknown ID fails.
 
 The package snapshot contains these stable IDs:
 
-| Entry                   | Role                                                                      |
-| ----------------------- | ------------------------------------------------------------------------- |
-| `concept/profiling`     | One display profile per opaque external principal                         |
-| `concept/preferring`    | Ordered owner, scope, key, and value preferences                          |
-| `concept/notifying`     | Retained ordered in-app inbox with read and dismiss state                 |
-| `recipe/account-center` | Validated profile, preference, trusted inbox, and joined-account boundary |
-| `bundle/account-center` | Complete validated memory-backed starter with an asserting scenario       |
+| Entry                    | Role                                                                      |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `concept/authenticating` | Exact identifier, secret-digest, and opaque-principal credentials         |
+| `concept/profiling`      | One display profile per opaque external principal                         |
+| `concept/preferring`     | Ordered owner, scope, key, and value preferences                          |
+| `concept/notifying`      | Retained ordered in-app inbox with read and dismiss state                 |
+| `concept/sessioning`     | Expiring opaque sessions, rotation, and principal-wide revocation         |
+| `recipe/account-center`  | Validated profile, preference, trusted inbox, and joined-account boundary |
+| `recipe/browser-session` | Identifier-secret sign-in and same-origin server-side browser sessions    |
+| `bundle/account-center`  | Complete validated memory-backed starter with an asserting scenario       |
 
 `concept/profiling` provides `memory` and `repository` variants.
+`concept/authenticating` and `concept/sessioning` provide `memory` variants.
 `bundle/account-center` constrains Profiling to `memory`, so installing the
 bundle selects that variant without `--variant`. `concept/preferring` and
 `concept/notifying` each provide one `memory` variant and select it

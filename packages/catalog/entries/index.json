@@ -1,6 +1,9 @@
 [
+  "concept/authenticating/manifest.json",
   "concept/notifying/manifest.json",
   "concept/preferring/manifest.json",
   "concept/profiling/manifest.json",
-  "recipe/account-center/manifest.json"
+  "concept/sessioning/manifest.json",
+  "recipe/account-center/manifest.json",
+  "recipe/browser-session/manifest.json"
 ]

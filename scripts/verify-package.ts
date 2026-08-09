@@ -13,8 +13,9 @@ const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
 const expectedAuthor = "Barish Namazov and Eagon Meng";
 const coreWorkspace = workspaceById("core");
 const catalogWorkspace = workspaceById("catalog");
+const httpWorkspace = workspaceById("http");
 const analysisWorkspace = workspaceById("analysis");
-const multiInstanceWorkspaces = [coreWorkspace, workspaceById("http")];
+const multiInstanceWorkspaces = [coreWorkspace, httpWorkspace];
 
 interface NpmPackResult {
   filename: string;
@@ -657,6 +658,7 @@ async function verifyCatalogAndExamples(
   if (executable === undefined) throw new Error("core package does not provide sync-engine");
 
   const catalog = workspaceArtifact(artifacts, catalogWorkspace);
+  const http = workspaceArtifact(artifacts, httpWorkspace);
   const catalogOnly = resolve(temporary, "catalog-only");
   await mkdir(catalogOnly);
   await writeFile(
@@ -704,8 +706,12 @@ async function verifyCatalogAndExamples(
         dependencies: {
           [core.workspace.packageName]: tarballSpecifier(catalogApplication, core.tarball),
           [catalog.workspace.packageName]: tarballSpecifier(catalogApplication, catalog.tarball),
+          [http.workspace.packageName]: tarballSpecifier(catalogApplication, http.tarball),
         },
-        devDependencies: { typescript: core.manifest.dependencies?.typescript },
+        devDependencies: {
+          "@types/node": core.manifest.devDependencies?.["@types/node"],
+          typescript: core.manifest.dependencies?.typescript,
+        },
       },
       null,
       2,
@@ -724,6 +730,7 @@ async function verifyCatalogAndExamples(
           noEmit: true,
           strict: true,
           skipLibCheck: true,
+          types: ["node"],
         },
         include: ["src", "generated", "generated.config.ts", "*.d.ts"],
       },
@@ -762,8 +769,191 @@ async function verifyCatalogAndExamples(
   );
   run(
     "bun",
-    [resolve(installedCatalog, catalogExecutable), "init", "bundle/account-center"],
+    [
+      resolve(installedCatalog, catalogExecutable),
+      "init",
+      "recipe/account-center",
+      "--variant",
+      "concept/profiling=memory",
+    ],
     catalogApplication,
+  );
+  run(
+    "bun",
+    [resolve(installedCatalog, catalogExecutable), "add", "recipe/browser-session"],
+    catalogApplication,
+  );
+  await mkdir(resolve(catalogApplication, "src"), { recursive: true });
+  await writeFile(
+    resolve(catalogApplication, "src/concept-set.ts"),
+    `import { conceptSet } from "@mit-sdg/sync-engine/assembly";
+import { catalogRegistrations } from "./catalog/registrations.generated.ts";
+
+export const catalogConcepts = conceptSet(catalogRegistrations);
+export const { concepts, vocabulary } = catalogConcepts;
+`,
+  );
+  await writeFile(
+    resolve(catalogApplication, "src/assembly.ts"),
+    `import { assemble } from "@mit-sdg/sync-engine/assembly";
+import { catalogComposition } from "./catalog/composition.generated.ts";
+import { catalogConcepts, vocabulary } from "./concept-set.ts";
+
+export function assembleCatalogApplication() {
+  return assemble({
+    vocabulary,
+    instances: catalogConcepts.implementations(),
+    composition: catalogComposition,
+  });
+}
+`,
+  );
+  await writeFile(
+    resolve(catalogApplication, "generated.config.ts"),
+    `import { assembleCatalogApplication } from "./src/assembly.ts";
+
+export default { assemble: assembleCatalogApplication, title: "Catalog application" };
+`,
+  );
+  await writeFile(
+    resolve(catalogApplication, "src/scenario.ts"),
+    `import { createGateway } from "@mit-sdg/sync-engine/boundary";
+import { createHttpHandler } from "@mit-sdg/sync-engine-http/server";
+import { assembleCatalogApplication } from "./assembly.ts";
+import { browserSessionHttpPolicy } from "./composition/browser-session.ts";
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(message);
+}
+
+const origin = "https://catalog.test";
+const application = assembleCatalogApplication();
+const gateway = createGateway({ application });
+const fetch = createHttpHandler({
+  application,
+  gateway,
+  policy: browserSessionHttpPolicy({ origin }),
+});
+
+function post(path: string, body: unknown, cookie?: string): Promise<Response> {
+  return fetch(
+    new Request(origin + path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+        ...(cookie === undefined ? {} : { Cookie: cookie }),
+      },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+function responseCookie(response: Response): string {
+  const value = response.headers.get("Set-Cookie")?.split(";", 1)[0];
+  if (value === undefined) throw new Error("A session cookie was not issued.");
+  return value;
+}
+
+const registration = {
+  identifier: "mina/exact",
+  secret: "correct horse battery staple",
+  displayName: "Mina",
+};
+const claimed = await post("/auth/register", { ...registration, principal: "caller-claim" });
+assert(claimed.status === 400, "Register accepted a caller-supplied principal.");
+
+const registered = await post("/auth/register", registration);
+assert(registered.status === 200, "Registration failed.");
+const registeredBody = await registered.json() as Record<string, unknown>;
+assert(
+  registeredBody.displayName === "Mina" &&
+    typeof registeredBody.profile === "string" &&
+    !("session" in registeredBody) &&
+    !("expiresAt" in registeredBody),
+  "Registration exposed cookie-owned fields or lost profile identity.",
+);
+const firstCookie = responseCookie(registered);
+assert(firstCookie.startsWith("__Host-session="), "Registration did not issue the host cookie.");
+
+const repeated = await post("/auth/register", registration);
+assert(
+  repeated.status === 200 &&
+    (await repeated.clone().json() as { profile: string }).profile === registeredBody.profile,
+  "Same-credential registration did not resume the existing profile.",
+);
+const repeatedCookie = responseCookie(repeated);
+const duplicate = await post("/auth/register", { ...registration, secret: "different valid secret" });
+assert(
+  duplicate.status === 409 && (await duplicate.json() as { error: string }).error === "CONFLICT",
+  "Registration replaced an identifier with a different secret.",
+);
+const wrongSecret = await post("/auth/sign-in", {
+  identifier: registration.identifier,
+  secret: "wrong but bounded secret",
+});
+assert(
+  wrongSecret.status === 401 &&
+    (await wrongSecret.json() as { error: string }).error === "UNAUTHORIZED",
+  "A wrong secret did not use the conservative public error.",
+);
+const signedIn = await post("/auth/sign-in", {
+  identifier: registration.identifier,
+  secret: registration.secret,
+});
+assert(signedIn.status === 200, "Valid credentials did not sign in.");
+const signInCookie = responseCookie(signedIn);
+
+const claimedCurrent = await post("/auth/session", { principal: "caller-claim" }, firstCookie);
+assert(claimedCurrent.status === 400, "Current session accepted a caller identity field.");
+const current = await post("/auth/session", {}, firstCookie);
+const currentBody = await current.json() as Record<string, unknown>;
+assert(
+  current.status === 200 &&
+    currentBody.profile === registeredBody.profile &&
+    currentBody.displayName === "Mina" &&
+    typeof currentBody.expiresAt === "string",
+  "Current session did not derive the registered identity.",
+);
+
+const rotated = await post("/auth/session/rotate", {}, firstCookie);
+assert(rotated.status === 200, "Session rotation failed.");
+const secondCookie = responseCookie(rotated);
+assert(secondCookie !== firstCookie, "Rotation did not issue a replacement credential.");
+const oldSession = await post("/auth/session", {}, firstCookie);
+assert(
+  oldSession.status === 401 &&
+    (await oldSession.json() as { error: string }).error === "UNAUTHORIZED",
+  "Rotation did not invalidate the old session.",
+);
+const replacementCurrent = await post("/auth/session", {}, secondCookie);
+assert(replacementCurrent.status === 200, "The replacement session is not current.");
+
+const signedOut = await post("/auth/sign-out", {}, signInCookie);
+assert(
+  signedOut.status === 200 &&
+    signedOut.headers.get("Set-Cookie")?.includes("Max-Age=0") === true,
+  "Sign out did not clear the browser cookie.",
+);
+const ended = await post("/auth/session", {}, secondCookie);
+assert(ended.status === 200, "Sign out changed another active session.");
+const endedSignIn = await post("/auth/session", {}, signInCookie);
+assert(endedSignIn.status === 401, "Sign out left its owner session active.");
+
+const signedOutAll = await post("/auth/sign-out-all", {}, secondCookie);
+const signedOutAllBody = await signedOutAll.json() as { endedCount?: number };
+assert(
+  signedOutAll.status === 200 &&
+    signedOutAllBody.endedCount === 2 &&
+    signedOutAll.headers.get("Set-Cookie")?.includes("Max-Age=0") === true,
+  "Sign out all did not revoke and clear every remaining browser session.",
+);
+for (const cookie of [secondCookie, repeatedCookie]) {
+  assert((await post("/auth/session", {}, cookie)).status === 401, "Sign out all left a session active.");
+}
+
+console.log("packed browser-session lifecycle holds");
+`,
   );
   run("bun", ["run", "generate"], catalogApplication);
   run("bun", ["run", "check"], catalogApplication);

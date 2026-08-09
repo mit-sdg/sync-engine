@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "id": "concept/authenticating",
+  "kind": "concept",
+  "summary": "Authenticate exact bounded identifiers against secret digests and return opaque principals.",
+  "files": [
+    { "source": "spec.md", "target": "$concepts/authenticating/spec.md" },
+    { "source": "registry.ts", "target": "$concepts/authenticating/registry.ts" }
+  ],
+  "variants": {
+    "memory": {
+      "summary": "Process-local digest records with an injectable synchronous secret codec and principal source.",
+      "packages": {
+        "@types/node": "^24.0.0"
+      },
+      "files": [
+        {
+          "source": "variants/memory/authenticating.ts",
+          "target": "$concepts/authenticating/authenticating.ts"
+        },
+        {
+          "source": "variants/memory/authenticating.test.ts",
+          "target": "$concepts/authenticating/authenticating.test.ts"
+        }
+      ]
+    }
+  },
+  "concept": {
+    "name": "Authenticating",
+    "registration": "$concepts/authenticating/registry.ts",
+    "export": "authenticating"
+  }
+}

@@ -699,6 +699,7 @@ function acceptsRequiredRange(declared: string | undefined, required: string): b
   if (declared === required) return true;
   const exact = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/.exec(required);
   if (exact === null) return false;
+  if (exact[4] !== undefined) return false;
   const [major, minor] = exact.slice(1, 3);
   return (
     declared === `^${required}` ||
@@ -972,12 +973,18 @@ function compositionSource(config: CatalogConfig, lock: CatalogLock): string {
       ] => entry[1].integration?.kind === "recipe",
     )
     .sort(([left], [right]) => left.localeCompare(right));
-  const imports = recipes.map(
-    ([, entry], index) =>
-      `import * as catalogRecipe${index} from ${JSON.stringify(relativeImport(config.composition, entry.integration.module))};`,
+  const imports = recipes.map(([, entry], recipeIndex) => {
+    const members = entry.integration.members
+      .map((name, memberIndex) => `${name} as catalogRecipe${recipeIndex}_${memberIndex}`)
+      .join(", ");
+    return `import { ${members} } from ${JSON.stringify(relativeImport(config.composition, entry.integration.module))};`;
+  });
+  const properties = recipes.flatMap(([, entry], recipeIndex) =>
+    entry.integration.members.map(
+      (name, memberIndex) => `  ${name}: catalogRecipe${recipeIndex}_${memberIndex},`,
+    ),
   );
-  const spreads = recipes.map((_, index) => `  ...catalogRecipe${index},`);
-  return `${GENERATED_HEADER}${imports.length === 0 ? "" : `${imports.join("\n")}\n\n`}export const catalogComposition = {\n${spreads.join("\n")}\n};\n`;
+  return `${GENERATED_HEADER}${imports.length === 0 ? "" : `${imports.join("\n")}\n\n`}export const catalogComposition = {\n${properties.join("\n")}\n};\n`;
 }
 
 async function verifyManaged(
