@@ -11,7 +11,6 @@ repository work.
 | Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                   |
 | Design concepts                             | [Designing with concepts](design.md)                                                                                                                       |
 | Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
-| Build the first application                 | [Getting started](guide/getting-started.md)                                                                                                                |
 | Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                |
 | Call an existing application                | [`client` API](reference/public-api.md#client), then [Call the typed client](guide/authoring.md#call-the-typed-client)                                     |
 | Construct a read                            | [Read construction cookbook](guide/read-construction.md)                                                                                                   |
@@ -22,8 +21,6 @@ repository work.
 
 ## Application authoring path
 
-- [Getting started](guide/getting-started.md) is the tutorial. It installs and
-  runs a complete multi-concept catalog application.
 - [Application authoring](guide/authoring.md) is the experienced TypeScript
   path. It follows a multi-concept application through registration,
   composition, assembly, generation, and a typed client.
@@ -45,7 +42,6 @@ grouped under `guide/`.
 | ------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------- |
 | [`docs/user/index.md`](index.md)                                                     | Index        | Human-readable task and document map                    |
 | [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Absolute-link map and constraints for software agents   |
-| [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | First catalog-installed application lifecycle           |
 | [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Multi-concept application authoring                     |
 | [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Ordered concept and composition review                  |
 | [`docs/user/guide/read-construction.md`](guide/read-construction.md)                 | How-to guide | Small tested read constructions and contrasts           |
@@ -63,7 +59,6 @@ grouped under `guide/`.
 
 | Resource                                                                                                    | Scope                                                              |
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [Source Catalog](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)               | Copy-owned concepts, computations, recipes, and bundles            |
 | [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)         | HTTP companion exports and transport behavior                      |
 | [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md) | Compiler-free IR queries and optional TypeScript project evidence  |
 | [Reading Circle](../../examples/reading-circle/README.md)                                                   | Shortest complete multi-concept application                        |

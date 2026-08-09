@@ -65,37 +65,38 @@ Git verification.
 ## Create an application from the catalog
 
 ```sh
-mkdir operations-room
-cd operations-room
+mkdir account-center
+cd account-center
 bun init -y
 bun add --exact @mit-sdg/sync-engine@beta
 bun add --dev "typescript@>=6 <7"
-bunx --package @mit-sdg/catalog@beta catalog init bundle/operations-room --variant concept/gathering=memory
+bunx --package @mit-sdg/catalog@beta catalog init bundle/account-center
 ```
 
 For a reproducible evaluation, replace both `@beta` selectors with matching
 pinned versions.
 
-The catalog copies four independent concepts, one vocabulary computation, five
-composition recipes, executable evidence, and a complete application boundary.
-Your application owns every copied source file. Continue with [Getting
-started](docs/user/guide/getting-started.md) to generate its contracts and run
-the incident-coordination scenario.
+The catalog copies three independent concepts, one composition recipe,
+executable evidence, and a complete validated application boundary. Your
+application owns every copied source file. Continue with the [catalog package
+guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)
+to generate its contracts and exercise the account profile, preference, and
+inbox lifecycle.
 
 ## Documentation
 
 Choose the path that matches the work:
 
-| Task                                                         | Start here                                                      |
-| ------------------------------------------------------------ | --------------------------------------------------------------- |
-| Understand concepts, composition, assembly, and the boundary | [Application model](docs/user/overview.md)                      |
-| Decide what the concepts are and review a design             | [Designing with concepts](docs/user/design.md)                  |
-| Build and run the generated application                      | [Getting started](docs/user/guide/getting-started.md)           |
-| Add concepts, reactions, views, formers, and endpoints       | [Authoring path](docs/user/index.md#application-authoring-path) |
-| Look up exports, options, and defaults                       | [Public API](docs/user/reference/public-api.md)                 |
-| Determine exact runtime behavior                             | [Execution semantics](docs/user/reference/semantics.md)         |
-| Select a deployment and identify host responsibilities       | [Operational limits](docs/user/reference/operations.md)         |
-| Inspect complete applications                                | [Example applications](examples/README.md)                      |
+| Task                                                         | Start here                                                                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Understand concepts, composition, assembly, and the boundary | [Application model](docs/user/overview.md)                                                           |
+| Decide what the concepts are and review a design             | [Designing with concepts](docs/user/design.md)                                                       |
+| Build and run a source-catalog application                   | [Catalog package guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md) |
+| Add concepts, reactions, views, formers, and endpoints       | [Authoring path](docs/user/index.md#application-authoring-path)                                      |
+| Look up exports, options, and defaults                       | [Public API](docs/user/reference/public-api.md)                                                      |
+| Determine exact runtime behavior                             | [Execution semantics](docs/user/reference/semantics.md)                                              |
+| Select a deployment and identify host responsibilities       | [Operational limits](docs/user/reference/operations.md)                                              |
+| Inspect complete applications                                | [Example applications](examples/README.md)                                                           |
 
 The [consumer documentation index](docs/user/index.md) routes application designers,
 authors, callers, and operators. Human and software agents using the engine can

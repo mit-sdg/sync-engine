@@ -49,6 +49,8 @@ export const releaseSourcePaths = [
   "packages/analysis/README.md",
   "packages/analysis/public-surface.md",
   "packages/catalog/README.md",
+  "packages/catalog/public-surface.md",
+  "packages/catalog/CONTRIBUTING.md",
   "README.md",
   "CHANGELOG.md",
   "docs/project/releasing.md",
@@ -65,7 +67,6 @@ export const releaseSourcePaths = [
   "docs/user/reference/semantics.md",
   "docs/user/reference/operations.md",
   "docs/user/reference/cli.md",
-  "docs/user/guide/getting-started.md",
   "SUPPORT.md",
   "SECURITY.md",
   ...ownedDependencyManifests,
@@ -96,6 +97,7 @@ const requiredHeadings = [
   "Runtime and security support",
 ] as const;
 const releasedChangelogDigests = new Map([
+  ["1.0.0-beta.7", "efab8a6f95bceca630f2cecc76bf8f45b24ab34a2d6c6600c9f27c30feb25f34"],
   ["1.0.0-beta.6", "05f202994a49062077b236d6888fd06f951c0025784bf31ac941babedfc3a344"],
   ["1.0.0-beta.5", "af1af8e82fb30e1910108d17f3c127012ab1eaa95e592a26dea767018666d603"],
   ["1.0.0-beta.4", "7034de9308ad503fa95b2999fc3c941d3e36ee44dd006dcc1b733fa7e14fd58d"],
@@ -219,6 +221,7 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
     const engines = object(manifest.engines) ?? {};
     manifest.engines = engines;
     engines.node = facts.node;
+    if (workspace.bins !== undefined) engines.bun = facts.bun;
     const peerDependencies = object(manifest.peerDependencies) ?? {};
     manifest.peerDependencies = peerDependencies;
     for (const peerId of workspace.peerWorkspaceIds) {
@@ -226,6 +229,11 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
       const peerVersion = workspaceVersions.get(peer.packageName);
       if (peerVersion !== undefined)
         peerDependencies[peer.packageName] = compatiblePeer(peerVersion);
+    }
+    if (workspace.id === catalogWorkspace.id) {
+      manifest.peerDependenciesMeta = {
+        [coreWorkspace.packageName]: { optional: true },
+      };
     }
     if (workspace.rootRuntimeDependencies.length > 0) {
       const dependencies = object(manifest.dependencies) ?? {};
@@ -484,6 +492,14 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
         `${workspace.packageManifest}: peerDependencies must contain only ${expectedPeers.join(", ")}`,
       );
     }
+    if (
+      workspace.id === catalogWorkspace.id &&
+      object(object(project?.peerDependenciesMeta)?.[coreWorkspace.packageName])?.optional !== true
+    ) {
+      failures.push(
+        `${workspace.packageManifest}: ${coreWorkspace.packageName} peer must be optional`,
+      );
+    }
     for (const dependency of workspace.rootRuntimeDependencies) {
       const expected = object(root?.dependencies)?.[dependency];
       if (object(project?.dependencies)?.[dependency] !== expected) {
@@ -710,6 +726,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
 
   const ci = activeWorkflowSource(sources.get(".github/workflows/ci.yml") ?? "");
   for (const fact of [
+    "push:\n    branches: [main]",
     "permissions:\n  contents: read",
     "name: Pack & import workspaces",
     "run: bun run package:check",

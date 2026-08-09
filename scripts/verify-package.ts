@@ -676,6 +676,14 @@ async function verifyCatalogAndExamples(
   );
   const catalogExecutable = catalog.manifest.bin?.catalog;
   if (catalogExecutable === undefined) throw new Error("catalog package does not provide catalog");
+  const unexpectedCore = resolve(
+    catalogOnly,
+    "node_modules",
+    ...core.workspace.packageName.split("/"),
+  );
+  if (existsSync(unexpectedCore)) {
+    throw new Error("catalog-only install unexpectedly installed its optional core peer");
+  }
   run("bun", [resolve(catalogOnlyInstalled, catalogExecutable), "list", "concept"], catalogOnly);
 
   const catalogApplication = resolve(temporary, "catalog-application");
@@ -731,7 +739,7 @@ async function verifyCatalogAndExamples(
   );
   const repositoryVariant = resolve(
     installedCatalog,
-    "dist/entries/concept/gathering/variants/repository",
+    "dist/entries/concept/profiling/variants/repository",
   );
   run(
     "node",
@@ -747,26 +755,14 @@ async function verifyCatalogAndExamples(
       "--moduleResolution",
       "NodeNext",
       "--allowImportingTsExtensions",
-      resolve(repositoryVariant, "gathering.ts"),
-      resolve(repositoryVariant, "gathering.test.ts"),
+      resolve(repositoryVariant, "profiling.ts"),
+      resolve(repositoryVariant, "profiling.test.ts"),
     ],
     catalogApplication,
   );
   run(
     "bun",
-    [resolve(installedCatalog, catalogExecutable), "init", "concept/selecting"],
-    catalogApplication,
-  );
-  run("bun", ["run", "typecheck"], catalogApplication);
-  run(
-    "bun",
-    [
-      resolve(installedCatalog, catalogExecutable),
-      "add",
-      "bundle/operations-room",
-      "--variant",
-      "concept/gathering=memory",
-    ],
+    [resolve(installedCatalog, catalogExecutable), "init", "bundle/account-center"],
     catalogApplication,
   );
   run("bun", ["run", "generate"], catalogApplication);

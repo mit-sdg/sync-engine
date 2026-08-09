@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import { addEntries, diffEntries, initializeProject } from "../src/project.ts";
+import { supportedCoreVersion } from "../src/registry.ts";
 
 let directory = "";
 const noSelections = { variants: new Map<string, string>() };
+const coreVersion = await supportedCoreVersion();
 type LockCase = readonly [string, (lock: any) => unknown, string];
 
 beforeEach(async () => {
@@ -14,7 +16,7 @@ beforeEach(async () => {
     join(directory, "package.json"),
     `${JSON.stringify({
       private: true,
-      dependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.7" },
+      dependencies: { "@mit-sdg/sync-engine": coreVersion },
     })}\n`,
   );
 });
@@ -56,51 +58,51 @@ describe("catalog project path validation", () => {
     );
   });
 
+  test("accepts a compatible workspace dependency from an ancestor install", async () => {
+    const project = join(directory, "packages/application");
+    await mkdir(project, { recursive: true });
+    await writeFile(
+      join(project, "package.json"),
+      `${JSON.stringify({ dependencies: { "@mit-sdg/sync-engine": "workspace:*" } })}\n`,
+    );
+    const installed = join(directory, "node_modules/@mit-sdg/sync-engine");
+    await mkdir(installed, { recursive: true });
+    await writeFile(
+      join(installed, "package.json"),
+      `${JSON.stringify({ version: coreVersion })}\n`,
+    );
+
+    await expect(
+      initializeProject(project, {}, ["concept/preferring"], noSelections),
+    ).resolves.toMatchObject({ initialized: true });
+  });
+
+  test("rejects write targets that contain catalog metadata", async () => {
+    await expect(
+      initializeProject(
+        directory,
+        { concepts: "catalog.lock" },
+        ["concept/preferring"],
+        noSelections,
+      ),
+    ).rejects.toThrow("write plan contains overlapping targets");
+    await expect(readFile(join(directory, "catalog.lock"), "utf8")).rejects.toThrow();
+  });
+
   test("finds initialized metadata from a nested directory", async () => {
     await initializeProject(directory, {}, [], noSelections);
     const nested = join(directory, "deep/path");
     await mkdir(nested, { recursive: true });
-    await addEntries(nested, ["concept/selecting"], noSelections);
+    await addEntries(nested, ["concept/preferring"], noSelections);
     await expect(
-      readFile(join(directory, "src/concepts/selecting/selecting.ts"), "utf8"),
-    ).resolves.toContain("SelectingConcept");
+      readFile(join(directory, "src/concepts/preferring/preferring.ts"), "utf8"),
+    ).resolves.toContain("PreferringConcept");
   });
 
-  test("refuses to initialize over either metadata file", async () => {
+  test("refuses to initialize over existing metadata", async () => {
     await initializeProject(directory, {}, [], noSelections);
-    await expect(initializeProject(directory, {}, [], noSelections)).rejects.toThrow(
-      "catalog.json already exists",
-    );
-    await rm(join(directory, "catalog.json"));
     await expect(initializeProject(directory, {}, [], noSelections)).rejects.toThrow(
       "catalog.lock already exists",
-    );
-  });
-});
-
-describe("catalog config validation", () => {
-  test.each([
-    [null, "must contain an object"],
-    [{ $schema: 1, extra: true }, "unknown fields"],
-    [{ $schema: 2 }, "$schema must be 1"],
-    [
-      {
-        $schema: 1,
-        concepts: 7,
-        computations: "src/computations",
-        recipes: "src/composition",
-        conceptSet: "src/concept-set.ts",
-        declarations: "src/catalog/text.generated.d.ts",
-        registrations: "src/catalog/registrations.generated.ts",
-        composition: "src/catalog/composition.generated.ts",
-      },
-      "concepts must be a string",
-    ],
-  ] as const)("rejects malformed catalog.json %#", async (value, message) => {
-    await initializeProject(directory, {}, [], noSelections);
-    await writeFile(join(directory, "catalog.json"), `${JSON.stringify(value)}\n`);
-    await expect(addEntries(directory, ["concept/selecting"], noSelections)).rejects.toThrow(
-      message,
     );
   });
 });
@@ -109,6 +111,17 @@ describe("catalog lock validation", () => {
   test.each([
     ["null lock", (_lock: any) => null, "must contain an object"],
     ["unknown root field", (lock: any) => ({ ...lock, extra: true }), "unknown fields"],
+    ["path map", (lock: any) => ({ ...lock, paths: null }), "paths must be an object"],
+    [
+      "unknown path",
+      (lock: any) => ({ ...lock, paths: { extra: "src/extra" } }),
+      "paths has unknown fields",
+    ],
+    [
+      "path shape",
+      (lock: any) => ({ ...lock, paths: { concepts: 7 } }),
+      "paths.concepts must be a string",
+    ],
     ["schema", (lock: any) => ({ ...lock, schema: 2 }), "not a supported catalog lock"],
     ["entry map", (lock: any) => ({ ...lock, entries: [] }), "not a supported catalog lock"],
     [
@@ -118,13 +131,13 @@ describe("catalog lock validation", () => {
     ],
     [
       "entry record",
-      (lock: any) => ({ ...lock, entries: { "concept/selecting": null } }),
+      (lock: any) => ({ ...lock, entries: { "concept/preferring": null } }),
       "invalid entry",
     ],
     [
       "entry field",
       (lock: any) => {
-        lock.entries["concept/selecting"].extra = true;
+        lock.entries["concept/preferring"].extra = true;
         return lock;
       },
       "unknown fields",
@@ -132,7 +145,7 @@ describe("catalog lock validation", () => {
     [
       "entry shape",
       (lock: any) => {
-        lock.entries["concept/selecting"].sourceDigest = "bad";
+        lock.entries["concept/preferring"].sourceDigest = "bad";
         return lock;
       },
       "malformed entry",
@@ -140,7 +153,7 @@ describe("catalog lock validation", () => {
     [
       "variant",
       (lock: any) => {
-        lock.entries["concept/selecting"].variant = "BAD";
+        lock.entries["concept/preferring"].variant = "BAD";
         return lock;
       },
       "invalid variant",
@@ -148,7 +161,7 @@ describe("catalog lock validation", () => {
     [
       "package",
       (lock: any) => {
-        lock.entries["concept/selecting"].packages = { BAD: "1" };
+        lock.entries["concept/preferring"].packages = { BAD: "1" };
         return lock;
       },
       "invalid package requirement",
@@ -156,7 +169,7 @@ describe("catalog lock validation", () => {
     [
       "file record",
       (lock: any) => {
-        lock.entries["concept/selecting"].files[0] = null;
+        lock.entries["concept/preferring"].files[0] = null;
         return lock;
       },
       "invalid file",
@@ -164,7 +177,7 @@ describe("catalog lock validation", () => {
     [
       "file field",
       (lock: any) => {
-        lock.entries["concept/selecting"].files[0].extra = true;
+        lock.entries["concept/preferring"].files[0].extra = true;
         return lock;
       },
       "unknown fields",
@@ -172,7 +185,7 @@ describe("catalog lock validation", () => {
     [
       "file shape",
       (lock: any) => {
-        lock.entries["concept/selecting"].files[0].hash = "bad";
+        lock.entries["concept/preferring"].files[0].hash = "bad";
         return lock;
       },
       "invalid file",
@@ -180,7 +193,7 @@ describe("catalog lock validation", () => {
     [
       "absolute file source",
       (lock: any) => {
-        lock.entries["concept/selecting"].files[0].source = "/outside.ts";
+        lock.entries["concept/preferring"].files[0].source = "/outside.ts";
         return lock;
       },
       "invalid file",
@@ -188,7 +201,7 @@ describe("catalog lock validation", () => {
     [
       "integration record",
       (lock: any) => {
-        lock.entries["concept/selecting"].integration = null;
+        lock.entries["concept/preferring"].integration = null;
         return lock;
       },
       "invalid integration",
@@ -196,7 +209,7 @@ describe("catalog lock validation", () => {
     [
       "concept integration",
       (lock: any) => {
-        lock.entries["concept/selecting"].integration.name = "bad-name";
+        lock.entries["concept/preferring"].integration.name = "bad-name";
         return lock;
       },
       "invalid concept integration",
@@ -204,7 +217,7 @@ describe("catalog lock validation", () => {
     [
       "unknown integration",
       (lock: any) => {
-        lock.entries["concept/selecting"].integration.kind = "unknown";
+        lock.entries["concept/preferring"].integration.kind = "unknown";
         return lock;
       },
       "unknown integration",
@@ -212,7 +225,7 @@ describe("catalog lock validation", () => {
     [
       "missing integration",
       (lock: any) => {
-        delete lock.entries["concept/selecting"].integration;
+        delete lock.entries["concept/preferring"].integration;
         return lock;
       },
       "missing integration metadata",
@@ -220,7 +233,7 @@ describe("catalog lock validation", () => {
     [
       "missing variant",
       (lock: any) => {
-        delete lock.entries["concept/selecting"].variant;
+        delete lock.entries["concept/preferring"].variant;
         return lock;
       },
       "invalid variant metadata",
@@ -228,7 +241,7 @@ describe("catalog lock validation", () => {
     [
       "duplicate file",
       (lock: any) => {
-        const entry = lock.entries["concept/selecting"];
+        const entry = lock.entries["concept/preferring"];
         entry.files.push({ ...entry.files[0] });
         return lock;
       },
@@ -237,17 +250,17 @@ describe("catalog lock validation", () => {
     [
       "missing dependency",
       (lock: any) => {
-        lock.entries["concept/selecting"].requires = ["concept/missing"];
+        lock.entries["concept/preferring"].requires = ["concept/missing"];
         return lock;
       },
       "requires missing entry",
     ],
   ] satisfies readonly LockCase[])("rejects malformed %s", async (_name, edit, message) => {
-    await initializeProject(directory, {}, ["concept/selecting"], noSelections);
+    await initializeProject(directory, {}, ["concept/preferring"], noSelections);
     const path = join(directory, "catalog.lock");
     const lock = JSON.parse(await readFile(path, "utf8"));
     await writeFile(path, `${JSON.stringify(edit(lock), null, 2)}\n`);
-    await expect(addEntries(directory, ["concept/alerting"], noSelections)).rejects.toThrow(
+    await expect(addEntries(directory, ["concept/notifying"], noSelections)).rejects.toThrow(
       message,
     );
   });
@@ -260,11 +273,11 @@ describe("catalog selection failures", () => {
       "Unknown catalog entry",
     );
     await expect(
-      addEntries(directory, ["concept/selecting", "concept/selecting"], noSelections),
+      addEntries(directory, ["concept/preferring", "concept/preferring"], noSelections),
     ).rejects.toThrow("operands must be unique");
     await expect(
-      addEntries(directory, ["concept/selecting"], {
-        variants: new Map([["concept/gathering", "memory"]]),
+      addEntries(directory, ["concept/preferring"], {
+        variants: new Map([["concept/profiling", "memory"]]),
       }),
     ).rejects.toThrow("not used by this install");
   });
@@ -272,27 +285,27 @@ describe("catalog selection failures", () => {
   test("rejects invalid variant and filename choices", async () => {
     await initializeProject(directory, {}, [], noSelections);
     await expect(
-      addEntries(directory, ["concept/gathering"], {
-        variants: new Map([["concept/gathering", "missing"]]),
+      addEntries(directory, ["concept/profiling"], {
+        variants: new Map([["concept/profiling", "missing"]]),
       }),
     ).rejects.toThrow("has variants");
     await expect(
-      addEntries(directory, ["bundle/operations-room"], {
-        variants: new Map([["concept/gathering", "repository"]]),
+      addEntries(directory, ["bundle/account-center"], {
+        variants: new Map([["concept/profiling", "repository"]]),
       }),
-    ).rejects.toThrow("requires concept/gathering variant memory");
+    ).rejects.toThrow("requires concept/profiling variant memory");
     await expect(
-      addEntries(directory, ["recipe/selection-opens-discussion"], {
-        variants: new Map(),
+      addEntries(directory, ["recipe/account-center"], {
+        variants: new Map([["concept/profiling", "memory"]]),
         recipeFile: "Bad.ts",
       }),
     ).rejects.toThrow("lowercase kebab-case");
   });
 
   test("reports missing copied files in diff", async () => {
-    await initializeProject(directory, {}, ["concept/selecting"], noSelections);
-    await rm(join(directory, "src/concepts/selecting/selecting.ts"));
-    const result = await diffEntries(directory, ["concept/selecting"]);
+    await initializeProject(directory, {}, ["concept/preferring"], noSelections);
+    await rm(join(directory, "src/concepts/preferring/preferring.ts"));
+    const result = await diffEntries(directory, ["concept/preferring"]);
     expect(result.output).toContain("(missing)");
   });
 });

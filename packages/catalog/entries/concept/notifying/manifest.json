@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "concept/notifying",
+  "kind": "concept",
+  "summary": "Keep a retained ordered in-app inbox with recipient-scoped read and dismissal state.",
+  "files": [
+    { "source": "spec.md", "target": "$concepts/notifying/spec.md" },
+    { "source": "registry.ts", "target": "$concepts/notifying/registry.ts" }
+  ],
+  "variants": {
+    "memory": {
+      "summary": "Dependency-free in-memory state with injectable identity generation.",
+      "files": [
+        { "source": "notifying.ts", "target": "$concepts/notifying/notifying.ts" },
+        { "source": "notifying.test.ts", "target": "$concepts/notifying/notifying.test.ts" }
+      ]
+    }
+  },
+  "concept": {
+    "name": "Notifying",
+    "registration": "$concepts/notifying/registry.ts",
+    "export": "notifying"
+  }
+}

@@ -49,7 +49,6 @@ export interface CatalogEntry {
 }
 
 export interface CatalogConfig {
-  $schema: 1;
   concepts: string;
   computations: string;
   recipes: string;
@@ -95,12 +94,8 @@ export interface LockedEntry {
 
 export interface CatalogLock {
   schema: 1;
+  paths: InitPaths;
   entries: Record<string, LockedEntry>;
-}
-
-export interface VariantSelection {
-  entry: string;
-  variant: string;
 }
 
 export interface InitPaths {

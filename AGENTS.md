@@ -44,7 +44,7 @@ The consumer document owners are:
 - Progressive application authoring: `docs/user/guide/`
 - Application model explanation: `docs/user/overview.md`
 - Small tested read constructions: `docs/user/guide/read-construction.md`
-- Exact core exports and API summaries: `docs/user/reference/public-api.md`; HTTP exports and API summaries: `packages/http/public-surface.md`; analysis exports and API summaries: `packages/analysis/public-surface.md`
+- Exact core exports and API summaries: `docs/user/reference/public-api.md`; HTTP exports and API summaries: `packages/http/public-surface.md`; analysis exports and API summaries: `packages/analysis/public-surface.md`; catalog CLI and formats: `packages/catalog/public-surface.md`
 - Concept file grammar: `docs/user/reference/concept-specification.md`
 - Installed command behavior: `docs/user/reference/cli.md`
 - Execution guarantees: `docs/user/reference/semantics.md`
@@ -59,10 +59,11 @@ The project document owners are:
 - Release procedure: `docs/project/releasing.md`
 - Coding-agent checkout instructions: `AGENTS.md`
 - Vite+ docs: `node_modules/vite-plus/docs/` or https://viteplus.dev/guide/
+- Catalog usage and contribution: `packages/catalog/README.md` and `packages/catalog/CONTRIBUTING.md`
 
-Documents must live under `docs/user/` or `docs/project/` and appear in that
-directory's `index.md` catalog. Do not add another root document or put
-temporary notes under `docs/`.
+Documents under `docs/` must live in `docs/user/` or `docs/project/` and appear
+in that directory's `index.md` catalog. Package-owned documents stay with their
+package. Do not add another root document or put temporary notes under `docs/`.
 
 ### Contributing to the example book
 

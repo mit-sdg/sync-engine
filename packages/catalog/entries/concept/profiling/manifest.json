@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "id": "concept/profiling",
+  "kind": "concept",
+  "summary": "Associate one display profile with each opaque external principal.",
+  "files": [
+    { "source": "spec.md", "target": "$concepts/profiling/spec.md" },
+    { "source": "registry.ts", "target": "$concepts/profiling/registry.ts" }
+  ],
+  "variants": {
+    "memory": {
+      "summary": "Dependency-free in-memory state with injectable identity generation.",
+      "files": [
+        {
+          "source": "variants/memory/profiling.ts",
+          "target": "$concepts/profiling/profiling.ts"
+        },
+        {
+          "source": "variants/memory/profiling.test.ts",
+          "target": "$concepts/profiling/profiling.test.ts"
+        }
+      ]
+    },
+    "repository": {
+      "summary": "Application-supplied synchronous repository with atomic profile creation.",
+      "files": [
+        {
+          "source": "variants/repository/profiling.ts",
+          "target": "$concepts/profiling/profiling.ts"
+        },
+        {
+          "source": "variants/repository/profiling.test.ts",
+          "target": "$concepts/profiling/profiling.test.ts"
+        }
+      ]
+    }
+  },
+  "concept": {
+    "name": "Profiling",
+    "registration": "$concepts/profiling/registry.ts",
+    "export": "profiling"
+  }
+}

@@ -76,9 +76,11 @@ export const workspaceCatalog = [
     copiesExamples: false,
     publication: "npm",
     requiredPackedFiles: [
+      "CONTRIBUTING.md",
       "LICENSE",
       "NOTICE",
       "README.md",
+      "public-surface.md",
       "package.json",
       "dist/command.js",
       "dist/entries/index.json",

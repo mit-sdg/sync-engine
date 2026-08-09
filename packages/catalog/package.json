@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/catalog",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-beta.8",
   "description": "Curated, copy-owned concepts and composition for sync-engine applications",
   "keywords": [
     "catalog",
@@ -21,9 +21,11 @@
     "catalog": "./dist/command.js"
   },
   "files": [
+    "CONTRIBUTING.md",
     "LICENSE",
     "NOTICE",
     "README.md",
+    "public-surface.md",
     "dist"
   ],
   "type": "module",
@@ -37,7 +39,7 @@
     "prepack": "bun ../../scripts/build.ts"
   },
   "peerDependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.7"
+    "@mit-sdg/sync-engine": "1.0.0-beta.8"
   },
   "peerDependenciesMeta": {
     "@mit-sdg/sync-engine": {

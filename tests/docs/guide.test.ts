@@ -4,7 +4,6 @@ import { describe, expect, test } from "vite-plus/test";
 
 const guideDirectory = new URL("../../docs/user/guide/", import.meta.url);
 const guideFiles = [
-  "getting-started.md",
   "authoring.md",
   "reviewing-a-design.md",
   "read-construction.md",
@@ -90,23 +89,6 @@ async function documentationFiles(directory: URL): Promise<URL[]> {
 }
 
 describe("guided curriculum", () => {
-  test("the getting-started guide describes the catalog bundle output", async () => {
-    const guide = await readFile(new URL("getting-started.md", guideDirectory), "utf8");
-
-    expect(guide).toContain("catalog init bundle/operations-room");
-    expect(guide).toContain("Gathering");
-    expect(guide).toContain("src/concepts/gathering/");
-    expect(guide).toContain("src/computations/");
-    expect(guide).toContain("concept-set.ts");
-    expect(guide).toContain("composition/");
-    expect(guide).toContain("assembly.ts");
-    expect(guide).toContain("edge.ts");
-    expect(guide).toContain("scenario.ts");
-    expect(guide).toContain("sync-engine artifacts pin");
-    expect(guide).toContain("bunx tsc --noEmit");
-    expect(guide).toContain("bun src/scenario.ts");
-  });
-
   test("every stated excerpt remains byte-exact with its stated source", async () => {
     for (const docUrl of excerptDocs) {
       const doc = await readFile(docUrl, "utf8");

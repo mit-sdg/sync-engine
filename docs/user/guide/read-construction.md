@@ -680,5 +680,5 @@ the responded circle activity of (circle) — inputs (circle); bindings (selecti
 
 Use [Execution semantics](../reference/semantics.md) for rules not established by these
 examples, including cache freshness, equality, failure delivery, concurrency,
-retention, and cancellation. Use [Getting started](getting-started.md)
-to build and run a complete application.
+retention, and cancellation. Use [Application authoring](authoring.md) to build
+and run a complete application.

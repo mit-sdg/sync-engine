@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { loadCatalog } from "../src/registry.ts";
+import { entryFiles, loadCatalog } from "../src/registry.ts";
 
 const directories: string[] = [];
 type ManifestCase = readonly [
@@ -191,6 +191,102 @@ describe("catalog manifest validation", () => {
     await expect(
       loadCatalog(await registry([{ path: "recipe/sample", value: recipe }])),
     ).rejects.toThrow("does not copy its recipe module");
+
+    const uncopiedComputation = {
+      ...computation,
+      computation: { module: "$computations/other.ts", exports: ["sample"] },
+    };
+    await expect(
+      loadCatalog(await registry([{ path: "computation/sample", value: uncopiedComputation }])),
+    ).rejects.toThrow("does not copy its computation module");
+
+    const invalidComputationExports = {
+      ...computation,
+      computation: { module: "$computations/sample.ts", exports: [] },
+    };
+    await expect(
+      loadCatalog(
+        await registry([{ path: "computation/sample", value: invalidComputationExports }]),
+      ),
+    ).rejects.toThrow("computation exports are invalid");
+
+    const repeatedRecipeMember = {
+      ...recipe,
+      recipe: { module: "$recipes/sample.ts", members: ["Sample", "Sample"] },
+    };
+    await expect(
+      loadCatalog(await registry([{ path: "recipe/sample", value: repeatedRecipeMember }])),
+    ).rejects.toThrow("repeats a composition member");
+
+    const uncopiedRecipeTest = {
+      ...recipe,
+      recipe: {
+        module: "$recipes/sample.ts",
+        test: "$recipes/sample.test.ts",
+        members: ["Sample"],
+      },
+    };
+    await expect(
+      loadCatalog(await registry([{ path: "recipe/sample", value: uncopiedRecipeTest }])),
+    ).rejects.toThrow("does not copy its recipe test");
+
+    const invalidRecipeTest = {
+      ...recipe,
+      recipe: { module: "$recipes/sample.ts", test: 7, members: ["Sample"] },
+    };
+    await expect(
+      loadCatalog(await registry([{ path: "recipe/sample", value: invalidRecipeTest }])),
+    ).rejects.toThrow("recipe test is invalid");
+
+    const invalidRecipeMembers = {
+      ...recipe,
+      recipe: { module: "$recipes/sample.ts", members: [] },
+    };
+    await expect(
+      loadCatalog(await registry([{ path: "recipe/sample", value: invalidRecipeMembers }])),
+    ).rejects.toThrow("recipe members are invalid");
+  });
+
+  test("loads complete computation and recipe integration metadata", async () => {
+    const computation = {
+      schema: 1,
+      id: "computation/sample",
+      kind: "computation",
+      summary: "Compute reusable values.",
+      packages: { "value-library": "^1.0.0" },
+      files: [{ source: "sample.ts", target: "$computations/sample.ts" }],
+      computation: {
+        module: "$computations/sample.ts",
+        exports: ["normalizeValue", "validateValue"],
+      },
+    };
+    const recipe = {
+      schema: 1,
+      id: "recipe/sample",
+      kind: "recipe",
+      summary: "Compose reusable values.",
+      requires: ["computation/sample"],
+      files: [
+        { source: "sample.ts", target: "$recipes/sample.ts" },
+        { source: "sample.test.ts", target: "$recipes/sample.test.ts" },
+      ],
+      recipe: {
+        module: "$recipes/sample.ts",
+        test: "$recipes/sample.test.ts",
+        members: ["NormalizeValue", "ValidateValue"],
+      },
+    };
+    const catalog = await loadCatalog(
+      await registry([
+        { path: "computation/sample", value: computation },
+        { path: "recipe/sample", value: recipe },
+      ]),
+    );
+
+    expect(catalog.get("computation/sample")?.manifest.computation).toEqual(
+      computation.computation,
+    );
+    expect(catalog.get("recipe/sample")?.manifest.recipe).toEqual(recipe.recipe);
   });
 
   test("rejects missing, repeated, and cyclic dependencies", async () => {
@@ -236,5 +332,29 @@ describe("catalog manifest validation", () => {
         await registry([{ path: "bundle/sample", value: bundle() }], { writeSources: false }),
       ),
     ).rejects.toThrow();
+  });
+
+  test("rejects invalid constraints and unavailable concept variants", async () => {
+    const constrained = {
+      ...bundle(),
+      requires: ["concept/sample"],
+      variantConstraints: { "concept/sample": ["missing"] },
+    };
+    await expect(
+      loadCatalog(
+        await registry([
+          { path: "bundle/sample", value: constrained },
+          { path: "concept/sample", value: concept() },
+        ]),
+      ),
+    ).rejects.toThrow("invalid variant constraint");
+
+    const catalog = await loadCatalog(
+      await registry([{ path: "concept/sample", value: concept() }]),
+    );
+    const sample = catalog.get("concept/sample");
+    if (sample === undefined) throw new Error("valid concept fixture was not loaded");
+    expect(() => entryFiles(sample)).toThrow("needs an implementation variant");
+    expect(() => entryFiles(sample, "missing")).toThrow("has no variant missing");
   });
 });

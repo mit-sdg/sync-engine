@@ -31,15 +31,26 @@ before every tag:
 - Keep the GitHub environment identity `npm`. Restrict it to the
   `v1.0.0-beta.*` tag policy, require an independent reviewer, and verify
   `prevent_self_review=true` and `can_admins_bypass=false`.
-- Configure npm trusted publishing for packages `@mit-sdg/sync-engine`,
-  `@mit-sdg/sync-engine-analysis`, and `@mit-sdg/sync-engine-http`, GitHub
-  organization `mit-sdg`, repository `sync-engine`, workflow
-  `.github/workflows/publish.yml`, and environment `npm`. Verify each publisher
+- Configure npm trusted publishing for every npm-published workspace in
+  `scripts/workspaces.ts`, using GitHub organization `mit-sdg`, repository
+  `sync-engine`, workflow filename `publish.yml`, and environment `npm`.
+  Explicitly allow `npm publish` for that identity. Verify each publisher
   identity before every release.
 - Verify npm package and organization ownership, require 2FA for owners and
   maintainers, remove stale owners, and confirm recovery access is controlled.
   Beta publications use the `beta` dist-tag and must not create or move
   `latest`.
+
+For a newly named npm workspace, bootstrap the package identity before tagging
+the release or publishing any workspace. npm cannot configure a trusted
+publisher for a package identity that does not yet exist. Review a minimal
+`0.0.0-bootstrap.0` package with no executable or import surface, publish it
+under a non-default `bootstrap` dist-tag with a one-time, least-privilege
+credential, verify its registry digest and ownership, deprecate that bootstrap
+version, and revoke the credential. Then configure and verify the trusted
+publisher above. Never use the intended release version for bootstrap, and
+never allow bootstrap to create or move `beta` or `latest`. Record this one-time
+procedure in the release review.
 
 Record the independent checks in the release review. A green workflow does not
 replace this external-setting verification.
@@ -73,21 +84,19 @@ bun install
 `release:update` projects the canonical facts into every owned package
 dependency location:
 
-| Location                                            | Owned version fact                                                   |
-| --------------------------------------------------- | -------------------------------------------------------------------- |
-| `package.json`                                      | Published version and `publishConfig.tag`                            |
-| `packages/http/package.json`                        | HTTP package version and exact core peer                             |
-| `packages/analysis/package.json`                    | Analysis version, exact core peer, and TypeScript runtime dependency |
-| `packages/catalog/package.json`                     | Catalog version and exact core peer                                  |
-| `examples/reading-circle/package.json`              | Shipped example dependency                                           |
-| `examples/operations-room/package.json`             | Shipped example dependency                                           |
-| `examples/production-http/package.json`             | Shipped example dependency                                           |
-| `tests/package/application/package.json`            | Standalone packed-application dependency                             |
-| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
-| `tests/package/multi-instance/backend/package.json` | Independent backend dependency                                       |
+| Location                                            | Owned version fact                                              |
+| --------------------------------------------------- | --------------------------------------------------------------- |
+| `package.json`                                      | Published version and `publishConfig.tag`                       |
+| Published `packages/*/package.json`                 | Package version, peer ranges, and package-specific dependencies |
+| `examples/reading-circle/package.json`              | Shipped example dependency                                      |
+| `examples/operations-room/package.json`             | Shipped example dependency                                      |
+| `examples/production-http/package.json`             | Shipped example dependency                                      |
+| `tests/package/application/package.json`            | Standalone packed-application dependency                        |
+| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency                              |
+| `tests/package/multi-instance/backend/package.json` | Independent backend dependency                                  |
 
-Catalog entry manifests contain no release version copies. The following
-`bun install` regenerates `bun.lock` from the projected package manifests.
+Copied-source manifests contain no release version copies. The install command
+above regenerates `bun.lock` from the projected package manifests.
 Review the lockfile and manifest diffs together. `bun run release:check` rejects
 stale projections; review and commit every updated manifest and `bun.lock`.
 Publication uses that committed package metadata unchanged. Run frozen
@@ -141,8 +150,8 @@ Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` invokes npm's real pack lifecycle for each workspace;
 the root package's `prepack` performs their shared build. The check inspects all
 workspace tarballs and policy links, installs core alone and all packages together,
-installs and runs the catalog bundle and shipped examples, compiles a separate generated
-client/backend topology, and runs Node scenarios. An isolated Node 24 import
+installs and runs maintained source templates and shipped examples, compiles a
+separate generated client/backend topology, and runs Node scenarios. An isolated Node 24 import
 first proves that analysis `/ir` does not load TypeScript, `fs`, `fs/promises`,
 `node:fs`, `node:fs/promises`, worker, project-loader, or source-index-builder
 modules. The combined exact-tarball
@@ -151,8 +160,7 @@ Node 24 and Bun, verifies source bytes through a caller reader before slicing an
 anchor, retains and supplies the complete project digest to the neutral facade,
 exercises source/impact queries, checks derivable file-byte resource accounting,
 and round-trips the strict project codec without workspace symlinks. In the
-publish workflow the
-check exports the exact core, catalog, analysis, and HTTP tarballs; the
+publish workflow the check exports every exact public-workspace tarball; the
 unprivileged job records their digests and transfers them unchanged to the
 protected publication jobs. The core package
 intentionally includes all three complete, independently runnable teaching
@@ -162,12 +170,10 @@ commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
-Core, catalog, analysis, and HTTP are independently published. Each release
-publishes core first, catalog and analysis only after core succeeds, and HTTP
-only after both core and analysis succeed. All three companions declare the
-exact matching core beta as their peer dependency. Analysis declares TypeScript
-as a normal runtime dependency. The workflow never overwrites an npm version or
-moves or reuses a release tag or tarball.
+Each public workspace is independently published. Core publishes first;
+companion job dependencies encode the order required by their exact peer
+relationships. The workflow never overwrites an npm version or moves or reuses
+a release tag or tarball.
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
    of `origin/main`, then create and push one annotated `v$VERSION` tag. Never
@@ -182,10 +188,10 @@ moves or reuses a release tag or tarball.
    The four publication jobs are the only jobs with the `npm` environment and
    `id-token: write`. Each checks out the same commit, refetches and verifies the
    live annotated tag and main ancestry, downloads the verified tarballs, and
-   checks its recorded digest. The core job publishes under `beta`; catalog and
-   analysis run only after core succeeds; HTTP runs only after core and analysis
-   succeed. All four publish under `beta` with public access. No publication job
-   installs dependencies, runs Bun, packs, prepackages, or rebuilds a package.
+   checks its recorded digest. Every job publishes under `beta` with public
+   access and waits for the jobs required by its package peers. No publication
+   job installs dependencies, runs Bun, packs, prepackages, or rebuilds a
+   package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.
    After npm verification, manually create a GitHub prerelease from the same
@@ -211,8 +217,7 @@ moves or reuses a release tag or tarball.
   new matching exact version under `beta` and that `latest` did not move.
 - Confirm `npm view @mit-sdg/sync-engine-http dist-tags versions` shows its new
   matching exact version under `beta` and that `latest` did not move.
-- Confirm `npm view @mit-sdg/catalog dist-tags versions` shows its new matching
-  exact version under `beta` and that `latest` did not move.
+- Repeat the dist-tag and version check for every published companion package.
 - Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` shows alpha
   versions as unsupported, with historical messages pointing at the exact beta
   or `@beta`, never `@alpha`.
@@ -221,10 +226,8 @@ moves or reuses a release tag or tarball.
 - In clean directories, install the exact registry version with npm and Bun,
   import every public subpath under the supported Node major, and typecheck with
   the supported TypeScript major.
-- Run `bunx --package @mit-sdg/sync-engine@$VERSION sync-engine --help` and
-  `bunx --package @mit-sdg/catalog@$VERSION catalog --help`. Install
-  `bundle/operations-room` from that exact catalog version, then run generation,
-  checks, entry evidence, and its scenario. Confirm copied source is
+- Run every installed executable's help command from its exact registry version,
+  then repeat the package-owned smoke procedure. Confirm copied source is
   application-owned and leave unrelated `node_modules` content unchanged.
 - Reconfirm the npm trusted publisher identity, ownership/2FA, GitHub
   environment controls, protected tag, and private vulnerability reporting

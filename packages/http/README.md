@@ -42,7 +42,7 @@ on the matching core beta. Pin both packages to the same exact version and
 upgrade them together:
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.7 @mit-sdg/sync-engine-http@1.0.0-beta.7
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.8 @mit-sdg/sync-engine-http@1.0.0-beta.8
 ```
 
 The current beta is ESM-only and supports Node.js 24 (`>=24 <25`).

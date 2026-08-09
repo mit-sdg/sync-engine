@@ -24,6 +24,5 @@ This catalog is exhaustive for `docs/project/`.
 | ----------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------ |
 | [`docs/project/index.md`](index.md)                                                       | Index        | Contributor task and document map                                  |
 | [`docs/project/architecture.md`](architecture.md)                                         | Explanation  | Source layout, subsystem ownership, and dependency rules           |
-| [`docs/project/catalog-design.md`](catalog-design.md)                                     | Explanation  | Catalog product journeys, source ownership, and installer contract |
 | [`docs/project/concept-specification-processing.md`](concept-specification-processing.md) | Explanation  | Concept-spec parsing, enforcement, data flow, gaps, and extensions |
 | [`docs/project/releasing.md`](releasing.md)                                               | How-to guide | Release preparation, publication, and bad-release response         |

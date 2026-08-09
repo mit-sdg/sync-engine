@@ -4,8 +4,6 @@ The installed `sync-engine` executable compares parsed concept action/query
 declarations with class source and checks or generates assembly artifacts.
 Commands follow the [runtime and toolchain support policy](../../../SUPPORT.md)
 and run relative to the current working directory unless a path says otherwise.
-Source installation belongs to the separately published
-[`@mit-sdg/catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md).
 
 ```text
 sync-engine <command> [arguments]

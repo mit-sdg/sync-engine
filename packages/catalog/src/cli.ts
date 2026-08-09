@@ -4,8 +4,6 @@ import {
   diffEntries,
   forgetEntries,
   initializeProject,
-  integrationInstructions,
-  readConfigFrom,
   type MutationResult,
 } from "./project.ts";
 import { loadCatalog } from "./registry.ts";
@@ -14,7 +12,7 @@ import type { AddOptions, EntryKind, InitPaths } from "./types.ts";
 const usage = `Usage: catalog <command> [arguments]
 
   catalog init [entry...] [path options] [selection options]
-    Initialize catalog.json and optionally install entries.
+    Initialize catalog.lock and optionally install entries.
 
   catalog list [concept|computation|recipe|bundle]
     List available catalog entries.
@@ -49,7 +47,6 @@ const HELP = new Set([undefined, "help", "--help", "-h"]);
 
 export interface CatalogIO {
   log(message: string): void;
-  error(message: string): void;
 }
 
 function addOptions(
@@ -112,7 +109,7 @@ function displayRoot(cwd: string, root: string): string {
   return path === "" ? "." : path;
 }
 
-async function printMutation(result: MutationResult, cwd: string, io: CatalogIO): Promise<void> {
+function printMutation(result: MutationResult, cwd: string, io: CatalogIO): void {
   if (result.initialized) io.log(`Initialized catalog in ${displayRoot(cwd, result.root)}.`);
   for (const id of result.alreadyInstalled) io.log(`Already tracked: ${id}`);
   if (result.written.length > 0) {
@@ -120,10 +117,9 @@ async function printMutation(result: MutationResult, cwd: string, io: CatalogIO)
     for (const path of result.written) io.log(`  ${path}`);
   }
   for (const warning of result.warnings) io.log(`Warning: ${warning}`);
-  if (result.initialized && result.integrationRequired !== false) {
-    const config = await readConfigFrom(result.root);
+  if (result.integration.length > 0) {
     io.log("\nIntegrate once:");
-    for (const instruction of integrationInstructions(config)) io.log(`  ${instruction}`);
+    for (const instruction of result.integration) io.log(`  ${instruction}`);
   }
   if (result.checkCommand !== undefined) io.log(`\nNext: ${result.checkCommand}`);
 }
@@ -192,7 +188,7 @@ export async function runCatalog(
   }
   if (command === "init") {
     const options = addOptions(args, true);
-    await printMutation(
+    printMutation(
       await initializeProject(cwd, options.paths, options.entries, options.add),
       cwd,
       io,
@@ -201,7 +197,7 @@ export async function runCatalog(
   }
   if (command === "add") {
     const options = addOptions(args, false);
-    await printMutation(await addEntries(cwd, options.entries, options.add), cwd, io);
+    printMutation(await addEntries(cwd, options.entries, options.add), cwd, io);
     return;
   }
   if (command === "diff") {
@@ -214,7 +210,7 @@ export async function runCatalog(
     if (args.length === 0 || args.some((argument) => argument.startsWith("-"))) {
       throw new Error(usage);
     }
-    await printMutation(await forgetEntries(cwd, args), cwd, io);
+    printMutation(await forgetEntries(cwd, args), cwd, io);
     return;
   }
   throw new Error(usage);

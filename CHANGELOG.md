@@ -5,11 +5,72 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.8] - 2026-08-09
+
+This beta replaces the one-purpose application scaffold with a separately
+published, copy-owned source catalog and a reusable account-center starter.
+
+### Compatibility
+
+- `@mit-sdg/catalog` is now a public, CLI-only package with an exact
+  `@mit-sdg/sync-engine@1.0.0-beta.8` optional peer. It exposes the `catalog`
+  executable and no JavaScript import surface.
+- The core `sync-engine new` command and its one-concept template are removed.
+  Core retains source checking and generated-artifact commands; application
+  source installation belongs to the catalog package.
+- The catalog ships independent Profiling, Preferring, and Notifying concepts,
+  one validated account-center boundary recipe, and a complete account-center
+  bundle. Profiling offers memory and application-repository variants; the
+  bundle selects memory explicitly.
+- Catalog projects use one deterministic `catalog.lock`. Standard paths are
+  implicit; only path overrides, selected entries and variants, dependency
+  edges, destinations, and source provenance are persisted.
+
+### Migration
+
+- Upgrade core and every installed companion to exact `1.0.0-beta.8` versions.
+  This is the catalog package's first public release; no earlier catalog version
+  exists to upgrade.
+- Replace `sync-engine new <directory>` with an ordinary Bun/TypeScript package
+  shell followed by `bunx --package @mit-sdg/catalog@1.0.0-beta.8 catalog init
+bundle/account-center`. Commit `catalog.lock`; copied concept, recipe, test, and
+  bundle source is application-owned.
+- Generate and review the installed application's artifacts, typecheck the
+  copied source, run its concept evidence, and run `src/scenario.ts`. Bind
+  principal and profile fields from authenticated context before exposing the
+  account boundary outside a trusted adapter.
+
+### Generated formats
+
+- The core application manifest remains at version 5. Regenerate checked-in
+  artifacts so generator provenance records `1.0.0-beta.8` and removed scaffold
+  source is no longer treated as a core package asset.
+- `catalog.lock` schema 1 is deterministic machine-owned provenance. The
+  catalog also owns one Markdown declaration and generated registration and
+  composition modules; it refuses to replace edited or missing managed files.
+  Copied entry and bundle files are never managed after installation.
+
+### Runtime and security support
+
+- Catalog mutations preflight complete dependency, package, variant, path,
+  collision, integration, and symbolic-link checks. They never run a package
+  manager or application code and never overwrite or delete copied source.
+- The account-center starter validates bounded endpoint shapes but does not
+  authenticate principals, authorize profiles, persist memory implementations,
+  send external messages, deduplicate retries, or guarantee exactly-once
+  delivery. Its copied guide identifies the trusted-adapter and persistence
+  responsibilities.
+- Packed verification installs the catalog without its optional core peer for
+  discovery, then installs the account-center bundle into an isolated ordinary
+  application, generates and checks artifacts, typechecks, runs all copied
+  evidence, and executes the asserting profile, preference, and inbox scenario.
+
+[Release][1.0.0-beta.8] | [Changes since 1.0.0-beta.7][1.0.0-beta.8-compare]
+
 ## [1.0.0-beta.7] - 2026-08-07
 
-This beta advances the canonical application manifest, publishes a lean
-two-surface analysis companion, and introduces a copy-owned application source
-catalog.
+This beta advances the canonical application manifest and publishes a lean,
+two-surface analysis companion for the first time.
 
 ### Compatibility
 
@@ -25,13 +86,6 @@ catalog.
   worker analysis, project diagnostics and producer options, and strict project
   codecs. TypeScript `>=6 <7` is an analysis runtime dependency, not a peer, but
   importing `/ir` does not evaluate it.
-- `@mit-sdg/catalog` is now a separately published, CLI-only source catalog
-  with an exact matching core peer. Its `catalog` executable installs curated
-  concepts, computations, composition recipes, and bundles without creating a
-  runtime dependency in copied applications.
-- The core `sync-engine new` command and its one-concept template are removed.
-  Core retains only source checking and generated-artifact commands; first-run
-  application source now comes from reusable catalog entries.
 - The unpublished oversized preview surface has been removed without aliases:
   there is no `/tooling`, `/guidance`, persisted granular-result codec, impact
   context bundle, change target, review orchestration, packaged guidance, or
@@ -51,11 +105,6 @@ catalog.
 - Upgrade core and HTTP to `1.0.0-beta.7` together. When adopting analysis,
   install `@mit-sdg/sync-engine-analysis@1.0.0-beta.7` alongside that exact core
   beta; do not infer an analysis beta.6 package from the core release history.
-- Replace `sync-engine new <directory>` with an ordinary Bun/TypeScript package
-  shell followed by `bunx --package @mit-sdg/catalog@1.0.0-beta.7 catalog init
-bundle/operations-room --variant concept/gathering=memory`. Commit
-  `catalog.json` and `catalog.lock`; copied concept and composition source is
-  application-owned.
 - Regenerate checked-in application manifests, assembled Markdown, and wire
   TypeScript. Replace V4 manifest type imports with V5. Preview analysis clients
   must replace `/tooling` imports with `/ir` and/or `/project` and move prompts,
@@ -610,6 +659,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.8]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.8
+[1.0.0-beta.8-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.7...v1.0.0-beta.8
 [1.0.0-beta.7]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.7
 [1.0.0-beta.7-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.6...v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.6

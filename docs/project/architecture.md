@@ -284,8 +284,7 @@ The installed executable under `src/command/` is an adapter over those
 capabilities. `check.ts` parses supported TypeScript method signatures and
 `artifacts.ts` imports an application descriptor. Command code may import
 engine concerns through `@engine`, but engine concerns do not import the
-command. The separately packed `@mit-sdg/catalog` CLI copies application-owned
-source and does not import engine internals.
+command.
 
 ## Public package boundary
 
@@ -299,8 +298,8 @@ package-path reachability. The packed-consumer fixture separately checks the
 emitted type graph.
 
 Workspace packaging and npm publication are separate policies. Every cataloged
-workspace builds, packs, and participates in combined-consumer checks. Core,
-analysis, and HTTP are independently npm-published. Analysis consumes only
+workspace builds, packs, and participates in combined-consumer checks. Every
+workspace marked for npm publication is published independently. Analysis consumes only
 supported core subpaths and exposes generic, non-verdict surfaces through
 `@mit-sdg/sync-engine-analysis/ir` and
 `@mit-sdg/sync-engine-analysis/project`. Plain source/project models and pure

@@ -9,6 +9,7 @@ import { describe, expect, test } from "vite-plus/test";
 const root = new URL("../../", import.meta.url);
 const documents = {
   readme: new URL("README.md", root),
+  catalogReadme: new URL("packages/catalog/README.md", root),
   semantics: new URL("docs/user/reference/semantics.md", root),
   publicSurface: new URL("docs/user/reference/public-api.md", root),
 };
@@ -83,7 +84,7 @@ describe("executable documentation examples", () => {
     const contexts = [
       [documents.readme, [await json("package.json")]],
       [
-        new URL("docs/user/guide/getting-started.md", root),
+        documents.catalogReadme,
         [await json("package.json"), await json("packages/catalog/package.json")],
       ],
       [
@@ -107,7 +108,7 @@ describe("executable documentation examples", () => {
   });
 
   test("the package-qualified first-run command works through the local catalog CLI", async () => {
-    const readme = await readFile(documents.readme, "utf8");
+    const readme = await readFile(documents.catalogReadme, "utf8");
     const manifest = await json("packages/catalog/package.json");
     const core = await json("package.json");
     const command = shellLines(readme).find((line) => line.includes(" catalog init "));
@@ -120,15 +121,10 @@ describe("executable documentation examples", () => {
       "--package",
       `${manifest.name}@${manifest.publishConfig?.tag}`,
     ]);
-    expect(words.slice(executable + 1)).toEqual([
-      "init",
-      "bundle/operations-room",
-      "--variant",
-      "concept/gathering=memory",
-    ]);
+    expect(words.slice(executable + 1)).toEqual(["init", "bundle/account-center"]);
 
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-docs-"));
-    const project = join(temporary, "operations-room");
+    const project = join(temporary, "account-center");
     try {
       await mkdir(project);
       await writeFile(
@@ -143,9 +139,7 @@ describe("executable documentation examples", () => {
         [
           fileURLToPath(new URL("packages/catalog/src/command.ts", root)),
           "init",
-          "bundle/operations-room",
-          "--variant",
-          "concept/gathering=memory",
+          "bundle/account-center",
         ],
         { cwd: project, encoding: "utf8" },
       );
@@ -154,7 +148,7 @@ describe("executable documentation examples", () => {
         stderr: "",
       });
       await expect(readFile(join(project, "generated.config.ts"), "utf8")).resolves.toContain(
-        'title: "Operations room"',
+        'title: "Account center"',
       );
     } finally {
       await rm(temporary, { recursive: true, force: true });

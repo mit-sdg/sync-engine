@@ -79,8 +79,10 @@ describe("release source facts", () => {
     const sources = fixture();
     editManifest(sources, releaseManifestPaths[0], (manifest) => {
       manifest.version = "stale";
+      manifest.engines.bun = "stale";
       manifest.engines.node = "stale";
       manifest.peerDependencies["@mit-sdg/sync-engine"] = "stale";
+      delete manifest.peerDependenciesMeta;
     });
     editManifest(sources, ownedDependencyManifests[0], (manifest) => {
       manifest.dependencies["@mit-sdg/sync-engine"] = "stale";
@@ -109,6 +111,14 @@ describe("release source facts", () => {
       ),
     );
     const projected = projectReleaseManifests(sources);
+    const projectedCatalog = JSON.parse(projected.get(releaseManifestPaths[0]) ?? "") as Record<
+      string,
+      any
+    >;
+    expect(projectedCatalog.engines.bun).toBe(packageManifest.engines.bun);
+    expect(projectedCatalog.peerDependenciesMeta).toEqual({
+      "@mit-sdg/sync-engine": { optional: true },
+    });
     expect(
       JSON.parse(projected.get(ownedDependencyManifests[0]) ?? "").dependencies,
     ).not.toHaveProperty("typescript");
@@ -457,6 +467,7 @@ describe("release source facts", () => {
   });
 
   test.each([
+    "push:\n    branches: [main]",
     "name: Generated artifacts",
     "run: bun run examples:check",
     "name: CI required",

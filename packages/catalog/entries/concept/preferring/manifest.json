@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "concept/preferring",
+  "kind": "concept",
+  "summary": "Keep one ordered preference value per owner, scope, and key.",
+  "files": [
+    { "source": "spec.md", "target": "$concepts/preferring/spec.md" },
+    { "source": "registry.ts", "target": "$concepts/preferring/registry.ts" }
+  ],
+  "variants": {
+    "memory": {
+      "summary": "Dependency-free in-memory state with injectable identity generation.",
+      "files": [
+        { "source": "preferring.ts", "target": "$concepts/preferring/preferring.ts" },
+        { "source": "preferring.test.ts", "target": "$concepts/preferring/preferring.test.ts" }
+      ]
+    }
+  },
+  "concept": {
+    "name": "Preferring",
+    "registration": "$concepts/preferring/registry.ts",
+    "export": "preferring"
+  }
+}

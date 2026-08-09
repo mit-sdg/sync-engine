@@ -44,7 +44,7 @@ The analysis package requires the exact matching core beta. Pin both packages to
 the same exact version:
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.7 @mit-sdg/sync-engine-analysis@1.0.0-beta.7
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.8 @mit-sdg/sync-engine-analysis@1.0.0-beta.8
 ```
 
 Keep the two version pins identical when upgrading. The built ESM package

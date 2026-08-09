@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "id": "recipe/account-center",
+  "kind": "recipe",
+  "summary": "Create and manage profile-backed preferences and a retained inbox through one validated account boundary.",
+  "requires": ["concept/profiling", "concept/preferring", "concept/notifying"],
+  "files": [
+    {
+      "source": "account-center.ts",
+      "target": "$recipes/account-center.ts"
+    },
+    {
+      "source": "account-center.test.ts",
+      "target": "$recipes/account-center.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/account-center.ts",
+    "test": "$recipes/account-center.test.ts",
+    "members": [
+      "accountCenter",
+      "CreateProfile",
+      "RenameProfile",
+      "SetPreference",
+      "RejectUnknownPreferenceOwner",
+      "ClearPreference",
+      "RejectUnknownPreferenceClear",
+      "DeliverNotification",
+      "RejectUnknownNotificationRecipient",
+      "MarkNotificationRead",
+      "DismissNotification",
+      "GetAccountCenter"
+    ]
+  }
+}

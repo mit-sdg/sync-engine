@@ -177,8 +177,8 @@ The checker does not traverse base classes. Runtime registration can therefore
 accept an inherited member that the source checker rejects.
 `scripts/check-specs.ts` checks `examples` and `tests/package/application`; the
 installed command defaults to `src/concepts`. The repository wrapper does not
-check catalog assets in place; packed-package verification installs each
-catalog bundle and checks the resulting ordinary `src/concepts` tree.
+check source templates in place; packed-package verification checks installed
+templates through their ordinary `src/concepts` trees.
 
 ### Runtime and tooling
 
