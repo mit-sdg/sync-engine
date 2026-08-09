@@ -10,12 +10,14 @@ the repository [support policy](../SUPPORT.md).
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | [Reading Circle](reading-circle/README.md)   | The shortest complete multi-concept application: one composition module, policy views, one page former, endpoints, gateway, and client    |
 | [Operations Room](operations-room/README.md) | A modular composition: selectable reaction packs, replaceable policy, implementation overrides, staged formers, and a nested dashboard    |
+| [Account Center](account-center/README.md)   | Validated profile, preference, and retained-inbox composition with explicit identity, persistence, and delivery boundaries                |
 | [Production HTTP](production-http/README.md) | Registered public-error projection with and without same-origin cookie credentials, correlation, base paths, and projected generated wire |
 
 Start with Reading Circle when learning the complete request lifecycle. Use
 Operations Room after the basic concept, reaction, view, former, and endpoint
-roles are familiar. Use Production HTTP when selecting a public transport
-boundary.
+roles are familiar. Use Account Center to study validated joined state and
+deployment-owned identity and persistence boundaries. Use Production HTTP when
+selecting a public transport boundary.
 
 From any example directory:
 

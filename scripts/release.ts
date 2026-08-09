@@ -17,6 +17,7 @@ const workspaceReleaseManifests = releaseWorkspaces
 const exampleManifests = [
   "examples/reading-circle/package.json",
   "examples/operations-room/package.json",
+  "examples/account-center/package.json",
   "examples/production-http/package.json",
 ] as const;
 const bunFixtureManifests = ["tests/package/application/package.json"] as const;

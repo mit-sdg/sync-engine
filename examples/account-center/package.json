@@ -1,0 +1,30 @@
+{
+  "name": "account-center",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/scenario.ts",
+    "test": "LOG_LEVEL=error vp test",
+    "typecheck": "tsc --noEmit",
+    "artifacts:check": "sync-engine artifacts check --config generated.config.ts",
+    "artifacts:pin": "sync-engine artifacts pin --config generated.config.ts",
+    "check": "vp check && bun run test && bun run artifacts:check"
+  },
+  "dependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": ">=6 <7",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.6",
+    "vite-plus": "0.2.6"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.6"
+  },
+  "engines": {
+    "bun": ">=1.3.14 <1.4",
+    "node": ">=24 <25"
+  },
+  "packageManager": "bun@1.3.14"
+}

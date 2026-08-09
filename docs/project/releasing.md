@@ -90,6 +90,7 @@ dependency location:
 | Published `packages/*/package.json`                 | Package version, peer ranges, and package-specific dependencies |
 | `examples/reading-circle/package.json`              | Shipped example dependency                                      |
 | `examples/operations-room/package.json`             | Shipped example dependency                                      |
+| `examples/account-center/package.json`              | Shipped example dependency                                      |
 | `examples/production-http/package.json`             | Shipped example dependency                                      |
 | `tests/package/application/package.json`            | Standalone packed-application dependency                        |
 | `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency                              |
