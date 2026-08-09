@@ -29,7 +29,7 @@ ESM-only and supports these three entrypoints.
 
 <!-- register:http-server:start -->
 
-`HttpCorrelationOptions`, `HttpCredentialBinding`, `HttpFloor`, `HttpPublicErrorCategory`, `HttpPublicErrorPolicy`, `ProductionHttpProfile`, `createHttpHandler`, `httpFloor`, `productionHttpProfile`
+`HttpCookieIssue`, `HttpCookiePolicy`, `HttpCorrelationOptions`, `HttpPolicy`, `HttpPublicErrorCategory`, `createHttpHandler`, `httpPolicy`
 
 <!-- register:http-server:end -->
 

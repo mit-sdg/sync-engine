@@ -5,6 +5,7 @@ function inProcessFetch(handler: (request: Request) => Promise<Response>, keepCo
   let cookie: string | undefined;
   return async (input: string | URL | Request, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
+    headers.set("Origin", "https://production-http.test");
     if (cookie !== undefined) headers.set("Cookie", cookie);
     const response = await handler(new Request(input, { ...init, headers }));
     if (keepCookie) {
@@ -17,14 +18,14 @@ function inProcessFetch(handler: (request: Request) => Promise<Response>, keepCo
 }
 
 export async function runScenario() {
-  const { floorHandler, profileHandler } = buildProductionHttp();
+  const { cookieHandler, plainHandler } = buildProductionHttp();
   const sessions = createProductionHttpClient({
     baseUrl: "https://production-http.test/api",
-    fetch: inProcessFetch(floorHandler, true),
+    fetch: inProcessFetch(cookieHandler, true),
   });
   const names = createProductionHttpClient({
     baseUrl: "https://production-http.test/api",
-    fetch: inProcessFetch(profileHandler),
+    fetch: inProcessFetch(plainHandler),
   });
   const started = await sessions.sessions.start({});
   const current = await sessions.sessions.current({});

@@ -1,6 +1,6 @@
 import { FrameworkErrorCode } from "@mit-sdg/sync-engine/boundary";
 import type { WireContractsIR } from "@mit-sdg/sync-engine/tooling";
-import type { HttpPublicErrorCategory, ProductionHttpProfile } from "./policy.ts";
+import type { HttpPolicy, HttpPublicErrorCategory } from "./policy.ts";
 
 type PublicHttpError = HttpPublicErrorCategory | "INTERNAL_ERROR";
 
@@ -53,11 +53,8 @@ export function publicErrorStatus(category: PublicHttpError): number {
   }
 }
 
-export function projectProductionHttpWire(
-  wire: WireContractsIR,
-  profile: ProductionHttpProfile,
-): WireContractsIR {
-  const categories = profile.publicErrors;
+export function projectHttpErrors(wire: WireContractsIR, policy: HttpPolicy): WireContractsIR {
+  const categories = policy.publicErrors;
   return {
     endpoints: wire.endpoints.map((endpoint) => {
       const errors = new Set<PublicHttpError>();

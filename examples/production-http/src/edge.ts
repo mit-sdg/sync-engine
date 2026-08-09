@@ -1,9 +1,5 @@
 import { createGateway } from "@mit-sdg/sync-engine/boundary";
-import {
-  createHttpHandler,
-  httpFloor,
-  productionHttpProfile as defineProductionHttpProfile,
-} from "@mit-sdg/sync-engine-http/server";
+import { createHttpHandler, httpPolicy } from "@mit-sdg/sync-engine-http/server";
 import type { ProductionHttpWire } from "../generated/wire.ts";
 import {
   assembleProductionHttp,
@@ -16,22 +12,22 @@ const publicErrors = {
   UNKNOWN_SESSION: "UNAUTHORIZED",
 } as const;
 
-export const productionHttpProfile = defineProductionHttpProfile({
+export const productionHttpPolicy = httpPolicy({
   origin: "https://production-http.test",
   basePath: "/api",
   publicErrors,
 });
 
-export const productionHttpFloor = httpFloor({
+export const productionCookiePolicy = httpPolicy({
   origin: "https://production-http.test",
   basePath: "/api",
   publicErrors,
-  credential: {
+  cookie: {
     name: "session",
     input: "session",
     issue: {
       path: "/sessions/start",
-      output: "session",
+      value: "session",
       expires: "expiresAt",
     },
     clear: ["/sessions/end"],
@@ -49,17 +45,17 @@ export function buildProductionHttp(instances: ProductionHttpOverrides = {}) {
     application,
     executionLimits: productionExecutionLimits,
   });
-  const profileHandler = createHttpHandler({
+  const plainHandler = createHttpHandler({
     application,
     gateway,
-    profile: productionHttpProfile,
+    policy: productionHttpPolicy,
     correlation,
   });
-  const floorHandler = createHttpHandler({
+  const cookieHandler = createHttpHandler({
     application,
     gateway,
-    floor: productionHttpFloor,
+    policy: productionCookiePolicy,
     correlation,
   });
-  return { application, floorHandler, gateway, profileHandler };
+  return { application, cookieHandler, gateway, plainHandler };
 }

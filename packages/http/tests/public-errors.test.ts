@@ -4,7 +4,7 @@ import type { HttpPublicErrorCategory } from "@mit-sdg/sync-engine-http/server";
 import {
   publicErrorStatus,
   publicFrameworkCategoryOf,
-  projectProductionHttpWire,
+  projectHttpErrors,
   registeredPublicCategoryOf,
 } from "../src/server/public-errors.ts";
 
@@ -48,7 +48,7 @@ describe("HTTP public error projection", () => {
   });
 
   test("keeps unmapped domain errors private in projected wire contracts", () => {
-    const projected = projectProductionHttpWire(
+    const projected = projectHttpErrors(
       {
         endpoints: [{ errors: ["NOT_FOUND"], inputAdmissionError: false, openError: false }],
         appWide: [],
@@ -66,7 +66,7 @@ describe("HTTP public error projection", () => {
   ] as const)(
     "distinguishes domain and admission INVALID_INPUT errors",
     (errors, admission, expected) => {
-      const projected = projectProductionHttpWire(
+      const projected = projectHttpErrors(
         {
           endpoints: [{ errors, inputAdmissionError: admission, openError: false }],
           appWide: [],

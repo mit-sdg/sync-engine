@@ -52,84 +52,73 @@ export type { HeadersOption, HttpClientError, HttpClientOptions, HttpRequestCont
 export declare const HTTP_PACKAGE_NAME: string;
 export declare const HTTP_PACKAGE_VERSION: string;
 
-=== packages/http/dist/server/floor.d.ts ===
-import { type WireProjectionFacts } from "@mit-sdg/sync-engine/boundary";
-import type { InputContractDecl } from "@mit-sdg/sync-engine/boundary";
+=== packages/http/dist/server/cookie-policy.d.ts ===
+import type { InputContractDecl, WireProjectionFacts } from "@mit-sdg/sync-engine/boundary";
 import type { WireContractsIR } from "@mit-sdg/sync-engine/tooling";
-import { type ProductionHttpProfile } from "./policy.ts";
-export interface HttpCredentialBinding {
-    readonly name: string;
-    readonly input: string;
-    readonly issue: {
-        readonly path: string;
-        readonly output: string;
-        readonly expires: string;
-    };
-    readonly clear: readonly string[];
-}
-export interface HttpFloor extends ProductionHttpProfile {
-    readonly credential: HttpCredentialBinding;
-}
-export declare function httpFloor(declaration: HttpFloor): HttpFloor;
-export declare function credentialProtectedPaths(contracts: Readonly<Record<string, InputContractDecl>>, input: string): Set<string>;
-export declare function validateHttpFloor(facts: WireProjectionFacts, floor: HttpFloor): void;
-export declare function projectHttpWire(facts: WireProjectionFacts, floor: HttpFloor): WireContractsIR;
+import type { HttpCookieIssue, HttpCookiePolicy, HttpPolicy } from "./policy.ts";
+export declare function cookieIssues(cookie: HttpCookiePolicy): readonly HttpCookieIssue[];
+export declare function cookieProtectedPaths(contracts: Readonly<Record<string, InputContractDecl>>, input: string): Set<string>;
+export declare function validateHttpCookiePolicy(facts: WireProjectionFacts, policy: HttpPolicy): void;
+export declare function projectHttpPolicyWire(facts: WireProjectionFacts, policy: HttpPolicy): WireContractsIR;
 
 === packages/http/dist/server/handler.d.ts ===
 import type { Assembly } from "@mit-sdg/sync-engine/assembly";
 import { type Gateway } from "@mit-sdg/sync-engine/boundary";
 import type { ContractShape } from "@mit-sdg/sync-engine/client";
-import type { HttpFloor } from "./floor.ts";
-import type { ProductionHttpProfile } from "./policy.ts";
+import { type HttpPolicy } from "./policy.ts";
 type Application = Assembly<Record<string, new (...args: never[]) => object>>;
 export interface HttpCorrelationOptions {
     resolve(request: Request): string | undefined;
     responseHeader?: string;
 }
-type FloorHandlerOptions = {
+type HttpHandlerOptions = {
     gateway: Gateway<ContractShape>;
     application: Application;
-    floor: HttpFloor;
+    policy: HttpPolicy;
     correlation?: HttpCorrelationOptions;
 };
-type ProfileHandlerOptions = {
-    gateway: Gateway<ContractShape>;
-    application: Application;
-    profile: ProductionHttpProfile;
-    correlation?: HttpCorrelationOptions;
-};
-export declare function createHttpHandler(options: FloorHandlerOptions | ProfileHandlerOptions): (request: Request) => Promise<Response>;
+export declare function createHttpHandler(options: HttpHandlerOptions): (request: Request) => Promise<Response>;
 export {};
 
 === packages/http/dist/server/index.d.ts ===
 export { createHttpHandler } from "./handler.ts";
 export type { HttpCorrelationOptions } from "./handler.ts";
-export { httpFloor } from "./floor.ts";
-export type { HttpCredentialBinding, HttpFloor } from "./floor.ts";
-export { productionHttpProfile } from "./policy.ts";
-export type { HttpPublicErrorCategory, HttpPublicErrorPolicy, ProductionHttpProfile, } from "./policy.ts";
+export { httpPolicy } from "./policy.ts";
+export type { HttpCookieIssue, HttpCookiePolicy, HttpPolicy, HttpPublicErrorCategory, } from "./policy.ts";
 
 === packages/http/dist/server/policy.d.ts ===
 export type HttpPublicErrorCategory = "INVALID_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT";
-export interface HttpPublicErrorPolicy {
-    readonly publicErrors?: Readonly<Record<string, HttpPublicErrorCategory>>;
+export interface HttpCookieIssue {
+    readonly path: string;
+    readonly value: string;
+    readonly expires: string;
 }
-export interface ProductionHttpProfile extends HttpPublicErrorPolicy {
+export interface HttpCookiePolicy {
+    readonly name: string;
+    readonly input: string;
+    readonly issue: HttpCookieIssue | readonly HttpCookieIssue[];
+    readonly clear?: readonly string[];
+    readonly sameSite?: "Strict" | "Lax" | "None";
+    readonly path?: string;
+    readonly domain?: string;
+    readonly origins?: readonly string[] | false;
+}
+export interface HttpPolicy {
     readonly origin: string;
     readonly basePath?: string;
+    readonly publicErrors?: Readonly<Record<string, HttpPublicErrorCategory>>;
+    readonly cookie?: HttpCookiePolicy;
 }
-export declare function normalizeHttpBasePath(basePath: string | undefined, label?: string): string;
-export declare function normalizeProductionHttpProfile(declaration: ProductionHttpProfile, label?: string, productionReason?: string): ProductionHttpProfile;
-export declare function productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile;
+export declare function httpPolicy(declaration: HttpPolicy): HttpPolicy;
 
 === packages/http/dist/server/public-errors.d.ts ===
 import type { WireContractsIR } from "@mit-sdg/sync-engine/tooling";
-import type { HttpPublicErrorCategory, ProductionHttpProfile } from "./policy.ts";
+import type { HttpPolicy, HttpPublicErrorCategory } from "./policy.ts";
 type PublicHttpError = HttpPublicErrorCategory | "INTERNAL_ERROR";
 export declare function registeredPublicCategoryOf(code: string, categories: Readonly<Record<string, HttpPublicErrorCategory>> | undefined): PublicHttpError;
 export declare function publicFrameworkCategoryOf(code: string): PublicHttpError;
 export declare function publicErrorStatus(category: PublicHttpError): number;
-export declare function projectProductionHttpWire(wire: WireContractsIR, profile: ProductionHttpProfile): WireContractsIR;
+export declare function projectHttpErrors(wire: WireContractsIR, policy: HttpPolicy): WireContractsIR;
 export {};
 
 === packages/http/dist/stream.d.ts ===
@@ -151,10 +140,9 @@ export {};
 
 === packages/http/dist/tooling/http-wire.d.ts ===
 import type { WireProjection } from "@mit-sdg/sync-engine/tooling";
-import type { HttpFloor } from "../server/floor.ts";
-import type { ProductionHttpProfile } from "../server/policy.ts";
+import { type HttpPolicy } from "../server/policy.ts";
 export interface HttpWireOptions {
-    readonly policy: ProductionHttpProfile | HttpFloor;
+    readonly policy: HttpPolicy;
     readonly name: string;
 }
 /** Derive the browser-visible contract from the same policy used by the handler. */

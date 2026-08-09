@@ -7,10 +7,8 @@ import {
   type InvocationResult,
 } from "@mit-sdg/sync-engine/boundary";
 import type { ContractShape } from "@mit-sdg/sync-engine/client";
-import type { HttpFloor } from "./floor.ts";
-import { credentialProtectedPaths, httpFloor, validateHttpFloor } from "./floor.ts";
-import type { ProductionHttpProfile } from "./policy.ts";
-import { normalizeHttpBasePath, productionHttpProfile } from "./policy.ts";
+import { cookieIssues, cookieProtectedPaths, validateHttpCookiePolicy } from "./cookie-policy.ts";
+import { httpPolicy, type HttpPolicy } from "./policy.ts";
 import {
   publicErrorStatus,
   publicFrameworkCategoryOf,
@@ -104,17 +102,10 @@ async function readRequestText(request: Request): Promise<RequestTextResult> {
   }
 }
 
-type FloorHandlerOptions = {
+type HttpHandlerOptions = {
   gateway: Gateway<ContractShape>;
   application: Application;
-  floor: HttpFloor;
-  correlation?: HttpCorrelationOptions;
-};
-
-type ProfileHandlerOptions = {
-  gateway: Gateway<ContractShape>;
-  application: Application;
-  profile: ProductionHttpProfile;
+  policy: HttpPolicy;
   correlation?: HttpCorrelationOptions;
 };
 
@@ -132,45 +123,66 @@ function setOwn(target: Record<string, unknown>, key: string, value: unknown): v
 }
 
 export function createHttpHandler(
-  options: FloorHandlerOptions | ProfileHandlerOptions,
+  options: HttpHandlerOptions,
 ): (request: Request) => Promise<Response> {
   const binding = bindTransport({ application: options.application, gateway: options.gateway });
-  let floor: HttpFloor | undefined;
-  let profile: ProductionHttpProfile;
-  if ("floor" in options) {
-    floor = httpFloor(options.floor);
-    profile = floor;
-  } else {
-    profile = productionHttpProfile(options.profile);
-  }
-  if (floor !== undefined) validateHttpFloor(binding, floor);
+  const policy = httpPolicy(options.policy);
+  if (policy.cookie !== undefined) validateHttpCookiePolicy(binding, policy);
   const correlation = normalizeCorrelationOptions(options.correlation);
-  const base = normalizeHttpBasePath(profile.basePath);
-  const credential = floor?.credential;
-  const secure = new URL(profile.origin).protocol === "https:";
+  const base = policy.basePath ?? "";
+  const cookiePolicy = policy.cookie;
+  const secure = new URL(policy.origin).protocol === "https:";
+  const cookiePath = cookiePolicy?.path ?? "/";
+  const cookieDomain = cookiePolicy?.domain;
   const cookieName =
-    credential === undefined ? "" : secure ? `__Host-${credential.name}` : credential.name;
+    cookiePolicy === undefined
+      ? ""
+      : secure
+        ? `${cookieDomain === undefined && cookiePath === "/" ? "__Host-" : "__Secure-"}${cookiePolicy.name}`
+        : cookiePolicy.name;
   const protectedPaths =
-    credential === undefined
+    cookiePolicy === undefined
       ? new Set<string>()
-      : credentialProtectedPaths(binding.routes, credential.input);
-
-  const cookie = (value: string, expires: Date) =>
-    `${cookieName}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/; ` +
-    `Expires=${expires.toUTCString()}${secure ? "; Secure" : ""}`;
+      : cookieProtectedPaths(binding.routes, cookiePolicy.input);
+  const issuesByPath = new Map(
+    cookiePolicy === undefined
+      ? []
+      : cookieIssues(cookiePolicy).map((issue) => [issue.path, issue] as const),
+  );
+  const cookieAttributes =
+    `; HttpOnly; SameSite=${cookiePolicy?.sameSite ?? "Strict"}; Path=${cookiePath}` +
+    (cookieDomain === undefined ? "" : `; Domain=${cookieDomain}`);
+  const cookie = (value: string, expires: Date): string | undefined => {
+    if (value.length === 0) return undefined;
+    let encoded: string;
+    try {
+      encoded = encodeURIComponent(value);
+    } catch {
+      return undefined;
+    }
+    const serialized =
+      `${cookieName}=${encoded}${cookieAttributes}; Expires=${expires.toUTCString()}` +
+      (secure ? "; Secure" : "");
+    return serialized.length <= 4_096 ? serialized : undefined;
+  };
   const clearedCookie = () =>
-    `${cookieName}=; HttpOnly; SameSite=Strict; Path=/; ` +
-    `Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0${secure ? "; Secure" : ""}`;
+    `${cookieName}=${cookieAttributes}; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0` +
+    (secure ? "; Secure" : "");
 
   return async (request) => {
     const correlationId = correlationIdFor(request, correlation);
     const reply = (response: Response) => withCorrelation(response, correlationId, correlation);
     const invalid = () => reply(publicJson({ error: "INVALID_REQUEST" }, 400));
-    if (request.method !== "POST") return invalid();
     const origin = request.headers.get("Origin");
-    if (floor !== undefined && origin !== null && origin !== profile.origin) {
+    const allowedOrigins = cookiePolicy?.origins;
+    if (
+      cookiePolicy !== undefined &&
+      allowedOrigins !== false &&
+      (origin === null || !(allowedOrigins ?? [policy.origin]).includes(origin))
+    ) {
       return reply(publicJson({ error: "FORBIDDEN" }, 403));
     }
+    if (request.method !== "POST") return invalid();
     const contentType = request.headers.get("Content-Type");
     if (contentType !== null && !/^application\/json(?:\s*;|$)/i.test(contentType)) {
       return invalid();
@@ -194,11 +206,11 @@ export function createHttpHandler(
     } catch {
       return invalid();
     }
-    if (credential !== undefined && protectedPaths.has(path)) {
+    if (cookiePolicy !== undefined && protectedPaths.has(path)) {
       if (!isPlainObject(body)) return invalid();
       setOwn(
         body,
-        credential.input,
+        cookiePolicy.input,
         cookieValue(request.headers.get("Cookie"), cookieName) ?? null,
       );
     }
@@ -214,7 +226,7 @@ export function createHttpHandler(
     }
     try {
       if (!result.ok) {
-        const failure = publicFailure(result, profile);
+        const failure = publicFailure(result, policy);
         const clear = protectedPaths.has(path) && failure.error === "UNAUTHORIZED";
         return reply(
           publicJson(
@@ -226,28 +238,29 @@ export function createHttpHandler(
       }
 
       const value = result.value;
-      if (credential === undefined) return reply(publicJson(value, 200));
-      if (path === credential.issue.path) {
+      if (cookiePolicy === undefined) return reply(publicJson(value, 200));
+      const issue = issuesByPath.get(path);
+      if (issue !== undefined) {
         if (!isPlainObject(value)) {
-          return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
+          return reply(publicJson({ error: "INTERNAL_ERROR" }, 500, { noStore: true }));
         }
-        const token = value[credential.issue.output];
-        const sourceExpiry = value[credential.issue.expires];
+        const token = value[issue.value];
+        const sourceExpiry = value[issue.expires];
         const expires =
           sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
-        if (typeof token !== "string" || Number.isNaN(expires.getTime())) {
-          return reply(publicJson({ error: "INTERNAL_ERROR" }, 500));
+        const issuedCookie =
+          typeof token === "string" && expires.getTime() > Date.now()
+            ? cookie(token, expires)
+            : undefined;
+        if (issuedCookie === undefined) {
+          return reply(publicJson({ error: "INTERNAL_ERROR" }, 500, { noStore: true }));
         }
         const publicValue = Object.fromEntries(
-          Object.entries(value).filter(
-            ([key]) => key !== credential.issue.output && key !== credential.issue.expires,
-          ),
+          Object.entries(value).filter(([key]) => key !== issue.value && key !== issue.expires),
         );
-        return reply(
-          publicJson(publicValue, 200, { cookie: cookie(token, expires), noStore: true }),
-        );
+        return reply(publicJson(publicValue, 200, { cookie: issuedCookie, noStore: true }));
       }
-      if (credential.clear.includes(path)) {
+      if (cookiePolicy.clear?.includes(path)) {
         return reply(publicJson(value, 200, { cookie: clearedCookie(), noStore: true }));
       }
       return reply(publicJson(value, 200));
@@ -259,14 +272,14 @@ export function createHttpHandler(
 
 function publicFailure(
   result: Exclude<InvocationResult, { ok: true }>,
-  profile: ProductionHttpProfile,
+  policy: HttpPolicy,
 ): { error: string; status: number } {
   const category =
     result.error.kind === "framework"
       ? publicFrameworkCategoryOf(result.error.code)
       : registeredPublicCategoryOf(
           typeof result.error.value === "string" ? result.error.value : "",
-          profile.publicErrors,
+          policy.publicErrors,
         );
   return { error: category, status: publicErrorStatus(category) };
 }
