@@ -1,13 +1,15 @@
 # `@mit-sdg/sync-engine-catalog`
 
 `catalog` copies curated sync-engine concept and recipe source into an existing
-application. Copied files become application source. The package has no runtime
-import API.
+application. Copied files become application source; generated registration and
+composition modules connect those files to the application. The package has no
+runtime import API.
 
 ## Install and inspect
 
 Install the catalog as a development dependency, then inspect the entries
-shipped by that version:
+shipped by that exact version. `list` and `show` read the package's manifest and
+source assets; they do not load the core package or entry modules:
 
 ```sh
 bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.7
@@ -28,8 +30,9 @@ bunx catalog add <entry> --floor memory
 ```
 
 The first successful add selects the project floor. Later adds use the floor in
-`catalog.lock`; the catalog does not install a second floor or migrate an
-existing project between floors.
+`catalog.lock`; the catalog rejects a different floor and does not migrate an
+existing project between floors. If no floor is supplied, all resolved concepts
+must share one `defaultFloor`.
 
 The command checks package requirements before writing. When a package is
 missing or incompatible, it prints the `bun add --exact` command to run and
@@ -49,8 +52,8 @@ is unsupported for those installations.
 
 ## Ownership and updates
 
-The catalog records copied and generated files in `catalog.lock`. It will not
-replace copied source or overwrite edited generated files. Repeating an
+The catalog records copied and generated files in `catalog.lock`. It never
+replaces copied source or overwrites edited generated files. Repeating an
 unchanged add performs no writes. Review the copied source and generated
 integration before committing it.
 

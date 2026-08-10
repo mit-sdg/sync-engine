@@ -1,15 +1,15 @@
 # @mit-sdg/sync-engine-http
 
 Use `@mit-sdg/sync-engine-http` to expose an assembled sync-engine application
-over POST/JSON. The package provides a Fetch handler and a typed Fetch client.
-The handler maps one `Request` to a `Response`; the host opens the listener and
-owns its lifecycle.
+over POST/JSON. The package provides a Fetch handler, a typed Fetch client, and
+a generated HTTP wire projection. The handler maps one `Request` to one
+`Response`; the host opens the listener and owns its lifecycle.
 
 Start with plain POST/JSON when callers send credentials and other inputs in the
-request body. Add an HTTP policy when the deployment needs cookies or
-request-origin protection, and add browser policy when it needs CORS. A route
-prefix, request-body limit, and reviewed public error mappings do not require
-browser policy.
+request body. Add an HTTP policy when the deployment needs cookies,
+request-origin protection, a route prefix, a request-body limit, or public error
+mappings. Add browser policy when the deployment needs CORS. A route prefix,
+request-body limit, and public error mappings do not require browser policy.
 
 ## Install
 
@@ -306,8 +306,8 @@ tier, not a deep-import workaround.
 
 The HTTP package handles the POST/JSON protocol. The host remains responsible
 for the listener and process lifecycle, static-file or SPA routing, TLS and
-proxy configuration, and traffic controls. Application code defines
-credential meaning, authentication, and authorization.
+proxy configuration, and traffic controls. Application code defines what a
+credential means, authentication, and authorization.
 
 The package does not provide a Node cookie jar, retries, idempotency, rollback,
 persistence, or cancellation of accepted application work. It buffers JSON

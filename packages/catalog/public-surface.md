@@ -1,8 +1,8 @@
 # Catalog command reference
 
 `@mit-sdg/sync-engine-catalog` is CLI-only. Its package `exports` object is
-empty. The executable reads shipped manifests and source assets without
-importing entry modules.
+empty; consumers use the installed `catalog` executable. The executable reads
+shipped manifests and source assets without importing entry modules.
 
 ## Commands
 
@@ -22,9 +22,10 @@ metadata. These commands do not require core and do not import entry modules.
 
 `add` requires a project-root `package.json`. It resolves recipe dependencies,
 deduplicates shared concepts, selects one project floor, verifies all current
-and requested package requirements, renders output in memory, validates paths
-and ownership, commits source, writes `catalog.lock` last, and prints
-integration guidance.
+and requested package requirements, renders output in memory, and validates
+paths and ownership before writing. It installs staged source and generated
+files, writes `catalog.lock` last, and prints integration guidance. A failed
+commit restores files that it replaced.
 
 Repeated `--floor`, comma-separated floor names, unknown options, unavailable
 floors, and a floor different from the lock fail before writes. Missing or
@@ -85,7 +86,8 @@ add.
 
 Missing or incompatible requirements prevent all writes. The command prints
 one `bun add --exact <name>@<requirement>...` command and a `Next:` line that
-repeats the original add.
+repeats the original add. The command checks declared dependency ranges; it does
+not inspect installed packages.
 
 ## Lock and ownership
 
@@ -142,7 +144,8 @@ integration as unverified rather than rewriting it.
 ## Write boundary
 
 The catalog may write selected source under `src/concepts/` and
-`src/composition/`, generated wiring under `src/catalog/`, `catalog.lock`, and
-sibling temporary or backup files used during commit. It never creates or edits
-`package.json`, `tsconfig.json`, `src/concept-set.ts`, `src/composition.ts`,
-`src/assembly.ts`, `generated.config.ts`, a host, or package scripts.
+`src/composition/`, generated wiring under `src/catalog/`, and `catalog.lock`.
+During a commit it may also create sibling temporary or backup files. It never
+creates or edits `package.json`, `tsconfig.json`, `src/concept-set.ts`,
+`src/composition.ts`, `src/assembly.ts`, `generated.config.ts`, a host, or
+package scripts.

@@ -2,9 +2,10 @@
 
 The installed `sync-engine` executable initializes concept-free application
 files, compares parsed concept action/query declarations with class source, and
-checks or generates assembly artifacts. Commands follow the [runtime and
-toolchain support policy](../../../SUPPORT.md) and run relative to the current
-working directory unless a path says otherwise.
+checks or generates assembly artifacts. The CLI runs on the supported Bun range
+listed in the [runtime and toolchain support policy](../../../SUPPORT.md). It
+uses the current working directory unless a command or option supplies another
+path.
 
 ```text
 sync-engine <command> [arguments]
@@ -15,8 +16,9 @@ print command help and exit successfully. A command error prints the error
 message without a stack and sets exit status 1.
 
 Commands accept only the operands and options shown below. Unknown options,
-repeated options, missing option values, and trailing operands are rejected
-before a command applies defaults, imports configuration, or writes files.
+repeated options, missing option values, and extra operands are rejected before
+a command applies defaults, imports configuration, or writes files. Command
+errors print one stackless message and exit with status 1.
 
 | Command                                | Result                                                                                | Writes files                                      |
 | -------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------- |
@@ -93,7 +95,7 @@ shapes, and uninterpreted boundary.
 
 `--config` also assembles the application and prints its structured diagnostics.
 `--fail-on-warnings` promotes warning diagnostics only when `--config` is
-present; without a config there are no application diagnostics to promote.
+present. Without a config, `check` has no application diagnostics to promote.
 
 Success prints:
 

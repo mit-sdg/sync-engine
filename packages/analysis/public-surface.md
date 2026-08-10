@@ -1,7 +1,7 @@
 # Analysis Public Surface
 
-`@mit-sdg/sync-engine-analysis` is a public package with no root export and no
-supported deep imports. Its complete public topology is `/ir` and `/project`.
+`@mit-sdg/sync-engine-analysis` has no root export or supported deep imports.
+Its complete public topology is `/ir` and `/project`.
 
 ## `ir`
 
@@ -14,9 +14,9 @@ supported deep imports. Its complete public topology is `/ir` and `/project`.
 <!-- register:analysis-ir:end -->
 
 This is the lightweight consumer surface. A native ESM import may evaluate Node
-crypto for canonical SHA-256 identities, but it does not evaluate `typescript`,
-`fs`, `fs/promises`, `node:fs`, `node:fs/promises`, worker threads, a project or
-worker module, or the TypeScript-backed source index builder.
+crypto for canonical SHA-256 identities, but it does not evaluate the
+TypeScript-backed source index builder, project modules, or worker modules. It
+also does not load `typescript`, filesystem modules, or worker threads.
 
 The persisted formats on this surface are
 `sync-engine.application-index` version 2,
@@ -155,7 +155,6 @@ index recomputed by the running analyzer.
 ## Boundary
 
 IR and source attribution are deterministic evidence, not proof that behavior
-will execute. The package contains no canonical guidance, prompts, stages,
-context packs, change targets, review orchestration, observations, coverage
-verdicts, rendered recommendations, authorization allowlists, or approval
-decisions.
+will execute. The package does not provide guidance, prompts, stages, context
+packs, change targets, review orchestration, observations, coverage verdicts,
+rendered recommendations, authorization allowlists, or approval decisions.

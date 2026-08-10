@@ -9,14 +9,10 @@ The [support policy](../../../SUPPORT.md) defines beta compatibility,
 generated-assembly compatibility, and format-version rules. The
 [security policy](../../../SECURITY.md) defines the supported security-fix window.
 
-Most backend files use `language`, `assembly`, and `boundary`; frontend files
-use `client`; generation scripts use `tooling`. `advanced` marks deliberate
-manual construction and explicit escape hatches.
-
 | Package path                                 | Role                                                          |
 | -------------------------------------------- | ------------------------------------------------------------- |
 | [`@mit-sdg/sync-engine/language`](#language) | Concepts, reactions, views, formers, and their conditions     |
-| [`@mit-sdg/sync-engine/assembly`](#assembly) | Concept registration, assemblies, retention, and audit sinks  |
+| [`@mit-sdg/sync-engine/assembly`](#assembly) | Concept registration, assembly lifecycle, retention, and audit sinks |
 | [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, invocation, gateways, and transport binding        |
 | [`@mit-sdg/sync-engine/client`](#client)     | Local and custom clients over a generated contract            |
 | [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation |
@@ -103,7 +99,7 @@ form or an `each(...).form(...)` selection row.
 
 For worked examples, see [Application
 authoring](../guide/authoring.md#connect-independent-behaviors). [Reaction
-semantics](semantics.md#reactions) defines matching and siblings; [Views and
+semantics](semantics.md#reactions) defines matching and siblings. [Views and
 formers](semantics.md#views-and-formers) defines absence and production.
 
 ## `assembly`

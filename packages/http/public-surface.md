@@ -1,9 +1,9 @@
 # Public API
 
 This reference defines the supported exports and observable behavior of
-`@mit-sdg/sync-engine-http`. The package has no root export and no supported
-deep import. The export registers are exact; the generated TypeScript
-declarations remain authoritative for complete structural types.
+`@mit-sdg/sync-engine-http`. The package has no root export or supported deep
+imports. The export registers are exact; the generated TypeScript declarations
+remain authoritative for complete structural types.
 
 Install the HTTP companion and core at the same exact beta version. The HTTP
 package is ESM-only and supports Node.js 24 (`>=24 <25`).
@@ -15,10 +15,11 @@ package is ESM-only and supports Node.js 24 (`>=24 <25`).
 | [`@mit-sdg/sync-engine-http/client`](#client)   | Fetch transport and typed client      |
 | [`@mit-sdg/sync-engine-http/tooling`](#tooling) | Generated HTTP wire projection        |
 
-Policy records deployment facts that the package cannot infer: the public
+A policy records deployment facts that the package cannot infer: the public
 origin, browser caller origins, public error mapping, and cookie bindings. The
 package derives CORS, request-origin checks, cookie attributes, and wire
-projection from those facts.
+projection from those facts. It does not authenticate users or authorize
+application operations.
 
 ## `policy`
 
@@ -211,7 +212,7 @@ errors and application-dependent cookie-policy errors throw synchronously.
 
 The handler accepts `POST` only. An `OPTIONS` request receives preflight
 handling only under a browser policy. Every other method returns
-`INVALID_REQUEST`/400; the handler does not emit `Allow`.
+`INVALID_REQUEST`/400; the handler does not emit an `Allow` header.
 
 Routing uses `URL.pathname` after removing `basePath`. Query parameters do not
 select a route. A path outside the base or a request for the base itself returns

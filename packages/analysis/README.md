@@ -1,13 +1,13 @@
 # @mit-sdg/sync-engine-analysis
 
-Use this package to inspect a sync-engine application as data: list its concepts,
-find reactions related to an action, read definitions, search contracts, and
-follow possible impact through the design.
+Use this package to inspect a sync-engine application as data. It lists
+concepts and other design elements, reads definitions and contracts, finds
+reactions related to an action, and follows possible impact through the design.
 
-This independently published public package inspects an explicit Application
+This independently published package inspects an explicit Application
 Manifest V5 supplied by the host. It does not connect to a running app or
-discover one. Source-aware analysis can add evidence from a checkout, but the
-host must still supply the manifest.
+discover a manifest. Source-aware analysis can add evidence from a checkout, but
+the host must still supply the manifest.
 
 ## What you can do
 
@@ -143,7 +143,8 @@ export async function inspectCheckout(
 Computing the digest immediately is appropriate here because the same host just
 produced the snapshot from its selected checkout. If a snapshot is stored or
 crosses a trust boundary, retain its digest in a trusted location and pass that
-previously retained value as `expectedProjectDigest`.
+previously retained value as `expectedProjectDigest`; hashing a snapshot at the
+trust boundary would not establish prior trust.
 
 ## Source bytes
 

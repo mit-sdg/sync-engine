@@ -1,8 +1,8 @@
 # Contributing catalog entries
 
 The catalog discovers entries only through `entries/index.json`, in index order.
-Read the [catalog command reference](public-surface.md#manifest-fields) before
-writing a manifest.
+An entry is unavailable until its id is listed there. Read the [catalog command
+reference](public-surface.md#manifest-fields) before writing a manifest.
 
 ## Add an entry
 
@@ -16,7 +16,8 @@ A concept entry includes:
 A recipe declares every concept dependency, the exact exported composition
 members that may enter `catalogComposition`, and one route for each member.
 Every relative import in an installed floor must resolve to another selected
-file.
+file; reserved `@catalog/*` imports are the only additional installer-resolved
+imports.
 
 Copied tests are source assets. Do not use repository-only aliases. Recipe
 source may use `@catalog/concepts`; installation rewrites that reserved alias to
