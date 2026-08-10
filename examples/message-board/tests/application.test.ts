@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:net";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
 import { createMessageBoardClient } from "../src/client.ts";
@@ -28,11 +29,15 @@ async function availablePort(): Promise<number> {
 }
 
 async function startHost(port: number): Promise<ChildProcess> {
-  const host = spawn("bun", [new URL("../src/host.ts", import.meta.url).pathname], {
-    cwd: new URL("../../..", import.meta.url).pathname,
-    env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
-    stdio: ["ignore", "pipe", "inherit"],
-  });
+  const host = spawn(
+    process.platform === "win32" ? "bun.exe" : "bun",
+    [fileURLToPath(new URL("../src/host.ts", import.meta.url))],
+    {
+      cwd: fileURLToPath(new URL("../../..", import.meta.url)),
+      env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
+      stdio: ["ignore", "pipe", "inherit"],
+    },
+  );
   hosts.push(host);
   await new Promise<void>((resolve, reject) => {
     host.once("error", reject);
