@@ -33,4 +33,21 @@ describe("Sessioning", () => {
     expect(() => sessioning.current({ session: "session-1" })).toThrow(UnknownSession);
     expect(() => sessioning.end({ session: "session-1" })).toThrow(UnknownSession);
   });
+
+  test("starting another session reclaims every expired record", () => {
+    let now = new Date("2099-07-20T12:00:00.000Z");
+    const values = ["session-1", "session-2"];
+    const sessioning = new SessioningConcept(
+      () => now,
+      () => values.shift() ?? "exhausted",
+    );
+    sessioning.start({ subject: "ari" });
+    now = new Date("2099-07-20T12:31:00.000Z");
+    sessioning.start({ subject: "bo" });
+
+    // Storage reclamation is intentionally not a public query, so this
+    // implementation test inspects the teaching store directly.
+    const stored = Reflect.get(sessioning, "sessions") as Map<string, unknown>;
+    expect([...stored.keys()]).toEqual(["session-2"]);
+  });
 });

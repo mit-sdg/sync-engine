@@ -7,15 +7,17 @@ proof of identity.
 
 ## Principle
 
-Ari registers username `ari` with a password. A duplicate registration is
-refused. A wrong password is refused. The right password authenticates Ari as
-`ari` without revealing the stored password verifier.
+Ari registers username `ari` with a password. `_registered` then reports `ari`
+as registered, and another registration of `ari` is refused.
+Authenticating `ari` with the wrong password is refused. The correct password
+authenticates Ari as `ari`, returning only the username.
 
 ## State
 
 ```state
 a set of Accounts with
   a username Username
+  a salt Salt
   a passwordVerifier Secret
 ```
 
@@ -23,7 +25,7 @@ a set of Accounts with
 
 ```actions
 register (username: Username, password: Password) : return (username: Username)
-  where username is malformed
+  where username is not 3 to 32 letters, digits, underscores, or hyphens
   then
     refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
   where password is shorter than 8 characters or longer than 128 characters
@@ -34,7 +36,7 @@ register (username: Username, password: Password) : return (username: Username)
     refuse USERNAME_TAKEN "That username is already registered."
   where username and password are accepted
   then
-    store a password verifier for username
+    add a new account with username, a fresh salt, and a verifier derived from password and that salt
     return username
 
 authenticate (username: Username, password: Password) : return (username: Username)
@@ -52,3 +54,9 @@ authenticate (username: Username, password: Password) : return (username: Userna
 _registered (username: Username) : one (registered: Flag)
   answers false for an unknown Username
 ```
+
+## Types
+
+`Username` is a caller-chosen account name. `Password` is transient input.
+`Salt` is a fresh per-account value. `Secret` is a one-way verifier derived from
+a password and that account's salt.

@@ -139,10 +139,51 @@ describe("message board application", () => {
       },
     });
 
+    const comment = "comment" in commented ? commented.comment : "unreachable";
+    await expect(client.board["retract-comment"]({ comment })).resolves.toEqual({ comment });
+    await expect(client.board.list({})).resolves.toEqual({
+      board: {
+        posts: [
+          { post: posted.post, author: "ari", content: "A small complete app", comments: [] },
+        ],
+      },
+    });
+    await expect(client.board["retract-comment"]({ comment })).resolves.toEqual({
+      error: "NOT_FOUND",
+    });
+
     await expect(client.auth["sign-out"]({})).resolves.toEqual({ signedOut: true });
     expect(jar.cookie()).toBeUndefined();
     expect(jar.lastSetCookie()).toContain("Max-Age=0");
     await expect(client.board.list({})).resolves.toEqual({ error: "UNAUTHORIZED" });
+  });
+
+  test("only the comment author may retract it", async () => {
+    const port = await availablePort();
+    await startHost(port);
+    const origin = `http://127.0.0.1:${port}`;
+    const author = createMessageBoardClient({
+      baseUrl: `${origin}/api`,
+      fetch: networkCookieFetch(origin).fetch as typeof fetch,
+    });
+    const other = createMessageBoardClient({
+      baseUrl: `${origin}/api`,
+      fetch: networkCookieFetch(origin).fetch as typeof fetch,
+    });
+    await author.auth.register({ username: "ari", password: "correct horse" });
+    await other.auth.register({ username: "bob", password: "correct horse" });
+
+    const posted = await author.board.post({ content: "A small complete app" });
+    if ("error" in posted) throw new Error(`Could not publish: ${posted.error}`);
+    const commented = await author.board.comment({ target: posted.post, content: "reply-42" });
+    if ("error" in commented) throw new Error(`Could not comment: ${commented.error}`);
+
+    await expect(other.board["retract-comment"]({ comment: commented.comment })).resolves.toEqual({
+      error: "FORBIDDEN",
+    });
+    await expect(author.board["retract-comment"]({ comment: commented.comment })).resolves.toEqual({
+      comment: commented.comment,
+    });
   });
 
   test("the handler overwrites session claims and rejects author claims", async () => {

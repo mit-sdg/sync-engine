@@ -2,15 +2,16 @@
 
 ## Purpose
 
-Attach authored external content identities to external targets in arrival order
-and let their author retract them, so those associations have a visible lifecycle.
+Attach authored external content identities to a target in arrival order and
+let only the author retract each attachment, so no other author can remove it.
 
 ## Principle
 
-Ari attaches content identity “reply-42” to target “topic-7,” and Bo attaches
-“reply-43.” Both attachments are listed in arrival order. Ari retracts the first.
-Bo cannot retract Ari's attachment, and retracting an unknown attachment is
-refused; either refusal leaves the attachments unchanged.
+Ari attaches content `reply-42` to target `topic-7` and receives comment
+`comment-1`. Bo attaches `reply-43` to the same target. Both attachments are
+listed for `topic-7` in arrival order. Bo's attempt to retract `comment-1` is
+refused, leaving both attachments. Ari retracts `comment-1`; a second attempt is
+refused because the comment is unknown, and only Bo's attachment remains.
 
 ## State
 
@@ -46,10 +47,11 @@ retract (comment: Comment, author: Author) : return (comment: Comment)
 
 ```queries
 _for (target: Target) : many (comment: Comment, author: Author, content: Content)
-  answers in attachment order
+  answers in arrival order
+  answers no rows for a target with no comments
 ```
 
 ## Types
 
-`Target`, `Author`, and `Content` are generic external identities. Commenting
-owns only their ordered attachment, not the facts identified by those values.
+`Comment` is an identity Commenting allocates for each attachment. `Target`,
+`Author`, and `Content` are opaque external identities.

@@ -21,22 +21,25 @@ connects an artificial split.
 Stop at the first failed criterion; later detail cannot repair an earlier
 boundary defect.
 
-| Criterion         | Evidence                                                                                                                              |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Purpose           | Names a useful capability and an undesirable outcome it prevents, rules out a plausible design, and can be fulfilled by this concept. |
-| Principle         | Demonstrates the purpose from empty state using only this concept's actions and queries, including any distinguishing refusal.        |
-| Independence      | Names no peer, stores only peer identities, and completes its lifecycle alone.                                                        |
-| State sufficiency | Every precondition, result, and effect follows from owned state, input, or an explicit environment dependency.                        |
-| Ownership         | Each durable fact has one authority; copies state update, staleness, and repair rules.                                                |
-| Actions           | Name only transitions required by the purpose and enforce local invariants, including direct calls.                                   |
-| Lifecycle         | Covers applicable creation, use, completion, expiry, reversal, retention, and deletion.                                               |
-| Failure           | Expected rejection is a refusal; reversal, compensation, and repetition are deliberate.                                               |
-| Durability        | Shared-state races and idempotency have storage-level enforcement where required.                                                     |
+| Criterion         | Evidence                                                                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Purpose           | Names a useful capability and an undesirable outcome it prevents, rules out a plausible design, and can be fulfilled by this concept.                              |
+| Principle         | Demonstrates the purpose from empty state using only this concept's actions and queries, including any distinguishing refusal.                                     |
+| Independence      | Names no peer, stores only peer identities, and completes its lifecycle alone.                                                                                     |
+| State sufficiency | Every precondition, result, and effect follows from owned state, input, or an explicit environment dependency.                                                     |
+| Ownership         | Each durable fact has one authority; copies state update, staleness, and repair rules.                                                                             |
+| Actions           | Name only transitions required by the purpose and enforce local invariants, including direct calls.                                                                |
+| Lifecycle         | Covers applicable creation, use, completion, expiry, reversal, retention, and deletion.                                                                            |
+| Failure           | Expected rejection is a refusal; reversal, compensation, and repetition are deliberate.                                                                            |
+| Durability        | Shared-state races and idempotency have storage-level enforcement where required.                                                                                  |
+| Documentation     | States each bound, lifetime, and order in the declaration that enforces it; matches each refusal sentence to its rule; and does not restate declarations in prose. |
 
 Trace the specification in both directions. Every purpose commitment must appear
 in the principle and be supported by the applicable actions, queries, refusals,
 and owned state. Every declared member and owned fact must contribute to a
-purpose commitment.
+purpose commitment. The [concept specification writing
+conventions](../reference/concept-specification.md#writing-conventions) define
+section placement, prose notation, and the documentation criterion.
 
 Use [Choosing concept boundaries](../design.md#choosing-concept-boundaries) when the
 state partitions, several purposes appear, or reactions mostly pass calls between

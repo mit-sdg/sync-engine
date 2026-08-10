@@ -1,9 +1,9 @@
 # Message board
 
 Message board is a small browser application built with sync-engine. A visitor
-can register, sign in, publish posts, attach comments, read the board, and sign
-out. The example shows how four independent stateful behaviors become one web
-application without making any one behavior responsible for the whole workflow.
+can register, sign in, publish posts, attach and retract comments, read the
+board, and sign out. It shows how independent behaviors form one web application
+without making any concept responsible for the complete workflow.
 
 Start with [Reading Circle](../reading-circle/README.md) if you want the shortest
 transport-neutral example. Message board adds authentication, browser sessions,
@@ -38,11 +38,11 @@ bun run check
 This example has no standalone command-line scenario; `start` runs the web host
 until it is stopped.
 
-## The four concepts
+## The concepts
 
 A **concept** is one independently meaningful stateful behavior. A concept owns
 its own facts and rules, but does not import or name the other concepts in the
-application. Message board registers four:
+application. Message board registers these:
 
 - **Authenticating** owns accounts and username/password verification.
   Registration records a password verifier. Authentication returns a username
@@ -52,14 +52,14 @@ application. Message board registers four:
 - **Posting** publishes string messages in order. Posting owns each post's text,
   while its `Author` is an external identity supplied by composition.
 - **Commenting** records ordered attachments between a `Target`, an `Author`, and
-  a `Content` identity. All three are generic external identities; Commenting
-  owns the attachment, not the post, person, or content they identify.
+  a `Content` identity. All three are opaque external identities; Commenting
+  owns the attachment, not the post, person, or content they identify. Only the
+  author who created an attachment may retract it.
 
-The last distinction is visible in the browser. The UI passes the entered
-comment string as Commenting's `Content` identity and displays that runtime
-string verbatim. This adaptation makes a usable demonstration, but it does not
-change Commenting into the owner of comment text. Posting, by contrast,
-explicitly owns its post strings.
+Posting and Commenting treat text differently. Posting owns post text. The
+browser passes entered comment text to Commenting as a `Content` identity and
+renders the returned value verbatim, but Commenting does not own or validate
+that text.
 
 Each concept has a specification and direct tests under `src/concepts/`. The
 specification states the concept's purpose, actions, queries, and expected
@@ -83,25 +83,37 @@ result by listing Posting's posts and, for each post identity, listing
 Commenting's attachments whose target is that post. Before adding a comment, the
 endpoint checks that Posting currently has the target post.
 
-A **reaction** is sync-engine's general mechanism for responding to one concept
-action by asking another action. This application declares no reactions. Its
-cross-concept decisions are ordered stages inside endpoint workflows:
-authenticate, start or resolve a session, perform the requested action, and
-respond. Keeping that sequence in composition leaves all four concepts usable
-and testable on their own.
+A **reaction** responds to one concept action by asking another. These workflows
+need the result of each step, so authentication, session resolution, the requested
+action, and the response are ordered endpoint stages instead of reactions.
+
+Sessioning owns session expiry and cleanup. A session becomes inactive at its
+expiry even if the application is idle. In the in-memory implementation,
+`start` removes every expired record before allocating a new session; `current` and
+`end` remove an expired record when they encounter it; and `_active` reports an
+expired session as absent without removing its record. An expired record can
+therefore remain stored until an applicable Sessioning action removes it.
+Assembly performs no cleanup initialization, the host schedules no cleanup, and
+Sessioning does not guarantee periodic reclamation.
+
+Composition contains the application connections, while each concept retains
+its own lifecycle rules.
 
 ## Browser and session flow
 
 The browser uses the generated typed client rather than constructing endpoint
 requests with raw `fetch` calls. A normal visit follows this lifecycle:
 
-1. Register a username and password.
-2. Sign in. Successful sign-in starts a session and issues an `HttpOnly` cookie.
-3. Publish a post or attach a comment. The server obtains the author from the
+1. Register a username and password, or sign in to an existing account. Either
+   operation starts a session and issues an `HttpOnly` cookie.
+2. Publish a post or attach a comment. The server obtains the author from the
    session rather than from browser input.
-4. List the board. The former combines post state with attached comment state.
-5. Sign out. Sessioning ends the session and the HTTP boundary clears the
-   cookie.
+3. List the board. The former combines post state with attached comment state.
+   Comments by the current user have a retract button. Hiding the button for
+   other comments is a presentation choice; Commenting enforces the author rule.
+4. Sign out. Sessioning ends the session and the HTTP boundary clears the
+   cookie. If the visitor does not sign out, the session becomes inactive at its
+   expiry.
 
 The [technical notes](TECHNICAL.md) describe the endpoint branches, cookie
 policy, runtime validation, failure boundaries, generated wire projection, and
@@ -112,7 +124,9 @@ test evidence.
 | Path                                                       | Role                                                         |
 | ---------------------------------------------------------- | ------------------------------------------------------------ |
 | `src/concepts/*/`                                          | Concept specifications, implementations, and principle tests |
-| `src/composition.ts`                                       | Endpoint workflows, runtime validators, and board former     |
+| `src/compositions/sessions.ts`                             | Registration, sign-in, current-user, and sign-out endpoints  |
+| `src/compositions/board.ts`                                | Board former and the post, comment, and retract endpoints    |
+| `src/compositions/validators.ts`                           | Runtime endpoint validators shared by both modules           |
 | `src/assembly.ts`                                          | Concept assembly and execution limits                        |
 | `src/edge.ts`                                              | Gateway, HTTP policy, cookie binding, and Fetch handler      |
 | `src/client.ts`                                            | Typed projected HTTP client                                  |

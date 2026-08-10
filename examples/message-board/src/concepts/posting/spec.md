@@ -2,14 +2,15 @@
 
 ## Purpose
 
-Publish authored string messages in arrival order, so contributions remain visible
-without depending on an external content store.
+Publish authored messages in publication order, so a contribution stays visible
+and attributed without depending on an external content store.
 
 ## Principle
 
-Ari publishes “First post” and Bo publishes “Second post.” Both messages are
-listed in publication order with their authors. An empty message is refused and
-nothing is added.
+Ari publishes "First post" and Bo publishes "Second post." Both posts are listed
+in publication order with their authors, and each post can be read by its
+identity. Publishing a blank message or one longer than 500 characters is
+refused and does not add a post.
 
 ## State
 
@@ -23,9 +24,9 @@ a seq of Posts with
 
 ```actions
 publish (author: Author, content: String) : return (post: Post)
-  where content is empty or longer than the accepted message bound
+  where content is blank or longer than 500 characters
   then
-    refuse INVALID_POST_CONTENT "Post content must contain 1 to 500 non-whitespace characters."
+    refuse INVALID_POST_CONTENT "Post content must not be blank and must be at most 500 characters."
   where content is accepted
   then
     add a new post with author and content
@@ -43,6 +44,5 @@ _get (post: Post) : optional (author: Author, content: String)
 
 ## Types
 
-`Author` is a generic external identity. Posting neither creates nor
-authenticates it. `String` content belongs to Posting. Posts are retained
-permanently in this small implementation.
+`Post` is an identity Posting allocates for each published message. `Author` is
+an opaque external identity. A post's `String` content is owned by Posting.

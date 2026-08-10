@@ -9,7 +9,9 @@ export class PostingConcept {
 
   publish({ author, content }: { author: string; content: string }) {
     if (content.trim().length === 0 || content.length > 500) {
-      throw new InvalidPostContent("Post content must contain 1 to 500 non-whitespace characters.");
+      throw new InvalidPostContent(
+        "Post content must not be blank and must be at most 500 characters.",
+      );
     }
     const post = this.freshID();
     this.posts.push({ post, author, content });
@@ -20,8 +22,8 @@ export class PostingConcept {
     return [...this.posts];
   }
 
-  _get({ post }: { post: string }): Post[] {
+  _get({ post }: { post: string }): Array<{ author: string; content: string }> {
     const found = this.posts.find((entry) => entry.post === post);
-    return found === undefined ? [] : [found];
+    return found === undefined ? [] : [{ author: found.author, content: found.content }];
   }
 }
