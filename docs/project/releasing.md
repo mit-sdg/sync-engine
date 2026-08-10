@@ -73,24 +73,17 @@ bun install
 `release:update` projects the canonical facts into every owned package
 dependency location:
 
-| Location                                                            | Owned version fact                                                   |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `package.json`                                                      | Published version and `publishConfig.tag`                            |
-| `packages/http/package.json`                                        | HTTP package version and exact core peer                             |
-| `packages/analysis/package.json`                                    | Analysis version, exact core peer, and TypeScript runtime dependency |
-| `packages/catalog/package.json`                                     | Catalog version, optional exact core peer, and SemVer dependency     |
-| `packages/catalog/entries/**/manifest.json`                         | Exact core requirements in shipped entries                           |
-| `examples/reading-circle/package.json`                              | Shipped example dependency                                           |
-| `examples/operations-room/package.json`                             | Shipped example dependency                                           |
-| `examples/message-board/package.json`                               | Shipped example dependency                                           |
-| `tests/packaging/application/package.json`                          | Standalone packed-application dependency                             |
-| `packages/http/tests/packaging/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
-| `packages/http/tests/packaging/multi-instance/backend/package.json` | Independent backend dependency                                       |
+| Location                                     | Owned version fact                      |
+| -------------------------------------------- | --------------------------------------- |
+| `package.json`                               | Canonical version and publication tag   |
+| `packages/*/package.json`                    | Workspace versions and dependencies     |
+| `packages/catalog/entries/**/manifest.json`  | Shipped entry requirements              |
+| `examples/*/package.json`                    | Shipped example dependencies            |
+| `tests/packaging/application/package.json`   | Packed-application dependency           |
+| `packages/*/tests/packaging/**/package.json` | Workspace consumer-fixture dependencies |
 
-Core setup derives guidance from canonical package facts. Catalog entry
-manifests carry release-owned exact core requirements. The following
-`bun install` regenerates `bun.lock` from the projected manifests. Review the
-lockfile and manifest diffs together. `bun run release:check` rejects
+The following `bun install` regenerates `bun.lock` from the projected
+manifests. Review the lockfile and manifest diffs together. `bun run release:check` rejects
 stale projections; review and commit every updated manifest and `bun.lock`.
 Publication uses that committed package metadata unchanged. Run frozen
 verification only after the lockfile is current; `bun run release:verify` begins
@@ -142,19 +135,11 @@ publication job.
 Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` invokes npm's real pack lifecycle for each workspace;
 the root package's `prepack` performs their shared build. The check inspects all
-workspace tarballs and policy links, installs core alone, installs all packages
-together, exercises concept-free setup and catalog-only installation, runs the
-examples, compiles a separate generated client/backend topology, and runs Node
-scenarios. An isolated Node 24 import
-first proves that analysis `/ir` does not load TypeScript, `fs`, `fs/promises`,
-`node:fs`, `node:fs/promises`, worker, project-loader, or source-index-builder
-modules. The combined exact-tarball
-consumer then generates and parses Manifest V5, executes project analysis under
-Node 24 and Bun, verifies source bytes through a caller reader before slicing an
-anchor, retains and supplies the complete project digest to the neutral facade,
-exercises source/impact queries, checks derivable file-byte resource accounting,
-and round-trips the strict project codec without workspace symlinks. In the
-publish workflow, the check exports every npm workspace tarball. The
+workspace tarballs and policy links, installs packages both independently and
+together, exercises each workspace's packed consumer
+contract, runs examples and scenarios, and verifies Node and Bun behavior
+without workspace links. In the publish workflow, the check exports every npm
+workspace tarball. The
 unprivileged job records their digests and transfers them unchanged to the
 protected publication jobs. The core package
 intentionally includes all three complete, independently runnable teaching
@@ -164,11 +149,9 @@ commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
-Npm workspaces are published independently in catalog build order. Each
-companion declares the exact matching core beta as a peer dependency; the
-catalog marks that peer optional. Analysis declares TypeScript as a normal
-runtime dependency. The workflow never overwrites an npm version or moves or
-reuses a release tag or tarball.
+Npm workspaces are published independently in registry build order. Package
+manifests own their dependency contracts. The workflow never overwrites an npm
+version or moves or reuses a release tag or tarball.
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
    of `origin/main`, then create and push one annotated `v$VERSION` tag. Never
@@ -222,15 +205,13 @@ reuses a release tag or tarball.
   or `@beta`, never `@alpha`.
 - Check each npm package page for GitHub Actions provenance and verify tarball
   integrity, repository, license, executable, policy files, and file metadata.
-- In clean directories, install the exact registry version with npm and Bun,
-  import every public subpath under the supported Node major, and typecheck with
-  the supported TypeScript major.
-- Run `bunx --package @mit-sdg/sync-engine@$VERSION sync-engine --help`.
-  Initialize an existing Bun package with `sync-engine setup`, then run its
-  generation, check, and start commands. Install the exact catalog version
-  separately; run `catalog list`, `catalog show`, and a memory-floor
-  `catalog add`. Check artifacts from an application-owned copy and leave
-  `node_modules` unchanged.
+- In clean directories, install every exact registry version with npm and Bun,
+  exercise each package's documented public entrypoints or command, and
+  typecheck with the supported TypeScript major.
+- Run the core command help and setup flow, then run the generated application's
+  generation, check, and start commands. Run each package-owned registry smoke
+  test documented by its README. Leave `node_modules` unchanged while checking
+  generated artifacts.
 - Reconfirm the npm trusted publisher identity, ownership/2FA, GitHub
   environment controls, protected tag, and private vulnerability reporting
   after publication.

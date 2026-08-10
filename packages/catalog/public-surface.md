@@ -90,11 +90,19 @@ repeats the original add.
 ## Lock and ownership
 
 `catalog.lock` stores `schema`, the selected `floor`, fixed `paths`, `entries`,
-and `generated`. Each entry records `kind`, its original `catalogVersion` and
-`sourceDigest`, `requires`, `packages`, `integration`, an optional concept
-`floor`, and `files`. Each tracked file records `source`, `target`, `hash`, and
-`class`. Generated records contain a target and hash. Serialization sorts object
-keys and ends with a newline.
+and `generated`. Each entry records `kind`, the `catalogVersion` and
+`sourceDigest` observed when the entry was first installed, `requires`,
+`packages`, `integration`, a concept `floor` for concept entries, and `files`.
+Each tracked file records `source`, `target`, `hash`, and `class`. Generated
+records contain a target and hash. Serialization sorts object keys and ends with
+a newline.
+
+`catalogVersion` and `sourceDigest` are installation provenance, not update
+markers. A repeated `add` retains both values. It may refresh a rendered
+registry hash after validating that the existing registry is still catalog-owned.
+It never replaces a copy-owned file. A change to requirements, selected
+packages, integration metadata, or rendered-file locations is a schema 1
+migration and fails rather than changing provenance.
 
 Lock paths are portable project-relative paths. Absolute paths, parent
 traversal, backslashes, empty components, and Windows device names fail

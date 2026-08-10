@@ -88,12 +88,19 @@ describe("catalog installer", () => {
         "recipe/workshop-selection",
       ]);
       await expectTypechecks(root);
+      const provenance = JSON.parse(await readFile(join(root, "catalog.lock"), "utf8")) as {
+        entries: Record<string, { catalogVersion: string; sourceDigest: string }>;
+      };
       const repeated = await addEntries(registry, ["recipe/workshop-selection"], {
         root,
         floor: "memory",
         originalCommand: "catalog add recipe/workshop-selection --floor memory",
       });
       expect(repeated.written).toEqual([]);
+      const repeatedLock = JSON.parse(
+        await readFile(join(root, "catalog.lock"), "utf8"),
+      ) as typeof provenance;
+      expect(repeatedLock.entries).toEqual(provenance.entries);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

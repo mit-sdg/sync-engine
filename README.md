@@ -1,9 +1,6 @@
 # sync-engine
 
 [![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
-[![HTTP npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
-[![Analysis npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-analysis/beta?label=analysis%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-analysis)
-[![Catalog npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-catalog/beta?label=catalog%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-catalog)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is a TypeScript library for composing independently implemented
@@ -39,32 +36,12 @@ bun add @mit-sdg/sync-engine@beta
 
 ## Packages
 
-| Package                                                                                               | Role                                                                     |
-| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `@mit-sdg/sync-engine`                                                                                | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
-| [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Deterministic IR queries and optional TypeScript project/source evidence |
-| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | Maintained HTTP handler, fetch client, and generated wire projection     |
-| [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)   | CLI-only curated concept and recipe source installer                     |
-
-The analysis and HTTP companions each require the exact matching core beta. The
-catalog declares that exact core peer as optional, so `catalog list` and
-`catalog show` work without core installed.
-
-Analysis exposes a lightweight `@mit-sdg/sync-engine-analysis/ir` surface and a
-TypeScript-backed `@mit-sdg/sync-engine-analysis/project` producer surface.
-TypeScript remains an analysis runtime dependency, but importing `/ir` does not
-evaluate the compiler, filesystem project loader, source index builder, or
-worker. Analysis results are inspection evidence, not correctness,
-authorization, workflow guidance, or approval verdicts. The project surface
-uses a Node worker for abortable filesystem analysis while preserving a
-synchronous custom-reader primitive for expert hosts. Project snapshots retain
-source metadata and digests, not source bytes; verified bytes come from a caller
-reader. A project-backed facade recomputes the manifest index before accepting
-the snapshot's semantic composition and requires a previously trusted complete
-project digest. Shape validation is not source-attribution authentication;
-trusting an attacker-chosen artifact and freshly computed digest still trusts
-attacker-chosen evidence. Revision labels remain caller assertions rather than
-Git verification.
+| Package                                                        | Role                                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [`@mit-sdg/sync-engine`](README.md)                            | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
+| [`@mit-sdg/sync-engine-analysis`](packages/analysis/README.md) | Deterministic IR queries and optional TypeScript project/source evidence |
+| [`@mit-sdg/sync-engine-http`](packages/http/README.md)         | Maintained HTTP handler, Fetch client, and generated wire projection     |
+| [`@mit-sdg/sync-engine-catalog`](packages/catalog/README.md)   | CLI-only curated concept and recipe source installer                     |
 
 ## Create an application
 
@@ -84,8 +61,7 @@ never edits `package.json` or overwrites an application file. It reports missing
 dependencies and scripts as guidance.
 
 Continue with [Getting started](docs/user/guide/getting-started.md) to run the
-empty application and, optionally, copy the example-derived workshop recipe
-from the catalog.
+empty application.
 
 ## Documentation
 
@@ -189,9 +165,9 @@ contributors use these repository documents:
 ## Upgrading beta versions
 
 A newer beta may make incompatible changes. Before changing a pinned version,
-read the [changelog](CHANGELOG.md), regenerate and review pinned artifacts, keep
-core and every installed companion on the exact same beta, and typecheck
-consumers. The [support policy](SUPPORT.md) defines the current window.
+read the [changelog](CHANGELOG.md), regenerate and review pinned artifacts, and
+typecheck consumers. Each installed package README defines its compatibility
+requirements. The [support policy](SUPPORT.md) defines the core support window.
 
 ## License
 

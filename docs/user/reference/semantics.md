@@ -534,8 +534,8 @@ forwarding, caller timeout and abort handling, limits, observation, and ordered
 drain. It does not create a second reaction engine or occurrence log. Gateway
 and application observation share the effective correlation id.
 
-The local and HTTP clients resolve to the same simple shape: the endpoint's
-success JSON or an `{ error, detail? }` envelope. The invoker that waits for the
+Core clients resolve to the endpoint's success JSON or an
+`{ error, detail? }` envelope. The invoker that waits for the
 boundary answer keeps domain errors and framework errors distinct. Client and
 invocation adapters omit exception text when an unknown thrown value becomes a
 framework error. A top-level `error` field in an authored response denotes a
@@ -551,10 +551,6 @@ synchronous `validateResponse` callback inspects the complete untrusted
 transport result with its route. `{ ok: false }`, a throw, or a promise-like
 validator result becomes `{ error: "TRANSPORT_ERROR" }`; an accepted result is
 returned without transformation.
-
-The maintained HTTP package defines its method, body, status, correlation,
-timeout, response-size, and cookie behavior in the [HTTP Public
-API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md).
 
 ### Limits and operational observation
 
@@ -589,9 +585,7 @@ remain host responsibilities.
 
 When a direct caller omits a correlation id, the gateway establishes a fresh
 UUID once at public entry and carries it through gateway and application
-observation. Correlation does not deduplicate work and is not an idempotency
-key. HTTP correlation resolution is specified by the [HTTP Public
-API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#handler).
+observation. Correlation does not deduplicate work and is not an idempotency key.
 
 Endpoint paths are portable absolute URL pathnames. Their declared spelling
 must survive WHATWG URL pathname handling exactly: queries,
@@ -599,21 +593,6 @@ fragments, scheme-relative paths, literal spaces or Unicode, dot-segment
 normalization (including encoded dot segments), malformed percent escapes, and
 other noncanonical spellings are rejected. Percent-encoded path data remains
 valid when URL handling preserves it. `/` is a valid endpoint path.
-
-### HTTP policy and browser controls
-
-The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#policy)
-defines immutable deployment policy, public-error projection, CORS, and the
-separate request-origin control. A missing `Origin` is allowed by default; when
-present, a disallowed origin is rejected on cookie-touched paths.
-
-### HTTP cookie bindings
-
-The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#cookie-bindings)
-defines cookie injection, issuance, clearing, and generated projection.
-Application-dependent binding validation occurs when the handler binds the
-application and when the wire projector runs, not when deployment-only policy is
-constructed.
 
 ### Runtime validation
 
@@ -657,12 +636,6 @@ one endpoint declaration may supply an explicit contract for a path. Assembly
 rejects an explicit contract when omitting its optional keys cannot match any
 receive alternative after defaults are applied.
 
-### Production transport requirements
-
-Transport requirements are specified by the [HTTP Public
-API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
-and [HTTP host responsibilities](operations.md#http-host-responsibilities).
-
 ### JSON projection
 
 The local client serializes and parses input and output before returning it.
@@ -688,14 +661,11 @@ portable design. Executable-only behavior causes assembly to fail.
 
 When a generated application descriptor supplies ordered `projections`, one
 module contains the logical contract followed by each named transport contract.
-The contract named by `wireName` retains the logical application inputs, outputs,
-and refusal codes for a local or custom client. The HTTP companion's
-`httpWire({ policy, name })` carries public policy categories and excludes
-private refusal codes. With cookie bindings, that contract also omits each
-cookie-bound input from protected routes and the consumed value and expiry
-fields from every issuing route's output. All contracts share generated type
-helpers and the vocabulary anchor. Core records every projector package and
-version in generated provenance.
+The contract named by `wireName` retains the logical application inputs,
+outputs, and refusal codes for a local or custom client. A projector may derive
+a transport contract from those logical facts. All contracts share generated
+type helpers and the vocabulary anchor. Core records every projector package
+and version in generated provenance.
 
 Projection planning validates all names before rendering. The logical wire,
 every projected wire, each app-wide error type, `Json`, and vocabulary helper

@@ -9,14 +9,9 @@ import type {
   RecipeIntegration,
 } from "./types.ts";
 import { assertPortablePath } from "./paths.ts";
-
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
-const ENTRY_ID = /^(?:concept|recipe)\/[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)*$/;
-const GENERATED_TARGETS = [
-  "src/catalog/composition.generated.ts",
-  "src/catalog/registrations.generated.ts",
-  "src/catalog/text.generated.d.ts",
-] as const;
+import { CATALOG_PATHS, ENTRY_ID, GENERATED_TARGETS, IDENTIFIER, targetRoot } from "./domain.ts";
+import { exact, object, stringArray } from "./decode.ts";
+import { validateDependencyGraph } from "./graph.ts";
 
 export const EMPTY_LOCK = (): CatalogLock => ({
   schema: 1,
@@ -24,27 +19,6 @@ export const EMPTY_LOCK = (): CatalogLock => ({
   entries: {},
   generated: [],
 });
-
-function object(value: unknown, label: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value))
-    throw new Error(`${label} must be an object`);
-  return value as Record<string, unknown>;
-}
-
-function exact(value: Record<string, unknown>, allowed: readonly string[], label: string): void {
-  for (const key of Object.keys(value))
-    if (!allowed.includes(key)) throw new Error(`${label} has unknown field ${key}`);
-}
-
-function stringArray(value: unknown, label: string): string[] {
-  if (
-    !Array.isArray(value) ||
-    value.some((item) => typeof item !== "string" || item.length === 0) ||
-    new Set(value).size !== value.length
-  )
-    throw new Error(`${label} must contain unique nonempty strings`);
-  return value as string[];
-}
 
 function packageRequirements(value: unknown, label: string): Record<string, string> {
   const requirements = object(value, label);
@@ -91,7 +65,7 @@ function parseIntegration(
     !integration.test.startsWith("src/composition/")
   )
     throw new Error(`${id} integration must remain under src/composition`);
-  const members = stringArray(integration.members, `${id} members`);
+  const members = stringArray(integration.members, `${id} members`, true);
   if (members.some((member) => !IDENTIFIER.test(member)))
     throw new Error(`${id} members must be TypeScript identifiers`);
   const routes = object(integration.routes, `${id} routes`);
@@ -167,7 +141,7 @@ export function parseLock(source: string): CatalogLock {
     )
       throw new Error(`invalid lock entry ${id}`);
     const kind = entry.kind;
-    const requires = stringArray(entry.requires, `${id} requires`);
+    const requires = stringArray(entry.requires, `${id} requires`, true);
     if (requires.some((required) => !ENTRY_ID.test(required)))
       throw new Error(`${id} contains an invalid requirement id`);
     if (kind === "concept" && requires.length > 0)
@@ -208,7 +182,7 @@ export function parseLock(source: string): CatalogLock {
       )
         throw new Error(`invalid tracked file in ${id}`);
       assertPortablePath(tracked.target, `${id} target`);
-      const prefix = kind === "concept" ? "src/concepts/" : "src/composition/";
+      const prefix = targetRoot(kind);
       if (!tracked.target.startsWith(prefix))
         throw new Error(`${id} target must remain under ${prefix}`);
       if (targets.has(tracked.target)) throw new Error(`duplicate lock target: ${tracked.target}`);
@@ -227,16 +201,27 @@ export function parseLock(source: string): CatalogLock {
       if (tracked === undefined || (expected.rendered && tracked.class !== "rendered"))
         throw new Error(`${id} integration target is not tracked: ${expected.target}`);
     }
-    entries[id] = {
-      kind,
-      catalogVersion: entry.catalogVersion,
-      sourceDigest: entry.sourceDigest,
-      requires,
-      ...(kind === "concept" ? { floor: entry.floor as string } : {}),
-      packages: requirements,
-      integration,
-      files: trackedFiles,
-    };
+    entries[id] =
+      kind === "concept"
+        ? {
+            kind,
+            catalogVersion: entry.catalogVersion,
+            sourceDigest: entry.sourceDigest,
+            requires: [],
+            floor: entry.floor as string,
+            packages: requirements,
+            integration: integration as ConceptIntegration,
+            files: trackedFiles,
+          }
+        : {
+            kind,
+            catalogVersion: entry.catalogVersion,
+            sourceDigest: entry.sourceDigest,
+            requires,
+            packages: requirements,
+            integration: integration as RecipeIntegration,
+            files: trackedFiles,
+          };
   }
   if (Object.keys(entries).length > 0 && concepts === 0)
     throw new Error("a nonempty catalog.lock must contain a concept");
@@ -246,17 +231,7 @@ export function parseLock(source: string): CatalogLock {
     for (const required of entry.requires)
       if (entries[required] === undefined)
         throw new Error(`${id} requires missing lock entry ${required}`);
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const visit = (id: string): void => {
-    if (visiting.has(id)) throw new Error(`catalog.lock dependency cycle at ${id}`);
-    if (visited.has(id)) return;
-    visiting.add(id);
-    for (const required of entries[id]?.requires ?? []) visit(required);
-    visiting.delete(id);
-    visited.add(id);
-  };
-  for (const id of Object.keys(entries)) visit(id);
+  validateDependencyGraph(new Map(Object.entries(entries)), "catalog.lock");
 
   const generated = root.generated.map((rawFile, index) => {
     const file = object(rawFile, `generated file ${index}`);
@@ -283,7 +258,7 @@ export function parseLock(source: string): CatalogLock {
   return {
     schema: 1,
     ...(typeof floor === "string" ? { floor } : {}),
-    paths: { concepts: "src/concepts", recipes: "src/composition", generated: "src/catalog" },
+    paths: CATALOG_PATHS,
     entries,
     generated,
   };

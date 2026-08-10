@@ -12,7 +12,7 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 
 - [Documentation index](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/index.md) — reader paths by task
 - [Application model](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/overview.md) — concepts, composition, assembly, clients, and occurrence evidence
-- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/getting-started.md) — initialize and run a concept-free application, then optionally add catalog source
+- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/getting-started.md) — initialize and run a concept-free application
 - [Core Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/public-api.md) — supported core subpaths, exports, signatures, and defaults
 - [Execution semantics](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/semantics.md) — authoritative runtime behavior
 - [Operational limits](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/operations.md) — deployment suitability and host responsibilities
@@ -30,37 +30,12 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 - [Command-line reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/cli.md)
 - [Glossary](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/glossary.md)
 
-## Source catalog
-
-- [Catalog package guide](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/README.md) — inspect and copy curated concept or recipe source
-- [Catalog command reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/public-surface.md) — command, manifest, lock, ownership, and write-boundary contract
-- The catalog is CLI-only; do not import it at runtime. One project selects one floor. `catalog add` copies source and generated wiring but does not edit application-owned integration files.
-
 ## Examples
 
 - [Reading Circle](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/reading-circle/README.md) — shortest complete multi-concept application
 - [Operations Room](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/operations-room/README.md) — selectable reactions, policy, and staged formers
 - [Message board](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/message-board/README.md) — complete browser app with authentication, typed HTTP, and secure cookie sessions
 - [Persistence, restart, and recovery](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/persistence-recovery.md) — durable concept state versus occurrence evidence
-
-## HTTP transport
-
-- [HTTP package guide](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/http/README.md) — tier 0 plain JSON, tier 1 browser sessions, and tier 2 extension and custom-transport paths
-- [HTTP Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/http/public-surface.md) — authoritative HTTP exports, signatures, validation, errors, and security behavior
-- Install the exact same beta of `@mit-sdg/sync-engine-http` and `@mit-sdg/sync-engine`; the HTTP package declares an exact core peer dependency.
-- Supported HTTP subpaths are `/policy`, `/handler`, `/client`, and `/tooling`. The companion root and deep imports are unsupported.
-- A plain `createHttpHandler({ application, gateway })` needs no policy. For public errors, browser origins, cookies, a base path, or a request limit, construct one `httpPolicy(...)` and reuse it in the handler and `httpWire({ policy, name })`.
-- The typed HTTP client takes no policy, sends `POST`, and defaults credentials to `same-origin`. Cross-origin browser sessions select `credentials: "include"` explicitly.
-- CORS controls browser response access; request-origin protection separately rejects present disallowed origins on cookie-touched paths. Missing `Origin` is allowed unless `requireOrigin` is true.
-- Core contains no HTTP handler or Fetch-client exports. Use the supported `Assembly`, `bindTransport`, wire projection, and generic client contracts listed in the HTTP package guide for a custom transport.
-
-## Analysis
-
-- [Analysis Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/analysis/public-surface.md): compiler-free IR queries, strict project codecs, and optional TypeScript source evidence
-- Install the exact same beta of `@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine`; import plain-data analysis from `/ir` and TypeScript-backed producers and project codecs from `/project`.
-- Project snapshots retain source metadata and digests, not source bytes. Read and verify complete documents through `readApplicationSourceDocument(...)` before slicing anchor ranges. Revision labels are caller assertions, not Git verification.
-- A project-backed `createApplicationAnalysis(...)` call requires a previously trusted `applicationProjectAnalysisDigest(...)` value as `expectedProjectDigest`. Shape validation is not authentication, and recomputing a digest from attacker-chosen input does not prove semantic source attribution.
-- Keep prompts, guidance, context packing, change targeting, review orchestration, and verdict policy in the client rather than the analysis package.
 
 ## Working rules
 

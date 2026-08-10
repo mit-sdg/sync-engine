@@ -6,42 +6,18 @@ import semver from "semver";
 import type { EntryManifest, FileDeclaration, FloorManifest } from "./types.ts";
 import { assertPortablePath } from "./paths.ts";
 import { renderFloor } from "./transforms.ts";
-
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
-const ENTRY_ID = /^(?:concept|recipe)\/[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)*$/;
+import { ENTRY_ID, IDENTIFIER, installedTarget, targetToken } from "./domain.ts";
+import { exact, object as record, stringArray as decodedStrings, stringRecord } from "./decode.ts";
+import { dependencyOrder, validateDependencyGraph } from "./graph.ts";
 
 function entriesRoot(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   const source = resolve(here, "../entries");
   return existsSync(source) ? source : resolve(here, "entries");
 }
-function record(value: unknown, label: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value))
-    throw new Error(`${label} must be an object`);
-  return value as Record<string, unknown>;
-}
-function exact(value: Record<string, unknown>, allowed: readonly string[], label: string): void {
-  for (const key of Object.keys(value))
-    if (!allowed.includes(key)) throw new Error(`${label} has unknown field ${key}`);
-}
-function strings(value: unknown, label: string): string[] {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0))
-    throw new Error(`${label} must be an array of nonempty strings`);
-  return value as string[];
-}
-function stringRecord(value: unknown, label: string): Record<string, string> {
-  if (value === undefined) return {};
-  const found = record(value, label);
-  if (
-    Object.entries(found).some(
-      ([name, item]) => name.length === 0 || typeof item !== "string" || item.length === 0,
-    )
-  )
-    throw new Error(`${label} contains an invalid value`);
-  return found as Record<string, string>;
-}
+const strings = decodedStrings;
 function packages(value: unknown, label: string): Record<string, string> {
-  const found = stringRecord(value, label);
+  const found = stringRecord(value, label, true);
   for (const [name, range] of Object.entries(found))
     if (semver.validRange(range) === null)
       throw new Error(`${label} contains an invalid requirement for ${name}: ${range}`);
@@ -69,13 +45,8 @@ function files(value: unknown, label: string): FileDeclaration[] {
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   return value.map((item, index) => file(item, `${label}[${index}]`));
 }
-function installedTarget(target: string): string {
-  return target
-    .replace(/^\$concepts\//, "src/concepts/")
-    .replace(/^\$recipes\//, "src/composition/");
-}
-function validateTarget(target: string, kind: string): void {
-  const token = kind === "concept" ? "$concepts/" : "$recipes/";
+function validateTarget(target: string, kind: "concept" | "recipe"): void {
+  const token = targetToken(kind);
   if (!target.startsWith(token)) throw new Error(`${target} must remain under ${token}`);
   assertPortablePath(installedTarget(target), "catalog target");
 }
@@ -141,16 +112,15 @@ async function parseManifest(path: string): Promise<EntryManifest> {
     requires.some((required) => !ENTRY_ID.test(required))
   )
     throw new Error(`${root.id}.requires must contain unique entry ids`);
-  const result: EntryManifest = {
-    schema: 1,
+  const base = {
+    schema: 1 as const,
     id: root.id,
-    kind,
     summary: root.summary,
-    requires,
     packages: packages(root.packages, `${root.id}.packages`),
     files: commonFiles,
     directory: dirname(path),
   };
+  let result: EntryManifest;
   if (kind === "concept") {
     if (root.recipe !== undefined || root.requires !== undefined)
       throw new Error(`${root.id}: concepts may not declare recipe or requires`);
@@ -183,9 +153,11 @@ async function parseManifest(path: string): Promise<EntryManifest> {
     }
     if (typeof root.defaultFloor !== "string" || floors[root.defaultFloor] === undefined)
       throw new Error(`${root.id}: defaultFloor must name a floor`);
-    result.concept = concept as unknown as EntryManifest["concept"];
-    result.floors = floors;
-    result.defaultFloor = root.defaultFloor;
+    const conceptMetadata = concept as unknown as {
+      name: string;
+      export: string;
+      registration: string;
+    };
     const rendered = commonFiles.filter((item) => item.render === "floor");
     const registration = commonFiles.find((item) => item.target === concept.registration);
     if (
@@ -198,6 +170,14 @@ async function parseManifest(path: string): Promise<EntryManifest> {
     const registrySource = await readFile(resolve(dirname(path), registration.source), "utf8");
     for (const floor of Object.keys(floors))
       renderFloor(registrySource, floor, Object.keys(floors));
+    result = {
+      ...base,
+      kind: "concept",
+      requires: [],
+      concept: conceptMetadata,
+      floors,
+      defaultFloor: root.defaultFloor,
+    };
   } else {
     if (root.concept !== undefined || root.defaultFloor !== undefined || root.floors !== undefined)
       throw new Error(`${root.id}: recipes may not declare concept floors`);
@@ -215,7 +195,7 @@ async function parseManifest(path: string): Promise<EntryManifest> {
       throw new Error(
         `${root.id}: recipe members must be unique identifiers and routes must have exactly those keys`,
       );
-    result.recipe = { module: recipe.module, test: recipe.test, members, routes };
+    const recipeMetadata = { module: recipe.module, test: recipe.test, members, routes };
     const moduleDeclaration = commonFiles.find((item) => item.target === recipe.module);
     const testDeclaration = commonFiles.find((item) => item.target === recipe.test);
     if (moduleDeclaration === undefined || testDeclaration === undefined)
@@ -234,7 +214,9 @@ async function parseManifest(path: string): Promise<EntryManifest> {
       )
         throw new Error(`${root.id}: route metadata for ${member} does not match its endpoint`);
     }
+    result = { ...base, kind: "recipe", requires, recipe: recipeMetadata };
   }
+  const conceptFloors = result.kind === "concept" ? result.floors : {};
   const commonPackages = new Set(Object.keys(result.packages));
   const checkImports = (
     declaration: FileDeclaration,
@@ -260,15 +242,15 @@ async function parseManifest(path: string): Promise<EntryManifest> {
       throw new Error(`${result.id}: declared source does not exist: ${declaration.source}`);
     }
     if (declaration.render === "floor") {
-      for (const [name, floor] of Object.entries(result.floors ?? {}))
+      for (const [name, floor] of Object.entries(conceptFloors))
         checkImports(
           declaration,
-          renderFloor(source, name, Object.keys(result.floors ?? {})),
+          renderFloor(source, name, Object.keys(conceptFloors)),
           new Set([...commonPackages, ...Object.keys(floor.packages ?? {})]),
         );
     } else checkImports(declaration, source, commonPackages);
   }
-  for (const floor of Object.values(result.floors ?? {}))
+  for (const floor of Object.values(conceptFloors))
     for (const declaration of floor.files) {
       validateTarget(declaration.target, kind);
       let source: string;
@@ -286,7 +268,7 @@ async function parseManifest(path: string): Promise<EntryManifest> {
 
   const selections =
     kind === "concept"
-      ? Object.entries(result.floors ?? {}).map(([floor, value]) => ({
+      ? Object.entries(conceptFloors).map(([floor, value]) => ({
           floor,
           declarations: [...result.files, ...value.files],
         }))
@@ -296,7 +278,7 @@ async function parseManifest(path: string): Promise<EntryManifest> {
     for (const declaration of selection.declarations) {
       let source = await readFile(resolve(result.directory, declaration.source), "utf8");
       if (declaration.render === "floor")
-        source = renderFloor(source, selection.floor ?? "", Object.keys(result.floors ?? {}));
+        source = renderFloor(source, selection.floor ?? "", Object.keys(conceptFloors));
       const from = posix.dirname(installedTarget(declaration.target));
       for (const specifier of moduleSpecifiers(source)) {
         if (!specifier.startsWith(".")) continue;
@@ -336,45 +318,24 @@ export class CatalogRegistry {
       conceptExports = new Set<string>(),
       recipeMembers = new Set<string>();
     for (const entry of entries.values()) {
-      if (entry.concept !== undefined) {
+      if (entry.kind === "concept") {
         if (conceptNames.has(entry.concept.name) || conceptExports.has(entry.concept.export))
           throw new Error(`duplicate concept name or export: ${entry.id}`);
         conceptNames.add(entry.concept.name);
         conceptExports.add(entry.concept.export);
-      }
-      for (const member of entry.recipe?.members ?? []) {
-        if (recipeMembers.has(member)) throw new Error(`duplicate recipe member: ${member}`);
-        recipeMembers.add(member);
-      }
+      } else
+        for (const member of entry.recipe.members) {
+          if (recipeMembers.has(member)) throw new Error(`duplicate recipe member: ${member}`);
+          recipeMembers.add(member);
+        }
       for (const required of entry.requires)
         if (!entries.has(required))
           throw new Error(`${entry.id} requires unknown entry ${required}`);
     }
-    const visiting = new Set<string>(),
-      visited = new Set<string>();
-    const visit = (id: string): void => {
-      if (visiting.has(id)) throw new Error(`entry dependency cycle at ${id}`);
-      if (visited.has(id)) return;
-      visiting.add(id);
-      for (const dep of entries.get(id)?.requires ?? []) visit(dep);
-      visiting.delete(id);
-      visited.add(id);
-    };
-    for (const id of entries.keys()) visit(id);
+    validateDependencyGraph(entries, "entry");
     return new CatalogRegistry(entries);
   }
   resolve(ids: readonly string[]): EntryManifest[] {
-    const result: EntryManifest[] = [],
-      seen = new Set<string>();
-    const visit = (id: string): void => {
-      if (seen.has(id)) return;
-      const entry = this.entries.get(id);
-      if (entry === undefined) throw new Error(`unknown catalog entry: ${id}`);
-      for (const required of entry.requires) visit(required);
-      seen.add(id);
-      result.push(entry);
-    };
-    for (const id of ids) visit(id);
-    return result;
+    return dependencyOrder(this.entries, ids, (id) => new Error(`unknown catalog entry: ${id}`));
   }
 }

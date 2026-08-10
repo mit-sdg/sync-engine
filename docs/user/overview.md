@@ -116,9 +116,8 @@ A representative request crosses these components:
 8. The client resolves to the success value or an error envelope.
 
 The boundary is transport-neutral. The local client applies a JSON projection;
-the maintained HTTP package adds its public error and transport policy. The
-[application authoring guide](guide/authoring.md#application-boundary) shows the
-boundary lifecycle.
+other transports define their own protocol behavior. The [application authoring
+guide](guide/authoring.md#application-boundary) shows the boundary lifecycle.
 
 ## Concept state and occurrence evidence
 

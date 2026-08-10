@@ -3,7 +3,8 @@
 The catalog executable copies curated concept and recipe source into an
 existing sync-engine application. Copied files become application source. The
 package has no runtime import API. It does not edit application-owned setup,
-integration, host, TypeScript, or package files.
+integration, host, TypeScript, or package files. The command supports Bun
+`>=1.3.14 <1.4` and Node.js `>=24 <25`.
 
 ## Install and inspect
 
@@ -68,6 +69,18 @@ After a caught I/O failure, the installer attempts to restore completed
 replacements. Process termination or a failed cleanup can leave temporary,
 backup, or copied files. Without a matching lock, the next `add` reports copied
 paths as collisions rather than claiming them.
+
+## Support and security
+
+Only the newest beta is supported. Pin the catalog version exactly and review
+the repository changelog before upgrading. The core peer is optional for
+inspection commands; copied entries may require an exact core version, which
+`add` verifies before writing.
+
+Treat shipped entry source as code that becomes part of the application. Review
+copied files and integration guidance before committing or running them. Report
+suspected vulnerabilities through the repository's [private reporting
+process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
 
 See [`public-surface.md`](public-surface.md) for the command, manifest, lock,
 dependency, and guidance contracts. Entry authors should read

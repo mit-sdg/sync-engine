@@ -108,13 +108,6 @@ An `Invoker` decorator that adds route admission, limits, observation, timeout
 and abort waiting, and ordered drain. It uses the target assembly's reaction
 engine.
 
-## HTTP cookie binding
-
-A named mapping between one logical credential input and the cookie paths that
-protect, issue, or clear it. The HTTP handler injects the cookie on protected
-requests. The handler and generated wire omit transport-owned credential and
-issue fields from the public JSON contract.
-
 ## Input contract
 
 The outer request-object contract for one endpoint route. It declares required
@@ -159,11 +152,6 @@ behavior only.
 
 A concrete behavioral sequence in a concept specification. A principle test
 runs the concept directly, without assembly.
-
-## Public error category
-
-A production HTTP classification registered for a concept refusal, such as
-`CONFLICT` or `UNAUTHORIZED`. Unmapped refusal codes do not cross that boundary.
 
 ## Query
 

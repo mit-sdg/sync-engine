@@ -289,54 +289,20 @@ do not import the command.
 
 ## Public package boundary
 
-Each supported core subpath has one export-only file under `src/<subpath>/index.ts`.
-The workspace catalog also describes independently packed companion packages
-under `packages/`; each has its own export-only entrypoints, declaration
-snapshot, tarball checks, and exact peer rules. Each workspace owns its
-exact-export test and packed TypeScript consumer contract. Runtime scenarios
-remain with the workspace whose package they exercise. Combined consumer
-verification copies these inputs into one isolated installation and checks the
-emitted type and runtime graphs.
+Each supported core subpath has one export-only file under
+`src/<subpath>/index.ts`. Independently packed workspaces live under `packages/`
+and own their entrypoints, declaration snapshots, export tests, packed consumer
+contracts, and runtime scenarios.
 
-`packages/catalog/` is the fourth workspace. Its CLI reads strict entry assets,
-plans one-floor source copies, validates lock ownership and package ranges,
-generates mechanical wiring, and leaves application integration to guidance. It
-exports no runtime API.
+The workspace registry in `scripts/workspaces.ts` defines build and packaging
+order. Packaging and publication are separate policies: every registered
+workspace builds, packs, and participates in combined-consumer checks, while
+only workspaces marked for npm publication are published. Combined verification
+installs exact tarballs in an isolated directory and checks emitted type and
+runtime graphs without workspace links.
 
-Workspace packaging and npm publication are separate policies. Every cataloged
-workspace builds, packs, and participates in combined-consumer checks. A
-workspace is published to npm only when its catalog entry selects `npm`.
-Analysis consumes only supported core subpaths and exposes generic, non-verdict
-surfaces through
-`@mit-sdg/sync-engine-analysis/ir` and
-`@mit-sdg/sync-engine-analysis/project`. Plain source/project models and pure
-queries live on the compiler-free `/ir` side. The package still declares
-TypeScript as a runtime dependency, but an isolated packed `/ir` import is
-checked not to load TypeScript, filesystem or filesystem-promise entrypoints,
-worker, project-loader, or source index-builder modules.
-
-The `/project` loader resolves the complete TypeScript reference graph through
-one immutable repository-bounded host, creates one program per config, and
-merges canonical owned source evidence. Its public async entrypoint runs that
-loader in an emitted Node worker; source tests explicitly select the TypeScript
-worker and packed ESM selects its JavaScript sibling. Packed-consumer verification
-executes the worker and codecs from exact tarballs under Node 24 and Bun rather
-than workspace paths. The package intentionally contains no workflow guidance,
-prompts, context packing, targeting, or review orchestration.
-
-Durable source indexes contain document and anchor metadata, ranges, and
-digests, never source bytes. `readApplicationSourceDocument(...)` is the
-reader-backed document verification boundary; clients slice verified text by
-anchor range. Project-backed facade construction recomputes the application
-index from the supplied manifest and compares exact semantic composition before
-using that index. It also requires a previously trusted digest of the complete
-project artifact. Codec validation enforces inventory ownership, indexed paths,
-file byte lengths, and derivable resource totals, but cannot prove semantic
-source attribution without rerunning TypeScript. AST work remains
-producer-reported. An attacker who chooses both an artifact and its digest still
-chooses the evidence. Revision labels remain caller assertions rather than VCS
-verification. The project parser is deliberately synchronous and whole-string;
-hosts own the byte bound for untrusted serialized input.
+Package behavior and APIs belong in each workspace's README and public-surface
+document, not in this repository architecture.
 
 ## Dependency rules
 

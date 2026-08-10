@@ -8,7 +8,7 @@ export interface FileDeclaration {
 }
 export interface FloorManifest {
   summary: string;
-  packages?: Record<string, string>;
+  packages: Record<string, string>;
   files: FileDeclaration[];
 }
 export interface ConceptMetadata {
@@ -22,20 +22,28 @@ export interface RecipeMetadata {
   members: string[];
   routes: Record<string, string>;
 }
-export interface EntryManifest {
+interface EntryBase {
   schema: 1;
   id: string;
-  kind: EntryKind;
   summary: string;
-  requires: string[];
   packages: Record<string, string>;
   files: FileDeclaration[];
   directory: string;
-  concept?: ConceptMetadata;
-  recipe?: RecipeMetadata;
-  defaultFloor?: string;
-  floors?: Record<string, FloorManifest>;
 }
+export interface ConceptManifest extends EntryBase {
+  kind: "concept";
+  requires: [];
+  concept: ConceptMetadata;
+  defaultFloor: string;
+  floors: Record<string, FloorManifest>;
+}
+export interface RecipeManifest extends EntryBase {
+  kind: "recipe";
+  requires: string[];
+  recipe: RecipeMetadata;
+}
+export type EntryManifest = ConceptManifest | RecipeManifest;
+
 export interface TrackedFile {
   source: string;
   target: string;
@@ -49,16 +57,24 @@ export interface RecipeIntegration extends RecipeMetadata {
   kind: "recipe";
 }
 export type EntryIntegration = ConceptIntegration | RecipeIntegration;
-export interface LockEntry {
-  kind: EntryKind;
+interface LockEntryBase {
   catalogVersion: string;
   sourceDigest: string;
   requires: string[];
-  floor?: string;
   packages: Record<string, string>;
-  integration: EntryIntegration;
   files: TrackedFile[];
 }
+export interface ConceptLockEntry extends LockEntryBase {
+  kind: "concept";
+  requires: [];
+  floor: string;
+  integration: ConceptIntegration;
+}
+export interface RecipeLockEntry extends LockEntryBase {
+  kind: "recipe";
+  integration: RecipeIntegration;
+}
+export type LockEntry = ConceptLockEntry | RecipeLockEntry;
 export interface GeneratedFile {
   target: string;
   hash: string;
@@ -70,11 +86,32 @@ export interface CatalogLock {
   entries: Record<string, LockEntry>;
   generated: GeneratedFile[];
 }
-export interface PlannedFile {
+
+export interface MaterializedEntry {
+  entry: EntryManifest;
+  floor?: string;
+  packages: Record<string, string>;
+  integration: EntryIntegration;
+  files: MaterializedFile[];
+  sourceDigest: string;
+}
+export interface MaterializedFile {
   source: string;
   target: string;
   contents: string;
   hash: string;
-  class: FileClass | "generated";
-  entry?: string;
+  class: FileClass;
 }
+export interface EntryPlannedFile extends MaterializedFile {
+  ownership: "entry";
+  entry: string;
+}
+export interface GeneratedPlannedFile {
+  source: "generated";
+  target: string;
+  contents: string;
+  hash: string;
+  class: "generated";
+  ownership: "generated";
+}
+export type PlannedFile = EntryPlannedFile | GeneratedPlannedFile;

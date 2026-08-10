@@ -68,10 +68,6 @@ an all-or-nothing filesystem transaction.
 `sync-engine new` is unsupported. It is parsed as an unknown command, and the
 resulting usage text names `setup`.
 
-The independent [`catalog` command reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/public-surface.md)
-defines source installation. Catalog commands are not `sync-engine`
-subcommands.
-
 ## `sync-engine check`
 
 ```text

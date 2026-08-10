@@ -163,35 +163,17 @@ Observer callbacks are synchronous, isolated handoffs. Throws and rejected
 promises do not change invocation behavior. Keep callbacks bounded and move
 queueing, retries, and network export into host-owned infrastructure.
 
-## HTTP host responsibilities
+## Transport host responsibilities
 
-Install the exact matching beta of `@mit-sdg/sync-engine-http`. A plain
-`createHttpHandler({ application, gateway })` exposes POST/JSON without policy.
-Use one immutable `httpPolicy(...)` value for deployment facts that must also
-shape `httpWire(...)`, including a base path, public errors, browser origins,
-request-origin protection, cookies, and the request-body limit. The [HTTP Public
-API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
-defines exact method, body, status, CORS, origin, cookie, correlation, timeout,
-and response-limit behavior.
-
-The Fetch handler maps one `Request` to a `Promise<Response>`. It does not open a
-listener, serve static files, or terminate TLS. A declared browser policy
-supplies exact-origin CORS and preflight handling; a separate request-origin
-policy protects cookie-touched paths. Plain POST/JSON deployments do not need
-browser or cookie policy when callers exchange every input in JSON.
+A transport adapter connects the gateway to a protocol; it does not change the
+engine's execution, persistence, or cancellation guarantees. Consult the
+selected transport's package documentation for protocol behavior and limits.
 
 The host owns connection and request-rate limits, denial-of-service controls,
 TLS, HSTS, certificate and trusted-proxy handling, static-file and SPA routing,
 health checks, autoscaling, listener and process lifecycle, and authentication
 integration. Application concepts own credential meaning and domain
 authorization.
-
-Methods other than `POST`, streaming, resource-oriented REST routing,
-framework-owned routing, request preprocessing, and unrestricted response
-transformation are unsupported. Wrap the handler when middleware must operate
-outside the package's security boundary, or implement a custom transport from
-supported core subpaths. The HTTP package does not provide a Node cookie jar,
-retry policy, idempotency, persistence, or cancellation of accepted work.
 
 ## Logs and sensitive values
 

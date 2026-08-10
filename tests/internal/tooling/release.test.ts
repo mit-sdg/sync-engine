@@ -388,15 +388,7 @@ describe("release source facts", () => {
   test.each([
     ["SUPPORT.md", "Only the newest beta is supported."],
     ["SUPPORT.md", `Node.js \`${packageManifest.engines.node}\``],
-    ["SUPPORT.md", "@mit-sdg/sync-engine-analysis/ir"],
-    ["SUPPORT.md", "@mit-sdg/sync-engine-analysis/project"],
-    ["SUPPORT.md", "sync-engine.application-index` version 2"],
-    ["SUPPORT.md", "sync-engine.impact-trace` version 2"],
-    ["SUPPORT.md", "sync-engine.application-source-index` version 2"],
-    ["SUPPORT.md", "sync-engine.application-project-analysis` version 2"],
-    ["SUPPORT.md", "expectedProjectDigest"],
-    ["SUPPORT.md", "Granular facade results are bounded immutable data"],
-    ["SUPPORT.md", "does not package guidance"],
+    ["SUPPORT.md", "sync-engine.application-manifest` version 5"],
     ["SECURITY.md", "security/advisories/new"],
     ["SECURITY.md", "acknowledgement within three business days"],
   ])("requires the policy fact %s: %s", (path, fact) => {

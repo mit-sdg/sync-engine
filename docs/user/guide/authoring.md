@@ -318,13 +318,5 @@ former. Source checks, principle tests, generated-artifact checks, and the
 scenario remain separate evidence; use the commands declared by the copied
 application in continuous integration.
 
-For a public HTTP boundary, install the exact matching beta of
-`@mit-sdg/sync-engine-http`. A plain POST/JSON handler needs no policy. When
-transport facts affect both runtime and generated types, construct one
-`httpPolicy(...)` value and pass it to `createHttpHandler(...)` and
-`httpWire(...)`. A cross-origin browser session also configures the client with
-`credentials: "include"`. Follow the [tiered HTTP setup](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)
-and use the [HTTP Public
-API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
-for the authoritative contract. [Operational limits](../reference/operations.md)
-defines persistence, traffic, and shutdown responsibilities.
+[Operational limits](../reference/operations.md) defines persistence, traffic,
+and shutdown responsibilities for a deployed boundary.

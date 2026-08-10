@@ -85,7 +85,7 @@ async function documentationFiles(directory: URL): Promise<URL[]> {
 }
 
 describe("guided curriculum", () => {
-  test("the getting-started guide describes setup and optional catalog output", async () => {
+  test("the getting-started guide describes concept-free setup", async () => {
     const guide = await readFile(new URL("getting-started.md", guideDirectory), "utf8");
 
     expect(guide).toContain("sync-engine setup");
@@ -94,7 +94,6 @@ describe("guided curriculum", () => {
     expect(guide).toContain("src/composition.ts");
     expect(guide).toContain("src/assembly.ts");
     expect(guide).toContain("src/main.ts");
-    expect(guide).toContain("catalog add recipe/workshop-selection --floor memory");
     expect(guide).toContain("bun run generate");
     expect(guide).toContain("bun run check");
     expect(guide).toContain("bun run start");

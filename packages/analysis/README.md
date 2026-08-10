@@ -197,6 +197,14 @@ format.
 [public surface resource table](public-surface.md#ir) for exact limits and error
 behavior.
 
+## Support and security
+
+Only the newest beta is supported. Keep the analysis and core versions pinned
+to the same exact beta and review the repository changelog before upgrading.
+Treat project snapshots and source readers according to the trust boundaries
+above. Report suspected vulnerabilities through the repository's [private
+reporting process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
+
 ## Reference
 
 - [Analysis public surface](public-surface.md)

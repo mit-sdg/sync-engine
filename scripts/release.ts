@@ -631,14 +631,6 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const supportFacts = [
     "Only the newest beta is supported.",
     "sync-engine.application-manifest` version 5",
-    "@mit-sdg/sync-engine-analysis/ir",
-    "@mit-sdg/sync-engine-analysis/project",
-    "analysis package requires the exact matching core beta as a peer dependency",
-    "TypeScript is a normal runtime dependency of the analysis package",
-    ...analysisFormatFacts,
-    "expectedProjectDigest",
-    "Granular facade results are bounded immutable data",
-    "analysis package is generic infrastructure and does not package guidance",
   ];
   if (facts.node !== undefined) supportFacts.push(`Node.js \`${facts.node}\``);
   if (facts.bun !== undefined) supportFacts.push(`Bun \`${facts.bun}\``);

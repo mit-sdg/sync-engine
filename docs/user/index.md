@@ -6,26 +6,24 @@ repository work.
 
 ## Start by task
 
-| Task                                        | Start with                                                                                                                                                                                               |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                                                                 |
-| Design concepts                             | [Designing with concepts](design.md)                                                                                                                                                                     |
-| Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                                                                        |
-| Initialize the first application            | [Getting started](guide/getting-started.md)                                                                                                                                                              |
-| Install curated concept or recipe source    | [Catalog package guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)                                                                                                     |
-| Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                                                              |
-| Call an existing application                | [`client` API](reference/public-api.md#client), then [Call the typed client](guide/authoring.md#call-the-typed-client)                                                                                   |
-| Construct a read                            | [Read construction cookbook](guide/read-construction.md)                                                                                                                                                 |
-| Add persistence, restart, or recovery       | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                                                                      |
-| Determine exact runtime behavior            | [Execution semantics](reference/semantics.md)                                                                                                                                                            |
-| Look up an export, command, format, or term | [Public API](reference/public-api.md), [CLI](reference/cli.md), [concept format](reference/concept-specification.md), or [glossary](reference/glossary.md)                                               |
-| Expose an application over HTTP             | [HTTP package tiers](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md), then [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md) |
-| Evaluate a deployment                       | [Operational limits](reference/operations.md)                                                                                                                                                            |
+| Task                                        | Start with                                                                                                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                   |
+| Design concepts                             | [Designing with concepts](design.md)                                                                                                                       |
+| Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
+| Initialize the first application            | [Getting started](guide/getting-started.md)                                                                                                                |
+| Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                |
+| Call an existing application                | [`client` API](reference/public-api.md#client), then [Call the typed client](guide/authoring.md#call-the-typed-client)                                     |
+| Construct a read                            | [Read construction cookbook](guide/read-construction.md)                                                                                                   |
+| Add persistence, restart, or recovery       | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                        |
+| Determine exact runtime behavior            | [Execution semantics](reference/semantics.md)                                                                                                              |
+| Look up an export, command, format, or term | [Public API](reference/public-api.md), [CLI](reference/cli.md), [concept format](reference/concept-specification.md), or [glossary](reference/glossary.md) |
+| Evaluate a deployment                       | [Operational limits](reference/operations.md)                                                                                                              |
 
 ## Application authoring path
 
 - [Getting started](guide/getting-started.md) is the tutorial. It initializes
-  and runs a concept-free application, then shows the optional catalog path.
+  and runs a concept-free application.
 - [Application authoring](guide/authoring.md) is the experienced TypeScript
   path. It follows a multi-concept application through registration,
   composition, assembly, generation, and a typed client.
@@ -47,7 +45,7 @@ grouped under `guide/`.
 | ------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------- |
 | [`docs/user/index.md`](index.md)                                                     | Index        | Human-readable task and document map                    |
 | [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Absolute-link map and constraints for software agents   |
-| [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | Concept-free setup and optional catalog source          |
+| [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | Concept-free application setup                          |
 | [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Multi-concept application authoring                     |
 | [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Ordered concept and composition review                  |
 | [`docs/user/guide/read-construction.md`](guide/read-construction.md)                 | How-to guide | Small tested read constructions and contrasts           |
@@ -61,18 +59,13 @@ grouped under `guide/`.
 | [`docs/user/reference/operations.md`](reference/operations.md)                       | Reference    | Deployment selection, limits, and host responsibilities |
 | [`docs/user/reference/glossary.md`](reference/glossary.md)                           | Reference    | Preferred terminology                                   |
 
-## Packages, examples, and policies
+## Examples and policies
 
-| Resource                                                                                                         | Scope                                                                                    |
-| ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [HTTP package guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)                   | Plain JSON, browser-session, and advanced transport tiers                                |
-| [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)              | HTTP policy, handler, client, projection, and security behavior                          |
-| [Catalog package guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)             | Curated source installation, one-floor selection, ownership, and integration guidance    |
-| [Catalog command reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/public-surface.md) | Catalog commands, manifests, lock, package verification, and write boundary              |
-| [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md)      | Compiler-free IR queries and optional TypeScript project evidence                        |
-| [Reading Circle](../../examples/reading-circle/README.md)                                                        | Shortest complete multi-concept application                                              |
-| [Operations Room](../../examples/operations-room/README.md)                                                      | Selectable reactions, replaceable policy, and staged formers                             |
-| [Message board](../../examples/message-board/README.md)                                                          | Complete same-origin browser app, authentication, typed HTTP, and secure cookie sessions |
-| [Support policy](../../SUPPORT.md)                                                                               | Supported versions, runtimes, toolchains, and generated formats                          |
-| [Security policy](../../SECURITY.md)                                                                             | Vulnerability reporting and the host/application security boundary                       |
-| [Changelog](../../CHANGELOG.md)                                                                                  | Release-specific compatibility and migration                                             |
+| Resource                                                    | Scope                                                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [Reading Circle](../../examples/reading-circle/README.md)   | Shortest complete multi-concept application                                            |
+| [Operations Room](../../examples/operations-room/README.md) | Selectable reactions, replaceable policy, and staged formers                           |
+| [Message board](../../examples/message-board/README.md)     | Complete same-origin browser app, authentication, typed transport, and secure sessions |
+| [Support policy](../../SUPPORT.md)                          | Supported versions, runtimes, toolchains, and generated formats                        |
+| [Security policy](../../SECURITY.md)                        | Vulnerability reporting and the host/application security boundary                     |
+| [Changelog](../../CHANGELOG.md)                             | Release-specific compatibility and migration                                           |

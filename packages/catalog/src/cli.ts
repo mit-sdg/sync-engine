@@ -46,7 +46,7 @@ export async function runCatalog(args: readonly string[]): Promise<void> {
         for (const file of [...entry.files, ...value.files])
           console.log(`  ${target(file.target)}`);
       }
-    if (entry.recipe !== undefined) {
+    if (entry.kind === "recipe") {
       console.log(`Members: ${entry.recipe.members.join(", ")}`);
       for (const member of entry.recipe.members)
         console.log(`  ${member}: ${entry.recipe.routes[member]}`);

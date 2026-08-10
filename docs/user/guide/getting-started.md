@@ -1,9 +1,9 @@
 # Getting started
 
-This tutorial initializes and runs a concept-free sync-engine application in
-an existing Bun package. The empty application establishes the extension points
-used by hand-authored concepts and by the optional source catalog. For setup
-behavior in partial projects, see the [command-line reference](../reference/cli.md).
+This tutorial initializes and runs a concept-free sync-engine application in an
+existing Bun package. The empty application establishes stable extension points
+for concepts and composition. For setup behavior in partial projects, see the
+[command-line reference](../reference/cli.md).
 
 ## Prerequisites
 
@@ -100,37 +100,7 @@ byte-identical setup files as verified. If an application file has changed,
 setup treats it as application-owned and reports any dependent setup it could
 not verify.
 
-## Add the optional catalog recipe
-
-The independent catalog package copies curated source into the application. It
-does not edit the setup files.
-
-```sh
-bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.7
-bunx catalog add recipe/workshop-selection --floor memory
-```
-
-If package requirements are missing, `catalog add` writes nothing and prints
-one `bun add --exact` command. Run that command, then repeat the command after
-`Next:`. A successful add copies the concepts, recipe, and tests; writes catalog
-wiring under `src/catalog/`; and prints the remaining integration work.
-
-Apply every printed step. For this memory-floor example, import and spread
-`catalogRegistrations` in `src/concept-set.ts`, import and spread
-`catalogComposition` in `src/composition.ts`, and set the assembly's `instances`
-to `applicationConcepts.implementations("memory", {})`.
-
-Then verify the integrated application:
-
-```sh
-bun run test
-bun run generate
-bun run check
-bun run start
-```
-
-See the [catalog package guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)
-for floor selection and ownership rules. Continue with [Application
-authoring](authoring.md) to design and register application-specific concepts.
-[Execution semantics](../reference/semantics.md) remains authoritative for
-runtime ordering and failure behavior.
+Continue with [Application authoring](authoring.md) to design and register
+application-specific concepts. [Execution
+semantics](../reference/semantics.md) remains authoritative for runtime ordering
+and failure behavior.
