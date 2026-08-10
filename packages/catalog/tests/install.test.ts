@@ -279,6 +279,37 @@ describe("catalog installer", () => {
     }
   }, 30_000);
 
+  test.each(["memory", "mongo"] as const)(
+    "copies and typechecks Approving on the %s floor",
+    async (floor) => {
+      const dependencies: Record<string, string> = {
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "vite-plus": "0.2.6",
+      };
+      if (floor === "mongo") dependencies.mongodb = "6.21.0";
+      const root = await fixture(dependencies);
+      try {
+        const result = await addEntries(await CatalogRegistry.load(), ["concept/approving"], {
+          root,
+          floor,
+          originalCommand: `catalog add concept/approving --floor ${floor}`,
+        });
+        expect(result.written).toContain(`src/concepts/approving/approving.${floor}.ts`);
+        expect(
+          result.written.some((path) => path.includes(floor === "memory" ? "mongo" : "memory")),
+        ).toBe(false);
+        const registry = await readFile(join(root, "src/concepts/approving/registry.ts"), "utf8");
+        expect(registry).toContain(
+          `class: Approving${floor === "memory" ? "Memory" : "Mongo"}Concept`,
+        );
+        expect(registry).not.toContain(floor === "memory" ? "Mongo" : "Memory");
+        await expectTypechecks(root);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   test("rejects unavailable floors and untracked collisions before writing", async () => {
     const dependencies = { "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" };
     const unavailable = await fixture(dependencies);

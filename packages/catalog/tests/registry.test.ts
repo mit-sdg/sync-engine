@@ -15,6 +15,7 @@ describe("catalog registry", () => {
       "concept/commenting",
       "concept/labeling",
       "concept/trashing",
+      "concept/approving",
       "concept/timing",
       "concept/upvoting",
       "recipe/workshop-selection",

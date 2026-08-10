@@ -1,5 +1,6 @@
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { alerting } from "../concept/alerting/registry.ts";
+import { approving } from "../concept/approving/registry.ts";
 import { commenting } from "../concept/commenting/registry.ts";
 import { discussing } from "../concept/discussing/registry.ts";
 import { gathering } from "../concept/gathering/registry.ts";
@@ -14,6 +15,7 @@ import { upvoting } from "../concept/upvoting/registry.ts";
 
 export const applicationConcepts = conceptSet({
   Alerting: alerting,
+  Approving: approving,
   Commenting: commenting,
   Discussing: discussing,
   Gathering: gathering,
