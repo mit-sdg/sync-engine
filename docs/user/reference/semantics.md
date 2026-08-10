@@ -1,11 +1,9 @@
 # Execution semantics
 
-This page defines the observable execution contract for actions, reactions,
-reads, formed results, and application boundaries in the current beta. It
-separates engine guarantees from host-owned storage, transport, and lifecycle
-policy. The [Public API](public-api.md) lists the exports. The [read construction
-cookbook](../guide/read-construction.md) demonstrates representative declarations
-without extending this contract.
+This current-beta contract covers actions, reactions, reads, formed results, and
+application boundaries. Storage, transport, and lifecycle policy remain
+host-owned. See the [Public API](public-api.md) and [read construction
+cookbook](../guide/read-construction.md).
 
 ## Contract index
 
@@ -50,11 +48,10 @@ The action then settles in one of two outcome postures:
   registered for that action. The advanced `Refuse` marker also produces this
   posture when its code is accepted under the engine mode described below.
 
-The engine classifies the outcome after the action body settles; it does not
-create a concept-state transaction. State changed before the action returns or
-throws is not rolled back by the engine. The concept implementation and backing
-store determine whether those changes persist. A reaction chain therefore does
-not become one transaction: each action owns its own state change.
+The engine classifies the outcome after the body settles but creates no
+concept-state transaction. It does not roll back earlier changes; persistence
+belongs to the concept implementation and store. Each action in a reaction chain
+owns its state change.
 
 A registered exception must belong to that action; an exception registered only
 for another action is a fault. Ordinary `assemble(...)` accepts `Refuse` only
@@ -65,11 +62,9 @@ and an unanswered endpoint settles as opaque `INTERNAL_ERROR`. Manual
 runtime warns when an explicit contract exists but omits that code. Applications
 should use declared refusals for stable contracts.
 
-A different throw is a **fault**. The engine records
-the fault against the ask, leaves that ask without an outcome, and lets the
-throw reach a direct caller. Failure delivery during reaction matching and at
-the application boundary is covered in
-[Failures between action asks](#failures-between-action-asks).
+Any other throw is a **fault**. The engine records it against the unanswered ask
+and lets it reach a direct caller. See [Failures between action
+asks](#failures-between-action-asks) for reaction and boundary delivery.
 
 For a direct call through `Assembly.concepts`, a returned action resolves to its
 success value and a refusal resolves to an `ActionRefusal` mapping with an
@@ -78,12 +73,10 @@ sentence as `detail`; a `Refuse` escape hatch may carry other data. A fault
 rejects the direct call. Underscore-prefixed query calls are asynchronous roots
 with their declared answer inside the promise and do not return action refusals.
 
-The direct caller receives a scalar action return unchanged. Occurrence
-matching normalizes a non-object return to an empty successful result, so
-reaction output patterns cannot bind fields from that scalar. Concept action
-contracts should return object mappings when composition needs their outputs.
-An action return remains successful when its object has a top-level `error`
-field; only a registered refusal produces the refused posture.
+Direct callers receive scalar returns unchanged. Occurrence matching normalizes
+a non-object return to an empty result, so reactions cannot bind fields from it.
+Return object mappings when composition needs outputs. A top-level `error` field
+remains a success; only a registered refusal produces the refused posture.
 
 ## Reactions
 
@@ -112,23 +105,17 @@ may dispatch several consequences. Each recorded firing names the reaction, its
 binding, the trigger occurrences it consumed, and the asks it produced. Other
 reactions consume those occurrences independently.
 
-Every callable consequence receives a fresh action id, inherits the trigger's
-flow, and records the asking reaction as `by`. Several members of one
-`then(...)` group are independent semantic siblings: every matching sibling is
-eligible to ask its action, and the group carries no priority, exclusivity, or
-coverage claim. Current execution is sequential; if an earlier sibling's
-evaluation never settles, a later sibling is not reached. A
-multi-member group requires one stable trailing `.named(...)` label per
-sibling. Labels determine lowered path names and remain stable when source
-order changes.
+Every consequence gets a fresh action id, inherits the trigger's flow, and
+records the reaction as `by`. Members of one `then(...)` group are independent:
+every match may ask its action, without priority, exclusivity, or coverage.
+Current evaluation is sequential, so a nonsettling sibling blocks later ones.
+Each sibling in a multi-member group needs a trailing `.named(...)` label;
+labels determine path names independent of source order.
 
-A later `.then(...)` group extends each current path independently after that
-path's preceding action returns. It does not wait for every sibling and is not
-a join. The engine lowers stages to separate reactions, pins each later
-trigger to the exact preceding `by` provenance, and uses `earlier` when a
-stage needs the original outside input. A refusal or fault stops that path
-while other siblings continue. A qualified sibling may carry its own chain
-before its trailing branch label.
+A later `.then(...)` extends each path after its preceding action returns; it is
+not a sibling join. Lowered stages are separate reactions pinned to exact `by`
+provenance; `earlier` recovers original outside input. A refusal or fault stops
+that path while other siblings continue.
 
 A later stage does not inherit a binding opened only by an earlier standing
 read. The binding reaches the later stage only when an intervening action input
@@ -154,12 +141,9 @@ when(Phasing.start({ sequence }).responds({ job, attempt }))
   .then(Phasing.advance({ job, attempt }));
 ```
 
-Such a trigger is **deferred**. Where an ordinary reaction prepares its firing
-as the occurrence lands, a deferred one is armed there and waits for a
-**settlement frontier**: the moment the flow's outermost ask is about to settle,
-when all tracked ordinary work in that flow has drained. Settlement is per
-causal flow. Unrelated root flows neither delay a frontier nor open one, and no
-application-wide idle is involved.
+A **deferred** trigger arms when its occurrence lands and waits for a
+**settlement frontier**, when the outermost ask is about to settle after tracked
+ordinary work drains. Frontiers are per flow; unrelated roots have no effect.
 
 At a frontier the engine reads the conditions of every deferred trigger match
 armed in that flow before dispatching any consequences. This is the same rule
@@ -168,12 +152,11 @@ consequences in the same flow, lets their ordinary cascades drain, and then open
 another frontier. A frontier at which no trigger combination qualifies finalizes
 the flow.
 
-A deferred consequence is an ordinary ask in every other respect. It keeps the
-flow token, the anchor's bindings, `earlier(...)` scope measured from the
-anchor's landing position, request correlation, `by` provenance, firing
-records, and execution-limit accounting. Each watched occurrence produces one
-trigger match; manually registered joint triggers may produce several trigger
-combinations. A combination whose conditions produce no binding remains armed.
+A deferred consequence keeps the flow token, anchor bindings, anchor-relative
+`earlier(...)` scope, request correlation, `by` provenance, firing records, and
+limit accounting. Each watched occurrence produces one trigger match; manual
+joint triggers may produce several combinations. A combination producing no
+binding remains armed.
 Before a later frontier evaluates it again, the runtime discards it if another
 firing of the same reaction consumed any of its trigger occurrences. Once a
 combination produces one or more bindings, it is retired and each binding is
@@ -223,14 +206,12 @@ composition and names the stage.
 
 ### Portable and local behavior
 
-A definition is **portable** only when its canonical JSON representation can be
-round-tripped and registered against the same named vocabulary. Named concept
-actions, queries, views, formers, and vocabulary computations satisfy that
-contract when their definitions contain only the portable IR vocabulary.
-Closures, explicit custom operations, `$is` object-identity patterns, raw result
-transforms, and whole reaction definitions that lowering cannot represent are
-local executable behavior. JSON markers for local behavior make it inspectable;
-they do not make its function or identity re-registerable.
+A definition is **portable** when its canonical JSON can round-trip and register
+against the same named vocabulary. Named actions, queries, views, formers, and
+vocabulary computations qualify only when they use portable IR. Closures,
+custom operations, `$is` identity patterns, raw result transforms, and
+unrepresentable reactions are local. Their JSON markers enable inspection, not
+re-registration.
 
 Ordinary assembly accepts portable behavior only. It rejects every local
 reaction, view, or former before an invoker, route set, generated plan, or
@@ -322,14 +303,11 @@ to a plain line, never to each other:
 Order comparisons (`is.lt`, `is.le`, `is.gt`, `is.ge`, …) are ordinary
 built-in relations read as closed lines over bound values.
 
-Registration rejects a fresh name under a denial, a name opened by a declarative
-read that no later line or consequence uses ("omit the key instead"), and a cycle
-between views. Unused trigger and action-result bindings are outside this check
-and require review. Registration also generates a read-back for every reaction.
-The read-back identifies paths, stages, opened and tested names, fan-out, and
-dropped cases.
-`inspectAssembly(assemble(...)).readBack` returns the application's complete
-read-back as one string.
+Registration rejects fresh names under denial, opened names unused by later
+lines or consequences ("omit the key instead"), and view cycles. It does not
+check unused trigger or action-result bindings. Each reaction's read-back names
+paths, stages, opened and tested names, fan-out, and dropped cases;
+`inspectAssembly(assemble(...)).readBack` returns all read-backs as one string.
 [The read construction cookbook](../guide/read-construction.md) quotes these read-backs entry by entry.
 
 ## Queries
@@ -341,16 +319,11 @@ records. An undeclared query may return one record or an array of records;
 because it makes no narrower promise, authoring treats it as potentially many.
 When the authored promise is available as a TypeScript literal, the vocabulary
 types reject a method whose return container does not match that promise.
-The engine attaches the registry's promises to whichever implementation the
-selected floor supplies and checks every answer when a reaction, view, or
-former reads it. `null`, a scalar, an array row that is null, scalar, or another
-array, or a violation of declared cardinality raises a query fault. Class
-instances and other non-null, non-array objects pass this container check. This
-is not row-schema validation. A record missing a field named in `.is` does not
-match that pattern. A direct query root returns the implementation result
-without this `where`-read container and cardinality check. Callers using a
-query as a reaction or former read therefore receive stricter runtime checking
-than callers invoking the query root directly.
+The engine applies registry promises to the selected implementation and checks
+answers read by reactions, views, or formers. `null`, scalars, invalid array
+rows, nested arrays, and cardinality violations fault. Other non-null,
+non-array objects pass; this is not row-schema validation. Missing `.is` fields
+do not match. Direct query roots bypass these container and cardinality checks.
 
 An ordinary assembly defaults to `queryCache: "memoize"`, which memoizes queries
 by concept instance and argument between invalidation points. Instrumented
@@ -358,8 +331,7 @@ actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
 caches before dispatch. `queryCache: "none"` disables this memoization; repeated
 reads execute the query implementation independently.
-Query implementations must not create side effects. The engine does not inspect
-or enforce query purity.
+Query implementations must be side-effect-free; the engine does not enforce it.
 A structural thenable returned by a memoized query is normalized to one native
 promise before that promise is cached. Equivalent reads reuse the normalized
 promise, so the original thenable's `then` is invoked once. Rejection, including
@@ -390,32 +362,28 @@ How such a fault is delivered depends on where the read occurs. See
 
 ## Views and formers
 
-A **view** names a match. Its builder receives separate input, output, and
-free-binding bags. Reading a property, including by destructuring, declares a
-stable logic variable. A predicate view ends in `.holds()`. A view with outputs defaults
-to `.many()` and may instead declare `.one()` or `.optional()`. Its human name
-carries no signature or cardinality. At a use-site a view takes one plain
-object input mapping. Every enumerable own key must be declared, and every
-declared input must be present according to the JavaScript `in` operator. The
-view is read exactly like a concept query. Its local bindings do not escape.
-Stacked `where` blocks are alternatives; any matching block can supply a result.
+A **view** names a match. Its builder has separate input, output, and
+free-binding bags; reading a property declares a stable logic variable. A
+predicate ends in `.holds()`. Output views default to `.many()` and may declare
+`.one()` or `.optional()`; the human name carries neither signature nor
+cardinality. Calls take one plain object whose enumerable own keys are declared
+and whose declared inputs are present by the `in` operator. Views read like
+queries, local bindings do not escape, and stacked `where` blocks are
+alternatives.
 
 The engine checks a concept query's declared promise whenever it reads the
 query and checks a view's declared promise whenever it reads the view. The
 read-back states the declaration and the runtime integrity check. The current
 package does not analyze cardinality over exported IR.
 
-A **former** names a formed answer. Its builder receives separate input and
-free-binding bags. Its body matches in `where` and produces in `form`, and
-production is terminal: nothing in a `where` chooses output. A record former
-promises one answer unless it ends in `.optional()`. A selection-root former
-always produces one result whose shape is determined by `.form`, `.count`,
-`.first`, or `.distinct`; it cannot end in `.optional()` because an empty
-selection already has a defined result. The human name carries neither inputs
-nor cardinality. The engine checks the promise when the former is evaluated. A
-record's `where` cannot open a name from a `many` source. Use `each` when the
-result should contain rows. Like a view, a former call takes one plain object
-mapping with the same enumerable-own-key and required-input checks.
+A **former** names a formed answer. Its builder has separate input and
+free-binding bags; `where` matches and terminal `form` produces. Record formers
+promise one answer unless `.optional()`. Selection-root formers always produce
+one `.form`, `.count`, `.first`, or `.distinct` result; empty selections already
+have defined results, so `.optional()` is invalid. Human names carry neither
+inputs nor cardinality. Evaluation checks the promise. A record `where` cannot
+open from a `many` source; use `each`. Calls use the same object-key and
+required-input checks as views.
 
 Production handles absence and plurality in three ways:
 
@@ -464,7 +432,7 @@ defines the in-process serialization and cross-process limits.
 
 ## Sibling paths and endpoint settlement
 
-One `then(...)` group may carry several alternatives:
+A `then(...)` group may carry several alternatives:
 
 ```ts
 .then(
@@ -480,9 +448,9 @@ creates `Reaction:left#2` and `Reaction:right#2`, each triggered by the return
 from its own first stage. Repeated sibling groups expand the set of paths; they
 do not create a runtime join.
 
-At the application boundary, `receive(...)` supplies the outside-request
-trigger to the same sibling tree. Path pinning, input contracts, request
-correlation, response shaping, and wire derivation remain endpoint concerns.
+At the boundary, `receive(...)` supplies the outside-request trigger. Path
+pinning, input contracts, correlation, response shaping, and wire derivation
+remain endpoint concerns.
 The endpoint's declared path is authoritative: `receive(...)` cannot author
 the boundary-owned `path`. Authored responses likewise cannot provide the
 boundary-owned `requestId` or `errorKind`; framework classification travels on
@@ -648,10 +616,9 @@ define their own projection failures and error codes.
 
 ## Generated wire
 
-The authoring guide explains how to [generate the wire
-contract](../guide/authoring.md#generate-the-wire-contract). With a vocabulary
-type anchor, endpoint
-leaves refer back to concept action parameters, action results, and query rows;
+With a [generated wire contract](../guide/authoring.md#generate-the-wire-contract)
+and vocabulary type anchor, endpoint leaves refer to concept action parameters,
+action results, and query rows;
 the response structure and absence rules come from the endpoint and its
 formers. The generated module applies the same JSON projection as the clients,
 including `Date` to `string`. Strict generation rejects any leaf that cannot be
@@ -711,8 +678,8 @@ reads. Type expressions, result declarations, and behavior prose do not become
 runtime validation or executable assertions.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
-defines input admission and explicit input, successful-output, and domain-error
-validation. None is inferred from the generated type.
+requires explicit input, successful-output, and domain-error validators; none is
+inferred from generated types.
 
 ## Operational limits
 
@@ -735,7 +702,7 @@ idempotent concept action may therefore return one stable persisted result
 when retried while its surrounding reaction executes once for every successful
 action occurrence.
 
-This topology does not provide:
+This topology provides no:
 
 - exactly-once action or reaction execution;
 - a distributed reaction scheduler;
@@ -744,9 +711,8 @@ This topology does not provide:
 - cross-process serialization without application storage coordination; or
 - deduplication by correlation id.
 
-Database drivers, transactions, constraints, locks, migrations, domain
-operation identifiers, and recovery policy remain application and host
-responsibilities.
+Drivers, transactions, constraints, locks, migrations, domain operation ids,
+and recovery policy remain application and host responsibilities.
 
 ### Execution and resource bounds
 
@@ -769,9 +735,9 @@ never release active-flow accounting. The host still owns the listener, OS
 signals, hard shutdown deadline, floor and custom log-sink resource closure, and
 process exit.
 
-A direct call through `Assembly.concepts`, and direct `Assembly.form(...)`
-evaluation, is an assembly root: it participates in active-root limits, idle
-observation, row limits, and drain admission. A rejected direct action resolves
+Direct `Assembly.concepts` calls and `Assembly.form(...)` evaluations are roots,
+subject to active-root limits, idle observation, row limits, and drain. A
+rejected direct action resolves
 to `{ error: "UNAVAILABLE" }` before an action occurrence is recorded; a
 rejected direct query or former evaluation rejects. Pending-request limits apply
 only to boundary invocations because direct roots do not create request waits.
@@ -865,17 +831,13 @@ Client calls carry `signal`, `timeoutMs`, and `correlationId` in their optional
 second argument. The local client forwards those values to the invoker. Other
 transports define how they apply the options.
 
-The default invocation timeout is 30 seconds without a profile and the
-profile's maximum request duration with one; `InvokeOptions.timeoutMs` selects a
-validated duration no greater than that maximum, and expiry resolves with
-`TIMED_OUT`. Timeout and abort end the pending wait but do not themselves record a
-`RequestBoundary.respond` occurrence, so recorded application work may remain
-unanswered. Continued work can later ask `respond`; after pending state is gone,
-that ask is recorded and refuses with `NOT_PENDING`. If an answer was accepted
-first, it remains authoritative. The
-invoker allows its causal dispatch to finish only until the original deadline
-or a later abort, then returns that answer even if other sibling work is still
-running.
+The default timeout is 30 seconds without a profile and the profile maximum with
+one. `InvokeOptions.timeoutMs` selects a validated duration no greater than that
+maximum; expiry returns `TIMED_OUT`. Timeout and abort end the wait without a
+`RequestBoundary.respond` occurrence. Later `respond` asks are recorded and
+refused with `NOT_PENDING`; an earlier accepted answer remains authoritative.
+The invoker waits for causal dispatch only until the deadline or abort and may
+return while sibling work continues.
 
 Gateway and application invokers each apply `timeoutMs` as their own duration
 when their layer begins waiting. The option is not an absolute deadline shared
@@ -948,13 +910,11 @@ retention never rewrites it. `FileLogSink` has no close API. A custom sink may
 own resources, but the host must close those resources after drain through an
 application-defined API.
 
-An application may persist concept state while leaving occurrence logs in
-memory, or vice versa. The engine does not load prior occurrence files, rebuild
-concept state, resume interrupted reactions, restore pending requests, or
-replay firings. Restart recovery must reconstruct state from concept-owned
-storage and explicit host procedures. A new assembly admits roots immediately;
-the host must complete recovery before exposing it to traffic, or provide its
-own admission barrier.
+Concept state and occurrence logs may persist independently. The engine does not
+load occurrence files, rebuild concept state, resume reactions, restore pending
+requests, or replay firings. Host recovery must reconstruct concept-owned state
+before exposing a new assembly, which admits roots immediately unless the host
+provides an admission barrier.
 
 ### Boundary operations
 
