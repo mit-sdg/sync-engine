@@ -26,6 +26,8 @@ describe("catalog registry", () => {
       "recipe/invite-only-workshop",
       "recipe/incident-room",
       "recipe/recoverable-board",
+      "recipe/review-queue",
+      "recipe/message-board",
     ]);
     expect(
       registry.resolve(["recipe/workshop-selection", "concept/gathering"]).map(({ id }) => id),
@@ -45,6 +47,20 @@ describe("catalog registry", () => {
       "concept/labeling",
       "concept/trashing",
       "recipe/recoverable-board",
+    ]);
+    expect(registry.resolve(["recipe/review-queue"]).map(({ id }) => id)).toEqual([
+      "concept/timing",
+      "concept/approving",
+      "concept/alerting",
+      "recipe/review-queue",
+    ]);
+    expect(registry.resolve(["recipe/message-board"]).map(({ id }) => id)).toEqual([
+      "concept/timing",
+      "concept/authenticating",
+      "concept/sessioning",
+      "concept/posting",
+      "concept/commenting",
+      "recipe/message-board",
     ]);
     expect(() => registry.resolve(["unknown"])).toThrow("unknown catalog entry");
   });

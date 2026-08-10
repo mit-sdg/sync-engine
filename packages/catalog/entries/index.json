@@ -19,5 +19,7 @@
   "recipe/ranked-discussion/manifest.json",
   "recipe/invite-only-workshop/manifest.json",
   "recipe/incident-room/manifest.json",
-  "recipe/recoverable-board/manifest.json"
+  "recipe/recoverable-board/manifest.json",
+  "recipe/review-queue/manifest.json",
+  "recipe/message-board/manifest.json"
 ]

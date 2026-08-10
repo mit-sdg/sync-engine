@@ -451,6 +451,44 @@ describe("catalog installer", () => {
     }
   }, 60_000);
 
+  test.each(["memory", "mongo"] as const)(
+    "installs and typechecks the security recipes on the %s floor",
+    async (floor) => {
+      const root = await fixture({
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@node-rs/argon2": "2.0.2",
+        ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
+        "vite-plus": "0.2.6",
+      });
+      try {
+        const result = await addEntries(
+          await CatalogRegistry.load(),
+          ["recipe/review-queue", "recipe/message-board"],
+          {
+            root,
+            floor,
+            originalCommand: `catalog add recipe/review-queue recipe/message-board --floor ${floor}`,
+          },
+        );
+        expect(result.written).toContain("src/composition/review-queue.ts");
+        expect(result.written).toContain("src/composition/message-board.ts");
+        expect(
+          result.written.some((path) => path.includes(floor === "mongo" ? ".memory." : ".mongo.")),
+        ).toBe(false);
+        const generated = await readFile(
+          join(root, "src/catalog/composition.generated.ts"),
+          "utf8",
+        );
+        expect(generated).toContain("RepairReviewAlert");
+        expect(generated).toContain("DeleteBoardAccount");
+        await expectTypechecks(root);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    45_000,
+  );
+
   test("rejects unavailable floors and untracked collisions before writing", async () => {
     const dependencies = { "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" };
     const unavailable = await fixture(dependencies);
