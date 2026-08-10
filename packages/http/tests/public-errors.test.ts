@@ -6,7 +6,7 @@ import {
   publicFrameworkCategoryOf,
   projectHttpPublicErrors,
   registeredPublicCategoryOf,
-} from "../src/server/public-errors.ts";
+} from "../src/handler/public-errors.ts";
 
 describe("HTTP public error projection", () => {
   test.each([

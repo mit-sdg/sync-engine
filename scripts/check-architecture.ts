@@ -60,8 +60,8 @@ const projectDirectories = new Set([
     .filter((workspace) => workspace.directory !== ".")
     .map((workspace) => `${workspace.directory}/`),
   "src/command/scaffold/",
-  "tests/package/application/",
-  "tests/package/multi-instance/",
+  "tests/packaging/application/",
+  "packages/http/tests/packaging/multi-instance/",
 ]);
 const result = checkArchitecture({
   files,

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "bun src/host.ts",
+    "start:api": "bun src/api-host.ts",
     "test": "LOG_LEVEL=error vp test",
     "typecheck": "tsc --noEmit",
     "artifacts:check": "sync-engine artifacts check --config generated.config.ts",

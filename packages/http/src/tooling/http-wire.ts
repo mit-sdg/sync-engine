@@ -7,7 +7,7 @@ import type {
 import { requireHttpPolicy } from "../policy/normalize.ts";
 import type { HttpPolicy } from "../policy/types.ts";
 import { HTTP_PACKAGE_NAME, HTTP_PACKAGE_VERSION } from "../package-version.ts";
-import { projectHttpPublicErrors } from "../server/public-errors.ts";
+import { projectHttpPublicErrors } from "../handler/public-errors.ts";
 import { projectHttpCookies } from "./cookie-projection.ts";
 
 export interface HttpWireOptions {

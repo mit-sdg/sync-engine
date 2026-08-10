@@ -591,7 +591,7 @@ When a direct caller omits a correlation id, the gateway establishes a fresh
 UUID once at public entry and carries it through gateway and application
 observation. Correlation does not deduplicate work and is not an idempotency
 key. HTTP correlation resolution is specified by the [HTTP Public
-API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server).
+API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#handler).
 
 Endpoint paths are portable absolute URL pathnames. Their declared spelling
 must survive WHATWG URL pathname handling exactly: queries,

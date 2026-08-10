@@ -32,5 +32,9 @@
     }
   },
   "include": ["examples", "packages", "scripts", "src", "tests"],
-  "exclude": ["src/command/scaffold", "tests/package/application", "tests/package/multi-instance"]
+  "exclude": [
+    "src/command/scaffold",
+    "tests/packaging/application",
+    "packages/http/tests/packaging/multi-instance"
+  ]
 }

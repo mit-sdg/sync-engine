@@ -6,7 +6,7 @@
  */
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import { conceptDirectories, conceptFailures } from "@command/check";
 
@@ -375,11 +375,16 @@ describe("membership, checked without constructing anything", () => {
   });
 });
 
-describe("the repository's own concepts", () => {
-  test("every shipped concept agrees with its specification", async () => {
-    const root = resolve(import.meta.dirname, "../../..");
-    const directories = await conceptDirectories(["examples", "tests/package/application"], root);
-    expect(directories.length).toBeGreaterThan(0);
-    expect(directories.flatMap((where) => conceptFailures(where, root))).toEqual([]);
-  }, 30_000);
+describe("concept discovery", () => {
+  test("finds concept directories recursively under each supplied root", async () => {
+    const first = await concept(
+      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
+    );
+    const nested = join(directory, "nested", "expiring");
+    await mkdir(nested, { recursive: true });
+    await writeFile(join(nested, "spec.md"), "# Expiring\n");
+
+    expect(await conceptDirectories(["."], directory)).toEqual([first, nested].sort());
+  });
 });

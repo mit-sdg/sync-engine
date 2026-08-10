@@ -19,10 +19,10 @@ API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-s
 are their exact export registers.
 
 `@mit-sdg/sync-engine-http` is an independently published first-party transport
-package with exactly these supported subpaths: `/server`, `/client`, and
-`/tooling`. Its root and deep imports are unsupported. Its core peer dependency
-requires the exact matching beta release. Core can be installed alone for custom
-transports and server adapters.
+package with exactly these supported subpaths: `/policy`, `/handler`, `/client`,
+and `/tooling`. Its root and deep imports are unsupported. Its core peer
+dependency requires the exact matching beta release. Core can be installed alone
+for custom transports and host adapters.
 
 `@mit-sdg/sync-engine-analysis` is an independently published first-party
 analysis package. Its supported subpaths are
@@ -39,7 +39,7 @@ is still the one listed under [Runtime and toolchain](#runtime-and-toolchain).
 
 Beta releases use Semantic Versioning prerelease identifiers. A newer beta may
 make incompatible changes to all six public core subpaths, including
-`/advanced`, both analysis subpaths, and the three HTTP subpaths. Every
+`/advanced`, both analysis subpaths, and the four HTTP subpaths. Every
 release identifies compatibility and migration effects in the
 [changelog](CHANGELOG.md). Consumers should pin an exact version and review the
 changelog before upgrading.

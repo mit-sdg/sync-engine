@@ -73,17 +73,17 @@ bun install
 `release:update` projects the canonical facts into every owned package
 dependency location:
 
-| Location                                            | Owned version fact                                                   |
-| --------------------------------------------------- | -------------------------------------------------------------------- |
-| `package.json`                                      | Published version and `publishConfig.tag`                            |
-| `packages/http/package.json`                        | HTTP package version and exact core peer                             |
-| `packages/analysis/package.json`                    | Analysis version, exact core peer, and TypeScript runtime dependency |
-| `examples/reading-circle/package.json`              | Shipped example dependency                                           |
-| `examples/operations-room/package.json`             | Shipped example dependency                                           |
-| `examples/message-board/package.json`               | Shipped example dependency                                           |
-| `tests/package/application/package.json`            | Standalone packed-application dependency                             |
-| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
-| `tests/package/multi-instance/backend/package.json` | Independent backend dependency                                       |
+| Location                                                            | Owned version fact                                                   |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `package.json`                                                      | Published version and `publishConfig.tag`                            |
+| `packages/http/package.json`                                        | HTTP package version and exact core peer                             |
+| `packages/analysis/package.json`                                    | Analysis version, exact core peer, and TypeScript runtime dependency |
+| `examples/reading-circle/package.json`                              | Shipped example dependency                                           |
+| `examples/operations-room/package.json`                             | Shipped example dependency                                           |
+| `examples/message-board/package.json`                               | Shipped example dependency                                           |
+| `tests/packaging/application/package.json`                          | Standalone packed-application dependency                             |
+| `packages/http/tests/packaging/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
+| `packages/http/tests/packaging/multi-instance/backend/package.json` | Independent backend dependency                                       |
 
 The scaffold keeps placeholders and generation reads the canonical root facts.
 The following `bun install` regenerates `bun.lock` from the projected manifests.
@@ -149,11 +149,9 @@ consumer then generates and parses Manifest V5, executes project analysis under
 Node 24 and Bun, verifies source bytes through a caller reader before slicing an
 anchor, retains and supplies the complete project digest to the neutral facade,
 exercises source/impact queries, checks derivable file-byte resource accounting,
-and round-trips the strict project codec without workspace symlinks. In the
-publish workflow the
-check exports the exact core, analysis, and HTTP tarballs; the unprivileged job
-records their digests and transfers them unchanged to the protected publication
-jobs. The core package
+and round-trips the strict project codec without workspace symlinks. In the publish workflow, the check exports every npm workspace tarball; the
+unprivileged job records their digests and transfers them unchanged to the
+protected publication jobs. The core package
 intentionally includes all three complete, independently runnable teaching
 examples; file-count, packed-size, and unpacked-size budgets prevent accidental
 growth. Wait for **CI required** on the final `main`
@@ -161,9 +159,9 @@ commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
-Core, analysis, and HTTP are independently published in that order. Both
-companions declare the exact matching core beta as their peer dependency.
-Analysis declares TypeScript as a normal runtime dependency. The workflow never
+Npm workspaces are published independently in catalog build order. Each
+companion declares the exact matching core beta as its peer dependency. Analysis
+declares TypeScript as a normal runtime dependency. The workflow never
 overwrites an npm version or moves or reuses a release tag or tarball.
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
@@ -182,8 +180,8 @@ overwrites an npm version or moves or reuses a release tag or tarball.
    main ancestry, downloads the verified tarballs, checks every recorded digest,
    and binds each packed `package.json` name and version to the validated source
    manifest. It rejects an artifact directory that is not exactly the reviewed
-   tarball/checksum set. It then publishes core, analysis, and HTTP sequentially
-   under `beta` with public access, stopping at the first failure. No publication
+   tarball/checksum set. It then publishes each npm workspace in catalog build
+   order under `beta` with public access, stopping at the first failure. No publication
    step installs dependencies, runs Bun, packs, prepackages, or rebuilds a
    package.
 4. Do not publish manually after a workflow failure until npm confirms the
