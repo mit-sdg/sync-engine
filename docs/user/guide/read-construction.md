@@ -86,13 +86,12 @@ const ClearedReadingClosesDiscussion = reaction(({ selection, discussion }) =>
 ```
 
 - **English**: the discussion open for that selection.
-- **Runs**: `subject` is bound from the trigger, so the engine reads
-  `_openFor` for that one subject. Nothing else could run: the only bound name
-  appears in the query input.
+- **Runs**: `subject` is bound from the trigger, so the engine can read
+  `_openFor` for that one subject.
 - **None / many**: `_openFor` promises at most one row. None means the reaction
-  quietly does not fire — no word for that was written, because the
-  declaration already says it. Many cannot happen; if the concept ever broke
-  that promise, the fault would name the query, not this reaction.
+  quietly does not fire; the read needs no explicit absence operator because
+  the declaration already permits no result. More than one row violates the
+  promise; the resulting fault names the query, not this reaction.
 - **Opens**: `discussion` — a fresh name in `.is` binds.
 
 The engine states this back at registration:
@@ -143,9 +142,9 @@ const theStandingOf = view(
   when the view is read.
 - **Opens**: `joined`.
 
-A `one` promise guarantees one source record, not that every output pattern
-will match it. A literal or already-bound name in `.is(...)` can reject that row
-and drop the case.
+A `one` promise guarantees one source row, not that every output pattern will
+match it. A literal or already-bound name in `.is(...)` can reject that row and
+drop the case.
 
 ```
 the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); checked when read
@@ -186,7 +185,8 @@ const nonmemberMayNotRespond = view(
   Gathering._membership (gathering: circle, member) has (joined: true) — existence — fires once or drops the case
 ```
 
-The second view gives the boundary's denial branch its own named question.
+The second view names the question used by the endpoint's denial branch in
+entry 10.
 
 ## 4 · A bound name tests, and a many-relation fans out
 
@@ -205,9 +205,9 @@ const HostLeavingDissolvesCircle = reaction(({ circle, host, member }) =>
 
 - **English**: the leaver is the host; every member of the circle.
 - **Runs**: `host` is already bound from the trigger, so the first line tests
-  the circle's `host` field against it — equality is never a word, it is the
-  same variable in both output patterns. The second line reads a many-promise relation with a
-  fresh name.
+  the circle's `host` field against it. Reusing the same variable in both
+  patterns expresses equality. The second line reads a many-promise relation
+  with a fresh name.
 - **None / many**: if the leaver is not the host, the first line drops the
   case. The second line fires the consequence once per distinct member, as
   declared by `_members`.
@@ -236,8 +236,8 @@ const OpenDiscussionOnce = reaction(({ selection }) =>
 
 - **English**: no discussion is open for it.
 - **Runs**: the same read as entry 1, expecting emptiness.
-- **None / many**: none passes; any row drops the case. `no` has exactly one
-  reading — no such row exists at all — never "a row exists that differs."
+- **None / many**: none passes; any row drops the case. `no` has one meaning:
+  no such row exists at all, never "a row exists that differs."
 - **Opens**: nothing. `no` can only test names already bound by the trigger or
   another available line.
 
@@ -280,8 +280,8 @@ const theCircleCard = former("the circle card (circle)", ({ circle }, { name, ho
 ```
 
 - **English**: the circle's name and host, and its current reading if any.
-- **Runs**: the first line reads as always; the second is softened by
-  `whether` — the row is read if present.
+- **Runs**: the first line is plain and therefore required. The second is
+  softened by `whether`, so its row is read only if present.
 - **None / many**: without `whether`, an absent selection would drop the whole
   card, because that is how a plain line handles absence. With it, the card
   survives and `reading` comes through blank — a `null` leaf in the formed
@@ -346,10 +346,10 @@ The read-back states that promise directly:
 the current reading of (circle) — inputs (circle); bindings (reading); promises at most one; checked when formed
 ```
 
-A host that reads this former plainly drops its row when there is no reading;
-a host that writes `whether(theCurrentReadingOf({ circle }))` keeps the row and
-takes blank leaves. Absence is declared once, here — every reader then chooses
-how to handle it.
+A plain use of this former drops its host row when there is no reading;
+`whether(theCurrentReadingOf({ circle }))` keeps the host row and supplies
+blank leaves. Absence is declared once, here; each use then chooses how to
+handle it.
 
 **Invalid construction — folding what is already single.** The first draft reached
 for a fold to say "the first one":
@@ -384,8 +384,8 @@ const theResponseCountOf = former(
 - **English**: the count of the discussion's responses.
 - **Runs**: `each` captures every row of a many-promise read; `count` folds
   the capture to one number.
-- **None / many**: an empty capture counts to zero — a selection always
-  answers, so this former promises exactly one.
+- **None / many**: an empty capture counts to zero. `count()` always produces a
+  number, so this former promises exactly one.
 - **Opens**: nothing outward; `response` ranges inside the capture.
 
 ```
@@ -434,11 +434,11 @@ const RejectNonmemberResponse = endpoint("/circles/respond", ({ circle, reading,
 );
 ```
 
-The middle line does two things at once, each already shown above: it opens
-`selection`, and it tests `item` against the request's `reading` — the same
-variable in both output patterns. The view line is read exactly like a query.
-The read-backs show the successful arm, its response step, and the independent
-nonmember answer:
+The `Selecting._current` line does two things at once, each already shown
+above: it opens `selection` and tests `item` against the request's `reading` by
+reusing the same variable. The view line is read exactly like a query. The
+read-backs show the successful declaration, its response step, and the
+independent nonmember answer:
 
 ```
 book.AddResponse
@@ -509,9 +509,9 @@ book.LeavingRoutesByHost:host
   then Discussing.open (subject: circle)
 ```
 
-Each sibling lowers to one single-case reaction. The stable labels produce
+Each sibling lowers to a single-case reaction. The stable labels produce
 `book.LeavingRoutesByHost:member` and
-`book.LeavingRoutesByHost:host`; reversing the source arguments leaves those
+`book.LeavingRoutesByHost:host`; reversing the sibling arguments leaves those
 names unchanged. If both conditions held, both paths would run. If the shared
 selection or both branch reads drop, neither path runs.
 
@@ -541,7 +541,7 @@ const ChooseReadingHostOnly = endpoint(
   tests equality, while `.is.not` tests difference. Every matching branch
   starts; labels establish path names, not priority.
 - **None / many**: `_get` promises at most one row, so when the circle does
-  not exist _both_ cases drop and nobody answers.
+  not exist _both_ cases drop and neither branch responds.
 - **Opens**: `selection`, in the acting case only.
 
 `receive(...)` supplies an outside-request trigger to the same builder that
@@ -662,8 +662,7 @@ the circle activity of (circle) — inputs (circle); bindings (selection, readin
 
 Nothing in this body tests that the circle exists, so an unknown circle returns
 a record of blanks. To return absence, anchor the body with one plain line
-(entry 6), or state `optional()` over a plain read and let the case drop (entry
-8).
+(entry 6), or make a plain-read former optional (entry 8).
 
 This variant adds a plain `_responses` read. It returns a record only when the
 open discussion has at least one response:
@@ -680,10 +679,11 @@ const theRespondedCircleActivityOf = former(
 ).optional();
 ```
 
-When `_current` returns no row, `selection` has no value. `_openFor` therefore
-produces no `discussion`, and the plain `_responses` read causes the former to
-return `null`. When both queries return a row, `_responses` receives the
-`discussion` value and the former returns its record once a response exists.
+When `_current` returns no row, `selection` has no value. The engine skips
+`_openFor` because its `subject` input is unbound, and the plain `_responses`
+read causes the former to return `null`. When both queries return a row,
+`_responses` receives the `discussion` value and the former returns its record
+once a response exists.
 
 ```
 the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; checked when formed
