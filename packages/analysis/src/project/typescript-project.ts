@@ -32,6 +32,15 @@ interface ParsedProject {
   readonly references: readonly string[];
 }
 
+interface CachedSourceFile {
+  readonly languageVersion: ts.ScriptTarget;
+  readonly impliedNodeFormat: ts.ResolutionMode | undefined;
+  readonly jsDocParsingMode: ts.JSDocParsingMode | undefined;
+  readonly moduleDetectionMode: string;
+  readonly text: string;
+  readonly source: ts.SourceFile;
+}
+
 export interface LoadTypeScriptProjectGraphOptions {
   readonly repositoryRoot: string;
   readonly tsconfigPath: string;
@@ -86,6 +95,7 @@ export class TypeScriptProjectGraph {
   private readonly underlyingRead: (path: string) => string | undefined;
   private readonly customRead: boolean;
   private readonly snapshots = new Map<string, ReadSnapshot>();
+  private readonly sourceFiles = new Map<string, CachedSourceFile>();
   private readFailure: unknown;
 
   constructor(options: LoadTypeScriptProjectGraphOptions) {
@@ -440,7 +450,14 @@ export class TypeScriptProjectGraph {
     parsedByPath: ReadonlyMap<string, ts.ParsedCommandLine>,
   ): ts.Program {
     const baseHost = ts.createCompilerHost(project.parsed.options, true);
-    const sourceFiles = new Map<string, ts.SourceFile>();
+    const moduleDetectionMode = JSON.stringify([
+      project.parsed.options.module,
+      project.parsed.options.moduleResolution,
+      project.parsed.options.moduleDetection,
+      project.parsed.options.jsx,
+      project.parsed.options.allowJs,
+      project.parsed.options.checkJs,
+    ]);
     const getSourceFile: ts.CompilerHost["getSourceFile"] = (
       fileName,
       languageVersionOrOptions,
@@ -459,9 +476,30 @@ export class TypeScriptProjectGraph {
         return undefined;
       }
       const key = this.readablePath(fileName, true)!.absolute;
+      const languageVersion =
+        typeof languageVersionOrOptions === "number"
+          ? languageVersionOrOptions
+          : languageVersionOrOptions.languageVersion;
+      const impliedNodeFormat =
+        typeof languageVersionOrOptions === "number"
+          ? undefined
+          : languageVersionOrOptions.impliedNodeFormat;
+      const jsDocParsingMode =
+        typeof languageVersionOrOptions === "number"
+          ? undefined
+          : languageVersionOrOptions.jsDocParsingMode;
       if (shouldCreateNewSourceFile !== true) {
-        const previous = sourceFiles.get(key);
-        if (previous !== undefined) return previous;
+        const previous = this.sourceFiles.get(key);
+        if (
+          previous !== undefined &&
+          previous.text === text &&
+          previous.languageVersion === languageVersion &&
+          previous.impliedNodeFormat === impliedNodeFormat &&
+          previous.jsDocParsingMode === jsDocParsingMode &&
+          previous.moduleDetectionMode === moduleDetectionMode
+        ) {
+          return previous.source;
+        }
       }
       const source = ts.createSourceFile(
         key,
@@ -470,7 +508,14 @@ export class TypeScriptProjectGraph {
         true,
         scriptKind(key),
       );
-      sourceFiles.set(key, source);
+      this.sourceFiles.set(key, {
+        languageVersion,
+        impliedNodeFormat,
+        jsDocParsingMode,
+        moduleDetectionMode,
+        text,
+        source,
+      });
       return source;
     };
     const cancellationToken: ts.CancellationToken = {
