@@ -38,6 +38,7 @@
     "semver": "^7.7.3"
   },
   "devDependencies": {
+    "@node-rs/argon2": "2.0.2",
     "mongodb": "^6.20.0",
     "mongodb-memory-server": "^10.4.1"
   },

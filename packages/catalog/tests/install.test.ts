@@ -48,6 +48,7 @@ async function expectTypechecks(root: string): Promise<void> {
       paths: {
         "@engine/*": [resolve(repository, "src/engine/*")],
         "@mit-sdg/sync-engine/*": [resolve(repository, "src/*/index.ts")],
+        "@node-rs/argon2": [resolve(repository, "packages/catalog/node_modules/@node-rs/argon2")],
         mongodb: [resolve(repository, "packages/catalog/node_modules/mongodb")],
       },
       types: ["node"],
@@ -308,6 +309,55 @@ describe("catalog installer", () => {
         await rm(root, { recursive: true, force: true });
       }
     },
+  );
+
+  test.each(["memory", "mongo"] as const)(
+    "copies and typechecks the security concepts on the %s floor",
+    async (floor) => {
+      const root = await fixture({
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@node-rs/argon2": "2.0.2",
+        ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
+        "vite-plus": "0.2.6",
+      });
+      try {
+        const result = await addEntries(
+          await CatalogRegistry.load(),
+          ["concept/sessioning", "concept/authenticating"],
+          {
+            root,
+            floor,
+            originalCommand: `catalog add concept/sessioning concept/authenticating --floor ${floor}`,
+          },
+        );
+        expect(result.written).toContain(`src/concepts/sessioning/sessioning.${floor}.ts`);
+        expect(result.written).toContain(`src/concepts/authenticating/authenticating.${floor}.ts`);
+        expect(
+          result.written.some((path) => path.includes(floor === "mongo" ? ".memory." : ".mongo.")),
+        ).toBe(false);
+
+        const sessioningRegistry = await readFile(
+          join(root, "src/concepts/sessioning/registry.ts"),
+          "utf8",
+        );
+        const authenticatingRegistry = await readFile(
+          join(root, "src/concepts/authenticating/registry.ts"),
+          "utf8",
+        );
+        expect(sessioningRegistry).toContain(
+          `class: Sessioning${floor === "mongo" ? "Mongo" : "Memory"}Concept`,
+        );
+        expect(authenticatingRegistry).toContain(
+          `class: Authenticating${floor === "mongo" ? "Mongo" : "Memory"}Concept`,
+        );
+        expect(sessioningRegistry).not.toContain(floor === "mongo" ? "Memory" : "Mongo");
+        expect(authenticatingRegistry).not.toContain(floor === "mongo" ? "Memory" : "Mongo");
+        await expectTypechecks(root);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    30_000,
   );
 
   test("rejects unavailable floors and untracked collisions before writing", async () => {
