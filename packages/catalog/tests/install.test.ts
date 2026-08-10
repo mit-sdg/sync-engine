@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import ts from "typescript";
 import { describe, expect, test } from "vite-plus/test";
@@ -32,7 +33,7 @@ async function typescriptFiles(directory: string): Promise<string[]> {
 }
 
 async function expectTypechecks(root: string): Promise<void> {
-  const repository = resolve(dirname(new URL(import.meta.url).pathname), "../../..");
+  const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
   await symlink(resolve(repository, "node_modules"), join(root, "node_modules"), "dir");
   await writeFile(
     join(root, "src/concept-set.ts"),

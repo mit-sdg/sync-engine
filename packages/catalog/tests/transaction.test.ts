@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "vite-plus/test";
 import { applyTransaction, type TransactionFilesystem } from "../src/transaction.ts";
@@ -28,7 +28,7 @@ describe("catalog transaction", () => {
         mkdir,
         writeFile,
         rename: async (from, to) => {
-          if (from.includes(".tmp") && to.endsWith("src/b.ts"))
+          if (from.includes(".tmp") && to.endsWith(normalize("src/b.ts")))
             throw new Error("injected rename failure");
           await rename(from, to);
         },
