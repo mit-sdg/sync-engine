@@ -13,6 +13,9 @@ catalog add <entry...> [--floor <name>]
 catalog help
 ```
 
+With no arguments, or with `help`, `--help`, or `-h`, the executable prints
+usage and exits successfully.
+
 `list` prints each matching id, kind, and summary. `show` prints requirements,
 floor and package summaries, destination paths, and recipe member-to-route
 metadata. These commands do not require core and do not import entry modules.
@@ -73,7 +76,9 @@ declare an exact version that satisfies the requirement or a range that is a
 subset of it. Non-semver protocols and tags are incompatible; range overlap
 alone is insufficient.
 
-The catalog reads `dependencies`, `devDependencies`, and `peerDependencies`.
+The catalog verifies declarations in `package.json`; it does not inspect
+`node_modules`. It reads `dependencies`, `devDependencies`, and
+`peerDependencies`.
 Different declarations for one package across those sections are a conflict.
 Requirements from entries already in `catalog.lock` are checked again on every
 add.
@@ -117,8 +122,8 @@ file carries a do-not-edit provenance banner.
 The catalog does not import generated modules into application-owned files.
 Guidance supplies snippets for `src/concept-set.ts` and `src/composition.ts`,
 selected-floor assembly construction, TypeScript coverage, generated
-configuration, and package scripts. Conservative text checks report
-unrecognized custom integration as unverified rather than rewriting it.
+configuration, and package scripts. Text checks report unrecognized custom
+integration as unverified rather than rewriting it.
 
 ## Write boundary
 

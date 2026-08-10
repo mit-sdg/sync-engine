@@ -95,9 +95,10 @@ exact export register; the core workspace uses the repository-level
 
 ## Documentation
 
-Documents must live under `docs/user/` or `docs/project/` and appear exactly
-once in that audience's `index.md` catalog. Temporary notes do not belong under
-`docs/`.
+Repository-wide documents under `docs/` must live in `docs/user/` or
+`docs/project/` and appear exactly once in that audience's `index.md` catalog.
+Package-owned guides and API references remain with their package and are linked
+from `docs/user/index.md`. Temporary notes do not belong under `docs/`.
 
 Every TypeScript fence in `docs/user/guide/read-construction.md` is a byte-exact excerpt from
 `tests/docs/book.test.ts`. Add or change the test first, then copy the exact

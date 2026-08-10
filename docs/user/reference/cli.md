@@ -53,12 +53,13 @@ setup leaves the dependent file absent and prints the required integration.
 This prevents setup from creating imports against an incompatible partial
 project.
 
-Setup analyzes `package.json` for the exact core version, a compatible
-TypeScript declaration, and expected scripts. Missing declarations produce
-guidance; conflicts and incompatible versions fail the command. Setup never
-edits `package.json`. It also does not merge or analyze an existing
-`tsconfig.json` or `generated.config.ts`; those files follow the target rules
-above.
+Setup checks `package.json` for the exact core version, a compatible TypeScript
+declaration, `generate` and `start` scripts, and either a `check` or `typecheck`
+script. Missing declarations produce guidance; conflicting package declarations
+and incompatible versions fail the command. Setup checks only whether each
+script is a string, not what the script runs. It never edits `package.json`.
+Setup also does not merge or analyze an existing `tsconfig.json` or
+`generated.config.ts`; those files follow the target rules above.
 
 A second invocation over unchanged output writes nothing. A filesystem failure
 can leave files written earlier in the command because setup does not promise
@@ -109,8 +110,8 @@ concepts, which permits a concept-free setup application. An explicitly named
 root that does not exist fails. The command also fails when any discovered
 concept fails. Parseable concept mismatches are collected and printed as
 bullets. Filesystem, missing-registry, or source-resolution failures can abort
-the command immediately as one stackless error. These failures bypass the aggregate
-list. The command does not modify files.
+the command immediately as one stackless error. These failures bypass the
+aggregate list. The command does not modify files.
 
 ## `sync-engine artifacts`
 

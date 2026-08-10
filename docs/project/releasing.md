@@ -79,7 +79,7 @@ dependency location:
 | `packages/http/package.json`                                        | HTTP package version and exact core peer                             |
 | `packages/analysis/package.json`                                    | Analysis version, exact core peer, and TypeScript runtime dependency |
 | `packages/catalog/package.json`                                     | Catalog version, optional exact core peer, and SemVer dependency     |
-| `packages/catalog/entries/*/manifest.json`                          | Exact core requirements in shipped entries                           |
+| `packages/catalog/entries/**/manifest.json`                         | Exact core requirements in shipped entries                           |
 | `examples/reading-circle/package.json`                              | Shipped example dependency                                           |
 | `examples/operations-room/package.json`                             | Shipped example dependency                                           |
 | `examples/message-board/package.json`                               | Shipped example dependency                                           |
@@ -165,9 +165,10 @@ commit, then repeat every external-setting check above.
 ## Tag and publish
 
 Npm workspaces are published independently in catalog build order. Each
-companion declares the exact matching core beta as its peer dependency. Analysis
-declares TypeScript as a normal runtime dependency. The workflow never
-overwrites an npm version or moves or reuses a release tag or tarball.
+companion declares the exact matching core beta as a peer dependency; the
+catalog marks that peer optional. Analysis declares TypeScript as a normal
+runtime dependency. The workflow never overwrites an npm version or moves or
+reuses a release tag or tarball.
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
    of `origin/main`, then create and push one annotated `v$VERSION` tag. Never

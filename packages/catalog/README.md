@@ -25,9 +25,9 @@ bunx catalog add recipe/workshop-selection --floor memory
 ```
 
 The recipe resolves `concept/gathering` and `concept/selecting`. The installer
-copies only memory implementations and tests, writes mechanical registration
-and composition modules under `src/catalog/`, and records ownership in
-`catalog.lock`.
+copies their shared files plus only the memory implementations and tests. It
+writes registration and composition modules under `src/catalog/` and records
+ownership in `catalog.lock`.
 
 Missing packages stop the plan before any write. Run the printed
 `bun add --exact` command, then repeat the command after `Next:`. After a
@@ -43,8 +43,8 @@ A catalog-managed project selects one floor. Select Mongo on the first add:
 bunx catalog add recipe/workshop-selection --floor mongo
 ```
 
-Mongo output includes `mongodb` source and tests and contains no memory
-implementation, test, import, or factory. Construct the floor with
+Mongo output includes the Mongo implementations and tests; it contains no
+memory implementation, test, import, or factory. Construct the floor with
 `applicationConcepts.implementations("mongo", { db })`. The host creates and
 closes `MongoClient`; assembly does not own that resource.
 
@@ -64,9 +64,10 @@ installed entry whose integration metadata or selected package and file
 declarations changed; `add` rejects that entry instead.
 
 Catalog commits use sibling temporary files, backups, and a lock-last write.
-Caught I/O failures restore completed replacements. Process termination can
-leave temporary or copied files. Without a matching lock, the next `add`
-reports those paths as collisions rather than claiming them.
+After a caught I/O failure, the installer attempts to restore completed
+replacements. Process termination or a failed cleanup can leave temporary,
+backup, or copied files. Without a matching lock, the next `add` reports copied
+paths as collisions rather than claiming them.
 
 See [`public-surface.md`](public-surface.md) for the command, manifest, lock,
 dependency, and guidance contracts. Entry authors should read

@@ -63,9 +63,11 @@ The project document owners are:
 - Coding-agent checkout instructions: `AGENTS.md`
 - Vite+ docs: `node_modules/vite-plus/docs/` or https://viteplus.dev/guide/
 
-Documents must live under `docs/user/` or `docs/project/` and appear in that
-directory's `index.md` catalog. Do not add another root document or put
-temporary notes under `docs/`.
+Repository-wide documents under `docs/` must live in `docs/user/` or
+`docs/project/` and appear in that directory's `index.md` catalog. Package-owned
+guides and API references remain with their package and are linked from
+`docs/user/index.md`. Do not add another root document or put temporary notes
+under `docs/`.
 
 ### Contributing to the example book
 
