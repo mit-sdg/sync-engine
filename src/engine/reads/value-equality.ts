@@ -11,6 +11,10 @@
  * `canonicallyEqual` in the engine's canonical-json utility.
  */
 export function structurallyEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
+    return false;
+  }
   return compare(left, right, new WeakMap());
 }
 

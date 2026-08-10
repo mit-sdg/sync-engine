@@ -153,7 +153,15 @@ function manifestFor(options: ManifestOptions): ApplicationManifestV5 {
   return manifest;
 }
 
+const programsBySource = new Map<string, ts.Program>();
+
 function programFor(files: Readonly<Record<string, string>>): ts.Program {
+  const cacheKey = JSON.stringify(
+    Object.entries(files).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  const cached = programsBySource.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const sources = new Map<string, string>([["/project/core.d.ts", coreDeclarations]]);
   for (const [path, text] of Object.entries(files)) {
     sources.set(path.startsWith("/") ? path : `/project/${path}`, text);
@@ -189,7 +197,13 @@ function programFor(files: Readonly<Record<string, string>>): ts.Program {
     getCurrentDirectory: () => "/project",
     writeFile: () => undefined,
   };
-  return ts.createProgram({ rootNames: [...sources.keys()], options: compilerOptions, host });
+  const program = ts.createProgram({
+    rootNames: [...sources.keys()],
+    options: compilerOptions,
+    host,
+  });
+  programsBySource.set(cacheKey, program);
+  return program;
 }
 
 function index(
