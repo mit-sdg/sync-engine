@@ -48,6 +48,7 @@ async function expectTypechecks(root: string): Promise<void> {
       paths: {
         "@engine/*": [resolve(repository, "src/engine/*")],
         "@mit-sdg/sync-engine/*": [resolve(repository, "src/*/index.ts")],
+        mongodb: [resolve(repository, "packages/catalog/node_modules/mongodb")],
       },
       types: ["node"],
       skipLibCheck: true,
@@ -128,6 +129,60 @@ describe("catalog installer", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("installs Timing on the mongo floor without MongoDB source or packages", async () => {
+    const root = await fixture({
+      "@mit-sdg/sync-engine": "1.0.0-beta.7",
+      "vite-plus": "0.2.6",
+    });
+    try {
+      const result = await addEntries(await CatalogRegistry.load(), ["concept/timing"], {
+        root,
+        floor: "mongo",
+        originalCommand: "catalog add concept/timing --floor mongo",
+      });
+      expect(result.written).toContain("src/concepts/timing/timing.ts");
+      expect(result.written.some((path) => /timing\.(?:memory|mongo)/.test(path))).toBe(false);
+      const registry = await readFile(join(root, "src/concepts/timing/registry.ts"), "utf8");
+      expect(registry).toContain("class: TimingConcept");
+      expect(registry).not.toContain("mongodb");
+      await expectTypechecks(root);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test.each(["memory", "mongo"] as const)(
+    "installs and typechecks Batch A on the %s floor",
+    async (floor) => {
+      const root = await fixture({
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
+        "vite-plus": "0.2.6",
+      });
+      try {
+        const result = await addEntries(
+          await CatalogRegistry.load(),
+          ["concept/timing", "concept/upvoting"],
+          {
+            root,
+            floor,
+            originalCommand: `catalog add concept/timing concept/upvoting --floor ${floor}`,
+          },
+        );
+        expect(result.written).toContain(`src/concepts/upvoting/upvoting.${floor}.ts`);
+        expect(result.written).toContain("src/concepts/timing/timing.ts");
+        expect(
+          result.written.some((path) =>
+            path.includes(`upvoting.${floor === "memory" ? "mongo" : "memory"}`),
+          ),
+        ).toBe(false);
+        await expectTypechecks(root);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("rejects unavailable floors and untracked collisions before writing", async () => {
     const dependencies = { "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" };
