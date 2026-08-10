@@ -262,7 +262,7 @@ The parser records inputs, promise, row fields or result type, and body.
 Registration does not interpret query bodies; test their claims in the
 implementation. Reactions, views, and formers check result containers and
 cardinality, but not row values. Direct instrumented query calls bypass this
-check; see [the processing map](../../project/concept-specification-processing.md#runtime-and-tooling).
+check.
 
 An omitted `## Actions` or `## Queries` section, or a section without its
 matching fence, declares no members of that kind. A present declaration fence
