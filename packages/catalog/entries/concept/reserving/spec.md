@@ -72,10 +72,3 @@ _activeFor (claimant: Claimant) : many (reservation: Reservation, resource: Reso
 `Reservation` is an identity allocated by Reserving. `Resource` and `Claimant` are
 opaque external identities. `ReservationStatus` is `active`, `cancelled`, or
 `fulfilled`. `DateTime` is an absolute instant.
-
-## Scope
-
-Reserving does not create Resources, authenticate a Claimant, schedule time slots,
-manage capacity greater than one, or expire a reservation. A fulfilled Resource
-remains consumed. An application models reusable fulfillment by reserving a new
-Resource identity.

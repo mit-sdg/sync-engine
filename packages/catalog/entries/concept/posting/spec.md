@@ -49,9 +49,3 @@ _byAuthor (author: Author) : many (post: Post, content: String, publishedAt: Dat
 
 `Post` is an identity allocated by Posting. `Author` is an opaque external identity.
 `String` is owned text. `DateTime` is an absolute instant.
-
-## Scope
-
-Posting does not authenticate an Author, edit a Post, retract it, or remove it. A Post
-is deliberately permanent in this concept. Composition may use Trashing to control
-visibility without changing Posting's record.

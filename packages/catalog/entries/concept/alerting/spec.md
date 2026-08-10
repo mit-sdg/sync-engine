@@ -66,9 +66,3 @@ _get (alert: Alert) : optional (recipient: Recipient, subject: Subject, cause: C
 `Alert` is an identity allocated by Alerting. `Recipient`, `Subject`, and `Cause` are
 opaque external identities. `DateTime` is an absolute instant. `Flag` is a Boolean
 value.
-
-## Scope
-
-Alerting does not authenticate the Recipient, deliver email or push notifications, or
-decide which event deserves attention. `Cause` is a caller-supplied idempotency
-identity; a genuinely new matter uses a new Cause.

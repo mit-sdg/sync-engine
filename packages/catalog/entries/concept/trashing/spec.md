@@ -76,12 +76,3 @@ _trashed () : many (item: Item, trashedAt: DateTime)
 
 `Item` is an opaque external identity. `DispositionStatus` is `active`, `trashed`, or
 `purged`. `DateTime` is an absolute instant.
-
-## Scope
-
-Trashing owns only an Item's Disposition. It does not mutate or delete the peer-owned
-Item payload, authenticate an actor, enforce a retention duration, or erase physical
-bytes. Composition hides peer records whose Disposition is trashed or purged. Restoring
-changes the Disposition to active so composition can reveal the existing peer record;
-the peer record remains stored throughout. Purge makes that visibility decision
-irreversible even when a later peer effect faults and requires repair.

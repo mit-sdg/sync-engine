@@ -58,11 +58,3 @@ _active (session: Session) : optional (subject: Subject, expiresAt: DateTime)
 `Session` is an unguessable bearer value allocated by Sessioning. `Subject` is an
 opaque external identity. `DateTime` is an absolute instant. `Flag` is a Boolean
 value.
-
-## Scope
-
-Sessioning does not authenticate a Subject, select cookie or header transport, renew a
-session, revoke every session for one subject, or provide a monotonic duration clock.
-The implementation uses an injected trusted wall-clock reader; callers do not supply
-current time. Storage cleanup may lag expiry, but every action and query treats an
-expired Session as inactive.

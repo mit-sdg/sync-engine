@@ -56,11 +56,3 @@ _get (selection: Selection) : optional (scope: Scope, item: Item)
 
 `Selection` is an identity allocated by Selecting. `Scope` and `Item` are opaque
 external identities.
-
-## Scope
-
-Selecting does not establish that a Scope or Item exists and does not authenticate a
-caller. Every Selection remains authoritative for its Item after it is superseded or
-cleared. An implementation that copies `item` into a current-selection index updates
-that projection in the same owner transaction as the retained Selection; the
-projection is not a second authority.

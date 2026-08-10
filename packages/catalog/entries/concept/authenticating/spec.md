@@ -82,11 +82,3 @@ _registered (username: Username) : one (registered: Flag)
 `Username` is a caller-chosen account name. `Password` is transient input. `Salt` is a
 fresh per-verifier value. `Secret` is a one-way password verifier. `Flag` is a Boolean
 value.
-
-## Scope
-
-Authenticating does not allocate a separate user identity, establish a session,
-recover a forgotten password, provide multifactor authentication, rate-limit attempts,
-or define authorization. The implementation's password-verifier algorithm and cost
-are security configuration, not observable concept behavior, and require an upgrade
-procedure independent of this specification.

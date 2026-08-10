@@ -223,13 +223,6 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 `Gathering` and `Membership` are identities allocated by Gathering. `Person` is
 an opaque external identity. `String` is owned text. `Flag` is a Boolean value.
 
-#### Scope
-
-Gathering does not authenticate a Person or give the recorded host authority over
-membership actions. The host starts as the first member but may leave. Leaving does
-not change the recorded host; a host who rejoins appears at the end of membership
-order with a new Membership identity.
-
 ### RequestBoundary
 
 **Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
@@ -299,14 +292,6 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 `Selection` is an identity allocated by Selecting. `Scope` and `Item` are opaque
 external identities.
-
-#### Scope
-
-Selecting does not establish that a Scope or Item exists and does not authenticate a
-caller. Every Selection remains authoritative for its Item after it is superseded or
-cleared. An implementation that copies `item` into a current-selection index updates
-that projection in the same owner transaction as the retained Selection; the
-projection is not a second authority.
 
 ## Views
 

@@ -193,7 +193,6 @@ the application documentation.
 | The precondition, effect, and refusal of each transition                             | `Actions`                 |
 | What a query answers, in what order, and what it answers when nothing matches        | The query's indented body |
 | What each type name is: allocated identity, opaque external identity, or owned value | `Types`                   |
-| What the concept deliberately does not decide                                        | `Scope`                   |
 
 Give each name one classification in `Types`, without an accompanying
 explanation. "`Subject` is an opaque external identity" classifies `Subject`.

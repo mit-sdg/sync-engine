@@ -82,9 +82,3 @@ _response (response: Response) : optional (discussion: Discussion, author: Autho
 `Discussion` and `Response` are identities allocated by Discussing. `Subject` and
 `Author` are opaque external identities. `String` is owned text. `DateTime` is an
 absolute instant.
-
-## Scope
-
-Discussing does not authenticate an Author, decide who may open or close a discussion,
-or moderate response content. Closing prevents new responses but retains the
-Discussion and its Responses.

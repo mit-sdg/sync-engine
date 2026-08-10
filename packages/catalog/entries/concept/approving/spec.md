@@ -89,10 +89,3 @@ _history (subject: Subject) : many (review: Review, requester: Person, reviewer:
 `Review` is an identity allocated by Approving. `Subject` and `Person` are opaque
 external identities. `ReviewStatus` is `pending`, `approved`, `rejected`, or
 `withdrawn`. `String` is owned text. `DateTime` is an absolute instant.
-
-## Scope
-
-Approving does not authenticate either Person, establish reviewer eligibility, or
-authorize a downstream effect. Approval is durable evidence of this concept's
-decision; composition decides what that evidence permits and remains responsible for
-race-sensitive enforcement in the downstream owner.

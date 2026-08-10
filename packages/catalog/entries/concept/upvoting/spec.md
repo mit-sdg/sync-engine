@@ -75,9 +75,3 @@ _score (item: Item) : one (score: Integer)
 
 `Item` and `Voter` are opaque external identities. `Direction` is the value `up` or
 `down`. `Integer` is a signed whole number.
-
-## Scope
-
-Upvoting does not authenticate a Voter, determine which Items exist, rank a caller's
-complete candidate set, or reveal voter identities through aggregate queries.
-Composition binds a trusted voter identity and decides which items may be voted on.

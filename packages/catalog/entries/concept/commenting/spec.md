@@ -61,9 +61,3 @@ _get (comment: Comment) : optional (target: Target, author: Author, text: String
 
 `Comment` is an identity allocated by Commenting. `Target` and `Author` are opaque
 external identities. `String` is owned text. `DateTime` is an absolute instant.
-
-## Scope
-
-Commenting does not authenticate an Author, establish that a Target exists, edit a
-Comment, or cascade when a Target is hidden or removed. Composition owns those
-decisions.

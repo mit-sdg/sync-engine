@@ -96,9 +96,3 @@ _items (label: Label) : many (item: Item)
 
 `Label` is an identity allocated by Labeling. `Scope` and `Item` are opaque external
 identities. `String` is owned text. Names are case-sensitive and retained exactly.
-
-## Scope
-
-Labeling does not authenticate an actor, decide label visibility or ownership, impose
-a hierarchy, or delete Labels. Labels are deliberately permanent in version 1;
-applications remove their Applications when a label is no longer in active use.

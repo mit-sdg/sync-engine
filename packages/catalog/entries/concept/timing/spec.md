@@ -28,10 +28,3 @@ _now () : one (time: DateTime)
 ## Types
 
 `DateTime` is an absolute wall-clock instant.
-
-## Scope
-
-Timing does not schedule work, measure monotonic duration, advance time, or define an
-expiry policy. A rule that needs one instant reads `_now` once and reuses that binding;
-it does not depend on repeated query evaluations invoking the reader. An owner whose
-invariant depends on actual current time uses its own trusted environmental clock.

@@ -80,9 +80,3 @@ _pendingFor (invitee: Person) : many (invitation: Invitation, target: Target, in
 `Invitation` is an identity allocated by Inviting. `Target` and `Person` are opaque
 external identities. `InvitationStatus` is `pending`, `accepted`, `declined`, or
 `revoked`. `DateTime` is an absolute instant.
-
-## Scope
-
-Inviting does not authenticate either Person, admit the invitee to the Target, create
-a secret token, or expire an invitation. Composition decides what acceptance causes
-and repairs a failed consequence without changing the recorded acceptance.
