@@ -63,9 +63,9 @@ Do not hand-edit these outputs:
 - `tests/packaging/declarations.snapshot.txt` and
   `packages/*/tests/declarations.snapshot.txt` — update with
   `bun run declarations:pin` after an intentional declaration change;
-- `examples/*/generated/*.md` and `examples/*/generated/wire.ts` — update through
-  the owning example's artifact pin command or the repository generation
-  script.
+- `examples/*/generated/*.md` and `examples/*/generated/wire.ts` — update with
+  `bun run artifacts:pin` from the owning example or with
+  `bun scripts/examples.ts pin` for all registered examples.
 
 Review generated diffs as public contract changes. The check commands compare
 the committed files with fresh output.

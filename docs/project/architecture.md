@@ -80,10 +80,10 @@ defines the observable ordering, snapshot, and failure contract.
 that appends log entries and retains unredacted values only while their causal
 flow is active.
 
-`Reacting` remains the internal host facade, but it owns no reaction catalog.
-`reaction-catalog.ts` exclusively owns executable reactions, trigger indexes,
-exported lowered/unlowered definitions, and base registration names. One
-`ConceptInstrumentation` owns one explicit `InstrumentationState` containing
+`Reacting` remains the internal host facade and holds the `ReactionCatalog`
+instance. `reaction-catalog.ts` owns the catalog's executable reactions, trigger
+indexes, exported lowered/unlowered definitions, and base registration names.
+One `ConceptInstrumentation` owns one explicit `InstrumentationState` containing
 proxy identities, raw-concept links, weak concept references, and query caches;
 `instrumenting.ts` reuses that persistent state for each operation. Its
 `QueryCacheMode` selects memoized wrappers by default or

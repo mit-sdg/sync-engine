@@ -55,27 +55,28 @@ exact tagged commit.
 
 ### Registry version
 
-Confirm the exact version is unused with the npm registry and confirm the
-intended dist-tag. Beta versions have the form `1.0.0-beta.N`, with no leading
-zero in `N`, and use `beta`. Never reuse an npm version or move an existing
-release tag.
+Confirm that the exact version is unused for every published workspace:
+`@mit-sdg/sync-engine`, `@mit-sdg/sync-engine-analysis`,
+`@mit-sdg/sync-engine-http`, and `@mit-sdg/sync-engine-catalog`. Beta versions
+have the form `1.0.0-beta.N`, with no leading zero in `N`, and use the `beta`
+dist-tag. Never reuse an npm version or move an existing release tag.
 
 ### Version surfaces
 
-Treat the root `package.json` version, engines, TypeScript dependency, and
-`packageManager` as canonical. Run these commands in order:
+In the root `package.json`, set the release version and confirm the `beta`
+`publishConfig` tag. The root version, engines, TypeScript dependency,
+`packageManager`, and publication settings are canonical. Then run these
+commands in order:
 
 ```sh
 bun run release:update
 bun install
 ```
 
-`release:update` projects the canonical facts into every owned package
-dependency location:
+`release:update` projects the canonical facts into the owned manifests:
 
-| Location                                     | Owned version fact                      |
+| Location                                     | Projected facts                         |
 | -------------------------------------------- | --------------------------------------- |
-| `package.json`                               | Canonical version and publication tag   |
 | `packages/*/package.json`                    | Workspace versions and dependencies     |
 | `packages/catalog/entries/**/manifest.json`  | Shipped entry requirements              |
 | `examples/*/package.json`                    | Shipped example dependencies            |
