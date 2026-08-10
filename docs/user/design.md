@@ -10,8 +10,9 @@ composition. It assumes the [application model](overview.md). The
 A **concept** is a semantic mechanism with one purpose, owned state, actions, and
 queries. Its purpose and principle can be understood without reading another
 concept. A **reaction** is an application-level rule that connects concepts.
-Registration checks selected declarations, not these design criteria: TypeScript
-peer imports therefore remain a design-review finding.
+Registration checks selected declarations, but it does not enforce these design
+criteria or reject TypeScript imports from peer concepts. Peer imports therefore
+remain a design-review finding.
 
 ## Concepts and composition
 
@@ -38,8 +39,8 @@ rule and permits a concept to participate in another composition.
 
 A purpose states the useful need that justifies the concept. A usable purpose:
 
-- names a useful capability and the undesirable outcome or lost capability it
-  prevents;
+- names a useful capability and the undesirable outcome it prevents or the
+  capability that would otherwise be lost;
 - predicts the behavior without listing methods;
 - rejects at least one plausible design;
 - names no peer concept and names an application only when intentionally scoped;
@@ -211,9 +212,9 @@ an explicit external-system adapter. No numeric reaction threshold is useful.
 ### Worked boundary comparison
 
 An initial Operations Room model can place membership, current mitigation,
-discussion responses, and alerts in one `Room` concept. The state partitions,
-purposes, authority questions, reuse patterns, and failure behavior separate, so
-the shipped design uses
+discussion responses, and alerts in one `Room` concept. These behaviors have
+different state, purposes, authority questions, reuse patterns, and failure
+rules, so the example separates them into
 [Gathering](../../examples/operations-room/src/concepts/gathering/spec.md),
 [Selecting](../../examples/operations-room/src/concepts/selecting/spec.md),
 [Discussing](../../examples/operations-room/src/concepts/discussing/spec.md), and
@@ -302,8 +303,9 @@ Composition may name replaceable policy as a view. Operations Room supplies
 [host-only](../../examples/operations-room/src/composition/host-may-contribute.ts)
 and [responder](../../examples/operations-room/src/composition/responders-may-contribute.ts)
 implementations of the same policy contract without changing concepts or
-endpoints. A security-critical or race-sensitive decision must still be enforced
-by the owner action and, for shared durable state, its storage transaction.
+endpoints. A security-critical decision must still be enforced by the owner
+action so direct calls cannot bypass it. If the decision must remain true when
+shared durable state changes, enforce it in the same storage transaction.
 
 ## Composition hazards
 

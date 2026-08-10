@@ -22,18 +22,18 @@ connects an artificial split.
 Stop at the first failed criterion; later detail cannot repair an earlier
 boundary defect.
 
-| Criterion         | Evidence                                                                                                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Purpose           | Names a useful capability and an undesirable outcome it prevents, rules out a plausible design, and can be fulfilled by this concept.                              |
-| Principle         | Demonstrates the purpose from empty state using only this concept's actions and queries, including any distinguishing refusal.                                     |
-| Independence      | Names no peer, stores only peer identities, and completes its lifecycle alone.                                                                                     |
-| State sufficiency | Every precondition, result, and effect follows from owned state, input, or an explicit environment dependency.                                                     |
-| Ownership         | Each durable fact has one authority; copies state update, staleness, and repair rules.                                                                             |
-| Actions           | Name only transitions required by the purpose and enforce local invariants, including direct calls.                                                                |
-| Lifecycle         | Covers applicable creation, use, completion, expiry, reversal, retention, and deletion.                                                                            |
-| Failure           | Expected rejection is a refusal; reversal, compensation, and repetition are deliberate.                                                                            |
-| Durability        | Shared-state races and idempotency have storage-level enforcement where required.                                                                                  |
-| Documentation     | States each bound, lifetime, and order in the declaration that enforces it; matches each refusal sentence to its rule; and does not restate declarations in prose. |
+| Criterion         | Evidence                                                                                                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Purpose           | Names a useful capability and the undesirable outcome it prevents or the capability otherwise lost, rules out a plausible design, and can be fulfilled by this concept. |
+| Principle         | Demonstrates the purpose from empty state using only this concept's actions and queries, including any distinguishing refusal.                                          |
+| Independence      | Does not depend on a peer concept's API or facts; stores only opaque identities for peer-owned entities; and completes its lifecycle alone.                             |
+| State sufficiency | Every precondition, result, and effect follows from owned state, input, or an explicit environment dependency.                                                          |
+| Ownership         | Each durable fact has one authority; copies state update, staleness, and repair rules.                                                                                  |
+| Actions           | Name only transitions required by the purpose and enforce local invariants, including direct calls.                                                                     |
+| Lifecycle         | Covers applicable creation, use, completion, expiry, reversal, retention, deletion, or deliberate permanence.                                                           |
+| Failure           | Expected rejection is a refusal; reversal, compensation, and repetition are deliberate.                                                                                 |
+| Durability        | Shared-state races and idempotency have storage-level enforcement where required.                                                                                       |
+| Documentation     | States each bound, lifetime, and order in the declaration that enforces it; matches each refusal sentence to its rule; and does not restate declarations in prose.      |
 
 Trace the specification in both directions. Every purpose commitment must appear
 in the principle and be supported by the applicable actions, queries, refusals,
@@ -43,9 +43,9 @@ the implementation satisfies the prose. The [concept specification writing
 conventions](../reference/concept-specification.md#writing-conventions) define
 section placement, prose notation, and the documentation criterion.
 
-Use [Choosing concept boundaries](../design.md#choosing-concept-boundaries) when the
-state partitions, several purposes appear, or reactions mostly pass calls between
-the same pair of concepts.
+Use [Choosing concept boundaries](../design.md#choosing-concept-boundaries) when
+state partitions or several purposes appear, or when reactions mostly pass calls
+between the same pair of concepts.
 
 ## 3. Review the composition
 
@@ -99,7 +99,9 @@ and [cancellation](../reference/semantics.md#cancellation) for the runtime contr
 For each protected effect, record the actor, authenticated identity, resource,
 owner of every fact, condition, and enforcement point. Check direct
 `Assembly.concepts` roots as well as endpoints. A composition read may provide an
-early denial; exact enforcement belongs in the owner action and storage.
+early denial, but the owner action must enforce security-critical decisions so a
+direct call cannot bypass them. Use the owner's storage transaction when the
+decision must remain true as shared durable state changes.
 
 Review what leaves the boundary. Generated types are not runtime validators.
 Check the selected transport's package documentation for its public error and
