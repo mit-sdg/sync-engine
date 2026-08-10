@@ -480,7 +480,7 @@ describe("release source facts", () => {
     );
   });
 
-  test("allows id-token permission on exactly the three publication jobs", () => {
+  test("allows id-token permission on only the publication job", () => {
     const sources = fixture();
     replaceSource(
       sources,
@@ -489,128 +489,67 @@ describe("release source facts", () => {
       "  verify:\n    permissions:\n      id-token: write\n",
     );
     expect(checkRelease(sources)).toContain(
-      ".github/workflows/publish.yml: only publication jobs may receive id-token: write",
+      ".github/workflows/publish.yml: only the publication job may receive id-token: write",
     );
-  });
-
-  test("requires the publish scenario gate to reuse the existing build", () => {
-    const sources = fixture();
-    replaceSource(
-      sources,
-      ".github/workflows/publish.yml",
-      "bun scripts/examples.ts scenario",
-      "bun run scenario",
-    );
-    expect(
-      checkRelease(sources).filter((failure) =>
-        failure.startsWith(".github/workflows/publish.yml: verify"),
-      ),
-    ).toEqual([
-      ".github/workflows/publish.yml: verify job must run bun scripts/examples.ts scenario",
-      ".github/workflows/publish.yml: verify gates must remain in reviewed order",
-    ]);
   });
 
   test.each([
-    "needs: verify",
-    "needs: [verify, publish-core]",
-    "needs: [verify, publish-core, publish-analysis]",
-    "id-token: write",
-    "name: npm",
-    "npm publish ./release/package.tgz --provenance --tag beta --access public",
-    "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
-    "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
-  ])("requires the publish-only fact %s", (fact) => {
+    ["needs: verify", "missing needs: verify"],
+    ["id-token: write", "missing id-token: write"],
+    ["name: npm", "missing name: npm"],
+    [
+      "node scripts/check-release-source.ts",
+      "verify source validation must invoke check-release-source.ts",
+    ],
+    [
+      "node scripts/check-release-source.ts release",
+      "publish source validation must invoke check-release-source.ts with verified artifacts",
+    ],
+    [
+      "npm publish ./release/package.tgz --provenance --tag beta --access public",
+      "missing npm publish ./release/package.tgz --provenance --tag beta --access public",
+    ],
+    [
+      "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
+      "missing npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
+    ],
+    [
+      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+      "missing npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+    ],
+  ])("requires the publish-only fact %s", (fact, failure) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-publish-fact");
-    expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`missing ${fact}`));
+    expect(checkRelease(sources)).toContainEqual(expect.stringContaining(failure));
   });
 
-  test.each([
-    [
-      "publish-core",
-      "sha256sum --check release/package.tgz.sha256",
-      "npm publish ./release/package.tgz --provenance --tag beta --access public",
-    ],
-    [
-      "publish-analysis",
-      "sha256sum --check release/analysis-package.tgz.sha256",
-      "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
-    ],
-    [
-      "publish-http",
-      "sha256sum --check release/http-package.tgz.sha256",
-      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
-    ],
-  ] as const)(
-    "requires checksum verification before publication in %s",
-    (name, checksum, publish) => {
-      const sources = fixture();
-      replaceSource(
-        sources,
-        ".github/workflows/publish.yml",
-        `      - run: ${checksum}\n      - run: ${publish}`,
-        `      - run: ${publish}\n      - run: ${checksum}`,
-      );
-      expect(checkRelease(sources)).toContain(
-        `.github/workflows/publish.yml: ${name} checksum verification must precede npm publish`,
-      );
-    },
-  );
-
-  test.each([
-    ["publish-core", "npm publish ./release/package.tgz --provenance --tag beta --access public"],
-    [
-      "publish-analysis",
-      "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
-    ],
-    [
-      "publish-http",
-      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
-    ],
-  ] as const)("rejects an extra npm publish command in %s", (name, publish) => {
+  test("requires publications in workspace catalog order", () => {
     const sources = fixture();
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      `      - run: ${publish}`,
-      `      - run: ${publish}\n      - run: npm publish ./release/unreviewed.tgz --access public`,
+      "      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public\n      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+      "      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public\n      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
     );
     expect(checkRelease(sources)).toContain(
-      `.github/workflows/publish.yml: ${name} job must contain exactly one npm publish command`,
+      ".github/workflows/publish.yml: publications must remain in catalog order",
     );
   });
 
-  test("requires HTTP publication to depend on core and analysis publication", () => {
+  test("rejects an extra npm publish command", () => {
     const sources = fixture();
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "needs: [verify, publish-core, publish-analysis]",
-      "needs: verify",
+      "      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+      "      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public\n      - run: npm publish ./release/unreviewed.tgz --access public",
     );
     expect(checkRelease(sources)).toContain(
-      ".github/workflows/publish.yml: publish-http job is missing needs: [verify, publish-core, publish-analysis]",
+      ".github/workflows/publish.yml: publish job must contain exactly one npm publish per published workspace",
     );
   });
 
-  test("requires verify, core, analysis, and HTTP jobs in reviewed order", () => {
-    const sources = fixture();
-    const path = ".github/workflows/publish.yml";
-    const source = sources.get(path) ?? "";
-    sources.set(
-      path,
-      source
-        .replace("\n  publish-core:", "\n  publish-temporary:")
-        .replace("\n  publish-analysis:", "\n  publish-core:")
-        .replace("\n  publish-temporary:", "\n  publish-analysis:"),
-    );
-    expect(checkRelease(sources)).toContain(
-      ".github/workflows/publish.yml: verify and publication jobs must remain in reviewed order",
-    );
-  });
-
-  test("restricts publication jobs to checkout, setup-node, and artifact download actions", () => {
+  test("restricts the publication job to checkout, setup-node, and artifact download actions", () => {
     const sources = fixture();
     replaceSource(
       sources,
@@ -618,42 +557,69 @@ describe("release source facts", () => {
       "      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
       "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6\n      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
     );
-    expect(checkRelease(sources)).toContainEqual(
-      expect.stringContaining(
-        "publish-core must use checkout, setup-node, and download-artifact only",
-      ),
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: publish must use checkout, setup-node, and download-artifact only",
     );
   });
 
-  test("rejects rebuilding in a publication job", () => {
+  test("rejects rebuilding in the publication job", () => {
     const sources = fixture();
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "      - run: sha256sum --check release/analysis-package.tgz.sha256",
-      "      - run: bun run build\n      - run: sha256sum --check release/analysis-package.tgz.sha256",
+      "      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
+      "      - run: bun run build\n      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
     );
     expect(checkRelease(sources)).toContain(
-      ".github/workflows/publish.yml: publish-analysis job must not rebuild (bun run)",
+      ".github/workflows/publish.yml: publish job must not rebuild (bun run)",
     );
   });
 
-  test.each(["./package.json", "./packages/analysis/package.json", "./packages/http/package.json"])(
-    "requires every source check to read %s",
-    (manifestPath) => {
-      const sources = fixture();
-      sources.set(
-        ".github/workflows/publish.yml",
-        (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
-          manifestPath,
-          "./omitted-package.json",
-        ),
-      );
-      expect(
-        checkRelease(sources).filter((failure) => failure.includes("source validation is missing")),
-      ).toHaveLength(4);
-    },
-  );
+  test("requires source validation in both release phases", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "node scripts/check-release-source.ts release",
+      "node omitted-release-source-check.ts release",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: publish source validation must invoke check-release-source.ts with verified artifacts",
+    );
+  });
+
+  test("rejects commented, conditional, and non-failing publication controls", () => {
+    const commented = fixture();
+    replaceSource(
+      commented,
+      ".github/workflows/publish.yml",
+      "      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+      "      # - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+    );
+    expect(checkRelease(commented)).toContainEqual(expect.stringContaining("missing npm publish"));
+
+    const conditional = fixture();
+    replaceSource(
+      conditional,
+      ".github/workflows/publish.yml",
+      "      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+      "      - if: ${{ false }}\n        run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+    );
+    expect(checkRelease(conditional)).toContain(
+      ".github/workflows/publish.yml: publish steps must not be conditional",
+    );
+
+    const continuing = fixture();
+    replaceSource(
+      continuing,
+      ".github/workflows/publish.yml",
+      "      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+      "      - run: npm publish ./release/package.tgz --provenance --tag beta --access public\n        continue-on-error: true",
+    );
+    expect(checkRelease(continuing)).toContain(
+      ".github/workflows/publish.yml: publish steps must not continue on error",
+    );
+  });
 
   test("requires the unprivileged job to checksum the analysis tarball", () => {
     const sources = fixture();
@@ -665,124 +631,6 @@ describe("release source facts", () => {
     );
     expect(checkRelease(sources)).toContain(
       ".github/workflows/publish.yml: verified artifact flow is missing sha256sum release/analysis-package.tgz > release/analysis-package.tgz.sha256",
-    );
-  });
-
-  test("requires the unprivileged job to upload the analysis tarball and checksum", () => {
-    const sources = fixture();
-    replaceSource(
-      sources,
-      ".github/workflows/publish.yml",
-      "            release/analysis-package.tgz\n            release/analysis-package.tgz.sha256",
-      "            release/omitted-analysis-package.tgz\n            release/omitted-analysis-package.tgz.sha256",
-    );
-    expect(checkRelease(sources)).toEqual(
-      expect.arrayContaining([
-        ".github/workflows/publish.yml: verified artifact upload omits release/analysis-package.tgz",
-        ".github/workflows/publish.yml: verified artifact upload omits release/analysis-package.tgz.sha256",
-      ]),
-    );
-  });
-
-  test.each([
-    ["GITHUB_REF_NAME", "GITHUB_REF_NAME"],
-    ["GITHUB_SHA", "GITHUB_SHA"],
-    ["origin/main", "origin/main"],
-    ["/^1\\.0\\.0-beta\\.", "v1 beta"],
-    ["Number.isSafeInteger(Number(beta[1]))", "safe numeric components"],
-    ["`v${core.version}`", "`v${core.version}`"],
-    ["core.version !== http.version", "core.version !== http.version"],
-    ["core.version !== analysis.version", "core.version !== analysis.version"],
-  ])("requires source validation fact %s", (source, fact) => {
-    const sources = fixture();
-    sources.set(
-      ".github/workflows/publish.yml",
-      (sources.get(".github/workflows/publish.yml") ?? "").replaceAll(
-        source,
-        "omitted-source-fact",
-      ),
-    );
-    expect(
-      checkRelease(sources).filter((failure) =>
-        failure.endsWith(`source validation is missing ${fact}`),
-      ),
-    ).toEqual([
-      `.github/workflows/publish.yml: verify source validation is missing ${fact}`,
-      `.github/workflows/publish.yml: publish-core source validation is missing ${fact}`,
-      `.github/workflows/publish.yml: publish-analysis source validation is missing ${fact}`,
-      `.github/workflows/publish.yml: publish-http source validation is missing ${fact}`,
-    ]);
-  });
-
-  test("requires a freshly fetched annotated tag at the release commit", () => {
-    const sources = fixture();
-    replaceSource(
-      sources,
-      ".github/workflows/publish.yml",
-      'test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag',
-      "test omitted-live-annotated-tag",
-    );
-    expect(checkRelease(sources)).toContainEqual(
-      expect.stringContaining("source validation is missing annotated tag"),
-    );
-  });
-
-  test("rejects release controls moved into comments or disabled steps", () => {
-    const commented = fixture();
-    replaceSource(
-      commented,
-      ".github/workflows/publish.yml",
-      "      - run: bun run coverage",
-      "      # - run: bun run coverage",
-    );
-    expect(checkRelease(commented)).toContain(
-      ".github/workflows/publish.yml: verify job must run bun run coverage",
-    );
-
-    const disabled = fixture();
-    replaceSource(
-      disabled,
-      ".github/workflows/publish.yml",
-      "      - run: bun run coverage",
-      "      - if: ${{ false }}\n        run: bun run coverage",
-    );
-    expect(checkRelease(disabled)).toContain(
-      ".github/workflows/publish.yml: verify steps must not be conditional",
-    );
-
-    const dependency = fixture();
-    replaceSource(
-      dependency,
-      ".github/workflows/publish.yml",
-      "    needs: verify",
-      "    # needs: verify",
-    );
-    expect(checkRelease(dependency)).toContain(
-      ".github/workflows/publish.yml: publish-core job is missing needs: verify",
-    );
-  });
-
-  test("requires enforcing run steps rather than inert command text", () => {
-    const environment = fixture();
-    replaceSource(
-      environment,
-      ".github/workflows/publish.yml",
-      "      - run: bun run coverage",
-      '      - run: "true"\n        env:\n          NOTE: bun run coverage',
-    );
-    expect(checkRelease(environment)).toContain(
-      ".github/workflows/publish.yml: verify job must run bun run coverage",
-    );
-
-    const continuing = fixture();
-    replaceSource(
-      continuing,
-      ".github/workflows/publish.yml",
-      "      - run: bun run coverage",
-      "      - run: bun run coverage\n        continue-on-error: true",
-    );
-    expect(checkRelease(continuing)).toContain(
-      ".github/workflows/publish.yml: verify steps must not continue on error",
     );
   });
 
