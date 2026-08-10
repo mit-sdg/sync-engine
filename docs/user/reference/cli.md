@@ -17,8 +17,7 @@ message without a stack and sets exit status 1.
 
 Commands accept only the operands and options shown below. Unknown options,
 repeated options, missing option values, and extra operands are rejected before
-a command applies defaults, imports configuration, or writes files. Command
-errors print one stackless message and exit with status 1.
+a command applies defaults, imports configuration, or writes files.
 
 | Command                                | Result                                                                                | Writes files                                      |
 | -------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------- |
@@ -106,10 +105,10 @@ Concept action/query source check passed for N concepts.
 An existing concept root with no concepts succeeds and reports zero checked
 concepts, which permits a concept-free setup application. An explicitly named
 root that does not exist fails. The command also fails when any discovered
-concept fails. Parseable concept mismatches are collected and printed as
-bullets. Filesystem, missing-registry, or source-resolution failures can abort
-the command immediately as one stackless error. These failures bypass the
-aggregate list. The command does not modify files.
+concept fails. Concept-specific parse, registry-shape, source-resolution, and
+declaration findings are collected and printed as bullets. A missing registry
+file or concept-discovery filesystem error instead aborts the command as one
+stackless error. The command does not modify files.
 
 ## `sync-engine artifacts`
 

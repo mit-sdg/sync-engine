@@ -9,14 +9,14 @@ The [support policy](../../../SUPPORT.md) defines beta compatibility,
 generated-assembly compatibility, and format-version rules. The
 [security policy](../../../SECURITY.md) defines the supported security-fix window.
 
-| Package path                                 | Role                                                          |
-| -------------------------------------------- | ------------------------------------------------------------- |
-| [`@mit-sdg/sync-engine/language`](#language) | Concepts, reactions, views, formers, and their conditions     |
+| Package path                                 | Role                                                                 |
+| -------------------------------------------- | -------------------------------------------------------------------- |
+| [`@mit-sdg/sync-engine/language`](#language) | Concepts, reactions, views, formers, and their conditions            |
 | [`@mit-sdg/sync-engine/assembly`](#assembly) | Concept registration, assembly lifecycle, retention, and audit sinks |
-| [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, invocation, gateways, and transport binding        |
-| [`@mit-sdg/sync-engine/client`](#client)     | Local and custom clients over a generated contract            |
-| [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation |
-| [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches        |
+| [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, invocation, gateways, and transport binding               |
+| [`@mit-sdg/sync-engine/client`](#client)     | Local and custom clients over a generated contract                   |
+| [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation        |
+| [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches               |
 
 | Task                                      | Primary APIs                                                |
 | ----------------------------------------- | ----------------------------------------------------------- |
@@ -330,9 +330,9 @@ authoritative and replaces the derived contract; it does not merge with it. At
 most one endpoint declaration may supply an explicit contract for a given path.
 Assembly rejects an explicit contract when omitting its optional keys cannot
 match any receive alternative after declared defaults are applied.
-Input validation follows shallow defaulting and precedes the application ask.
-Invalid successful output is recorded as an integrity failure and returned as
-opaque `INTERNAL_ERROR`. An invalid domain-error value records
+Admission checks required keys before shallowly applying defaults, then invokes
+the application ask. An invalid successful output records an integrity failure
+and returns opaque `INTERNAL_ERROR`. An invalid domain-error value records
 `invalid-domain-error` integrity evidence and also returns opaque
 `INTERNAL_ERROR`. A thrown validator fails closed and reaches
 `rawFaultReporter`, when configured, as an unsanitized `endpoint-validator`
@@ -361,15 +361,16 @@ invoker.invoke(path, input, options?: InvokeOptions): Promise<InvocationResult>
 
 `ExecutionLimits` requires positive finite integers for active root flows,
 pending requests, actions and firings per flow, rows per evaluation, and the
-maximum caller deadline. Overload and drain return `UNAVAILABLE`. `Gateway`
-also exposes `beginDrain()` and `whenIdle()` and includes the target assembly's
-lifecycle when that target supplies it.
+maximum caller deadline. `maxRequestDurationMs` must not exceed the reliable
+platform timer maximum of 2,147,483,647 ms. Overload and drain return
+`UNAVAILABLE`. `Gateway` also exposes `beginDrain()` and `whenIdle()` and
+includes the target assembly's lifecycle when that target supplies it.
 
-An explicit `timeoutMs` must be a positive finite integer. When execution limits
-are configured, it must not exceed the layer's maximum request duration. An
-invalid value returns `INVALID_INPUT` before work is recorded. Gateway and
-application invokers apply the option as separate durations; it is not one
-absolute deadline shared by both layers.
+An explicit `timeoutMs` must be a positive finite integer no greater than
+2,147,483,647 ms. When execution limits are configured, it must also not exceed
+the layer's maximum request duration. An invalid value returns `INVALID_INPUT`
+before work is recorded. Gateway and application invokers apply the option as
+separate durations; it is not one absolute deadline shared by both layers.
 
 The gateway decorates the target application's `Invoker` and uses the target's
 reaction engine. Observers
@@ -613,6 +614,7 @@ a separate public name for that aggregate argument type.
 | `WireRenderOptions` field | Default / effect                                                        |
 | ------------------------- | ----------------------------------------------------------------------- |
 | `moduleName`              | `"WireContracts"`                                                       |
+| `banner`                  | Two-line core generator banner; a supplied string replaces it           |
 | `vocabulary`              | No type anchor; `{ from, export }` enables signature references         |
 | `strictLeaves`            | `false`; `true` requires an anchor and rejects unresolved `Json` leaves |
 | `appWideErrorName`        | `"AppWideError"`                                                        |
@@ -630,20 +632,20 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. `GeneratedApplication` names the
 descriptor type exported from `/tooling`.
 
-| Field                 | Required | Default                                                 |
-| --------------------- | -------- | ------------------------------------------------------- |
-| `assemble`            | yes      | Function that builds the application                    |
-| `title`               | yes      | Application title used to derive names                  |
-| `close`               | no       | Runs after the generated assembly drains                |
-| `directory`           | no       | `new URL("./generated/", configUrl)`                    |
-| `specification`       | no       | Slugged title plus `.md`                                |
-| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance |
-| `wire`                | no       | `"wire.ts"`                                             |
-| `wireName`            | no       | Pascal-cased title plus `Wire`                          |
-| `wireBanner`          | no       | Exact package/version generator banner                  |
-| `vocabulary.module`   | no       | `new URL("./src/concept-set.ts", configUrl)`            |
-| `vocabulary.export`   | no       | `"vocabulary"`                                          |
-| `projections`         | no       | Ordered transport-specific projections                  |
+| Field                 | Required | Default                                                    |
+| --------------------- | -------- | ---------------------------------------------------------- |
+| `assemble`            | yes      | Synchronous function that returns the application assembly |
+| `title`               | yes      | Application title used to derive names                     |
+| `close`               | no       | Runs after the generated assembly drains                   |
+| `directory`           | no       | `new URL("./generated/", configUrl)`                       |
+| `specification`       | no       | Slugged title plus `.md`                                   |
+| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance    |
+| `wire`                | no       | `"wire.ts"`                                                |
+| `wireName`            | no       | Pascal-cased title plus `Wire`                             |
+| `wireBanner`          | no       | Exact package/version generator banner                     |
+| `vocabulary.module`   | no       | `new URL("./src/concept-set.ts", configUrl)`               |
+| `vocabulary.export`   | no       | `"vocabulary"`                                             |
+| `projections`         | no       | Ordered transport-specific projections                     |
 
 The default specification banner consists of these comments:
 
