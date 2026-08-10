@@ -64,14 +64,14 @@ under `guide/`.
 
 ## Packages, examples, and policies
 
-| Resource                                                    | Scope                                                                                  |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [HTTP package](../../packages/http/README.md)               | POST/JSON handler, Fetch client, browser policy, and HTTP wire projection              |
-| [Analysis package](../../packages/analysis/README.md)       | Manifest and optional checkout-source inspection                                       |
-| [Catalog package](../../packages/catalog/README.md)         | Curated concept and recipe source installer                                            |
-| [Reading Circle](../../examples/reading-circle/README.md)   | Shortest complete multi-concept application                                            |
-| [Operations Room](../../examples/operations-room/README.md) | Selectable reactions, replaceable policy, and staged formers                           |
-| [Message board](../../examples/message-board/README.md)     | Complete same-origin browser app, authentication, typed transport, and secure sessions |
-| [Support policy](../../SUPPORT.md)                          | Supported versions, runtimes, toolchains, and generated formats                        |
-| [Security policy](../../SECURITY.md)                        | Vulnerability reporting and the host/application security boundary                     |
-| [Changelog](../../CHANGELOG.md)                             | Release-specific compatibility and migration                                           |
+| Resource                                                                               | Scope                                                                                  |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [HTTP package](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | POST/JSON handler, Fetch client, browser policy, and HTTP wire projection              |
+| [Analysis package](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Manifest and optional checkout-source inspection                                       |
+| [Catalog package](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)   | Curated concept and recipe source installer                                            |
+| [Reading Circle](../../examples/reading-circle/README.md)                              | Shortest complete multi-concept application                                            |
+| [Operations Room](../../examples/operations-room/README.md)                            | Selectable reactions, replaceable policy, and staged formers                           |
+| [Message board](../../examples/message-board/README.md)                                | Complete same-origin browser app, authentication, typed transport, and secure sessions |
+| [Support policy](../../SUPPORT.md)                                                     | Supported versions, runtimes, toolchains, and generated formats                        |
+| [Security policy](../../SECURITY.md)                                                   | Vulnerability reporting and the host/application security boundary                     |
+| [Changelog](../../CHANGELOG.md)                                                        | Release-specific compatibility and migration                                           |
