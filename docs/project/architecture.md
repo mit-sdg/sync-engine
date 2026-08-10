@@ -291,15 +291,16 @@ but engine concerns do not import the command.
 Each supported core subpath has one export-only file under `src/<subpath>/index.ts`.
 The workspace catalog also describes independently packed companion packages
 under `packages/`; each has its own export-only entrypoints, declaration
-snapshot, tarball checks, and exact peer rules. The public API test checks exact
-symbol identity, nested constants, unsupported historical names, and
-package-path reachability. The packed-consumer fixture separately checks the
-emitted type graph.
+snapshot, tarball checks, and exact peer rules. Each workspace owns its
+exact-export test and packed TypeScript consumer contract. Runtime scenarios
+remain with the workspace whose package they exercise. Combined consumer
+verification copies these inputs into one isolated installation and checks the
+emitted type and runtime graphs.
 
 Workspace packaging and npm publication are separate policies. Every cataloged
-workspace builds, packs, and participates in combined-consumer checks. Core,
-analysis, and HTTP are independently npm-published. Analysis consumes only
-supported core subpaths and exposes generic, non-verdict surfaces through
+workspace builds, packs, and participates in combined-consumer checks. A
+workspace is published to npm only when its catalog entry selects `npm`.
+Analysis consumes only supported core subpaths and exposes generic, non-verdict surfaces through
 `@mit-sdg/sync-engine-analysis/ir` and
 `@mit-sdg/sync-engine-analysis/project`. Plain source/project models and pure
 queries live on the compiler-free `/ir` side. The package still declares

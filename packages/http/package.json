@@ -33,9 +33,9 @@
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js"
     },
-    "./server": {
-      "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js"
+    "./handler": {
+      "types": "./dist/handler/index.d.ts",
+      "import": "./dist/handler/index.js"
     },
     "./tooling": {
       "types": "./dist/tooling/index.d.ts",

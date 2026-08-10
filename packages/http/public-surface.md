@@ -11,14 +11,14 @@ package is ESM-only and supports Node.js 24 (`>=24 <25`).
 | Package path                                    | Role                                  |
 | ----------------------------------------------- | ------------------------------------- |
 | [`@mit-sdg/sync-engine-http/policy`](#policy)   | Validated immutable deployment policy |
-| [`@mit-sdg/sync-engine-http/server`](#server)   | Fetch handler                         |
+| [`@mit-sdg/sync-engine-http/handler`](#handler) | Fetch handler                         |
 | [`@mit-sdg/sync-engine-http/client`](#client)   | Fetch transport and typed client      |
 | [`@mit-sdg/sync-engine-http/tooling`](#tooling) | Generated HTTP wire projection        |
 
-Policy accepts deployment facts, not security mechanisms. The policy declares
-facts that the package cannot infer, including the public origin, browser caller
-origins, public error mapping, and cookie bindings. The package derives CORS,
-request-origin checks, cookie attributes, and wire projection from those facts.
+Policy records deployment facts that the package cannot infer: the public
+origin, browser caller origins, public error mapping, and cookie bindings. The
+package derives CORS, request-origin checks, cookie attributes, and wire
+projection from those facts.
 
 ## `policy`
 
@@ -177,13 +177,13 @@ when `httpWire(...).project` projects one:
 - every issue endpoint output alternative must contain the declared value and
   expiry fields.
 
-## `server`
+## `handler`
 
-<!-- register:http-server:start -->
+<!-- register:http-handler:start -->
 
 `HttpCorrelationOptions`, `HttpHandlerOptions`, `HttpResponseHeadersContext`, `createHttpHandler`
 
-<!-- register:http-server:end -->
+<!-- register:http-handler:end -->
 
 ### `createHttpHandler`
 
@@ -231,7 +231,7 @@ core portable JSON serialization. An invocation throw, invalid cookie issue
 value, invalid or non-future expiry, oversized serialized cookie, or response
 serialization failure returns opaque `INTERNAL_ERROR`/500.
 
-### Server errors
+### Handler errors
 
 | Result            | Status | Condition                                                                                                               |
 | ----------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
@@ -301,8 +301,11 @@ Fetch handler for behavior outside these controls. A wrapper is outside the
 package's security boundary and can invalidate the handler's header and error
 guarantees.
 
-Handler calls may overlap. The handler has no disposal method and does not own
-the application, gateway, concept store, listener, or other host resources.
+Handler calls may overlap. The handler has no disposal method. The caller owns
+the application, gateway, and concept stores. The host owns the listener, static
+files, TLS, process lifecycle, and other host resources. The host must route
+complete Fetch requests to the handler, return its responses, and close every
+resource that the host creates.
 
 ## `client`
 

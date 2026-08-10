@@ -34,7 +34,7 @@ export const workspaceCatalog = [
     sourceDirectory: "src",
     distDirectory: "dist",
     buildConfig: "tsconfig.build.json",
-    declarationSnapshot: "tests/package/declarations.snapshot.txt",
+    declarationSnapshot: "tests/packaging/declarations.snapshot.txt",
     verifiedTarball: "package.tgz",
     buildAfter: [],
     peerWorkspaceIds: [],

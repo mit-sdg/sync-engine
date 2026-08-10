@@ -4,10 +4,13 @@ import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
+import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
+import { createMessageBoard } from "../src/application.ts";
 import { createMessageBoardClient } from "../src/client.ts";
 import { AuthenticatingConcept } from "../src/concepts/authenticating/authenticating.ts";
 import { SessioningConcept } from "../src/concepts/sessioning/sessioning.ts";
-import { buildMessageBoard } from "../src/edge.ts";
+import { messageBoardCorrelation, messageBoardPolicy } from "../src/edge.ts";
+import { listenerOptionsFromEnvironment, validateHttpOrigin } from "../src/host-config.ts";
 
 const hosts: ChildProcess[] = [];
 afterEach(() => {
@@ -28,10 +31,14 @@ async function availablePort(): Promise<number> {
   return address.port;
 }
 
-async function startHost(port: number): Promise<ChildProcess> {
+async function startHost(
+  port: number,
+  source = "host.ts",
+  readyMessage = "Message board listening",
+): Promise<ChildProcess> {
   const host = spawn(
     process.platform === "win32" ? "bun.exe" : "bun",
-    [fileURLToPath(new URL("../src/host.ts", import.meta.url))],
+    [fileURLToPath(new URL(`../src/${source}`, import.meta.url))],
     {
       cwd: fileURLToPath(new URL("../../..", import.meta.url)),
       env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
@@ -45,7 +52,7 @@ async function startHost(port: number): Promise<ChildProcess> {
       reject(new Error(`Host exited before listening (${String(code)}).`)),
     );
     host.stdout?.on("data", (chunk: Buffer) => {
-      if (chunk.toString().includes("Message board listening")) resolve();
+      if (chunk.toString().includes(readyMessage)) resolve();
     });
   });
   return host;
@@ -83,6 +90,29 @@ function post(path: string, body: unknown, cookie?: string) {
 }
 
 describe("message board application", () => {
+  test("serves a plain POST/JSON API without frontend assets or cookie policy", async () => {
+    const port = await availablePort();
+    await startHost(port, "api-host.ts", "Message board API listening");
+    const origin = `http://127.0.0.1:${port}`;
+
+    const registration = await fetch(`${origin}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "api-user", password: "correct horse" }),
+    });
+    expect(registration.status).toBe(200);
+    expect(await registration.json()).toEqual({
+      username: "api-user",
+      session: expect.any(String),
+      expiresAt: expect.any(String),
+    });
+    expect(registration.headers.get("Set-Cookie")).toBeNull();
+
+    const root = await fetch(`${origin}/`);
+    expect(root.status).toBe(400);
+    expect(await root.json()).toEqual({ error: "INVALID_REQUEST" });
+  });
+
   test("serves the browser and completes the typed network session lifecycle", async () => {
     const port = await availablePort();
     await startHost(port);
@@ -192,9 +222,15 @@ describe("message board application", () => {
       () => new Date("2099-07-20T12:00:00.000Z"),
       () => "real-session",
     );
-    const { handler } = buildMessageBoard({
+    const { application, gateway } = createMessageBoard({
       Authenticating: authenticating,
       Sessioning: sessioning,
+    });
+    const handler = createHttpHandler({
+      application,
+      gateway,
+      policy: messageBoardPolicy,
+      correlation: messageBoardCorrelation,
     });
     await handler(post("/auth/register", { username: "ari", password: "correct horse" }));
     const signedIn = await handler(
@@ -215,8 +251,24 @@ describe("message board application", () => {
     expect(await spoofedAuthor.json()).toEqual({ error: "INVALID_REQUEST" });
   });
 
+  test("rejects invalid listener and origin environment configuration early", () => {
+    expect(() => listenerOptionsFromEnvironment({ HOST: "", PORT: "3000" })).toThrow(/HOST/);
+    expect(() => listenerOptionsFromEnvironment({ HOST: "localhost", PORT: "3.5" })).toThrow(
+      /PORT/,
+    );
+    expect(() => listenerOptionsFromEnvironment({ HOST: "localhost", PORT: "65536" })).toThrow(
+      /PORT/,
+    );
+    expect(() => validateHttpOrigin("https://user@example.test", "PUBLIC_ORIGIN")).toThrow(
+      /PUBLIC_ORIGIN/,
+    );
+    expect(() => validateHttpOrigin("https://example.test/path", "PUBLIC_ORIGIN")).toThrow(
+      /PUBLIC_ORIGIN/,
+    );
+  });
+
   test("validates every endpoint and pins the credential-free projected wire", async () => {
-    const { application } = buildMessageBoard();
+    const { application } = createMessageBoard();
     expect(
       applicationManifest(application).endpoints.every(
         ({ validators }) => validators.input && validators.output,

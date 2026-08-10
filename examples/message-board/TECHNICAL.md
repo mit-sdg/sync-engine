@@ -44,10 +44,10 @@ it.
 
 | Endpoint                 | Ordered workflow                                                                  |
 | ------------------------ | --------------------------------------------------------------------------------- |
-| `/auth/register`         | Register the account, start a session for its username, respond                   |
-| `/auth/sign-in`          | Authenticate, start a session for the returned username, respond                  |
+| `/auth/register`         | Register credentials, start a session for the username, respond                   |
+| `/auth/sign-in`          | Authenticate, pass the username to `Sessioning.start` as its subject, respond     |
 | `/auth/current`          | Resolve the session subject and return it as the current username                 |
-| `/auth/sign-out`         | End the session                                                                   |
+| `/auth/sign-out`         | Resolve and end the session                                                       |
 | `/board/list`            | Resolve the session, then form the current board                                  |
 | `/board/post`            | Resolve the session subject, adapt it to `Author`, publish the post               |
 | `/board/comment`         | Resolve the subject, check the target post, adapt the subject to `Author`, attach |
@@ -87,19 +87,50 @@ There is no periodic reclamation guarantee. A durable Sessioning implementation
 may use another storage and reclamation mechanism, but it must preserve the
 specified action and query behavior.
 
-## HTTP session boundary
+## Application, boundary, and host layers
 
-`src/edge.ts` constructs one `httpPolicy` and passes it to the Fetch handler.
-The policy exposes the application below `/api`, maps reviewed concept refusals
-to public HTTP categories, and binds the logical `session` input to the
-`message-board-session` cookie.
+`createMessageBoard()` in `src/application.ts` assembles the concepts and creates
+a gateway with the execution limits from `src/assembly.ts`. It returns the
+application and gateway. Tests, non-HTTP callers, and both example hosts use
+this policy-independent constructor.
 
-Successful `/auth/sign-in` reads `session` and `expiresAt` from the logical
-response, removes both fields from the HTTP response body, and issues the
-cookie. Successful `/auth/sign-out` clears the cookie. An `UNAUTHORIZED` result
-on an endpoint protected by this binding also clears the cookie. The cookie is
-`HttpOnly`, `Secure`, `SameSite=Strict`, and `Path=/`; because it has no domain
-and uses `/`, the handler derives the `__Host-` prefix.
+`src/edge.ts` supplies two policies. `messageBoardApiPolicy()` selects `/api` and
+maps reviewed concept refusals to public HTTP categories. It declares no
+cookies, browser origins, or request-origin checks. `messageBoardHttpPolicy(...)`
+adds the cookie binding used by the browser deployment. Policy construction is
+separate from handler binding: each host calls `createMessageBoard()`, selects a
+policy, and passes the application, gateway, and policy to
+`createHttpHandler(...)`.
+
+The returned Fetch handler maps a complete `Request` to a
+`Promise<Response>`. It does not open a listener. `src/api-host.ts` gives the
+plain handler directly to `Bun.serve`. `src/host.ts` wraps the cookie-backed
+handler with GET routes for `index.html` and the bundled browser client, then
+passes that routing function to `Bun.serve`. Bun owns the listener and process
+lifecycle; the browser host owns bundling and static-file routing.
+
+### Plain POST/JSON binding
+
+The plain API exchanges every logical input and output as JSON. Registration and
+sign-in responses contain `session` and `expiresAt`. Current-user, sign-out,
+board-list, post, and comment requests must include that session in the body.
+The handler emits no `Set-Cookie` or CORS headers. The API host serves no
+frontend assets.
+
+This binding is suitable for callers that retain and send session values
+explicitly. `MessageBoardWireHttp` describes the browser binding and removes
+cookie-owned fields.
+
+### Browser cookie binding
+
+The browser policy binds the logical `session` input to the
+`message-board-session` cookie. Successful registration and sign-in read
+`session` and `expiresAt` from the logical response, remove both fields from the
+HTTP response body, and issue the cookie. Successful `/auth/sign-out` clears the
+cookie. An `UNAUTHORIZED` result on an endpoint protected by this binding also
+clears the cookie. The cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, and
+`Path=/`; because it has no domain and uses `/`, the handler derives the
+`__Host-` prefix.
 
 The current-user, sign-out, board-list, post, comment, and comment-retraction
 endpoints require the logical `session` input. On those paths, the handler
@@ -107,18 +138,23 @@ overwrites a body-supplied session with the cookie value, or with `null` if no
 readable cookie is present.
 The application then asks Sessioning whether that value identifies an active
 session. Authentication and session interpretation remain application behavior;
-the HTTP package only performs the declared cookie binding.
+the HTTP package performs only the declared cookie binding.
+
+The browser host serves the UI and API from one origin and declares no CORS
+policy. `PUBLIC_ORIGIN` identifies that externally visible origin; the cookie
+policy derives its request-origin allowlist from the same value. Bun configures
+the listener and serves the frontend. A separate-origin browser deployment
+requires an explicit `browser` policy with matching CORS, credentials, and
+request-origin settings.
 
 The endpoints do not accept an author field. Composition derives the author from
 the active session subject. Every endpoint also has explicit input and output
 validators. These validators reject extra fields and bound public strings;
 generated TypeScript alone does not validate requests received at runtime.
 
-The host serves the UI and API from one origin. It uses Bun's listener and
-bundler directly and does not add a web framework. The HTTP package itself owns
-neither the listener nor process lifecycle; see the [HTTP package
-README](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md) for host responsibilities and the
-complete policy contract.
+See the [HTTP package
+README](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)
+for the complete policy and host-responsibility contract.
 
 ## Failure and commit boundaries
 
@@ -148,9 +184,12 @@ does not recover accepted work.
 - [`generated/wire.ts`](generated/wire.ts) contains the logical
   `MessageBoardWire` and the HTTP-projected `MessageBoardWireHttp`.
 
-The HTTP projection removes cookie-owned session inputs from browser calls. It
-also removes the issued session and expiry fields from sign-in's browser-visible
-output. The browser client in `src/client.ts` is typed by that projected wire.
+The HTTP projection uses `messageBoardPolicy`, the browser host's cookie policy.
+It removes cookie-owned session inputs from browser calls and removes the issued
+session and expiry fields from registration and sign-in outputs. The browser
+client in `src/client.ts` is typed by that projected wire. The plain API instead
+exposes the logical fields shown by `MessageBoardWire`; it does not use the
+cookie-projected client contract.
 
 Do not edit generated files directly. After an intentional specification,
 composition, or policy change, regenerate and review both files:
@@ -165,8 +204,10 @@ their sources.
 ## Verification
 
 Concept tests under `src/concepts/*/` exercise each concept directly. The
-application test starts the real host and verifies:
+application test starts both real hosts and verifies:
 
+- the plain host accepts registration as JSON, returns session fields, emits no
+  cookie, and serves no frontend root;
 - browser HTML and bundled JavaScript are served;
 - unauthenticated board access is rejected and clears an applicable cookie;
 - registration, sign-in, current-user lookup, posting, commenting, retracting,
@@ -175,7 +216,8 @@ application test starts the real host and verifies:
 - a body-supplied session cannot replace the cookie session;
 - a body-supplied author is rejected;
 - retracting someone else's comment answers `FORBIDDEN`, and retracting a
-  retracted comment answers `NOT_FOUND`; and
+  retracted comment answers `NOT_FOUND`;
+- invalid listener and public-origin configuration fails before startup; and
 - every endpoint has input and output validators and the projected wire omits
   cookie-owned fields.
 

@@ -1,28 +1,43 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { Server } from "bun";
-import { buildMessageBoard, messageBoardHttpPolicy } from "./edge.ts";
+import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
+import { createMessageBoard } from "./application.ts";
+import { messageBoardCorrelation, messageBoardHttpPolicy } from "./edge.ts";
+import {
+  listenerOptionsFromEnvironment,
+  publicOriginFor,
+  validateHostname,
+  validateHttpOrigin,
+  validatePort,
+} from "./host-config.ts";
 
 export interface MessageBoardHostOptions {
   readonly hostname?: string;
   readonly port?: number;
   readonly publicOrigin?: string;
-  readonly additionalRequestOrigins?: readonly string[];
 }
 
 export async function startMessageBoardHost({
   hostname = "localhost",
   port = 3000,
   publicOrigin,
-  additionalRequestOrigins = [],
 }: MessageBoardHostOptions = {}): Promise<Server<undefined>> {
-  const publicHostname = hostname.includes(":") ? `[${hostname}]` : hostname;
-  const policy = messageBoardHttpPolicy(
-    publicOrigin ?? `http://${publicHostname}:${port}`,
-    additionalRequestOrigins,
+  validateHostname(hostname);
+  validatePort(port);
+  const effectivePublicOrigin = validateHttpOrigin(
+    publicOrigin ?? publicOriginFor(hostname, port),
+    "publicOrigin",
   );
-  const [{ handler }, html, bundle] = await Promise.all([
-    Promise.resolve(buildMessageBoard({}, policy)),
+  const policy = messageBoardHttpPolicy(effectivePublicOrigin);
+  const { application, gateway } = createMessageBoard();
+  const handler = createHttpHandler({
+    application,
+    gateway,
+    policy,
+    correlation: messageBoardCorrelation,
+  });
+  const [html, bundle] = await Promise.all([
     readFile(new URL("./web/index.html", import.meta.url), "utf8"),
     Bun.build({
       entrypoints: [fileURLToPath(new URL("./web/client.ts", import.meta.url))],
@@ -58,13 +73,12 @@ export async function startMessageBoardHost({
 }
 
 if (import.meta.main) {
+  const listener = listenerOptionsFromEnvironment();
   const server = await startMessageBoardHost({
-    hostname: process.env.HOST ?? "localhost",
-    port: Number(process.env.PORT ?? 3000),
-    ...(process.env.PUBLIC_ORIGIN === undefined ? {} : { publicOrigin: process.env.PUBLIC_ORIGIN }),
-    additionalRequestOrigins: (process.env.ADDITIONAL_REQUEST_ORIGINS ?? "")
-      .split(",")
-      .filter((origin) => origin !== ""),
+    ...listener,
+    ...(process.env.PUBLIC_ORIGIN === undefined
+      ? {}
+      : { publicOrigin: validateHttpOrigin(process.env.PUBLIC_ORIGIN, "PUBLIC_ORIGIN") }),
   });
   console.log(`Message board listening on ${server.url}`);
 }

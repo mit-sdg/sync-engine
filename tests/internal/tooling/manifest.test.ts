@@ -1164,7 +1164,7 @@ describe("application manifest", () => {
 
   test("the CLI prints canonical manifest JSON and exposes advisory diagnostics", () => {
     const root = fileURLToPath(new URL("../../../", import.meta.url));
-    const config = "tests/package/application/generated.config.ts";
+    const config = "tests/packaging/application/generated.config.ts";
     const printed = spawnSync(
       "bun",
       ["src/command/main.ts", "artifacts", "manifest", "--config", config],
@@ -1183,7 +1183,7 @@ describe("application manifest", () => {
         "src/command/main.ts",
         "check",
         "--concepts",
-        "tests/package/application/src/concepts",
+        "tests/packaging/application/src/concepts",
         "--config",
         config,
       ],
