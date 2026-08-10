@@ -18,7 +18,7 @@ import {
   Conflict,
   composition,
   createMultiInstanceClient,
-  multiInstanceHttpProfile,
+  multiInstanceHttpPolicy,
   type MultiInstanceWire,
   vocabulary,
 } from "@sync-engine-fixture/multi-instance-client";
@@ -349,7 +349,7 @@ function createRuntime(
   const handler = createHttpHandler({
     application,
     gateway,
-    profile: multiInstanceHttpProfile,
+    policy: multiInstanceHttpPolicy,
     correlation: {
       resolve: (request) => request.headers.get("X-Correlation-Id") ?? undefined,
       responseHeader: "X-Correlation-Id",

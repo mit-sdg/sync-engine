@@ -600,15 +600,20 @@ normalization (including encoded dot segments), malformed percent escapes, and
 other noncanonical spellings are rejected. Percent-encoded path data remains
 valid when URL handling preserves it. `/` is a valid endpoint path.
 
-### Production HTTP profile
+### HTTP policy and browser controls
 
-The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server)
-defines production error projection and origin handling.
+The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#policy)
+defines immutable deployment policy, public-error projection, CORS, and the
+separate request-origin control. A missing `Origin` is allowed by default; when
+present, a disallowed origin is rejected on cookie-touched paths.
 
-### Cookie credential floor
+### HTTP cookie bindings
 
-The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server)
-defines the cookie credential binding and its generated projection.
+The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#cookie-bindings)
+defines cookie injection, issuance, clearing, and generated projection.
+Application-dependent binding validation occurs when the handler binds the
+application and when the wire projector runs, not when deployment-only policy is
+constructed.
 
 ### Runtime validation
 
@@ -686,11 +691,11 @@ module contains the logical contract followed by each named transport contract.
 The contract named by `wireName` retains the logical application inputs, outputs,
 and refusal codes for a local or custom client. The HTTP companion's
 `httpWire({ policy, name })` carries public policy categories and excludes
-private refusal codes. With `httpFloor`, that contract also omits the
-cookie-bound input from protected routes and the consumed token and expiry fields
-from the issuing route's output. All contracts share generated type helpers and
-the vocabulary anchor. Core records every projector package and version in
-generated provenance.
+private refusal codes. With cookie bindings, that contract also omits each
+cookie-bound input from protected routes and the consumed value and expiry
+fields from every issuing route's output. All contracts share generated type
+helpers and the vocabulary anchor. Core records every projector package and
+version in generated provenance.
 
 Projection planning validates all names before rendering. The logical wire,
 every projected wire, each app-wide error type, `Json`, and vocabulary helper

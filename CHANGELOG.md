@@ -7,11 +7,21 @@ an exact version, follow the [support policy](SUPPORT.md), and review the
 
 ## [1.0.0-beta.7] - 2026-08-07
 
-This beta advances the canonical application manifest and publishes a lean,
-two-surface analysis companion for the first time.
+This beta advances the canonical application manifest, publishes a lean
+two-surface analysis companion, and replaces the HTTP companion's policy and
+browser-session API.
 
 ### Compatibility
 
+- `@mit-sdg/sync-engine-http` now exposes `/policy`, `/server`, `/client`, and
+  `/tooling`. One branded immutable policy supplies deployment facts to the
+  handler and wire projector; the typed client remains policy-free. The handler
+  accepts POST/JSON only and can derive exact-origin CORS, request-origin
+  protection, and secure cookie behavior.
+- HTTP policy construction now rejects raw mutable policy objects, insecure or
+  inert cookie declarations, and unsafe origin combinations. Handler binding
+  and wire projection reject bindings that disagree with endpoint contracts.
+  The HTTP API has no compatibility aliases.
 - The canonical `sync-engine.application-manifest` format advances to V5.
   `ApplicationManifestV5` and `ManifestEndpointV5` replace the version-4 public
   type names; V4 input is rejected rather than upgraded.
@@ -40,6 +50,48 @@ two-surface analysis companion for the first time.
 
 ### Migration
 
+Upgrade core and HTTP to `1.0.0-beta.7` together. The HTTP rework uses the
+following replacements.
+
+#### Removed HTTP identifiers
+
+| Removed                          | Replacement                     |
+| -------------------------------- | ------------------------------- |
+| `productionHttpProfile`          | `httpPolicy`                    |
+| `ProductionHttpProfile`          | `HttpPolicyInit` / `HttpPolicy` |
+| `HttpPublicErrorPolicy`          | folded into `HttpPolicyInit`    |
+| `httpFloor`                      | `httpPolicy({ cookies })`       |
+| `HttpFloor`                      | `HttpPolicy`                    |
+| `HttpCredentialBinding`          | `HttpCookieBinding`             |
+| `createHttpHandler({ profile })` | `createHttpHandler({ policy })` |
+| `createHttpHandler({ floor })`   | `createHttpHandler({ policy })` |
+
+#### Renamed HTTP fields
+
+| Before                          | After                                   |
+| ------------------------------- | --------------------------------------- |
+| `origin`                        | `publicOrigin` (conditionally required) |
+| `credential`                    | `cookies.<name>`                        |
+| `credential.issue` (one object) | `cookies.<name>.issue` (array)          |
+| `credential.issue.output`       | `cookies.<name>.issue[].value`          |
+| `credential.name`               | `cookies.<name>.name`                   |
+
+#### Changed HTTP behavior
+
+| Change                                                                                    | Effect                                                                             |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Raw mutable policies rejected                                                             | Construct policy values with `httpPolicy(...)`.                                    |
+| `SameSite` derived; `None` under a credentialed browser policy                            | Cross-origin browser session policy no longer silently receives `Strict`.          |
+| HTTPS-or-loopback required whenever cookies are declared                                  | Cookie policy no longer depends on `NODE_ENV`.                                     |
+| Client default `credentials: "same-origin"`                                               | Cross-origin browser clients must select `"include"`.                              |
+| Clearing scoped to applicable bindings; `FORBIDDEN` excluded                              | Authorization refusal no longer signs out a valid session.                         |
+| Construction rejects overlapping bindings, inert bindings, and optional credential inputs | Previously accepted assemblies may fail during handler binding or wire projection. |
+
+- When adopting the HTTP API, import policy declarations from `/policy`, pass
+  the same `HttpPolicy` to the handler and projector, and configure
+  cross-origin browser clients with `credentials: "include"`. CORS and
+  request-origin protection are separate controls; a missing `Origin` remains
+  allowed unless `requestOrigins.requireOrigin` is true.
 - Upgrade core and HTTP to `1.0.0-beta.7` together. When adopting analysis,
   install `@mit-sdg/sync-engine-analysis@1.0.0-beta.7` alongside that exact core
   beta; do not infer an analysis beta.6 package from the core release history.

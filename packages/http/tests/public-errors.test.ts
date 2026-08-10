@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
 import { FrameworkErrorCode } from "@sync-engine/boundary";
-import type { HttpPublicErrorCategory } from "@mit-sdg/sync-engine-http/server";
+import { httpPolicy, type HttpPublicErrorCategory } from "@mit-sdg/sync-engine-http/policy";
 import {
   publicErrorStatus,
   publicFrameworkCategoryOf,
-  projectProductionHttpWire,
+  projectHttpPublicErrors,
   registeredPublicCategoryOf,
 } from "../src/server/public-errors.ts";
 
@@ -48,12 +48,12 @@ describe("HTTP public error projection", () => {
   });
 
   test("keeps unmapped domain errors private in projected wire contracts", () => {
-    const projected = projectProductionHttpWire(
+    const projected = projectHttpPublicErrors(
       {
         endpoints: [{ errors: ["NOT_FOUND"], inputAdmissionError: false, openError: false }],
         appWide: [],
       } as never,
-      { origin: "https://example.test", publicErrors: {} },
+      httpPolicy({ publicErrors: {} }),
     );
 
     expect(projected.endpoints[0]?.errors).toEqual(["INTERNAL_ERROR"]);
@@ -66,12 +66,12 @@ describe("HTTP public error projection", () => {
   ] as const)(
     "distinguishes domain and admission INVALID_INPUT errors",
     (errors, admission, expected) => {
-      const projected = projectProductionHttpWire(
+      const projected = projectHttpPublicErrors(
         {
           endpoints: [{ errors, inputAdmissionError: admission, openError: false }],
           appWide: [],
         } as never,
-        { origin: "https://example.test", publicErrors: {} },
+        httpPolicy({ publicErrors: {} }),
       );
 
       expect(projected.endpoints[0]?.errors).toEqual(expected);

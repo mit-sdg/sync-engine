@@ -1,0 +1,191 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:net";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, test } from "vite-plus/test";
+import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
+import { createMessageBoardClient } from "../src/client.ts";
+import { AuthenticatingConcept } from "../src/concepts/authenticating/authenticating.ts";
+import { SessioningConcept } from "../src/concepts/sessioning/sessioning.ts";
+import { buildMessageBoard } from "../src/edge.ts";
+
+const hosts: ChildProcess[] = [];
+afterEach(() => {
+  for (const host of hosts.splice(0)) host.kill();
+});
+
+async function availablePort(): Promise<number> {
+  const listener = createServer();
+  await new Promise<void>((resolve, reject) => {
+    listener.once("error", reject);
+    listener.listen(0, "127.0.0.1", resolve);
+  });
+  const address = listener.address();
+  if (address === null || typeof address === "string") throw new Error("Could not select a port.");
+  await new Promise<void>((resolve, reject) =>
+    listener.close((error) => (error ? reject(error) : resolve())),
+  );
+  return address.port;
+}
+
+async function startHost(port: number): Promise<ChildProcess> {
+  const host = spawn(
+    process.platform === "win32" ? "bun.exe" : "bun",
+    [fileURLToPath(new URL("../src/host.ts", import.meta.url))],
+    {
+      cwd: fileURLToPath(new URL("../../..", import.meta.url)),
+      env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
+      stdio: ["ignore", "pipe", "inherit"],
+    },
+  );
+  hosts.push(host);
+  await new Promise<void>((resolve, reject) => {
+    host.once("error", reject);
+    host.once("exit", (code) =>
+      reject(new Error(`Host exited before listening (${String(code)}).`)),
+    );
+    host.stdout?.on("data", (chunk: Buffer) => {
+      if (chunk.toString().includes("Message board listening")) resolve();
+    });
+  });
+  return host;
+}
+
+function networkCookieFetch(origin: string) {
+  let cookie: string | undefined;
+  let lastSetCookie: string | null = null;
+  const fetchWithCookies = async (input: string | URL | Request, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    headers.set("Origin", origin);
+    if (cookie !== undefined) headers.set("Cookie", cookie);
+    const response = await fetch(input, { ...init, headers });
+    lastSetCookie = response.headers.get("Set-Cookie");
+    if (lastSetCookie?.includes("Max-Age=0")) cookie = undefined;
+    else if (lastSetCookie !== null) cookie = lastSetCookie.split(";", 1)[0];
+    return response;
+  };
+  return {
+    fetch: fetchWithCookies,
+    cookie: () => cookie,
+    lastSetCookie: () => lastSetCookie,
+  };
+}
+
+function post(path: string, body: unknown, cookie?: string) {
+  return new Request(`http://localhost:3000/api${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookie === undefined ? {} : { Cookie: cookie }),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+describe("message board application", () => {
+  test("serves the browser and completes the typed network session lifecycle", async () => {
+    const port = await availablePort();
+    await startHost(port);
+    const origin = `http://127.0.0.1:${port}`;
+    const page = await fetch(`${origin}/`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain("content as external identities");
+    const script = await fetch(`${origin}/app.js`);
+    expect(script.status).toBe(200);
+    expect(script.headers.get("Content-Type")).toContain("text/javascript");
+
+    const jar = networkCookieFetch(origin);
+    const client = createMessageBoardClient({
+      baseUrl: `${origin}/api`,
+      fetch: jar.fetch as typeof fetch,
+    });
+    await expect(client.board.list({})).resolves.toEqual({ error: "UNAUTHORIZED" });
+    expect(jar.lastSetCookie()).toContain("Max-Age=0");
+
+    await expect(
+      client.auth.register({ username: "ari", password: "correct horse" }),
+    ).resolves.toEqual({ username: "ari" });
+    expect(jar.cookie()).toMatch(/^__Host-message-board-session=/);
+    await expect(client.auth.current({})).resolves.toEqual({ username: "ari" });
+
+    await expect(client.auth["sign-out"]({})).resolves.toEqual({ signedOut: true });
+    await expect(
+      client.auth["sign-in"]({ username: "ari", password: "correct horse" }),
+    ).resolves.toEqual({ username: "ari" });
+
+    const posted = await client.board.post({ content: "A small complete app" });
+    if ("error" in posted) throw new Error(`Could not publish: ${posted.error}`);
+    const commented = await client.board.comment({
+      target: posted.post,
+      content: "external-content-reference",
+    });
+    expect(commented).toHaveProperty("comment");
+    await expect(client.board.list({})).resolves.toEqual({
+      board: {
+        posts: [
+          {
+            post: posted.post,
+            author: "ari",
+            content: "A small complete app",
+            comments: [
+              {
+                comment: "comment" in commented ? commented.comment : "unreachable",
+                author: "ari",
+                content: "external-content-reference",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await expect(client.auth["sign-out"]({})).resolves.toEqual({ signedOut: true });
+    expect(jar.cookie()).toBeUndefined();
+    expect(jar.lastSetCookie()).toContain("Max-Age=0");
+    await expect(client.board.list({})).resolves.toEqual({ error: "UNAUTHORIZED" });
+  });
+
+  test("the handler overwrites session claims and rejects author claims", async () => {
+    const authenticating = new AuthenticatingConcept(() => "salt");
+    const sessioning = new SessioningConcept(
+      () => new Date("2099-07-20T12:00:00.000Z"),
+      () => "real-session",
+    );
+    const { handler } = buildMessageBoard({
+      Authenticating: authenticating,
+      Sessioning: sessioning,
+    });
+    await handler(post("/auth/register", { username: "ari", password: "correct horse" }));
+    const signedIn = await handler(
+      post("/auth/sign-in", { username: "ari", password: "correct horse" }),
+    );
+    const cookie = signedIn.headers.get("Set-Cookie")?.split(";", 1)[0];
+    if (cookie === undefined) throw new Error("Expected a session cookie.");
+    expect(await signedIn.json()).toEqual({ username: "ari" });
+
+    const spoofedSession = await handler(
+      post("/board/post", { session: "invented", content: "accepted" }, cookie),
+    );
+    expect(spoofedSession.status).toBe(200);
+    const spoofedAuthor = await handler(
+      post("/board/post", { content: "rejected", author: "admin" }, cookie),
+    );
+    expect(spoofedAuthor.status).toBe(400);
+    expect(await spoofedAuthor.json()).toEqual({ error: "INVALID_REQUEST" });
+  });
+
+  test("validates every endpoint and pins the credential-free projected wire", async () => {
+    const { application } = buildMessageBoard();
+    expect(
+      applicationManifest(application).endpoints.every(
+        ({ validators }) => validators.input && validators.output,
+      ),
+    ).toBe(true);
+    const wire = await readFile(new URL("../generated/wire.ts", import.meta.url), "utf8");
+    const projected = wire.slice(wire.indexOf("MessageBoardWireHttp"));
+    expect(projected).not.toContain('"session":');
+    expect(projected).not.toContain('"expiresAt":');
+    expect(projected).toContain('"UNAUTHORIZED"');
+    expect(projected).not.toContain('"UNKNOWN_SESSION"');
+  });
+});

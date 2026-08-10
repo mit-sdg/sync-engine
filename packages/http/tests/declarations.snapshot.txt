@@ -18,7 +18,7 @@ export interface HttpClientOptions {
     fetch?: typeof fetch;
     /** Extra headers merged into every request after `Content-Type`. */
     headers?: HeadersOption;
-    /** Request credentials mode. Defaults to `include` for cookie-bearing policies. */
+    /** Request credentials mode. Defaults to `same-origin`. */
     credentials?: "include" | "omit" | "same-origin";
     /** Optional synchronous runtime check for each complete HTTP result. */
     validateResponse?: ClientResponseValidator;
@@ -52,84 +52,167 @@ export type { HeadersOption, HttpClientError, HttpClientOptions, HttpRequestCont
 export declare const HTTP_PACKAGE_NAME: string;
 export declare const HTTP_PACKAGE_VERSION: string;
 
-=== packages/http/dist/server/floor.d.ts ===
+=== packages/http/dist/policy/browser.d.ts ===
+import type { HttpBrowserPolicy, HttpRequestOriginPolicy } from "./types.ts";
+export declare function normalizeOrigin(value: string, label: string): string;
+export declare function normalizeBrowser(value: HttpBrowserPolicy | undefined): HttpBrowserPolicy | undefined;
+export declare function normalizeRequestOrigins(value: HttpRequestOriginPolicy | false | undefined, defaults: readonly string[], browserOrigins: readonly string[]): HttpRequestOriginPolicy | false | undefined;
+export declare function isHttpsOrLoopback(value: string): boolean;
+
+=== packages/http/dist/policy/cookies.d.ts ===
 import { type WireProjectionFacts } from "@mit-sdg/sync-engine/boundary";
-import type { InputContractDecl } from "@mit-sdg/sync-engine/boundary";
-import type { WireContractsIR } from "@mit-sdg/sync-engine/tooling";
-import { type ProductionHttpProfile } from "./policy.ts";
-export interface HttpCredentialBinding {
+import type { WireType } from "@mit-sdg/sync-engine/tooling";
+import type { HttpCookieBinding, HttpPolicy } from "./types.ts";
+export interface CookieBindingFacts {
+    readonly key: string;
+    readonly binding: HttpCookieBinding & {
+        readonly sameSite: "Strict" | "Lax" | "None";
+        readonly path: string;
+    };
+    readonly cookieName: string;
+    readonly issuePaths: ReadonlySet<string>;
+    readonly clearPaths: ReadonlySet<string>;
+}
+export declare function normalizeCookies(cookies: Readonly<Record<string, HttpCookieBinding>> | undefined, browserDeclared: boolean): Readonly<Record<string, HttpCookieBinding>> | undefined;
+export interface ValidatedCookieBinding extends CookieBindingFacts {
+    readonly protectedPaths: ReadonlySet<string>;
+    readonly touchedPaths: ReadonlySet<string>;
+}
+export declare function validateCookieBindings(facts: WireProjectionFacts, policy: HttpPolicy): readonly ValidatedCookieBinding[];
+export declare function omitTopLevel(type: WireType, omitted: ReadonlySet<string>): WireType;
+
+=== packages/http/dist/policy/index.d.ts ===
+export { httpPolicy } from "./normalize.ts";
+export { HttpPolicyBrand } from "./types.ts";
+export type { HttpBrowserPolicy, HttpCookieBinding, HttpLimits, HttpPolicy, HttpPolicyInit, HttpPublicErrorCategory, HttpRequestOriginPolicy, } from "./types.ts";
+
+=== packages/http/dist/policy/normalize.d.ts ===
+import { type HttpPolicy, type HttpPolicyInit } from "./types.ts";
+export declare function isHttpPolicy(value: unknown): value is HttpPolicy;
+export declare function httpPolicy(init: HttpPolicyInit): HttpPolicy;
+export declare function requireHttpPolicy(value: HttpPolicy | undefined, consumer: string): HttpPolicy;
+
+=== packages/http/dist/policy/types.d.ts ===
+export type HttpPublicErrorCategory = "INVALID_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT";
+export interface HttpBrowserPolicy {
+    readonly origins: readonly string[];
+    readonly credentials?: boolean;
+    readonly allowedHeaders?: readonly string[];
+    readonly exposedHeaders?: readonly string[];
+    readonly maxAgeSeconds?: number;
+}
+export interface HttpRequestOriginPolicy {
+    readonly allowed: readonly string[];
+    readonly requireOrigin?: boolean;
+}
+export interface HttpLimits {
+    readonly requestBodyBytes?: number;
+}
+interface HttpCookieIssue {
+    readonly path: string;
+    readonly value: string;
+    readonly expires: string;
+}
+export interface HttpCookieBinding {
     readonly name: string;
     readonly input: string;
-    readonly issue: {
-        readonly path: string;
-        readonly output: string;
-        readonly expires: string;
-    };
+    readonly issue: readonly HttpCookieIssue[];
     readonly clear: readonly string[];
+    readonly sameSite?: "Strict" | "Lax" | "None";
+    readonly path?: string;
+    readonly domain?: string;
 }
-export interface HttpFloor extends ProductionHttpProfile {
-    readonly credential: HttpCredentialBinding;
+export interface HttpPolicyInit {
+    readonly publicOrigin?: string;
+    readonly basePath?: string;
+    readonly publicErrors?: Readonly<Record<string, HttpPublicErrorCategory>>;
+    readonly browser?: HttpBrowserPolicy;
+    readonly requestOrigins?: HttpRequestOriginPolicy | false;
+    readonly cookies?: Readonly<Record<string, HttpCookieBinding>>;
+    readonly limits?: HttpLimits;
 }
-export declare function httpFloor(declaration: HttpFloor): HttpFloor;
-export declare function credentialProtectedPaths(contracts: Readonly<Record<string, InputContractDecl>>, input: string): Set<string>;
-export declare function validateHttpFloor(facts: WireProjectionFacts, floor: HttpFloor): void;
-export declare function projectHttpWire(facts: WireProjectionFacts, floor: HttpFloor): WireContractsIR;
+/** Runtime marker shared by every installed copy of this package. */
+export declare const HttpPolicyBrand: unique symbol;
+export interface HttpPolicy extends HttpPolicyInit {
+    readonly [HttpPolicyBrand]: true;
+}
+export {};
+
+=== packages/http/dist/server/cookie-runtime.d.ts ===
+import type { ValidatedCookieBinding } from "../policy/cookies.ts";
+export declare function cookieValue(header: string | null, name: string): string | undefined;
+export declare function issuedCookie(facts: ValidatedCookieBinding, value: unknown, sourceExpiry: unknown, now?: number): string | undefined;
+export declare function clearedCookie(facts: ValidatedCookieBinding): string;
+
+=== packages/http/dist/server/cors.d.ts ===
+import type { HttpBrowserPolicy } from "../policy/types.ts";
+export declare function corsOriginAllowed(request: Request, browser: HttpBrowserPolicy): boolean;
+export declare function withCors(response: Response, request: Request, browser: HttpBrowserPolicy | undefined, preflight?: boolean): Response;
+export declare function preflightAllowed(request: Request, browser: HttpBrowserPolicy): boolean;
 
 === packages/http/dist/server/handler.d.ts ===
 import type { Assembly } from "@mit-sdg/sync-engine/assembly";
 import { type Gateway } from "@mit-sdg/sync-engine/boundary";
 import type { ContractShape } from "@mit-sdg/sync-engine/client";
-import type { HttpFloor } from "./floor.ts";
-import type { ProductionHttpProfile } from "./policy.ts";
+import type { HttpPolicy } from "../policy/types.ts";
+import { type HttpResponseHeaders, type HttpResponseHeadersContext } from "./response.ts";
 type Application = Assembly<Record<string, new (...args: never[]) => object>>;
 export interface HttpCorrelationOptions {
     resolve(request: Request): string | undefined;
     responseHeader?: string;
 }
-type FloorHandlerOptions = {
-    gateway: Gateway<ContractShape>;
-    application: Application;
-    floor: HttpFloor;
-    correlation?: HttpCorrelationOptions;
-};
-type ProfileHandlerOptions = {
-    gateway: Gateway<ContractShape>;
-    application: Application;
-    profile: ProductionHttpProfile;
-    correlation?: HttpCorrelationOptions;
-};
-export declare function createHttpHandler(options: FloorHandlerOptions | ProfileHandlerOptions): (request: Request) => Promise<Response>;
-export {};
+export interface HttpHandlerOptions {
+    readonly gateway: Gateway<ContractShape>;
+    readonly application: Application;
+    readonly policy?: HttpPolicy;
+    readonly correlation?: HttpCorrelationOptions;
+    readonly responseHeaders?: HttpResponseHeaders;
+}
+/** Create a Fetch handler for one assembled application and gateway. */
+export declare function createHttpHandler(options: HttpHandlerOptions): (request: Request) => Promise<Response>;
+export type { HttpResponseHeadersContext };
 
 === packages/http/dist/server/index.d.ts ===
 export { createHttpHandler } from "./handler.ts";
-export type { HttpCorrelationOptions } from "./handler.ts";
-export { httpFloor } from "./floor.ts";
-export type { HttpCredentialBinding, HttpFloor } from "./floor.ts";
-export { productionHttpProfile } from "./policy.ts";
-export type { HttpPublicErrorCategory, HttpPublicErrorPolicy, ProductionHttpProfile, } from "./policy.ts";
-
-=== packages/http/dist/server/policy.d.ts ===
-export type HttpPublicErrorCategory = "INVALID_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT";
-export interface HttpPublicErrorPolicy {
-    readonly publicErrors?: Readonly<Record<string, HttpPublicErrorCategory>>;
-}
-export interface ProductionHttpProfile extends HttpPublicErrorPolicy {
-    readonly origin: string;
-    readonly basePath?: string;
-}
-export declare function normalizeHttpBasePath(basePath: string | undefined, label?: string): string;
-export declare function normalizeProductionHttpProfile(declaration: ProductionHttpProfile, label?: string, productionReason?: string): ProductionHttpProfile;
-export declare function productionHttpProfile(declaration: ProductionHttpProfile): ProductionHttpProfile;
+export type { HttpCorrelationOptions, HttpHandlerOptions, HttpResponseHeadersContext, } from "./handler.ts";
 
 === packages/http/dist/server/public-errors.d.ts ===
 import type { WireContractsIR } from "@mit-sdg/sync-engine/tooling";
-import type { HttpPublicErrorCategory, ProductionHttpProfile } from "./policy.ts";
+import type { HttpPolicy, HttpPublicErrorCategory } from "../policy/types.ts";
 type PublicHttpError = HttpPublicErrorCategory | "INTERNAL_ERROR";
 export declare function registeredPublicCategoryOf(code: string, categories: Readonly<Record<string, HttpPublicErrorCategory>> | undefined): PublicHttpError;
 export declare function publicFrameworkCategoryOf(code: string): PublicHttpError;
 export declare function publicErrorStatus(category: PublicHttpError): number;
-export declare function projectProductionHttpWire(wire: WireContractsIR, profile: ProductionHttpProfile): WireContractsIR;
+export declare function projectHttpPublicErrors(wire: WireContractsIR, policy: HttpPolicy): WireContractsIR;
+export {};
+
+=== packages/http/dist/server/request.d.ts ===
+export type RequestTextResult = {
+    ok: true;
+    text: string;
+} | {
+    ok: false;
+};
+export declare function readRequestText(request: Request, maxBytes: number): Promise<RequestTextResult>;
+export declare function isPlainObject(value: unknown): value is Record<string, unknown>;
+export declare function setOwn(target: Record<string, unknown>, key: string, value: unknown): void;
+
+=== packages/http/dist/server/response.d.ts ===
+export interface HttpResponseHeadersContext {
+    readonly request: Request;
+    readonly path: string | undefined;
+    readonly status: number;
+    readonly correlationId?: string;
+}
+type HttpHeadersInit = ConstructorParameters<typeof Headers>[0];
+export type HttpResponseHeaders = HttpHeadersInit | ((context: HttpResponseHeadersContext) => HttpHeadersInit | PromiseLike<HttpHeadersInit>);
+export declare function isReservedResponseHeader(name: string): boolean;
+export declare function internalErrorResponse(): Response;
+export declare function publicJson(body: unknown, status: number, options?: {
+    cookies?: readonly string[];
+    noStore?: boolean;
+}): Response;
+export declare function withResponseHeaders(response: Response, option: HttpResponseHeaders | undefined, context: HttpResponseHeadersContext): Promise<Response | undefined>;
 export {};
 
 === packages/http/dist/stream.d.ts ===
@@ -149,12 +232,17 @@ export declare function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | 
 export declare function readCappedUtf8Stream(stream: ReadableStream<Uint8Array> | null, maxBytes: number, declaredBytes?: number, signal?: AbortSignal): Promise<CappedTextRead>;
 export {};
 
+=== packages/http/dist/tooling/cookie-projection.d.ts ===
+import type { WireProjectionFacts } from "@mit-sdg/sync-engine/boundary";
+import type { WireContractsIR } from "@mit-sdg/sync-engine/tooling";
+import type { HttpPolicy } from "../policy/types.ts";
+export declare function projectHttpCookies(facts: WireProjectionFacts, policy: HttpPolicy, source: WireContractsIR): WireContractsIR;
+
 === packages/http/dist/tooling/http-wire.d.ts ===
 import type { WireProjection } from "@mit-sdg/sync-engine/tooling";
-import type { HttpFloor } from "../server/floor.ts";
-import type { ProductionHttpProfile } from "../server/policy.ts";
+import type { HttpPolicy } from "../policy/types.ts";
 export interface HttpWireOptions {
-    readonly policy: ProductionHttpProfile | HttpFloor;
+    readonly policy?: HttpPolicy;
     readonly name: string;
 }
 /** Derive the browser-visible contract from the same policy used by the handler. */

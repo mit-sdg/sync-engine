@@ -7,7 +7,7 @@ import {
   type RegisteredConceptSet,
 } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { productionHttpProfile } from "@mit-sdg/sync-engine-http/server";
+import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { reaction, when } from "@mit-sdg/sync-engine/language";
 
 const entriesSpecification = `# Entries
@@ -181,8 +181,8 @@ export const composition: Record<string, unknown> = {
   RecordCreation,
 };
 
-export const multiInstanceHttpProfile = productionHttpProfile({
-  origin: "https://multi-instance.test",
+export const multiInstanceHttpPolicy = httpPolicy({
+  publicOrigin: "https://multi-instance.test",
   basePath: "/api",
   publicErrors: { CONFLICT: "CONFLICT" },
 });

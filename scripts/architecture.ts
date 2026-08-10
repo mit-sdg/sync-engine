@@ -92,6 +92,12 @@ const eliminatedIdentifiers = new Set([
   "reactionMap",
   "sanitize",
   "specificationProse",
+  "productionHttpProfile",
+  "ProductionHttpProfile",
+  "HttpPublicErrorPolicy",
+  "httpFloor",
+  "HttpFloor",
+  "HttpCredentialBinding",
 ]);
 const allowedRootFiles = new Set([
   ".gitattributes",
@@ -721,7 +727,10 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
         (parts[1] === "user" || parts[1] === "project") &&
         (path.endsWith(".md") || path === "docs/user/llms.txt")) ||
       (head === "examples" &&
-        (path.endsWith(".md") || path.endsWith(".ts") || path.endsWith(".json"))) ||
+        (path.endsWith(".html") ||
+          path.endsWith(".md") ||
+          path.endsWith(".ts") ||
+          path.endsWith(".json"))) ||
       (head === "scripts" && parts.length === 2 && path.endsWith(".ts")) ||
       (head === "tests" &&
         ((parts.length === 2 && parts[1] === "public-api.test.ts") ||

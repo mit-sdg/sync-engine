@@ -13,10 +13,7 @@ import {
   createHttpTransport,
   type HttpClientError,
 } from "@mit-sdg/sync-engine-http/client";
-import {
-  productionHttpProfile,
-  type ProductionHttpProfile,
-} from "@mit-sdg/sync-engine-http/server";
+import { httpPolicy, type HttpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 import type {
   ApplicationManifestV5,
@@ -126,11 +123,11 @@ const directQuery: Promise<{ value: string }[]> = directAssembly.concepts.Direct
 const gatewayOptions: GatewayOptions = {
   application: directAssembly,
 };
-const httpProfile: ProductionHttpProfile = productionHttpProfile({
-  origin: "https://example.test",
+const transportPolicy: HttpPolicy = httpPolicy({
+  publicOrigin: "https://example.test",
   basePath: "/api",
 });
-void [directAction, directQuery, gatewayOptions, httpProfile, occurrenceEntries];
+void [directAction, directQuery, gatewayOptions, transportPolicy, occurrenceEntries];
 
 // @ts-expect-error A direct action caller must account for refusal mappings.
 const directSuccessOnly: Promise<{ value: string }> = directAssembly.concepts.Direct.act({
