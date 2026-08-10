@@ -15,6 +15,33 @@ const coreWorkspace = workspaceById("core");
 const analysisWorkspace = workspaceById("analysis");
 const multiInstanceWorkspaces = [coreWorkspace, workspaceById("http")];
 
+interface RuntimeConsumerCheck {
+  readonly filename: string;
+  readonly runners: readonly ("node" | "bun")[];
+  readonly timeout?: number;
+}
+
+interface ConsumerFixture {
+  readonly workspaceId: string;
+  readonly runtimeChecks?: readonly RuntimeConsumerCheck[];
+}
+
+const consumerFixtures: readonly ConsumerFixture[] = [
+  { workspaceId: "core" },
+  { workspaceId: "http" },
+  {
+    workspaceId: "analysis",
+    runtimeChecks: [
+      { filename: "analysis-ir-import-isolation.mjs", runners: ["node"] },
+      {
+        filename: "analysis-consumer-scenario.mjs",
+        runners: ["node", "bun"],
+        timeout: 30_000,
+      },
+    ],
+  },
+];
+
 interface NpmPackResult {
   filename: string;
   size: number;
@@ -618,37 +645,34 @@ async function verifyCombinedConsumer(
   }
   await writeFile(resolve(consumer, "all-entrypoints.ts"), entrypointImports(packed));
   await writeFile(resolve(consumer, "runtime-import.mjs"), runtimeEntrypointImports(packed));
-  await copyFile(
-    resolve(root, "tests/packaging/consumer-contract.ts"),
-    resolve(consumer, "consumer-contract.ts"),
+  const consumerContractFiles = consumerFixtures.map(
+    ({ workspaceId }) => `${workspaceId}-consumer-contract.ts`,
   );
-  await copyFile(
-    resolve(root, "packages/http/tests/packaging/consumer-contract.ts"),
-    resolve(consumer, "http-consumer-contract.ts"),
-  );
-  await copyFile(
-    resolve(root, "packages/analysis/tests/packaging/analysis-consumer-scenario.mjs"),
-    resolve(consumer, "analysis-consumer-scenario.mjs"),
-  );
-  await copyFile(
-    resolve(root, "packages/analysis/tests/packaging/analysis-ir-import-isolation.mjs"),
-    resolve(consumer, "analysis-ir-import-isolation.mjs"),
-  );
+  const runtimeConsumerChecks: Array<RuntimeConsumerCheck & { path: string }> = [];
+  for (const fixture of consumerFixtures) {
+    const workspace = workspaceById(fixture.workspaceId);
+    const fixtureRoot = workspacePath(root, workspace, "tests/packaging");
+    const contract = `${fixture.workspaceId}-consumer-contract.ts`;
+    await copyFile(resolve(fixtureRoot, contract), resolve(consumer, contract));
+    for (const check of fixture.runtimeChecks ?? []) {
+      const destination = resolve(consumer, check.filename);
+      await copyFile(resolve(fixtureRoot, check.filename), destination);
+      runtimeConsumerChecks.push({ ...check, path: destination });
+    }
+  }
   await writeTypeScriptConfig(resolve(consumer, "tsconfig.json"), [
     "all-entrypoints.ts",
-    "consumer-contract.ts",
-    "http-consumer-contract.ts",
+    ...consumerContractFiles,
   ]);
   run(
     "node",
     [resolve(consumer, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.json"],
     consumer,
   );
-  run("node", [resolve(consumer, "analysis-ir-import-isolation.mjs")], consumer);
   run("node", [resolve(consumer, "runtime-import.mjs")], consumer);
-  const analysisScenario = resolve(consumer, "analysis-consumer-scenario.mjs");
-  run("node", [analysisScenario], consumer, 30_000);
-  run("bun", [analysisScenario], consumer, 30_000);
+  for (const check of runtimeConsumerChecks) {
+    for (const runner of check.runners) run(runner, [check.path], consumer, check.timeout);
+  }
 }
 
 async function verifyScaffoldAndExamples(

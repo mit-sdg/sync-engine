@@ -63,16 +63,25 @@ Do not hand-edit these outputs:
 Review generated diffs as public contract changes. The check commands compare
 the committed files with fresh output.
 
+Each packed consumer contract remains in its owning workspace under
+`tests/packaging/` and is named `<workspace-id>-consumer-contract.ts`. The core
+workspace uses the repository-level `tests/packaging/` directory. Runtime
+consumer scenarios stay beside the contract that owns them.
+`scripts/verify-package.ts` copies the cataloged fixtures into one isolated
+consumer.
+
 ## Public entrypoints
 
 The six files under `src/<subpath>/index.ts` are export-only core public
 barrels. Workspace packages expose their own export-only public entrypoints and
 may import only supported core subpaths. Internal engine code imports engine
-modules directly. The architecture check enforces dependency
-direction and rejects unsupported entrypoints. Any export change requires
-corresponding public API and declaration updates. `tests/public-api.test.ts`
-compares the exact export register and reference units in
-`docs/user/reference/public-api.md` with the public barrels.
+modules directly. The architecture check enforces dependency direction and
+rejects unsupported entrypoints.
+
+An export change requires updates to the owning public API reference and
+declaration snapshot. Each workspace's `tests/public-api.test.ts` checks its
+exact export register; the core workspace uses the repository-level
+`tests/public-api.test.ts`.
 
 ## Documentation
 

@@ -1,15 +1,14 @@
 # Message board
 
-Message board is a small application built with sync-engine. Its application
-constructor has no HTTP policy. Two Bun hosts bind the same application to a
-Fetch handler: one exposes a plain POST/JSON API, while the other adds a
-cookie-backed browser session and serves the browser assets.
+The message board runs the same sync-engine application behind two Bun hosts.
+`bun run start` serves a browser UI with cookie-backed sessions. `bun run
+start:api` exposes the logical endpoint inputs and outputs as plain POST/JSON.
+Both hosts create the application with the same policy-independent constructor.
 
-A visitor can register, sign in, publish posts, attach comments, read the board,
-and sign out. The example shows how four independent stateful behaviors become
-one application without making any one behavior responsible for the whole
-workflow. Start with [Reading Circle](../reading-circle/README.md) for the
-shortest transport-neutral example.
+The application supports registration, sign-in, posting, commenting, board
+reads, and sign-out. Each of its four concepts owns one independent part of that
+behavior. For a shorter transport-neutral example, see [Reading
+Circle](../reading-circle/README.md).
 
 ## Run the browser deployment
 
@@ -98,14 +97,13 @@ refusals without relying on another concept.
 
 `createMessageBoard()` in `src/application.ts` assembles the concepts and
 composition, applies execution limits to a gateway, and returns
-`{ application, gateway }`. The function imports no HTTP package code and
-selects no cookie, CORS, origin, listener, or static-file policy. Direct callers
+`{ application, gateway }`. HTTP policy is selected by each host. Direct callers
 and other transports can use the same application and gateway.
 
 `src/edge.ts` defines two deployment policies. `messageBoardApiPolicy()` adds
-only `/api` and reviewed public error mappings. `messageBoardHttpPolicy(...)`
-also binds the logical `session` input and registration and sign-in outputs to a secure cookie.
-Each host passes its selected policy, application, and gateway to
+`/api` and reviewed public error mappings. `messageBoardHttpPolicy(...)` also
+binds the logical `session` input and the registration and sign-in outputs to a
+secure cookie. Each host passes its selected policy, application, and gateway to
 `createHttpHandler(...)` from `@mit-sdg/sync-engine-http/handler`.
 
 `src/api-host.ts` gives that Fetch handler directly to `Bun.serve`.

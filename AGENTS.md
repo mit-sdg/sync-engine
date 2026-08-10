@@ -85,8 +85,8 @@ the book.
 | `src/engine/reactions/`          | Reaction capabilities nested under `authoring/`, `concepts/`, and `runtime/`, plus shared concern contracts and facades at the root |
 | `src/engine/reads/`              | Where operations, views, formers, lowering, evaluation, IR, and rendering                                                           |
 | `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, and `wire/`                      |
-| `packages/http/`                 | Independently published first-party HTTP transport; imports only supported core subpaths                                            |
-| `packages/analysis/`             | Public analysis companion; exposes compiler-free queries through `/ir` and TypeScript-backed producers through `/project`           |
+| `packages/http/`                 | Independently published HTTP transport and its package-owned API, declaration, and packaging tests                                  |
+| `packages/analysis/`             | Independently published analysis companion and its package-owned API, declaration, and packaging tests                              |
 | `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
 | `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
 | `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |
@@ -96,7 +96,7 @@ the book.
 | `scripts/`                       | Build, package, architecture, declaration, and maintenance commands                                                                 |
 | `.github/`                       | Continuous integration using the same named package commands contributors run                                                       |
 | `tests/internal/`                | Focused units mirroring reactions, reads, boundary, and hosting                                                                     |
-| `tests/packaging/`               | Source and packed type contracts, the isolated consumer fixture, and generated declarations                                         |
+| `tests/packaging/`               | Core-owned source contracts, packed consumer contract, application fixture, and declaration snapshot                                |
 | `examples/*/tests/`              | End-to-end coverage colocated with each self-contained example                                                                      |
 | `tests/docs/`                    | Guide source-link and excerpt verification                                                                                          |
 | `tests/internal/utils/`          | Shared utility implementation coverage                                                                                              |

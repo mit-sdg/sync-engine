@@ -15,10 +15,10 @@ package is ESM-only and supports Node.js 24 (`>=24 <25`).
 | [`@mit-sdg/sync-engine-http/client`](#client)   | Fetch transport and typed client      |
 | [`@mit-sdg/sync-engine-http/tooling`](#tooling) | Generated HTTP wire projection        |
 
-Policy accepts deployment facts, not security mechanisms. The policy declares
-facts that the package cannot infer, including the public origin, browser caller
-origins, public error mapping, and cookie bindings. The package derives CORS,
-request-origin checks, cookie attributes, and wire projection from those facts.
+Policy records deployment facts that the package cannot infer: the public
+origin, browser caller origins, public error mapping, and cookie bindings. The
+package derives CORS, request-origin checks, cookie attributes, and wire
+projection from those facts.
 
 ## `policy`
 
@@ -301,11 +301,11 @@ Fetch handler for behavior outside these controls. A wrapper is outside the
 package's security boundary and can invalidate the handler's header and error
 guarantees.
 
-Handler calls may overlap. The handler has no disposal method and does not own
-the application, gateway, concept store, listener, static files, TLS, process
-lifecycle, or other host resources. The host must route complete Fetch requests
-to the handler, return its responses, and close every resource that the host
-creates.
+Handler calls may overlap. The handler has no disposal method. The caller owns
+the application, gateway, and concept stores. The host owns the listener, static
+files, TLS, process lifecycle, and other host resources. The host must route
+complete Fetch requests to the handler, return its responses, and close every
+resource that the host creates.
 
 ## `client`
 

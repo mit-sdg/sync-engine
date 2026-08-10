@@ -64,9 +64,8 @@ bounds this read. The other configured execution limits are recorded in
 
 `createMessageBoard()` in `src/application.ts` assembles the concepts and creates
 a gateway with the execution limits from `src/assembly.ts`. It returns the
-application and gateway without importing the HTTP package or selecting any
-deployment policy. Tests, non-HTTP callers, and both example hosts use this same
-constructor.
+application and gateway. Tests, non-HTTP callers, and both example hosts use
+this policy-independent constructor.
 
 `src/edge.ts` supplies two policies. `messageBoardApiPolicy()` selects `/api` and
 maps reviewed concept refusals to public HTTP categories. It declares no
@@ -92,9 +91,8 @@ The handler emits no `Set-Cookie` or CORS headers. The API host serves no
 frontend assets.
 
 This binding is suitable for callers that retain and send session values
-explicitly. It is not the browser contract represented by
-`MessageBoardWireHttp`, because that projected contract removes cookie-owned
-fields.
+explicitly. `MessageBoardWireHttp` describes the browser binding and removes
+cookie-owned fields.
 
 ### Browser cookie binding
 
@@ -114,12 +112,12 @@ The application then asks Sessioning whether that value identifies an active
 session. Authentication and session interpretation remain application behavior;
 the HTTP package performs only the declared cookie binding.
 
-The browser host serves the UI and API from one origin and therefore does not
-declare CORS policy. `PUBLIC_ORIGIN` identifies that externally visible origin;
-the cookie policy derives its request-origin allowlist from the same value. It
-does not configure a listener or serve a frontend. A separate-origin browser
-deployment would need an explicit `browser` policy with matching CORS,
-credentials, and request-origin settings.
+The browser host serves the UI and API from one origin and declares no CORS
+policy. `PUBLIC_ORIGIN` identifies that externally visible origin; the cookie
+policy derives its request-origin allowlist from the same value. Bun configures
+the listener and serves the frontend. A separate-origin browser deployment
+requires an explicit `browser` policy with matching CORS, credentials, and
+request-origin settings.
 
 The endpoints do not accept an author field. Composition derives the author from
 the active session subject. Every endpoint also has explicit input and output

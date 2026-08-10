@@ -1,10 +1,9 @@
 # @mit-sdg/sync-engine-http
 
-This package adapts `Request` to `Response`; it does not open a listener.
-`@mit-sdg/sync-engine-http` exposes an assembled sync-engine application through
-a Fetch handler and supplies a typed Fetch client. A host passes complete
-requests to the handler, returns its responses, and owns the listener and
-process lifecycle.
+Use `@mit-sdg/sync-engine-http` to expose an assembled sync-engine application
+over POST/JSON. The package provides a Fetch handler and a typed Fetch client.
+The handler maps one `Request` to a `Response`; the host opens the listener and
+owns its lifecycle.
 
 Start with plain POST/JSON when callers send credentials and other inputs in the
 request body. Add an HTTP policy when the deployment needs cookies or
@@ -39,10 +38,6 @@ has no root export and no supported deep imports.
 | JSON calls without package-managed cookies              | [Plain POST/JSON](#tier-0-plain-postjson)                              |
 | Browser sessions, cookie binding, or cross-origin calls | [Browser sessions](#tier-1-browser-sessions)                           |
 | Response headers, handler wrapping, or another protocol | [Advanced integration](#tier-2-headers-wrapping-and-custom-transports) |
-
-Tier 0 is a complete deployment option, not a prerequisite for constructing a
-tier 1 handler. Use the smallest tier that supplies the required transport
-behavior.
 
 ## Tier 0: plain POST/JSON
 
@@ -136,8 +131,8 @@ The client always sends JSON `POST` requests. It takes no policy and defaults to
 `credentials: "same-origin"`. If `baseUrl` is omitted, the client uses
 `API_BASE_URL`, then `/api`; an explicit `/` selects the origin root.
 
-Tier 0 is complete here. See the [HTTP public API reference](public-surface.md)
-for exact validation, result, timeout, abort, and response-size behavior.
+See the [HTTP public API reference](public-surface.md) for exact validation,
+result, timeout, abort, and response-size behavior.
 
 ## Tier 1: browser sessions
 
@@ -244,8 +239,8 @@ response readable across origins. Disabling request-origin protection is
 rejected when any cookie uses `SameSite=None`, because that combination removes
 both origin and SameSite request defenses.
 
-Tier 1 is complete here. The [message-board example](https://github.com/mit-sdg/sync-engine/blob/main/examples/message-board/README.md)
-shows one complete checked browser application lifecycle.
+The [message-board example](https://github.com/mit-sdg/sync-engine/blob/main/examples/message-board/README.md)
+shows a checked browser application lifecycle.
 
 ## Tier 2: headers, wrapping, and custom transports
 
@@ -309,18 +304,16 @@ tier, not a deep-import workaround.
 
 ## Host responsibilities and unsupported features
 
-The package does not own:
+The HTTP package handles the POST/JSON protocol. The host remains responsible
+for the listener and process lifecycle, static-file or SPA routing, TLS and
+proxy configuration, and traffic controls. Application code defines
+credential meaning, authentication, and authorization.
 
-- an HTTP listener, static files, SPA routing, connection limits, request-rate
-  limits, DDoS controls, health checks, autoscaling, or process lifecycle;
-- TLS termination, HSTS, certificate management, or trusted-proxy interpretation;
-- authentication semantics, authorization policy, credential storage, or a Node
-  cookie jar;
-- retries, idempotency, rollback, persistence, or cancellation of accepted
-  application work; or
-- methods other than `POST`, resource-oriented REST routing, streaming bodies or
-  responses, arbitrary framework adapters, or runtime validation inferred from
-  generated TypeScript.
+The package does not provide a Node cookie jar, retries, idempotency, rollback,
+persistence, or cancellation of accepted application work. It buffers JSON
+request and response bodies. Resource-oriented REST routing, streaming, and
+arbitrary framework adapters are unsupported. Generated TypeScript does not
+provide runtime validation.
 
 The handler and client have no disposal method. The host closes listeners, Fetch
 agents, gateways, stores, and other resources. Handler calls and client header
@@ -333,16 +326,17 @@ The rework is a clean break. There are no aliases or compatibility adapters.
 
 ### Removed identifiers
 
-| Removed                          | Replacement                     |
-| -------------------------------- | ------------------------------- |
-| `productionHttpProfile`          | `httpPolicy`                    |
-| `ProductionHttpProfile`          | `HttpPolicyInit` / `HttpPolicy` |
-| `HttpPublicErrorPolicy`          | folded into `HttpPolicyInit`    |
-| `httpFloor`                      | `httpPolicy({ cookies })`       |
-| `HttpFloor`                      | `HttpPolicy`                    |
-| `HttpCredentialBinding`          | `HttpCookieBinding`             |
-| `createHttpHandler({ profile })` | `createHttpHandler({ policy })` |
-| `createHttpHandler({ floor })`   | `createHttpHandler({ policy })` |
+| Removed                            | Replacement                         |
+| ---------------------------------- | ----------------------------------- |
+| `@mit-sdg/sync-engine-http/server` | `@mit-sdg/sync-engine-http/handler` |
+| `productionHttpProfile`            | `httpPolicy`                        |
+| `ProductionHttpProfile`            | `HttpPolicyInit` / `HttpPolicy`     |
+| `HttpPublicErrorPolicy`            | folded into `HttpPolicyInit`        |
+| `httpFloor`                        | `httpPolicy({ cookies })`           |
+| `HttpFloor`                        | `HttpPolicy`                        |
+| `HttpCredentialBinding`            | `HttpCookieBinding`                 |
+| `createHttpHandler({ profile })`   | `createHttpHandler({ policy })`     |
+| `createHttpHandler({ floor })`     | `createHttpHandler({ policy })`     |
 
 ### Renamed fields
 

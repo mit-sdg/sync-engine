@@ -55,16 +55,17 @@ following replacements.
 
 #### Removed HTTP identifiers
 
-| Removed                          | Replacement                     |
-| -------------------------------- | ------------------------------- |
-| `productionHttpProfile`          | `httpPolicy`                    |
-| `ProductionHttpProfile`          | `HttpPolicyInit` / `HttpPolicy` |
-| `HttpPublicErrorPolicy`          | folded into `HttpPolicyInit`    |
-| `httpFloor`                      | `httpPolicy({ cookies })`       |
-| `HttpFloor`                      | `HttpPolicy`                    |
-| `HttpCredentialBinding`          | `HttpCookieBinding`             |
-| `createHttpHandler({ profile })` | `createHttpHandler({ policy })` |
-| `createHttpHandler({ floor })`   | `createHttpHandler({ policy })` |
+| Removed                            | Replacement                         |
+| ---------------------------------- | ----------------------------------- |
+| `@mit-sdg/sync-engine-http/server` | `@mit-sdg/sync-engine-http/handler` |
+| `productionHttpProfile`            | `httpPolicy`                        |
+| `ProductionHttpProfile`            | `HttpPolicyInit` / `HttpPolicy`     |
+| `HttpPublicErrorPolicy`            | folded into `HttpPolicyInit`        |
+| `httpFloor`                        | `httpPolicy({ cookies })`           |
+| `HttpFloor`                        | `HttpPolicy`                        |
+| `HttpCredentialBinding`            | `HttpCookieBinding`                 |
+| `createHttpHandler({ profile })`   | `createHttpHandler({ policy })`     |
+| `createHttpHandler({ floor })`     | `createHttpHandler({ policy })`     |
 
 #### Renamed HTTP fields
 
