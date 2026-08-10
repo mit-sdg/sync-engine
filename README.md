@@ -15,10 +15,6 @@ The main composition forms are:
 - **formers**, which build current-state result trees; and
 - **endpoints**, which connect outside requests to composed behavior.
 
-The shortest path to a running application is [Getting
-started](docs/user/guide/getting-started.md). Read [How sync-engine applications
-fit together](docs/user/overview.md) when you need the model behind those files.
-
 The engine validates the composition, instruments the selected concept
 instances, and records action occurrences. Tooling can derive an assembled
 read-back and TypeScript boundary contract from that assembly.
@@ -48,8 +44,7 @@ bun add @mit-sdg/sync-engine@beta
 
 ## Create your first application
 
-For a new application, create a Bun package, install core, and initialize the
-concept-free application files:
+Create a Bun package and initialize the concept-free application files:
 
 ```sh
 mkdir workshop-app
@@ -63,9 +58,8 @@ For a reproducible evaluation, replace `@beta` with a pinned version. `setup`
 never edits `package.json` or overwrites an application file. It reports missing
 dependencies and scripts as guidance.
 
-Continue with [Getting started](docs/user/guide/getting-started.md) to add the
-remaining development dependencies, run the generated checks, and see the empty
-application start.
+[Getting started](docs/user/guide/getting-started.md) adds the development
+dependencies and verifies the empty application.
 
 ## Documentation
 
@@ -82,10 +76,8 @@ Choose the path that matches the next task:
 | Select a deployment and identify host responsibilities       | [Operational limits](docs/user/reference/operations.md)         |
 | Inspect complete applications                                | [Example applications](examples/README.md)                      |
 
-The [consumer documentation index](docs/user/index.md) routes application
-designers, authors, callers, and operators. Human and software agents using the
-engine can start with [`docs/user/llms.txt`](docs/user/llms.txt), which records
-the supported imports, authoring sequence, commands, and source-of-truth order.
+Software agents can use [`docs/user/llms.txt`](docs/user/llms.txt) for supported
+imports, authoring sequence, commands, and source-of-truth order.
 
 ## A first composition rule
 
@@ -104,9 +96,7 @@ export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
 );
 ```
 
-Calling `Selecting.choose(...)` in this declaration records an action reference.
-At runtime, a returned `Selecting.choose` occurrence activates the reaction,
-binds `selection` from the result, and causes the reaction to ask
+At runtime, a returned `Selecting.choose` occurrence binds `selection` and asks
 `Discussing.open`. Selecting and Discussing remain independently implemented.
 
 See [Connect independent
@@ -154,14 +144,12 @@ for deployment responsibilities.
 
 ## Run the shipped examples
 
-Each example is a standalone application. The [example
-index](examples/README.md) selects an application and lists its local install,
-check, and start commands.
+The [example index](examples/README.md) lists each standalone application's
+install, check, and start commands.
 
 ## Work on sync-engine itself
 
-Consumer documentation does not describe changes to this repository. Project
-contributors use these repository documents:
+Project contributors use these documents:
 
 - [Contributing](https://github.com/mit-sdg/sync-engine/blob/main/CONTRIBUTING.md)
   selects checks by change type.

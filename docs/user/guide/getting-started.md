@@ -1,11 +1,8 @@
 # Getting started
 
 This tutorial initializes and runs a concept-free sync-engine application in
-an existing Bun package. It ends with generated artifacts and TypeScript
-checked, and with `src/main.ts` printing the empty route list. The setup files
-are application-owned extension points: add registrations to
-`src/concept-set.ts`, composition to `src/composition.ts`, and runtime options
-to `src/assembly.ts` as the application grows.
+an existing Bun package. Add registrations to `src/concept-set.ts`, composition
+to `src/composition.ts`, and runtime options to `src/assembly.ts`.
 
 For setup behavior in partial or already-authored projects, see the
 [command-line reference](../reference/cli.md). For the next step, use the
@@ -13,10 +10,8 @@ For setup behavior in partial or already-authored projects, see the
 
 ## Prerequisites
 
-Use a Bun version in the [supported range](../../../SUPPORT.md#runtime-and-toolchain),
-then create a package and install the exact core beta selected for the
-application. These commands pin the core release and development dependencies
-used by this tutorial:
+Use a Bun version in the [supported range](../../../SUPPORT.md#runtime-and-toolchain).
+These commands pin the tutorial's core release and development dependencies:
 
 ```sh
 mkdir workshop-app
@@ -62,8 +57,7 @@ src/
 
 ## Stable extension points
 
-The setup files separate declarations from execution. `src/concept-set.ts`
-starts with no registrations:
+`src/concept-set.ts` starts with no registrations:
 
 ```ts
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
@@ -78,7 +72,7 @@ export const { concepts, vocabulary } = applicationConcepts;
 export const applicationComposition = {};
 ```
 
-`src/assembly.ts` assembles those two application-owned extension points:
+`src/assembly.ts` assembles the concept set and composition:
 
 ```ts
 import { assemble } from "@mit-sdg/sync-engine/assembly";
@@ -109,12 +103,10 @@ concept specifications with their classes, inspects application diagnostics,
 verifies the generated files, and runs TypeScript. The concept-free application
 has no concepts or endpoints, so `start` prints `[]`.
 
-Run `sync-engine setup` again only when you want to reconcile setup files. It
-writes nothing for unchanged setup files and reports them as verified. If an
-application-owned file has changed, setup leaves it untouched and reports any
-dependent file it cannot verify. It is not a migration tool for those files.
+Rerun `sync-engine setup` to reconcile setup files. It verifies unchanged
+files. If an application-owned file changed, setup leaves it untouched and
+reports dependent files it cannot verify. It does not migrate those files.
 
-Continue with [Application authoring](authoring.md) to design and register
-application-specific concepts. [Execution
-semantics](../reference/semantics.md) remains authoritative for runtime ordering,
-failures, and settlement.
+Continue with [Application authoring](authoring.md). [Execution
+semantics](../reference/semantics.md) defines runtime ordering, failures, and
+settlement.

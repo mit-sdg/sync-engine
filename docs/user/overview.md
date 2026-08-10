@@ -1,12 +1,10 @@
 # How sync-engine applications fit together
 
 sync-engine composes independently implemented stateful behaviors into one
-application. This page is the conceptual map between the setup files and the
-runtime: it identifies each application part and follows one request through
-them. Read it before splitting a new domain into concepts; use [Designing with
-concepts](design.md) for the design criteria, [Public API](reference/public-api.md)
-for signatures and defaults, and [Execution semantics](reference/semantics.md)
-for runtime behavior.
+application. This page maps the setup files to the runtime and follows one
+request through them. Use [Designing with concepts](design.md) before choosing
+concept boundaries, [Public API](reference/public-api.md) for signatures and
+defaults, and [Execution semantics](reference/semantics.md) for runtime behavior.
 
 ## Application layers
 
@@ -35,11 +33,10 @@ concept specifications + TypeScript classes
           typed client ------+
 ```
 
-Concepts define independent behavior. Composition connects those behaviors.
-Assembly installs one combination. Tooling and a generated client are optional;
-the lower-level `vocabulary(...)` path may also assemble concepts without
-specification registration. The [application authoring
-guide](guide/authoring.md) shows the complete path from registration to a client.
+Concepts define independent behavior, composition connects it, and assembly
+installs one combination. Tooling and a generated client are optional. The
+lower-level `vocabulary(...)` path can assemble concepts without specification
+registration.
 
 ## Concepts own behavior and state
 
@@ -55,9 +52,9 @@ reaction, so the same Selecting implementation can participate in another
 composition.
 
 The specification records the concept's purpose, principle, actions, queries,
-and expected refusals. Its optional State section is notation for readers, not a
-runtime schema. [Concept specification format](reference/concept-specification.md) defines
-what registration and source checking parse.
+and expected refusals. Its optional State section is not a runtime schema.
+[Concept specification format](reference/concept-specification.md) defines what
+registration and source checking parse.
 
 ## Registration names the concepts
 
@@ -84,9 +81,8 @@ Composition has four declaration forms:
 | Endpoint | Receive outside input and produce a boundary response through the reaction model            |
 
 These declarations carry application policy and references; concepts retain
-domain state. Application code may organize declarations in nested TypeScript
-records or create those records with ordinary factory functions before calling
-`assemble(...)`.
+domain state. Declarations may be nested in TypeScript records or created by
+factory functions before `assemble(...)`.
 
 ## Assembly installs one application
 
@@ -121,8 +117,7 @@ A representative request crosses these components:
 8. The client resolves to the success value or an error envelope.
 
 The boundary is transport-neutral. The local client applies a JSON projection;
-other transports define their own protocol behavior. The [application authoring
-guide](guide/authoring.md#application-boundary) shows the boundary lifecycle.
+other transports define their own protocol behavior.
 
 ## Concept state and occurrence evidence
 

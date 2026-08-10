@@ -1,14 +1,8 @@
 # Using sync-engine
 
-Files under `docs/user/` are for human or software agents that design, build,
-call, or operate applications with sync-engine. This index does not cover
-repository work.
-
-If sync-engine is new to you, read [Getting started](guide/getting-started.md)
-first. It creates and runs the smallest application. Then read the [application
-model](overview.md) before choosing concept boundaries; return to the
-[application authoring path](#application-authoring-path) when you are ready to
-add behavior.
+Start with [Getting started](guide/getting-started.md), then read the
+[application model](overview.md) before choosing concept boundaries. Use the
+[application authoring path](#application-authoring-path) to add behavior.
 
 ## Start by task
 
@@ -28,8 +22,6 @@ add behavior.
 
 ## Application authoring path
 
-The core path is:
-
 1. [Getting started](guide/getting-started.md) initializes and runs a
    concept-free application.
 2. [Application model](overview.md) explains the parts introduced by the setup
@@ -43,19 +35,14 @@ needs optional, repeated, or folded data. Use [Persistence, restart, and
 recovery](guide/persistence-recovery.md) when the application must survive a
 process restart.
 
-The guides demonstrate representative constructions. [Execution
-semantics](reference/semantics.md) is authoritative when a guide simplifies
-runtime behavior, and [Operational limits](reference/operations.md) is the
-selection point for deployment decisions.
+[Execution semantics](reference/semantics.md) is authoritative for runtime
+behavior. Use [Operational limits](reference/operations.md) for deployment
+decisions.
 
 ## Engine-user document catalog
 
-This catalog is exhaustive. A **tutorial** teaches through one complete first
-task. A **how-to guide** completes a defined task. An **explanation** describes
-the model or design reasoning. A **reference** defines observable behavior or
-accepted forms. An **index** routes readers without owning those contracts.
-Reference entries are grouped under `reference/`; task-oriented procedures are
-grouped under `guide/`.
+This catalog is exhaustive. References are under `reference/`; procedures are
+under `guide/`.
 
 | Path                                                                                 | Class        | Scope                                                   |
 | ------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------- |

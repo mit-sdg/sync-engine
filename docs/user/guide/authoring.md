@@ -1,15 +1,10 @@
 # Application authoring
 
-This guide follows one Operations Room application from concept registration
-to a client typed by its generated wire contract. It assumes TypeScript, an
-existing Bun package with a concept-free assembly, and the [application
-model](../overview.md). The linked source belongs to the standalone Operations
-Room example. The snippets show the roles and order of the work; they are not a
+This guide follows the Operations Room application from concept registration
+to a client typed by its generated wire contract. It assumes TypeScript, a Bun
+package with a concept-free assembly, and the [application model](../overview.md).
+The snippets are excerpts from the standalone Operations Room example, not a
 second setup template.
-
-Follow the sections in order: define and register a concept; connect concepts;
-build current-state reads; expose actions through endpoints; assemble, generate,
-validate, and call the application; then run the example checks.
 
 Use the [Public API](../reference/public-api.md) for signatures and [Execution
 semantics](../reference/semantics.md) for runtime guarantees.
@@ -22,17 +17,14 @@ to run this guide's commands unchanged. When extending the files created by
 module names and package scripts to the application. The example's
 `package.json` supplies every script used below.
 
-The example keeps each concept's specification, implementation, registry, and
-principle test together. This guide shows the specification and implementation
-shape; the linked files contain the imports, declarations, and complete test
-setup needed to reproduce it.
+The linked files contain the imports, declarations, and test setup omitted from
+the excerpts.
 
 ## Define one behavior
 
 Design the concept's purpose, principle, owned state, actions, queries, and
 expected refusals before writing its class. [Designing with
-concepts](../design.md) gives the criteria. The Alerting specification
-declares two actions, one refusal, and one many-row query:
+concepts](../design.md) gives the criteria.
 
 _Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../../examples/operations-room/src/concepts/alerting/spec.md)_
 
@@ -64,9 +56,8 @@ _openFor (recipient: Person) : many (alert: Alert, subject: Subject)
 ```
 ````
 
-The class is ordinary TypeScript. Non-underscore prototype methods are actions;
-underscore-prefixed methods are queries. Use ECMAScript `#private` methods or
-module functions for helpers.
+Non-underscore prototype methods are actions; underscore-prefixed methods are
+queries. Use ECMAScript `#private` methods or module functions for helpers.
 
 _Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../../examples/operations-room/src/concepts/alerting/alerting.ts)_
 
@@ -91,9 +82,6 @@ Test the principle against the class directly, as
 [`alerting.test.ts`](../../../examples/operations-room/src/concepts/alerting/alerting.test.ts)
 does with deterministic identities. This separates concept behavior from
 assembly and composition.
-
-Register the class with its specification, refusal classes, and any named
-implementation factories.
 
 _Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../../examples/operations-room/src/concepts/alerting/registry.ts)_
 
@@ -132,8 +120,8 @@ factory context and lifecycle.
 
 ## Connect independent behaviors
 
-Keep concept implementations independent of peer concepts. Put cross-concept
-decisions in composition. Operations Room installs two independent reactions
+Keep concept implementations independent of peer concepts and put
+cross-concept decisions in composition. Operations Room installs two reactions
 after a mitigation is selected:
 
 _Source: [`examples/operations-room/src/composition/packs.ts`](../../../examples/operations-room/src/composition/packs.ts)_
@@ -160,8 +148,7 @@ earlier action. [Designing reactions](../design.md#designing-reactions) covers
 placement; [Reaction semantics](../reference/semantics.md#reactions) defines
 matching and failure.
 
-Name reusable or replaceable policy as views. The responder policy's affirmative
-relation is:
+Name reusable or replaceable policy as views:
 
 _Source: [`examples/operations-room/src/composition/responders-may-contribute.ts`](../../../examples/operations-room/src/composition/responders-may-contribute.ts)_
 
@@ -179,9 +166,8 @@ without changing the endpoints.
 
 ## Build current-state reads
 
-A view names a relation or policy decision. A former constructs a current result
-tree from queries, views, or other formers. This former captures every member
-returned by Gathering:
+A former constructs a current result tree from queries, views, or other
+formers:
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../../examples/operations-room/src/composition/room.ts)_
 
@@ -205,9 +191,6 @@ defines production behavior.
 ## Application boundary
 
 ### Receive, ask, respond
-
-An endpoint binds admitted input with `receive(...)`, asks concept actions, and
-settles through `respond(...)`.
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../../examples/operations-room/src/composition/room.ts)_
 
@@ -276,8 +259,6 @@ drain without creating another reaction engine.
 
 ### Generate the wire contract
 
-The application-owned descriptor identifies the assembly and generated title:
-
 _Source: [`examples/operations-room/generated.config.ts`](../../../examples/operations-room/generated.config.ts)_
 
 ```ts
@@ -289,8 +270,7 @@ export default {
 };
 ```
 
-From an application-owned copy, pin and check generated artifacts. Pinning
-updates generated files; checking only verifies that the committed files match
+Pinning updates generated files; checking verifies that committed files match
 the current assembly:
 
 ```sh
@@ -317,8 +297,6 @@ defines ordering and failure.
 
 ### Call the typed client
 
-Code outside the assembly depends on a client typed by the generated wire:
-
 _Source: [`examples/operations-room/src/client.ts`](../../../examples/operations-room/src/client.ts)_
 
 ```ts
@@ -344,15 +322,10 @@ bun run check
 bun run start
 ```
 
-The scenario crosses the assembly, gateway, a local client typed from the
-generated contract, and the `roomDashboard` former. `check` covers the example's
-formatting, types, tests, and pinned artifacts. `start` prints the deterministic
-dashboard and the `ALREADY_JOINED` refusal from a repeated join; a missing
-refusal makes the scenario fail. Keep those checks separate from deployment
-checks, which must also account for persistence, traffic, and shutdown
-responsibilities.
-
-[Operational limits](../reference/operations.md) defines those deployment
-responsibilities. [Execution semantics](../reference/semantics.md) remains the
-authoritative source when the guide's representative construction leaves out a
-failure or ordering detail.
+`check` covers formatting, types, tests, and pinned artifacts. `start` prints
+the deterministic dashboard and the `ALREADY_JOINED` refusal from a repeated
+join; a missing refusal fails the scenario. Deployment checks must also cover
+persistence, traffic, and shutdown responsibilities described in [Operational
+limits](../reference/operations.md). [Execution
+semantics](../reference/semantics.md) defines omitted failure and ordering
+details.
