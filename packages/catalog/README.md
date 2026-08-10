@@ -17,9 +17,6 @@ bunx catalog list
 bunx catalog show <entry>
 ```
 
-`list` and `show` only read catalog metadata. They do not require the core
-package or import entry modules.
-
 ## Add source
 
 Run `add` from an application package root. Replace `<entry>` with an id from
@@ -53,9 +50,10 @@ is unsupported for those installations.
 ## Ownership and updates
 
 The catalog records copied and generated files in `catalog.lock`. It never
-replaces copied source or overwrites edited generated files. Repeating an
-unchanged add performs no writes. Review the copied source and generated
-integration before committing it.
+rewrites copy-owned source. It rewrites rendered registries and generated files
+only while their bytes match the hashes in the lock. Repeating an unchanged add
+performs no writes. Review the copied source and generated integration before
+committing it.
 
 For command behavior, manifest rules, lock ownership, and failure details, see
 [`public-surface.md`](public-surface.md). Entry authors should read

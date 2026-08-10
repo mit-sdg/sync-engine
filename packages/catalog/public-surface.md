@@ -16,9 +16,11 @@ catalog help
 With no arguments, or with `help`, `--help`, or `-h`, the executable prints
 usage and exits successfully.
 
-`list` prints each matching id, kind, and summary. `show` prints requirements,
-floor and package summaries, destination paths, and recipe member-to-route
-metadata. These commands do not require core and do not import entry modules.
+`list` prints each matching id, kind, and summary. `show` prints the summary and
+catalog-entry dependencies. For a concept, it also prints each floor, merged
+package requirements, and destination paths. For a recipe, it prints
+composition members, routes, and destination paths. These commands do not
+require core and do not import entry modules.
 
 `add` requires a project-root `package.json`. It resolves recipe dependencies,
 deduplicates shared concepts, selects one project floor, verifies all current
@@ -45,10 +47,11 @@ package requirements that belong only to another floor.
 
 ## Manifest fields
 
-Every manifest has `schema: 1`, a globally unique `id`, `kind`, `summary`,
-`packages`, and `files`. An id consists of `concept/` or `recipe/` followed by
-one or more lowercase, hyphenated path components. Recipes add `requires` and
-`recipe`; concepts add `concept`, `defaultFloor`, and `floors`. Unknown fields
+Every manifest has `schema: 1`, a globally unique `id`, `kind`, `summary`, and
+`files`. The optional `packages` object defaults to empty. An id consists of
+`concept/` or `recipe/` followed by one or more lowercase, hyphenated path
+components. Recipes add `recipe` and may add `requires`, which defaults to an
+empty array. Concepts add `concept`, `defaultFloor`, and `floors`. Unknown fields
 fail validation.
 
 A file declaration contains `source`, `target`, and optional
@@ -66,23 +69,26 @@ floor.
 Recipe metadata contains `module`, `test`, `members`, and `routes`. The module
 and test must name declared files. `members` is the exact
 `catalogComposition` allowlist and contains unique TypeScript identifiers.
-`routes` must have exactly the same keys. Recipe dependencies must exist, and
-the complete dependency graph must be acyclic.
+`routes` must have exactly the same keys. Each route must match its member's
+`export const <member> = endpoint("<route>", ...)` declaration in the recipe
+module.
+Recipe dependencies must exist, and the complete dependency graph must be
+acyclic.
 
 ## Package requirements
 
-Every external package imported by copied source must be declared by the entry
-or selected floor with a valid semantic-version range. The application may
-declare an exact version that satisfies the requirement or a range that is a
-subset of it. Non-semver protocols and tags are incompatible; range overlap
-alone is insufficient.
+Every nonrelative import other than a `node:` import or permitted
+`@catalog/*` alias must name a package declared by the entry or selected floor
+with a valid semantic-version range. The application may declare an exact
+version that satisfies the requirement or a range that is a subset of it.
+Non-semver protocols and tags are incompatible; range overlap alone is
+insufficient.
 
 The catalog verifies declarations in `package.json`; it does not inspect
 `node_modules`. It reads `dependencies`, `devDependencies`, and
-`peerDependencies`.
-Different declarations for one package across those sections are a conflict.
-Requirements from entries already in `catalog.lock` are checked again on every
-add.
+`peerDependencies`. Different ranges for one package across those sections are
+a conflict. Requirements from entries already in `catalog.lock` are checked
+again on every add.
 
 Missing or incompatible requirements prevent all writes. The command prints
 one `bun add --exact <name>@<requirement>...` command and a `Next:` line that
