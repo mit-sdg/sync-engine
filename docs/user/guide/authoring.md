@@ -1,17 +1,30 @@
 # Application authoring
 
-This guide follows one Operations Room application from concept registration to
-a generated client. It assumes TypeScript and the [application
-model](../overview.md). The linked source belongs to the standalone Operations
-Room example. Use the [Public API](../reference/public-api.md) for signatures and
-[Execution semantics](../reference/semantics.md) for runtime guarantees.
+This guide follows the Operations Room application from concept registration
+to a client typed by its generated wire contract. It assumes TypeScript, a Bun
+package with a concept-free assembly, and the [application model](../overview.md).
+The snippets are excerpts from the standalone Operations Room example, not a
+second setup template.
+
+Use the [Public API](../reference/public-api.md) for signatures and [Execution
+semantics](../reference/semantics.md) for runtime guarantees.
+
+## Prerequisites
+
+Use a copy of [`examples/operations-room`](../../../examples/operations-room/)
+to run this guide's commands unchanged. When extending the files created by
+[Getting started](getting-started.md), follow the same sequence but adapt the
+module names and package scripts to the application. The example's
+`package.json` supplies every script used below.
+
+The linked files contain the imports, declarations, and test setup omitted from
+the excerpts.
 
 ## Define one behavior
 
 Design the concept's purpose, principle, owned state, actions, queries, and
 expected refusals before writing its class. [Designing with
-concepts](../design.md) gives the criteria. The Alerting specification
-declares two actions, one refusal, and one many-row query:
+concepts](../design.md) gives the criteria.
 
 _Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../../examples/operations-room/src/concepts/alerting/spec.md)_
 
@@ -43,9 +56,8 @@ _openFor (recipient: Person) : many (alert: Alert, subject: Subject)
 ```
 ````
 
-The class is ordinary TypeScript. Non-underscore prototype methods are actions;
-underscore-prefixed methods are queries. Use ECMAScript `#private` methods or
-module functions for helpers.
+Non-underscore prototype methods are actions; underscore-prefixed methods are
+queries. Use ECMAScript `#private` methods or module functions for helpers.
 
 _Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../../examples/operations-room/src/concepts/alerting/alerting.ts)_
 
@@ -70,9 +82,6 @@ Test the principle against the class directly, as
 [`alerting.test.ts`](../../../examples/operations-room/src/concepts/alerting/alerting.test.ts)
 does with deterministic identities. This separates concept behavior from
 assembly and composition.
-
-Register the class with its specification, refusal classes, and any named
-implementation factories.
 
 _Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../../examples/operations-room/src/concepts/alerting/registry.ts)_
 
@@ -111,8 +120,9 @@ factory context and lifecycle.
 
 ## Connect independent behaviors
 
-Put cross-concept decisions in composition. Operations Room installs two
-independent reactions after a mitigation is selected:
+Keep concept implementations independent of peer concepts and put
+cross-concept decisions in composition. Operations Room installs two reactions
+after a mitigation is selected:
 
 _Source: [`examples/operations-room/src/composition/packs.ts`](../../../examples/operations-room/src/composition/packs.ts)_
 
@@ -132,12 +142,13 @@ export const SelectedMitigationAlertsResponders = reaction(({ room, selection, r
 
 The first rule asks one consequence. The many-row membership query fans the
 second rule out once per matching responder. Separate reactions keep the two
-consequences independently selectable. [Designing
-reactions](../design.md#designing-reactions) covers placement; [Reaction
-semantics](../reference/semantics.md#reactions) defines matching and failure.
+consequences independently selectable. A reaction is not a transaction: each
+concept action settles independently, and a later failure does not roll back an
+earlier action. [Designing reactions](../design.md#designing-reactions) covers
+placement; [Reaction semantics](../reference/semantics.md#reactions) defines
+matching and failure.
 
-Name reusable or replaceable policy as views. The responder policy's affirmative
-relation is:
+Name reusable or replaceable policy as views:
 
 _Source: [`examples/operations-room/src/composition/responders-may-contribute.ts`](../../../examples/operations-room/src/composition/responders-may-contribute.ts)_
 
@@ -153,10 +164,10 @@ The module also exports the complementary denial relation and response code. The
 host-only policy exports the same names, so assembly can select either module
 without changing the endpoints.
 
-## Views and formers
+## Build current-state reads
 
-A view names a relation. A former constructs a current result tree. This former
-captures every member returned by Gathering:
+A former constructs a current result tree from queries, views, or other
+formers:
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../../examples/operations-room/src/composition/room.ts)_
 
@@ -181,9 +192,6 @@ defines production behavior.
 
 ### Receive, ask, respond
 
-An endpoint binds admitted input with `receive(...)`, asks concept actions, and
-settles through `respond(...)`.
-
 _Source: [`examples/operations-room/src/composition/room.ts`](../../../examples/operations-room/src/composition/room.ts)_
 
 ```ts
@@ -196,14 +204,17 @@ export const ChooseMitigation = endpoint(
 );
 ```
 
-Registered concept refusals use the standard refusal path. Case-split endpoints
-must answer every admitted case deliberately; branches have no fall-through
-priority. See [endpoint
-settlement](../reference/semantics.md#sibling-paths-and-endpoint-settlement).
+When a concept action throws a registered refusal class, the boundary returns
+the registered code as a domain error. An unregistered throw instead follows
+the opaque framework-failure path. Case-split endpoints must answer every
+admitted case deliberately; branches have no fall-through priority. See
+[endpoint settlement](../reference/semantics.md#sibling-paths-and-endpoint-settlement).
 
 ### Assemble the application
 
-Select implementations and composition before calling `assemble(...)`:
+Select implementations and composition before calling `assemble(...)`. Each
+call creates a new process-local runtime; changing an option later does not
+reconfigure an existing assembly:
 
 _Source: [`examples/operations-room/src/assembly.ts`](../../../examples/operations-room/src/assembly.ts)_
 
@@ -242,13 +253,11 @@ the resulting records but does not invoke function leaves. Ordinary assembly
 rejects local executable declarations before exposing routes.
 
 [`src/edge.ts`](../../../examples/operations-room/src/edge.ts) places
-`createGateway(...)` in front of the assembly. The gateway adds public admission,
-limits, observation, timeout and abort waiting, and ordered drain without
-creating another reaction engine.
+`createGateway(...)` in front of the assembly. The gateway provides public
+admission, timeout and abort waiting, optional limits and observers, and ordered
+drain without creating another reaction engine.
 
 ### Generate the wire contract
-
-The application-owned descriptor identifies the assembly and generated title:
 
 _Source: [`examples/operations-room/generated.config.ts`](../../../examples/operations-room/generated.config.ts)_
 
@@ -261,11 +270,12 @@ export default {
 };
 ```
 
-From an application-owned copy, pin and check generated artifacts:
+Pinning updates generated files; checking verifies that committed files match
+the current assembly:
 
 ```sh
 bun run artifacts:pin
-bunx sync-engine artifacts check
+bun run artifacts:check
 ```
 
 Do not generate inside an example installed under `node_modules`. Commit the
@@ -277,16 +287,15 @@ derivation.
 
 ### Add runtime validation
 
-Generated TypeScript does not validate untyped callers. Attach synchronous
-endpoint validators under the third `endpoint(...)` argument's
+Generated TypeScript constrains typed callers but does not validate values at
+runtime. Attach synchronous endpoint validators under the third `endpoint(...)`
+argument's
 `validators.input`, `validators.output`, and `validators.domainError` fields when
 the boundary requires them. [Endpoints](../reference/public-api.md#endpoints) defines
 the result shape; [Runtime validation](../reference/semantics.md#runtime-validation)
 defines ordering and failure.
 
 ### Call the typed client
-
-Code outside the assembly depends on a client typed by the generated wire:
 
 _Source: [`examples/operations-room/src/client.ts`](../../../examples/operations-room/src/client.ts)_
 
@@ -313,10 +322,10 @@ bun run check
 bun run start
 ```
 
-The scenario crosses the assembly, gateway, generated local client, and dashboard
-former. Source checks, principle tests, generated-artifact checks, and the
-scenario remain separate evidence; use the commands declared by the copied
-application in continuous integration.
-
-[Operational limits](../reference/operations.md) defines persistence, traffic,
-and shutdown responsibilities for a deployed boundary.
+`check` covers formatting, types, tests, and pinned artifacts. `start` prints
+the deterministic dashboard and the `ALREADY_JOINED` refusal from a repeated
+join; a missing refusal fails the scenario. Deployment checks must also cover
+persistence, traffic, and shutdown responsibilities described in [Operational
+limits](../reference/operations.md). [Execution
+semantics](../reference/semantics.md) defines omitted failure and ordering
+details.

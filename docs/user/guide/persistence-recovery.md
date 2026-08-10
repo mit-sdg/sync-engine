@@ -1,14 +1,10 @@
 # Persistence, restart, and recovery
 
-This how-to separates durable concept state, occurrence evidence, and recovery
-of process-local derived state. It assumes an application already has concepts,
-composition, and an assembly. Start with the [application authoring
-guide](../index.md#application-authoring-path) for that lifecycle. [Operational
-limits](../reference/operations.md#persistence-and-restart) and [Execution
-semantics](../reference/semantics.md#logs-concept-implementations-and-restart) define the
-underlying contracts.
-
-The executable examples use only Node APIs and supported package subpaths:
+This restart arrangement separates durable concept state, occurrence evidence,
+and process-local derived state. See the [application authoring guide](../index.md#application-authoring-path)
+for the assembly lifecycle and the [persistence](../reference/operations.md#persistence-and-restart)
+and [execution](../reference/semantics.md#logs-concept-implementations-and-restart)
+contracts.
 
 ```ts
 import * as fs from "node:fs";
@@ -21,10 +17,10 @@ import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 
 ## Ownership
 
-Keep domain state, occurrence evidence, and recovery policy separate. This
-example gives `FileBackedNotes` ownership of durable note state, supplies a
-different JSONL path to the assembly's `FileLogSink`, and derives a process-local
-search index through a reaction.
+`FileBackedNotes` owns durable note state, `FileLogSink` uses a separate JSONL
+path, and a reaction derives the process-local search index. Production state
+storage must provide required atomicity and coordination; this example writes
+the state file directly.
 
 | Concern             | Owner                                | What survives restart                               |
 | ------------------- | ------------------------------------ | --------------------------------------------------- |
@@ -110,24 +106,32 @@ async function recoverSearchIndex(
    paths.
 2. Call `Notes.save`. The concept writes its state file, the reaction updates
    the process-local index, and `FileLogSink` appends occurrence evidence.
-3. Stop admission and await `application.beginDrain()` before closing resources
-   or constructing a replacement process.
+3. Stop the external listener, then await `application.beginDrain()` before
+   closing resources or starting the replacement. Drain closes assembly root
+   admission and waits for accepted, engine-tracked causal flows. Detached work
+   is not tracked and must be settled through the concept or host lifecycle.
 4. Construct a new assembly. `FileBackedNotes` loads durable state, while the
-   new search index and the assembly's occurrence index begin empty.
+   new search index and the assembly's occurrence index begin empty. Do not
+   attach the new assembly to a listener yet.
 5. Call `recoverSearchIndex`. The recovery procedure reads durable concept
-   state and invokes the index action explicitly.
+   state and invokes the index action explicitly. Start admission only after it
+   succeeds.
 
-A successful `Notes.save` writes `notes.json`, while the assembly records the
-`Notes.save`, `SearchIndex.index`, and reaction evidence in a separate
-`occurrences.jsonl`. Drain the old assembly before closing host resources and
-constructing the replacement.
+A successful `Notes.save` writes `notes.json`; the assembly records action and
+reaction evidence in `occurrences.jsonl`. On reconstruction, `FileBackedNotes`
+loads `notes.json`, but `FileLogSink` does not read the existing JSONL file,
+rebuild the occurrence index, replay reactions, or rebuild the search index.
+`recoverSearchIndex` must rebuild from durable concept state before admission.
+Recovery is not transactional: on partial failure, retry an idempotent recovery,
+discard and rebuild derived state, or stop startup.
 
-On reconstruction, `FileBackedNotes` loads `notes.json`. A new `FileLogSink` over
-the existing `occurrences.jsonl` does **not** read that file into the assembly's
-index, replay the old reaction, or rebuild the search index. The derived query
-therefore remains empty until the host explicitly calls `recoverSearchIndex`,
-which reads durable concept state and invokes the derived concept's action.
+The state and occurrence writes do not form one commit. `FileBackedNotes.save`
+changes memory before writing `notes.json`; the engine appends outcome and
+reaction evidence after the action returns. A state-file failure can leave
+changed memory. A later append failure can leave durable state without complete
+occurrence evidence or derived state. The engine rolls back neither case.
 
-`FileLogSink` provides append-only JSONL audit output. Production concept-state
-storage must separately define atomic writes, schema migration, concurrency,
-durability, and recovery failure handling.
+`FileLogSink` synchronously appends JSONL audit output without locking,
+shared-writer coordination, flush or durability guarantees, or a close method.
+Concept storage and custom sinks must define atomic writes, migration,
+concurrency, durability, and recovery failure handling.

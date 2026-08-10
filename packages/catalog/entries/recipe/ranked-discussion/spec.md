@@ -25,9 +25,3 @@ application when attribution or one-person-one-vote matters.
 - `UnvoteResponse` — `/ranked-discussions/unvote`
 - `CloseRankedDiscussion` — `/ranked-discussions/close`
 - `GetRankedDiscussion` — `/ranked-discussions/get`
-
-## Failure
-
-Responding and voting are separate user operations. No endpoint first creates a
-Response and then votes, so the recipe has no cross-concept write chain. A Response
-can remain visible with score 0.

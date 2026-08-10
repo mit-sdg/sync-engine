@@ -1,8 +1,8 @@
 # Operational limits
 
-This page states the deployment properties that determine whether sync-engine is
-suitable for an application. It applies to the current beta. [Execution
-semantics](semantics.md) defines the underlying runtime contract.
+Sync-engine is an in-process execution component. Storage, transport, traffic
+control, and restart policy remain application and host responsibilities in the
+current beta. [Execution semantics](semantics.md) defines the runtime contract.
 
 ## Deployment fit at a glance
 
@@ -16,22 +16,18 @@ semantics](semantics.md) defines the underlying runtime contract.
 | Cancel work after acceptance                    | Not provided                 | Design idempotency and recovery for work that outlives the caller   |
 | Serve a public JSON boundary                    | Maintained Fetch handler     | Host supplies listener, TLS, traffic controls, and lifecycle        |
 
-Use sync-engine only when the application and host can own every requirement in
-the final column.
-
 ## Appropriate use
 
 Use sync-engine when independently implemented concepts benefit from explicit,
-inspectable composition and the host owns storage, validation, workload control,
-and process lifecycle. One process can host an ordinary application. Several
-instances can share domain state only through concept implementations and storage
-that provide the required transactions and coordination.
+inspectable composition and the host can own every requirement in the final
+column. Several instances may share domain state only through concept
+implementations and storage that provide required transactions and coordination.
 
 Do not use the engine as the sole control plane for untrusted or unbounded
-traffic. Use another architecture, or add host-level coordination, when
-correctness requires a transaction across concepts, distributed serialization,
-synchronous cancellation of accepted work, occurrence replay, automatic restart
-recovery, or exactly-once processing.
+traffic. Choose another architecture or add host coordination when correctness
+requires cross-concept transactions, distributed serialization, synchronous
+cancellation, occurrence replay, automatic restart recovery, or exactly-once
+processing.
 
 ## Beta compatibility
 
@@ -52,12 +48,11 @@ asynchronous action and do not receive a transactional snapshot. Query
 implementations must be side-effect-free, and storage must provide required
 read/write isolation.
 
-Each action commits independently. A later refusal or fault does not roll back an
+Each action commits independently; a later refusal or fault does not roll back an
 earlier action. Put uniqueness, capacity, first-writer, and answer-once decisions
-inside the action that owns the state. The runtime provides no retry
-deduplication; retryable operations need domain idempotency keys and durable
-deduplication where required. [Ordering and state-read
-timing](semantics.md#ordering-and-state-read-timing) defines the exact ordering.
+inside the state-owning action. Retryable operations need domain idempotency keys
+and durable deduplication where required. [Ordering and state-read
+timing](semantics.md#ordering-and-state-read-timing) defines exact ordering.
 
 ## Supported multi-instance topology
 
@@ -75,11 +70,11 @@ deduplication, or exactly-once action or reaction execution.
 
 ## Timeouts, abort, and shutdown
 
-Without an execution profile, invocation timeout defaults to 30 seconds. A
-profile supplies the default and maximum request duration. Timeout and
-`AbortSignal` stop waiting; neither cancels accepted concept work nor rolls back
-completed actions. Continued work remains subject to flow limits and can outlive
-its transport request.
+Without an execution profile, invocation timeout defaults to 30 seconds. With a
+profile, `maxRequestDurationMs` is both the default and the maximum accepted
+`timeoutMs`. Timeout and `AbortSignal` stop waiting; neither cancels accepted
+concept work nor rolls back completed actions. Continued work remains subject to
+flow limits and can outlive its transport request.
 
 Shutdown must account for that continued work. Stop public admission, call
 `beginDrain()`, and wait for the returned promise or `whenIdle()` until accepted
@@ -102,10 +97,10 @@ must define recovery for partially completed operations.
 
 ## Runtime validation
 
-Generated wire contracts check TypeScript callers; they do not validate runtime
-values. Default admission checks only that input is an object and that required
-own keys are present, then applies shallow defaults. It does not infer primitive
-or nested schemas from generated types or concept State notation.
+Generated wire contracts do not validate runtime values. Default admission
+requires an object with all required own keys, then applies shallow defaults. It
+does not infer primitive or nested schemas from generated types or concept State
+notation.
 
 Attach explicit synchronous endpoint validators for untrusted input, successful
 output, and domain errors. Input validation runs before application work. Invalid
@@ -127,18 +122,21 @@ endpoint settlement](semantics.md#sibling-paths-and-endpoint-settlement).
 
 ## Persistence and restart
 
-Concept state and occurrence evidence are separate. Every engine owns a
-process-local occurrence index. `FileLogSink` appends JSONL audit output but does
-not load it, rebuild the index, restore concept state, or replay reactions on
-startup. The engine also does not restore pending requests or interrupted paths.
+Concept state and occurrence evidence are separate. Every engine owns a local
+occurrence index. `FileLogSink` appends JSONL but does not load it, rebuild the
+index, restore concept state, replay reactions, or restore pending work.
 
-Persist domain state in concept implementations and design an application-specific
-recovery procedure. An occurrence file can support audit or diagnosis, but it is
-not a recovery log. `FileLogSink` provides no locking, shared-writer, flush, or
-network-filesystem durability contract. Use a host-owned sink when those
-properties matter. The [persistence and restart
-recipe](../guide/persistence-recovery.md#persistence-restart-and-recovery) demonstrates the
-separation.
+Persist domain state in concept implementations. Drain accepted work before
+replacement, then reconstruct derived state from durable state before admission.
+Overlapping old and new processes require storage coordination because their
+action queues are independent.
+
+An occurrence file supports audit or diagnosis, not recovery. `FileLogSink`
+appends synchronously without locking, shared-writer coordination, flush,
+network-filesystem durability, or a close method. Use a host-owned sink when
+those properties matter.
+The [persistence and restart recipe](../guide/persistence-recovery.md#persistence-restart-and-recovery)
+demonstrates the separation.
 
 ## Retention and memory
 
@@ -165,9 +163,8 @@ queueing, retries, and network export into host-owned infrastructure.
 
 ## Transport host responsibilities
 
-A transport adapter connects the gateway to a protocol; it does not change the
-engine's execution, persistence, or cancellation guarantees. Consult the
-selected transport's package documentation for protocol behavior and limits.
+A transport adapter does not change execution, persistence, or cancellation
+guarantees. Its package documentation defines protocol behavior and limits.
 
 The host owns connection and request-rate limits, denial-of-service controls,
 TLS, HSTS, certificate and trusted-proxy handling, static-file and SPA routing,
@@ -183,11 +180,11 @@ find them. Opaque values passed to a `LogSink`, including class instances,
 `Map`, `Set`, and functions, retain their identity and must be treated as
 read-only sensitive values.
 
-A sink runs synchronously before an entry reaches the internal occurrence index.
-An invocation append failure can prevent the action body from running; an outcome
-append failure can occur after concept state changed. The engine neither retries
-the append nor rolls back state. Custom sink availability, recovery, and resource
-lifecycle are host responsibilities.
+A sink runs synchronously before an entry reaches the occurrence index. An
+invocation append failure can prevent the action body; an outcome append failure
+can follow a concept-state change. The engine neither retries the append nor
+rolls back state. Sink availability, recovery, and lifecycle are host
+responsibilities.
 
 `rawFaultReporter` receives original thrown values outside the sanitized
 occurrence path. Treat it as privileged application code, restrict access, and

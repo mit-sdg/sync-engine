@@ -1,8 +1,8 @@
 # Using sync-engine
 
-Files under `docs/user/` are for human or software agents that design, build,
-call, or operate applications with sync-engine. This index does not cover
-repository work.
+Start with [Getting started](guide/getting-started.md), then read the
+[application model](overview.md) before choosing concept boundaries. Use the
+[application authoring path](#application-authoring-path) to add behavior.
 
 ## Start by task
 
@@ -22,24 +22,27 @@ repository work.
 
 ## Application authoring path
 
-- [Getting started](guide/getting-started.md) is the tutorial. It initializes
-  and runs a concept-free application.
-- [Application authoring](guide/authoring.md) is the experienced TypeScript
-  path. It follows a multi-concept application through registration,
-  composition, assembly, generation, and a typed client.
+1. [Getting started](guide/getting-started.md) initializes and runs a
+   concept-free application.
+2. [Application model](overview.md) explains the parts introduced by the setup
+   files. Read [Designing with concepts](design.md) before choosing concept
+   boundaries.
+3. [Application authoring](guide/authoring.md) adds concepts, composition,
+   assembly, generated artifacts, validation, and a typed client.
 
-The guides demonstrate representative constructions. [Execution
-semantics](reference/semantics.md) is authoritative when a guide simplifies
-runtime behavior.
+Use the [read construction cookbook](guide/read-construction.md) when a former
+needs optional, repeated, or folded data. Use [Persistence, restart, and
+recovery](guide/persistence-recovery.md) when the application must survive a
+process restart.
+
+[Execution semantics](reference/semantics.md) is authoritative for runtime
+behavior. Use [Operational limits](reference/operations.md) for deployment
+decisions.
 
 ## Engine-user document catalog
 
-This catalog is exhaustive. A **tutorial** teaches through one complete first
-task. A **how-to guide** completes a defined task. An **explanation** describes
-the model or design reasoning. A **reference** defines observable behavior or
-accepted forms. An **index** routes readers without owning those contracts.
-Reference entries are grouped under `reference/`; task-oriented procedures are
-grouped under `guide/`.
+This catalog is exhaustive. References are under `reference/`; procedures are
+under `guide/`.
 
 | Path                                                                                 | Class        | Scope                                                   |
 | ------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------- |
@@ -59,13 +62,16 @@ grouped under `guide/`.
 | [`docs/user/reference/operations.md`](reference/operations.md)                       | Reference    | Deployment selection, limits, and host responsibilities |
 | [`docs/user/reference/glossary.md`](reference/glossary.md)                           | Reference    | Preferred terminology                                   |
 
-## Examples and policies
+## Packages, examples, and policies
 
-| Resource                                                    | Scope                                                                                  |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [Reading Circle](../../examples/reading-circle/README.md)   | Shortest complete multi-concept application                                            |
-| [Operations Room](../../examples/operations-room/README.md) | Selectable reactions, replaceable policy, and staged formers                           |
-| [Message board](../../examples/message-board/README.md)     | Complete same-origin browser app, authentication, typed transport, and secure sessions |
-| [Support policy](../../SUPPORT.md)                          | Supported versions, runtimes, toolchains, and generated formats                        |
-| [Security policy](../../SECURITY.md)                        | Vulnerability reporting and the host/application security boundary                     |
-| [Changelog](../../CHANGELOG.md)                             | Release-specific compatibility and migration                                           |
+| Resource                                                                               | Scope                                                                                  |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [HTTP package](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | POST/JSON handler, Fetch client, browser policy, and HTTP wire projection              |
+| [Analysis package](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Manifest and optional checkout-source inspection                                       |
+| [Catalog package](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)   | Curated concept and recipe source installer                                            |
+| [Reading Circle](../../examples/reading-circle/README.md)                              | Shortest complete multi-concept application                                            |
+| [Operations Room](../../examples/operations-room/README.md)                            | Selectable reactions, replaceable policy, and staged formers                           |
+| [Message board](../../examples/message-board/README.md)                                | Complete same-origin browser app, authentication, typed transport, and secure sessions |
+| [Support policy](../../SUPPORT.md)                                                     | Supported versions, runtimes, toolchains, and generated formats                        |
+| [Security policy](../../SECURITY.md)                                                   | Vulnerability reporting and the host/application security boundary                     |
+| [Changelog](../../CHANGELOG.md)                                                        | Release-specific compatibility and migration                                           |

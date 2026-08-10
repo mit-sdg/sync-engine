@@ -16,7 +16,9 @@ disposition. Timing supplies publication, comment, and removal times.
 Board reads omit trashed and purged Posts. Trashing a Post hides its Comments and
 Labels without deleting them. Restoring reveals them again. Purging permanently
 excludes the Post from this recipe. Because Posting deliberately has no delete action,
-purge does not claim physical erasure of Post or Comment storage.
+purge does not claim physical erasure of Post or Comment storage. A public adapter
+must bind author inputs to authenticated identities when attribution and author-only
+comment retraction matter.
 
 ## Endpoints
 

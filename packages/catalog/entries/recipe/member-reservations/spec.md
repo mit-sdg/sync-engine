@@ -13,9 +13,9 @@ claims and the one-blocking-reservation invariant.
 ## Decisions
 
 A claimant must be a Gathering member when requesting a reservation. Membership is an
-eligibility snapshot; leaving later does not cancel an existing Reservation.
-Cancellation and fulfillment use the authenticated claimant identity when the recipe
-is exposed publicly.
+eligibility snapshot; leaving later does not cancel an existing Reservation. A public
+adapter must bind claimant inputs to the authenticated caller. Reading another
+claimant's reservations requires authorization.
 
 ## Endpoints
 

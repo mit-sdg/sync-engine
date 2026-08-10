@@ -1,13 +1,15 @@
 # How sync-engine applications fit together
 
 sync-engine composes independently implemented stateful behaviors into one
-application. This page identifies the application parts and follows one request
-through them. The [Public API](reference/public-api.md) defines signatures and defaults;
-[Execution semantics](reference/semantics.md) defines runtime behavior.
+application. This page maps the setup files to the runtime and follows one
+request through them. Use [Designing with concepts](design.md) before choosing
+concept boundaries, [Public API](reference/public-api.md) for signatures and
+defaults, and [Execution semantics](reference/semantics.md) for runtime behavior.
 
 ## Application layers
 
-A registered application is assembled and exposed in this order:
+A registered application moves from declarations to an assembly and,
+optionally, to a public boundary in this order:
 
 ```text
 concept specifications + TypeScript classes
@@ -31,10 +33,10 @@ concept specifications + TypeScript classes
           typed client ------+
 ```
 
-Concepts define independent behavior. Composition connects those behaviors.
-Assembly installs one combination. Tooling and a generated client are optional;
-the lower-level `vocabulary(...)` path may also assemble concepts without
-specification registration.
+Concepts define independent behavior, composition connects it, and assembly
+installs one combination. Tooling and a generated client are optional. The
+lower-level `vocabulary(...)` path can assemble concepts without specification
+registration.
 
 ## Concepts own behavior and state
 
@@ -50,9 +52,9 @@ reaction, so the same Selecting implementation can participate in another
 composition.
 
 The specification records the concept's purpose, principle, actions, queries,
-and expected refusals. Its optional State section is notation for readers, not a
-runtime schema. [Concept specification format](reference/concept-specification.md) defines
-what registration and source checking parse.
+and expected refusals. Its optional State section is not a runtime schema.
+[Concept specification format](reference/concept-specification.md) defines what
+registration and source checking parse.
 
 ## Registration names the concepts
 
@@ -79,9 +81,8 @@ Composition has four declaration forms:
 | Endpoint | Receive outside input and produce a boundary response through the reaction model            |
 
 These declarations carry application policy and references; concepts retain
-domain state. Application code may organize declarations in nested TypeScript
-records or create those records with ordinary factory functions before calling
-`assemble(...)`.
+domain state. Declarations may be nested in TypeScript records or created by
+factory functions before `assemble(...)`.
 
 ## Assembly installs one application
 
@@ -116,16 +117,17 @@ A representative request crosses these components:
 8. The client resolves to the success value or an error envelope.
 
 The boundary is transport-neutral. The local client applies a JSON projection;
-other transports define their own protocol behavior. The [application authoring
-guide](guide/authoring.md#application-boundary) shows the boundary lifecycle.
+other transports define their own protocol behavior.
 
 ## Concept state and occurrence evidence
 
 Concept state is domain state owned by concept implementations and their storage.
 Occurrence evidence records asks, outcomes, faults, reaction firings, and selected
-runtime failures inside one assembly. The engine uses a process-local occurrence
-index for matching and inspection. An optional `LogSink` may receive an audit
-copy, but a sink does not replace concept storage or provide replay.
+runtime failures inside one assembly. These are different data: occurrence
+records describe execution, while concept storage is the source from which
+queries obtain domain state. The engine uses a process-local occurrence index
+for matching and inspection. An optional `LogSink` may receive an audit copy,
+but a sink does not replace concept storage or provide replay.
 
 The engine does not rebuild concept state, pending requests, or interrupted
 reactions from occurrence output. Applications that require durable state and

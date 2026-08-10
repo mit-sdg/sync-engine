@@ -1,10 +1,9 @@
 # Working on sync-engine
 
-Files under `docs/project/` describe changes to the sync-engine repository. They
-do not define package behavior and are not included in the published package.
-Use the engine-user [documentation map](../user/index.md), [Public
+Files under `docs/project/` guide repository changes; consumer contracts belong
+in the [user documentation](../user/index.md), [Public
 API](../user/reference/public-api.md), and [Execution
-semantics](../user/reference/semantics.md) for consumer contracts.
+semantics](../user/reference/semantics.md).
 
 ## Start by task
 

@@ -1,15 +1,9 @@
 # @mit-sdg/sync-engine-http
 
-Use `@mit-sdg/sync-engine-http` to expose an assembled sync-engine application
-over POST/JSON. The package provides a Fetch handler and a typed Fetch client.
-The handler maps one `Request` to a `Response`; the host opens the listener and
-owns its lifecycle.
-
-Start with plain POST/JSON when callers send credentials and other inputs in the
-request body. Add an HTTP policy when the deployment needs cookies or
-request-origin protection, and add browser policy when it needs CORS. A route
-prefix, request-body limit, and reviewed public error mappings do not require
-browser policy.
+`@mit-sdg/sync-engine-http` exposes an assembled application over POST/JSON
+through a Fetch handler, typed client, and generated wire projection. The host
+opens and owns the listener. HTTP policy adds cookies, request-origin protection,
+a route prefix, body limits, or public error mappings; browser policy adds CORS.
 
 ## Install
 
@@ -31,18 +25,9 @@ has no root export and no supported deep imports.
 | `@mit-sdg/sync-engine-http/client`  | Typed Fetch client and lower-level transport |
 | `@mit-sdg/sync-engine-http/tooling` | Generated HTTP wire projection               |
 
-## Choose a setup
-
-| Requirement                                             | Start with                                                             |
-| ------------------------------------------------------- | ---------------------------------------------------------------------- |
-| JSON calls without package-managed cookies              | [Plain POST/JSON](#tier-0-plain-postjson)                              |
-| Browser sessions, cookie binding, or cross-origin calls | [Browser sessions](#tier-1-browser-sessions)                           |
-| Response headers, handler wrapping, or another protocol | [Advanced integration](#tier-2-headers-wrapping-and-custom-transports) |
-
 ## Tier 0: plain POST/JSON
 
-A plain handler needs no HTTP policy. Create a gateway, bind the application to
-a Fetch handler, and give the handler's returned `Response` to the host:
+A plain handler needs no HTTP policy:
 
 ```ts
 import { createGateway } from "@mit-sdg/sync-engine/boundary";
@@ -61,18 +46,16 @@ failures become `{ "error": "INTERNAL_ERROR" }`. The handler emits no CORS or
 cookie headers without a policy. It does not validate primitive or nested input
 shapes beyond the application's endpoint validators.
 
-A Fetch-native host calls `handler(request)`. The host must route the complete
-request URL to this handler; the handler selects an endpoint from the URL
-pathname. For example, Bun can use the handler as its `fetch` callback:
+The host must route the complete request URL to `handler(request)`; the handler
+selects an endpoint from its pathname. For example:
 
 ```ts
 const listener = Bun.serve({ hostname: "127.0.0.1", port: 3000, fetch: handler });
 ```
 
-`Bun.serve` opens the listener; `createHttpHandler` does not. The package does
-not provide a plain-host executable. Node, frameworks, workers, and serverless
-platforms may supply the same Fetch `Request` and consume the returned
-`Response`.
+`Bun.serve` opens the listener, but Bun is outside the package's Node.js 24
+support contract. A Node.js 24 host or adapter can supply the same Fetch
+`Request` and consume its `Response`; the package provides no host executable.
 
 ### Public errors, base path, and generated contract
 
@@ -91,11 +74,9 @@ export const policy = httpPolicy({
 export const handler = createHttpHandler({ application, gateway, policy });
 ```
 
-`httpPolicy` validates, copies, deeply freezes, and brands the supplied
-deployment facts. Consumers reject raw objects. Policy accepts deployment
-facts, not security mechanisms: an application declares facts such as its
-public origin, browser caller origins, and cookie-to-endpoint bindings; the
-package derives transport controls from those facts.
+`httpPolicy` validates, copies, freezes, and brands deployment facts; consumers
+reject raw objects. The package derives transport controls from declared public
+and browser origins and cookie-to-endpoint bindings.
 
 Use the same policy to project the browser-visible wire:
 
@@ -136,10 +117,7 @@ result, timeout, abort, and response-size behavior.
 
 ## Tier 1: browser sessions
 
-Tier 1 binds browser-visible credentials to cookies and, when needed, declares
-cross-origin browser access. Browser deployment also requires a host that opens
-the listener and serves or routes the frontend; neither responsibility belongs
-to this package. The following policy supports an API at
+This policy binds credentials to cookies for an API at
 `https://api.example.com` and a credentialed frontend at
 `https://app.example.com`:
 
@@ -218,16 +196,14 @@ cookies.
 
 ### CORS and request-origin protection
 
-CORS and request-origin protection are separate controls.
-
 CORS controls whether a browser exposes a response to frontend code. The
 `browser` policy uses exact origin matching, answers valid `OPTIONS` preflights,
 emits allow-origin and configured header metadata, and adds the required `Vary`
 fields. CORS headers are applied to successful and error responses for an
 allowed origin.
 
-Request-origin protection controls which origins may invoke cookie-touched
-paths: protected, issuing, and clearing endpoints. By default, the allowlist is
+Request-origin protection separately controls which origins may invoke
+protected, issuing, and clearing endpoints. By default, the allowlist is
 `publicOrigin` plus `browser.origins`. A present disallowed `Origin` returns
 `FORBIDDEN`/403. A missing `Origin` is allowed by default so non-browser callers can attach
 credentials deliberately. Set
@@ -304,10 +280,9 @@ tier, not a deep-import workaround.
 
 ## Host responsibilities and unsupported features
 
-The HTTP package handles the POST/JSON protocol. The host remains responsible
-for the listener and process lifecycle, static-file or SPA routing, TLS and
-proxy configuration, and traffic controls. Application code defines
-credential meaning, authentication, and authorization.
+The host owns listener and process lifecycle, static or SPA routing, TLS, proxy
+configuration, and traffic controls. Application code defines credentials,
+authentication, and authorization.
 
 The package does not provide a Node cookie jar, retries, idempotency, rollback,
 persistence, or cancellation of accepted application work. It buffers JSON
@@ -322,7 +297,7 @@ serialization.
 
 ## Migration to the current API
 
-The rework is a clean break. There are no aliases or compatibility adapters.
+There are no aliases or compatibility adapters.
 
 ### Removed identifiers
 
@@ -369,8 +344,6 @@ process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
 ## Related documentation
 
 - [HTTP public API reference](public-surface.md)
-- [Complete message-board web application](https://github.com/mit-sdg/sync-engine/blob/main/examples/message-board/README.md)
+- [Complete message-board application](https://github.com/mit-sdg/sync-engine/blob/main/examples/message-board/README.md)
 - [Boundary, gateway, and client semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client)
 - [Core operational limits](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md)
-- [Core support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md)
-- [Security policy](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md)

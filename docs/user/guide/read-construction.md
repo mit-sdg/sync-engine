@@ -1,24 +1,19 @@
 # Read construction cookbook
 
-Use this cookbook to look up a representative reading construction and compare
-it with a close variant. The [Public API](../reference/public-api.md#language) lists the
-exported forms, and [Execution
-semantics](../reference/semantics.md#reading-declarations-govern) defines matching and
-cardinality.
+Compare these reading constructions with their close variants. [Execution
+semantics](../reference/semantics.md#reading-declarations-govern) defines the
+contract; the [language API](../reference/public-api.md#language) lists the
+interfaces. `inspectAssembly(assemble(...)).readBack` returns diagnostic output
+like the excerpts below, exposing opened names, tests, fan-out, and drop points.
 
-For your own assembly, `inspectAssembly(assemble(...)).readBack` returns the
-same kind of read-back shown here.
+A plain line is not ordered by its position in a reaction or former. The
+engine schedules a line when its inputs are bound; the examples put supplying
+lines first where that makes the data flow easier to read. Views are the
+exception documented in the reference: write each view line after the line
+that supplies its inputs.
 
-Each entry describes four parts of the construction:
-
-1. What is the **English**?
-2. What **runs**, and why was it forced?
-3. What happens on **none**, and on **many**?
-4. Which names did the line **open**?
-
-Entries labelled **Invalid construction** show a rejected form beside the exact
-error from the phase that rejects it. Most fail during assembly registration;
-former-root errors fail when the former is installed for evaluation.
+**Invalid construction** entries include the exact rejection. Most fail during
+assembly registration; former-root errors fail when installed for evaluation.
 
 ## Construction index
 
@@ -49,10 +44,8 @@ former-root errors fail when the former is installed for evaluation.
 
 ## The scene
 
-Everything below uses the
-[reading-circle example](../../../examples/reading-circle/README.md) vocabulary:
-people gather in circles, a circle selects a current reading, and an open
-discussion collects responses. Its queries declare every promise used here:
+The [reading-circle example](../../../examples/reading-circle/README.md)
+supplies this vocabulary and its query promises:
 
 | Concept    | Actions                    | Queries and their promises                                                                                                                        |
 | ---------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -60,8 +53,8 @@ discussion collects responses. Its queries declare every promise used here:
 | Selecting  | `choose`, `clear`          | `_current (scope) → selection, item` at most one · `_get (selection) → scope, item` at most one                                                   |
 | Discussing | `open`, `respond`, `close` | `_openFor (subject) → discussion` at most one · `_responses (discussion) → response, author, text` any number                                     |
 
-The entries register as one composition named `book`, so reactions print under
-`book.` in the read-backs quoted below.
+The entries register in composition `book`, reflected in reaction read-backs.
+Query promises belong to the vocabulary contract, not each use site.
 
 ## 1 · A plain line
 
@@ -76,16 +69,15 @@ const ClearedReadingClosesDiscussion = reaction(({ selection, discussion }) =>
 ```
 
 - **English**: the discussion open for that selection.
-- **Runs**: `subject` is bound from the trigger, so the engine reads
-  `_openFor` for that one subject. Nothing else could run: the only bound name
-  appears in the query input.
+- **Runs**: `subject` is bound from the trigger, so the engine can read
+  `_openFor` for that one subject.
 - **None / many**: `_openFor` promises at most one row. None means the reaction
-  quietly does not fire — no word for that was written, because the
-  declaration already says it. Many cannot happen; if the concept ever broke
-  that promise, the fault would name the query, not this reaction.
+  quietly does not fire; the read needs no explicit absence operator because
+  the declaration already permits no result. More than one row violates the
+  promise; the resulting fault names the query, not this reaction.
 - **Opens**: `discussion` — a fresh name in `.is` binds.
 
-The engine states this back at registration:
+Registration read-back:
 
 ```
 book.ClearedReadingClosesDiscussion
@@ -94,8 +86,8 @@ book.ClearedReadingClosesDiscussion
   then Discussing.close (discussion)
 ```
 
-**Invalid construction — the row grabbed out of habit.** A later reaction pulled
-both outputs of `_current` and used only one:
+**Invalid construction — unused output.** This reaction opens both `_current`
+outputs but uses only one:
 
 ```ts
 const ReopenOnJoin = reaction(({ circle, selection, reading }) =>
@@ -105,8 +97,7 @@ const ReopenOnJoin = reaction(({ circle, selection, reading }) =>
 );
 ```
 
-Opening a name is a claim that the reaction ranges over it, so an opened name
-nobody reads is refused:
+Registration rejects the unused opened name:
 
 ```
 Reaction "bad.ReopenOnJoin": "reading" is opened and never used — omit the key instead.
@@ -133,17 +124,17 @@ const theStandingOf = view(
   when the view is read.
 - **Opens**: `joined`.
 
-A `one` promise guarantees the source row. A literal or already-bound name in
-`.is(...)` can reject that row and drop the case.
+A `one` promise guarantees one source row, not that every output pattern will
+match it. A literal or already-bound name in `.is(...)` can reject that row and
+drop the case.
 
 ```
 the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); checked when read
   Gathering._membership (gathering: circle, member) has (joined) — always fills; opens (joined)
 ```
 
-Entries 1 and 2 show the cardinality contract. Authors do not repeat a quantity
-at the use-site. The relation's promise determines whether a read _always
-fills_, _fills or drops_, or _fans out_.
+The relation's promise determines whether a read _always fills_, _fills or
+drops_, or _fans out_; authors do not repeat it at the use site.
 
 ## 3 · A literal in the pattern tests
 
@@ -175,7 +166,7 @@ const nonmemberMayNotRespond = view(
   Gathering._membership (gathering: circle, member) has (joined: true) — existence — fires once or drops the case
 ```
 
-The second view gives the boundary's denial branch its own named question.
+Entry 10 uses the second view in its denial branch.
 
 ## 4 · A bound name tests, and a many-relation fans out
 
@@ -194,9 +185,9 @@ const HostLeavingDissolvesCircle = reaction(({ circle, host, member }) =>
 
 - **English**: the leaver is the host; every member of the circle.
 - **Runs**: `host` is already bound from the trigger, so the first line tests
-  the circle's `host` field against it — equality is never a word, it is the
-  same variable in both output patterns. The second line reads a many-promise relation with a
-  fresh name.
+  the circle's `host` field against it. Reusing the same variable in both
+  patterns expresses equality. The second line reads a many-promise relation
+  with a fresh name.
 - **None / many**: if the leaver is not the host, the first line drops the
   case. The second line fires the consequence once per distinct member, as
   declared by `_members`.
@@ -225,8 +216,8 @@ const OpenDiscussionOnce = reaction(({ selection }) =>
 
 - **English**: no discussion is open for it.
 - **Runs**: the same read as entry 1, expecting emptiness.
-- **None / many**: none passes; any row drops the case. `no` has exactly one
-  reading — no such row exists at all — never "a row exists that differs."
+- **None / many**: none passes; any row drops the case. `no` has one meaning:
+  no such row exists at all, never "a row exists that differs."
 - **Opens**: nothing. `no` can only test names already bound by the trigger or
   another available line.
 
@@ -269,8 +260,8 @@ const theCircleCard = former("the circle card (circle)", ({ circle }, { name, ho
 ```
 
 - **English**: the circle's name and host, and its current reading if any.
-- **Runs**: the first line reads as always; the second is softened by
-  `whether` — the row is read if present.
+- **Runs**: the first line is plain and therefore required. The second is
+  softened by `whether`, so its row is read only if present.
 - **None / many**: without `whether`, an absent selection would drop the whole
   card, because that is how a plain line handles absence. With it, the card
   survives and `reading` comes through blank — a `null` leaf in the formed
@@ -280,8 +271,7 @@ const theCircleCard = former("the circle card (circle)", ({ circle }, { name, ho
   case while it is blank, so a chain meant to survive absence stays under
   `whether`.
 
-The former's read-back states its record-root promise. The author declares
-that the circle exists, and the engine checks that declaration when forming:
+The engine checks the former's exactly-one promise when forming:
 
 ```
 the circle card (circle) — inputs (circle); bindings (name, host, reading); promises exactly one; checked when formed
@@ -328,20 +318,18 @@ const theCurrentReadingOf = former("the current reading of (circle)", ({ circle 
 ).optional();
 ```
 
-A record former promises exactly one answer unless it ends in `optional()`.
-The read-back states that promise directly:
+A record former promises exactly one answer unless it ends in `optional()`:
 
 ```
 the current reading of (circle) — inputs (circle); bindings (reading); promises at most one; checked when formed
 ```
 
-A host that reads this former plainly drops its row when there is no reading;
-a host that writes `whether(theCurrentReadingOf({ circle }))` keeps the row and
-takes blank leaves. Absence is declared once, here — every reader then chooses
-how to handle it.
+A plain use of this former drops its host row when there is no reading;
+`whether(theCurrentReadingOf({ circle }))` keeps the host row and supplies
+blank leaves. Absence is declared once, here; each use then chooses how to
+handle it.
 
-**Invalid construction — folding what is already single.** The first draft reached
-for a fold to say "the first one":
+**Invalid construction — folding a single source.**
 
 ```ts
 const theFirstReadingOf = former("the first reading of (circle)", ({ circle }, { reading }) =>
@@ -353,8 +341,8 @@ const theFirstReadingOf = former("the first reading of (circle)", ({ circle }, {
 Former "the first reading of (circle)": the source already promises at most one row; use a plain line or whether(...), not a fold.
 ```
 
-Folds reduce genuine pluralities. When the declaration already answers "how
-many," the fold is refused, and the plain read above is the accepted spelling.
+Folds reduce pluralities; use the plain read above for an at-most-one source.
+A fold changes result shape and cannot repair a query-promise violation.
 
 ## 9 · Folds consume a captured range
 
@@ -371,16 +359,15 @@ const theResponseCountOf = former(
 - **English**: the count of the discussion's responses.
 - **Runs**: `each` captures every row of a many-promise read; `count` folds
   the capture to one number.
-- **None / many**: an empty capture counts to zero — a selection always
-  answers, so this former promises exactly one.
+- **None / many**: an empty capture counts to zero. `count()` always produces a
+  number, so this former promises exactly one.
 - **Opens**: nothing outward; `response` ranges inside the capture.
 
 ```
 the response count of (discussion) — inputs (discussion); bindings (response); promises exactly one; checked when formed
 ```
 
-**Invalid construction — a record over a crowd.** Without `each`, a formed record
-was pointed at the many-promise relation directly:
+**Invalid construction — a record over a many-row source.**
 
 ```ts
 const theMemberCard = former("the member card (circle)", ({ circle }, { member }) =>
@@ -421,11 +408,9 @@ const RejectNonmemberResponse = endpoint("/circles/respond", ({ circle, reading,
 );
 ```
 
-The middle line does two things at once, each already shown above: it opens
-`selection`, and it tests `item` against the request's `reading` — the same
-variable in both output patterns. The view line is read exactly like a query.
-The read-backs show the successful arm, its response step, and the independent
-nonmember answer:
+`Selecting._current` opens `selection` and tests `item` against the bound
+`reading`. The view reads like a query. The response step and nonmember answer
+are independent:
 
 ```
 book.AddResponse
@@ -450,10 +435,9 @@ book.RejectNonmemberResponse
   then RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)
 ```
 
-Two declarations on one path are independent alternatives, and both may fire.
-The twin views from entry 3 happen to answer opposite values, but the endpoint
-declarations make no exclusivity or coverage claim. Entries 11 and 12 show the
-same all-match rule inside one labeled sibling group.
+Declarations on one path are independent alternatives and may both fire. The
+opposite views make no exclusivity or coverage claim. Entries 11 and 12 apply
+the same all-match rule to siblings.
 
 ## 11 · Siblings on an ordinary reaction
 
@@ -496,11 +480,10 @@ book.LeavingRoutesByHost:host
   then Discussing.open (subject: circle)
 ```
 
-Each sibling lowers to one single-case reaction. The stable labels produce
-`book.LeavingRoutesByHost:member` and
-`book.LeavingRoutesByHost:host`; reversing the source arguments leaves those
-names unchanged. If both conditions held, both paths would run. If the shared
-selection or both branch reads drop, neither path runs.
+Each sibling lowers to a single-case reaction. Stable labels produce
+`book.LeavingRoutesByHost:member` and `book.LeavingRoutesByHost:host` regardless
+of source order. Both matching paths run; if the shared selection or both branch
+reads drop, neither runs.
 
 ## 12 · An endpoint uses the same sibling shape
 
@@ -528,13 +511,11 @@ const ChooseReadingHostOnly = endpoint(
   tests equality, while `.is.not` tests difference. Every matching branch
   starts; labels establish path names, not priority.
 - **None / many**: `_get` promises at most one row, so when the circle does
-  not exist _both_ cases drop and nobody answers.
+  not exist _both_ cases drop and neither branch responds.
 - **Opens**: `selection`, in the acting case only.
 
-`receive(...)` supplies an outside-request trigger to the same builder that
-entry 11 used after `when(...)`. The sibling lowering is the same.
-The endpoint layer adds the path, input contract, request correlation,
-response, and generated wire.
+`receive(...)` supplies an outside-request trigger; the endpoint adds the path,
+input contract, request correlation, response, and generated wire.
 
 ```
 book.ChooseReadingHostOnly:non-host
@@ -557,9 +538,8 @@ book.ChooseReadingHostOnly:host#2
   then RequestBoundary.respond (selection, requestId)
 ```
 
-**Overlapping conditions.** The author meant the
-second branch as "not found" but wrote it as a plain read. When the circle is
-found, both branches match and both ask the boundary to answer:
+**Overlapping conditions.** The second branch intends "not found" but uses a
+plain read, so a found circle makes both branches answer:
 
 ```ts
 const GetCircleNameFirstDraft = endpoint("/circles/name", ({ circle, name }) =>
@@ -591,10 +571,9 @@ const GetCircleName = endpoint("/circles/name", ({ circle, name }) =>
 );
 ```
 
-This version covers found and missing circles. Runtime execution does not prove
-or enforce that coverage. Application diagnostics report that neither answer
-path is independently total; present and absent reads do not share a state
-snapshot. The author remains responsible for complete endpoint cases.
+Runtime does not enforce this found/missing coverage. Diagnostics report that
+neither path is independently total, and the reads do not share a state
+snapshot.
 
 ```
 book.GetCircleName:found
@@ -615,8 +594,7 @@ book.GetCircleName:missing
 _The circle at a glance: the current reading if one is chosen, the open
 discussion if there is one — and an answer either way._
 
-Entry 6's card anchored on a plain line: `_get` had to fill, or there was no
-card. Take the anchor away and soften every line:
+Unlike entry 6, this former has no required plain-line anchor:
 
 ```ts
 const theCircleActivityOf = former(
@@ -649,11 +627,9 @@ the circle activity of (circle) — inputs (circle); bindings (selection, readin
 
 Nothing in this body tests that the circle exists, so an unknown circle returns
 a record of blanks. To return absence, anchor the body with one plain line
-(entry 6), or state `optional()` over a plain read and let the case drop (entry
-8).
+(entry 6), or make a plain-read former optional (entry 8).
 
-This variant adds a plain `_responses` read. It returns a record only when the
-open discussion has at least one response:
+Adding a plain `_responses` read requires at least one response:
 
 ```ts
 const theRespondedCircleActivityOf = former(
@@ -667,10 +643,9 @@ const theRespondedCircleActivityOf = former(
 ).optional();
 ```
 
-When `_current` returns no row, `selection` has no value. `_openFor` therefore
-produces no `discussion`, and the plain `_responses` read causes the former to
-return `null`. When both queries return a row, `_responses` receives the
-`discussion` value and the former returns its record once a response exists.
+Without `_current`, `selection` is blank, `_openFor` is skipped, and the plain
+`_responses` read makes the former return `null`. With a current selection and
+open discussion, the former returns its record only if a response exists.
 
 ```
 the responded circle activity of (circle) — inputs (circle); bindings (selection, reading, discussion); promises at most one; checked when formed
@@ -678,7 +653,6 @@ the responded circle activity of (circle) — inputs (circle); bindings (selecti
 
 ## Related references
 
-Use [Execution semantics](../reference/semantics.md) for rules not established by these
-examples, including cache freshness, equality, failure delivery, concurrency,
-retention, and cancellation. Use [Getting started](getting-started.md)
-to build and run a complete application.
+See [Execution semantics](../reference/semantics.md) for cache freshness,
+equality, failure delivery, concurrency, retention, and cancellation. [Getting
+started](getting-started.md) builds a complete application.

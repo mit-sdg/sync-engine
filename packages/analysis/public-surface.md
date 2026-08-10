@@ -1,7 +1,11 @@
 # Analysis Public Surface
 
-`@mit-sdg/sync-engine-analysis` is a public package with no root export and no
-supported deep imports. Its complete public topology is `/ir` and `/project`.
+`@mit-sdg/sync-engine-analysis` is a public package that exports only `/ir` and
+`/project`; root and deep imports are unsupported.
+
+Install analysis and core at the same exact beta version. The package is
+ESM-only and supports Node.js 24 (`>=24 <25`). Project analysis also installs
+TypeScript `>=6 <7` as a runtime dependency; importing `/ir` does not load it.
 
 ## `ir`
 
@@ -13,10 +17,9 @@ supported deep imports. Its complete public topology is `/ir` and `/project`.
 
 <!-- register:analysis-ir:end -->
 
-This is the lightweight consumer surface. A native ESM import may evaluate Node
-crypto for canonical SHA-256 identities, but it does not evaluate `typescript`,
-`fs`, `fs/promises`, `node:fs`, `node:fs/promises`, worker threads, a project or
-worker module, or the TypeScript-backed source index builder.
+This lightweight surface may evaluate Node crypto for canonical SHA-256
+identities, but loads no TypeScript source index builder, project or worker
+modules, `typescript`, filesystem modules, or worker threads.
 
 The persisted formats on this surface are
 `sync-engine.application-index` version 2,
@@ -30,26 +33,25 @@ and reports explicit incompleteness when limits or unknown seeds prevent a
 complete trace.
 
 `ApplicationSourceIndex` is metadata-only plain data. Documents carry relative
-paths, lengths, byte lengths, and SHA-256 digests. Anchors carry ranges,
-resolution metadata, and slice digests; neither documents nor anchors retain
-source bytes or excerpts. `ApplicationSourceQuery` is the one query model used
-by `queryApplicationSources()` and the facade. Unknown query discriminants,
+paths, lengths, byte lengths, and SHA-256 digests; anchors carry ranges,
+resolution metadata, and slice digests. Neither retains source bytes or excerpts.
+`ApplicationSourceQuery` is the one query model used by
+`queryApplicationSources()` and the facade. Unknown query discriminants,
 extra fields, and malformed `DesignRef` values are rejected.
 
-`readApplicationSourceDocument()` is the source-byte trust boundary. It asks a
-caller reader for the complete document, checks path shape, cancellation, byte
-limits, length, and SHA-256 identity, and only then returns the verified string.
+`readApplicationSourceDocument()` obtains a complete document from the caller,
+then checks path shape, cancellation, byte limits, length, and SHA-256 identity
+before returning it.
 Clients slice that string with an anchor range and may compare the slice SHA-256
 with the anchor digest. `designRefsForSourceRange()` and source queries do not
 load TypeScript.
 
 `createApplicationAnalysis(...)` accepts a manifest and an optional strict V2
-project snapshot. Supplying `project` also requires `expectedProjectDigest`, a
-previously trusted value returned by
-`applicationProjectAnalysisDigest(project)` from `/project`. Omission, malformed
-digests, and mismatches are rejected before a facade is returned. Computing a
-new digest from an untrusted artifact at ingestion explicitly chooses that
-different artifact; it is not authentication against prior trust.
+project snapshot. Supplying `project` also requires a previously trusted
+`expectedProjectDigest` from `/project`'s
+`applicationProjectAnalysisDigest(project)`. Omission,
+malformed digests, and mismatches are rejected before facade creation. Hashing
+an untrusted artifact at ingestion does not authenticate it.
 
 The facade always recomputes the canonical application index from the supplied
 manifest, using optional `limits`, and requires the snapshot index to have
@@ -74,11 +76,34 @@ Search trims a 1-256 UTF-16-unit query, applies locale-invariant
 every token in the explicitly selected fields. It performs no stemming or
 locale-sensitive case mapping.
 
-Requests reject unknown fields and invalid exact references with typed
-`AnalysisError` values. Operations check cancellation at deterministic points,
-enforce a hard canonical UTF-8 result-byte bound with one size pass, and deeply
-freeze returned data. Granular results deliberately have no persisted format,
-parser, renderer, validator, or digest API.
+### Facade operation bounds and failures
+
+Facade methods reject with `AnalysisError`. Its `code` is `INVALID_ARGUMENT`,
+`INVALID_FORMAT`, `UNSUPPORTED_VERSION`, `SNAPSHOT_MISMATCH`, `NOT_FOUND`,
+`CAPABILITY_UNAVAILABLE`, `LIMIT_EXCEEDED`, or `ABORTED`; optional `data`
+contains serializable failure details. Requests reject unknown fields and
+malformed or unknown exact references.
+
+Paged methods default to offset 0 and 50 items. A page may contain at most 200
+items. Every method defaults `maxResultBytes` to 4 MiB and rejects values above
+the 64 MiB hard maximum; the bound applies to the complete canonical UTF-8
+result, not only `items`. Operations check an `AbortSignal` at deterministic
+points, so cancellation is not timer-preemptive.
+
+`impact()` accepts at most 100 seeds. Its defaults are depth 12 and 500 nodes;
+the hard maxima are depth 12 and 1,000 nodes. `navigate()` defaults to depth 1,
+100 nodes, and 250 edges; its hard maxima are depth 12, 1,000 nodes, and 5,000
+edges. Reaching a traversal bound returns `complete: false` with a diagnostic
+rather than rejecting. Facade results are deeply frozen and have no persisted
+format, parser, renderer, validator, or digest API.
+
+The lower-level producers `indexApplication()`, `indexApplicationSources()`,
+`loadApplicationProject()`, and `traceApplicationImpact()` throw
+`AnalysisLimitError` when a construction limit is exceeded and
+`AnalysisAbortedError` when they observe cancellation. They do not return a
+partial artifact.
+
+### Producer resource limits
 
 `DEFAULT_ANALYSIS_RESOURCE_LIMITS` publishes the exact defaults used when a
 member of `AnalysisLimits` is omitted:
@@ -154,8 +179,6 @@ index recomputed by the running analyzer.
 
 ## Boundary
 
-IR and source attribution are deterministic evidence, not proof that behavior
-will execute. The package contains no canonical guidance, prompts, stages,
-context packs, change targets, review orchestration, observations, coverage
-verdicts, rendered recommendations, authorization allowlists, or approval
-decisions.
+IR and source attribution are deterministic evidence, not proof of execution.
+They do not provide workflow, change, coverage, authorization, or approval
+recommendations.

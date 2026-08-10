@@ -1,12 +1,11 @@
 # Contributing
 
-Contributions must preserve the public package boundary, generated artifacts,
-and documented execution contracts. The [project documentation
-map](docs/project/index.md) classifies contributor material. Read [Engine
-architecture](docs/project/architecture.md) before moving implementation files,
-and read [Execution semantics](docs/user/reference/semantics.md) before changing observable
-runtime behavior.
-Public compatibility and vulnerability work must also follow the [support
+Preserve the public package boundary, generated artifacts, and documented
+execution contracts. The [project documentation map](docs/project/index.md)
+classifies contributor material. Before moving implementation files, read
+[Engine architecture](docs/project/architecture.md). Before changing observable
+runtime behavior, read [Execution semantics](docs/user/reference/semantics.md).
+Compatibility and vulnerability work must follow the [support
 policy](SUPPORT.md) and [security policy](SECURITY.md).
 
 ## Set up the checkout
@@ -46,16 +45,6 @@ bun run package:check
 bun audit
 ```
 
-### CI platform coverage
-
-CI runs the complete test suite on Linux, Windows, and macOS. Windows and macOS
-also build every workspace and run the application scenarios, establishing that
-the engine works from built output on both platforms. Release-oriented checks—npm packing, isolated consumer installation,
-concept-free setup, workspace verification, and package policy inspection—run
-on Linux only. The
-publication workflow repeats those checks on Linux before publishing the
-verified tarballs.
-
 ## Generated files
 
 Do not hand-edit these outputs:
@@ -63,9 +52,9 @@ Do not hand-edit these outputs:
 - `tests/packaging/declarations.snapshot.txt` and
   `packages/*/tests/declarations.snapshot.txt` — update with
   `bun run declarations:pin` after an intentional declaration change;
-- `examples/*/generated/*.md` and `examples/*/generated/wire.ts` — update through
-  the owning example's artifact pin command or the repository generation
-  script.
+- `examples/*/generated/*.md` and `examples/*/generated/wire.ts` — update with
+  `bun run artifacts:pin` from the owning example or with
+  `bun scripts/examples.ts pin` for all registered examples.
 
 Review generated diffs as public contract changes. The check commands compare
 the committed files with fresh output.
@@ -110,9 +99,7 @@ reference only when implementation and contract tests establish the behavior.
 ## Release work
 
 Do not commit, tag, or publish a release as part of an ordinary contribution.
-After changing version or toolchain facts in the root manifest, run
-`bun run release:update` and review the concrete standalone-manifest changes.
-Release maintainers use the [Contributor release
-procedure](docs/project/releasing.md) after all intended changes reach `main`. Released
-versions are immutable; compatibility, migration, generated-format, and
-runtime/security notes are required for every release.
+After changing root-manifest version or toolchain facts, run
+`bun run release:update` and review the standalone-manifest changes. Release
+maintainers follow the [Contributor release
+procedure](docs/project/releasing.md) after all changes reach `main`.

@@ -3,8 +3,8 @@
 Authenticating delegates password derivation and checking to an injected
 `PasswordVerifierStrategy`. The memory and Mongo implementations use the same
 strategy contract. This file describes implementation security configuration;
-the algorithm and cost are not part of `spec.md` or the concept's observable
-behavior.
+the algorithm and cost are not part of the [concept specification](spec.md) or
+its observable behavior.
 
 ## Shipped strategy
 

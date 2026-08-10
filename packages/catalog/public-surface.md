@@ -1,8 +1,7 @@
 # Catalog command reference
 
-`@mit-sdg/sync-engine-catalog` is CLI-only. Its package `exports` object is
-empty. The executable reads shipped manifests and source assets without
-importing entry modules.
+`@mit-sdg/sync-engine-catalog` exposes only the `catalog` executable, which
+reads shipped manifests and source assets without importing entry modules.
 
 ## Commands
 
@@ -13,18 +12,19 @@ catalog add <entry...> [--floor <name>]
 catalog help
 ```
 
-With no arguments, or with `help`, `--help`, or `-h`, the executable prints
-usage and exits successfully.
+No arguments, `help`, `--help`, and `-h` print usage and exit successfully.
 
-`list` prints each matching id, kind, and summary. `show` prints requirements,
-floor and package summaries, destination paths, and recipe member-to-route
-metadata. These commands do not require core and do not import entry modules.
+`list` prints each matching id, kind, and summary. `show` prints summary,
+dependencies, and destination paths, plus floors and merged package requirements
+for concepts or composition members and routes for recipes. Neither command
+requires core or imports entry modules.
 
 `add` requires a project-root `package.json`. It resolves recipe dependencies,
 deduplicates shared concepts, selects one project floor, verifies all current
-and requested package requirements, renders output in memory, validates paths
-and ownership, commits source, writes `catalog.lock` last, and prints
-integration guidance.
+and requested package requirements, renders output in memory, and validates
+paths and ownership before writing. It installs staged source and generated
+files, writes `catalog.lock` last, and prints integration guidance. A failed
+commit restores files that it replaced.
 
 Repeated `--floor`, comma-separated floor names, unknown options, unavailable
 floors, and a floor different from the lock fail before writes. Missing or
@@ -39,15 +39,16 @@ concept must name the same `defaultFloor`; that common default is selected.
 Every resolved concept must provide the selected floor. `catalog.lock` fixes the
 floor for later additions.
 
-The plan omits registry blocks, implementations, imports, factories, tests, and
-package requirements that belong only to another floor.
+The plan omits another floor's registry blocks, implementations, imports,
+factories, tests, and package requirements.
 
 ## Manifest fields
 
-Every manifest has `schema: 1`, a globally unique `id`, `kind`, `summary`,
-`packages`, and `files`. An id consists of `concept/` or `recipe/` followed by
-one or more lowercase, hyphenated path components. Recipes add `requires` and
-`recipe`; concepts add `concept`, `defaultFloor`, and `floors`. Unknown fields
+Every manifest has `schema: 1`, a globally unique `id`, `kind`, `summary`, and
+`files`. The optional `packages` object defaults to empty. An id consists of
+`concept/` or `recipe/` followed by one or more lowercase, hyphenated path
+components. Recipes add `recipe` and may add `requires`, which defaults to an
+empty array. Concepts add `concept`, `defaultFloor`, and `floors`. Unknown fields
 fail validation.
 
 A file declaration contains `source`, `target`, and optional
@@ -65,27 +66,28 @@ floor.
 Recipe metadata contains `module`, `test`, `members`, and `routes`. The module
 and test must name declared files. `members` is the exact
 `catalogComposition` allowlist and contains unique TypeScript identifiers.
-`routes` must have exactly the same keys. Recipe dependencies must exist, and
-the complete dependency graph must be acyclic.
+`routes` must have exactly the same keys. Each route must match its member's
+`export const <member> = endpoint("<route>", ...)` declaration in the recipe
+module.
+Recipe dependencies must exist, and the complete dependency graph must be
+acyclic.
 
 ## Package requirements
 
-Every external package imported by copied source must be declared by the entry
-or selected floor with a valid semantic-version range. The application may
-declare an exact version that satisfies the requirement or a range that is a
-subset of it. Non-semver protocols and tags are incompatible; range overlap
-alone is insufficient.
+Every nonrelative import other than a `node:` import or permitted
+`@catalog/*` alias must name a package declared by the entry or selected floor
+with a valid semantic-version range. The application may declare an exact
+version that satisfies the requirement or a range that is a subset of it.
+Non-semver protocols and tags are incompatible; range overlap alone is
+insufficient.
 
-The catalog verifies declarations in `package.json`; it does not inspect
-`node_modules`. It reads `dependencies`, `devDependencies`, and
-`peerDependencies`.
-Different declarations for one package across those sections are a conflict.
-Requirements from entries already in `catalog.lock` are checked again on every
-add.
+The catalog checks `dependencies`, `devDependencies`, and `peerDependencies` in
+`package.json`, not `node_modules`. Different ranges for one package conflict.
+Every add rechecks requirements from locked entries.
 
-Missing or incompatible requirements prevent all writes. The command prints
-one `bun add --exact <name>@<requirement>...` command and a `Next:` line that
-repeats the original add.
+Missing or incompatible requirements prevent all writes and print one
+`bun add --exact <name>@<requirement>...` command followed by a `Next:` line
+repeating the original add.
 
 ## Lock and ownership
 
@@ -108,11 +110,9 @@ Lock paths are portable project-relative paths. Absolute paths, parent
 traversal, backslashes, empty components, and Windows device names fail
 validation. Planning also refuses traversal through a symlink.
 
-Copy-owned files are never rewritten. Rendered registries are rewritten only
-when the current bytes match the previous catalog hash. Generated files are
-regenerated from the lock only when their current bytes match the previous
-generated hash. Byte equality without lock attribution does not establish
-ownership.
+Copy-owned files are never rewritten. Rendered registries and generated files
+are rewritten only when current bytes match their locked hashes. Byte equality
+without lock attribution does not establish ownership.
 
 Repeating an unchanged add performs no writes. When an installed entry's
 requirements, selected packages, integration metadata, or rendered-file
@@ -134,15 +134,15 @@ to `src/catalog/registrations.generated.ts` so the test can construct the select
 real floor. Other entry files must declare nonrelative imports as packages.
 
 The catalog does not import generated modules into application-owned files.
-Guidance supplies snippets for `src/concept-set.ts` and `src/composition.ts`,
-selected-floor assembly construction, TypeScript coverage, generated
-configuration, and package scripts. Text checks report unrecognized custom
-integration as unverified rather than rewriting it.
+Guidance covers `src/concept-set.ts`, `src/composition.ts`, selected-floor
+assembly, TypeScript coverage, generated configuration, and package scripts.
+Text checks report unrecognized custom integration as unverified.
 
 ## Write boundary
 
 The catalog may write selected source under `src/concepts/` and
-`src/composition/`, generated wiring under `src/catalog/`, `catalog.lock`, and
-sibling temporary or backup files used during commit. It never creates or edits
-`package.json`, `tsconfig.json`, `src/concept-set.ts`, `src/composition.ts`,
-`src/assembly.ts`, `generated.config.ts`, a host, or package scripts.
+`src/composition/`, generated wiring under `src/catalog/`, and `catalog.lock`.
+During a commit it may also create sibling temporary or backup files. It never
+creates or edits `package.json`, `tsconfig.json`, `src/concept-set.ts`,
+`src/composition.ts`, `src/assembly.ts`, `generated.config.ts`, a host, or
+package scripts.

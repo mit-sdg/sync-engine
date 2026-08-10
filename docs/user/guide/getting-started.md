@@ -1,14 +1,17 @@
 # Getting started
 
-This tutorial initializes and runs a concept-free sync-engine application in an
-existing Bun package. The empty application establishes stable extension points
-for concepts and composition. For setup behavior in partial projects, see the
-[command-line reference](../reference/cli.md).
+This tutorial initializes and runs a concept-free sync-engine application in
+an existing Bun package. Add registrations to `src/concept-set.ts`, composition
+to `src/composition.ts`, and runtime options to `src/assembly.ts`.
+
+For setup behavior in partial or already-authored projects, see the
+[command-line reference](../reference/cli.md). For the next step, use the
+[application authoring guide](authoring.md).
 
 ## Prerequisites
 
-Create a Bun package and install the exact core beta selected for the
-application:
+Use a Bun version in the [supported range](../../../SUPPORT.md#runtime-and-toolchain).
+These commands pin the tutorial's core release and development dependencies:
 
 ```sh
 mkdir workshop-app
@@ -16,6 +19,7 @@ cd workshop-app
 bun init -y
 bun add --exact @mit-sdg/sync-engine@1.0.0-beta.7
 bun add --dev --exact typescript@6
+bun add --dev --exact @types/node@24.0.0
 ```
 
 ## Initialize the application files
@@ -24,17 +28,17 @@ bun add --dev --exact typescript@6
 bunx sync-engine setup
 ```
 
-`setup` writes only missing files. It neither edits `package.json` nor replaces
-an existing file. Apply the dependency and script guidance printed by the
-command. For this tutorial, add these scripts to `package.json`:
+`setup` writes only missing application files. It does not edit
+`package.json` or replace an existing file. It also reports missing dependencies
+and scripts as guidance. Apply that guidance before running the checks. For
+this tutorial, add these scripts to `package.json`:
 
 ```json
 {
   "scripts": {
     "generate": "sync-engine artifacts pin",
     "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check && tsc --noEmit",
-    "start": "bun src/main.ts",
-    "test": "vp test"
+    "start": "bun src/main.ts"
   }
 }
 ```
@@ -68,7 +72,7 @@ export const { concepts, vocabulary } = applicationConcepts;
 export const applicationComposition = {};
 ```
 
-`src/assembly.ts` assembles those two application-owned extension points:
+`src/assembly.ts` assembles the concept set and composition:
 
 ```ts
 import { assemble } from "@mit-sdg/sync-engine/assembly";
@@ -84,7 +88,9 @@ export function assembleApplication() {
 }
 ```
 
-## Run the empty application
+## Run and verify the empty application
+
+Run the commands in order:
 
 ```sh
 bun run generate
@@ -92,15 +98,15 @@ bun run check
 bun run start
 ```
 
-Artifact generation writes the configured read-back and wire contract. The
-empty application has no routes, so `start` prints `[]`.
+`generate` writes the configured read-back and wire contract. `check` compares
+concept specifications with their classes, inspects application diagnostics,
+verifies the generated files, and runs TypeScript. The concept-free application
+has no concepts or endpoints, so `start` prints `[]`.
 
-A second `sync-engine setup` invocation writes nothing and reports
-byte-identical setup files as verified. If an application file has changed,
-setup treats it as application-owned and reports any dependent setup it could
-not verify.
+Rerun `sync-engine setup` to reconcile setup files. It verifies unchanged
+files. If an application-owned file changed, setup leaves it untouched and
+reports dependent files it cannot verify. It does not migrate those files.
 
-Continue with [Application authoring](authoring.md) to design and register
-application-specific concepts. [Execution
-semantics](../reference/semantics.md) remains authoritative for runtime ordering
-and failure behavior.
+Continue with [Application authoring](authoring.md). [Execution
+semantics](../reference/semantics.md) defines runtime ordering, failures, and
+settlement.

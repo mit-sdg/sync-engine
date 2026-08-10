@@ -1,16 +1,18 @@
 # Designing with concepts
 
-This page defines the design criteria for dividing an application into concepts
-and reconnecting them through composition. It assumes the [application
-model](overview.md). The [authoring guides](index.md#application-authoring-path)
-show the TypeScript API; [Execution semantics](reference/semantics.md) defines runtime
-behavior.
+This page defines how to choose concept boundaries and reconnect concepts through
+composition. It assumes the [application model](overview.md). See the
+[authoring guides](index.md#application-authoring-path) for the TypeScript API,
+[execution semantics](reference/semantics.md) for runtime behavior, and the
+[concept specification reference](reference/concept-specification.md) for the
+`spec.md` format.
 
 A **concept** is a semantic mechanism with one purpose, owned state, actions, and
-queries. Its specification can be understood without reading another concept. A
-**reaction** is an application-level rule that connects concepts. Registration
-does not enforce these design constraints against arbitrary TypeScript imports;
-peer imports remain a design-review finding.
+queries. Its purpose and principle can be understood without reading another
+concept. A **reaction** is an application-level rule that connects concepts.
+Registration checks selected declarations, but it does not enforce these design
+criteria or reject TypeScript imports from peer concepts. Peer imports therefore
+remain a design-review finding.
 
 ## Concepts and composition
 
@@ -26,18 +28,19 @@ Concept boundaries follow behavior, not implementation layout.
 | Workflow           | A workflow sequences independently complete behaviors.                                                                       |
 | Data structure     | Domain-neutral builders, caches, indexes, and graphs remain implementation modules unless they implement a domain mechanism. |
 
-A concept names no peer concept, stores peer identities rather than peer-owned
-facts, and completes its lifecycle through its own actions. Cross-concept policy,
-workflow, notification, adaptation, and repair belong in composition. This puts
-each dependency in one inspectable rule and permits a concept to participate in
-another composition.
+A concept's specification and implementation do not depend on a peer concept's
+API. A concept may store an opaque identity also used by another concept, but it
+does not store facts owned by that peer. The concept completes its own lifecycle
+through its own actions. Cross-concept policy, workflow, notification, adaptation,
+and repair belong in composition. This puts each dependency in one inspectable
+rule and permits a concept to participate in another composition.
 
 ## Purpose and principle
 
 A purpose states the useful need that justifies the concept. A usable purpose:
 
-- names a useful capability and the undesirable outcome or lost capability it
-  prevents;
+- names a useful capability and the undesirable outcome it prevents or the
+  capability that would otherwise be lost;
 - predicts the behavior without listing methods;
 - rejects at least one plausible design;
 - names no peer concept and names an application only when intentionally scoped;
@@ -49,14 +52,9 @@ Mechanism descriptions such as “store memberships in a set” and goals such a
 implementation; the second describes an application composed from several
 mechanisms.
 
-A broad goal or value does not determine a concept. Several mechanisms can serve
-the same goal while imposing different state, authority, lifecycle, and failure
-rules. Reduce the goal to a concrete capability people need or a failure the
-design must prevent, then derive the mechanism from that case.
-
-Application-specific concepts are valid when the mechanism genuinely exists
-only in that application. Name that scope explicitly rather than disguising it
-as a reusable concept.
+Reduce a broad goal to a concrete capability or failure. Several mechanisms can
+serve one goal while imposing different state, authority, lifecycle, and failure
+rules. Name application-specific scope explicitly.
 
 A principle is one concrete scenario that demonstrates the purpose. Start from
 empty state, perform setup through the concept's own actions, observe results
@@ -95,8 +93,8 @@ shared concept boundary.
 ### State sufficiency
 
 Every precondition, result, and effect must be expressible from the concept's
-state and action input, plus explicit non-peer environmental dependencies. When a
-fact is missing, choose among these moves in order:
+state and action input, plus explicit environmental dependencies that are not peer
+concepts. When a fact is missing, choose among these moves in order:
 
 1. Add it to state when the concept owns the fact.
 2. Accept it as input when the caller owns and can establish the fact.
@@ -137,9 +135,8 @@ state. Gathering checks for an existing membership and creates the new membershi
 inside `join`; a preceding composition read would not make uniqueness atomic.
 Shared durable state also needs a storage transaction or constraint.
 
-Every action must serve the concept's purpose. Remove unrelated operations,
-model getters as queries, and avoid loop wrappers that add no domain transition
-of their own.
+Remove actions unrelated to the purpose, model getters as queries, and avoid
+loop wrappers that add no domain transition.
 
 Expected domain rejection is a declared refusal with a stable code. Unexpected
 failures are faults. [Actions, refusals, and
@@ -156,10 +153,9 @@ promise is a domain cardinality claim, not a performance hint. The promise
 determines whether composition can require one row, tolerate absence, or fan out.
 [Query semantics](reference/semantics.md#queries) defines runtime checking and caching.
 
-Walk each managed entity through the lifecycle stages that apply: creation,
-ordinary use, completion, expiry, retention, reversal, deletion, or deliberate
-permanence. Do not add CRUD symmetry where the mechanism has no corresponding
-transition.
+Cover each applicable lifecycle stage: creation, use, completion, expiry,
+retention, reversal, deletion, or deliberate permanence. Do not add CRUD
+symmetry where the mechanism has no corresponding transition.
 
 ### Failure, reversal, and repetition
 
@@ -209,9 +205,9 @@ an explicit external-system adapter. No numeric reaction threshold is useful.
 ### Worked boundary comparison
 
 An initial Operations Room model can place membership, current mitigation,
-discussion responses, and alerts in one `Room` concept. The state partitions,
-purposes, authority questions, reuse patterns, and failure behavior separate, so
-the shipped design uses
+discussion responses, and alerts in one `Room` concept. These behaviors have
+different state, purposes, authority questions, reuse patterns, and failure
+rules, so the example separates them into
 [Gathering](../../examples/operations-room/src/concepts/gathering/spec.md),
 [Selecting](../../examples/operations-room/src/concepts/selecting/spec.md),
 [Discussing](../../examples/operations-room/src/concepts/discussing/spec.md), and
@@ -225,17 +221,15 @@ the gathering's existence, and creating a gathering establishes its host's
 membership as one invariant-preserving transition. A reaction would turn that
 transition into two independently failing actions.
 
-A familiar concept name carries behavioral expectations. Use one only when the
-observable choices, lifecycle, and refusal behavior match the familiar mechanism;
-similar terminology, interface, or storage is insufficient. Narrow or rename the
-concept when a defining expectation does not fit. Keep reuse domain-specific: a
-candidate equally suitable in every domain is often a utility or data structure.
-Test change containment by naming likely changes and the concepts or rules each
-would touch.
+Use a familiar concept name only when its observable choices, lifecycle, and
+refusals match that mechanism. Otherwise narrow or rename it. A candidate
+suitable in every domain is often a utility or data structure. Test change
+containment by naming likely changes and the concepts or rules each would touch.
 
 ## Designing reactions
 
-A reaction states one application decision through three parts:
+A reaction states one application decision. Describe that decision through three
+parts:
 
 | Part      | Question                                                                      |
 | --------- | ----------------------------------------------------------------------------- |
@@ -299,8 +293,9 @@ Composition may name replaceable policy as a view. Operations Room supplies
 [host-only](../../examples/operations-room/src/composition/host-may-contribute.ts)
 and [responder](../../examples/operations-room/src/composition/responders-may-contribute.ts)
 implementations of the same policy contract without changing concepts or
-endpoints. A security-critical or race-sensitive decision must still be enforced
-by the owner action and, for shared durable state, its storage transaction.
+endpoints. A security-critical decision must still be enforced by the owner
+action so direct calls cannot bypass it. If the decision must remain true when
+shared durable state changes, enforce it in the same storage transaction.
 
 ## Composition hazards
 
@@ -315,8 +310,6 @@ by the owner action and, for shared durable state, its storage transaction.
 | Stale observation                 | Move exact decisions into the owner action; otherwise state why the observation window is acceptable. |
 
 The engine does not detect reaction cycles, roll back earlier actions, cancel
-accepted work, or provide exactly-once execution. [Execution
-semantics](reference/semantics.md) defines these limits; [Operational
-limits](reference/operations.md) assigns the corresponding storage and host
-responsibilities. Apply this page through the [design review
-procedure](guide/reviewing-a-design.md).
+accepted work, or provide exactly-once execution. See [execution
+semantics](reference/semantics.md), [operational limits](reference/operations.md),
+and the [design review procedure](guide/reviewing-a-design.md).
