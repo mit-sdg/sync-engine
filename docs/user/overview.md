@@ -1,13 +1,17 @@
 # How sync-engine applications fit together
 
 sync-engine composes independently implemented stateful behaviors into one
-application. This page identifies the application parts and follows one request
-through them. The [Public API](reference/public-api.md) defines signatures and defaults;
-[Execution semantics](reference/semantics.md) defines runtime behavior.
+application. This page is the conceptual map between the setup files and the
+runtime: it identifies each application part and follows one request through
+them. Read it before splitting a new domain into concepts; use [Designing with
+concepts](design.md) for the design criteria, [Public API](reference/public-api.md)
+for signatures and defaults, and [Execution semantics](reference/semantics.md)
+for runtime behavior.
 
 ## Application layers
 
-A registered application is assembled and exposed in this order:
+A registered application moves from declarations to an assembly and,
+optionally, to a public boundary in this order:
 
 ```text
 concept specifications + TypeScript classes
@@ -34,7 +38,8 @@ concept specifications + TypeScript classes
 Concepts define independent behavior. Composition connects those behaviors.
 Assembly installs one combination. Tooling and a generated client are optional;
 the lower-level `vocabulary(...)` path may also assemble concepts without
-specification registration.
+specification registration. The [application authoring
+guide](guide/authoring.md) shows the complete path from registration to a client.
 
 ## Concepts own behavior and state
 
@@ -123,9 +128,11 @@ guide](guide/authoring.md#application-boundary) shows the boundary lifecycle.
 
 Concept state is domain state owned by concept implementations and their storage.
 Occurrence evidence records asks, outcomes, faults, reaction firings, and selected
-runtime failures inside one assembly. The engine uses a process-local occurrence
-index for matching and inspection. An optional `LogSink` may receive an audit
-copy, but a sink does not replace concept storage or provide replay.
+runtime failures inside one assembly. These are different data: occurrence
+records describe execution, while concept storage is the source from which
+queries obtain domain state. The engine uses a process-local occurrence index
+for matching and inspection. An optional `LogSink` may receive an audit copy,
+but a sink does not replace concept storage or provide replay.
 
 The engine does not rebuild concept state, pending requests, or interrupted
 reactions from occurrence output. Applications that require durable state and

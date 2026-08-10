@@ -1,10 +1,27 @@
 # Application authoring
 
-This guide follows one Operations Room application from concept registration to
-a generated client. It assumes TypeScript and the [application
-model](../overview.md). The linked source belongs to the standalone Operations
-Room example. Use the [Public API](../reference/public-api.md) for signatures and
-[Execution semantics](../reference/semantics.md) for runtime guarantees.
+This guide follows one Operations Room application from concept registration
+to a generated client. It is a how-to guide for an application that already
+has a Bun package and a concept-free assembly; it assumes TypeScript and the
+[application model](../overview.md). The linked source belongs to the standalone
+Operations Room example, so the snippets show the roles and order of the work,
+not a second setup template.
+
+Follow the sections in order: define and register a concept; connect concepts;
+build current-state reads; expose actions through endpoints; assemble, generate,
+validate, and call the application; then run the example checks.
+
+Use the [Public API](../reference/public-api.md) for signatures and [Execution
+semantics](../reference/semantics.md) for runtime guarantees.
+
+## Prerequisites
+
+Start from the files created by [Getting started](getting-started.md), or work
+from a copy of [`examples/operations-room`](../../../examples/operations-room/).
+The example's `package.json` supplies the `artifacts:pin`, `check`, and `start`
+scripts used below. A concept specification, implementation, registry, and
+principle test belong together; this guide shows the specification and the
+implementation shape, while the example contains the complete test setup.
 
 ## Define one behavior
 
@@ -111,8 +128,9 @@ factory context and lifecycle.
 
 ## Connect independent behaviors
 
-Put cross-concept decisions in composition. Operations Room installs two
-independent reactions after a mitigation is selected:
+Keep concept implementations independent of peer concepts. Put cross-concept
+decisions in composition. Operations Room installs two independent reactions
+after a mitigation is selected:
 
 _Source: [`examples/operations-room/src/composition/packs.ts`](../../../examples/operations-room/src/composition/packs.ts)_
 
@@ -132,9 +150,11 @@ export const SelectedMitigationAlertsResponders = reaction(({ room, selection, r
 
 The first rule asks one consequence. The many-row membership query fans the
 second rule out once per matching responder. Separate reactions keep the two
-consequences independently selectable. [Designing
-reactions](../design.md#designing-reactions) covers placement; [Reaction
-semantics](../reference/semantics.md#reactions) defines matching and failure.
+consequences independently selectable. A reaction is not a transaction: each
+concept action settles independently, and a later failure does not roll back an
+earlier action. [Designing reactions](../design.md#designing-reactions) covers
+placement; [Reaction semantics](../reference/semantics.md#reactions) defines
+matching and failure.
 
 Name reusable or replaceable policy as views. The responder policy's affirmative
 relation is:
@@ -155,8 +175,9 @@ without changing the endpoints.
 
 ## Views and formers
 
-A view names a relation. A former constructs a current result tree. This former
-captures every member returned by Gathering:
+A view names a relation or policy decision. A former constructs a current result
+tree from queries, views, or other formers. This former captures every member
+returned by Gathering:
 
 _Source: [`examples/operations-room/src/composition/room.ts`](../../../examples/operations-room/src/composition/room.ts)_
 
@@ -203,7 +224,9 @@ settlement](../reference/semantics.md#sibling-paths-and-endpoint-settlement).
 
 ### Assemble the application
 
-Select implementations and composition before calling `assemble(...)`:
+Select implementations and composition before calling `assemble(...)`. Each
+call creates a new process-local runtime; changing an option later does not
+reconfigure an existing assembly:
 
 _Source: [`examples/operations-room/src/assembly.ts`](../../../examples/operations-room/src/assembly.ts)_
 
@@ -261,7 +284,9 @@ export default {
 };
 ```
 
-From an application-owned copy, pin and check generated artifacts:
+From an application-owned copy, pin and check generated artifacts. Pinning
+updates generated files; checking only verifies that the committed files match
+the current assembly:
 
 ```sh
 bun run artifacts:pin
@@ -277,8 +302,9 @@ derivation.
 
 ### Add runtime validation
 
-Generated TypeScript does not validate untyped callers. Attach synchronous
-endpoint validators under the third `endpoint(...)` argument's
+Generated TypeScript constrains typed callers but does not validate values at
+runtime. Attach synchronous endpoint validators under the third `endpoint(...)`
+argument's
 `validators.input`, `validators.output`, and `validators.domainError` fields when
 the boundary requires them. [Endpoints](../reference/public-api.md#endpoints) defines
 the result shape; [Runtime validation](../reference/semantics.md#runtime-validation)
@@ -313,10 +339,13 @@ bun run check
 bun run start
 ```
 
-The scenario crosses the assembly, gateway, generated local client, and dashboard
-former. Source checks, principle tests, generated-artifact checks, and the
-scenario remain separate evidence; use the commands declared by the copied
-application in continuous integration.
+The scenario crosses the assembly, gateway, generated local client, and
+`roomDashboard` former. `check` covers the example's source, types, tests, and
+pinned artifacts; `start` exercises the deterministic workflow. Keep those
+checks separate from deployment checks, which must also account for persistence,
+traffic, and shutdown responsibilities.
 
-[Operational limits](../reference/operations.md) defines persistence, traffic,
-and shutdown responsibilities for a deployed boundary.
+[Operational limits](../reference/operations.md) defines those deployment
+responsibilities. [Execution semantics](../reference/semantics.md) remains the
+authoritative source when the guide's representative construction leaves out a
+failure or ordering detail.

@@ -4,6 +4,12 @@ Files under `docs/user/` are for human or software agents that design, build,
 call, or operate applications with sync-engine. This index does not cover
 repository work.
 
+If sync-engine is new to you, read [Getting started](guide/getting-started.md)
+first. It creates and runs the smallest application. Then read the [application
+model](overview.md) before choosing concept boundaries; return to the
+[application authoring path](#application-authoring-path) when you are ready to
+add behavior.
+
 ## Start by task
 
 | Task                                        | Start with                                                                                                                                                 |
@@ -22,15 +28,21 @@ repository work.
 
 ## Application authoring path
 
-- [Getting started](guide/getting-started.md) is the tutorial. It initializes
-  and runs a concept-free application.
-- [Application authoring](guide/authoring.md) is the experienced TypeScript
-  path. It follows a multi-concept application through registration,
-  composition, assembly, generation, and a typed client.
+The guides form one progression:
+
+1. [Getting started](guide/getting-started.md) initializes and runs a
+   concept-free application.
+2. [Application authoring](guide/authoring.md) adds concepts, composition,
+   assembly, generated artifacts, validation, and a typed client.
+3. [Read construction cookbook](guide/read-construction.md) supplies smaller
+   tested alternatives when a former needs optional, repeated, or folded data.
+4. [Persistence, restart, and recovery](guide/persistence-recovery.md) covers
+   host responsibilities beyond the in-memory first application.
 
 The guides demonstrate representative constructions. [Execution
 semantics](reference/semantics.md) is authoritative when a guide simplifies
-runtime behavior.
+runtime behavior, and [Operational limits](reference/operations.md) is the
+selection point for deployment decisions.
 
 ## Engine-user document catalog
 

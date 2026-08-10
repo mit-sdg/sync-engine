@@ -3,17 +3,21 @@
 [![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
-sync-engine is a TypeScript library for composing independently implemented
-application behaviors. Each behavior, called a **concept**, owns its state,
-actions, queries, and expected refusals. The application connects concepts in a
-separate composition, leaving their implementations independent of peers.
+sync-engine is an ESM-only TypeScript library for composing independently
+implemented application behaviors. Each behavior, called a **concept**, owns
+its state, actions, queries, and expected refusals. Application composition
+connects concepts without making their implementations depend on one another.
 
-Composition has four main parts:
+The main composition forms are:
 
-- **reactions** ask for consequences after action asks or outcomes;
-- **views** name shared relations and policy decisions;
-- **formers** build current-state result trees;
-- **endpoints** connect outside requests to composed behavior.
+- **reactions**, which ask for consequences after action asks or outcomes;
+- **views**, which name reusable relations and policy decisions;
+- **formers**, which build current-state result trees; and
+- **endpoints**, which connect outside requests to composed behavior.
+
+The shortest path to a running application is [Getting
+started](docs/user/guide/getting-started.md). Read [How sync-engine applications
+fit together](docs/user/overview.md) when you need the model behind those files.
 
 The engine validates the composition, instruments the selected concept
 instances, and records action occurrences. Tooling can derive an assembled
@@ -21,12 +25,10 @@ read-back and TypeScript boundary contract from that assembly.
 
 ## Status and requirements
 
-Version 1 is in beta. Only the newest beta release is supported. Read the
-[support policy](SUPPORT.md) and review the
-[operational limits](docs/user/reference/operations.md) before choosing a deployment.
-
-The package is ESM-only. See the [support policy](SUPPORT.md) for current runtime
-and toolchain requirements.
+Version 1 is in beta, and only the newest beta release is supported. The package
+requires Bun and is ESM-only. Read the [support policy](SUPPORT.md) for the
+supported runtime and toolchain versions, and review the [operational
+limits](docs/user/reference/operations.md) before choosing a deployment.
 
 ## Install in an existing project
 
@@ -43,10 +45,10 @@ bun add @mit-sdg/sync-engine@beta
 | [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)         | Maintained HTTP handler, Fetch client, and generated wire projection     |
 | [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)   | CLI-only curated concept and recipe source installer                     |
 
-## Create an application
+## Create your first application
 
-Create a Bun package, install core, and initialize the concept-free application
-files:
+For a new application, create a Bun package, install core, and initialize the
+concept-free application files:
 
 ```sh
 mkdir workshop-app
@@ -60,12 +62,13 @@ For a reproducible evaluation, replace `@beta` with a pinned version. `setup`
 never edits `package.json` or overwrites an application file. It reports missing
 dependencies and scripts as guidance.
 
-Continue with [Getting started](docs/user/guide/getting-started.md) to run the
-empty application.
+Continue with [Getting started](docs/user/guide/getting-started.md) to add the
+remaining development dependencies, run the generated checks, and see the empty
+application start.
 
 ## Documentation
 
-Choose the path that matches the work:
+Choose the path that matches the next task:
 
 | Task                                                         | Start here                                                      |
 | ------------------------------------------------------------ | --------------------------------------------------------------- |
@@ -83,10 +86,11 @@ designers, authors, callers, and operators. Human and software agents using the
 engine can start with [`docs/user/llms.txt`](docs/user/llms.txt), which records
 the supported imports, authoring sequence, commands, and source-of-truth order.
 
-## How composition works
+## A first composition rule
 
-This reaction is part of the application composition. It opens a
-discussion whenever Selecting returns a new selection:
+After the empty application runs, a reaction can connect two independently
+implemented concepts. This example opens a discussion whenever Selecting
+returns a new selection:
 
 ```ts
 import { reaction, when } from "@mit-sdg/sync-engine/language";
@@ -112,7 +116,8 @@ failure behavior.
 ## Expose an application boundary
 
 An endpoint uses the same reaction model to receive an outside request and
-produce one answer:
+produce one answer. It is a declaration in the composition; an assembly makes
+that declaration callable:
 
 ```ts
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
@@ -135,14 +140,16 @@ describes endpoint inputs, successful outputs, and errors for typed callers.
 Applications attach endpoint validators when they also need runtime value
 validation.
 
-## Contract boundaries
+## Runtime boundaries to plan for
 
 Actions serialize per concept instance within one assembly, not across concepts,
 assemblies, or processes. The engine does not provide multi-action transactions,
 accepted-work cancellation, concept-state persistence, restart replay,
 distributed serialization, or exactly-once execution. Generated contracts do
-not validate runtime values. See [Execution semantics](docs/user/reference/semantics.md) for
-the contract and [Operational limits](docs/user/reference/operations.md) before deployment.
+not validate runtime values; add endpoint validators when untyped callers need
+runtime checks. See [Execution semantics](docs/user/reference/semantics.md) for
+the exact contract and [Operational limits](docs/user/reference/operations.md)
+for deployment responsibilities.
 
 ## Run the shipped examples
 
