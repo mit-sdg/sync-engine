@@ -109,6 +109,11 @@ handler with GET routes for `index.html` and the bundled browser client, then
 passes that routing function to `Bun.serve`. Bun owns the listener and process
 lifecycle; the browser host owns bundling and static-file routing.
 
+Both hosts require a nonempty `HOST` and an integer `PORT` from 1 through 65535.
+The browser host also validates `PUBLIC_ORIGIN` as an absolute HTTP or HTTPS
+origin without credentials, path, query, or fragment. Invalid values terminate
+startup before `Bun.serve` runs.
+
 ### Plain POST/JSON binding
 
 The plain API exchanges every logical input and output as JSON. Registration and

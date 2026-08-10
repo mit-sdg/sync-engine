@@ -70,7 +70,21 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 ##### `_openFor (subject: Subject) : optional (discussion: Discussion)`
 
+**Authored behavior:**
+
+    answers no row for a Subject with no open Discussion
+
 ##### `_responses (discussion: Discussion) : many (response: Response, author: Person, text: String)`
+
+**Authored behavior:**
+
+    answers no rows for a Discussion with no Responses
+    orders rows by when each Response was added
+
+#### Types
+
+`Discussion` and `Response` are identities allocated by Discussing. `Subject`
+and `Person` are opaque external identities. `String` is owned text.
 
 ### Gathering
 
@@ -135,9 +149,27 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 ##### `_get (gathering: Gathering) : optional (name: String, host: Person)`
 
+**Authored behavior:**
+
+    answers no row for an unknown Gathering
+
 ##### `_members (gathering: Gathering) : many (member: Person)`
 
+**Authored behavior:**
+
+    answers no rows for an unknown Gathering
+    orders rows by when each Person joined
+
 ##### `_membership (gathering: Gathering, member: Person) : one (joined: Flag)`
+
+**Authored behavior:**
+
+    answers false when Person is not a member or Gathering is unknown
+
+#### Types
+
+`Gathering` and `Membership` are identities allocated by Gathering. `Person` is
+an opaque external identity. `String` is owned text. `Flag` is a Boolean value.
 
 ### RequestBoundary
 
@@ -194,7 +226,20 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 ##### `_current (scope: Scope) : optional (selection: Selection, item: Item)`
 
+**Authored behavior:**
+
+    answers no row for a Scope with no current Selection
+
 ##### `_get (selection: Selection) : optional (scope: Scope, item: Item)`
+
+**Authored behavior:**
+
+    answers no row for an unknown Selection
+
+#### Types
+
+`Selection` is an identity allocated by Selecting. `Scope` and `Item` are opaque
+external identities.
 
 ## Views
 

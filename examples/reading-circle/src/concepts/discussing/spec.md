@@ -26,9 +26,6 @@ a seq of Responses with
   a text String
 ```
 
-At most one open discussion exists for a subject. Responses keep their arrival
-order.
-
 ## Actions
 
 ```actions
@@ -65,8 +62,13 @@ close (discussion: Discussion) : return ()
 
 ```queries
 _openFor (subject: Subject) : optional (discussion: Discussion)
+  answers no row for a Subject with no open Discussion
 _responses (discussion: Discussion) : many (response: Response, author: Person, text: String)
+  answers no rows for a Discussion with no Responses
+  orders rows by when each Response was added
 ```
 
-`_responses` answers in arrival order. Subjects are opaque identities;
-Discussing neither creates nor interprets them.
+## Types
+
+`Discussion` and `Response` are identities allocated by Discussing. `Subject`
+and `Person` are opaque external identities. `String` is owned text.

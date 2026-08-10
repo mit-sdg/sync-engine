@@ -1,14 +1,17 @@
 # Reading Circle
 
-Reading Circle is the shortest complete multi-concept example. Members create
-and join circles, select a reading, and discuss it. The application keeps its
-reactions, policy views, formers, and endpoints in one composition module so
-the whole design can be read in one place. Runtime and toolchain requirements
-are declared in `package.json` and the repository [support policy](../../SUPPORT.md).
+Reading Circle is a small application for discussing a shared reading. A host
+creates a circle, members join it, the circle chooses its current reading, and
+members post responses. Opening the circle page returns the roster, current
+reading, and responses as one value.
+
+The deterministic scenario creates the `after-dinner` circle for Mara, joins
+Lin, chooses _The Dispossessed_, and records Lin's response. It also shows two
+rejections: Lin cannot join twice, and Niko cannot respond without joining.
 
 ## Run the example
 
-Run these commands from this directory:
+From this directory:
 
 ```sh
 bun install
@@ -16,43 +19,57 @@ bun run check
 bun run start
 ```
 
-The deterministic scenario creates the `after-dinner` circle for Mara, joins
-Lin, chooses _The Dispossessed_, records a response, and reads the complete
-circle page. It also returns the `ALREADY_JOINED` concept refusal and the
-`NOT_A_MEMBER` authored policy response.
+`start` prints the deterministic scenario result. `check` verifies formatting,
+types, tests, and pinned generated artifacts.
 
-## What the example establishes
+## How the application is composed
 
-- Gathering, Selecting, and Discussing remain independently registered.
-- Choosing a reading opens its discussion through a reaction.
-- `memberMayRespond` and `nonmemberMayNotRespond` express opposite policy cases
-  without changing a concept implementation.
-- A former joins circle, selection, discussion, and response state into one
-  page value.
-- Endpoints expose the application through the standard gateway, local client,
-  and generated wire contract.
-- Principle tests exercise each concept directly; application tests exercise
-  the assembled boundary.
+Reading Circle gives three independent concepts application-specific roles:
+
+- **Gathering** stores the circle's name, host, and members.
+- **Selecting** stores the circle's current reading.
+- **Discussing** stores responses about a selected reading.
+
+Each selection identifies a separate discussion. Choosing the same reading text
+in two circles therefore does not combine their responses.
+
+The composition in `src/composition/reading-circle.ts` connects them. When
+Selecting chooses a reading, a reaction opens a Discussing discussion for that
+selection. Two policy views divide response requests: a member may respond, while
+a nonmember receives `NOT_A_MEMBER`. The `circlePage` former joins the three
+concepts into the page returned by `/circles/page`.
+
+The endpoints expose this workflow through the standard gateway and generated
+client contract:
+
+1. `/circles/create` creates the circle and makes its host the first member.
+2. `/circles/join` adds another member.
+3. `/circles/choose` selects the current reading and triggers its discussion.
+4. `/circles/respond` checks membership and records a response in the current
+   reading's discussion.
+5. `/circles/page` forms the complete page.
+
+The concepts do not import one another or contain these application-specific
+connections. Their specifications and direct tests live under `src/concepts/`;
+`tests/application.test.ts` checks the assembled behavior.
 
 ## Source map
 
 | Path                                                         | Role                                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `src/concepts/*/`                                            | Concept specifications, implementations, registries, and principle tests |
+| `src/concepts/*/`                                            | Independent concept specifications, implementations, and principle tests |
 | `src/concept-set.ts`                                         | Named registrations, vocabulary, and implementations                     |
-| `src/composition/reading-circle.ts`                          | Reactions, views, former, and endpoints                                  |
+| `src/composition/reading-circle.ts`                          | Reading reaction, membership policy, page former, and endpoints          |
 | `src/assembly.ts`                                            | Application assembly                                                     |
 | `src/edge.ts`                                                | Standard gateway                                                         |
 | `src/client.ts`                                              | Transport-neutral generated-contract client helper                       |
-| `src/scenario.ts`                                            | Complete local-gateway scenario                                          |
-| `tests/application.test.ts`                                  | Assembled behavior and deterministic snapshot tests                      |
+| `src/scenario.ts`                                            | Complete local-gateway workflow                                          |
+| `tests/application.test.ts`                                  | Assembled behavior and deterministic scenario tests                      |
 | `generated.config.ts`                                        | Artifact command configuration                                           |
 | [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                                               |
 | [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                                          |
 
 ## Individual checks
-
-Use these commands to isolate a failed aggregate check:
 
 ```sh
 bun run test
@@ -60,9 +77,9 @@ bun run typecheck
 bun run artifacts:check
 ```
 
-`artifacts:check` is silent on success. To update both generated files after an
-intentional source change, run `bun run artifacts:pin` and review the diff.
+Run `bun run artifacts:pin` only after an intentional composition,
+specification, or contract change, then review both generated files.
 
-Continue with the [read construction cookbook](../../docs/user/guide/read-construction.md) for small reading
-constructions or [Execution semantics](../../docs/user/reference/semantics.md) for the runtime
-contract.
+Continue with the [application authoring guide](../../docs/user/guide/authoring.md)
+for a progressive construction of this example, or the [read construction
+cookbook](../../docs/user/guide/read-construction.md) for smaller former examples.

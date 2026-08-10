@@ -25,9 +25,6 @@ a set of Memberships with
   a member Person
 ```
 
-At most one membership exists for a given gathering and member. Creating a
-gathering creates its host's membership in the same action.
-
 ## Actions
 
 ```actions
@@ -66,9 +63,15 @@ leave (gathering: Gathering, member: Person) : return (membership: Membership)
 
 ```queries
 _get (gathering: Gathering) : optional (name: String, host: Person)
+  answers no row for an unknown Gathering
 _members (gathering: Gathering) : many (member: Person)
+  answers no rows for an unknown Gathering
+  orders rows by when each Person joined
 _membership (gathering: Gathering, member: Person) : one (joined: Flag)
+  answers false when Person is not a member or Gathering is unknown
 ```
 
-`_members` answers in join order. Gathering does not know why people meet or
-what they do together.
+## Types
+
+`Gathering` and `Membership` are identities allocated by Gathering. `Person` is
+an opaque external identity. `String` is owned text. `Flag` is a Boolean value.

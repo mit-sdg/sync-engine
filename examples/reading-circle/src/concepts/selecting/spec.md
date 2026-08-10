@@ -23,9 +23,6 @@ a set of Selections with
 a Current set of Selections
 ```
 
-At most one current selection exists in each scope. Past selections remain
-identifiable even after another becomes current.
-
 ## Actions
 
 ```actions
@@ -50,7 +47,12 @@ clear (scope: Scope) : return (selection: Selection)
 
 ```queries
 _current (scope: Scope) : optional (selection: Selection, item: Item)
+  answers no row for a Scope with no current Selection
 _get (selection: Selection) : optional (scope: Scope, item: Item)
+  answers no row for an unknown Selection
 ```
 
-Selecting treats scopes and items as opaque identities.
+## Types
+
+`Selection` is an identity allocated by Selecting. `Scope` and `Item` are opaque
+external identities.

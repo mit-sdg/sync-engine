@@ -67,9 +67,6 @@
       .error {
         color: #c33;
       }
-      .note {
-        opacity: 0.75;
-      }
     </style>
   </head>
   <body>
@@ -104,10 +101,6 @@
         <label>New post <textarea name="content" maxlength="500" required></textarea></label>
         <button type="submit">Publish</button>
       </form>
-      <p class="note">
-        Commenting models target, author, and content as external identities. This UI uses the
-        entered comment string as the content identity and displays it verbatim.
-      </p>
       <div id="posts"></div>
     </section>
     <script type="module" src="/app.js"></script>
