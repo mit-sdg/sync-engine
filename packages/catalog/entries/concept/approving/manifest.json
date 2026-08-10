@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "id": "concept/approving",
+  "kind": "concept",
+  "summary": "Record requests and assigned reviewers' durable terminal decisions.",
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "concept": {
+    "name": "Approving",
+    "export": "approving",
+    "registration": "$concepts/approving/registry.ts"
+  },
+  "defaultFloor": "memory",
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$concepts/approving/spec.md"
+    },
+    {
+      "source": "approving.shared.ts",
+      "target": "$concepts/approving/approving.shared.ts"
+    },
+    {
+      "source": "registry.ts",
+      "target": "$concepts/approving/registry.ts",
+      "render": "floor"
+    }
+  ],
+  "floors": {
+    "memory": {
+      "summary": "Process-local review records with injectable identity allocation and pending Subject and reviewer indexes.",
+      "files": [
+        {
+          "source": "approving.behavior.ts",
+          "target": "$concepts/approving/approving.behavior.ts"
+        },
+        {
+          "source": "approving.memory.ts",
+          "target": "$concepts/approving/approving.memory.ts"
+        },
+        {
+          "source": "approving.memory.test.ts",
+          "target": "$concepts/approving/approving.memory.test.ts"
+        }
+      ]
+    },
+    "mongo": {
+      "summary": "MongoDB reviews with injectable identity allocation, a partial unique pending-Subject index, and conditional decisions.",
+      "packages": {
+        "mongodb": "^6.20.0"
+      },
+      "files": [
+        {
+          "source": "approving.behavior.ts",
+          "target": "$concepts/approving/approving.behavior.ts"
+        },
+        {
+          "source": "approving.mongo.ts",
+          "target": "$concepts/approving/approving.mongo.ts"
+        },
+        {
+          "source": "approving.mongo.test.ts",
+          "target": "$concepts/approving/approving.mongo.test.ts"
+        },
+        {
+          "source": "approving.mongo.concurrent.test.ts",
+          "target": "$concepts/approving/approving.mongo.concurrent.test.ts"
+        }
+      ]
+    }
+  }
+}

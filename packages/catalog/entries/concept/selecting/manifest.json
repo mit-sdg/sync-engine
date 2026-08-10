@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "id": "concept/selecting",
+  "kind": "concept",
+  "summary": "Keep one current item for a shared scope.",
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "concept": {
+    "name": "Selecting",
+    "export": "selecting",
+    "registration": "$concepts/selecting/registry.ts"
+  },
+  "defaultFloor": "memory",
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$concepts/selecting/spec.md"
+    },
+    {
+      "source": "selecting.conformance.ts",
+      "target": "$concepts/selecting/selecting.conformance.ts"
+    },
+    {
+      "source": "selecting.shared.ts",
+      "target": "$concepts/selecting/selecting.shared.ts"
+    },
+    {
+      "source": "registry.ts",
+      "target": "$concepts/selecting/registry.ts",
+      "render": "floor"
+    }
+  ],
+  "floors": {
+    "memory": {
+      "summary": "Process-local state with injectable identity allocation.",
+      "files": [
+        {
+          "source": "selecting.memory.ts",
+          "target": "$concepts/selecting/selecting.memory.ts"
+        },
+        {
+          "source": "selecting.memory.test.ts",
+          "target": "$concepts/selecting/selecting.memory.test.ts"
+        }
+      ]
+    },
+    "mongo": {
+      "summary": "MongoDB replica set or sharded deployment using transactions to retain history and advance one current projection.",
+      "packages": {
+        "mongodb": "^6.20.0"
+      },
+      "files": [
+        {
+          "source": "selecting.mongo.ts",
+          "target": "$concepts/selecting/selecting.mongo.ts"
+        },
+        {
+          "source": "selecting.mongo.test.ts",
+          "target": "$concepts/selecting/selecting.mongo.test.ts"
+        }
+      ]
+    }
+  }
+}

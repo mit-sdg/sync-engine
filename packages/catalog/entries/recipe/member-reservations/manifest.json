@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "id": "recipe/member-reservations",
+  "kind": "recipe",
+  "summary": "Let current gathering members reserve exclusive resources.",
+  "requires": ["concept/timing", "concept/gathering", "concept/reserving"],
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$recipes/member-reservations.spec.md"
+    },
+    {
+      "source": "member-reservations.ts",
+      "target": "$recipes/member-reservations.ts"
+    },
+    {
+      "source": "member-reservations.test.ts",
+      "target": "$recipes/member-reservations.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/member-reservations.ts",
+    "test": "$recipes/member-reservations.test.ts",
+    "members": [
+      "ReserveForMember",
+      "CancelMemberReservation",
+      "FulfillMemberReservation",
+      "GetMemberReservations"
+    ],
+    "routes": {
+      "ReserveForMember": "/member-reservations/reserve",
+      "CancelMemberReservation": "/member-reservations/cancel",
+      "FulfillMemberReservation": "/member-reservations/fulfill",
+      "GetMemberReservations": "/member-reservations/get"
+    }
+  }
+}

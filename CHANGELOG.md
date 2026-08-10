@@ -13,6 +13,14 @@ browser-session API.
 
 ### Compatibility
 
+- Added the CLI-only `@mit-sdg/sync-engine-catalog` package. It copies curated
+  concept and recipe source for one selected storage floor, records ownership in
+  `catalog.lock`, generates mechanical wiring, and leaves application
+  integration to explicit guidance.
+- Replaced `sync-engine new` and its example-bearing scaffold with
+  `sync-engine setup [directory]`. Setup initializes only missing concept-free
+  files in an existing Bun package and never edits `package.json` or overwrites
+  an application file. `new` has no compatibility alias.
 - `@mit-sdg/sync-engine-http` now exposes `/policy`, `/handler`, `/client`, and
   `/tooling`. One branded immutable policy supplies deployment facts to the
   handler and wire projector; the typed client remains policy-free. The handler
@@ -49,6 +57,12 @@ browser-session API.
   canonical recomputation.
 
 ### Migration
+
+Applications that used `sync-engine new` must create a Bun package, install
+core, and run `sync-engine setup`. Add concepts manually or install the matching
+catalog package and run `catalog add`. The catalog does not edit the
+application-owned concept set, composition, assembly, host, TypeScript
+configuration, or scripts.
 
 Upgrade core and HTTP to `1.0.0-beta.7` together. The HTTP rework uses the
 following replacements.

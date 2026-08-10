@@ -7,7 +7,7 @@ through them. The [Public API](reference/public-api.md) defines signatures and d
 
 ## Application layers
 
-The scaffolded, registered, and generated path is built in this order:
+A registered application is assembled and exposed in this order:
 
 ```text
 concept specifications + TypeScript classes
@@ -116,9 +116,8 @@ A representative request crosses these components:
 8. The client resolves to the success value or an error envelope.
 
 The boundary is transport-neutral. The local client applies a JSON projection;
-the maintained HTTP package adds its public error and transport policy. The
-[application authoring guide](guide/authoring.md#application-boundary) shows the
-boundary lifecycle.
+other transports define their own protocol behavior. The [application authoring
+guide](guide/authoring.md#application-boundary) shows the boundary lifecycle.
 
 ## Concept state and occurrence evidence
 

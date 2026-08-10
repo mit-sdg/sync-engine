@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "id": "concept/upvoting",
+  "kind": "concept",
+  "summary": "Keep one current vote per voter and derive each item's score.",
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "concept": {
+    "name": "Upvoting",
+    "export": "upvoting",
+    "registration": "$concepts/upvoting/registry.ts"
+  },
+  "defaultFloor": "memory",
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$concepts/upvoting/spec.md"
+    },
+    {
+      "source": "upvoting.shared.ts",
+      "target": "$concepts/upvoting/upvoting.shared.ts"
+    },
+    {
+      "source": "upvoting.conformance.ts",
+      "target": "$concepts/upvoting/upvoting.conformance.ts"
+    },
+    {
+      "source": "registry.ts",
+      "target": "$concepts/upvoting/registry.ts",
+      "render": "floor"
+    }
+  ],
+  "floors": {
+    "memory": {
+      "summary": "Process-local vote records with scores derived on each query.",
+      "files": [
+        {
+          "source": "upvoting.memory.ts",
+          "target": "$concepts/upvoting/upvoting.memory.ts"
+        },
+        {
+          "source": "upvoting.memory.test.ts",
+          "target": "$concepts/upvoting/upvoting.memory.test.ts"
+        }
+      ]
+    },
+    "mongo": {
+      "summary": "MongoDB vote records with unique voter-item storage enforcement and derived scores.",
+      "packages": {
+        "mongodb": "^6.20.0"
+      },
+      "files": [
+        {
+          "source": "upvoting.mongo.ts",
+          "target": "$concepts/upvoting/upvoting.mongo.ts"
+        },
+        {
+          "source": "upvoting.mongo.test.ts",
+          "target": "$concepts/upvoting/upvoting.mongo.test.ts"
+        }
+      ]
+    }
+  }
+}

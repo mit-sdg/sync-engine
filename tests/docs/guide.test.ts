@@ -1,5 +1,4 @@
 import { readFile, readdir, stat } from "node:fs/promises";
-import { camel, heading, pascal, slug } from "@engine/utils/case";
 import { describe, expect, test } from "vite-plus/test";
 
 const guideDirectory = new URL("../../docs/user/guide/", import.meta.url);
@@ -27,9 +26,9 @@ const repositoryOnlySources = new Map<string, URL[]>([
   [
     new URL("getting-started.md", guideDirectory).pathname,
     [
-      new URL("../../src/command/scaffold/src/concept-set.ts", import.meta.url),
-      new URL("../../src/command/scaffold/src/composition.ts", import.meta.url),
-      new URL("../../src/command/scaffold/src/assembly.ts", import.meta.url),
+      new URL("../../src/command/setup/src/concept-set.ts", import.meta.url),
+      new URL("../../src/command/setup/src/composition.ts", import.meta.url),
+      new URL("../../src/command/setup/src/assembly.ts", import.meta.url),
     ],
   ],
   [readConstruction.pathname, [new URL("../docs/book.test.ts", import.meta.url)]],
@@ -39,18 +38,6 @@ function atExcerptIndents(source: string): string[] {
   return Array.from({ length: 9 }, (_, level) =>
     source.replace(new RegExp(`^ {${level * 2}}`, "gm"), ""),
   );
-}
-
-function applyTemplate(source: string, name: string): string {
-  const h = heading(name);
-  const r: Record<string, string> = {
-    App: pascal(name),
-    app: camel(name),
-    heading: h,
-    slug: slug(h),
-    name,
-  };
-  return source.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => r[key] ?? _match);
 }
 
 function headingAnchors(markdown: string): Set<string> {
@@ -98,23 +85,17 @@ async function documentationFiles(directory: URL): Promise<URL[]> {
 }
 
 describe("guided curriculum", () => {
-  test("the getting-started guide describes the scaffold output", async () => {
+  test("the getting-started guide describes concept-free setup", async () => {
     const guide = await readFile(new URL("getting-started.md", guideDirectory), "utf8");
 
-    expect(guide).toContain("sync-engine new note-keeper");
-    expect(guide).toContain("Noting");
-    expect(guide).toContain("src/concepts/noting/spec.md");
-    expect(guide).toContain("src/concepts/noting/noting.ts");
-    expect(guide).toContain("src/concepts/noting/registry.ts");
-    expect(guide).toContain("src/concepts/noting/noting.test.ts");
+    expect(guide).toContain("sync-engine setup");
+    expect(guide).toContain("concept-free");
     expect(guide).toContain("src/concept-set.ts");
     expect(guide).toContain("src/composition.ts");
     expect(guide).toContain("src/assembly.ts");
-    expect(guide).toContain("edge.ts");
-    expect(guide).toContain("scenario.ts");
+    expect(guide).toContain("src/main.ts");
     expect(guide).toContain("bun run generate");
-    expect(guide).toContain("bun run typecheck");
-    expect(guide).toContain("bun run principle");
+    expect(guide).toContain("bun run check");
     expect(guide).toContain("bun run start");
   });
 
@@ -148,9 +129,6 @@ describe("guided curriculum", () => {
       for (const sourceUrl of repositoryOnlySources.get(docUrl.pathname) ?? []) {
         const text = await readFile(sourceUrl, "utf8");
         sources.push(text);
-        if (text.includes("{{")) {
-          sources.push(applyTemplate(text, "note-keeper"));
-        }
       }
 
       const candidates = sources.flatMap(atExcerptIndents);

@@ -33,6 +33,11 @@ Operations Room gives four independent concepts application-specific roles:
 - **Discussing** stores responder updates about a selected mitigation.
 - **Alerting** stores each responder's open mitigation alerts.
 
+This example's Alerting concept is a tutorial variant of the
+[catalog Alerting contract](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/entries/concept/alerting/spec.md).
+It omits the catalog contract's caller-supplied `Cause`, so each repeated `raise`
+creates another alert instead of returning an existing alert.
+
 Selecting a mitigation can trigger two independent reaction packs. The
 discussion pack opens a discussion whose subject is the new selection. The alert
 pack raises an alert for every current room member. `roomDashboard` joins each

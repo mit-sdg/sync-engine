@@ -50,21 +50,19 @@ bun audit
 
 CI runs the complete test suite on Linux, Windows, and macOS. Windows and macOS
 also build every workspace and run the application scenarios, establishing that
-the engine works from built output on both platforms. Release-oriented checks —
-npm packing, isolated consumer installation, scaffold verification, and package
-policy inspection — run on Linux only; the publication workflow repeats those
-checks on Linux before publishing the verified tarballs.
+the engine works from built output on both platforms. Release-oriented checks—npm packing, isolated consumer installation,
+concept-free setup, workspace verification, and package policy inspection—run
+on Linux only. The
+publication workflow repeats those checks on Linux before publishing the
+verified tarballs.
 
 ## Generated files
 
 Do not hand-edit these outputs:
 
-- `tests/packaging/declarations.snapshot.txt` — update with
+- `tests/packaging/declarations.snapshot.txt` and
+  `packages/*/tests/declarations.snapshot.txt` — update with
   `bun run declarations:pin` after an intentional declaration change;
-- `packages/http/tests/declarations.snapshot.txt` — update with
-  `bun run declarations:pin` after an intentional HTTP-package declaration change;
-- `packages/analysis/tests/declarations.snapshot.txt` — update with
-  `bun run declarations:pin` after an intentional analysis-package declaration change;
 - `examples/*/generated/*.md` and `examples/*/generated/wire.ts` — update through
   the owning example's artifact pin command or the repository generation
   script.
@@ -76,7 +74,7 @@ Each packed consumer contract remains in its owning workspace under
 `tests/packaging/` and is named `<workspace-id>-consumer-contract.ts`. The core
 workspace uses the repository-level `tests/packaging/` directory. Runtime
 consumer scenarios stay beside the contract that owns them.
-`scripts/verify-package.ts` copies the cataloged fixtures into one isolated
+`scripts/verify-package.ts` copies the registered fixtures into one isolated
 consumer.
 
 ## Public entrypoints
@@ -94,9 +92,11 @@ exact export register; the core workspace uses the repository-level
 
 ## Documentation
 
-Documents must live under `docs/user/` or `docs/project/` and appear exactly
-once in that audience's `index.md` catalog. Temporary notes do not belong under
-`docs/`.
+Repository-wide documents under `docs/` must live in `docs/user/` or
+`docs/project/` and appear exactly once in that audience's `index.md` catalog.
+Package-owned guides and API references remain with their package. Root and
+core documentation must not duplicate package-specific setup, behavior, or API
+contracts. Temporary notes do not belong under `docs/`.
 
 Every TypeScript fence in `docs/user/guide/read-construction.md` is a byte-exact excerpt from
 `tests/docs/book.test.ts`. Add or change the test first, then copy the exact

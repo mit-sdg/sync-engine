@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "id": "recipe/ranked-discussion",
+  "kind": "recipe",
+  "summary": "Collect discussion responses and show their aggregate vote scores.",
+  "requires": ["concept/timing", "concept/discussing", "concept/upvoting"],
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$recipes/ranked-discussion.spec.md"
+    },
+    {
+      "source": "ranked-discussion.ts",
+      "target": "$recipes/ranked-discussion.ts"
+    },
+    {
+      "source": "ranked-discussion.test.ts",
+      "target": "$recipes/ranked-discussion.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/ranked-discussion.ts",
+    "test": "$recipes/ranked-discussion.test.ts",
+    "members": [
+      "OpenRankedDiscussion",
+      "RespondToDiscussion",
+      "UpvoteResponse",
+      "DownvoteResponse",
+      "UnvoteResponse",
+      "CloseRankedDiscussion",
+      "GetRankedDiscussion"
+    ],
+    "routes": {
+      "OpenRankedDiscussion": "/ranked-discussions/open",
+      "RespondToDiscussion": "/ranked-discussions/respond",
+      "UpvoteResponse": "/ranked-discussions/upvote",
+      "DownvoteResponse": "/ranked-discussions/downvote",
+      "UnvoteResponse": "/ranked-discussions/unvote",
+      "CloseRankedDiscussion": "/ranked-discussions/close",
+      "GetRankedDiscussion": "/ranked-discussions/get"
+    }
+  }
+}

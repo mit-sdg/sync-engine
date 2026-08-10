@@ -359,11 +359,18 @@ The rework is a clean break. There are no aliases or compatibility adapters.
 | Clearing scoped to applicable bindings; `FORBIDDEN` excluded                              | Authorization refusal no longer signs out a valid session.                         |
 | Construction rejects overlapping bindings, inert bindings, and optional credential inputs | Previously accepted assemblies may fail during handler binding or wire projection. |
 
+## Support and security
+
+Only the newest beta is supported. Pin exact matching core and HTTP versions,
+and review the repository changelog before upgrading. Report suspected
+vulnerabilities through the repository's [private reporting
+process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
+
 ## Related documentation
 
 - [HTTP public API reference](public-surface.md)
 - [Complete message-board web application](https://github.com/mit-sdg/sync-engine/blob/main/examples/message-board/README.md)
 - [Boundary, gateway, and client semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client)
-- [HTTP host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md#http-host-responsibilities)
-- [Support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md)
+- [Core operational limits](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md)
+- [Core support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md)
 - [Security policy](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md)

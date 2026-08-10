@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "id": "concept/sessioning",
+  "kind": "concept",
+  "summary": "Issue fixed-lifetime opaque sessions for external subjects.",
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "concept": {
+    "name": "Sessioning",
+    "export": "sessioning",
+    "registration": "$concepts/sessioning/registry.ts"
+  },
+  "defaultFloor": "memory",
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$concepts/sessioning/spec.md"
+    },
+    {
+      "source": "sessioning.shared.ts",
+      "target": "$concepts/sessioning/sessioning.shared.ts"
+    },
+    {
+      "source": "registry.ts",
+      "target": "$concepts/sessioning/registry.ts",
+      "render": "floor"
+    }
+  ],
+  "floors": {
+    "memory": {
+      "summary": "Process-local state with an injected trusted clock and secure bearer source.",
+      "files": [
+        {
+          "source": "sessioning.memory.ts",
+          "target": "$concepts/sessioning/sessioning.memory.ts"
+        },
+        {
+          "source": "sessioning.memory.test.ts",
+          "target": "$concepts/sessioning/sessioning.memory.test.ts"
+        }
+      ]
+    },
+    "mongo": {
+      "summary": "MongoDB digest records with logical expiry checks and a cleanup-only TTL index.",
+      "packages": {
+        "mongodb": "^6.20.0"
+      },
+      "files": [
+        {
+          "source": "sessioning.mongo.ts",
+          "target": "$concepts/sessioning/sessioning.mongo.ts"
+        },
+        {
+          "source": "sessioning.mongo.test.ts",
+          "target": "$concepts/sessioning/sessioning.mongo.test.ts"
+        }
+      ]
+    }
+  }
+}

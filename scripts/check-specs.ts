@@ -19,7 +19,11 @@ import { conceptDirectories, conceptFailures } from "../src/command/check.ts";
 const root = resolve(import.meta.dirname, "..");
 
 /** Where authored concepts live: any directory below these holding a `spec.md`. */
-const conceptRoots = ["examples", "tests/packaging/application"];
+const conceptRoots = [
+  "examples",
+  "packages/catalog/entries/concept",
+  "tests/packaging/application",
+];
 
 if (import.meta.main) {
   const directories = await conceptDirectories(conceptRoots, root);

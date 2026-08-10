@@ -35,8 +35,7 @@ async function rejectForbiddenWorkspaceImports(
   }
 }
 
-async function rewriteCoreAliases(workspace: Workspace): Promise<void> {
-  if (workspace.scaffold === undefined) return;
+async function rewriteRepositoryAliases(workspace: Workspace): Promise<void> {
   const dist = workspacePath(root, workspace, workspace.distDirectory);
   for (const path of await filesBelow(
     dist,
@@ -83,19 +82,23 @@ async function buildWorkspace(workspace: Workspace): Promise<void> {
       stdio: "inherit",
     },
   );
-  await rewriteCoreAliases(workspace);
+  await rewriteRepositoryAliases(workspace);
   await rejectForbiddenWorkspaceImports(workspace, dist, [".js", ".d.ts"]);
 
-  if (workspace.scaffold !== undefined) {
-    await cp(
-      resolve(root, workspace.scaffold.source),
-      resolve(root, workspace.scaffold.destination),
-      {
-        recursive: true,
+  for (const asset of workspace.assets) {
+    const sourceAsset = workspacePath(root, workspace, asset.source);
+    await cp(sourceAsset, workspacePath(root, workspace, asset.destination), {
+      recursive: true,
+      filter: (path) => {
+        const entry = relative(sourceAsset, path).split(sep).join("/");
+        return !(asset.exclude ?? []).some(
+          (excluded) => entry === excluded || entry.startsWith(`${excluded}/`),
+        );
       },
-    );
-    await chmod(resolve(root, workspace.scaffold.executable), 0o755);
+    });
   }
+  for (const executable of workspace.bins)
+    await chmod(workspacePath(root, workspace, executable), 0o755);
 }
 
 for (const workspace of workspaceBuildOrder) await buildWorkspace(workspace);

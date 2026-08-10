@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "id": "recipe/workshop-selection",
+  "kind": "recipe",
+  "summary": "Create a workshop, join it, and choose its current item.",
+  "requires": ["concept/gathering", "concept/selecting"],
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$recipes/workshop-selection.spec.md"
+    },
+    {
+      "source": "workshop-selection.ts",
+      "target": "$recipes/workshop-selection.ts"
+    },
+    {
+      "source": "workshop-selection.test.ts",
+      "target": "$recipes/workshop-selection.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/workshop-selection.ts",
+    "test": "$recipes/workshop-selection.test.ts",
+    "members": ["CreateWorkshop", "JoinWorkshop", "ChooseWorkshopItem", "GetWorkshop"],
+    "routes": {
+      "CreateWorkshop": "/workshops/create",
+      "JoinWorkshop": "/workshops/join",
+      "ChooseWorkshopItem": "/workshops/choose",
+      "GetWorkshop": "/workshops/get"
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "id": "recipe/review-queue",
+  "kind": "recipe",
+  "summary": "Assign durable reviews and keep reviewer alerts convergent through repair.",
+  "requires": ["concept/timing", "concept/approving", "concept/alerting"],
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$recipes/review-queue.spec.md"
+    },
+    {
+      "source": "review-queue.ts",
+      "target": "$recipes/review-queue.ts"
+    },
+    {
+      "source": "review-queue.behavior.ts",
+      "target": "$recipes/review-queue.behavior.ts"
+    },
+    {
+      "source": "review-queue.test.ts",
+      "target": "$recipes/review-queue.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/review-queue.ts",
+    "test": "$recipes/review-queue.test.ts",
+    "members": [
+      "RequestQueuedReview",
+      "ApproveQueuedReview",
+      "RejectQueuedReview",
+      "WithdrawQueuedReview",
+      "RepairReviewAlert",
+      "GetReviewQueue"
+    ],
+    "routes": {
+      "RequestQueuedReview": "/review-queue/request",
+      "ApproveQueuedReview": "/review-queue/approve",
+      "RejectQueuedReview": "/review-queue/reject",
+      "WithdrawQueuedReview": "/review-queue/withdraw",
+      "RepairReviewAlert": "/review-queue/repair",
+      "GetReviewQueue": "/review-queue/get"
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "@mit-sdg/sync-engine-catalog",
+  "version": "1.0.0-beta.7",
+  "description": "Curated source installer for @mit-sdg/sync-engine applications",
+  "keywords": [
+    "catalog",
+    "concept",
+    "sync-engine"
+  ],
+  "homepage": "https://github.com/mit-sdg/sync-engine#readme",
+  "bugs": "https://github.com/mit-sdg/sync-engine/issues",
+  "license": "Apache-2.0",
+  "author": "Barish Namazov and Eagon Meng",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mit-sdg/sync-engine",
+    "directory": "packages/catalog"
+  },
+  "bin": {
+    "catalog": "./dist/command.js"
+  },
+  "files": [
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "public-surface.md",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {},
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "dependencies": {
+    "semver": "^7.7.3"
+  },
+  "devDependencies": {
+    "@node-rs/argon2": "2.0.2",
+    "mongodb": "^6.20.0",
+    "mongodb-memory-server": "^10.4.1"
+  },
+  "peerDependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7"
+  },
+  "peerDependenciesMeta": {
+    "@mit-sdg/sync-engine": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "bun": ">=1.3.14 <1.4",
+    "node": ">=24 <25"
+  }
+}

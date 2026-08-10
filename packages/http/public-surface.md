@@ -409,6 +409,6 @@ uses the resulting generated type and does not receive that policy.
 
 The [package README](README.md) provides tiered setup and the supported custom
 transport building blocks. Core [execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client)
-define invocation settlement and accepted-work cancellation. [Operational
-limits](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md#http-host-responsibilities)
-define host responsibilities.
+define invocation settlement and accepted-work cancellation. The package
+[README](README.md#host-responsibilities-and-unsupported-features) defines HTTP
+host responsibilities.

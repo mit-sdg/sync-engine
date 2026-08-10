@@ -1,10 +1,10 @@
 # Command-line reference
 
-The installed `sync-engine` executable scaffolds projects, compares parsed
-concept action/query declarations with class source, and checks or generates
-assembly artifacts. Commands follow the [runtime and toolchain support
-policy](../../../SUPPORT.md) and run relative to the current working directory unless
-a path says otherwise.
+The installed `sync-engine` executable initializes concept-free application
+files, compares parsed concept action/query declarations with class source, and
+checks or generates assembly artifacts. Commands follow the [runtime and
+toolchain support policy](../../../SUPPORT.md) and run relative to the current
+working directory unless a path says otherwise.
 
 ```text
 sync-engine <command> [arguments]
@@ -18,36 +18,55 @@ Commands accept only the operands and options shown below. Unknown options,
 repeated options, missing option values, and trailing operands are rejected
 before a command applies defaults, imports configuration, or writes files.
 
-| Command                                | Result                                                                                | Writes files                                    |
-| -------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `new <directory>`                      | Creates the runnable one-concept scaffold                                             | Yes; never overwrites an intended template file |
-| `check`                                | Compares concept specifications with class source and optionally inspects an assembly | No                                              |
-| `artifacts check`                      | Compares both configured artifacts with the assembly                                  | No                                              |
-| `artifacts pin`                        | Regenerates both configured artifacts                                                 | Yes                                             |
-| `artifacts pin-spec` / `pin-wire`      | Regenerates one configured artifact                                                   | Yes                                             |
-| `artifacts manifest` / `spec` / `wire` | Prints one derived representation to standard output                                  | No                                              |
+| Command                                | Result                                                                                | Writes files                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `setup [directory]`                    | Initializes missing concept-free application files in an existing Bun package         | Missing setup files only; never edits other files |
+| `check`                                | Compares concept specifications with class source and optionally inspects an assembly | No                                                |
+| `artifacts check`                      | Compares both configured artifacts with the assembly                                  | No                                                |
+| `artifacts pin`                        | Regenerates both configured artifacts                                                 | Yes                                               |
+| `artifacts pin-spec` / `pin-wire`      | Regenerates one configured artifact                                                   | Yes                                               |
+| `artifacts manifest` / `spec` / `wire` | Prints one derived representation to standard output                                  | No                                                |
 
-## `sync-engine new`
+## `sync-engine setup`
 
 ```text
-sync-engine new <directory>
+sync-engine setup [directory]
 ```
 
-`new` writes the one-concept project used by [Getting
-started](../guide/getting-started.md). The basename of `<directory>` determines
-the package name, generated application title, TypeScript identifiers, and
-specification filename. It must begin with a lowercase letter and contain only
-lowercase letters, digits, and single hyphens. Invalid names are rejected before
-the destination directory is created.
+`setup` initializes the concept-free files used by [Getting
+started](../guide/getting-started.md). The directory defaults to the current
+working directory. It must already exist and contain a valid `package.json`.
+When `packageManager` is present, it must name Bun. The command does not create
+a directory or package manifest.
 
-The command may create `<directory>` and missing subdirectories. Before writing,
-it checks every intended template path. If any intended file already exists,
-the command fails and lists the collisions. It does not overwrite those files.
-A filesystem failure during writing can leave a partial project; the command
-does not provide a transactional rollback.
+The setup targets are `tsconfig.json`, `generated.config.ts`,
+`src/concept-set.ts`, `src/composition.ts`, `src/assembly.ts`, and
+`src/main.ts`. Setup handles each target as follows:
 
-On success, the command lists the written paths and prints a `Next:` command for
-installing, generating, checking, and running the project.
+- An absent target is eligible to be created.
+- A byte-identical target is reported as verified.
+- Any other existing target remains unchanged and becomes application-owned.
+
+Before creating a file that imports another setup target, the command checks
+whether the dependency exports the expected identifiers. If the check fails,
+setup leaves the dependent file absent and prints the required integration.
+This prevents setup from creating imports against an incompatible partial
+project.
+
+Setup checks `package.json` for the exact core version, a compatible TypeScript
+declaration, `generate` and `start` scripts, and either a `check` or `typecheck`
+script. Missing declarations produce guidance; conflicting package declarations
+and incompatible versions fail the command. Setup checks only whether each
+script is a string, not what the script runs. It never edits `package.json`.
+Setup also does not merge or analyze an existing `tsconfig.json` or
+`generated.config.ts`; those files follow the target rules above.
+
+A second invocation over unchanged output writes nothing. A filesystem failure
+can leave files written earlier in the command because setup does not promise
+an all-or-nothing filesystem transaction.
+
+`sync-engine new` is unsupported. It is parsed as an unknown command, and the
+resulting usage text names `setup`.
 
 ## `sync-engine check`
 
@@ -82,11 +101,13 @@ Success prints:
 Concept action/query source check passed for N concepts.
 ```
 
-The command fails when no concept directories are found or when any concept
-fails. Parseable concept mismatches are collected and printed as bullets.
-Filesystem, missing-registry, or source-resolution failures can abort the
-command immediately as one stackless error. These failures bypass the aggregate
-list. The command does not modify files.
+An existing concept root with no concepts succeeds and reports zero checked
+concepts, which permits a concept-free setup application. An explicitly named
+root that does not exist fails. The command also fails when any discovered
+concept fails. Parseable concept mismatches are collected and printed as
+bullets. Filesystem, missing-registry, or source-resolution failures can abort
+the command immediately as one stackless error. These failures bypass the
+aggregate list. The command does not modify files.
 
 ## `sync-engine artifacts`
 

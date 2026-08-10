@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
@@ -568,9 +568,10 @@ export async function conceptDirectories(
   projectRoot = "",
 ): Promise<string[]> {
   const found = await Promise.all(
-    roots.map((directory) =>
-      filesBelow(resolve(projectRoot, directory), (name) => name === "spec.md"),
-    ),
+    roots.map((directory) => {
+      const root = resolve(projectRoot, directory);
+      return existsSync(root) ? filesBelow(root, (name) => name === "spec.md") : [];
+    }),
   );
   return found
     .flat()
@@ -610,13 +611,14 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
     }
     throw new Error(usage);
   }
+  const root = process.cwd();
+  if (conceptRoots !== undefined)
+    for (const directory of conceptRoots)
+      if (!existsSync(resolve(root, directory)))
+        throw new Error(`Concept root does not exist: ${directory}`);
   conceptRoots ??= ["src/concepts"];
 
-  const root = process.cwd();
   const directories = await conceptDirectories(conceptRoots, root);
-  if (directories.length === 0) {
-    throw new Error(`No concept directories found under: ${conceptRoots.join(", ")}`);
-  }
   const failures = directories.flatMap((directory) => conceptFailures(directory, root));
   if (failures.length > 0) {
     throw new Error(

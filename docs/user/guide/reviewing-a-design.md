@@ -97,9 +97,9 @@ owner of every fact, condition, and enforcement point. Check direct
 `Assembly.concepts` roots as well as endpoints. A composition read may provide an
 early denial; exact enforcement belongs in the owner action and storage.
 
-Review what leaves the boundary. Generated types are not runtime validators, and
-the production HTTP policy exposes only its configured public categories. See
-the [HTTP Fetch handler contract](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#handler).
+Review what leaves the boundary. Generated types are not runtime validators.
+Check the selected transport's package documentation for its public error and
+validation boundary.
 
 ## 6. Record revisions and evidence
 

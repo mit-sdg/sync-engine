@@ -5,8 +5,6 @@ current beta release. There is no root export and no supported deep import.
 The export registers are exact; compact signatures and tables summarize the
 principal call shapes and do not replace the generated TypeScript declarations.
 
-The independently published HTTP companion has its own [public API reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md).
-
 The [support policy](../../../SUPPORT.md) defines beta compatibility,
 generated-assembly compatibility, and format-version rules. The
 [security policy](../../../SECURITY.md) defines the supported security-fix window.
@@ -417,20 +415,20 @@ writes.
 ### Framework errors
 
 `FrameworkErrorCode` is the stable core value object; its value union names the
-core boundary and client framework failures. Transport packages may add their
-own error unions, such as `HttpClientError`. Controlled admission details may
-accompany an error, but exception text from an unknown failure is omitted.
+core boundary and client framework failures. A transport may add its own error
+union. Controlled admission details may accompany an error, but exception text
+from an unknown failure is omitted.
 
-| Code              | Ordinary source                                                                |
-| ----------------- | ------------------------------------------------------------------------------ |
-| `INVALID_INPUT`   | Invoker, gateway, or HTTP timeout option; shape, contract, or input validation |
-| `NOT_FOUND`       | Unknown logical route                                                          |
-| `UNAVAILABLE`     | Overload or draining admission                                                 |
-| `TIMED_OUT`       | Invocation or HTTP transport wait expired                                      |
-| `ABORTED`         | Invocation or client signal aborted                                            |
-| `INTERNAL_ERROR`  | Application, framework, validation, or interpreter fault                       |
-| `TRANSPORT_ERROR` | Forwarding, transport, or client-response validation failure                   |
-| `UNKNOWN_ERROR`   | Unclassified framework envelope                                                |
+| Code              | Ordinary source                                              |
+| ----------------- | ------------------------------------------------------------ |
+| `INVALID_INPUT`   | Shape, contract, option, or input validation                 |
+| `NOT_FOUND`       | Unknown logical route                                        |
+| `UNAVAILABLE`     | Overload or draining admission                               |
+| `TIMED_OUT`       | Invocation or transport wait expired                         |
+| `ABORTED`         | Invocation or client signal aborted                          |
+| `INTERNAL_ERROR`  | Application, framework, validation, or interpreter fault     |
+| `TRANSPORT_ERROR` | Forwarding, transport, or client-response validation failure |
+| `UNKNOWN_ERROR`   | Unclassified framework envelope                              |
 
 ## `client`
 
@@ -475,12 +473,9 @@ and error delivery are normative in
 [Execution semantics](semantics.md#boundary-gateway-and-client).
 
 `createClient` replaces a nullish input with `{}`. A transport throw or rejected
-promise resolves as `{ error: "TRANSPORT_ERROR" }`. Transport-specific failures
-are owned by the selected transport package. Pass their error type as the
-second generic, for example
-`createClient<Wire, HttpClientError>({ transport: createHttpTransport() })`;
-`createHttpClient<Wire>(...)` composes the maintained HTTP transport directly.
-Neither form weakens generated endpoint input and output types.
+promise resolves as `{ error: "TRANSPORT_ERROR" }`. A transport-specific error
+type can be supplied as the second generic parameter. This does not weaken the
+generated endpoint input and output types.
 
 ## `tooling`
 
@@ -676,11 +671,9 @@ must be distinct TypeScript identifiers. Projection provenance must contain a
 nonblank package name and a valid SemVer version. Projector versions are
 not restricted to 1.x. Artifact planning separately requires the manifest's
 core generator identity to name `@mit-sdg/sync-engine` at a 1.x version;
-generator and projector provenance may use prerelease versions. Core
-evaluates projections in declaration order and rejects any projection or naming
-failure before an artifact command compares or writes files. The HTTP companion's
-`httpWire({ policy, name })` additionally removes cookie-consumed credential
-fields for a floor. The
+generator and projector provenance may use prerelease versions. Core evaluates
+projections in declaration order and rejects any projection or naming failure
+before an artifact command compares or writes files. The
 [application authoring guide](../guide/authoring.md#generate-the-wire-contract)
 shows the application-owned command path; [Generated wire](semantics.md#generated-wire)
 defines derivation guarantees.

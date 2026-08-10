@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "id": "concept/labeling",
+  "kind": "concept",
+  "summary": "Own permanent scoped labels and many-to-many item classification.",
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "concept": {
+    "name": "Labeling",
+    "export": "labeling",
+    "registration": "$concepts/labeling/registry.ts"
+  },
+  "defaultFloor": "memory",
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$concepts/labeling/spec.md"
+    },
+    {
+      "source": "labeling.shared.ts",
+      "target": "$concepts/labeling/labeling.shared.ts"
+    },
+    {
+      "source": "labeling.conformance.ts",
+      "target": "$concepts/labeling/labeling.conformance.ts"
+    },
+    {
+      "source": "registry.ts",
+      "target": "$concepts/labeling/registry.ts",
+      "render": "floor"
+    }
+  ],
+  "floors": {
+    "memory": {
+      "summary": "Process-local stable Labels and application sets with injectable identities.",
+      "files": [
+        {
+          "source": "labeling.memory.ts",
+          "target": "$concepts/labeling/labeling.memory.ts"
+        },
+        {
+          "source": "labeling.memory.test.ts",
+          "target": "$concepts/labeling/labeling.memory.test.ts"
+        }
+      ]
+    },
+    "mongo": {
+      "summary": "MongoDB Labels and applications protected by compound unique indexes.",
+      "packages": {
+        "mongodb": "^6.20.0"
+      },
+      "files": [
+        {
+          "source": "labeling.mongo.ts",
+          "target": "$concepts/labeling/labeling.mongo.ts"
+        },
+        {
+          "source": "labeling.mongo.test.ts",
+          "target": "$concepts/labeling/labeling.mongo.test.ts"
+        }
+      ]
+    }
+  }
+}

@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 
 import { artifactsCommand } from "./artifacts.ts";
-import { scaffoldProject } from "./scaffold.ts";
+import { setupProject } from "./setup.ts";
 import { checkCommand } from "./check.ts";
 import { describeError } from "@engine/utils/redaction";
 
 const usage = `Usage: sync-engine <command> [arguments]
 
-  sync-engine new <directory>
-    Write a runnable project: one concept, its composition, and its config.
+  sync-engine setup [directory]
+    Initialize missing concept-free application files in an existing Bun package.
 
   sync-engine artifacts <command> [--config path]
     check      Verify the assembled read-back and wire contract against the assembly.
@@ -33,13 +33,26 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (topic === "new") {
-    if (rest.length !== 1 || rest[0].startsWith("-")) throw new Error(usage);
-    const written = await scaffoldProject(rest[0]);
-    console.log(`Wrote ${written.length} files into ${rest[0]}:`);
-    for (const path of written) console.log(`  ${path}`);
+  if (topic === "setup") {
+    if (rest.length > 1 || rest[0]?.startsWith("-")) throw new Error(usage);
+    const directory = rest[0] ?? ".";
+    const result = await setupProject(directory);
+    if (result.written.length > 0) {
+      console.log(`Wrote ${result.written.length} files into ${directory}:`);
+      for (const path of result.written) console.log(`  ${path}`);
+    } else {
+      console.log(`No files written into ${directory}.`);
+    }
+    if (result.verified.length > 0) {
+      console.log("Verified setup files:");
+      for (const path of result.verified) console.log(`  ${path}`);
+    }
+    if (result.guidance.length > 0) {
+      console.log("\nIntegration guidance:");
+      for (const finding of result.guidance) console.log(`  ${finding}`);
+    }
     console.log(
-      `\nNext: cd ${rest[0]} && bun install && bun run generate && bun run check && bun run start`,
+      "\nNext: apply any guidance, then run bun run generate && bun run check && bun run start",
     );
     return;
   }

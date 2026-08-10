@@ -82,7 +82,16 @@ describe("executable documentation examples", () => {
       [documents.readme, [await json("package.json")]],
       [
         new URL("docs/user/guide/getting-started.md", root),
-        [await json("src/command/scaffold/package.json")],
+        [
+          {
+            scripts: {
+              generate: "sync-engine artifacts pin",
+              check: "...",
+              start: "bun src/main.ts",
+              test: "vp test",
+            },
+          },
+        ],
       ],
       [
         new URL("docs/user/guide/authoring.md", root),
@@ -107,7 +116,7 @@ describe("executable documentation examples", () => {
   test("the package-qualified first-run command works through the local CLI", async () => {
     const readme = await readFile(documents.readme, "utf8");
     const manifest = await json("package.json");
-    const command = shellLines(readme).find((line) => line.includes(" sync-engine new "));
+    const command = shellLines(readme).find((line) => line.includes(" sync-engine setup"));
     expect(command).toBeDefined();
 
     const words = command?.split(/\s+/) ?? [];
@@ -117,22 +126,29 @@ describe("executable documentation examples", () => {
       "--package",
       `${manifest.name}@${manifest.publishConfig?.tag}`,
     ]);
-    expect(words.slice(executable + 1)).toEqual(["new", "note-keeper"]);
+    expect(words.slice(executable + 1)).toEqual(["setup"]);
 
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-docs-"));
-    const project = join(temporary, "note-keeper");
+    const project = join(temporary, "workshop-app");
     try {
+      await import("node:fs/promises").then(async ({ mkdir, writeFile }) => {
+        await mkdir(project);
+        await writeFile(
+          join(project, "package.json"),
+          '{"name":"workshop-app","packageManager":"bun@1.3.14"}\n',
+        );
+      });
       const result = spawnSync(
         "bun",
-        [fileURLToPath(new URL("src/command/main.ts", root)), "new", project],
-        { cwd: fileURLToPath(root), encoding: "utf8" },
+        [fileURLToPath(new URL("src/command/main.ts", root)), "setup"],
+        { cwd: project, encoding: "utf8" },
       );
       expect({ status: result.status, stderr: result.stderr }, result.stdout).toEqual({
         status: 0,
         stderr: "",
       });
       await expect(readFile(join(project, "generated.config.ts"), "utf8")).resolves.toContain(
-        'title: "Note keeper"',
+        'title: "Application"',
       );
     } finally {
       await rm(temporary, { recursive: true, force: true });

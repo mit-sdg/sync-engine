@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "id": "recipe/recoverable-board",
+  "kind": "recipe",
+  "summary": "Publish a labeled board with reversible trash and permanent visibility purge.",
+  "requires": [
+    "concept/timing",
+    "concept/posting",
+    "concept/commenting",
+    "concept/labeling",
+    "concept/trashing"
+  ],
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$recipes/recoverable-board.spec.md"
+    },
+    {
+      "source": "recoverable-board.ts",
+      "target": "$recipes/recoverable-board.ts"
+    },
+    {
+      "source": "recoverable-board.test.ts",
+      "target": "$recipes/recoverable-board.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/recoverable-board.ts",
+    "test": "$recipes/recoverable-board.test.ts",
+    "members": [
+      "PublishBoardPost",
+      "AddBoardComment",
+      "RetractBoardComment",
+      "CreateBoardLabel",
+      "LabelBoardPost",
+      "UnlabelBoardPost",
+      "TrashBoardPost",
+      "RestoreBoardPost",
+      "PurgeBoardPost",
+      "ListRecoverableBoard"
+    ],
+    "routes": {
+      "PublishBoardPost": "/recoverable-board/post",
+      "AddBoardComment": "/recoverable-board/comment",
+      "RetractBoardComment": "/recoverable-board/retract-comment",
+      "CreateBoardLabel": "/recoverable-board/create-label",
+      "LabelBoardPost": "/recoverable-board/label",
+      "UnlabelBoardPost": "/recoverable-board/unlabel",
+      "TrashBoardPost": "/recoverable-board/trash",
+      "RestoreBoardPost": "/recoverable-board/restore",
+      "PurgeBoardPost": "/recoverable-board/purge",
+      "ListRecoverableBoard": "/recoverable-board/list"
+    }
+  }
+}
