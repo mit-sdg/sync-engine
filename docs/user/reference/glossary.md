@@ -108,11 +108,12 @@ An `Invoker` decorator that adds route admission, limits, observation, timeout
 and abort waiting, and ordered drain. It uses the target assembly's reaction
 engine.
 
-## HTTP floor
+## HTTP cookie policy
 
-A production HTTP profile plus one cookie credential binding. The floor consumes
-the credential input on protected requests and removes issued credential fields
-from the public response and generated contract.
+The optional `HttpPolicy.cookie` binding for one protected logical input. The
+handler injects the cookie value on protected requests and removes each issue
+route's configured value and expiry fields from the public response and
+generated contract.
 
 ## Input contract
 
@@ -161,7 +162,7 @@ runs the concept directly, without assembly.
 
 ## Public error category
 
-A production HTTP classification registered for a concept refusal, such as
+A public HTTP classification registered for a concept refusal, such as
 `CONFLICT` or `UNAUTHORIZED`. Unmapped refusal codes do not cross that boundary.
 
 ## Query

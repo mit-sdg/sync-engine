@@ -166,8 +166,11 @@ queueing, retries, and network export into host-owned infrastructure.
 ## HTTP host responsibilities
 
 Install the exact matching beta of `@mit-sdg/sync-engine-http`. Use
-`productionHttpProfile(...)` for a credential-free public JSON policy or
-`httpFloor(...)` for its narrow cookie credential binding. The [HTTP Public
+`httpPolicy(...)` for both plain JSON and cookie-bearing HTTP boundaries. Pass
+the same `HttpPolicy` to `createHttpHandler({ policy })` and `httpWire(...)`.
+When `policy.cookie` is present, the handler requires a matching Origin by
+default, injects the protected cookie input, and hides issued cookie fields from
+the response and generated contract. The [HTTP Public
 API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
 defines method, body, status, origin, cookie, correlation, timeout, and response
 limits.

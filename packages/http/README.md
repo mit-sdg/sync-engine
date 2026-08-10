@@ -1,80 +1,47 @@
 # @mit-sdg/sync-engine-http
 
-Use `@mit-sdg/sync-engine-http` to expose an assembled sync-engine application as
-POST/JSON endpoints and call those endpoints through a generated, typed Fetch
-client. The package adapts Fetch `Request` objects to `Response` objects and
-provides a client; it does not own an HTTP listener, web framework, or server
+`@mit-sdg/sync-engine-http` adapts an assembled sync-engine application to Fetch
+`Request` and `Response` objects and provides a typed Fetch client. The package
+does not create a listener, terminate TLS, configure CORS, or own server
 lifecycle.
 
-## Mental model
-
-```text
-caller -> typed Fetch client -> HTTP -> Fetch handler -> gateway -> application
-                 ^                         ^
-                 |                         |
-      generated HTTP wire type      immutable HTTP profile
-                 ^                         |
-                 +------ httpWire(profile)-+
-```
-
-The handler and client exchange JSON over HTTP. `httpWire(...)` applies the same
-public profile as the handler to the application's logical wire contract. The
-generated HTTP wire type then supplies the client's endpoint names, inputs,
-outputs, and public error categories.
-
-## What you get
-
-| Part                      | Main export                   | Purpose                                                                         |
-| ------------------------- | ----------------------------- | ------------------------------------------------------------------------------- |
-| Fetch handler             | `createHttpHandler(...)`      | Routes a Fetch `Request` through a sync-engine gateway and returns a `Response` |
-| Typed Fetch client        | `createHttpClient<Wire>(...)` | Exposes generated paths as typed methods and sends JSON `POST` requests         |
-| HTTP wire projection      | `httpWire(...)`               | Generates the transport-visible contract from the logical wire                  |
-| Production profile/policy | `productionHttpProfile(...)`  | Freezes the origin, route prefix, and public domain-error mapping               |
-| Optional credential floor | `httpFloor(...)`              | Binds one logical credential to an `HttpOnly` cookie                            |
-
-`createHttpTransport(...)` is also available when an application needs the HTTP
-transport without the `createHttpClient(...)` convenience composition.
+The handler and generated HTTP contract use one `HttpPolicy`. A plain policy
+defines the public origin, optional base path, and public errors. Adding
+`HttpPolicy.cookie` binds one required logical input to an `HttpOnly` cookie and
+projects the consumed credential fields out of HTTP.
 
 ## Install
 
-The HTTP package is published separately and declares an exact peer dependency
-on the matching core beta. Pin both packages to the same exact version and
-upgrade them together:
+The HTTP package requires the exact matching core beta. Pin and upgrade both
+packages together:
 
 ```sh
 bun add --exact @mit-sdg/sync-engine@1.0.0-beta.8 @mit-sdg/sync-engine-http@1.0.0-beta.8
 ```
 
-The current beta is ESM-only and supports Node.js 24 (`>=24 <25`).
+The package is ESM-only and supports Node.js `>=24 <25`. It has no root export.
 
-## Import paths
+| Public subpath                      | Exports                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| `@mit-sdg/sync-engine-http/server`  | `httpPolicy`, policy types, `createHttpHandler`, and correlation options |
+| `@mit-sdg/sync-engine-http/client`  | Typed Fetch client and lower-level transport                             |
+| `@mit-sdg/sync-engine-http/tooling` | `httpWire` generated-contract projection                                 |
 
-The package has no root export. Deep imports are not supported; use one of these
-public subpaths:
+Deep imports are unsupported.
 
-| Subpath                             | Contains                                      |
-| ----------------------------------- | --------------------------------------------- |
-| `@mit-sdg/sync-engine-http/server`  | Handler, production profile, credential floor |
-| `@mit-sdg/sync-engine-http/client`  | Fetch client and lower-level HTTP transport   |
-| `@mit-sdg/sync-engine-http/tooling` | Generated HTTP wire projection                |
+## Plain JSON policy
 
-## Quickstart
-
-This quickstart assumes the application already exports `assembleApplication()`
-and declares a `/names/claim` endpoint with a `{ name: string }` input and a
-`NAME_TAKEN` refusal. The local module and generated type names below belong to
-the application.
-
-### 1. Create the profile and handler
+This example assumes `assembleApplication()` returns an assembly with a
+`/names/claim` endpoint and the `NAME_TAKEN` domain refusal.
 
 ```ts
 // src/http-edge.ts
 import { createGateway } from "@mit-sdg/sync-engine/boundary";
-import { createHttpHandler, productionHttpProfile } from "@mit-sdg/sync-engine-http/server";
+import { createHttpHandler, httpPolicy } from "@mit-sdg/sync-engine-http/server";
 import { assembleApplication } from "./assembly.ts";
 
-export const httpProfile = productionHttpProfile({
-  origin: "https://app.example",
+export const applicationHttpPolicy = httpPolicy({
+  origin: "https://api.example.com",
   basePath: "/api",
   publicErrors: { NAME_TAKEN: "CONFLICT" },
 });
@@ -85,65 +52,52 @@ export function buildHttpEdge() {
   const handler = createHttpHandler({
     application,
     gateway,
-    profile: httpProfile,
+    policy: applicationHttpPolicy,
   });
 
   return { application, gateway, handler };
 }
 ```
 
-`origin` declares the public HTTP or HTTPS origin, and production requires HTTPS;
-it does not configure CORS. `basePath` exposes `/names/claim` at
-`POST /api/names/claim`. `publicErrors` is an allowlist: `NAME_TAKEN` becomes
-`CONFLICT`/409, while an unmapped domain error becomes opaque
-`INTERNAL_ERROR`/500.
+The handler exposes the logical `/names/claim` path at
+`POST /api/names/claim`. It accepts a missing `Content-Type`; when present, the
+value must be `application/json` with optional parameters. The request body must
+be valid JSON and cannot exceed 1,048,576 bytes.
 
-### 2. Give Fetch requests to the handler
+`publicErrors` is an allowlist. In this example, `NAME_TAKEN` becomes
+`{"error":"CONFLICT"}` with status 409. Unmapped domain failures become the
+opaque `{"error":"INTERNAL_ERROR"}` with status 500.
 
-A Fetch-native host can pass each request directly to the handler. The host then
-sends the returned `Response` to the caller.
+A plain policy does not inspect the inbound `Origin` header. The required
+`origin` describes the public deployment origin and must use HTTPS when
+`NODE_ENV=production`; it does not configure CORS.
 
-```ts
-import { buildHttpEdge } from "./src/http-edge.ts";
+### Generate the matching HTTP contract
 
-const edge = buildHttpEdge();
-
-export function respondToRequest(request: Request): Promise<Response> {
-  return edge.handler(request);
-}
-```
-
-Register `respondToRequest` with the host. No framework-specific adapter is
-required when the host already uses Fetch interfaces.
-
-### 3. Generate the HTTP wire type
-
-Use the same immutable `httpProfile` value for the handler and `httpWire(...)`:
+Pass the same policy value to `httpWire`:
 
 ```ts
 // generated.config.ts
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import { assembleApplication } from "./src/assembly.ts";
-import { httpProfile } from "./src/http-edge.ts";
+import { applicationHttpPolicy } from "./src/http-edge.ts";
 
 export default {
   assemble: assembleApplication,
   title: "Application",
   wireName: "ApplicationWire",
-  projections: [httpWire({ policy: httpProfile, name: "ApplicationWireHttp" })],
+  projections: [httpWire({ policy: applicationHttpPolicy, name: "ApplicationWireHttp" })],
 };
 ```
-
-Generate or update the checked-in artifacts:
 
 ```sh
 bunx sync-engine artifacts pin --config generated.config.ts
 ```
 
-The projection emits `ApplicationWireHttp` in `generated/wire.ts` and replaces
-private domain refusal names with the profile's public categories.
+The projection maps known domain refusals to the same public categories as the
+handler. Unknown and open domain failures project as `INTERNAL_ERROR`.
 
-### 4. Call an endpoint through the typed client
+### Call the generated contract
 
 ```ts
 import { createHttpClient } from "@mit-sdg/sync-engine-http/client";
@@ -151,100 +105,182 @@ import type { ApplicationWireHttp } from "./generated/wire.ts";
 
 const client = createHttpClient<ApplicationWireHttp>({ baseUrl: "/api" });
 const result = await client.names.claim({ name: "atlas" });
-
-if ("error" in result) {
-  console.error("Name claim failed:", result.error);
-} else {
-  console.log("Claimed:", result.name);
-}
 ```
 
-The client appends each generated endpoint path to `baseUrl`. If `baseUrl` is
-omitted, the client uses `API_BASE_URL`, then `/api`; an explicit `/` selects the
-origin root. Per-call options carry abort, timeout, and correlation values.
-Headers, response-size limits, credentials mode, and optional response
-validation belong in `HttpClientOptions`.
+The client sends JSON `POST` requests and uses `credentials: "include"` by
+default. An omitted `baseUrl` uses `API_BASE_URL`, then `/api`; an explicit `/`
+selects the current origin root. Endpoint calls resolve handled server and
+transport failures as error envelopes. See the [client
+reference](public-surface.md#client) for abort, timeout, headers, response
+validation, and response-size behavior.
 
-## Results and exceptions
+## Cookie policy
 
-Handled server failures become JSON `Response` objects. Public categories use
-status 400 (`INVALID_REQUEST`), 401 (`UNAUTHORIZED`), 403 (`FORBIDDEN`), 404
-(`NOT_FOUND`), or 409 (`CONFLICT`). Private domain errors and internal failures
-use the opaque `INTERNAL_ERROR` category with status 500.
+Add `cookie` when one required endpoint input must come from a browser cookie.
+The application still owns credential creation, expiry, revocation, and domain
+authorization.
 
-Endpoint calls resolve handled HTTP and client transport failures as error
-envelopes. These include network failure, bad JSON, an unexpected status,
-header-provider failure, response-size overflow, abort, and timeout. Check the
-result's `error` property rather than relying on a rejected promise for these
-conditions.
-
-Invalid setup is a programmer or configuration error and throws while the
-profile, floor, handler, or client is constructed. Examples include an invalid
-origin or base path, a gateway for another application, an inconsistent
-credential floor, or an invalid `maxResponseBytes`. Errors in the listener or
-framework outside the Fetch adapter remain host errors.
-
-## Optional cookie credential floor
-
-Use `httpFloor(...)` when one required logical input should come from a browser
-cookie instead of the JSON body. The application still owns the credential's
-meaning, expiry, and authorization decisions.
+This policy supports initial issuance and session rotation through different
+routes and output fields:
 
 ```ts
-// Alternative policy in src/http-edge.ts
-import { httpFloor } from "@mit-sdg/sync-engine-http/server";
+import { createGateway } from "@mit-sdg/sync-engine/boundary";
+import {
+  createHttpHandler,
+  httpPolicy,
+  type HttpCookieIssue,
+  type HttpCookiePolicy,
+  type HttpPolicy,
+} from "@mit-sdg/sync-engine-http/server";
+import { assembleApplication } from "./assembly.ts";
 
-export const sessionFloor = httpFloor({
-  origin: "https://app.example",
+const issues: readonly HttpCookieIssue[] = [
+  { path: "/sessions/start", value: "session", expires: "expiresAt" },
+  {
+    path: "/sessions/rotate",
+    value: "replacement",
+    expires: "replacementExpiresAt",
+  },
+];
+
+const cookie: HttpCookiePolicy = {
+  name: "session",
+  input: "session",
+  issue: issues,
+  clear: ["/sessions/end", "/sessions/end-all"],
+};
+
+export const sessionHttpPolicy: HttpPolicy = httpPolicy({
+  origin: "https://api.example.com",
   basePath: "/api",
   publicErrors: { UNKNOWN_SESSION: "UNAUTHORIZED" },
-  credential: {
+  cookie,
+});
+
+const application = assembleApplication();
+const gateway = createGateway({ application });
+export const handler = createHttpHandler({
+  application,
+  gateway,
+  policy: sessionHttpPolicy,
+});
+```
+
+An endpoint is protected when its input contract lists `cookie.input` as
+required. For a protected route, the handler overwrites any body-supplied
+`session` with the decoded cookie value or `null`. The generated HTTP contract
+omits that input.
+
+After a successful issue route, the handler requires a nonempty string in the
+configured value field and a future expiry. It removes the value and expiry
+fields from the JSON response and sets the cookie. Each issue route can name
+different output fields. A successful clear route clears the cookie. An
+`UNAUTHORIZED` result from any protected route also clears it.
+
+### Secure defaults
+
+For an HTTPS policy origin, the default cookie is:
+
+- prefixed `__Host-` when `Path=/` and no `Domain` is configured;
+- marked `Secure` and `HttpOnly`;
+- `SameSite=Strict`;
+- scoped to `Path=/` with no `Domain`;
+- sent with an absolute `Expires` value supplied by the issuing endpoint.
+
+Issue, successful clear, and unauthorized protected responses that clear the
+cookie use `Cache-Control: no-store`. The serialized issuing cookie must not
+exceed 4,096 characters.
+
+### Origin enforcement
+
+A cookie policy defaults `origins` to the policy origin. Every request handled
+by that cookie-policy handler must include a present `Origin` header that exactly
+matches an allowed origin. A missing or mismatched value returns
+`FORBIDDEN`/403 before method and body processing.
+
+Use an explicit nonempty allowlist when a browser frontend has another origin:
+
+```ts
+const policy = httpPolicy({
+  origin: "https://api.example.com",
+  cookie: {
     name: "session",
     input: "session",
-    issue: {
-      path: "/sessions/start",
-      output: "session",
-      expires: "expiresAt",
-    },
-    clear: ["/sessions/end"],
+    issue: issues,
+    origins: ["https://app.example.com"],
   },
 });
 ```
 
-Pass `floor: sessionFloor` instead of `profile: httpProfile` to
-`createHttpHandler(...)`, and pass the same `sessionFloor` as the `policy` for
-`httpWire(...)`.
+This allowlist does not implement CORS. The handler does not answer `OPTIONS`
+preflight requests or emit `Access-Control-Allow-*` headers. The host must
+configure CORS consistently with the policy.
 
-An endpoint is protected only when its input contract lists `session` as
-required. For such an endpoint, the handler replaces the input with the cookie
-value or `null`; it never trusts a body-supplied value. The wire projection
-removes that input from protected endpoints and removes `session` and
-`expiresAt` from the issuing endpoint's public output.
+The lower-level `origins: false` setting disables the Origin check. Use it only
+when another trusted layer enforces an equivalent request-origin or
+cross-site-request policy. Disabling this check removes the package's default
+cookie request-origin defense.
 
-The handler sets the cookie after successful issuance and clears it after a
-successful configured clear endpoint or an `UNAUTHORIZED` result from a
-protected endpoint. Browsers own cookie storage. `createHttpClient(...)` uses
-`credentials: "include"` by default, but Node.js and custom Fetch
-implementations must provide a cookie store when later calls depend on the
-credential.
+### Cookie customization
 
-## Your host still owns
+`sameSite`, `path`, and `domain` are configurable. `SameSite=None` requires an
+HTTPS policy origin. A configured domain must be a canonical parent DNS hostname
+of the policy origin. A domain or non-root path uses the `__Secure-` prefix under
+HTTPS instead of `__Host-`.
+
+Logical cookie names cannot include the reserved `__Host-` or `__Secure-`
+prefix. The handler chooses the prefix after validating the complete policy.
+Issue and clear paths must be distinct portable endpoint paths and cannot
+overlap. `createHttpHandler` also verifies that all paths exist, at least one
+endpoint requires the protected input, and every issue output contains its
+declared value and expiry fields.
+
+Pass `sessionHttpPolicy` to `httpWire` as well. The projected contract removes
+the protected input from every protected route and removes each issue route's
+own value and expiry fields.
+
+## Responses, correlation, and limits
+
+Successful invocations return status 200 and JSON. Public failures use these
+categories and statuses:
+
+| Category          | Status |
+| ----------------- | ------ |
+| `INVALID_REQUEST` | 400    |
+| `UNAUTHORIZED`    | 401    |
+| `FORBIDDEN`       | 403    |
+| `NOT_FOUND`       | 404    |
+| `CONFLICT`        | 409    |
+| `INTERNAL_ERROR`  | 500    |
+
+Public failure bodies contain only `{ error }`. Exception text and private
+domain values do not cross the handler boundary.
+
+Optional correlation configuration resolves one ID per request and can place it
+in a response header. The effective ID also reaches gateway and application
+observers. Missing, invalid, or faulting resolver output is replaced with a
+UUID. Correlation is tracing information, not an idempotency key.
+
+Handler calls can overlap. Request abort stops invocation waiting but does not
+roll back or cancel accepted concept work. The handler has no disposal method
+and does not own the application, gateway, concept stores, listener, or Fetch
+runtime.
+
+## Host and application responsibilities
 
 The host owns the listener, TLS termination, HSTS, CORS and preflight handling,
-proxy trust, connection limits, rate limits, retries, idempotency, and startup,
-drain, and shutdown policy. Handler calls may overlap, and client header
-providers for concurrent calls may run concurrently; the host and application
-must provide any required serialization.
+trusted-proxy policy, connection and request-rate limits, denial-of-service
+controls, retries, process admission, startup, drain, shutdown, and forced-exit
+deadline. Browser cookie storage belongs to the browser. Node.js and custom
+Fetch clients must supply a cookie store when later requests depend on an issued
+cookie.
 
-The handler and client have no disposal method. They do not close the
-application, gateway, concept store, listener, selected Fetch implementation, or
-Fetch agent.
+The application owns credential meaning, durable storage, session recovery,
+resource authorization, idempotency, and transactions. The HTTP package does
+not turn a credential cookie into a complete authentication or authorization
+system.
 
-## Related documentation
-
-- [HTTP public API reference](public-surface.md)
-- [Complete production HTTP example](https://github.com/mit-sdg/sync-engine/tree/main/examples/production-http)
-- [Boundary, gateway, and client semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client)
-- [HTTP host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md#http-host-responsibilities)
-- [Support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md)
-- [Security policy and private vulnerability reporting](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md)
+See the exact [HTTP public API](public-surface.md), the self-contained
+[Production HTTP example](../../examples/production-http/README.md), [boundary
+and client semantics](../../docs/user/reference/semantics.md#boundary-gateway-and-client),
+and [HTTP host responsibilities](../../docs/user/reference/operations.md#http-host-responsibilities).

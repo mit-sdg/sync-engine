@@ -41,7 +41,7 @@ bun add @mit-sdg/sync-engine@beta
 | Package                                                                                               | Role                                                                     |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `@mit-sdg/sync-engine`                                                                                | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
-| [`@mit-sdg/catalog`](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)               | Copy-owned concepts, computations, recipes, and application bundles      |
+| [`@mit-sdg/catalog`](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)               | Copy-owned concepts, computations, and composition recipes               |
 | [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Deterministic IR queries and optional TypeScript project/source evidence |
 | [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | Maintained HTTP handler, fetch client, and generated wire projection     |
 
@@ -62,26 +62,29 @@ trusting an attacker-chosen artifact and freshly computed digest still trusts
 attacker-chosen evidence. Revision labels remain caller assertions rather than
 Git verification.
 
-## Create an application from the catalog
+## Add a catalog recipe
 
 ```sh
 mkdir account-center
 cd account-center
 bun init -y
-bun add --exact @mit-sdg/sync-engine@beta
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.8
 bun add --dev "typescript@>=6 <7"
-bunx --package @mit-sdg/catalog@beta catalog init bundle/account-center
+bunx --package @mit-sdg/catalog@beta catalog init recipe/account-center --variant concept/profiling=memory
 ```
 
-For a reproducible evaluation, replace both `@beta` selectors with matching
-pinned versions.
+For a reproducible evaluation, replace the catalog's `@beta` selector with
+`@1.0.0-beta.8` so it matches the pinned core.
 
-The catalog copies three independent concepts, one composition recipe,
-executable evidence, and a complete validated application boundary. Your
-application owns every copied source file. Continue with the [catalog package
+The catalog copies three independent concepts, one composition recipe, and
+their evidence. It also generates registration and composition records for an
+existing application. It does not create an assembly, gateway, generated
+artifact configuration, or runnable application shell. Your application owns
+every copied source file. Continue with the [catalog package
 guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)
-to generate its contracts and exercise the account profile, preference, and
-inbox lifecycle.
+to integrate those records, or use the self-contained [Account Center
+example](examples/account-center/README.md) for the complete profile,
+preference, and inbox lifecycle.
 
 ## Documentation
 

@@ -24,6 +24,8 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 ## Authoring
 
 - [Application authoring](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/authoring.md)
+- [Catalog package guide](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/README.md) — copy and integrate curated concepts, computations, and recipes
+- [Catalog Public Surface](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/public-surface.md) — exact commands, manifest and lock schemas, generated integration, and copy ownership
 - [Read construction cookbook](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/read-construction.md)
 - [Concept specification format](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/concept-specification.md)
 - [Command-line reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/cli.md)
@@ -33,6 +35,7 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 
 - [Reading Circle](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/reading-circle/README.md) — shortest complete multi-concept application
 - [Operations Room](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/operations-room/README.md) — selectable reactions, policy, and staged formers
+- [Account Center](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/account-center/README.md) — self-contained profile, preference, and retained-inbox application
 - [Production HTTP](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/production-http/README.md) — validation, limits, public errors, correlation, and cookie credentials
 - [Persistence, restart, and recovery](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/persistence-recovery.md) — durable concept state versus occurrence evidence
 
@@ -41,7 +44,8 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 - [HTTP Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/http/public-surface.md) — supported HTTP subpaths, exports, signatures, and defaults
 - Install the exact same beta of `@mit-sdg/sync-engine-http` and `@mit-sdg/sync-engine`; the HTTP package declares an exact core peer dependency.
 - Import handlers and policies from `@mit-sdg/sync-engine-http/server`, fetch clients from `@mit-sdg/sync-engine-http/client`, and `httpWire` from `@mit-sdg/sync-engine-http/tooling`. The companion root and deep imports are unsupported.
-- Put public domain-error mappings on the reused HTTP profile or floor. Generate the public contract with `projections: [httpWire({ policy, name })]`.
+- Construct one `HttpPolicy` with `httpPolicy(...)`, pass it to `createHttpHandler({ application, gateway, policy })`, and reuse it in `projections: [httpWire({ policy, name })]`. Add `policy.cookie` for protected cookie input and issue-output hiding.
+- A cookie policy requires a present matching Origin by default and does not implement CORS. `origins: false` is the lower-level opt-out; the host owns any equivalent control and all CORS handling.
 - Core contains no HTTP handler or fetch-client exports. Use `bindTransport` and `createClient` for a custom transport without the companion package.
 
 ## Analysis

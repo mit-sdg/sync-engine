@@ -1,189 +1,152 @@
-# Contributing To The Catalog
+# Contributing to the catalog
 
-This guide is for changes under `packages/catalog/`. Use the repository root
-`CONTRIBUTING.md` for checkout, review, and pull-request workflow.
+This guide applies to changes under `packages/catalog/`. Use the repository-root
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md) for checkout, review, and pull-request
+workflow.
 
-Catalog documentation stays with this package:
+Package documentation stays with the package:
 
-- `README.md` is the approachable user guide;
-- `public-surface.md` is the complete supported CLI and format contract;
-- this file owns entry-authoring and implementation workflow.
+- `README.md` owns progressive usage;
+- `public-surface.md` owns the supported CLI, manifest, lock, generated-file,
+  and failure contracts;
+- this file owns entry design, authoring, and verification.
 
-Do not add catalog design notes or usage documents under `docs/`.
+Do not add catalog design notes under `docs/`. Complete application wiring,
+artifact configuration, gateways, clients, host adapters, and runnable scenarios
+belong in self-contained packages under [`examples/`](../../examples/README.md),
+not in catalog entries.
 
-## Entry Standard
+## Entry quality bar
 
-Add an entry only when it provides a common application capability with a clear
-owner and observable behavior. A concept must own state independently of
-unrelated capabilities. A recipe must express a reusable cross-concept policy,
-boundary, or read. A bundle must demonstrate how independent entries compose;
-it must not hide one large coupled behavior.
+Add an entry only when it provides a reusable application capability with a
+clear owner and observable contract.
 
-The useful-entry bar requires executable evidence for the behavior that makes
-the entry worth adopting. Evidence must cover meaningful refusals and ordering
-when the contract defines them. Do not add a filler entry merely to exercise an
-entry kind. Do not rename application-specific behavior and present it as a
-generic capability.
+- A **concept** independently owns state, actions, queries, and expected
+  refusals.
+- A **computation** is a reusable pure vocabulary function.
+- A **recipe** expresses reusable composition: a policy, boundary, reaction,
+  view, former, or related set of those declarations.
 
-Names, summaries, and examples must not imply authentication, authorization,
-audit, or external-delivery guarantees that the source does not implement and
-test. A profile association is not authentication. Retained records are not by
-themselves an audit log. An in-app inbox insertion is not email or push delivery
-and does not imply deduplication or exactly-once behavior.
+The supported kinds are exactly `concept`, `computation`, and `recipe`. Complete
+applications remain examples rather than catalog entry kinds. The current
+absence of a computation entry does not justify a filler entry.
 
-Every entry lives below `entries/<kind>/<name>/` and appears once in
+Every entry needs executable evidence for the behavior that makes the entry
+useful. Evidence must cover contractual refusals, state preservation,
+cardinality, and ordering where they apply. One successful construction is not
+enough when the contract distinguishes failure or order.
+
+Names, summaries, and examples must not claim authentication, authorization,
+audit, durability, external delivery, idempotency, or exactly-once behavior that
+the source and evidence do not establish. A profile association is not
+authentication. An in-app record is not external delivery. Process-local state
+is not durable state.
+
+## Design sequence
+
+Before writing source:
+
+1. State the common application capability, its observable value, and what it
+   does not provide.
+2. Assign each state transition to one concept owner. Keep cross-concept policy
+   in a recipe instead of coupling concept implementations.
+3. Specify accepted inputs, state changes, query cardinality, ordering, refusal
+   precedence, idempotency, and trust boundaries where relevant.
+4. Identify exact catalog dependencies, package requirements, and implementation
+   seams. A variant changes implementation, not concept semantics.
+5. Define evidence for the principle, normal behavior, state-preserving
+   refusals, cardinality, ordering, and failure boundaries.
+6. Decide whether a complete application example is needed to demonstrate
+   assembly or operational use. If so, add or extend one self-contained example
+   separately; the catalog still copies only reusable source.
+
+`concept/profiling` demonstrates an implementation seam. Its `memory` and
+`repository` variants share one specification, registration, refusal contract,
+and conformance expectation. The repository variant delegates atomic
+principal-unique creation to an application repository. It does not alter
+Profiling semantics or establish that an arbitrary repository is durable.
+
+Reject proposals that duplicate an existing entry under different application
+vocabulary, combine unrelated state owners, or require the installer to infer
+semantic equivalence.
+
+## Source layout and IDs
+
+Every entry lives under `entries/<kind>/<name>/` and appears once in
 `entries/index.json`. Its ID is the same lowercase kebab-case path:
 
 ```text
 concept/profiling
-concept/preferring
-concept/notifying
+computation/normalizing-name
 recipe/account-center
-bundle/account-center
 ```
 
-The allowed kinds are `concept`, `computation`, `recipe`, and `bundle`. The
-current snapshot intentionally has no computation entry; `computation` remains
-supported. Do not add one solely to fill that gap.
+The computation ID above illustrates the grammar; it is not a shipped entry.
+Do not list hypothetical entries in user-facing catalog documentation.
 
-## Design Process
+Keep specifications, common concept registration, and shared evidence outside
+variant directories. Put implementation-specific source and evidence under the
+variant when more than one implementation exists.
 
-Start with the application need and choose the smallest reusable entry that
-expresses it. Before writing source:
+## Implementation sequence
 
-1. Name the common application capability and the concrete behavior or
-   composition contrast the entry adds. State what the entry does not provide.
-2. Assign each state transition to one independently owned concept. Put policy
-   that coordinates concepts in a recipe rather than moving their state into a
-   shared implementation.
-3. Write the observable contract: accepted inputs, state changes, query
-   cardinality, ordering, refusal precedence, idempotency, and trust boundaries
-   where each applies.
-4. Identify exact entry dependencies, package requirements, and implementation
-   seams. A variant must change implementation rather than concept semantics.
-5. Define executable evidence for the principle, normal path, state-preserving
-   refusals, cardinality, and ordering. One happy-path construction is not
-   enough when refusal or ordering behavior is part of the value.
-6. For a bundle, explain why the selected entries form one coherent application,
-   which variants its assembly supports, and which operational responsibilities
-   remain with the receiving application.
+1. Write or update the concept specification or recipe contract. Record state
+   ownership, actions, queries, refusals, ordering, recovery, and trust
+   assumptions in entry-owned source.
+2. Implement source under `entries/<kind>/<name>/`. Keep concept implementations
+   independent of peer concepts.
+3. Add executable evidence beside the copied source. Exercise concepts directly
+   and composed policy at the narrowest practical level.
+4. Add the exact manifest and register it once in `entries/index.json`.
+5. Add registry and installer tests for parsing, dependency resolution,
+   rendering, package requirements, ownership, collisions, selected variants,
+   lock data, and generated integration.
+6. Update `README.md` for ordinary use and `public-surface.md` for every
+   observable command, option, format, entry, output, or failure change.
+7. Add complete wiring and a scenario under `examples/` only when the reusable
+   entry cannot establish the application lifecycle by itself.
+8. Verify both the source checkout and the packed tarball in an isolated
+   ordinary consumer.
 
-`concept/profiling` is the model for a meaningful storage seam. Its `memory` and
-`repository` variants share one specification, registry, refusal contract, and
-conformance expectation. The repository variant delegates atomic
-principal-unique creation to an application-supplied repository; it does not
-change Profiling semantics or claim that every supplied repository is durable.
+## Manifest contract
 
-`bundle/account-center` is the model for bundle-level evidence. It composes
-three independent state owners and one boundary recipe, constrains Profiling to the
-constructor shape its assembly supports, and runs an asserting lifecycle that
-covers duplicate refusal, preference order, delivery policy, read state, and
-dismissal.
+Every manifest uses schema 1 and the exact fields accepted by
+`src/registry.ts`. Unknown fields are errors. Common fields include `id`,
+`kind`, `summary`, optional exact `requires`, optional package `packages`, and
+kind-specific copied files and integration metadata.
 
-Reject proposals that duplicate an existing entry with renamed application
-vocabulary, couple unrelated state into one concept, or require the installer
-to infer equivalence. Review concept semantics with the repository's design and
-design-review guides before treating catalog packaging as the implementation
-problem.
+File targets use only these tokens:
 
-## Implementation Sequence
+| Token            | Destination                        |
+| ---------------- | ---------------------------------- |
+| `$concepts/`     | Configured concept source root     |
+| `$computations/` | Configured computation source root |
+| `$recipes/`      | Configured recipe source root      |
 
-1. Write or update the concept specification or recipe contract before the
-   application bundle. Record state ownership, action and query behavior,
-   refusals, ordering, and boundary assumptions in the entry-owned source.
-2. Implement the source under `entries/<kind>/<name>/`. Keep common concept
-   files outside variant directories and keep all variants conformant with the
-   same specification and registration contract.
-3. Add executable evidence beside the copied source. Exercise the implementation
-   directly for concepts; exercise composed policy at the narrowest practical
-   level. Check state after refusals and compare complete ordered results when
-   order is contractual.
-4. Add the manifest and register it once in `entries/index.json`. Declare exact
-   entry dependencies, package requirements, copied files, integration members,
-   and variant constraints. Keep every recipe independently installable.
-5. Build a bundle only after its reusable concepts and recipes stand alone. Add
-   the concept set, assembly, edge, artifact descriptor, and an asserting
-   scenario. The account-center bundle, for example, explicitly constrains
-   `concept/profiling` to `memory` rather than relying on installer inference.
-6. Add or update registry and installation tests for manifest validation,
-   dependency resolution, rendering, ownership, collisions, selected variants,
-   lock data, and integration metadata. Test the complete preflight and rollback
-   boundary for observable installer changes.
-7. Update `README.md` for the ordinary workflow and `public-surface.md` for every
-   observable command, option, format, entry, output, or failure change. Keep
-   package-owned catalog documentation under `packages/catalog/`, not `docs/`.
-8. Verify the source checkout, then install the packed tarball in an isolated
-   consumer and run its evidence, generated-artifact checks, typecheck, and
-   scenario.
+A concept may copy only below `$concepts/`, a computation only below
+`$computations/`, and a recipe only below `$recipes/`. There is no project-root
+or concept-set target. The configured concept-set path is an application-owned
+reference used to render recipe imports; it is not copied from a manifest.
 
-## Manifest Shape
+Sources are relative to the entry directory. Source and target paths must stay
+inside their owners and remain portable across supported Linux, macOS, and
+Windows environments.
 
-Every `manifest.json` contains:
+### Concept manifests and variants
+
+A concept declares common files, one or more implementation variants, and
+`concept` integration metadata. The relevant shape is:
 
 ```json
 {
   "schema": 1,
-  "id": "recipe/account-center",
-  "kind": "recipe",
-  "summary": "Expose one validated account boundary.",
-  "requires": ["concept/notifying", "concept/preferring", "concept/profiling"],
+  "id": "concept/profiling",
+  "kind": "concept",
+  "summary": "Associate one display profile with each opaque external principal.",
   "files": [
-    {
-      "source": "account-center.ts",
-      "target": "$recipes/account-center.ts"
-    },
-    {
-      "source": "account-center.test.ts",
-      "target": "$recipes/account-center.test.ts"
-    }
+    { "source": "spec.md", "target": "$concepts/profiling/spec.md" },
+    { "source": "registry.ts", "target": "$concepts/profiling/registry.ts" }
   ],
-  "recipe": {
-    "module": "$recipes/account-center.ts",
-    "test": "$recipes/account-center.test.ts",
-    "members": [
-      "accountCenter",
-      "CreateProfile",
-      "RenameProfile",
-      "SetPreference",
-      "RejectUnknownPreferenceOwner",
-      "ClearPreference",
-      "RejectUnknownPreferenceClear",
-      "DeliverNotification",
-      "RejectUnknownNotificationRecipient",
-      "MarkNotificationRead",
-      "DismissNotification",
-      "GetAccountCenter"
-    ]
-  }
-}
-```
-
-`requires` names exact entry IDs. `packages` maps npm package names to exact
-required ranges. Do not infer structural substitutes or execute configuration
-from a manifest.
-
-File records contain `source`, relative to the entry directory, and `target`,
-which uses one supported token:
-
-| Token            | Destination                             |
-| ---------------- | --------------------------------------- |
-| `$concepts/`     | Configured concept directory            |
-| `$computations/` | Configured computation directory        |
-| `$recipes/`      | Configured recipe directory             |
-| `$concept-set`   | Configured application concept-set file |
-| `$root/`         | Project root                            |
-
-Source and target paths must remain inside their owners and be portable across
-Linux, macOS, and Windows.
-
-## Concept Entries
-
-A concept entry owns common files, one or more implementation variants, and
-`concept` integration metadata. For example, the relevant
-`concept/profiling` fields are:
-
-```json
-{
   "variants": {
     "memory": {
       "summary": "Dependency-free in-memory state with injectable identity generation.",
@@ -220,114 +183,183 @@ A concept entry owns common files, one or more implementation variants, and
 }
 ```
 
-Variants share one specification, registration, action/query contract, refusal
-contract, and conformance expectation. Use variants only for a meaningful
-implementation seam such as storage. A bundle may constrain compatible
-variants through `variantConstraints`. For the Profiling repository variant,
-the repository's `create` operation owns the atomic principal-uniqueness check;
-a read followed by a separate write does not satisfy that contract.
+Every variant shares the concept specification, registration, action and query
+shapes, refusal contract, and conformance expectation. Use a variant for a real
+implementation seam such as storage. Do not use variants to change concept
+meaning. The application selects a multi-variant concept explicitly at first
+installation; no manifest field selects or constrains a variant on its behalf.
 
-Concept evidence must run the implementation directly and demonstrate its
-principle, normal behavior, refusal behavior, query cardinality, and relevant
-ordering. Each variant must satisfy equivalent evidence.
+Concept evidence must run the implementation directly. For storage variants,
+test the required atomic operation rather than substituting a read followed by a
+separate write.
 
-## Computation Entries
+### Computation manifests
 
-A computation entry declares its copied `$computations/` module and every
-exported vocabulary function in the manifest's `computation` record.
-
-Computations are pure. Evidence should cover representative values and edge
-cases without assembling an application. No computation currently ships, but
-the manifest kind, installer integration, path option, and lock form remain
-supported.
-
-## Recipe Entries
-
-A recipe owns one composition module, an optional paired test, and every member
-that its namespace contributes:
+A computation manifest declares one copied module and every public vocabulary
+function contributed by that module:
 
 ```json
 {
-  "recipe": {
-    "module": "$recipes/account-center.ts",
-    "test": "$recipes/account-center.test.ts",
-    "members": [
-      "accountCenter",
-      "CreateProfile",
-      "RenameProfile",
-      "SetPreference",
-      "RejectUnknownPreferenceOwner",
-      "ClearPreference",
-      "RejectUnknownPreferenceClear",
-      "DeliverNotification",
-      "RejectUnknownNotificationRecipient",
-      "MarkNotificationRead",
-      "DismissNotification",
-      "GetAccountCenter"
-    ]
+  "schema": 1,
+  "id": "computation/normalizing-name",
+  "kind": "computation",
+  "summary": "Normalize a display name.",
+  "files": [
+    {
+      "source": "normalizing-name.ts",
+      "target": "$computations/normalizing-name.ts"
+    }
+  ],
+  "computation": {
+    "module": "$computations/normalizing-name.ts",
+    "exports": ["normalizeName"]
   }
 }
 ```
 
-Declare the exact concept and computation entries used by the module. Recipes
-may contain reactions, views, formers, endpoints, and computed lines. Keep each
-recipe focused on one policy or read construction so applications can adopt it
-independently.
+This is a schema example, not a shipped computation. Computations must be pure.
+Evidence should call them directly over representative and boundary values.
 
-Recipe source may use `@catalog/concepts` for the configured concept set.
-Paired evidence may use `@catalog/recipe` for the installed recipe module. The
-installer renders only declared tokens; do not add application-specific aliases
-or AST rewrite assumptions.
+### Recipe manifests and helpers
 
-## Bundle Entries
+A recipe declares exact catalog dependencies, copied source, and only the named
+members contributed to assembled composition:
 
-A bundle depends on reusable entries and may copy application-level files such
-as a concept set, assembly, edge, scenario, and artifact descriptor. Use
-`@catalog/registrations` and `@catalog/composition` in those files so custom
-layouts render correctly.
+```json
+{
+  "schema": 1,
+  "id": "recipe/browser-session",
+  "kind": "recipe",
+  "summary": "Compose identifier-secret authentication, profiles, and server-side sessions behind a same-origin browser cookie boundary.",
+  "requires": ["concept/authenticating", "concept/sessioning", "concept/profiling"],
+  "packages": {
+    "@mit-sdg/sync-engine-http": "1.0.0-beta.8"
+  },
+  "files": [
+    { "source": "spec.md", "target": "$recipes/browser-session.spec.md" },
+    { "source": "browser-session.ts", "target": "$recipes/browser-session.ts" },
+    {
+      "source": "browser-session.test.ts",
+      "target": "$recipes/browser-session.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/browser-session.ts",
+    "test": "$recipes/browser-session.test.ts",
+    "members": ["Register", "SignIn", "CurrentSession", "RotateSession", "SignOut", "SignOutAll"]
+  }
+}
+```
 
-A bundle must install from the packed package into an isolated ordinary
-consumer, typecheck, generate and check artifacts, run entry evidence, and run
-its scenario. Keep bundle source readable after copying; it is a starting point,
-not generated internals.
+The installer generates named imports only for `recipe.members`. A recipe may
+export application helpers, configuration constructors, and types in addition
+to those members. Such exports must be imported directly from the copied module;
+they must not be added to `members` unless they are valid assembled composition
+members. `browserSessionHttpPolicy` is the current example of a direct helper
+export.
 
-The account-center bundle must continue to state its trust and persistence
-limits in copied documentation. Endpoint validation is not authentication or
-authorization, memory-backed state is lost on restart, and an in-app
-notification record is not proof of external or exactly-once delivery.
+Recipe source may use `@catalog/concepts` for the configured concept-set
+reference. Paired evidence may use `@catalog/recipe` for the installed recipe
+module. The installer replaces those tokens with relative imports. Do not rely
+on additional aliases or AST rewriting.
 
-## Implementation Changes
+## Evidence requirements
 
-The CLI source is private package implementation. Preserve these boundaries:
+Evidence must be small enough to inspect and complete enough to fail when the
+entry's contract changes.
 
-- discovery commands work without a project or core installation;
-- standard initialization writes one lock and three managed files;
+For concepts, test:
+
+- the specification principle;
+- normal state transitions and query answers;
+- each meaningful refusal and required refusal precedence;
+- unchanged state after refusal or host failure;
+- cardinality, identity, and ordering guarantees;
+- each implementation variant against equivalent expectations.
+
+For recipes, test:
+
+- every declared manifest member loads;
+- endpoint paths and required input contracts;
+- runtime validators and exact domain-error sets when supplied;
+- branch and recovery behavior that the recipe claims;
+- helper configuration defaults and allowed customization;
+- that helper exports are absent from generated composition when not members.
+
+Tests establish behavior for their stated setup. Do not turn one fixture's
+observation into an unconditional contract without implementation support.
+
+## Browser Session security review
+
+Changes to Authenticating, Sessioning, the Browser Session recipe, or its HTTP
+helper require explicit review of:
+
+- identifier and secret bounds, refusal precedence, generic credential failure,
+  dummy verification, digest storage, and replacement behavior;
+- session entropy source, lifetime bounds, expiry cleanup, atomic rotation,
+  revocation indexes, and failure before invalidation;
+- exact endpoint input and output shapes and rejection of caller identity
+  claims;
+- cookie input injection, issue-output hiding, every issue and clear route,
+  default Origin enforcement, cookie attributes, and public-error mappings;
+- interruption between credential, profile, and session owner actions and after
+  successful rotation;
+- process-local memory, restart, multi-process, rate-limit, recovery,
+  verification, and authorization limits.
+
+Do not describe the recipe as complete production authentication. It omits
+durable credential and session storage, account recovery, verification,
+multi-factor authentication, rate limiting, and resource authorization. A
+cookie and valid session do not decide which application resource a principal
+may access.
+
+Security-affecting changes need packed evidence using the exact matching core
+and HTTP packages. Verify that generated HTTP contracts omit the cookie-bound
+input and every consumed issue value and expiry field.
+
+## CLI implementation changes
+
+The CLI implementation is private, but its observable boundaries are supported:
+
+- discovery works without a project or core installation;
+- initialization writes one lock and three generated files, not an application
+  shell;
 - path overrides live only in `catalog.lock.paths`;
+- only `init` accepts source-root and integration-path configuration;
 - copied source is never overwritten or deleted;
-- mutating commands preflight the complete operation;
+- mutations preflight the complete operation and restore in-process partial
+  writes on failure;
+- package requirements are reported, not installed;
 - the package exports no importable JavaScript API.
 
-Avoid adding prompts, remote registries, package-manager execution, source
-merging, AST editing, or compatibility layers for unreleased formats.
+Do not add prompts, remote registries, package-manager execution, source merging,
+AST editing, or compatibility aliases for unreleased formats.
 
 ## Verification
 
-Run focused checks while iterating:
+Run focused catalog tests while iterating:
 
 ```sh
 bun run test packages/catalog/tests
 bun run coverage packages/catalog/tests
-bun run check
 ```
 
-Before review, run the packed consumer and full release gates:
+Run repository checks after documentation, source, or manifest changes:
+
+```sh
+bun run check
+bun run release:check
+```
+
+Before review of a catalog release change, verify the packed consumer:
 
 ```sh
 bun run package:check
 bun run release:verify
 ```
 
-Update `README.md` for the ordinary workflow and `public-surface.md` for every
-observable command, option, default, output, persisted field, or failure
-change. Package verification must exercise the installed tarball rather than
-relying only on source-checkout imports.
+Packed verification must install the produced tarball in an isolated package,
+run discovery without the optional core peer, install recipes against exact
+companion versions, typecheck copied source, generate and check artifacts, run
+copied evidence, and execute a representative scenario. Source-checkout imports
+alone do not verify the published package.

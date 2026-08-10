@@ -32,13 +32,14 @@ version; maintainers do not replace an existing tag or tarball. See the
 
 sync-engine owns the behavior explicitly documented for its interpreter,
 assembly, generated contracts, and gateway. The independently published
-`@mit-sdg/sync-engine-http` package owns its production profile and cookie
-floor. These packages do not provide authentication policy, domain authorization,
-application input schemas, concept-state confidentiality or durability,
-cross-concept transactions, dependency or host patching, TLS termination,
-trusted-proxy configuration, CORS, HSTS, rate or connection limiting, DDoS
-protection, secret management, exporter isolation, process supervision, or
-incident response. Those controls belong to the host and application.
+`@mit-sdg/sync-engine-http` package owns its `HttpPolicy`, cookie binding, and
+Fetch behavior. These packages do not provide authentication policy, domain
+authorization, application input schemas, concept-state confidentiality or
+durability, cross-concept transactions, dependency or host patching, TLS
+termination, trusted-proxy configuration, CORS, HSTS, rate or connection
+limiting, DDoS protection, secret management, exporter isolation, process
+supervision, or incident response. Those controls belong to the host and
+application.
 
 Generated TypeScript is not runtime validation. Applications must validate
 untrusted values, enforce domain invariants in owning concepts, configure

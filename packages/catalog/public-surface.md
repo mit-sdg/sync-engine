@@ -1,14 +1,14 @@
-# Catalog Public Surface
+# Catalog public surface
 
-This document defines the complete supported surface of `@mit-sdg/catalog`.
-The package is CLI-only: `package.json` exposes the `catalog` executable and an
-empty `exports` map. Importing the package root, a deep module, entry source, or
-internal TypeScript is unsupported.
+This reference defines the complete supported surface of `@mit-sdg/catalog`.
+The package exposes the `catalog` executable and an empty JavaScript `exports`
+map. Package-root imports, deep imports, entry source imports, and internal
+TypeScript imports are unsupported.
 
-The catalog package and `@mit-sdg/sync-engine` are released at the same exact
-beta version. The core peer is optional for running discovery commands, but
-`init` and `add` require the target application to declare a compatible core
-dependency.
+The catalog and `@mit-sdg/sync-engine` are released at the same exact beta
+version. Discovery does not require a project or core installation. `init` and
+`add` require the target project to declare a compatible core package and every
+package required by the selected entry closure.
 
 ## Executable
 
@@ -16,208 +16,313 @@ dependency.
 catalog <command> [arguments]
 ```
 
-`catalog`, `catalog help`, `catalog --help`, and `catalog -h` print help and
+`catalog`, `catalog help`, `catalog --help`, and `catalog -h` print usage and
 exit successfully. A command error prints one stackless message to standard
-error and sets exit status 1.
+error and sets exit status 1. Commands are noninteractive.
 
-Commands are noninteractive. Unknown options, repeated options, missing option
-values, invalid trailing operands, and repeated entry operands are rejected.
-`list` and `show` work outside a project. `add`, `diff`, and `forget` locate the
-nearest ancestor containing `catalog.lock`; `init` uses the current directory.
+| Command             | Effect                                                  | Writes |
+| ------------------- | ------------------------------------------------------- | ------ |
+| `list [kind]`       | List entries and summaries                              | No     |
+| `show <entry>`      | Describe one entry                                      | No     |
+| `init [entry...]`   | Create catalog metadata and optionally install entries  | Yes    |
+| `add <entry...>`    | Install entries and their dependency closure            | Yes    |
+| `diff [entry...]`   | Compare copied source with the invoked catalog snapshot | No     |
+| `forget <entry...>` | Stop tracking entries without deleting copied source    | Yes    |
 
-| Command             | Result                                                     | Writes |
-| ------------------- | ---------------------------------------------------------- | ------ |
-| `list [kind]`       | Lists available entries and summaries                      | No     |
-| `show <entry>`      | Describes one entry                                        | No     |
-| `init [entry...]`   | Initializes metadata and optionally installs entries       | Yes    |
-| `add <entry...>`    | Installs entries and their exact dependency closure        | Yes    |
-| `diff [entry...]`   | Compares local files with the invoked package snapshot     | No     |
-| `forget <entry...>` | Stops tracking entries without deleting application source | Yes    |
+`list` and `show` work outside a project. `init` uses exactly the current
+directory. `add`, `diff`, and `forget` search the current directory and its
+ancestors for the nearest `catalog.lock`.
 
-## Discovery
+Unknown options, missing option values, repeated options, invalid trailing
+operands, and repeated entry operands are errors.
 
-### `list`
+## Entry kinds and shipped IDs
+
+The supported kinds are `concept`, `computation`, and `recipe`.
 
 ```text
-catalog list [concept|computation|recipe|bundle]
+catalog list [concept|computation|recipe]
 ```
 
-With no kind, `list` prints every entry sorted by ID. With a kind, it prints
-only that kind. Each line contains the stable entry ID and its summary.
-
-### `show`
+With no kind, `list` prints all entries sorted by ID. With a kind, it prints
+only entries of that kind. Each line contains the ID and summary.
 
 ```text
 catalog show <entry>
 ```
 
-`show` prints the entry ID, summary, kind, direct entry dependencies, npm
-package requirements, available concept variants, and declared destination
-tokens. An unknown ID fails.
+`show` prints the ID, summary, kind, direct entry dependencies, entry-level
+package requirements, concept variant names and summaries when present, and all
+common and variant file targets. It does not expand variant-level package
+requirements. An unknown ID is an error.
 
-### Shipped entries
+This package snapshot contains exactly seven IDs:
 
-The package snapshot contains these stable IDs:
+| ID                       | Role                                                                        |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `concept/authenticating` | Exact bounded identifiers, secret digests, and opaque principals            |
+| `concept/notifying`      | Retained ordered in-app inbox with read and dismissal state                 |
+| `concept/preferring`     | Ordered owner, scope, key, and value preferences                            |
+| `concept/profiling`      | One display profile for each opaque external principal                      |
+| `concept/sessioning`     | Expiring opaque sessions, rotation, and principal-wide revocation           |
+| `recipe/account-center`  | Validated profile, preference, trusted inbox, and joined-account boundary   |
+| `recipe/browser-session` | Identifier-secret registration and same-origin server-side browser sessions |
 
-| Entry                    | Role                                                                      |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `concept/authenticating` | Exact identifier, secret-digest, and opaque-principal credentials         |
-| `concept/profiling`      | One display profile per opaque external principal                         |
-| `concept/preferring`     | Ordered owner, scope, key, and value preferences                          |
-| `concept/notifying`      | Retained ordered in-app inbox with read and dismiss state                 |
-| `concept/sessioning`     | Expiring opaque sessions, rotation, and principal-wide revocation         |
-| `recipe/account-center`  | Validated profile, preference, trusted inbox, and joined-account boundary |
-| `recipe/browser-session` | Identifier-secret sign-in and same-origin server-side browser sessions    |
-| `bundle/account-center`  | Complete validated memory-backed starter with an asserting scenario       |
+`concept/profiling` has `memory` and `repository` variants. The other four
+concepts each have one `memory` variant. This snapshot contains no computation
+entry, but the kind, command filter, manifest form, path, lock integration, and
+generated computation record remain supported.
 
-`concept/profiling` provides `memory` and `repository` variants.
-`concept/authenticating` and `concept/sessioning` provide `memory` variants.
-`bundle/account-center` constrains Profiling to `memory`, so installing the
-bundle selects that variant without `--variant`. `concept/preferring` and
-`concept/notifying` each provide one `memory` variant and select it
-automatically.
+## Entry manifest schema
 
-This package snapshot contains no computation entry. The `computation` kind and
-`catalog list computation` command remain supported.
+Each indexed entry has one schema-1 `manifest.json`. The common fields are:
 
-### Account-center boundaries
+| Field      | Required | Meaning                                        |
+| ---------- | -------- | ---------------------------------------------- |
+| `schema`   | Yes      | Integer `1`                                    |
+| `id`       | Yes      | Lowercase ID whose prefix matches `kind`       |
+| `kind`     | Yes      | `concept`, `computation`, or `recipe`          |
+| `summary`  | Yes      | Nonempty discovery text                        |
+| `requires` | No       | Distinct direct entry IDs                      |
+| `packages` | No       | Package names mapped to required range strings |
+| `files`    | By kind  | Common copied files                            |
 
-The account-center endpoint validators enforce exact object shapes and bounded
-strings. They do not authenticate a principal or authorize a profile or
-recipient. These fields are caller claims unless a trusted adapter replaces
-them with values derived from verified application context.
+Unknown fields are rejected. The complete indexed dependency graph must contain
+every named dependency and must be acyclic. Every declared source file must
+exist inside its entry directory.
 
-The account recipe's delivery endpoint is a trusted service operation and
-creates an inbox item unconditionally for the bound profile. Preferences do not
-automatically enforce delivery policy. Notifying records an in-app item; it does
-not send email or push messages, deduplicate retries, or guarantee exactly-once
-delivery. The bundle's memory state is process-local and is lost on restart.
+### Manifest targets
 
-## Installation
+A file target must begin with exactly one of these tokens:
 
-### `init`
+| Token            | Configured destination     |
+| ---------------- | -------------------------- |
+| `$concepts/`     | `concepts` source root     |
+| `$computations/` | `computations` source root |
+| `$recipes/`      | `recipes` source root      |
+
+All files selected for a concept must be below `$concepts/`; computation files
+must be below `$computations/`; recipe files must be below `$recipes/`. A
+manifest cannot target the project root, the configured concept-set file, or a
+generated integration file.
+
+Sources are entry-relative POSIX paths that remain inside the entry. Copied
+targets cannot repeat within one selected variant.
+
+### Concept manifests
+
+A concept manifest requires nonempty `variants` and `concept` integration
+metadata:
+
+```json
+{
+  "variants": {
+    "memory": {
+      "summary": "Process-local implementation.",
+      "files": [
+        {
+          "source": "variants/memory/sample.ts",
+          "target": "$concepts/sample/sample.ts"
+        }
+      ],
+      "packages": {}
+    }
+  },
+  "concept": {
+    "name": "Sample",
+    "registration": "$concepts/sample/registry.ts",
+    "export": "sample"
+  }
+}
+```
+
+Common `files` apply to every variant. A selected variant contributes its
+`files` and optional package requirements. The common files must include the
+declared registration module. Concept names are unique across the catalog.
+
+### Computation manifests
+
+A computation manifest requires `computation.module` and a nonempty, distinct
+`computation.exports` array. Common files must include the declared module. Each
+export becomes a property of `catalogComputations`.
+
+### Recipe manifests
+
+A recipe manifest requires a `recipe` record:
+
+```json
+{
+  "recipe": {
+    "module": "$recipes/sample.ts",
+    "test": "$recipes/sample.test.ts",
+    "members": ["SampleEndpoint"]
+  }
+}
+```
+
+`module` and optional `test` must name files in the common `files` array.
+`members` is a nonempty array of distinct identifier names. The generated
+composition imports only these named members. Helper functions, constants, and
+types exported by the recipe module remain available through a direct
+application import but are not assembled.
+
+Copied source replaces `@catalog/concepts` with a relative import of the
+configured `conceptSet` reference. For a recipe installation, copied source also
+replaces `@catalog/recipe` with a relative import of the installed recipe module.
+No other source transformation is supported.
+
+## `init`
 
 ```text
 catalog init [entry...] [path options] [selection options]
 ```
 
-`init` operates on exactly the current directory. It requires `package.json`
-and refuses when `catalog.lock` already exists. With no entries, it writes the
-empty lock and the three managed files. With entries, initialization and
-installation share one complete preflight; failure before commit leaves no
-catalog metadata or copied source.
+`init` requires `package.json` in the current directory and refuses if
+`catalog.lock` already exists. With no entries, it writes an empty lock and the
+three generated files. With entries, it resolves and validates the complete
+dependency closure before writing.
 
-Default paths are implicit. `catalog.lock.paths` contains only path overrides,
-so a standard initialization records `"paths": {}`.
+Default paths are implicit. `catalog.lock.paths` stores only values that differ
+from the defaults. Initialization prints two integration instructions: import
+the generated registration and computation records into `conceptSet(...)`, and
+spread the generated composition into the assembly. The catalog does not create
+the application concept set or assembly.
 
-When the installed entries include a complete bundle that already imports the
-managed registrations and composition, no integration instructions are
-printed. Otherwise `init` prints the two application integration steps.
+If `package.json` defines a string-valued `check` script, a successful mutation
+prints `bun run check` as the next command. The catalog does not execute it.
 
-### `add`
+## `add`
 
 ```text
 catalog add <entry...> [--variant concept/id=name] [--file name.ts]
 ```
 
-`add` resolves direct and transitive entry dependencies before writing. An
-unknown or repeated entry fails. Entries already tracked are no-ops when
-requested directly.
+`add` requires at least one distinct entry. It installs each untracked entry and
+its untracked transitive dependencies in dependency order. A directly requested
+tracked entry is a no-op and is reported as already tracked.
 
-For an already tracked transitive dependency, `add` requires the invoked
-package snapshot to have the same source digest as the lock. Local changes do
-not change that digest: they are retained and produce a warning naming every
-changed or missing dependency file.
+When a tracked entry is a dependency of a new entry, the current catalog
+snapshot's source digest must equal the digest recorded by the lock. Missing or
+locally edited copied files do not change that catalog digest. They remain
+untouched and cause a compatibility warning naming the changed files.
 
 ### Variant selection
 
-`--variant concept/id=name` may be repeated for distinct concepts. A concept
-with one implementation selects it automatically. A multi-variant concept
-installed directly requires an explicit selection. An entry closure may narrow
-a concept to one compatible variant; in that case the declared constraint is
-selected automatically. Explicit selections must satisfy every constraint in
-the closure.
-
-Selections for concepts outside the requested closure, unknown concepts,
-unknown variants, and attempts to switch a tracked concept's variant fail.
-
-### Recipe filenames
-
-`--file name.ts` is valid only with one explicitly requested, untracked recipe.
-The value must be a lowercase kebab-case TypeScript basename. It renames the
-recipe module and paired test together. It does not rename dependencies or an
-already tracked recipe.
-
-If the requested recipe's module or paired test collides, the error gives a
-deterministic alternative. A dependency or bundle collision does not claim
-that renaming the recipe will resolve it.
-
-## Path Options
-
-Path options are valid only on `init`. Each option may appear once and takes a
-project-relative portable path.
-
-| Option            | Lock field      | Default                                  | Kind      |
-| ----------------- | --------------- | ---------------------------------------- | --------- |
-| `--concepts`      | `concepts`      | `src/concepts`                           | Directory |
-| `--computations`  | `computations`  | `src/computations`                       | Directory |
-| `--recipes`       | `recipes`       | `src/composition`                        | Directory |
-| `--concept-set`   | `conceptSet`    | `src/concept-set.ts`                     | `.ts`     |
-| `--declarations`  | `declarations`  | `src/catalog/text.generated.d.ts`        | `.d.ts`   |
-| `--registrations` | `registrations` | `src/catalog/registrations.generated.ts` | `.ts`     |
-| `--composition`   | `composition`   | `src/catalog/composition.generated.ts`   | `.ts`     |
-
-Paths reject absolute forms, parent traversal, empty segments, backslashes,
-control characters, Windows device names, nonportable punctuation, and
-trailing dots or spaces. The four file paths must be distinct. Writes reject a
-symbolic link in any destination path. The complete write plan also rejects
-exact or ancestor/descendant target overlap, including overlap with
-`catalog.lock`.
-
-## Comparison And Forgetting
-
-### `diff`
-
 ```text
-catalog diff [entry...]
+--variant concept/id=name
 ```
 
-With no operands, `diff` compares every tracked entry. Otherwise it compares
-the named tracked entries. It renders source from the currently invoked catalog
-package using the locked variant, paths, and recipe filename. It reports
-missing local files, files removed from the current package snapshot, entries
-absent from that snapshot, and unified text differences. No difference prints
-`No catalog differences.`. The command never writes and does not change its
-exit status merely because differences exist.
+The option may be repeated for distinct concepts. A concept with one variant
+selects it automatically. A concept with several variants requires an explicit
+selection the first time it is installed. A selection for an entry outside the
+requested dependency closure, a non-concept entry, an unknown variant, or a
+second selection for the same concept is an error. A tracked concept retains its
+locked variant; it cannot be switched.
 
-### `forget`
+### Recipe filename
 
 ```text
-catalog forget <entry...>
+--file name.ts
 ```
 
-`forget` requires one or more distinct tracked entries. It refuses when a
-remaining tracked entry directly depends on one being forgotten. On success it
-removes those lock records and their managed imports, then warns that copied
-source was retained. It never removes source or npm dependencies.
+`--file` is valid only when exactly one explicitly requested recipe is untracked.
+The value must be a lowercase kebab-case `.ts` basename without a directory. It
+renames the recipe module and, when declared, its paired test to the same stem.
+It does not rename dependencies or a tracked recipe.
 
-## Resolution And Package Requirements
+If the explicitly requested recipe module or test collides with an existing
+path, the error supplies a deterministic alternative filename. A dependency
+collision supplies no recipe-rename claim.
 
-Entry dependencies are stable exact IDs. The complete package-owned graph must
-be acyclic and every dependency must exist. Installation preserves dependency
-order while generated integration modules sort entries by ID.
+## Path options
 
-`init` and `add` read the target `package.json`. Requirements may be declared in
-`dependencies`, `devDependencies`, or `peerDependencies`. Missing or
-incompatible requirements fail with one exact `bun add --exact` command; the
-catalog does not run it. A `file:` or `workspace:` core declaration is accepted
-only when the first installed package found from the project through ancestor
-`node_modules` directories satisfies the catalog's exact peer.
+Path options are valid only on `init`. Each option may occur once.
+
+| Option            | Lock field      | Default                                  | Form                   |
+| ----------------- | --------------- | ---------------------------------------- | ---------------------- |
+| `--concepts`      | `concepts`      | `src/concepts`                           | Directory              |
+| `--computations`  | `computations`  | `src/computations`                       | Directory              |
+| `--recipes`       | `recipes`       | `src/composition`                        | Directory              |
+| `--concept-set`   | `conceptSet`    | `src/concept-set.ts`                     | `.ts` file reference   |
+| `--declarations`  | `declarations`  | `src/catalog/text.generated.d.ts`        | `.d.ts` generated file |
+| `--registrations` | `registrations` | `src/catalog/registrations.generated.ts` | `.ts` generated file   |
+| `--composition`   | `composition`   | `src/catalog/composition.generated.ts`   | `.ts` generated file   |
+
+All values are project-relative portable paths. Absolute paths, parent
+traversal, empty segments, backslashes, control characters, Windows device
+names, nonportable punctuation, and segments ending in a dot or space are
+rejected. The four file paths must be distinct. The concept-set path is a
+reference and is not created.
+
+Writes reject a symbolic link in any destination path. The complete write plan
+also rejects equal and ancestor/descendant target overlap, including overlap
+with `catalog.lock`.
+
+## Package checks
+
+`init` and `add` read `dependencies`, `devDependencies`, and `peerDependencies`
+from the project `package.json`. The combined installation always requires the
+catalog's core peer and adds package requirements from every selected or tracked
+entry in the requested closure. Two entries requiring different strings for the
+same package are incompatible.
+
+If one package name appears in several dependency sections, the
+`peerDependencies` declaration takes precedence over `devDependencies`, which
+takes precedence over `dependencies`.
+
+A declared range is accepted under these rules:
+
+1. Exact string equality with the required range is accepted.
+2. If the requirement is a plain stable version such as `2.3.4`, declarations
+   `^2.3.4`, `~2.3.4`, and `>=2.3.4 <2.4.0` are also accepted.
+3. An exact prerelease requirement such as `1.0.0-beta.8` accepts only the
+   identical declaration. `^1.0.0-beta.8`, `~1.0.0-beta.8`, and other ranges are
+   rejected.
+4. A `file:` or `workspace:` declaration is checked against the first installed
+   package found in the project or an ancestor `node_modules`. Its installed
+   version must satisfy the same rules. For an exact first-party prerelease, the
+   installed version must therefore be identical.
+
+The current `recipe/browser-session` closure requires exact
+`@mit-sdg/sync-engine@1.0.0-beta.8`, exact
+`@mit-sdg/sync-engine-http@1.0.0-beta.8`, and the literal
+`@types/node` range `^24.0.0`. The HTTP package and Node types come from the
+recipe and its Authenticating and Sessioning memory dependencies.
+
+The copied browser-session source is TypeScript. Supported type checking uses
+TypeScript `>=6 <7`. The catalog checks manifest package declarations, not a
+project's compiler version or `tsconfig.json`.
+
+Missing or incompatible declarations abort before writing and produce one
+`bun add --exact ...` command. The catalog never runs that command or another
+package-manager operation.
+
+## Generated files
+
+The catalog manages `catalog.lock` and exactly three configured generated files:
+
+- `declarations`, which declares `*.md` imports as strings;
+- `registrations`, which exports `catalogRegistrations` and
+  `catalogComputations`;
+- `composition`, which exports `catalogComposition`.
+
+The registration module uses named imports from locked concept registration
+modules and computation modules. The composition module uses named imports for
+each recipe manifest's `members`; it does not use namespace imports and does not
+include undeclared helper exports. Entries are sorted by ID, and properties
+retain manifest member order within each recipe.
+
+Concept names, computation export names, and recipe member names must each be
+unique among tracked entries in their category. The catalog does not inspect or
+merge application-owned records that consume the generated objects.
+
+Generated files begin with `Generated by @mit-sdg/catalog. Do not edit.`. Before
+`add` or `forget`, the catalog verifies their complete expected contents. An
+edited or missing generated file aborts the mutation.
 
 ## `catalog.lock`
 
-`catalog.lock` is deterministic, machine-owned JSON and must be committed. The
-top-level schema is:
+`catalog.lock` is deterministic schema-1 JSON:
 
 ```json
 {
@@ -227,49 +332,94 @@ top-level schema is:
 }
 ```
 
-`paths` accepts only the seven path names listed above and stores only values
-that differ from defaults. Every entry record has these fields:
+`paths` accepts only `concepts`, `computations`, `recipes`, `conceptSet`,
+`declarations`, `registrations`, and `composition`. Only nondefault values are
+written.
 
-| Field            | Shape                                      | Meaning                                      |
-| ---------------- | ------------------------------------------ | -------------------------------------------- |
-| `kind`           | Entry kind                                 | Must match the ID prefix                     |
-| `catalogVersion` | Nonempty string                            | Package version that installed the entry     |
-| `sourceDigest`   | Lowercase SHA-256                          | Digest of manifest-owned source and metadata |
-| `requires`       | Distinct entry IDs                         | Locked direct dependencies                   |
-| `packages`       | Package name to required range             | Locked npm requirements                      |
-| `variant`        | Lowercase variant name, concepts only      | Installed implementation variant             |
-| `files`          | Array of `{ source, target, hash }`        | Provenance, destination, rendered SHA-256    |
-| `integration`    | Kind-specific integration record, optional | Managed registration or composition data     |
+Each entry record contains:
 
-Concept integration records contain `kind: "concept"`, `name`, `export`, and
-`registration`. Computation records contain `kind: "computation"`, `module`,
-and distinct `exports`. Recipe records contain `kind: "recipe"`, `module`, an
-optional `test`, and distinct `members`. Bundles have no integration record.
+| Field            | Shape                        | Meaning                                                            |
+| ---------------- | ---------------------------- | ------------------------------------------------------------------ |
+| `kind`           | Entry kind                   | Must match the ID prefix                                           |
+| `catalogVersion` | Nonempty string              | Catalog version that installed the entry                           |
+| `sourceDigest`   | Lowercase SHA-256            | Digest of dependencies, packages, integration, variant, and source |
+| `requires`       | Distinct entry IDs           | Locked direct dependencies                                         |
+| `packages`       | Package-to-range object      | Locked requirements for the selected entry and variant             |
+| `variant`        | Lowercase name               | Required for concepts and forbidden for other kinds                |
+| `files`          | `{ source, target, hash }[]` | Provenance, rendered project path, and rendered SHA-256            |
+| `integration`    | Kind-specific object         | Data used to regenerate imports and records                        |
 
-The parser rejects unknown fields, malformed hashes and identifiers, repeated
-targets, missing dependencies, cycles, and incompatible integration ownership.
+Concept integration contains `kind: "concept"`, `name`, `export`, and
+`registration`. Computation integration contains `kind: "computation"`,
+`module`, and nonempty distinct `exports`. Recipe integration contains
+`kind: "recipe"`, `module`, optional `test`, and nonempty distinct `members`.
+Every entry kind requires its matching integration record.
 
-## Managed Files
+The lock parser rejects unknown fields, malformed IDs and hashes, repeated
+targets, missing dependencies, dependency cycles, cross-kind integration,
+invalid variant metadata, and integration-name collisions.
 
-The catalog owns exactly these configured files plus `catalog.lock`:
+## `diff`
 
-- the ambient `*.md` declaration;
-- the module exporting `catalogRegistrations` and `catalogComputations`;
-- the module exporting `catalogComposition`.
+```text
+catalog diff [entry...]
+```
 
-Managed files begin with `Generated by @mit-sdg/catalog. Do not edit.`.
-Mutating commands verify their complete expected content and refuse if a file
-was edited or removed. The concept set, assembly, copied entries, tests, and
-bundle files are application-owned.
+With no operands, `diff` compares all tracked entries. Otherwise it compares the
+named distinct tracked entries. The command renders source from the invoked
+catalog package using the locked paths, variant, and recipe filename. It reports
+missing local files, files removed from the current package snapshot, entries
+absent from that snapshot, and unified text differences.
 
-## Write And Failure Guarantees
+No differences prints `No catalog differences.`. Differences do not change the
+exit status. `diff` never writes.
 
-Mutating commands validate package requirements, variants, dependency
-compatibility, integrations, destination uniqueness, existing paths, and
-symbolic links before the first write. New files use exclusive creation.
-Managed replacements use temporary siblings and rename. An in-process failure
-removes newly created files and restores managed originals.
+## `forget`
 
-Catalog commands never execute application TypeScript, project scripts, or a
-package manager. They never overwrite copied source. There is no update, merge,
-overwrite, or source-removal command.
+```text
+catalog forget <entry...>
+```
+
+`forget` requires one or more distinct tracked entries. It refuses when a
+remaining tracked entry directly depends on an entry being forgotten. On
+success, it removes the selected lock records and their generated registration
+or composition properties. Copied source and package declarations remain in the
+application.
+
+## Copy ownership and failure guarantees
+
+Copied concept, computation, recipe, specification, and test files become
+application-owned when created. Catalog commands never update, merge,
+overwrite, or delete copied files. There is no source update or source removal
+command.
+
+Mutating commands validate the lock, package requirements, dependency closure,
+variants, integration names, generated files, destination uniqueness, existing
+paths, and symbolic links before the first planned write. New files use
+exclusive creation. Generated replacements use temporary sibling files and
+rename.
+
+If a write fails in process, the command attempts to remove files created by
+that operation and restore generated files whose replacement began. The command
+does not report a partial successful installation. This rollback is an
+in-process filesystem procedure, not a durability guarantee against another
+filesystem failure, process termination, operating-system failure, or hardware
+failure.
+
+Catalog commands do not execute application TypeScript, project scripts, or a
+package manager.
+
+## Browser Session boundaries
+
+`recipe/browser-session` supplies six validated endpoint declarations and the
+directly importable `browserSessionHttpPolicy` helper. The helper is not listed
+in manifest `members` and is not included in `catalogComposition`.
+
+The recipe's memory variants are process-local and lose credentials, profiles,
+and sessions on restart. Registration, profile creation, and session creation
+are separate owner actions without a cross-owner transaction. The recipe does
+not provide rate limiting, account recovery, verification, multi-factor
+authentication, cross-process session storage, or resource authorization. Its
+HTTP helper requires a present exact Origin by default and does not implement
+CORS. The [HTTP public surface](../http/public-surface.md) defines the policy,
+cookie, handler, and generated-wire behavior.

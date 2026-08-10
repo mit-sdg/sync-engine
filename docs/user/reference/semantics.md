@@ -600,15 +600,17 @@ normalization (including encoded dot segments), malformed percent escapes, and
 other noncanonical spellings are rejected. Percent-encoded path data remains
 valid when URL handling preserves it. `/` is a valid endpoint path.
 
-### Production HTTP profile
+### HTTP policy
 
 The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server)
-defines production error projection and origin handling.
+defines `HttpPolicy`, public-error projection, origin handling, and the Fetch
+handler contract.
 
-### Cookie credential floor
+### HTTP cookie policy
 
 The [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server)
-defines the cookie credential binding and its generated projection.
+defines `HttpCookiePolicy`, protected input injection, issue-output hiding,
+Origin enforcement, cookie clearing, and generated projection.
 
 ### Runtime validation
 
@@ -686,11 +688,11 @@ module contains the logical contract followed by each named transport contract.
 The contract named by `wireName` retains the logical application inputs, outputs,
 and refusal codes for a local or custom client. The HTTP companion's
 `httpWire({ policy, name })` carries public policy categories and excludes
-private refusal codes. With `httpFloor`, that contract also omits the
-cookie-bound input from protected routes and the consumed token and expiry fields
-from the issuing route's output. All contracts share generated type helpers and
-the vocabulary anchor. Core records every projector package and version in
-generated provenance.
+private refusal codes. When `policy.cookie` is present, that contract also omits
+the cookie-bound input from protected routes and each issue route's configured
+value and expiry fields. All contracts share generated type helpers and the
+vocabulary anchor. Core records every projector package and version in generated
+provenance.
 
 Projection planning validates all names before rendering. The logical wire,
 every projected wire, each app-wide error type, `Json`, and vocabulary helper

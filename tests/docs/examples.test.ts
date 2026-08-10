@@ -121,7 +121,12 @@ describe("executable documentation examples", () => {
       "--package",
       `${manifest.name}@${manifest.publishConfig?.tag}`,
     ]);
-    expect(words.slice(executable + 1)).toEqual(["init", "bundle/account-center"]);
+    expect(words.slice(executable + 1)).toEqual([
+      "init",
+      "recipe/account-center",
+      "--variant",
+      "concept/profiling=memory",
+    ]);
 
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-docs-"));
     const project = join(temporary, "account-center");
@@ -139,7 +144,9 @@ describe("executable documentation examples", () => {
         [
           fileURLToPath(new URL("packages/catalog/src/command.ts", root)),
           "init",
-          "bundle/account-center",
+          "recipe/account-center",
+          "--variant",
+          "concept/profiling=memory",
         ],
         { cwd: project, encoding: "utf8" },
       );
@@ -147,9 +154,16 @@ describe("executable documentation examples", () => {
         status: 0,
         stderr: "",
       });
-      await expect(readFile(join(project, "generated.config.ts"), "utf8")).resolves.toContain(
-        'title: "Account center"',
-      );
+      await expect(
+        readFile(join(project, "src/composition/account-center.ts"), "utf8"),
+      ).resolves.toContain("export const accountCenter");
+      await expect(
+        readFile(join(project, "src/catalog/registrations.generated.ts"), "utf8"),
+      ).resolves.toContain("catalogRegistrations");
+      await expect(
+        readFile(join(project, "src/catalog/composition.generated.ts"), "utf8"),
+      ).resolves.toContain("GetAccountCenter");
+      await expect(readFile(join(project, "src/assembly.ts"), "utf8")).rejects.toThrow();
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }

@@ -7,8 +7,9 @@ an exact version, follow the [support policy](SUPPORT.md), and review the
 
 ## [1.0.0-beta.8] - 2026-08-09
 
-This beta replaces the one-purpose application scaffold with a separately
-published, copy-owned source catalog and a reusable account-center starter.
+This beta replaces the one-purpose application scaffold with a recipe-first,
+copy-owned source catalog, adds two reusable account boundaries, and unifies the
+first-party HTTP configuration under one policy contract.
 
 ### Compatibility
 
@@ -18,13 +19,33 @@ published, copy-owned source catalog and a reusable account-center starter.
 - The core `sync-engine new` command and its one-concept template are removed.
   Core retains source checking and generated-artifact commands; application
   source installation belongs to the catalog package.
-- The catalog ships independent Profiling, Preferring, and Notifying concepts,
-  one validated account-center boundary recipe, and a complete account-center
-  bundle. Profiling offers memory and application-repository variants; the
-  bundle selects memory explicitly.
+- The catalog installs only `concept`, `computation`, and `recipe` entries. It
+  does not install bundles or application shells. Complete wiring and scenarios
+  now live in self-contained examples.
+- The catalog ships five concepts: Authenticating, Notifying, Preferring,
+  Profiling, and Sessioning. Profiling offers memory and
+  application-repository variants; the other concepts currently provide memory
+  variants.
+- `recipe/account-center` composes validated profile, preference, trusted inbox,
+  and joined-account behavior. The new self-contained Account Center example
+  supplies the assembly, gateway, generated artifacts, and asserting scenario
+  that are deliberately absent from the catalog entry.
+- `recipe/browser-session` composes Authenticating, Profiling, and Sessioning
+  into registration, sign-in, current-session, rotation, sign-out, and
+  principal-wide sign-out endpoints. Its directly importable
+  `browserSessionHttpPolicy(...)` helper is not an assembled recipe member.
 - Catalog projects use one deterministic `catalog.lock`. Standard paths are
   implicit; only path overrides, selected entries and variants, dependency
   edges, destinations, and source provenance are persisted.
+- The HTTP companion removes the split `productionHttpProfile(...)` and
+  `httpFloor(...)` configuration, their profile/floor types, and handler
+  `profile`/`floor` options. `httpPolicy(...)` now returns the one `HttpPolicy`
+  accepted by `createHttpHandler({ application, gateway, policy })` and
+  `httpWire({ policy, name })`.
+- `HttpPolicy.cookie` provides the former cookie binding in one optional
+  `HttpCookiePolicy`. It supports one or several `HttpCookieIssue` routes,
+  customizable cookie attributes and allowed origins, protected-input
+  injection, issue-output hiding, and configured or unauthorized clearing.
 
 ### Migration
 
@@ -33,12 +54,28 @@ published, copy-owned source catalog and a reusable account-center starter.
   exists to upgrade.
 - Replace `sync-engine new <directory>` with an ordinary Bun/TypeScript package
   shell followed by `bunx --package @mit-sdg/catalog@1.0.0-beta.8 catalog init
-bundle/account-center`. Commit `catalog.lock`; copied concept, recipe, test, and
-  bundle source is application-owned.
-- Generate and review the installed application's artifacts, typecheck the
-  copied source, run its concept evidence, and run `src/scenario.ts`. Bind
-  principal and profile fields from authenticated context before exposing the
-  account boundary outside a trusted adapter.
+recipe/account-center --variant concept/profiling=memory`. Create or update the
+  application concept set and assembly to consume `catalogRegistrations`,
+  `catalogComputations`, and `catalogComposition`. Commit `catalog.lock`; copied
+  concept, recipe, specification, and test source is application-owned.
+- Use `examples/account-center` when a complete runnable Account Center
+  configuration is required. Generate and review its artifacts, typecheck it,
+  run its concept and recipe evidence, and execute its scenario. Bind principal
+  and profile fields from authenticated context before exposing the account
+  boundary through an untrusted adapter.
+- Replace `productionHttpProfile(declaration)` with
+  `httpPolicy(declaration)`. Replace `httpFloor({ ..., credential })` with
+  `httpPolicy({ ..., cookie })`; rename each issue field `output` to `value`.
+  Pass the result through the handler's `policy` option and reuse it as
+  `httpWire`'s `policy`. No compatibility aliases remain.
+- Cookie-policy requests now require a present exact `Origin` by default. Use a
+  nonempty `cookie.origins` allowlist for an explicit frontend origin. The
+  lower-level `cookie.origins: false` opt-out removes this check and requires an
+  equivalent host control; it does not enable CORS.
+- Installing `recipe/browser-session` directly requires exact beta.8 core and
+  HTTP packages, `@types/node` at the declared `^24.0.0` range, and an explicit
+  Profiling variant. Import `browserSessionHttpPolicy` from the copied recipe
+  module rather than from generated composition.
 
 ### Generated formats
 
@@ -48,22 +85,41 @@ bundle/account-center`. Commit `catalog.lock`; copied concept, recipe, test, and
 - `catalog.lock` schema 1 is deterministic machine-owned provenance. The
   catalog also owns one Markdown declaration and generated registration and
   composition modules; it refuses to replace edited or missing managed files.
-  Copied entry and bundle files are never managed after installation.
+  Copied entry files are never managed after installation.
+- Catalog manifests target only configured concept, computation, and recipe
+  roots. Generated composition uses named imports for manifest-declared recipe
+  members; helper exports do not enter the assembled composition.
+- Regenerate HTTP wire artifacts after migration. `httpWire` now snapshots one
+  `HttpPolicy`; when `policy.cookie` is present, every protected input and each
+  issue route's configured value and expiry fields are omitted from its public
+  contract.
 
 ### Runtime and security support
 
 - Catalog mutations preflight complete dependency, package, variant, path,
   collision, integration, and symbolic-link checks. They never run a package
   manager or application code and never overwrite or delete copied source.
-- The account-center starter validates bounded endpoint shapes but does not
+- The Account Center recipe validates bounded endpoint shapes but does not
   authenticate principals, authorize profiles, persist memory implementations,
   send external messages, deduplicate retries, or guarantee exactly-once
-  delivery. Its copied guide identifies the trusted-adapter and persistence
-  responsibilities.
+  delivery. The self-contained example identifies trusted-adapter, persistence,
+  and delivery responsibilities.
+- The Browser Session recipe is not complete production authentication. Its
+  memory variants lose credentials, profiles, and sessions on restart;
+  registration crosses three owners without one transaction; response loss can
+  leave an undisclosed issued or rotated session; and the recipe omits rate
+  limiting, account recovery, verification, multi-factor authentication, and
+  resource authorization.
+- HTTPS cookie defaults use `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`,
+  and the applicable `__Host-` or `__Secure-` prefix. Origin enforcement does not
+  implement CORS. Hosts still own TLS, HSTS, CORS and preflight handling, proxy
+  trust, traffic and denial-of-service controls, durable credential/session
+  storage, and process lifecycle.
 - Packed verification installs the catalog without its optional core peer for
-  discovery, then installs the account-center bundle into an isolated ordinary
-  application, generates and checks artifacts, typechecks, runs all copied
-  evidence, and executes the asserting profile, preference, and inbox scenario.
+  discovery, installs both recipes into an isolated ordinary application using
+  exact packed core and HTTP packages, generates and checks artifacts,
+  typechecks copied source, runs copied evidence, and exercises the Browser
+  Session cookie boundary.
 
 [Release][1.0.0-beta.8] | [Changes since 1.0.0-beta.7][1.0.0-beta.8-compare]
 

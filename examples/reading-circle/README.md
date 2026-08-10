@@ -30,8 +30,8 @@ circle page. It also returns the `ALREADY_JOINED` concept refusal and the
 - A former joins circle, selection, discussion, and response state into one
   page value.
 - Endpoints expose the application through the standard gateway, local client,
-  and generated wire contract. Public HTTP policy belongs in a production
-  profile or HTTP floor.
+  and generated wire contract. Public HTTP behavior belongs in an `HttpPolicy`;
+  add its optional cookie policy only when the boundary binds a cookie input.
 - Principle tests exercise each concept directly; application tests exercise
   the assembled boundary.
 

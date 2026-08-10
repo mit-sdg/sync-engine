@@ -9,6 +9,7 @@ repository work.
 | Task                                        | Start with                                                                                                                                                 |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                   |
+| Add a catalog recipe to an application      | [Catalog package guide](../../packages/catalog/README.md)                                                                                                  |
 | Design concepts                             | [Designing with concepts](design.md)                                                                                                                       |
 | Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
 | Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                |
@@ -59,10 +60,13 @@ grouped under `guide/`.
 
 | Resource                                                                                                    | Scope                                                              |
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [Catalog package guide](../../packages/catalog/README.md)                                                   | Recipe-first installation and generated integration                |
+| [Catalog public surface](../../packages/catalog/public-surface.md)                                          | Exact catalog commands, manifests, lock, and ownership contract    |
 | [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)         | HTTP companion exports and transport behavior                      |
 | [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md) | Compiler-free IR queries and optional TypeScript project evidence  |
 | [Reading Circle](../../examples/reading-circle/README.md)                                                   | Shortest complete multi-concept application                        |
 | [Operations Room](../../examples/operations-room/README.md)                                                 | Selectable reactions, replaceable policy, and staged formers       |
+| [Account Center](../../examples/account-center/README.md)                                                   | Complete profile, preference, and retained-inbox application       |
 | [Production HTTP](../../examples/production-http/README.md)                                                 | Validation, public errors, limits, correlation, and credentials    |
 | [Support policy](../../SUPPORT.md)                                                                          | Supported versions, runtimes, toolchains, and generated formats    |
 | [Security policy](../../SECURITY.md)                                                                        | Vulnerability reporting and the host/application security boundary |
