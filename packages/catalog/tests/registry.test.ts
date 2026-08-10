@@ -9,6 +9,8 @@ describe("catalog registry", () => {
       "concept/selecting",
       "concept/alerting",
       "concept/reserving",
+      "concept/discussing",
+      "concept/inviting",
       "concept/timing",
       "concept/upvoting",
       "recipe/workshop-selection",

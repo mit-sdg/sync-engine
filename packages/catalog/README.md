@@ -49,6 +49,14 @@ memory implementation, test, import, or factory. Construct the floor with
 `applicationConcepts.implementations("mongo", { db })`. The host creates and
 closes `MongoClient`; assembly does not own that resource.
 
+`concept/discussing` requires a transaction-capable MongoDB replica set or
+sharded deployment. Its response transaction updates the discussion and inserts
+the response together, which prevents `close` from completing between the
+open-state check and response insertion. A standalone MongoDB deployment is not
+supported for an installation that includes Discussing. Other catalog Mongo
+floors do not acquire this topology requirement merely by sharing the project
+floor.
+
 The selected floor is stored in `catalog.lock`. Every later add uses that floor.
 The catalog does not install a second floor or migrate between floors.
 

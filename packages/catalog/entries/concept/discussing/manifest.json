@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "id": "concept/discussing",
+  "kind": "concept",
+  "summary": "Open exchanges about subjects and collect ordered authored responses.",
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "concept": {
+    "name": "Discussing",
+    "export": "discussing",
+    "registration": "$concepts/discussing/registry.ts"
+  },
+  "defaultFloor": "memory",
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$concepts/discussing/spec.md"
+    },
+    {
+      "source": "discussing.shared.ts",
+      "target": "$concepts/discussing/discussing.shared.ts"
+    },
+    {
+      "source": "registry.ts",
+      "target": "$concepts/discussing/registry.ts",
+      "render": "floor"
+    }
+  ],
+  "floors": {
+    "memory": {
+      "summary": "Process-local discussion and ordered response state with injectable identity allocation.",
+      "files": [
+        {
+          "source": "discussing.memory.ts",
+          "target": "$concepts/discussing/discussing.memory.ts"
+        },
+        {
+          "source": "discussing.memory.test.ts",
+          "target": "$concepts/discussing/discussing.memory.test.ts"
+        }
+      ]
+    },
+    "mongo": {
+      "summary": "MongoDB replica set or sharded deployment using transactions to make responses atomic with closure.",
+      "packages": {
+        "mongodb": "^6.20.0"
+      },
+      "files": [
+        {
+          "source": "discussing.mongo.ts",
+          "target": "$concepts/discussing/discussing.mongo.ts"
+        },
+        {
+          "source": "discussing.mongo.test.ts",
+          "target": "$concepts/discussing/discussing.mongo.test.ts"
+        }
+      ]
+    }
+  }
+}
