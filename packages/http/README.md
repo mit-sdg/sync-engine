@@ -280,7 +280,7 @@ resource authorization, idempotency, and transactions. The HTTP package does
 not turn a credential cookie into a complete authentication or authorization
 system.
 
-See the exact [HTTP public API](public-surface.md), the self-contained
-[Production HTTP example](../../examples/production-http/README.md), [boundary
-and client semantics](../../docs/user/reference/semantics.md#boundary-gateway-and-client),
-and [HTTP host responsibilities](../../docs/user/reference/operations.md#http-host-responsibilities).
+See the exact [HTTP public API](public-surface.md), the self-contained [Production
+HTTP example](https://github.com/mit-sdg/sync-engine/blob/main/examples/production-http/README.md),
+[boundary and client semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client),
+and [HTTP host responsibilities](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md#http-host-responsibilities).

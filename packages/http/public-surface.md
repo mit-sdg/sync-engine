@@ -409,9 +409,9 @@ denial-of-service controls, retries, idempotency, authentication policy, resourc
 authorization, session persistence, startup, drain, shutdown, or process
 supervision. Those controls remain with the host and application.
 
-Core [execution semantics](../../docs/user/reference/semantics.md#boundary-gateway-and-client)
+Core [execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client)
 define gateway settlement and accepted-work cancellation. [Operational
-limits](../../docs/user/reference/operations.md#http-host-responsibilities)
+limits](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/operations.md#http-host-responsibilities)
 define deployment responsibilities. The self-contained [Production HTTP
-example](../../examples/production-http/README.md) exercises plain and cookie
+example](https://github.com/mit-sdg/sync-engine/blob/main/examples/production-http/README.md) exercises plain and cookie
 policies with one generated HTTP contract.

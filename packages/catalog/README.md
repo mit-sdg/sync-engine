@@ -3,7 +3,7 @@
 `@mit-sdg/catalog` copies curated concepts, computations, and composition
 recipes into a sync-engine application. It does not copy an application shell,
 assembly, gateway, artifact configuration, or runnable scenario. Complete
-runnable configurations live under [`examples/`](../../examples/README.md).
+runnable configurations live under [`examples/`](https://github.com/mit-sdg/sync-engine/blob/main/examples/README.md).
 
 The package exposes the `catalog` executable and no JavaScript import surface.
 Copied source belongs to the receiving application and has no runtime dependency
@@ -105,7 +105,7 @@ from that recipe module, but they are not placed in the assembled composition.
 For example, `browserSessionHttpPolicy` is imported from
 `src/composition/browser-session.ts`; it is not a composition member.
 
-The self-contained [Account Center example](../../examples/account-center/README.md)
+The self-contained [Account Center example](https://github.com/mit-sdg/sync-engine/blob/main/examples/account-center/README.md)
 contains an assembly, gateway, generated artifacts, tests, and an asserting
 scenario. It also documents the recipe's identity, persistence, delivery, and
 runtime-validation boundaries.
@@ -206,7 +206,7 @@ const policy = browserSessionHttpPolicy({
 
 `SameSite=None` requires HTTPS. A domain or non-root path changes the secure
 prefix from `__Host-` to `__Secure-`. See the [HTTP policy
-contract](../http/public-surface.md) for validation, Origin, cookie, response,
+contract](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md) for validation, Origin, cookie, response,
 and host behavior.
 
 ### Security and recovery limits
@@ -229,7 +229,7 @@ This recipe is not a complete production authentication system.
   authorize access to application resources or operations. Resource owners and
   trusted adapters must enforce that policy.
 
-The [Production HTTP example](../../examples/production-http/README.md) shows the
+The [Production HTTP example](https://github.com/mit-sdg/sync-engine/blob/main/examples/production-http/README.md) shows the
 same `HttpPolicy` value used by a handler and generated HTTP wire, with runtime
 validation, limits, correlation, and host responsibilities. It is transport
 evidence, not a complete authentication deployment.

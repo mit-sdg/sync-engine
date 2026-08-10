@@ -1,7 +1,7 @@
 # Contributing to the catalog
 
 This guide applies to changes under `packages/catalog/`. Use the repository-root
-[`CONTRIBUTING.md`](../../CONTRIBUTING.md) for checkout, review, and pull-request
+[`CONTRIBUTING.md`](https://github.com/mit-sdg/sync-engine/blob/main/CONTRIBUTING.md) for checkout, review, and pull-request
 workflow.
 
 Package documentation stays with the package:
@@ -13,7 +13,7 @@ Package documentation stays with the package:
 
 Do not add catalog design notes under `docs/`. Complete application wiring,
 artifact configuration, gateways, clients, host adapters, and runnable scenarios
-belong in self-contained packages under [`examples/`](../../examples/README.md),
+belong in self-contained packages under [`examples/`](https://github.com/mit-sdg/sync-engine/blob/main/examples/README.md),
 not in catalog entries.
 
 ## Entry quality bar

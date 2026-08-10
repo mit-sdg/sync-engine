@@ -421,5 +421,5 @@ are separate owner actions without a cross-owner transaction. The recipe does
 not provide rate limiting, account recovery, verification, multi-factor
 authentication, cross-process session storage, or resource authorization. Its
 HTTP helper requires a present exact Origin by default and does not implement
-CORS. The [HTTP public surface](../http/public-surface.md) defines the policy,
+CORS. The [HTTP public surface](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md) defines the policy,
 cookie, handler, and generated-wire behavior.
