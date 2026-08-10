@@ -414,6 +414,43 @@ describe("catalog installer", () => {
     30_000,
   );
 
+  test("installs and typechecks the board recipes on both floors", async () => {
+    for (const recipe of ["incident-room", "recoverable-board"] as const) {
+      for (const floor of ["memory", "mongo"] as const) {
+        const root = await fixture({
+          "@mit-sdg/sync-engine": "1.0.0-beta.7",
+          ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
+          "vite-plus": "0.2.6",
+        });
+        try {
+          const id = `recipe/${recipe}`;
+          const result = await addEntries(await CatalogRegistry.load(), [id], {
+            root,
+            floor,
+            originalCommand: `catalog add ${id} --floor ${floor}`,
+          });
+          expect(result.written).toContain(`src/composition/${recipe}.ts`);
+          expect(result.written).toContain(`src/composition/${recipe}.test.ts`);
+          expect(
+            result.written.some((path) =>
+              path.includes(floor === "memory" ? ".mongo." : ".memory."),
+            ),
+          ).toBe(false);
+          const composition = await readFile(
+            join(root, "src/catalog/composition.generated.ts"),
+            "utf8",
+          );
+          expect(composition).toContain(
+            recipe === "incident-room" ? "RepairMitigationEffects" : "ListRecoverableBoard",
+          );
+          await expectTypechecks(root);
+        } finally {
+          await rm(root, { recursive: true, force: true });
+        }
+      }
+    }
+  }, 60_000);
+
   test("rejects unavailable floors and untracked collisions before writing", async () => {
     const dependencies = { "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" };
     const unavailable = await fixture(dependencies);

@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "id": "recipe/incident-room",
+  "kind": "recipe",
+  "summary": "Coordinate incident responders around a mitigation, discussion, and idempotent alerts.",
+  "requires": [
+    "concept/timing",
+    "concept/gathering",
+    "concept/selecting",
+    "concept/discussing",
+    "concept/alerting"
+  ],
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$recipes/incident-room.spec.md"
+    },
+    {
+      "source": "incident-room.ts",
+      "target": "$recipes/incident-room.ts"
+    },
+    {
+      "source": "incident-room.test.ts",
+      "target": "$recipes/incident-room.test.ts"
+    }
+  ],
+  "recipe": {
+    "module": "$recipes/incident-room.ts",
+    "test": "$recipes/incident-room.test.ts",
+    "members": [
+      "CreateIncidentRoom",
+      "JoinIncidentRoom",
+      "ChooseMitigation",
+      "ContributeUpdate",
+      "CloseMitigationDiscussion",
+      "AcknowledgeMitigationAlert",
+      "RepairMitigationEffects",
+      "GetIncidentDashboard"
+    ],
+    "routes": {
+      "CreateIncidentRoom": "/incident-rooms/create",
+      "JoinIncidentRoom": "/incident-rooms/join",
+      "ChooseMitigation": "/incident-rooms/choose",
+      "ContributeUpdate": "/incident-rooms/contribute",
+      "CloseMitigationDiscussion": "/incident-rooms/close-discussion",
+      "AcknowledgeMitigationAlert": "/incident-rooms/acknowledge",
+      "RepairMitigationEffects": "/incident-rooms/repair",
+      "GetIncidentDashboard": "/incident-rooms/dashboard"
+    }
+  }
+}

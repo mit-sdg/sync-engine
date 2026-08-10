@@ -17,5 +17,7 @@
   "recipe/workshop-selection/manifest.json",
   "recipe/member-reservations/manifest.json",
   "recipe/ranked-discussion/manifest.json",
-  "recipe/invite-only-workshop/manifest.json"
+  "recipe/invite-only-workshop/manifest.json",
+  "recipe/incident-room/manifest.json",
+  "recipe/recoverable-board/manifest.json"
 ]
