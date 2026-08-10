@@ -37,12 +37,6 @@ export type AccountCenterWire = {
           "subject": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Notifying"]["_inbox"]>>>, ["subject"]>>;
           "topic": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Notifying"]["_inbox"]>>>, ["topic"]>>;
         }[];
-        "preferences": {
-          "key": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Preferring"]["_all"]>>>, ["key"]>>;
-          "preference": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Preferring"]["_all"]>>>, ["preference"]>>;
-          "scope": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Preferring"]["_all"]>>>, ["scope"]>>;
-          "value": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Preferring"]["_all"]>>>, ["value"]>>;
-        }[];
         "principal": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Profiling"]["_forPrincipal"]>[0], ["principal"]>>;
         "profile": Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Profiling"]["_forPrincipal"]>>>, ["profile"]>>;
       } | null;
@@ -80,29 +74,6 @@ export type AccountCenterWire = {
       "notification": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Notifying"]["markRead"]>[0], ["notification"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Notifying"]["markRead"]>>, ["notification"]>]>>;
     };
     error: { error: AppWideError | "INVALID_INPUT" | "NOTIFICATION_NOT_FOUND" };
-  };
-  "/account/preferences/clear": {
-    input: {
-      "key": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Preferring"]["clear"]>[0], ["key"]>>;
-      "profile": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Preferring"]["clear"]>[0], ["owner"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Profiling"]["_get"]>[0], ["profile"]>]>>;
-      "scope": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Preferring"]["clear"]>[0], ["scope"]>>;
-    };
-    output: {
-      "preference": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Preferring"]["clear"]>>, ["preference"]>>;
-    };
-    error: { error: AppWideError | "INVALID_INPUT" | "PREFERENCE_NOT_FOUND" | "PROFILE_NOT_FOUND" };
-  };
-  "/account/preferences/set": {
-    input: {
-      "key": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Preferring"]["set"]>[0], ["key"]>>;
-      "profile": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Profiling"]["_get"]>[0], ["profile"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Preferring"]["set"]>[0], ["owner"]>]>>;
-      "scope": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Preferring"]["set"]>[0], ["scope"]>>;
-      "value": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Preferring"]["set"]>[0], ["value"]>>;
-    };
-    output: {
-      "preference": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Preferring"]["set"]>>, ["preference"]>>;
-    };
-    error: { error: AppWideError | "INVALID_INPUT" | "PROFILE_NOT_FOUND" };
   };
   "/account/rename": {
     input: {

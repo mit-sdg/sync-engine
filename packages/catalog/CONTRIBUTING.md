@@ -23,13 +23,18 @@ clear owner and observable contract.
 
 - A **concept** independently owns state, actions, queries, and expected
   refusals.
-- A **computation** is a reusable pure vocabulary function.
 - A **recipe** expresses reusable composition: a policy, boundary, reaction,
-  view, former, or related set of those declarations.
+  view, former, or related set of those declarations. A recipe may also copy
+  recipe-owned helpers used by that composition.
 
-The supported kinds are exactly `concept`, `computation`, and `recipe`. Complete
-applications remain examples rather than catalog entry kinds. The current
-absence of a computation entry does not justify a filler entry.
+The supported kinds are exactly `concept` and `recipe`. Complete applications
+remain examples rather than catalog entry kinds.
+
+Computations are a core sync-engine language feature. A recipe may copy a pure
+function as an ordinary file below `$recipes/`; it does not receive separate
+catalog integration. If composition refers to that function as a named
+vocabulary computation, the recipe documentation must tell the application to
+register it explicitly with `conceptSet(...)`.
 
 Every entry needs executable evidence for the behavior that makes the entry
 useful. Evidence must cover contractual refusals, state preservation,
@@ -77,12 +82,8 @@ Every entry lives under `entries/<kind>/<name>/` and appears once in
 
 ```text
 concept/profiling
-computation/normalizing-name
 recipe/account-center
 ```
-
-The computation ID above illustrates the grammar; it is not a shipped entry.
-Do not list hypothetical entries in user-facing catalog documentation.
 
 Keep specifications, common concept registration, and shared evidence outside
 variant directories. Put implementation-specific source and evidence under the
@@ -117,16 +118,15 @@ kind-specific copied files and integration metadata.
 
 File targets use only these tokens:
 
-| Token            | Destination                        |
-| ---------------- | ---------------------------------- |
-| `$concepts/`     | Configured concept source root     |
-| `$computations/` | Configured computation source root |
-| `$recipes/`      | Configured recipe source root      |
+| Token        | Destination                    |
+| ------------ | ------------------------------ |
+| `$concepts/` | Configured concept source root |
+| `$recipes/`  | Configured recipe source root  |
 
-A concept may copy only below `$concepts/`, a computation only below
-`$computations/`, and a recipe only below `$recipes/`. There is no project-root
-or concept-set target. The configured concept-set path is an application-owned
-reference used to render recipe imports; it is not copied from a manifest.
+A concept may copy only below `$concepts/`, and a recipe may copy only below
+`$recipes/`. There is no project-root or concept-set target. The configured
+concept-set path is an application-owned reference used to render recipe
+imports; it is not copied from a manifest.
 
 Sources are relative to the entry directory. Source and target paths must stay
 inside their owners and remain portable across supported Linux, macOS, and
@@ -193,33 +193,6 @@ Concept evidence must run the implementation directly. For storage variants,
 test the required atomic operation rather than substituting a read followed by a
 separate write.
 
-### Computation manifests
-
-A computation manifest declares one copied module and every public vocabulary
-function contributed by that module:
-
-```json
-{
-  "schema": 1,
-  "id": "computation/normalizing-name",
-  "kind": "computation",
-  "summary": "Normalize a display name.",
-  "files": [
-    {
-      "source": "normalizing-name.ts",
-      "target": "$computations/normalizing-name.ts"
-    }
-  ],
-  "computation": {
-    "module": "$computations/normalizing-name.ts",
-    "exports": ["normalizeName"]
-  }
-}
-```
-
-This is a schema example, not a shipped computation. Computations must be pure.
-Evidence should call them directly over representative and boundary values.
-
 ### Recipe manifests and helpers
 
 A recipe declares exact catalog dependencies, copied source, and only the named
@@ -252,11 +225,17 @@ members contributed to assembled composition:
 ```
 
 The installer generates named imports only for `recipe.members`. A recipe may
-export application helpers, configuration constructors, and types in addition
-to those members. Such exports must be imported directly from the copied module;
+copy or export pure functions, application helpers, configuration constructors,
+and types in addition to those members. Every recipe file remains below
+`$recipes/`. Such exports must be imported directly from copied recipe files;
 they must not be added to `members` unless they are valid assembled composition
 members. `browserSessionHttpPolicy` is the current example of a direct helper
 export.
+
+A named vocabulary computation receives no generated registration. Document its
+export and required application registration, and test the function directly
+over representative and boundary values in addition to testing composition that
+uses it.
 
 Recipe source may use `@catalog/concepts` for the configured concept-set
 reference. Paired evidence may use `@catalog/recipe` for the installed recipe
@@ -324,6 +303,7 @@ The CLI implementation is private, but its observable boundaries are supported:
 - discovery works without a project or core installation;
 - initialization writes one lock and three generated files, not an application
   shell;
+- the generated registration module exports only `catalogRegistrations`;
 - path overrides live only in `catalog.lock.paths`;
 - only `init` accepts source-root and integration-path configuration;
 - copied source is never overwritten or deleted;

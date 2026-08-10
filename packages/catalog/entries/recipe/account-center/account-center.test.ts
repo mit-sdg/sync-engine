@@ -1,26 +1,18 @@
 import {
   accountCenter,
-  ClearPreference,
   CreateProfile,
   DeliverNotification,
   DismissNotification,
   GetAccountCenter,
   MarkNotificationRead,
-  RejectUnknownPreferenceClear,
-  RejectUnknownPreferenceOwner,
   RejectUnknownNotificationRecipient,
   RenameProfile,
-  SetPreference,
 } from "@catalog/recipe";
 
 for (const declaration of [
   accountCenter,
   CreateProfile,
   RenameProfile,
-  SetPreference,
-  RejectUnknownPreferenceOwner,
-  ClearPreference,
-  RejectUnknownPreferenceClear,
   DeliverNotification,
   RejectUnknownNotificationRecipient,
   MarkNotificationRead,
@@ -66,12 +58,5 @@ if (
   accepts(GetAccountCenter.validators?.output, { account: { profile: "partial" } })
 ) {
   throw new Error("Account output validation does not enforce the joined shape.");
-}
-if (
-  !accepts(RejectUnknownPreferenceClear.validators?.domainError, "PROFILE_NOT_FOUND") ||
-  !accepts(RejectUnknownPreferenceClear.validators?.domainError, "PREFERENCE_NOT_FOUND") ||
-  accepts(RejectUnknownPreferenceClear.validators?.domainError, "UNKNOWN")
-) {
-  throw new Error("Preference clear validation does not cover its exact domain errors.");
 }
 console.log("account-center declarations load");

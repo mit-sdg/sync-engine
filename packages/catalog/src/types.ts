@@ -1,4 +1,4 @@
-export type EntryKind = "computation" | "concept" | "recipe";
+export type EntryKind = "concept" | "recipe";
 
 export interface CatalogFile {
   source: string;
@@ -9,11 +9,6 @@ export interface ConceptIntegration {
   name: string;
   registration: string;
   export: string;
-}
-
-export interface ComputationIntegration {
-  module: string;
-  exports: string[];
 }
 
 export interface RecipeIntegration {
@@ -38,7 +33,6 @@ export interface EntryManifest {
   files?: CatalogFile[];
   variants?: Record<string, ConceptVariant>;
   concept?: ConceptIntegration;
-  computation?: ComputationIntegration;
   recipe?: RecipeIntegration;
 }
 
@@ -49,7 +43,6 @@ export interface CatalogEntry {
 
 export interface CatalogConfig {
   concepts: string;
-  computations: string;
   recipes: string;
   conceptSet: string;
   declarations: string;
@@ -67,18 +60,11 @@ export interface LockedConceptIntegration extends ConceptIntegration {
   kind: "concept";
 }
 
-export interface LockedComputationIntegration extends ComputationIntegration {
-  kind: "computation";
-}
-
 export interface LockedRecipeIntegration extends RecipeIntegration {
   kind: "recipe";
 }
 
-export type LockedIntegration =
-  | LockedConceptIntegration
-  | LockedComputationIntegration
-  | LockedRecipeIntegration;
+export type LockedIntegration = LockedConceptIntegration | LockedRecipeIntegration;
 
 export interface LockedEntry {
   kind: EntryKind;
@@ -99,7 +85,6 @@ export interface CatalogLock {
 
 export interface InitPaths {
   concepts?: string;
-  computations?: string;
   recipes?: string;
   conceptSet?: string;
   declarations?: string;

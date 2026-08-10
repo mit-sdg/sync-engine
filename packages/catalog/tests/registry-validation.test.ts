@@ -170,18 +170,7 @@ describe("catalog manifest validation", () => {
     );
   });
 
-  test("rejects incomplete computation and recipe integration", async () => {
-    const computation = {
-      schema: 1,
-      id: "computation/sample",
-      kind: "computation",
-      summary: "Compute.",
-      files: [{ source: "sample.ts", target: "$computations/sample.ts" }],
-    };
-    await expect(
-      loadCatalog(await registry([{ path: "computation/sample", value: computation }])),
-    ).rejects.toThrow("needs integration metadata");
-
+  test("rejects incomplete recipe integration", async () => {
     const recipe = {
       schema: 1,
       id: "recipe/sample",
@@ -193,24 +182,6 @@ describe("catalog manifest validation", () => {
     await expect(
       loadCatalog(await registry([{ path: "recipe/sample", value: recipe }])),
     ).rejects.toThrow("does not copy its recipe module");
-
-    const uncopiedComputation = {
-      ...computation,
-      computation: { module: "$computations/other.ts", exports: ["sample"] },
-    };
-    await expect(
-      loadCatalog(await registry([{ path: "computation/sample", value: uncopiedComputation }])),
-    ).rejects.toThrow("does not copy its computation module");
-
-    const invalidComputationExports = {
-      ...computation,
-      computation: { module: "$computations/sample.ts", exports: [] },
-    };
-    await expect(
-      loadCatalog(
-        await registry([{ path: "computation/sample", value: invalidComputationExports }]),
-      ),
-    ).rejects.toThrow("computation exports are invalid");
 
     const repeatedRecipeMember = {
       ...recipe,
@@ -249,25 +220,13 @@ describe("catalog manifest validation", () => {
     ).rejects.toThrow("recipe members are invalid");
   });
 
-  test("loads complete computation and recipe integration metadata", async () => {
-    const computation = {
-      schema: 1,
-      id: "computation/sample",
-      kind: "computation",
-      summary: "Compute reusable values.",
-      packages: { "value-library": "^1.0.0" },
-      files: [{ source: "sample.ts", target: "$computations/sample.ts" }],
-      computation: {
-        module: "$computations/sample.ts",
-        exports: ["normalizeValue", "validateValue"],
-      },
-    };
+  test("loads complete recipe integration metadata", async () => {
     const recipe = {
       schema: 1,
       id: "recipe/sample",
       kind: "recipe",
       summary: "Compose reusable values.",
-      requires: ["computation/sample"],
+      packages: { "value-library": "^1.0.0" },
       files: [
         { source: "sample.ts", target: "$recipes/sample.ts" },
         { source: "sample.test.ts", target: "$recipes/sample.test.ts" },
@@ -278,16 +237,8 @@ describe("catalog manifest validation", () => {
         members: ["NormalizeValue", "ValidateValue"],
       },
     };
-    const catalog = await loadCatalog(
-      await registry([
-        { path: "computation/sample", value: computation },
-        { path: "recipe/sample", value: recipe },
-      ]),
-    );
+    const catalog = await loadCatalog(await registry([{ path: "recipe/sample", value: recipe }]));
 
-    expect(catalog.get("computation/sample")?.manifest.computation).toEqual(
-      computation.computation,
-    );
     expect(catalog.get("recipe/sample")?.manifest.recipe).toEqual(recipe.recipe);
   });
 

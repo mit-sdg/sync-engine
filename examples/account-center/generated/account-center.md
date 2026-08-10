@@ -87,58 +87,6 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
     answers only notifications for recipient whose read and dismissed flags are false
     orders rows by delivery
 
-### Preferring
-
-**Purpose.** Keep explicit scoped preferences for each owner, so independently composed
-features can share choices without owning one another's state.
-
-**Principle.** Mina first prefers a dark theme and then compact density for a workshop.
-Replacing her theme with light keeps the same preference identity and first-set
-position. Jo's theme and Mina's theme in another scope remain independent. An
-exact value matches; a different or absent value does not. Clearing Mina's
-workshop theme removes it, and trying to clear it again is refused without
-changing the remaining preferences.
-
-_Registration checks member names, recoverable input names, and refusal mappings._
-_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
-
-#### Actions
-
-##### `set (owner: Owner, scope: Scope, key: Key, value: Value) : return (preference: Preference)`
-
-**Authored behavior:**
-
-    where no preference has owner, scope, and key
-    then
-      add a new preference with owner, scope, key, and value
-      return preference
-    where some preference has owner, scope, and key
-    then
-      replace that preference's value with value
-      return that preference
-
-##### `clear (owner: Owner, scope: Scope, key: Key) : return (preference: Preference)`
-
-**Authored behavior:**
-
-    where no preference has owner, scope, and key
-    then
-      refuse PREFERENCE_NOT_FOUND "There is no preference for this owner, scope, and key."
-    where some preference has owner, scope, and key
-    then
-      delete that preference
-      return that preference
-
-**Registered refusal codes:** `PREFERENCE_NOT_FOUND`
-
-#### Queries
-
-##### `_get (owner: Owner, scope: Scope, key: Key) : optional (preference: Preference, value: Value)`
-
-##### `_all (owner: Owner) : many (preference: Preference, scope: Scope, key: Key, value: Value)`
-
-##### `_matches (owner: Owner, scope: Scope, key: Key, value: Value) : one (matches: Flag)`
-
 ### Profiling
 
 **Purpose.** Associate a display name with one stable profile for each external principal, so
@@ -222,7 +170,7 @@ _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
 ```former
-Former "the account center of (principal)" — inputs (principal); bindings (profile, displayName, preference, scope, key, value, notification, topic, subject, message, read); promises at most one record — forms:
+Former "the account center of (principal)" — inputs (principal); bindings (profile, displayName, notification, topic, subject, message, read); promises at most one record — forms:
   a record of
     where Profiling._forPrincipal (principal) has (displayName, profile)
     displayName
@@ -233,12 +181,6 @@ Former "the account center of (principal)" — inputs (principal); bindings (pro
         read
         subject
         topic
-    preferences: each Preferring._all (owner: profile) has (key, preference, scope, value)
-      form a record of
-        key
-        preference
-        scope
-        value
     principal
     profile
 ```
@@ -263,26 +205,6 @@ where
   earlier, RequestBoundary.request (requestId)
 then
   RequestBoundary.respond (error: message, requestId)
-```
-
-### accountCenter.ClearPreference
-
-```reaction
-when RequestBoundary.request (key, path: "/account/preferences/clear", profile, requestId, scope)
-where
-  Profiling._get (profile)
-then
-  Preferring.clear (key, owner: profile, scope)
-```
-
-### accountCenter.ClearPreference#2
-
-```reaction
-when Preferring.clear (key, owner: profile, scope, preference), asked by accountCenter.ClearPreference
-where
-  earlier, RequestBoundary.request (key, path: "/account/preferences/clear", profile, requestId, scope)
-then
-  RequestBoundary.respond (preference, requestId)
 ```
 
 ### accountCenter.CreateProfile
@@ -377,26 +299,6 @@ then
   RequestBoundary.respond (error: "PROFILE_NOT_FOUND", requestId)
 ```
 
-### accountCenter.RejectUnknownPreferenceClear
-
-```reaction
-when RequestBoundary.request (key, path: "/account/preferences/clear", profile, requestId, scope)
-where
-  no Profiling._get (profile)
-then
-  RequestBoundary.respond (error: "PROFILE_NOT_FOUND", requestId)
-```
-
-### accountCenter.RejectUnknownPreferenceOwner
-
-```reaction
-when RequestBoundary.request (key, path: "/account/preferences/set", profile, requestId, scope, value)
-where
-  no Profiling._get (profile)
-then
-  RequestBoundary.respond (error: "PROFILE_NOT_FOUND", requestId)
-```
-
 ### accountCenter.RenameProfile
 
 ```reaction
@@ -415,26 +317,6 @@ then
   RequestBoundary.respond (profile, requestId)
 ```
 
-### accountCenter.SetPreference
-
-```reaction
-when RequestBoundary.request (key, path: "/account/preferences/set", profile, requestId, scope, value)
-where
-  Profiling._get (profile)
-then
-  Preferring.set (key, owner: profile, scope, value)
-```
-
-### accountCenter.SetPreference#2
-
-```reaction
-when Preferring.set (key, owner: profile, scope, value, preference), asked by accountCenter.SetPreference
-where
-  earlier, RequestBoundary.request (key, path: "/account/preferences/set", profile, requestId, scope, value)
-then
-  RequestBoundary.respond (preference, requestId)
-```
-
 ## Endpoint input contracts
 
 Before recording an action ask, the boundary rejects a body that is not an
@@ -447,6 +329,4 @@ not listed here have no explicit input contract.
 - `/account/notifications/deliver` — requires `profile`, `topic`, `subject`, `message`
 - `/account/notifications/dismiss` — requires `profile`, `notification`
 - `/account/notifications/read` — requires `profile`, `notification`
-- `/account/preferences/clear` — requires `profile`, `scope`, `key`
-- `/account/preferences/set` — requires `profile`, `scope`, `key`, `value`
 - `/account/rename` — requires `profile`, `displayName`

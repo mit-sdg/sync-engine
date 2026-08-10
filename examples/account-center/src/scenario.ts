@@ -7,7 +7,6 @@ type AccountCenterError =
   | (typeof FrameworkErrorCode)[keyof typeof FrameworkErrorCode]
   | "DISPLAY_NAME_REQUIRED"
   | "NOTIFICATION_NOT_FOUND"
-  | "PREFERENCE_NOT_FOUND"
   | "PROFILE_ALREADY_EXISTS"
   | "PROFILE_NOT_FOUND";
 
@@ -19,7 +18,6 @@ function fail(operation: string, error: AccountCenterError): never {
     case "INVALID_INPUT":
     case "NOTIFICATION_NOT_FOUND":
     case "NOT_FOUND":
-    case "PREFERENCE_NOT_FOUND":
     case "PROFILE_ALREADY_EXISTS":
     case "PROFILE_NOT_FOUND":
     case "TIMED_OUT":
@@ -61,33 +59,6 @@ export async function runScenario() {
   if (duplicate.error !== "PROFILE_ALREADY_EXISTS")
     fail("refuse duplicate profile", duplicate.error);
 
-  const themeSet = await operations.account.preferences.set({
-    profile,
-    scope: "appearance",
-    key: "theme",
-    value: "dark",
-  });
-  if ("error" in themeSet) fail("set theme preference", themeSet.error);
-
-  const digestSet = await operations.account.preferences.set({
-    profile,
-    scope: "communication",
-    key: "digest-frequency",
-    value: "weekly",
-  });
-  if ("error" in digestSet) fail("set digest preference", digestSet.error);
-
-  const unknownPreference = await operations.account.preferences.set({
-    profile: "profile_missing",
-    scope: "appearance",
-    key: "theme",
-    value: "light",
-  });
-  if (!("error" in unknownPreference)) throw new Error("An unknown profile received a preference.");
-  if (unknownPreference.error !== "PROFILE_NOT_FOUND") {
-    fail("refuse unknown preference owner", unknownPreference.error);
-  }
-
   const product = await operations.account.notifications.deliver({
     profile,
     topic: "product-updates",
@@ -123,12 +94,6 @@ export async function runScenario() {
   assert(joined.account !== null, "The joined account was not found.");
   assert(joined.account.displayName === renamedDisplayName, "The joined account was not renamed.");
   assert(
-    joined.account.preferences
-      .map(({ scope, key, value }) => `${scope}/${key}=${value}`)
-      .join(",") === "appearance/theme=dark,communication/digest-frequency=weekly",
-    "The joined account did not preserve first-set preference order.",
-  );
-  assert(
     joined.account.notifications.map(({ notification }) => notification).join(",") ===
       `${product.notification},${security.notification}`,
     "The joined account did not preserve notification delivery order.",
@@ -161,24 +126,6 @@ export async function runScenario() {
     "Reading one notification changed the wrong inbox state.",
   );
 
-  const cleared = await operations.account.preferences.clear({
-    profile,
-    scope: "communication",
-    key: "digest-frequency",
-  });
-  if ("error" in cleared) fail("clear digest preference", cleared.error);
-  assert(cleared.preference === digestSet.preference, "Clear returned the wrong preference.");
-
-  const repeatedClear = await operations.account.preferences.clear({
-    profile,
-    scope: "communication",
-    key: "digest-frequency",
-  });
-  if (!("error" in repeatedClear)) throw new Error("A missing preference was cleared twice.");
-  if (repeatedClear.error !== "PREFERENCE_NOT_FOUND") {
-    fail("refuse missing preference clear", repeatedClear.error);
-  }
-
   for (const notification of [product.notification, security.notification]) {
     const dismissed = await operations.account.notifications.dismiss({ profile, notification });
     if ("error" in dismissed) fail("dismiss notification", dismissed.error);
@@ -187,30 +134,15 @@ export async function runScenario() {
   const finalResult = await operations.account.get({ principal });
   if ("error" in finalResult) fail("read final account", finalResult.error);
   assert(finalResult.account !== null, "The final account was not found.");
-  assert(
-    finalResult.account.preferences.length === 1,
-    "The final account did not have one preference.",
-  );
-  assert(
-    finalResult.account.preferences[0]?.preference === themeSet.preference &&
-      finalResult.account.preferences[0].scope === "appearance" &&
-      finalResult.account.preferences[0].key === "theme" &&
-      finalResult.account.preferences[0].value === "dark",
-    "The final account did not retain only the theme preference.",
-  );
   assert(finalResult.account.notifications.length === 0, "The final inbox was not empty.");
 
   return {
     missingAccount: missing.account,
     duplicateCreate: duplicate.error,
-    unknownPreferenceOwner: unknownPreference.error,
     unknownNotificationRecipient: unknownDelivery.error,
     displayName: finalResult.account.displayName,
-    preferenceOrder: ["appearance/theme=dark", "communication/digest-frequency=weekly"],
     notificationOrderPreserved: true,
     wrongReader: wrongReader.error,
-    missingPreferenceClear: repeatedClear.error,
-    finalPreferences: ["appearance/theme=dark"],
     finalInboxSize: finalResult.account.notifications.length,
   };
 }

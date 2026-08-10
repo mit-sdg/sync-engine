@@ -1,9 +1,9 @@
 # @mit-sdg/catalog
 
-`@mit-sdg/catalog` copies curated concepts, computations, and composition
-recipes into a sync-engine application. It does not copy an application shell,
-assembly, gateway, artifact configuration, or runnable scenario. Complete
-runnable configurations live under [`examples/`](https://github.com/mit-sdg/sync-engine/blob/main/examples/README.md).
+`@mit-sdg/catalog` copies curated concepts and composition recipes into a
+sync-engine application. It does not copy an application shell, assembly,
+gateway, artifact configuration, or runnable scenario. Complete runnable
+configurations live under [`examples/`](https://github.com/mit-sdg/sync-engine/blob/main/examples/README.md).
 
 The package exposes the `catalog` executable and no JavaScript import surface.
 Copied source belongs to the receiving application and has no runtime dependency
@@ -12,9 +12,9 @@ on the catalog package.
 ## Install the Account Center recipe
 
 Start in a Bun and TypeScript package that declares the exact matching core
-beta. The Account Center recipe uses Profiling, Preferring, and Notifying;
-Profiling has more than one implementation, so this installation selects its
-process-local `memory` variant explicitly.
+beta. The Account Center recipe uses Profiling and Notifying. Profiling has more
+than one implementation, so this installation selects its process-local
+`memory` variant explicitly.
 
 ```sh
 mkdir account-center
@@ -25,7 +25,7 @@ bun add --dev "typescript@>=6 <7"
 bunx --package @mit-sdg/catalog@beta catalog init recipe/account-center --variant concept/profiling=memory
 ```
 
-`init` writes `catalog.lock`, copies the recipe and its three concept
+`init` writes `catalog.lock`, copies the recipe and its two concept
 dependencies, and creates three generated integration files. It does not create
 `src/concept-set.ts`, `src/assembly.ts`, `generated.config.ts`, or another
 application shell file.
@@ -35,18 +35,17 @@ The default destinations are:
 | Content or reference              | Default path                             | Created by `init` |
 | --------------------------------- | ---------------------------------------- | ----------------- |
 | Concept source                    | `src/concepts/`                          | As needed         |
-| Computation source                | `src/computations/`                      | As needed         |
 | Recipe source                     | `src/composition/`                       | As needed         |
 | Application concept-set reference | `src/concept-set.ts`                     | No                |
 | Markdown import declaration       | `src/catalog/text.generated.d.ts`        | Yes               |
-| Registrations and computations    | `src/catalog/registrations.generated.ts` | Yes               |
+| Concept registrations             | `src/catalog/registrations.generated.ts` | Yes               |
 | Recipe composition                | `src/catalog/composition.generated.ts`   | Yes               |
 
 The configured concept-set path is an import target used while rendering copied
 recipes. It is a reference to an application-owned file, not a catalog output.
-All three source roots, the concept-set reference, and all three generated-file
-paths can be changed only during `catalog init`. Later commands read the paths
-from `catalog.lock`.
+Both source roots, the concept-set reference, and all three generated-file paths
+can be changed only during `catalog init`. Later commands read the paths from
+`catalog.lock`.
 
 ### Add the concept set
 
@@ -54,9 +53,9 @@ Create `src/concept-set.ts` from the generated records:
 
 ```ts
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { catalogComputations, catalogRegistrations } from "./catalog/registrations.generated.ts";
+import { catalogRegistrations } from "./catalog/registrations.generated.ts";
 
-export const applicationConcepts = conceptSet(catalogRegistrations, catalogComputations);
+export const applicationConcepts = conceptSet(catalogRegistrations);
 
 export const { concepts, vocabulary } = applicationConcepts;
 ```
@@ -64,16 +63,19 @@ export const { concepts, vocabulary } = applicationConcepts;
 An existing application merges its own records explicitly:
 
 ```ts
-conceptSet(
-  { ...applicationRegistrations, ...catalogRegistrations },
-  { ...applicationComputations, ...catalogComputations },
-);
+conceptSet({ ...applicationRegistrations, ...catalogRegistrations }, applicationComputations);
 ```
 
-Those names must be disjoint. JavaScript object spread silently replaces an
+Concept names must be disjoint. JavaScript object spread silently replaces an
 earlier property with a later property; the catalog cannot detect a collision
 with records defined outside `catalog.lock`. The installer does reject two
-tracked catalog entries that register the same concept or computation name.
+tracked catalog entries that register the same concept name.
+
+Computations remain a core language feature. Recipe-owned pure helpers are
+ordinary files under the configured recipe root. When a copied recipe requires
+a named vocabulary computation, register that function in the application's
+second `conceptSet(...)` argument. The generated registration module exports
+only `catalogRegistrations`.
 
 ### Add the recipe to the assembly
 
@@ -110,10 +112,21 @@ contains an assembly, gateway, generated artifacts, tests, and an asserting
 scenario. It also documents the recipe's identity, persistence, delivery, and
 runtime-validation boundaries.
 
-The copied Account Center endpoints validate shapes but do not authenticate
-`principal` or authorize `profile`. Its notification delivery route is a trusted
-service operation, not external message delivery. The selected memory variants
-lose profiles, preferences, and notifications on restart.
+The recipe contributes these endpoint routes:
+
+| Route                            | Effect                                                               |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `/account/create`                | Create a concrete `profile` for `principal` and `displayName`        |
+| `/account/rename`                | Change the `displayName` of a concrete `profile`                     |
+| `/account/get`                   | Return `profile`, `principal`, `displayName`, and the retained inbox |
+| `/account/notifications/deliver` | Add a notification to a known profile's inbox                        |
+| `/account/notifications/read`    | Mark one profile-owned notification as read                          |
+| `/account/notifications/dismiss` | Hide one profile-owned notification from the inbox                   |
+
+The endpoints validate exact bounded shapes but do not authenticate `principal`
+or authorize `profile`. The delivery route is a trusted service operation, not
+external message delivery. The selected memory variants lose profiles and
+notifications on restart.
 
 ## Install the Browser Session recipe
 
@@ -242,12 +255,20 @@ bunx --package @mit-sdg/catalog@beta catalog show recipe/browser-session
 bunx --package @mit-sdg/catalog@beta catalog add concept/profiling --variant concept/profiling=repository
 ```
 
-The current package contains five concepts and two recipes. It contains no
-computation entry, although computations remain a supported entry kind.
+The package contains exactly four concepts and two recipes:
+
+- `concept/authenticating`
+- `concept/notifying`
+- `concept/profiling`
+- `concept/sessioning`
+- `recipe/account-center`
+- `recipe/browser-session`
+
+The supported catalog entry kinds are exactly `concept` and `recipe`.
 
 ## Copy ownership and collisions
 
-Copied concepts, computations, recipes, specifications, and tests are
+Copied concepts, recipes, specifications, helpers, and tests are
 application-owned immediately. Catalog commands do not update, merge,
 overwrite, or delete them. A destination collision aborts the operation before
 any planned file is retained. For one explicitly requested recipe, `--file

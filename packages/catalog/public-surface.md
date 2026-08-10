@@ -38,10 +38,10 @@ operands, and repeated entry operands are errors.
 
 ## Entry kinds and shipped IDs
 
-The supported kinds are `concept`, `computation`, and `recipe`.
+The supported kinds are exactly `concept` and `recipe`.
 
 ```text
-catalog list [concept|computation|recipe]
+catalog list [concept|recipe]
 ```
 
 With no kind, `list` prints all entries sorted by ID. With a kind, it prints
@@ -56,22 +56,19 @@ package requirements, concept variant names and summaries when present, and all
 common and variant file targets. It does not expand variant-level package
 requirements. An unknown ID is an error.
 
-This package snapshot contains exactly seven IDs:
+This package snapshot contains exactly six IDs:
 
-| ID                       | Role                                                                        |
-| ------------------------ | --------------------------------------------------------------------------- |
-| `concept/authenticating` | Exact bounded identifiers, secret digests, and opaque principals            |
-| `concept/notifying`      | Retained ordered in-app inbox with read and dismissal state                 |
-| `concept/preferring`     | Ordered owner, scope, key, and value preferences                            |
-| `concept/profiling`      | One display profile for each opaque external principal                      |
-| `concept/sessioning`     | Expiring opaque sessions, rotation, and principal-wide revocation           |
-| `recipe/account-center`  | Validated profile, preference, trusted inbox, and joined-account boundary   |
-| `recipe/browser-session` | Identifier-secret registration and same-origin server-side browser sessions |
+| ID                       | Role                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `concept/authenticating` | Exact bounded identifiers, secret digests, and opaque principals             |
+| `concept/notifying`      | Retained ordered in-app inbox with read and dismissal state                  |
+| `concept/profiling`      | One display profile for each opaque external principal                       |
+| `concept/sessioning`     | Expiring opaque sessions, rotation, and principal-wide revocation            |
+| `recipe/account-center`  | Concrete profiles and a retained inbox behind one validated account boundary |
+| `recipe/browser-session` | Identifier-secret registration and same-origin server-side browser sessions  |
 
-`concept/profiling` has `memory` and `repository` variants. The other four
-concepts each have one `memory` variant. This snapshot contains no computation
-entry, but the kind, command filter, manifest form, path, lock integration, and
-generated computation record remain supported.
+`concept/profiling` has `memory` and `repository` variants. The other three
+concepts each have one `memory` variant.
 
 ## Entry manifest schema
 
@@ -81,7 +78,7 @@ Each indexed entry has one schema-1 `manifest.json`. The common fields are:
 | ---------- | -------- | ---------------------------------------------- |
 | `schema`   | Yes      | Integer `1`                                    |
 | `id`       | Yes      | Lowercase ID whose prefix matches `kind`       |
-| `kind`     | Yes      | `concept`, `computation`, or `recipe`          |
+| `kind`     | Yes      | `concept` or `recipe`                          |
 | `summary`  | Yes      | Nonempty discovery text                        |
 | `requires` | No       | Distinct direct entry IDs                      |
 | `packages` | No       | Package names mapped to required range strings |
@@ -95,16 +92,14 @@ exist inside its entry directory.
 
 A file target must begin with exactly one of these tokens:
 
-| Token            | Configured destination     |
-| ---------------- | -------------------------- |
-| `$concepts/`     | `concepts` source root     |
-| `$computations/` | `computations` source root |
-| `$recipes/`      | `recipes` source root      |
+| Token        | Configured destination |
+| ------------ | ---------------------- |
+| `$concepts/` | `concepts` source root |
+| `$recipes/`  | `recipes` source root  |
 
-All files selected for a concept must be below `$concepts/`; computation files
-must be below `$computations/`; recipe files must be below `$recipes/`. A
-manifest cannot target the project root, the configured concept-set file, or a
-generated integration file.
+All files selected for a concept must be below `$concepts/`; all files selected
+for a recipe must be below `$recipes/`. A manifest cannot target the project
+root, the configured concept-set file, or a generated integration file.
 
 Sources are entry-relative POSIX paths that remain inside the entry. Copied
 targets cannot repeat within one selected variant.
@@ -140,12 +135,6 @@ Common `files` apply to every variant. A selected variant contributes its
 `files` and optional package requirements. The common files must include the
 declared registration module. Concept names are unique across the catalog.
 
-### Computation manifests
-
-A computation manifest requires `computation.module` and a nonempty, distinct
-`computation.exports` array. Common files must include the declared module. Each
-export becomes a property of `catalogComputations`.
-
 ### Recipe manifests
 
 A recipe manifest requires a `recipe` record:
@@ -166,6 +155,11 @@ composition imports only these named members. Helper functions, constants, and
 types exported by the recipe module remain available through a direct
 application import but are not assembled.
 
+Pure computations and helpers owned by a recipe are ordinary recipe files and
+remain below `$recipes/`. The catalog does not generate vocabulary registration
+for them. An application that uses one as a named vocabulary computation must
+import and register it explicitly through `conceptSet(...)`.
+
 Copied source replaces `@catalog/concepts` with a relative import of the
 configured `conceptSet` reference. For a recipe installation, copied source also
 replaces `@catalog/recipe` with a relative import of the installed recipe module.
@@ -183,10 +177,10 @@ three generated files. With entries, it resolves and validates the complete
 dependency closure before writing.
 
 Default paths are implicit. `catalog.lock.paths` stores only values that differ
-from the defaults. Initialization prints two integration instructions: import
-the generated registration and computation records into `conceptSet(...)`, and
-spread the generated composition into the assembly. The catalog does not create
-the application concept set or assembly.
+from the defaults. Initialization prints two integration instructions: pass the
+generated registration record to `conceptSet(...)`, and spread the generated
+composition into the assembly. The catalog does not create the application
+concept set or assembly.
 
 If `package.json` defines a string-valued `check` script, a successful mutation
 prints `bun run check` as the next command. The catalog does not execute it.
@@ -241,7 +235,6 @@ Path options are valid only on `init`. Each option may occur once.
 | Option            | Lock field      | Default                                  | Form                   |
 | ----------------- | --------------- | ---------------------------------------- | ---------------------- |
 | `--concepts`      | `concepts`      | `src/concepts`                           | Directory              |
-| `--computations`  | `computations`  | `src/computations`                       | Directory              |
 | `--recipes`       | `recipes`       | `src/composition`                        | Directory              |
 | `--concept-set`   | `conceptSet`    | `src/concept-set.ts`                     | `.ts` file reference   |
 | `--declarations`  | `declarations`  | `src/catalog/text.generated.d.ts`        | `.d.ts` generated file |
@@ -302,19 +295,18 @@ package-manager operation.
 The catalog manages `catalog.lock` and exactly three configured generated files:
 
 - `declarations`, which declares `*.md` imports as strings;
-- `registrations`, which exports `catalogRegistrations` and
-  `catalogComputations`;
+- `registrations`, which exports only `catalogRegistrations`;
 - `composition`, which exports `catalogComposition`.
 
 The registration module uses named imports from locked concept registration
-modules and computation modules. The composition module uses named imports for
-each recipe manifest's `members`; it does not use namespace imports and does not
-include undeclared helper exports. Entries are sorted by ID, and properties
-retain manifest member order within each recipe.
+modules. The composition module uses named imports for each recipe manifest's
+`members`; it does not use namespace imports and does not include undeclared
+helper exports. Entries are sorted by ID, and properties retain manifest member
+order within each recipe.
 
-Concept names, computation export names, and recipe member names must each be
-unique among tracked entries in their category. The catalog does not inspect or
-merge application-owned records that consume the generated objects.
+Concept names and recipe member names must each be unique among tracked entries
+in their category. The catalog does not inspect or merge application-owned
+records that consume the generated objects.
 
 Generated files begin with `Generated by @mit-sdg/catalog. Do not edit.`. Before
 `add` or `forget`, the catalog verifies their complete expected contents. An
@@ -332,9 +324,8 @@ edited or missing generated file aborts the mutation.
 }
 ```
 
-`paths` accepts only `concepts`, `computations`, `recipes`, `conceptSet`,
-`declarations`, `registrations`, and `composition`. Only nondefault values are
-written.
+`paths` accepts only `concepts`, `recipes`, `conceptSet`, `declarations`,
+`registrations`, and `composition`. Only nondefault values are written.
 
 Each entry record contains:
 
@@ -350,10 +341,9 @@ Each entry record contains:
 | `integration`    | Kind-specific object         | Data used to regenerate imports and records                        |
 
 Concept integration contains `kind: "concept"`, `name`, `export`, and
-`registration`. Computation integration contains `kind: "computation"`,
-`module`, and nonempty distinct `exports`. Recipe integration contains
-`kind: "recipe"`, `module`, optional `test`, and nonempty distinct `members`.
-Every entry kind requires its matching integration record.
+`registration`. Recipe integration contains `kind: "recipe"`, `module`,
+optional `test`, and nonempty distinct `members`. Every entry requires its
+matching integration record.
 
 The lock parser rejects unknown fields, malformed IDs and hashes, repeated
 targets, missing dependencies, dependency cycles, cross-kind integration,
@@ -388,7 +378,7 @@ application.
 
 ## Copy ownership and failure guarantees
 
-Copied concept, computation, recipe, specification, and test files become
+Copied concept, recipe, specification, helper, and test files become
 application-owned when created. Catalog commands never update, merge,
 overwrite, or delete copied files. There is no source update or source removal
 command.
@@ -408,6 +398,44 @@ failure.
 
 Catalog commands do not execute application TypeScript, project scripts, or a
 package manager.
+
+## Account Center boundaries
+
+`recipe/account-center` contributes the optional `accountCenter` former and
+seven endpoint declarations over Profiling and Notifying. Two declarations
+share the delivery route so a missing profile returns a domain error.
+
+| Route                            | Required input                           | Success result                                              | Domain errors                                     |
+| -------------------------------- | ---------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------- |
+| `/account/create`                | `principal`, `displayName`               | `profile`                                                   | `DISPLAY_NAME_REQUIRED`, `PROFILE_ALREADY_EXISTS` |
+| `/account/rename`                | `profile`, `displayName`                 | `profile`                                                   | `PROFILE_NOT_FOUND`, `DISPLAY_NAME_REQUIRED`      |
+| `/account/get`                   | `principal`                              | `account`: profile and active inbox, or `null`              | None                                              |
+| `/account/notifications/deliver` | `profile`, `topic`, `subject`, `message` | `notification`                                              | `PROFILE_NOT_FOUND`                               |
+| `/account/notifications/read`    | `profile`, `notification`                | `notification`                                              | `NOTIFICATION_NOT_FOUND`                          |
+| `/account/notifications/dismiss` | `profile`, `notification`                | `notification`; active inbox results omit the retained item | `NOTIFICATION_NOT_FOUND`                          |
+
+The `account` object contains exactly `profile`, `principal`, `displayName`, and
+`notifications`. Active notifications retain delivery order and contain
+`notification`, `topic`, `subject`, `message`, and `read`.
+
+Endpoint validators require exact object keys and nonempty bounded strings.
+`principal`, `profile`, `displayName`, `topic`, and `notification` accept at
+most 128 UTF-16 code units; `subject` accepts at most 256; `message` accepts at
+most 4,096. Profiling applies its additional non-whitespace display-name rule.
+
+Profile creation returns `DISPLAY_NAME_REQUIRED` for a whitespace-only name and
+`PROFILE_ALREADY_EXISTS` when a valid name is supplied for a principal that
+already has a profile. Rename checks profile existence first: an unknown profile
+returns `PROFILE_NOT_FOUND`, including when the supplied name is whitespace
+only. Delivery returns `PROFILE_NOT_FOUND` for an unknown profile. Read and
+dismiss return `NOTIFICATION_NOT_FOUND` when the notification is unknown or
+belongs to another profile. These refusals leave concept state unchanged.
+
+The recipe does not authenticate `principal` or authorize `profile`. A trusted
+adapter must bind those fields, and the delivery route must remain a trusted
+service operation. The memory implementations lose profiles and notifications
+on restart. Notifying retains inbox records but does not send external messages,
+deduplicate delivery, or provide exactly-once behavior.
 
 ## Browser Session boundaries
 

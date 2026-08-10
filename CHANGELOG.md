@@ -7,92 +7,95 @@ an exact version, follow the [support policy](SUPPORT.md), and review the
 
 ## [1.0.0-beta.8] - 2026-08-09
 
-This beta replaces the one-purpose application scaffold with a recipe-first,
-copy-owned source catalog, adds two reusable account boundaries, and unifies the
-first-party HTTP configuration under one policy contract.
+This beta publishes a recipe-first, copy-owned source catalog, two reusable
+account boundaries, and one first-party HTTP policy contract.
 
 ### Compatibility
 
-- `@mit-sdg/catalog` is now a public, CLI-only package with an exact
-  `@mit-sdg/sync-engine@1.0.0-beta.8` optional peer. It exposes the `catalog`
-  executable and no JavaScript import surface.
-- The core `sync-engine new` command and its one-concept template are removed.
-  Core retains source checking and generated-artifact commands; application
-  source installation belongs to the catalog package.
-- The catalog installs only `concept`, `computation`, and `recipe` entries. It
-  does not install bundles or application shells. Complete wiring and scenarios
-  now live in self-contained examples.
-- The catalog ships five concepts: Authenticating, Notifying, Preferring,
-  Profiling, and Sessioning. Profiling offers memory and
-  application-repository variants; the other concepts currently provide memory
-  variants.
-- `recipe/account-center` composes validated profile, preference, trusted inbox,
-  and joined-account behavior. The new self-contained Account Center example
-  supplies the assembly, gateway, generated artifacts, and asserting scenario
-  that are deliberately absent from the catalog entry.
-- `recipe/browser-session` composes Authenticating, Profiling, and Sessioning
-  into registration, sign-in, current-session, rotation, sign-out, and
-  principal-wide sign-out endpoints. Its directly importable
-  `browserSessionHttpPolicy(...)` helper is not an assembled recipe member.
-- Catalog projects use one deterministic `catalog.lock`. Standard paths are
-  implicit; only path overrides, selected entries and variants, dependency
-  edges, destinations, and source provenance are persisted.
-- The HTTP companion removes the split `productionHttpProfile(...)` and
-  `httpFloor(...)` configuration, their profile/floor types, and handler
-  `profile`/`floor` options. `httpPolicy(...)` now returns the one `HttpPolicy`
-  accepted by `createHttpHandler({ application, gateway, policy })` and
-  `httpWire({ policy, name })`.
-- `HttpPolicy.cookie` provides the former cookie binding in one optional
-  `HttpCookiePolicy`. It supports one or several `HttpCookieIssue` routes,
-  customizable cookie attributes and allowed origins, protected-input
-  injection, issue-output hiding, and configured or unauthorized clearing.
+- This is the first public `@mit-sdg/catalog` release. Catalog projects use its
+  schema-1 lock and generated integration modules as one versioned unit.
+- Core, HTTP, and catalog packages in an application must use the exact beta.8
+  version. The core application manifest remains at version 5.
 
 ### Migration
 
-- Upgrade core and every installed companion to exact `1.0.0-beta.8` versions.
-  This is the catalog package's first public release; no earlier catalog version
-  exists to upgrade.
-- Replace `sync-engine new <directory>` with an ordinary Bun/TypeScript package
-  shell followed by `bunx --package @mit-sdg/catalog@1.0.0-beta.8 catalog init
-recipe/account-center --variant concept/profiling=memory`. Create or update the
-  application concept set and assembly to consume `catalogRegistrations`,
-  `catalogComputations`, and `catalogComposition`. Commit `catalog.lock`; copied
-  concept, recipe, specification, and test source is application-owned.
-- Use `examples/account-center` when a complete runnable Account Center
-  configuration is required. Generate and review its artifacts, typecheck it,
-  run its concept and recipe evidence, and execute its scenario. Bind principal
-  and profile fields from authenticated context before exposing the account
-  boundary through an untrusted adapter.
-- Replace `productionHttpProfile(declaration)` with
-  `httpPolicy(declaration)`. Replace `httpFloor({ ..., credential })` with
-  `httpPolicy({ ..., cookie })`; rename each issue field `output` to `value`.
-  Pass the result through the handler's `policy` option and reuse it as
-  `httpWire`'s `policy`. No compatibility aliases remain.
-- Cookie-policy requests now require a present exact `Origin` by default. Use a
-  nonempty `cookie.origins` allowlist for an explicit frontend origin. The
-  lower-level `cookie.origins: false` opt-out removes this check and requires an
-  equivalent host control; it does not enable CORS.
-- Installing `recipe/browser-session` directly requires exact beta.8 core and
-  HTTP packages, `@types/node` at the declared `^24.0.0` range, and an explicit
-  Profiling variant. Import `browserSessionHttpPolicy` from the copied recipe
-  module rather than from generated composition.
+- Pin the beta.8 packages exactly. Initialize catalog metadata with `catalog
+init`, import `catalogRegistrations` into the application concept set, and
+  spread `catalogComposition` into assembly.
+- Configure one `HttpPolicy` and pass it to both `createHttpHandler` and
+  `httpWire`. Applications own any framework adapter around that policy.
+
+### Source catalog
+
+- `@mit-sdg/catalog` is a public, CLI-only package with an exact optional peer on
+  `@mit-sdg/sync-engine@1.0.0-beta.8`. It exposes the `catalog` executable and no
+  JavaScript import surface.
+- Catalog entry kinds are exactly `concept` and `recipe`. The package ships four
+  concepts—Authenticating, Notifying, Profiling, and Sessioning—and two recipes:
+  Account Center and Browser Session.
+- Profiling provides `memory` and application-supplied `repository` variants.
+  Authenticating, Notifying, and Sessioning provide `memory` variants.
+- `catalog init` and `catalog add` copy selected entries and their dependencies
+  into an ordinary application package. Copied concepts, recipes,
+  specifications, helpers, and tests are application-owned.
+- Each catalog project has one deterministic schema-1 `catalog.lock`, one
+  generated Markdown declaration, one registration module exporting only
+  `catalogRegistrations`, and one composition module exporting
+  `catalogComposition`.
+- Catalog source paths cover concepts and recipes. Pure recipe helpers are
+  ordinary recipe-owned files; applications explicitly register any helper used
+  as a named vocabulary computation. Computations remain a core sync-engine
+  language feature.
+- `catalog list`, `show`, `diff`, and dependency discovery are deterministic.
+  Mutations validate package requirements, variants, paths, collisions,
+  integration names, and symbolic links before writing.
+
+### Account recipes
+
+- `recipe/account-center` composes Profiling and Notifying. It contributes
+  `/account/create`, `/account/rename`, `/account/get`, and notification
+  `deliver`, `read`, and `dismiss` routes. Account reads contain the concrete
+  `profile`, `principal`, `displayName`, and retained active inbox in delivery
+  order.
+- The self-contained Account Center example supplies assembly, gateway,
+  generated artifacts, runtime validators, implementation overrides, and an
+  asserting scenario.
+- `recipe/browser-session` composes Authenticating, Profiling, and Sessioning
+  into registration, sign-in, current-session, rotation, sign-out, and
+  principal-wide sign-out endpoints. Its directly importable
+  `browserSessionHttpPolicy(...)` helper is a direct recipe export rather than an
+  assembled recipe member.
+- A Browser Session installation requires exact beta.8 core and HTTP packages,
+  `@types/node` at `^24.0.0`, and an explicit Profiling variant.
+
+### HTTP policy
+
+- `httpPolicy(...)` returns the `HttpPolicy` accepted by
+  `createHttpHandler({ application, gateway, policy })` and
+  `httpWire({ policy, name })`.
+- Optional `HttpPolicy.cookie` configuration supports one or several
+  `HttpCookieIssue` routes, customizable cookie attributes and allowed origins,
+  protected-input injection, issue-output hiding, and configured or
+  unauthorized clearing.
+- Cookie-policy requests require a present exact `Origin` by default. A nonempty
+  `cookie.origins` allowlist admits explicit frontend origins. The lower-level
+  `cookie.origins: false` setting delegates the equivalent control to the host;
+  it does not enable CORS.
 
 ### Generated formats
 
-- The core application manifest remains at version 5. Regenerate checked-in
-  artifacts so generator provenance records `1.0.0-beta.8` and removed scaffold
-  source is no longer treated as a core package asset.
+- The core application manifest remains at version 5. Beta.8 generators record
+  `1.0.0-beta.8` provenance in checked-in artifacts.
 - `catalog.lock` schema 1 is deterministic machine-owned provenance. The
   catalog also owns one Markdown declaration and generated registration and
-  composition modules; it refuses to replace edited or missing managed files.
-  Copied entry files are never managed after installation.
-- Catalog manifests target only configured concept, computation, and recipe
-  roots. Generated composition uses named imports for manifest-declared recipe
-  members; helper exports do not enter the assembled composition.
-- Regenerate HTTP wire artifacts after migration. `httpWire` now snapshots one
-  `HttpPolicy`; when `policy.cookie` is present, every protected input and each
-  issue route's configured value and expiry fields are omitted from its public
-  contract.
+  composition modules. Mutations require those managed files to match their
+  expected content. Copied entry files are application-owned after installation.
+- Catalog manifests target configured concept and recipe roots. Generated
+  composition uses named imports for manifest-declared recipe members; direct
+  helper exports stay outside assembled composition.
+- `httpWire` snapshots one `HttpPolicy`. When `policy.cookie` is present, every
+  protected input and each issue route's configured value and expiry fields are
+  omitted from its public contract.
 
 ### Runtime and security support
 
@@ -102,8 +105,8 @@ recipe/account-center --variant concept/profiling=memory`. Create or update the
 - The Account Center recipe validates bounded endpoint shapes but does not
   authenticate principals, authorize profiles, persist memory implementations,
   send external messages, deduplicate retries, or guarantee exactly-once
-  delivery. The self-contained example identifies trusted-adapter, persistence,
-  and delivery responsibilities.
+  delivery. The self-contained example identifies the trusted-adapter,
+  persistence, and delivery responsibilities.
 - The Browser Session recipe is not complete production authentication. Its
   memory variants lose credentials, profiles, and sessions on restart;
   registration crosses three owners without one transaction; response loss can

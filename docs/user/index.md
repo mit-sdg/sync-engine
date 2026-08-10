@@ -66,8 +66,8 @@ grouped under `guide/`.
 | [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md)   | Compiler-free IR queries and optional TypeScript project evidence  |
 | [Reading Circle](../../examples/reading-circle/README.md)                                                     | Shortest complete multi-concept application                        |
 | [Operations Room](../../examples/operations-room/README.md)                                                   | Selectable reactions, replaceable policy, and staged formers       |
-| [Account Center](../../examples/account-center/README.md)                                                     | Complete profile, preference, and retained-inbox application       |
+| [Account Center](../../examples/account-center/README.md)                                                     | Complete concrete-profile and retained-inbox application           |
 | [Production HTTP](../../examples/production-http/README.md)                                                   | Validation, public errors, limits, correlation, and credentials    |
 | [Support policy](../../SUPPORT.md)                                                                            | Supported versions, runtimes, toolchains, and generated formats    |
 | [Security policy](../../SECURITY.md)                                                                          | Vulnerability reporting and the host/application security boundary |
-| [Changelog](../../CHANGELOG.md)                                                                               | Release-specific compatibility and migration                       |
+| [Changelog](../../CHANGELOG.md)                                                                               | Release-specific behavior and generated-format notes               |

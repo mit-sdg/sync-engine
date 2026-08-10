@@ -11,11 +11,11 @@ import type {
   EntryManifest,
 } from "./types.ts";
 
-const ENTRY_ID = /^(?:computation|concept|recipe)\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const ENTRY_ID = /^(?:concept|recipe)\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const NAME = /^[A-Za-z][A-Za-z0-9]*$/;
-const TARGET = /^\$(?:concepts|computations|recipes)\/.+$/;
+const TARGET = /^\$(?:concepts|recipes)\/.+$/;
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
-const KINDS = new Set<EntryKind>(["computation", "concept", "recipe"]);
+const KINDS = new Set<EntryKind>(["concept", "recipe"]);
 
 function entriesDirectory(): string {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -118,7 +118,6 @@ function parseManifest(value: unknown, path: string): EntryManifest {
       "files",
       "variants",
       "concept",
-      "computation",
       "recipe",
     ],
     path,
@@ -188,22 +187,6 @@ function parseManifest(value: unknown, path: string): EntryManifest {
     };
   }
 
-  if (found.computation !== undefined) {
-    if (manifest.kind !== "computation") {
-      throw new Error(`${path}: computation metadata has wrong kind`);
-    }
-    const computation = record(found.computation, `${path}.computation`);
-    rejectUnknown(computation, ["module", "exports"], `${path}.computation`);
-    if (typeof computation.module !== "string") {
-      throw new Error(`${path}: computation module is invalid`);
-    }
-    const exported = stringArray(computation.exports, `${path}.computation.exports`);
-    if (exported.length === 0 || exported.some((name) => !NAME.test(name))) {
-      throw new Error(`${path}: computation exports are invalid`);
-    }
-    manifest.computation = { module: computation.module, exports: exported };
-  }
-
   if (found.recipe !== undefined) {
     if (manifest.kind !== "recipe") throw new Error(`${path}: recipe metadata has wrong kind`);
     const recipe = record(found.recipe, `${path}.recipe`);
@@ -228,9 +211,6 @@ function parseManifest(value: unknown, path: string): EntryManifest {
     (manifest.concept === undefined || manifest.variants === undefined)
   ) {
     throw new Error(`${path}: a concept needs metadata and variants`);
-  }
-  if (manifest.kind === "computation" && manifest.computation === undefined) {
-    throw new Error(`${path}: a computation needs integration metadata`);
   }
   if (manifest.kind === "recipe" && manifest.recipe === undefined) {
     throw new Error(`${path}: a recipe needs integration metadata`);
@@ -286,12 +266,6 @@ export async function loadCatalog(root = entriesDirectory()): Promise<Map<string
       !common.some(({ target }) => target === entry.manifest.concept?.registration)
     ) {
       throw new Error(`${entry.manifest.id} does not copy its registration module`);
-    }
-    if (
-      entry.manifest.computation !== undefined &&
-      !common.some(({ target }) => target === entry.manifest.computation?.module)
-    ) {
-      throw new Error(`${entry.manifest.id} does not copy its computation module`);
     }
     if (entry.manifest.recipe !== undefined) {
       if (!common.some(({ target }) => target === entry.manifest.recipe?.module)) {
@@ -354,7 +328,6 @@ export async function sourceDigest(entry: CatalogEntry, variant?: string): Promi
       packages: manifest.packages ?? {},
       variantPackages: variant === undefined ? {} : (manifest.variants?.[variant]?.packages ?? {}),
       concept: manifest.concept,
-      computation: manifest.computation,
       recipe: manifest.recipe,
     }),
   );

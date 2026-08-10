@@ -24,7 +24,7 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 ## Authoring
 
 - [Application authoring](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/authoring.md)
-- [Catalog package guide](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/README.md) — copy and integrate curated concepts, computations, and recipes
+- [Catalog package guide](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/README.md) — copy and integrate curated concepts and recipes
 - [Catalog Public Surface](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/public-surface.md) — exact commands, manifest and lock schemas, generated integration, and copy ownership
 - [Read construction cookbook](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/read-construction.md)
 - [Concept specification format](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/concept-specification.md)
@@ -35,7 +35,7 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 
 - [Reading Circle](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/reading-circle/README.md) — shortest complete multi-concept application
 - [Operations Room](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/operations-room/README.md) — selectable reactions, policy, and staged formers
-- [Account Center](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/account-center/README.md) — self-contained profile, preference, and retained-inbox application
+- [Account Center](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/account-center/README.md) — self-contained concrete-profile and retained-inbox application
 - [Production HTTP](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/production-http/README.md) — validation, limits, public errors, correlation, and cookie credentials
 - [Persistence, restart, and recovery](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/persistence-recovery.md) — durable concept state versus occurrence evidence
 

@@ -14,7 +14,7 @@ const usage = `Usage: catalog <command> [arguments]
   catalog init [entry...] [path options] [selection options]
     Initialize catalog.lock and optionally install entries.
 
-  catalog list [concept|computation|recipe]
+  catalog list [concept|recipe]
     List available catalog entries.
 
   catalog show <entry>
@@ -31,7 +31,6 @@ const usage = `Usage: catalog <command> [arguments]
 
 Path options for init:
   --concepts <directory>       Default: src/concepts
-  --computations <directory>   Default: src/computations
   --recipes <directory>        Default: src/composition
   --concept-set <file>         Default: src/concept-set.ts
   --declarations <file>        Default: src/catalog/text.generated.d.ts
@@ -42,7 +41,7 @@ Selection options:
   --variant <concept-id>=<variant>  Repeat for multiple concepts.
   --file <name.ts>                  Rename one explicitly added recipe module.`;
 
-const KINDS = new Set<EntryKind>(["computation", "concept", "recipe"]);
+const KINDS = new Set<EntryKind>(["concept", "recipe"]);
 const HELP = new Set([undefined, "help", "--help", "-h"]);
 
 export interface CatalogIO {
@@ -63,7 +62,6 @@ function addOptions(
   let recipeFile: string | undefined;
   const pathOptions: Record<string, keyof InitPaths> = {
     "--concepts": "concepts",
-    "--computations": "computations",
     "--recipes": "recipes",
     "--concept-set": "conceptSet",
     "--declarations": "declarations",
@@ -126,7 +124,7 @@ function printMutation(result: MutationResult, cwd: string, io: CatalogIO): void
 
 async function listEntries(kind: string | undefined, io: CatalogIO): Promise<void> {
   if (kind !== undefined && !KINDS.has(kind as EntryKind)) {
-    throw new Error(`catalog list kind must be concept, computation, or recipe`);
+    throw new Error(`catalog list kind must be concept or recipe`);
   }
   const catalog = await loadCatalog();
   const entries = [...catalog.values()]

@@ -73,7 +73,7 @@ describe("catalog project path validation", () => {
     );
 
     await expect(
-      initializeProject(project, {}, ["concept/preferring"], noSelections),
+      initializeProject(project, {}, ["concept/notifying"], noSelections),
     ).resolves.toMatchObject({ initialized: true });
   });
 
@@ -82,7 +82,7 @@ describe("catalog project path validation", () => {
       initializeProject(
         directory,
         { concepts: "catalog.lock" },
-        ["concept/preferring"],
+        ["concept/notifying"],
         noSelections,
       ),
     ).rejects.toThrow("write plan contains overlapping targets");
@@ -93,10 +93,10 @@ describe("catalog project path validation", () => {
     await initializeProject(directory, {}, [], noSelections);
     const nested = join(directory, "deep/path");
     await mkdir(nested, { recursive: true });
-    await addEntries(nested, ["concept/preferring"], noSelections);
+    await addEntries(nested, ["concept/notifying"], noSelections);
     await expect(
-      readFile(join(directory, "src/concepts/preferring/preferring.ts"), "utf8"),
-    ).resolves.toContain("PreferringConcept");
+      readFile(join(directory, "src/concepts/notifying/notifying.ts"), "utf8"),
+    ).resolves.toContain("NotifyingConcept");
   });
 
   test("refuses to initialize over existing metadata", async () => {
@@ -131,13 +131,13 @@ describe("catalog lock validation", () => {
     ],
     [
       "entry record",
-      (lock: any) => ({ ...lock, entries: { "concept/preferring": null } }),
+      (lock: any) => ({ ...lock, entries: { "concept/notifying": null } }),
       "invalid entry",
     ],
     [
       "entry field",
       (lock: any) => {
-        lock.entries["concept/preferring"].extra = true;
+        lock.entries["concept/notifying"].extra = true;
         return lock;
       },
       "unknown fields",
@@ -145,7 +145,7 @@ describe("catalog lock validation", () => {
     [
       "entry shape",
       (lock: any) => {
-        lock.entries["concept/preferring"].sourceDigest = "bad";
+        lock.entries["concept/notifying"].sourceDigest = "bad";
         return lock;
       },
       "malformed entry",
@@ -153,7 +153,7 @@ describe("catalog lock validation", () => {
     [
       "variant",
       (lock: any) => {
-        lock.entries["concept/preferring"].variant = "BAD";
+        lock.entries["concept/notifying"].variant = "BAD";
         return lock;
       },
       "invalid variant",
@@ -161,7 +161,7 @@ describe("catalog lock validation", () => {
     [
       "package",
       (lock: any) => {
-        lock.entries["concept/preferring"].packages = { BAD: "1" };
+        lock.entries["concept/notifying"].packages = { BAD: "1" };
         return lock;
       },
       "invalid package requirement",
@@ -169,7 +169,7 @@ describe("catalog lock validation", () => {
     [
       "file record",
       (lock: any) => {
-        lock.entries["concept/preferring"].files[0] = null;
+        lock.entries["concept/notifying"].files[0] = null;
         return lock;
       },
       "invalid file",
@@ -177,7 +177,7 @@ describe("catalog lock validation", () => {
     [
       "file field",
       (lock: any) => {
-        lock.entries["concept/preferring"].files[0].extra = true;
+        lock.entries["concept/notifying"].files[0].extra = true;
         return lock;
       },
       "unknown fields",
@@ -185,7 +185,7 @@ describe("catalog lock validation", () => {
     [
       "file shape",
       (lock: any) => {
-        lock.entries["concept/preferring"].files[0].hash = "bad";
+        lock.entries["concept/notifying"].files[0].hash = "bad";
         return lock;
       },
       "invalid file",
@@ -193,7 +193,7 @@ describe("catalog lock validation", () => {
     [
       "absolute file source",
       (lock: any) => {
-        lock.entries["concept/preferring"].files[0].source = "/outside.ts";
+        lock.entries["concept/notifying"].files[0].source = "/outside.ts";
         return lock;
       },
       "invalid file",
@@ -201,7 +201,7 @@ describe("catalog lock validation", () => {
     [
       "integration record",
       (lock: any) => {
-        lock.entries["concept/preferring"].integration = null;
+        lock.entries["concept/notifying"].integration = null;
         return lock;
       },
       "invalid integration",
@@ -209,7 +209,7 @@ describe("catalog lock validation", () => {
     [
       "concept integration",
       (lock: any) => {
-        lock.entries["concept/preferring"].integration.name = "bad-name";
+        lock.entries["concept/notifying"].integration.name = "bad-name";
         return lock;
       },
       "invalid concept integration",
@@ -217,7 +217,7 @@ describe("catalog lock validation", () => {
     [
       "unknown integration",
       (lock: any) => {
-        lock.entries["concept/preferring"].integration.kind = "unknown";
+        lock.entries["concept/notifying"].integration.kind = "unknown";
         return lock;
       },
       "unknown integration",
@@ -225,7 +225,7 @@ describe("catalog lock validation", () => {
     [
       "missing integration",
       (lock: any) => {
-        delete lock.entries["concept/preferring"].integration;
+        delete lock.entries["concept/notifying"].integration;
         return lock;
       },
       "missing integration metadata",
@@ -233,7 +233,7 @@ describe("catalog lock validation", () => {
     [
       "missing variant",
       (lock: any) => {
-        delete lock.entries["concept/preferring"].variant;
+        delete lock.entries["concept/notifying"].variant;
         return lock;
       },
       "invalid variant metadata",
@@ -241,7 +241,7 @@ describe("catalog lock validation", () => {
     [
       "duplicate file",
       (lock: any) => {
-        const entry = lock.entries["concept/preferring"];
+        const entry = lock.entries["concept/notifying"];
         entry.files.push({ ...entry.files[0] });
         return lock;
       },
@@ -250,13 +250,13 @@ describe("catalog lock validation", () => {
     [
       "missing dependency",
       (lock: any) => {
-        lock.entries["concept/preferring"].requires = ["concept/missing"];
+        lock.entries["concept/notifying"].requires = ["concept/missing"];
         return lock;
       },
       "requires missing entry",
     ],
   ] satisfies readonly LockCase[])("rejects malformed %s", async (_name, edit, message) => {
-    await initializeProject(directory, {}, ["concept/preferring"], noSelections);
+    await initializeProject(directory, {}, ["concept/notifying"], noSelections);
     const path = join(directory, "catalog.lock");
     const lock = JSON.parse(await readFile(path, "utf8"));
     await writeFile(path, `${JSON.stringify(edit(lock), null, 2)}\n`);
@@ -273,10 +273,10 @@ describe("catalog selection failures", () => {
       "Unknown catalog entry",
     );
     await expect(
-      addEntries(directory, ["concept/preferring", "concept/preferring"], noSelections),
+      addEntries(directory, ["concept/notifying", "concept/notifying"], noSelections),
     ).rejects.toThrow("operands must be unique");
     await expect(
-      addEntries(directory, ["concept/preferring"], {
+      addEntries(directory, ["concept/notifying"], {
         variants: new Map([["concept/profiling", "memory"]]),
       }),
     ).rejects.toThrow("not used by this install");
@@ -298,9 +298,9 @@ describe("catalog selection failures", () => {
   });
 
   test("reports missing copied files in diff", async () => {
-    await initializeProject(directory, {}, ["concept/preferring"], noSelections);
-    await rm(join(directory, "src/concepts/preferring/preferring.ts"));
-    const result = await diffEntries(directory, ["concept/preferring"]);
+    await initializeProject(directory, {}, ["concept/notifying"], noSelections);
+    await rm(join(directory, "src/concepts/notifying/notifying.ts"));
+    const result = await diffEntries(directory, ["concept/notifying"]);
     expect(result.output).toContain("(missing)");
   });
 });

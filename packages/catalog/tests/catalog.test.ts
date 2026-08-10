@@ -56,7 +56,6 @@ describe("catalog registry", () => {
     expect([...catalog.keys()].sort()).toEqual([
       "concept/authenticating",
       "concept/notifying",
-      "concept/preferring",
       "concept/profiling",
       "concept/sessioning",
       "recipe/account-center",
@@ -102,7 +101,6 @@ describe("catalog project installation", () => {
       directory,
       {
         concepts: "app/domain",
-        computations: "app/calculations",
         recipes: "app/policies",
         conceptSet: "app/system/vocabulary.ts",
         declarations: "app/generated/text.d.ts",
@@ -118,8 +116,7 @@ describe("catalog project installation", () => {
     expect(recipe).toContain('from "../system/vocabulary.ts"');
     const registrations = await readFile(join(directory, "app/generated/registrations.ts"), "utf8");
     expect(registrations).toContain("Notifying: catalogConcept0");
-    expect(registrations).toContain("Preferring: catalogConcept1");
-    expect(registrations).toContain("Profiling: catalogConcept2");
+    expect(registrations).toContain("Profiling: catalogConcept1");
     await expect(readFile(join(directory, "app/generated/text.d.ts"), "utf8")).resolves.toContain(
       'declare module "*.md"',
     );
@@ -128,7 +125,6 @@ describe("catalog project installation", () => {
     };
     expect(lock.paths).toEqual({
       concepts: "app/domain",
-      computations: "app/calculations",
       recipes: "app/policies",
       conceptSet: "app/system/vocabulary.ts",
       declarations: "app/generated/text.d.ts",
@@ -136,7 +132,7 @@ describe("catalog project installation", () => {
       composition: "app/generated/composition.ts",
     });
     expect(result.integration).toEqual([
-      "Import catalogRegistrations and catalogComputations from app/generated/registrations.ts, then pass them to conceptSet(...).",
+      "Import catalogRegistrations from app/generated/registrations.ts, then pass it to conceptSet(...).",
       "Import catalogComposition from app/generated/composition.ts, then spread it into assembled composition.",
     ]);
     await expect(readFile(join(directory, "app/system/vocabulary.ts"), "utf8")).rejects.toThrow();
@@ -293,16 +289,16 @@ describe("catalog project installation", () => {
     await initializeProject(directory, {}, [], noSelections);
     const managed = join(directory, "src/catalog/composition.generated.ts");
     await writeFile(managed, `${await readFile(managed, "utf8")}\n// edited\n`);
-    await expect(addEntries(directory, ["concept/preferring"], noSelections)).rejects.toThrow(
+    await expect(addEntries(directory, ["concept/notifying"], noSelections)).rejects.toThrow(
       "managed catalog file was edited",
     );
   });
 
   test("reports missing managed files and treats an explicit re-add as a no-op", async () => {
-    await initializeProject(directory, {}, ["concept/preferring"], noSelections);
-    const repeated = await addEntries(directory, ["concept/preferring"], noSelections);
+    await initializeProject(directory, {}, ["concept/notifying"], noSelections);
+    const repeated = await addEntries(directory, ["concept/notifying"], noSelections);
     expect(repeated.written).toEqual([]);
-    expect(repeated.alreadyInstalled).toEqual(["concept/preferring"]);
+    expect(repeated.alreadyInstalled).toEqual(["concept/notifying"]);
 
     await rm(join(directory, "src/catalog/composition.generated.ts"));
     await expect(addEntries(directory, ["concept/notifying"], noSelections)).rejects.toThrow(
@@ -311,12 +307,12 @@ describe("catalog project installation", () => {
   });
 
   test("rejects lock paths before they can affect generated imports", async () => {
-    await initializeProject(directory, {}, ["concept/preferring"], noSelections);
+    await initializeProject(directory, {}, ["concept/notifying"], noSelections);
     const lockPath = join(directory, "catalog.lock");
     const lock = JSON.parse(await readFile(lockPath, "utf8")) as {
       entries: Record<string, { integration: { registration: string } }>;
     };
-    lock.entries["concept/preferring"].integration.registration = "../../outside.ts";
+    lock.entries["concept/notifying"].integration.registration = "../../outside.ts";
     await writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
     await expect(addEntries(directory, ["concept/notifying"], noSelections)).rejects.toThrow(
       "must be a project-relative portable path",
@@ -349,7 +345,7 @@ describe("catalog project installation", () => {
   });
 
   test("validates the package manifest before forgetting entries", async () => {
-    await initializeProject(directory, {}, ["concept/preferring"], noSelections);
+    await initializeProject(directory, {}, ["concept/notifying"], noSelections);
     const lockPath = join(directory, "catalog.lock");
     const compositionPath = join(directory, "src/catalog/composition.generated.ts");
     const before = {
@@ -358,20 +354,20 @@ describe("catalog project installation", () => {
     };
     await writeFile(join(directory, "package.json"), "{");
 
-    await expect(forgetEntries(directory, ["concept/preferring"])).rejects.toThrow();
+    await expect(forgetEntries(directory, ["concept/notifying"])).rejects.toThrow();
     await expect(readFile(lockPath, "utf8")).resolves.toBe(before.lock);
     await expect(readFile(compositionPath, "utf8")).resolves.toBe(before.composition);
   });
 
   test("rejects unknown and repeated diff or forget operands", async () => {
-    await initializeProject(directory, {}, ["concept/preferring"], noSelections);
+    await initializeProject(directory, {}, ["concept/notifying"], noSelections);
     await expect(diffEntries(directory, ["concept/unknown"])).rejects.toThrow("is not tracked");
     await expect(
-      diffEntries(directory, ["concept/preferring", "concept/preferring"]),
+      diffEntries(directory, ["concept/notifying", "concept/notifying"]),
     ).rejects.toThrow("operands must be unique");
     await expect(forgetEntries(directory, ["concept/unknown"])).rejects.toThrow("is not tracked");
     await expect(
-      forgetEntries(directory, ["concept/preferring", "concept/preferring"]),
+      forgetEntries(directory, ["concept/notifying", "concept/notifying"]),
     ).rejects.toThrow("operands must be unique");
     await expect(forgetEntries(directory, [])).rejects.toThrow("requires at least one entry");
   });
@@ -404,15 +400,15 @@ describe("catalog CLI", () => {
     expect(output.join("\n")).toContain("Integrate once:");
     output.length = 0;
 
-    await runCatalog(["add", "concept/preferring"], directory, io);
-    expect(output.join("\n")).toContain("preferring.ts");
+    await runCatalog(["add", "concept/notifying"], directory, io);
+    expect(output.join("\n")).toContain("notifying.ts");
     output.length = 0;
 
-    await runCatalog(["diff", "concept/preferring"], directory, io);
+    await runCatalog(["diff", "concept/notifying"], directory, io);
     expect(output).toEqual(["No catalog differences."]);
     output.length = 0;
 
-    await runCatalog(["forget", "concept/preferring"], directory, io);
+    await runCatalog(["forget", "concept/notifying"], directory, io);
     expect(output.join("\n")).toContain("application-owned");
   });
 
@@ -427,15 +423,15 @@ describe("catalog CLI", () => {
     [["init", "--concepts", "one", "--concepts", "two"], "may appear only once"],
     [["init", "--variant", "bad"], "requires concept/<id>=<variant>"],
     [
-      ["init", "--variant", "concept/preferring=memory", "--variant", "concept/preferring=memory"],
+      ["init", "--variant", "concept/notifying=memory", "--variant", "concept/notifying=memory"],
       "--variant is repeated",
     ],
     [["init", "--file"], "--file needs a value"],
     [["init", "--file", "one.ts", "--file", "two.ts"], "--file may appear only once"],
     [["init", "--file", "one.ts"], "requires exactly one explicit recipe entry"],
-    [["init", "--variant", "concept/preferring=memory"], "not used by this install"],
+    [["init", "--variant", "concept/notifying=memory"], "not used by this install"],
     [["add"], "requires at least one entry"],
-    [["add", "concept/preferring", "--concepts", "somewhere"], "only valid with catalog init"],
+    [["add", "concept/notifying", "--concepts", "somewhere"], "only valid with catalog init"],
     [["diff", "--bad"], "Usage: catalog"],
     [["forget"], "Usage: catalog"],
     [["unknown"], "Usage: catalog"],

@@ -2,7 +2,7 @@ import { endpoint, receive, respond, type EndpointValidator } from "@mit-sdg/syn
 import { each, former, no, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
-const { Notifying, Preferring, Profiling } = concepts;
+const { Notifying, Profiling } = concepts;
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -24,17 +24,6 @@ function validator(
   return (value) => (record(value) && accepts(value) ? { ok: true } : { ok: false, detail });
 }
 
-function preferenceRow(value: unknown): boolean {
-  return (
-    record(value) &&
-    hasOnly(value, ["preference", "scope", "key", "value"]) &&
-    boundedString(value.preference, 128) &&
-    boundedString(value.scope, 128) &&
-    boundedString(value.key, 128) &&
-    boundedString(value.value, 4_096)
-  );
-}
-
 function notificationRow(value: unknown): boolean {
   return (
     record(value) &&
@@ -50,12 +39,10 @@ function notificationRow(value: unknown): boolean {
 function accountRow(value: unknown): boolean {
   return (
     record(value) &&
-    hasOnly(value, ["profile", "principal", "displayName", "preferences", "notifications"]) &&
+    hasOnly(value, ["profile", "principal", "displayName", "notifications"]) &&
     boundedString(value.profile, 128) &&
     boundedString(value.principal, 128) &&
     boundedString(value.displayName, 128) &&
-    Array.isArray(value.preferences) &&
-    value.preferences.every(preferenceRow) &&
     Array.isArray(value.notifications) &&
     value.notifications.every(notificationRow)
   );
@@ -75,25 +62,6 @@ const renameProfileInput = validator(
     boundedString(value.profile, 128) &&
     boundedString(value.displayName, 128),
   "profile and displayName must be strings between 1 and 128 characters",
-);
-
-const setPreferenceInput = validator(
-  (value) =>
-    hasOnly(value, ["profile", "scope", "key", "value"]) &&
-    boundedString(value.profile, 128) &&
-    boundedString(value.scope, 128) &&
-    boundedString(value.key, 128) &&
-    boundedString(value.value, 4_096),
-  "profile, scope, and key must be 1-128 characters and value 1-4096",
-);
-
-const clearPreferenceInput = validator(
-  (value) =>
-    hasOnly(value, ["profile", "scope", "key"]) &&
-    boundedString(value.profile, 128) &&
-    boundedString(value.scope, 128) &&
-    boundedString(value.key, 128),
-  "profile, scope, and key must be strings between 1 and 128 characters",
 );
 
 const notificationInput = validator(
@@ -124,11 +92,6 @@ const profileOutput = validator(
   "response must contain exactly one bounded profile",
 );
 
-const preferenceOutput = validator(
-  (value) => hasOnly(value, ["preference"]) && boundedString(value.preference, 128),
-  "response must contain exactly one bounded preference",
-);
-
 const notificationOutput = validator(
   (value) => hasOnly(value, ["notification"]) && boundedString(value.notification, 128),
   "response must contain exactly one bounded notification",
@@ -144,40 +107,14 @@ const profileNotFound: EndpointValidator = (value) =>
     ? { ok: true }
     : { ok: false, detail: 'error must be exactly "PROFILE_NOT_FOUND"' };
 
-const preferenceError: EndpointValidator = (value) =>
-  value === "PROFILE_NOT_FOUND" || value === "PREFERENCE_NOT_FOUND"
-    ? { ok: true }
-    : {
-        ok: false,
-        detail: 'error must be exactly "PROFILE_NOT_FOUND" or "PREFERENCE_NOT_FOUND"',
-      };
-
-/** Join a profile to its preferences and inbox without reordering query rows. */
+/** Join a concrete profile to its inbox without reordering query rows. */
 export const accountCenter = former(
   "the account center of (principal)",
-  (
-    { principal },
-    {
-      profile,
-      displayName,
-      preference,
-      scope,
-      key,
-      value,
-      notification,
-      topic,
-      subject,
-      message,
-      read,
-    },
-  ) =>
+  ({ principal }, { profile, displayName, notification, topic, subject, message, read }) =>
     where(Profiling._forPrincipal({ principal }).is({ profile, displayName })).form({
       profile,
       principal,
       displayName,
-      preferences: each(
-        Preferring._all({ owner: profile }).is({ preference, scope, key, value }),
-      ).form({ preference, scope, key, value }),
       notifications: each(
         Notifying._inbox({ recipient: profile }).is({ notification, topic, subject, message, read }),
       ).form({ notification, topic, subject, message, read }),
@@ -210,50 +147,6 @@ export const RenameProfile = endpoint(
     input: { required: ["profile", "displayName"] },
     validators: { input: renameProfileInput, output: profileOutput },
   },
-);
-
-export const SetPreference = endpoint(
-  "/account/preferences/set",
-  ({ profile, scope, key, value, preference }) =>
-    receive({ profile, scope, key, value })
-      .where(Profiling._get({ profile }))
-      .then(Preferring.set({ owner: profile, scope, key, value }).responds({ preference }))
-      .then(respond({ preference })),
-  {
-    input: { required: ["profile", "scope", "key", "value"] },
-    validators: { input: setPreferenceInput, output: preferenceOutput },
-  },
-);
-
-export const RejectUnknownPreferenceOwner = endpoint(
-  "/account/preferences/set",
-  ({ profile, scope, key, value }) =>
-    receive({ profile, scope, key, value })
-      .where(no(Profiling._get({ profile })))
-      .then(respond({ error: "PROFILE_NOT_FOUND" })),
-  { validators: { domainError: profileNotFound } },
-);
-
-export const ClearPreference = endpoint(
-  "/account/preferences/clear",
-  ({ profile, scope, key, preference }) =>
-    receive({ profile, scope, key })
-      .where(Profiling._get({ profile }))
-      .then(Preferring.clear({ owner: profile, scope, key }).responds({ preference }))
-      .then(respond({ preference })),
-  {
-    input: { required: ["profile", "scope", "key"] },
-    validators: { input: clearPreferenceInput, output: preferenceOutput },
-  },
-);
-
-export const RejectUnknownPreferenceClear = endpoint(
-  "/account/preferences/clear",
-  ({ profile, scope, key }) =>
-    receive({ profile, scope, key })
-      .where(no(Profiling._get({ profile })))
-      .then(respond({ error: "PROFILE_NOT_FOUND" })),
-  { validators: { domainError: preferenceError } },
 );
 
 /** Trusted service delivery; adapters must bind profile from authorized context. */
