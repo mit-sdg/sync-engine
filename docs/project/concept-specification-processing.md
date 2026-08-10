@@ -101,9 +101,10 @@ retains structured input and result declarations plus a compatibility `inputs`
 name list. Duplicate fields, missing types or results, and trailing text fail at
 the source line and column.
 
-Action names are ASCII-style identifiers without a leading `_` and resolve with
-`return`. Query names begin with `_` and resolve with `one`, `optional`, or
-`many`. Names must be unique within their declaration fence.
+Action names match `[A-Za-z][A-Za-z0-9_]*` and resolve with `return`. Query
+names match `_[A-Za-z0-9_]*` and resolve with `one`, `optional`, or `many`; `_`
+alone is therefore a valid query name. Names must be unique within their
+declaration fence.
 
 Action body lines beginning with the literal text `refuse ` must match a code
 followed by a JSON-compatible quoted string. Messages are decoded, must be
@@ -150,11 +151,14 @@ perform `registerConcept` conformance checks.
 
 ### `sync-engine check`
 
-The command discovers `spec.md`, reads the neighboring `registry.ts`, finds a
-`registerConcept` class supplied by a direct named import, and resolves that
-import relative to the registry. The target file must directly declare the
-class. The checker compares direct, non-static, non-TypeScript-`private` methods
-with parsed action/query names.
+The command discovers `spec.md`, reads the neighboring `registry.ts`, and finds
+the class identifier passed to `registerConcept`. That identifier must be a
+named import whose local name matches a class declared directly in the target
+file. The checker resolves the import path relative to the registry without
+TypeScript module resolution, support for aliased imports, or re-export
+traversal.
+It compares direct, non-static, non-TypeScript-`private` methods with parsed
+action/query names.
 
 `checkerFor` loads the nearest `tsconfig.json`, preserving compiler options,
 module resolution, paths, and project references. Config-included concepts share
@@ -171,13 +175,14 @@ finite records. Resolution distributes unions and intersections as key-set
 alternatives. An intersection combines each possible set; a union is accepted
 only when every final alternative has the same keys.
 
-Resolution is cycle-safe and bounded to 32 operations and 64 alternatives. It
-fails closed for differing alternatives, open index signatures, unresolved or
-generic mapped shapes, `any`, `unknown`, primitives, arrays, callables, and
-invalid parameter lists. `Record<string, never>` contributes no keys, while
-`Record<"known", never>` contributes its finite key. Diagnostics retain the
-parameter type, first unsupported operation, declaration location, relevant
-TypeScript diagnostic, and differing key sets.
+Resolution is cycle-safe and bounded to an expansion depth of 32 and 64
+generated alternatives. It fails closed for differing alternatives, open index
+signatures, unresolved or generic mapped shapes, `any`, `unknown`, primitives,
+arrays, callables, and invalid parameter lists. `Record<string, never>`
+contributes no keys, while `Record<"known", never>` contributes its finite key.
+
+Diagnostics retain the parameter type, first unsupported operation, declaration
+location, relevant TypeScript diagnostic, and differing key sets.
 
 The checker does not traverse base classes. Runtime registration can therefore
 accept an inherited member that the source checker rejects.
@@ -238,13 +243,13 @@ them.
 
 ## Known gaps
 
-| Current behavior                                        | Consequence                                         |
-| ------------------------------------------------------- | --------------------------------------------------- |
-| Named specification types are not resolved              | Parsed references do not prove a declaration exists |
-| Runtime role recovery reads function text               | Runtime registration can skip an erased comparison  |
-| Registration sees inheritance; source checking does not | The two checks can disagree on inherited members    |
-| Direct query roots bypass `queryRows`                   | Cardinality enforcement depends on the call path    |
-| Parsed action bodies are not interpreted                | Conditions and effects require implementation tests |
+| Current behavior                                        | Consequence                                           |
+| ------------------------------------------------------- | ----------------------------------------------------- |
+| Named specification types are not resolved              | Parsed references do not prove a declaration exists   |
+| Runtime role recovery reads function text               | Runtime registration can skip an erased comparison    |
+| Registration sees inheritance; source checking does not | The two checks can disagree on inherited members      |
+| Direct query roots bypass `queryRows`                   | Cardinality enforcement depends on the call path      |
+| Parsed action bodies are not interpreted                | Conditions and effects require implementation tests   |
 | State has no parsed representation                      | State claims require implementation and backend tests |
 
 ## Verification ownership

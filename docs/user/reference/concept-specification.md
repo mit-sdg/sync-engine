@@ -63,7 +63,7 @@ expressions, results, or prose.
 
 | Layer                              | Establishes                                                                    |
 | ---------------------------------- | ------------------------------------------------------------------------------ |
-| Specification parser               | Complete declaration syntax, descriptions, promises, refusals, and locations   |
+| Specification parser               | Accepted declaration syntax, descriptions, promises, refusals, and locations   |
 | `registerConcept`                  | Agreement with callable methods, recoverable input names, and refusal mappings |
 | `sync-engine check`                | Agreement with direct class methods and supported TypeScript input shapes      |
 | Engine-evaluated reads             | Query result container and declared cardinality                                |
@@ -112,21 +112,24 @@ and common indentation are removed.
 Action and query signatures use the following independent grammar:
 
 ```text
-action       = name "(" fields? ")" ":" "return" result
-query        = "_" name "(" fields? ")" ":" promise result
+action       = action-name "(" fields? ")" ":" "return" result
+query        = query-name "(" fields? ")" ":" promise result
 fields       = field ("," field)*
-field        = name "?"? ":" type
+field        = identifier "?"? ":" type
 result       = "(" fields? ")" | type
 promise      = "one" | "optional" | "many"
 type         = named-type | "null" | "undefined" | "(" type ")" | type "|" type
 named-type   = qualified-name ("<" type ("," type)* ">")?
+identifier   = (ASCII letter | "_") (ASCII letter | digit | "_")*
+action-name  = ASCII letter (ASCII letter | digit | "_")*
+query-name   = "_" (ASCII letter | digit | "_")*
 ```
 
-Names are ASCII JavaScript-style identifiers. A qualified type name joins such
-identifiers with dots. Commas inside generic arguments and delimiters inside
-parenthesized types do not split the surrounding field list. The parser retains
-field names, optionality, type structure, result structure, and one-based source
-locations. It does not resolve a type name against TypeScript or validate values
+A qualified type name joins `identifier` values with dots. An action name cannot
+begin with `_`; a query name may be `_` alone. Commas inside generic arguments
+and delimiters inside parenthesized types do not split the surrounding field
+list. The parser retains field names, optionality, type structure, result
+structure, and one-based source locations. It does not resolve a type name against TypeScript or validate values
 at runtime.
 
 ## Documentation sections
@@ -161,12 +164,12 @@ paragraph creates another description that can become inconsistent.
 
 | Invariant                       | Where it is already stated                            |
 | ------------------------------- | ----------------------------------------------------- |
-| A bound or accepted format      | The `where` branch that refuses the values outside it |
+| A limit or accepted format      | The `where` branch that refuses the values outside it |
 | Uniqueness                      | The `where` branch that refuses the duplicate         |
 | Ordering                        | A `seq` in the fence and the query's `answers` line   |
 | Absence for an unknown input    | The query's `answers` line                            |
 | A lifetime, delay, or threshold | The `then` line of the action that sets it            |
-| Permanence, or no reversal      | No declared transition removes the entity             |
+| Permanence or no reversal       | No declared transition removes the entity             |
 | An unrestricted input           | The action declares no `where` branch that rejects it |
 
 Do not repeat these statements in prose. Use prose only for facts that the
@@ -275,11 +278,11 @@ _membership (gathering: Gathering, member: Person) : one (joined: Boolean)
 
 A query name must begin with `_`. Its promise is one of:
 
-| Promise    | Implementation result                         | Runtime check                                 |
-| ---------- | --------------------------------------------- | --------------------------------------------- |
-| `one`      | one record                                    | exactly one record                            |
-| `optional` | an array containing zero or one record        | no more than one record                       |
-| `many`     | an array containing any number of record rows | every element is a non-null, non-array object |
+| Promise    | Implementation result                     | Runtime check                                 |
+| ---------- | ----------------------------------------- | --------------------------------------------- |
+| `one`      | one non-null, non-array object            | exactly one object                            |
+| `optional` | an array containing zero or one object    | at most one object                            |
+| `many`     | an array containing any number of objects | every element is a non-null, non-array object |
 
 The parser records the structured inputs, promise, inline row fields or result
 type expression, and normalized body. Registration does not interpret query
@@ -335,14 +338,17 @@ input-name comparison.
 ## `sync-engine check` checks
 
 `sync-engine check` reads `spec.md`, `registry.ts`, and the registered class's
-TypeScript source. `registry.ts` must use a named import whose module specifier
-resolves as a filesystem path to the source file that declares the class.
-Relative paths are resolved from `registry.ts`; absolute paths remain absolute.
-Class discovery does not use TypeScript module resolution or follow re-export
-chains. The checker compares methods declared directly in that class with the
-action and query names. It does not traverse a base class, so a specification
-relying on an inherited method can pass `registerConcept` while failing the
-source check.
+TypeScript source. The class identifier passed to `registerConcept` must be a
+named import, and its local name must match the class declaration in the target
+file. The import's module specifier must resolve directly to that file as a
+filesystem path. Relative paths are resolved from `registry.ts`; absolute paths
+remain absolute. Class discovery does not use TypeScript module resolution,
+aliased imports, or re-export chains. The checker compares methods declared
+directly in that class with the action and query names.
+
+The checker does not traverse base classes. A specification relying on an
+inherited method can therefore pass `registerConcept` while failing the source
+check.
 
 Supported method parameter forms are:
 
@@ -364,9 +370,9 @@ parameters, plain untyped parameters, and nested or rest destructuring. A
 failure names the method and parameter type, first unsupported operation,
 declaration location, and alternative key sets when applicable.
 
-Type resolution is limited to 32 expansion operations and 64 alternative key
-sets. Exceeding either limit fails the check rather than accepting an incomplete
-shape.
+Type resolution is limited to an expansion depth of 32 and 64 generated
+alternative key sets. Exceeding either limit fails the check rather than
+accepting an incomplete shape.
 
 The checker loads the nearest `tsconfig.json`, uses its module resolution and
 path mappings, and adds the concept source when the config excludes it. Without
