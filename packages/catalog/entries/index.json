@@ -14,6 +14,7 @@
   "concept/approving/manifest.json",
   "concept/sessioning/manifest.json",
   "concept/authenticating/manifest.json",
+  "concept/auditing/manifest.json",
   "recipe/workshop-selection/manifest.json",
   "recipe/member-reservations/manifest.json",
   "recipe/ranked-discussion/manifest.json",

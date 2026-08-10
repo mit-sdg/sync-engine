@@ -146,7 +146,7 @@ export const workspaceCatalog = [
       "dist/command.js",
       "dist/entries/index.json",
     ],
-    packageBudget: { files: 200, packedBytes: 500_000, unpackedBytes: 2_000_000 },
+    packageBudget: { files: 220, packedBytes: 500_000, unpackedBytes: 2_000_000 },
     assets: [{ source: "entries", destination: "dist/entries", exclude: ["_typecheck"] }],
     bins: ["dist/command.js"],
   },

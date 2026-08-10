@@ -20,6 +20,7 @@ describe("catalog registry", () => {
       "concept/approving",
       "concept/sessioning",
       "concept/authenticating",
+      "concept/auditing",
       "recipe/workshop-selection",
       "recipe/member-reservations",
       "recipe/ranked-discussion",

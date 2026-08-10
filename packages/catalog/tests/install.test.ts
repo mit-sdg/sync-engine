@@ -367,6 +367,40 @@ describe("catalog installer", () => {
   );
 
   test.each(["memory", "mongo"] as const)(
+    "copies and typechecks Auditing on the %s floor",
+    async (floor) => {
+      const dependencies: Record<string, string> = {
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "vite-plus": "0.2.6",
+      };
+      if (floor === "mongo") dependencies.mongodb = "6.21.0";
+      const root = await fixture(dependencies);
+      try {
+        const result = await addEntries(await CatalogRegistry.load(), ["concept/auditing"], {
+          root,
+          floor,
+          originalCommand: `catalog add concept/auditing --floor ${floor}`,
+        });
+        expect(result.written).toContain(`src/concepts/auditing/auditing.${floor}.ts`);
+        expect(
+          result.written.includes("src/concepts/auditing/auditing.mongo.concurrent.test.ts"),
+        ).toBe(floor === "mongo");
+        expect(
+          result.written.some((path) => path.includes(floor === "memory" ? "mongo" : "memory")),
+        ).toBe(false);
+        const registry = await readFile(join(root, "src/concepts/auditing/registry.ts"), "utf8");
+        expect(registry).toContain(
+          `class: Auditing${floor === "memory" ? "Memory" : "Mongo"}Concept`,
+        );
+        expect(registry).not.toContain(floor === "memory" ? "Mongo" : "Memory");
+        await expectTypechecks(root);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.each(["memory", "mongo"] as const)(
     "copies and typechecks the security concepts on the %s floor",
     async (floor) => {
       const root = await fixture({
