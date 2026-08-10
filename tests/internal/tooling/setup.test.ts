@@ -27,6 +27,8 @@ describe("sync-engine setup", () => {
         "src/main.ts",
       ]);
       expect(await readFile(join(root, "src/concept-set.ts"), "utf8")).toContain("conceptSet({})");
+      expect(await readFile(join(root, "tsconfig.json"), "utf8")).toContain('"types": ["node"]');
+      expect(first.guidance.join("\n")).toContain("@types/node");
       const second = await setupProject(root);
       expect(second.written).toEqual([]);
       expect(second.verified).toHaveLength(6);
@@ -91,6 +93,14 @@ describe("sync-engine setup", () => {
       "an incompatible core version",
       JSON.stringify({ dependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.6" } }),
       "must be declared at",
+    ],
+    [
+      "conflicting @types/node declarations",
+      JSON.stringify({
+        dependencies: { "@types/node": "24.0.0" },
+        devDependencies: { "@types/node": "^24.0.0" },
+      }),
+      "conflicting @types/node",
     ],
     [
       "conflicting TypeScript declarations",

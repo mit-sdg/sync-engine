@@ -91,6 +91,7 @@ function dependencyGuidance(
   manifest: Record<string, unknown>,
   version: string,
   typescriptRange: string,
+  nodeTypesRange: string,
 ): string[] {
   const all = ["dependencies", "devDependencies", "peerDependencies"].flatMap((key) => {
     const value = manifest[key];
@@ -112,6 +113,13 @@ function dependencyGuidance(
   else if (core[0] !== version)
     throw new Error(
       `sync-engine setup: @mit-sdg/sync-engine must be declared at ${version}; found ${core[0]}.`,
+    );
+  const nodeTypes = requirements("@types/node");
+  if (new Set(nodeTypes).size > 1)
+    throw new Error("sync-engine setup: conflicting @types/node package declarations.");
+  if (nodeTypes.length === 0)
+    guidance.push(
+      `Development dependency required: bun add --dev --exact @types/node@"${nodeTypesRange}"`,
     );
   const typescript = requirements("typescript");
   if (new Set(typescript).size > 1)
@@ -160,7 +168,11 @@ export async function setupProject(directory = "."): Promise<SetupResult> {
   );
   const packageManifest = JSON.parse(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
-  ) as { version: string; dependencies: { typescript: string } };
+  ) as {
+    version: string;
+    dependencies: { typescript: string };
+    devDependencies: { "@types/node": string };
+  };
   const source = await templates();
   const existing = new Map<string, string>();
   for (const path of source.keys()) {
@@ -174,6 +186,7 @@ export async function setupProject(directory = "."): Promise<SetupResult> {
     manifest,
     packageManifest.version,
     packageManifest.dependencies.typescript,
+    packageManifest.devDependencies["@types/node"],
   );
   for (const [path, contents] of source) {
     const current = existing.get(path);

@@ -12,6 +12,7 @@ describe("catalog project analysis", () => {
       const result = await readProject(root);
       expect(result.guidance.join("\n")).toContain("sync-engine setup");
       expect(result.guidance.join("\n")).toContain("tsconfig.json");
+      expect(result.guidance.join("\n")).toContain("Markdown imports as text");
       expect((await integrationGuidance(root, "memory")).join("\n")).toContain(
         'implementations("memory", {})',
       );
@@ -30,6 +31,7 @@ describe("catalog project analysis", () => {
       );
       await writeFile(join(root, "tsconfig.json"), '{"include":["tests"]}\n');
       await writeFile(join(root, "generated.config.ts"), "export default {};\n");
+      await writeFile(join(root, "vite.config.ts"), "export default {};\n");
       await writeFile(
         join(root, "src/concept-set.ts"),
         'import { catalogRegistrations } from "./catalog/registrations.generated.ts";\nexport const registrations = { ...catalogRegistrations };\n',
@@ -44,6 +46,7 @@ describe("catalog project analysis", () => {
       );
       const project = await readProject(root);
       expect(project.guidance.join("\n")).toContain("does not appear to cover");
+      expect(project.guidance.join("\n")).not.toContain("Markdown imports as text");
       const guidance = await integrationGuidance(root, "mongo");
       expect(guidance).toEqual(["Selected catalog floor: mongo"]);
       await writeFile(join(root, "tsconfig.json"), "not json\n");

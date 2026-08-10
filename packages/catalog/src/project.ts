@@ -59,6 +59,19 @@ export async function readProject(
       "Integration required: generated.config.ts must point at the application assembly.",
     );
   }
+  const viteConfigs = [
+    "vite.config.ts",
+    "vite.config.js",
+    "vite.config.mts",
+    "vite.config.mjs",
+    "vite.config.cts",
+    "vite.config.cjs",
+  ];
+  if (!viteConfigs.some((path) => existsSync(`${root}/${path}`)))
+    guidance.push(`Integration required: Vite must load catalog Markdown imports as text. Create vite.config.ts with:
+  import { readFileSync } from "node:fs";
+  import { defineConfig } from "vite-plus";
+  export default defineConfig({ plugins: [{ name: "catalog-markdown-as-text", enforce: "pre", load(id: string) { return id.endsWith(".md") ? \`export default \${JSON.stringify(readFileSync(id, "utf8"))};\` : null; } }] });`);
   const scripts =
     typeof manifest.scripts === "object" && manifest.scripts !== null
       ? (manifest.scripts as Record<string, unknown>)
