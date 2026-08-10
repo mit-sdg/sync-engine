@@ -133,6 +133,86 @@ not extension blocks. State remains deliberately excluded. Documentation blocks
 do not add registration or runtime semantics; use tests to establish any claim
 they make.
 
+## Writing conventions
+
+The grammar accepts documents that are syntactically valid but incomplete or
+unclear as concept descriptions. The parser does not enforce the conventions in
+this section. The shipped examples follow them, and the [design review
+procedure](../guide/reviewing-a-design.md#2-review-each-concept) asks reviewers
+to apply them.
+
+A specification must stand on its own for a reader who cannot inspect the
+implementation class. Its declarations must state every observable rule; nearby
+prose is not a substitute for a missing declaration.
+
+**Let the notation carry the invariant.** The state fence, `where` branches, and
+query bodies state most concept guarantees. Repeating those guarantees in a
+paragraph creates another description that can become inconsistent.
+
+| Invariant                       | Where it is already stated                            |
+| ------------------------------- | ----------------------------------------------------- |
+| A bound or accepted format      | The `where` branch that refuses the values outside it |
+| Uniqueness                      | The `where` branch that refuses the duplicate         |
+| Ordering                        | A `seq` in the fence and the query's `answers` line   |
+| Absence for an unknown input    | The query's `answers` line                            |
+| A lifetime, delay, or threshold | The `then` line of the action that sets it            |
+| Permanence, or no reversal      | No declared transition removes the entity             |
+| An unrestricted input           | The action declares no `where` branch that rejects it |
+
+Do not repeat these statements in prose. Use prose only for facts that the
+declarations cannot express.
+
+**State the value, not a label for the value.** Write `where content is blank or
+longer than 500 characters`, not `where content is longer than the accepted
+message bound`. Write `expiring 30 minutes from now`, not `with a bounded
+expiry`. A declaration that names but does not state a bound forces the reader
+to find the value elsewhere.
+
+**Make each refusal sentence match its action condition.** The sentence is the
+caller-visible contract and the registered detail. `"Post content must contain 1
+to 500 non-whitespace characters."` does not match a rule that rejects blank
+content or content longer than 500 characters.
+
+**Declare the row a query actually returns.** The engine checks a query's result
+container and cardinality, but not its fields. An implementation can therefore
+return fields omitted by the declaration. Project the result to the declared
+fields instead of widening the declaration to expose a convenient internal
+record.
+
+**Describe the concept, not one implementation.** Storage choices, process
+lifetime, and qualifications such as "in this small implementation" belong in
+the application documentation.
+
+### Where each statement belongs
+
+| Statement                                                                            | Section                   |
+| ------------------------------------------------------------------------------------ | ------------------------- |
+| Why the concept exists and what its absence would cost                               | `Purpose`                 |
+| One concrete scenario using only this concept's own actions and queries              | `Principle`               |
+| The owned facts themselves                                                           | `State`                   |
+| The precondition, effect, and refusal of each transition                             | `Actions`                 |
+| What a query answers, in what order, and what it answers when nothing matches        | The query's indented body |
+| What each type name is: allocated identity, opaque external identity, or owned value | `Types`                   |
+| What the concept deliberately does not decide                                        | `Scope`                   |
+
+Give each name one classification in `Types`, without an accompanying
+explanation. "`Subject` is an opaque external identity" classifies `Subject`.
+"Sessioning stores it without creating or interpreting it" repeats what
+"external identity" means.
+
+Choose a section according to the statement's subject, not according to the
+generated output. The parser discards `State`, so it does not appear in generated
+read-back. `Types` and the other extension blocks do appear. This difference
+does not move state descriptions into another section.
+
+### Notation in prose
+
+Use backticks for identity and domain values: subject `ari`, target `topic-7`.
+Use quotation marks for content the concept owns as a `String`: Ari publishes
+"First post." Use plain text for a person or object outside the concept: Asha
+creates Saturday Workshop. Quotation marks around an opaque identity incorrectly
+present the identity as string content.
+
 ## Action declarations
 
 An `actions` fence contains zero or more left-aligned signatures. Indented lines

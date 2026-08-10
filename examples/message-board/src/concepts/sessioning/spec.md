@@ -7,9 +7,11 @@ can end without changing that subject's identity.
 
 ## Principle
 
-Ari starts a session for subject `ari`. Before its expiry, the session resolves
-to `ari`. Ending it makes it unknown. An invented or expired session is also
-refused and does not resolve to a subject.
+Ari starts a session for subject `ari`. Before the session expires, `_active`
+returns a row whose subject is `ari`, and `current` resolves the session to
+`ari`. Ending the session makes it unknown, so another `current` call is
+refused. An invented or expired session is refused in the same way, and
+`_active` returns no row for it.
 
 ## State
 
@@ -24,13 +26,14 @@ a set of Sessions with
 ```actions
 start (subject: Subject) : return (session: Session, expiresAt: Time)
   then
-    add a new opaque session for subject with a bounded expiry
+    delete every expired session
+    add a new opaque session for subject expiring 30 minutes from now
     return session and expiresAt
 
 current (session: Session) : return (subject: Subject)
   where session is unknown, ended, or expired
   then
-    delete session if expired
+    delete the session if it is expired
     refuse UNKNOWN_SESSION "This session is not active."
   where session is active
   then
@@ -39,7 +42,7 @@ current (session: Session) : return (subject: Subject)
 end (session: Session) : return (ended: Flag)
   where session is unknown, ended, or expired
   then
-    delete session if expired
+    delete the session if it is expired
     refuse UNKNOWN_SESSION "This session is not active."
   where session is active
   then
@@ -57,5 +60,5 @@ _active (session: Session) : optional (subject: Subject, expiresAt: Time)
 
 ## Types
 
-`Subject` is a generic external identity. Sessioning stores it without creating
-or interpreting it.
+`Session` is an opaque identity allocated by Sessioning. `Subject` is an opaque
+external identity. `Time` is an absolute instant.

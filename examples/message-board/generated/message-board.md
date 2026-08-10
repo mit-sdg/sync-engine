@@ -13,9 +13,10 @@ _specifications and composition source, then regenerate this file._
 **Purpose.** Establish a username from a password, so an identity claim alone cannot act as
 proof of identity.
 
-**Principle.** Ari registers username `ari` with a password. A duplicate registration is
-refused. A wrong password is refused. The right password authenticates Ari as
-`ari` without revealing the stored password verifier.
+**Principle.** Ari registers username `ari` with a password. `_registered` then reports `ari`
+as registered, and another registration of `ari` is refused.
+Authenticating `ari` with the wrong password is refused. The correct password
+authenticates Ari as `ari`, returning only the username.
 
 _Registration checks member names, recoverable input names, and refusal mappings._
 _Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
@@ -26,7 +27,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Authored behavior:**
 
-    where username is malformed
+    where username is not 3 to 32 letters, digits, underscores, or hyphens
     then
       refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
     where password is shorter than 8 characters or longer than 128 characters
@@ -37,7 +38,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
       refuse USERNAME_TAKEN "That username is already registered."
     where username and password are accepted
     then
-      store a password verifier for username
+      add a new account with username, a fresh salt, and a verifier derived from password and that salt
       return username
 
 **Registered refusal codes:** `INVALID_USERNAME`, `WEAK_PASSWORD`, `USERNAME_TAKEN`
@@ -63,15 +64,22 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
     answers false for an unknown Username
 
+#### Types
+
+`Username` is a caller-chosen account name. `Password` is transient input.
+`Salt` is a fresh per-account value. `Secret` is a one-way verifier derived from
+a password and that account's salt.
+
 ### Commenting
 
-**Purpose.** Attach authored external content identities to external targets in arrival order
-and let their author retract them, so those associations have a visible lifecycle.
+**Purpose.** Attach authored external content identities to a target in arrival order and
+let only the author retract each attachment, so no other author can remove it.
 
-**Principle.** Ari attaches content identity “reply-42” to target “topic-7,” and Bo attaches
-“reply-43.” Both attachments are listed in arrival order. Ari retracts the first.
-Bo cannot retract Ari's attachment, and retracting an unknown attachment is
-refused; either refusal leaves the attachments unchanged.
+**Principle.** Ari attaches content `reply-42` to target `topic-7` and receives comment
+`comment-1`. Bo attaches `reply-43` to the same target. Both attachments are
+listed for `topic-7` in arrival order. Bo's attempt to retract `comment-1` is
+refused, leaving both attachments. Ari retracts `comment-1`; a second attempt is
+refused because the comment is unknown, and only Bo's attachment remains.
 
 _Registration checks member names, recoverable input names, and refusal mappings._
 _Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
@@ -109,21 +117,23 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Authored behavior:**
 
-    answers in attachment order
+    answers in arrival order
+    answers no rows for a target with no comments
 
 #### Types
 
-`Target`, `Author`, and `Content` are generic external identities. Commenting
-owns only their ordered attachment, not the facts identified by those values.
+`Comment` is an identity Commenting allocates for each attachment. `Target`,
+`Author`, and `Content` are opaque external identities.
 
 ### Posting
 
-**Purpose.** Publish authored string messages in arrival order, so contributions remain visible
-without depending on an external content store.
+**Purpose.** Publish authored messages in publication order, so a contribution stays visible
+and attributed without depending on an external content store.
 
-**Principle.** Ari publishes “First post” and Bo publishes “Second post.” Both messages are
-listed in publication order with their authors. An empty message is refused and
-nothing is added.
+**Principle.** Ari publishes "First post" and Bo publishes "Second post." Both posts are listed
+in publication order with their authors, and each post can be read by its
+identity. Publishing a blank message or one longer than 500 characters is
+refused and does not add a post.
 
 _Registration checks member names, recoverable input names, and refusal mappings._
 _Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
@@ -134,9 +144,9 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 **Authored behavior:**
 
-    where content is empty or longer than the accepted message bound
+    where content is blank or longer than 500 characters
     then
-      refuse INVALID_POST_CONTENT "Post content must contain 1 to 500 non-whitespace characters."
+      refuse INVALID_POST_CONTENT "Post content must not be blank and must be at most 500 characters."
     where content is accepted
     then
       add a new post with author and content
@@ -160,9 +170,8 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Types
 
-`Author` is a generic external identity. Posting neither creates nor
-authenticates it. `String` content belongs to Posting. Posts are retained
-permanently in this small implementation.
+`Post` is an identity Posting allocates for each published message. `Author` is
+an opaque external identity. A post's `String` content is owned by Posting.
 
 ### RequestBoundary
 
@@ -180,9 +189,11 @@ Actions:
 **Purpose.** Keep a short-lived opaque session for an external subject, so temporary access
 can end without changing that subject's identity.
 
-**Principle.** Ari starts a session for subject `ari`. Before its expiry, the session resolves
-to `ari`. Ending it makes it unknown. An invented or expired session is also
-refused and does not resolve to a subject.
+**Principle.** Ari starts a session for subject `ari`. Before the session expires, `_active`
+returns a row whose subject is `ari`, and `current` resolves the session to
+`ari`. Ending the session makes it unknown, so another `current` call is
+refused. An invented or expired session is refused in the same way, and
+`_active` returns no row for it.
 
 _Registration checks member names, recoverable input names, and refusal mappings._
 _Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
@@ -194,7 +205,8 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 **Authored behavior:**
 
     then
-      add a new opaque session for subject with a bounded expiry
+      delete every expired session
+      add a new opaque session for subject expiring 30 minutes from now
       return session and expiresAt
 
 ##### `current (session: Session) : return (subject: Subject)`
@@ -203,7 +215,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
     where session is unknown, ended, or expired
     then
-      delete session if expired
+      delete the session if it is expired
       refuse UNKNOWN_SESSION "This session is not active."
     where session is active
     then
@@ -217,7 +229,7 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
     where session is unknown, ended, or expired
     then
-      delete session if expired
+      delete the session if it is expired
       refuse UNKNOWN_SESSION "This session is not active."
     where session is active
     then
@@ -237,8 +249,8 @@ _Engine-evaluated reads enforce query cardinality. Types, results, and behavior 
 
 #### Types
 
-`Subject` is a generic external identity. Sessioning stores it without creating
-or interpreting it.
+`Session` is an opaque identity allocated by Sessioning. `Subject` is an opaque
+external identity. `Time` is an absolute instant.
 
 ## Formers
 
@@ -262,64 +274,6 @@ Former "the message board" — inputs (); bindings (post, author, content, comme
 
 ## Reactions
 
-### AddComment
-
-```reaction
-when RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
-then
-  Sessioning.current (session)
-```
-
-### AddComment:post-exists#2
-
-```reaction
-when Sessioning.current (session, subject: username), asked by AddComment
-where
-  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
-  Posting._get (post: target)
-then
-  Commenting.add (author: username, content, target)
-```
-
-### AddComment:post-exists#3
-
-```reaction
-when Commenting.add (author: username, content, target, comment), asked by AddComment:post-exists#2
-where
-  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
-then
-  RequestBoundary.respond (comment, requestId)
-```
-
-### AddComment:post-missing#2
-
-```reaction
-when Sessioning.current (session, subject: username), asked by AddComment
-where
-  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
-  no Posting._get (post: target)
-then
-  RequestBoundary.respond (error: "POST_NOT_FOUND", requestId)
-```
-
-### CurrentUser
-
-```reaction
-when RequestBoundary.request (path: "/auth/current", requestId, session)
-then
-  Sessioning.current (session)
-```
-
-### CurrentUser#2
-
-```reaction
-when Sessioning.current (session, subject: username), asked by CurrentUser
-where
-  earlier, RequestBoundary.request (path: "/auth/current", requestId, session)
-then
-  RequestBoundary.respond (requestId, username)
-```
-
 ### DeliverFaultToAsker
 
 ```reaction
@@ -340,7 +294,47 @@ then
   RequestBoundary.respond (error: message, requestId)
 ```
 
-### ListBoard
+### board.AddComment
+
+```reaction
+when RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
+then
+  Sessioning.current (session)
+```
+
+### board.AddComment:post-exists#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by board.AddComment
+where
+  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
+  Posting._get (post: target)
+then
+  Commenting.add (author: username, content, target)
+```
+
+### board.AddComment:post-exists#3
+
+```reaction
+when Commenting.add (author: username, content, target, comment), asked by board.AddComment:post-exists#2
+where
+  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
+then
+  RequestBoundary.respond (comment, requestId)
+```
+
+### board.AddComment:post-missing#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by board.AddComment
+where
+  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
+  no Posting._get (post: target)
+then
+  RequestBoundary.respond (error: "POST_NOT_FOUND", requestId)
+```
+
+### board.ListBoard
 
 ```reaction
 when RequestBoundary.request (path: "/board/list", requestId, session)
@@ -348,17 +342,17 @@ then
   Sessioning.current (session)
 ```
 
-### ListBoard#2
+### board.ListBoard#2
 
 ```reaction
-when Sessioning.current (session, subject: username), asked by ListBoard
+when Sessioning.current (session, subject: username), asked by board.ListBoard
 where
   earlier, RequestBoundary.request (path: "/board/list", requestId, session)
 then
   RequestBoundary.respond (board: former "the message board", requestId)
 ```
 
-### PublishPost
+### board.PublishPost
 
 ```reaction
 when RequestBoundary.request (content, path: "/board/post", requestId, session)
@@ -366,27 +360,73 @@ then
   Sessioning.current (session)
 ```
 
-### PublishPost#2
+### board.PublishPost#2
 
 ```reaction
-when Sessioning.current (session, subject: username), asked by PublishPost
+when Sessioning.current (session, subject: username), asked by board.PublishPost
 where
   earlier, RequestBoundary.request (content, path: "/board/post", requestId, session)
 then
   Posting.publish (author: username, content)
 ```
 
-### PublishPost#3
+### board.PublishPost#3
 
 ```reaction
-when Posting.publish (author: username, content, post), asked by PublishPost#2
+when Posting.publish (author: username, content, post), asked by board.PublishPost#2
 where
   earlier, RequestBoundary.request (content, path: "/board/post", requestId, session)
 then
   RequestBoundary.respond (post, requestId)
 ```
 
-### Register
+### board.RetractComment
+
+```reaction
+when RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### board.RetractComment#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by board.RetractComment
+where
+  earlier, RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
+then
+  Commenting.retract (author: username, comment)
+```
+
+### board.RetractComment#3
+
+```reaction
+when Commenting.retract (author: username, comment), asked by board.RetractComment#2
+where
+  earlier, RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
+then
+  RequestBoundary.respond (comment, requestId)
+```
+
+### sessions.CurrentUser
+
+```reaction
+when RequestBoundary.request (path: "/auth/current", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### sessions.CurrentUser#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by sessions.CurrentUser
+where
+  earlier, RequestBoundary.request (path: "/auth/current", requestId, session)
+then
+  RequestBoundary.respond (requestId, username)
+```
+
+### sessions.Register
 
 ```reaction
 when RequestBoundary.request (password, path: "/auth/register", requestId, username)
@@ -394,25 +434,25 @@ then
   Authenticating.register (password, username)
 ```
 
-### Register#2
+### sessions.Register#2
 
 ```reaction
-when Authenticating.register (password, username), asked by Register
+when Authenticating.register (password, username), asked by sessions.Register
 then
   Sessioning.start (subject: username)
 ```
 
-### Register#3
+### sessions.Register#3
 
 ```reaction
-when Sessioning.start (subject: username, expiresAt, session), asked by Register#2
+when Sessioning.start (subject: username, expiresAt, session), asked by sessions.Register#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/register", requestId, username)
 then
   RequestBoundary.respond (expiresAt, requestId, session, username)
 ```
 
-### SignIn
+### sessions.SignIn
 
 ```reaction
 when RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
@@ -420,25 +460,25 @@ then
   Authenticating.authenticate (password, username)
 ```
 
-### SignIn#2
+### sessions.SignIn#2
 
 ```reaction
-when Authenticating.authenticate (password, username), asked by SignIn
+when Authenticating.authenticate (password, username), asked by sessions.SignIn
 then
   Sessioning.start (subject: username)
 ```
 
-### SignIn#3
+### sessions.SignIn#3
 
 ```reaction
-when Sessioning.start (subject: username, expiresAt, session), asked by SignIn#2
+when Sessioning.start (subject: username, expiresAt, session), asked by sessions.SignIn#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
 then
   RequestBoundary.respond (expiresAt, requestId, session, username)
 ```
 
-### SignOut
+### sessions.SignOut
 
 ```reaction
 when RequestBoundary.request (path: "/auth/sign-out", requestId, session)
@@ -446,10 +486,10 @@ then
   Sessioning.end (session)
 ```
 
-### SignOut#2
+### sessions.SignOut#2
 
 ```reaction
-when Sessioning.end (session, ended: signedOut), asked by SignOut
+when Sessioning.end (session, ended: signedOut), asked by sessions.SignOut
 where
   earlier, RequestBoundary.request (path: "/auth/sign-out", requestId, session)
 then
@@ -470,3 +510,4 @@ not listed here have no explicit input contract.
 - `/board/comment` — requires `session`, `target`, `content`
 - `/board/list` — requires `session`
 - `/board/post` — requires `session`, `content`
+- `/board/retract-comment` — requires `session`, `comment`

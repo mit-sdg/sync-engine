@@ -79,7 +79,13 @@ formats are implementation choices unless they alter the observable contract.
 
 The optional `State` section in a concept specification is notation for readers;
 registration derives no schema or validator from it. See [State
-notation](reference/concept-specification.md#state-notation).
+notation](reference/concept-specification.md#state-notation). Record owned facts
+in `State`, but state each invariant where the specification enforces it. Put a
+bound in the `where` branch that refuses out-of-range values. Represent order
+with `seq` and describe that order in the query that returns the sequence. The
+absence of a removing transition expresses permanence. [Writing
+conventions](reference/concept-specification.md#writing-conventions) maps other
+statements to their owning sections.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning

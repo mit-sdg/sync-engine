@@ -15,9 +15,10 @@ describe("Commenting", () => {
     commenting.add({ target: "topic-7", author: "Ari", content: "reply-42" });
     commenting.add({ target: "topic-7", author: "Bo", content: "reply-43" });
     expect(commenting._for({ target: "topic-7" })).toEqual([
-      { comment: "first", target: "topic-7", author: "Ari", content: "reply-42" },
-      { comment: "second", target: "topic-7", author: "Bo", content: "reply-43" },
+      { comment: "first", author: "Ari", content: "reply-42" },
+      { comment: "second", author: "Bo", content: "reply-43" },
     ]);
+    expect(commenting._for({ target: "topic-8" })).toEqual([]);
 
     const wrongAuthor = () => commenting.retract({ comment: "first", author: "Bo" });
     expect(wrongAuthor).toThrow(CommentAuthorMismatch);
@@ -29,7 +30,7 @@ describe("Commenting", () => {
     expect(repeated).toThrow(CommentNotFound);
     expect(repeated).toThrow("There is no such comment.");
     expect(commenting._for({ target: "topic-7" })).toEqual([
-      { comment: "second", target: "topic-7", author: "Bo", content: "reply-43" },
+      { comment: "second", author: "Bo", content: "reply-43" },
     ]);
   });
 });

@@ -5,6 +5,7 @@ import type { vocabulary as ApplicationVocabulary } from "../src/concept-set.ts"
 
 type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : never : T;
 type QueryRow<T> = T extends readonly (infer Row)[] ? Row : T;
+type AllOf<T extends readonly unknown[]> = T extends readonly [infer Head, ...infer Rest] ? Head & AllOf<Rest> : unknown;
 type OneOf<T extends readonly unknown[]> = T[number];
 type Jsonify<T> = T extends Date ? string : T extends null | boolean | number | string ? T : T extends (...args: never[]) => unknown ? never : T extends readonly (infer Item)[] ? Jsonify<Item>[] : T extends object ? { [K in keyof T]: Jsonify<T[K]> } : never;
 
@@ -96,6 +97,16 @@ export type MessageBoardWire = {
     };
     error: { error: AppWideError | "INVALID_INPUT" | "INVALID_POST_CONTENT" | "UNKNOWN_SESSION" };
   };
+  "/board/retract-comment": {
+    input: {
+      "comment": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commenting"]["retract"]>[0], ["comment"]>>;
+      "session": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["current"]>[0], ["session"]>>;
+    };
+    output: {
+      "comment": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commenting"]["retract"]>[0], ["comment"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commenting"]["retract"]>>, ["comment"]>]>>;
+    };
+    error: { error: AppWideError | "COMMENT_AUTHOR_MISMATCH" | "COMMENT_NOT_FOUND" | "INVALID_INPUT" | "UNKNOWN_SESSION" };
+  };
 };
 
 export type HttpAppWideError = never;
@@ -171,5 +182,14 @@ export type MessageBoardWireHttp = {
       "post": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Posting"]["publish"]>>, ["post"]>>;
     };
     error: { error: HttpAppWideError | "INVALID_REQUEST" | "UNAUTHORIZED" };
+  };
+  "/board/retract-comment": {
+    input: {
+      "comment": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commenting"]["retract"]>[0], ["comment"]>>;
+    };
+    output: {
+      "comment": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Commenting"]["retract"]>[0], ["comment"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Commenting"]["retract"]>>, ["comment"]>]>>;
+    };
+    error: { error: HttpAppWideError | "FORBIDDEN" | "INVALID_REQUEST" | "NOT_FOUND" | "UNAUTHORIZED" };
   };
 };

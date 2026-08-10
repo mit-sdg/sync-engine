@@ -24,7 +24,9 @@ export class CommentingConcept {
     return { comment };
   }
 
-  _for({ target }: { target: string }): Comment[] {
-    return this.comments.filter((entry) => entry.target === target);
+  _for({ target }: { target: string }): Array<Omit<Comment, "target">> {
+    return this.comments
+      .filter((entry) => entry.target === target)
+      .map(({ comment, author, content }) => ({ comment, author, content }));
   }
 }

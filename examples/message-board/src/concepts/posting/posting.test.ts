@@ -18,12 +18,10 @@ describe("Posting", () => {
       { post: "first", author: "Ari", content: "First post" },
       { post: "second", author: "Bo", content: "Second post" },
     ]);
-    expect(posting._get({ post: "first" })).toEqual([
-      { post: "first", author: "Ari", content: "First post" },
-    ]);
+    expect(posting._get({ post: "first" })).toEqual([{ author: "Ari", content: "First post" }]);
     const invalid = () => posting.publish({ author: "Ari", content: "   " });
     expect(invalid).toThrow(InvalidPostContent);
-    expect(invalid).toThrow("Post content must contain 1 to 500 non-whitespace characters.");
+    expect(invalid).toThrow("Post content must not be blank and must be at most 500 characters.");
     expect(posting._all({})).toHaveLength(2);
     expect(() => posting.publish({ author: "Ari", content: "x".repeat(501) })).toThrow(
       InvalidPostContent,

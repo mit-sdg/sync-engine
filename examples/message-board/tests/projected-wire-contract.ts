@@ -15,3 +15,8 @@ void client.board.post({ author: "admin", content: "hello" });
 
 // @ts-expect-error Authentication, not the caller, decides the comment author.
 void client.board.comment({ target: "post-1", author: "admin", content: "reference" });
+
+void client.board["retract-comment"]({ comment: "comment-1" });
+
+// @ts-expect-error The retracting author comes from the session, not the body.
+void client.board["retract-comment"]({ comment: "comment-1", author: "admin" });

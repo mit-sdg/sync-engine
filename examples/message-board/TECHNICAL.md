@@ -26,39 +26,66 @@ uses random UUID session values and a 30-minute lifetime. Accounts, sessions,
 posts, and comments are held in memory and are not recovered after restart.
 These implementation choices are not general sync-engine guarantees.
 
-Posting retains posts permanently for the process lifetime and refuses empty,
-whitespace-only, or over-500-character content. Commenting retains attachments
-until `retract` succeeds, but the browser composition does not expose a retract
-endpoint. Commenting itself does not validate its external target, author, or
-content identities; the `/board/comment` endpoint applies the bounds needed by
-this public boundary.
+Posting retains posts for the process lifetime and refuses blank content or
+content longer than 500 characters. It declares no retraction, so a published
+post cannot be removed. Commenting retains an attachment until its author
+retracts it, and `/board/retract-comment` exposes that transition. Commenting
+does not validate its external target, author, or content identities. The
+`/board/comment` endpoint applies the public boundary's length constraints; those
+constraints do not apply to direct calls through `Assembly.concepts`.
 
 ## Endpoint composition
 
-The composition module declares a board former and seven endpoints. It declares
-no reactions. Each endpoint stage is part of the request workflow rather than a
-background consequence of a concept action.
+The application divides composition declarations between two modules.
+`sessions.ts` contains the account and session endpoints. `board.ts` contains the
+board former and its read and write endpoints. `validators.ts` contains shared
+runtime validators but no composition declarations, so assembly does not scan
+it.
 
-| Endpoint         | Ordered workflow                                                                  |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `/auth/register` | Register credentials, start a session for the username, respond                   |
-| `/auth/sign-in`  | Authenticate, pass the username to `Sessioning.start` as its subject, respond     |
-| `/auth/current`  | Resolve the session subject and return it as the current username                 |
-| `/auth/sign-out` | Resolve and end the session                                                       |
-| `/board/list`    | Resolve the session, then form the current board                                  |
-| `/board/post`    | Resolve the session subject, adapt it to `Author`, publish the post               |
-| `/board/comment` | Resolve the subject, check the target post, adapt the subject to `Author`, attach |
+| Endpoint                 | Ordered workflow                                                                  |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `/auth/register`         | Register credentials, start a session for the username, respond                   |
+| `/auth/sign-in`          | Authenticate, pass the username to `Sessioning.start` as its subject, respond     |
+| `/auth/current`          | Resolve the session subject and return it as the current username                 |
+| `/auth/sign-out`         | Resolve and end the session                                                       |
+| `/board/list`            | Resolve the session, then form the current board                                  |
+| `/board/post`            | Resolve the session subject, adapt it to `Author`, publish the post               |
+| `/board/comment`         | Resolve the subject, check the target post, adapt the subject to `Author`, attach |
+| `/board/retract-comment` | Resolve the subject and ask `Commenting.retract` with it as the claimed author    |
 
 `/board/comment` uses two named branches. If `Posting._get` finds the target,
 composition asks `Commenting.add`. If the query finds no target, composition
 responds with the logical `POST_NOT_FOUND` error. Commenting remains independent:
 its own `add` action can attach any external target identity.
 
+`/board/retract-comment` passes the session subject to `Commenting.retract` as
+the claimed author. Commenting returns `COMMENT_AUTHOR_MISMATCH` for another
+author's comment and `COMMENT_NOT_FOUND` for an unknown comment. The HTTP policy
+maps those refusals to `FORBIDDEN` and `NOT_FOUND`, respectively. Commenting also
+enforces the rule on direct concept calls. The browser's decision to omit the
+button for another author's comment is presentation, not enforcement.
+
 The `board` former iterates over `Posting._all`. For each post row, it asks
 `Commenting._for` with the post identity as the external target and nests the
-matching attachments. The assembly's `maxRowsPerEvaluation` limit of 1,000
-bounds this read. The other configured execution limits are recorded in
-`src/assembly.ts`.
+matching attachments. The assembly sets `maxRowsPerEvaluation` to 1,000. If
+former expansion exceeds that limit, evaluation fails instead of returning a
+truncated board. The other execution limits are recorded in `src/assembly.ts`.
+
+## Session expiry
+
+Sessioning owns expiry and cleanup; neither is a scheduled application workflow.
+At its expiry, a session becomes logically inactive. The expired record may
+remain in the in-memory map until a Sessioning action removes it.
+
+Cleanup is opportunistic. `start` removes all expired records before allocating
+a new session. `current` and `end` remove the expired record they encounter and
+then refuse the action with `UNKNOWN_SESSION`. `_active` returns no row for an
+expired session without mutating state.
+
+Assembly performs no cleanup initialization, and the host schedules no cleanup.
+There is no periodic reclamation guarantee. A durable Sessioning implementation
+may use another storage and reclamation mechanism, but it must preserve the
+specified action and query behavior.
 
 ## Application, boundary, and host layers
 
@@ -105,9 +132,10 @@ clears the cookie. The cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, and
 `Path=/`; because it has no domain and uses `/`, the handler derives the
 `__Host-` prefix.
 
-The current-user, sign-out, board-list, post, and comment endpoints require the
-logical `session` input. On those paths, the handler overwrites a body-supplied
-session with the cookie value, or with `null` if no readable cookie is present.
+The current-user, sign-out, board-list, post, comment, and comment-retraction
+endpoints require the logical `session` input. On those paths, the handler
+overwrites a body-supplied session with the cookie value, or with `null` if no
+readable cookie is present.
 The application then asks Sessioning whether that value identifies an active
 session. Authentication and session interpretation remain application behavior;
 the HTTP package performs only the declared cookie binding.
@@ -182,11 +210,13 @@ application test starts both real hosts and verifies:
   cookie, and serves no frontend root;
 - browser HTML and bundled JavaScript are served;
 - unauthenticated board access is rejected and clears an applicable cookie;
-- registration, sign-in, current-user lookup, posting, commenting, listing, and
-  sign-out complete over the network through the projected client;
+- registration, sign-in, current-user lookup, posting, commenting, retracting,
+  listing, and sign-out complete over the network through the projected client;
 - the issued cookie has the derived `__Host-` name;
 - a body-supplied session cannot replace the cookie session;
 - a body-supplied author is rejected;
+- retracting someone else's comment answers `FORBIDDEN`, and retracting a
+  retracted comment answers `NOT_FOUND`;
 - invalid listener and public-origin configuration fails before startup; and
 - every endpoint has input and output validators and the projected wire omits
   cookie-owned fields.

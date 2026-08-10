@@ -13,8 +13,10 @@ export class SessioningConcept {
   ) {}
 
   start({ subject }: { subject: string }) {
+    const now = this.clock().getTime();
+    this.#discardExpired(now);
     const session = this.freshSession();
-    const expiresAt = this.clock().getTime() + SESSION_LIFETIME_MS;
+    const expiresAt = now + SESSION_LIFETIME_MS;
     this.sessions.set(session, { subject, expiresAt });
     return { session, expiresAt: new Date(expiresAt) };
   }
@@ -33,6 +35,12 @@ export class SessioningConcept {
     const found = this.sessions.get(session);
     if (found === undefined || found.expiresAt <= this.clock().getTime()) return [];
     return [{ subject: found.subject, expiresAt: new Date(found.expiresAt) }];
+  }
+
+  #discardExpired(now: number): void {
+    for (const [session, found] of this.sessions) {
+      if (found.expiresAt <= now) this.sessions.delete(session);
+    }
   }
 
   #active(session: string): Session {

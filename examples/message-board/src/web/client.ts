@@ -29,6 +29,8 @@ function show(message: string, failed = false): void {
   status.classList.toggle("error", failed);
 }
 
+let signedInAs: string | undefined;
+
 async function loadBoard(): Promise<void> {
   const result = await client.board.list({});
   if ("error" in result) {
@@ -46,6 +48,24 @@ async function loadBoard(): Promise<void> {
       for (const comment of post.comments) {
         const item = document.createElement("li");
         item.textContent = `${comment.author}: ${comment.content}`;
+        // Commenting refuses a retraction by anyone but the author, so this
+        // button is a convenience rather than the enforcement point.
+        if (comment.author === signedInAs) {
+          const retract = document.createElement("button");
+          retract.type = "button";
+          retract.textContent = "Retract";
+          retract.addEventListener("click", () => {
+            void (async () => {
+              const removed = await client.board["retract-comment"]({ comment: comment.comment });
+              if ("error" in removed) show(`Could not retract: ${removed.error}`, true);
+              else {
+                show("Comment retracted.");
+                await loadBoard();
+              }
+            })();
+          });
+          item.append(" ", retract);
+        }
         comments.append(item);
       }
       const commentForm = document.createElement("form");
@@ -72,6 +92,7 @@ async function loadBoard(): Promise<void> {
 }
 
 function signedIn(as: string): void {
+  signedInAs = as;
   authPanel.hidden = true;
   boardPanel.hidden = false;
   required("who").textContent = as;
@@ -79,6 +100,7 @@ function signedIn(as: string): void {
 }
 
 function signedOut(): void {
+  signedInAs = undefined;
   authPanel.hidden = false;
   boardPanel.hidden = true;
   posts.replaceChildren();
