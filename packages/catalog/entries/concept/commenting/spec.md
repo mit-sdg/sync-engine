@@ -6,12 +6,6 @@ Attach authored comments to an external target and let only the author retract e
 comment, so discussion can accumulate without allowing one author to erase another's
 contribution.
 
-## Principle
-
-Ari adds "First reply" to target `topic-7` and Bo adds "Second reply" later. Both
-comments are listed in chronological order. Bo cannot retract Ari's comment. Ari
-retracts it; a second retraction is refused, and only Bo's comment remains.
-
 ## State
 
 ```state

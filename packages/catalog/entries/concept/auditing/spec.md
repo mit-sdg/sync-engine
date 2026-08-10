@@ -6,16 +6,6 @@ Keep a permanent numbered record of who did what to which target, so past activi
 can be attributed and read back afterwards instead of being reconstructed from state
 that shows only its current values.
 
-## Principle
-
-Trail `workspace-1` starts with no entries. Recording event `evt-1`, in which actor
-`ari` did "reservation.hold" to target `slot-4`, places it at position 1, and event
-`evt-2` from actor `bo` follows at position 2. Reading from position 0 returns both in that
-order, reading target `slot-4` returns only Ari's entry, and the trail reports 2
-entries ending at position 2. Replaying `evt-1` returns the entry already at position
-1 instead of adding a third, and replaying `evt-1` against another target is
-refused.
-
 ## State
 
 ```state

@@ -1,9 +1,8 @@
 # Engine architecture
 
-This project document maps the current source tree for contributors changing
-sync-engine itself. The consumer [documentation index](../user/index.md), [Execution
-semantics](../user/reference/semantics.md), and [Public API](../user/reference/public-api.md) define
-supported package behavior.
+This document maps the source tree. The [user documentation](../user/index.md),
+[Execution semantics](../user/reference/semantics.md), and [Public
+API](../user/reference/public-api.md) define supported package behavior.
 
 ## Concern map
 
@@ -139,9 +138,6 @@ vocabulary refs and language words
   -> lowered ReactionIR where possible
   -> executable reactions indexed by trigger
 ```
-
-The roles are deliberately separate even where the current implementation is
-co-located:
 
 | Area                  | Main files                                                                                     | Responsibility                                                                                                        |
 | --------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -300,9 +296,6 @@ workspace builds, packs, and participates in combined-consumer checks, while
 only workspaces marked for npm publication are published. Combined verification
 installs exact tarballs in an isolated directory and checks emitted type and
 runtime graphs without workspace links.
-
-Package behavior and APIs belong in each workspace's README and public-surface
-document, not in this repository architecture.
 
 ## Dependency rules
 

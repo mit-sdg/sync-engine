@@ -5,14 +5,6 @@
 Establish a username from a password, so a username claim alone cannot act as proof of
 identity and a compromised password can be replaced or removed.
 
-## Principle
-
-Ari registers username `ari` with a password. Another registration of `ari` is refused.
-The wrong password cannot authenticate `ari`; the correct password can. Ari changes
-the password using the old password, after which the old password fails and the new
-one succeeds. Ari unregisters with the current password, and the username is no longer
-registered.
-
 ## State
 
 ```state

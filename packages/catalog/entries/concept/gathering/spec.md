@@ -5,14 +5,6 @@
 Let a host create a named gathering and let people join or leave it, so
 belonging is an explicit, visible state.
 
-## Principle
-
-Asha creates Saturday Workshop and becomes its first member. Bo joins and appears
-among its members. When Bo tries to join again, the gathering refuses the
-duplicate. Bo leaves; a second attempt to leave is refused because Bo no longer
-belongs. When Cy tries to join an unknown gathering, it is refused because the
-gathering does not exist.
-
 ## State
 
 ```state

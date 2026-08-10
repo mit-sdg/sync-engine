@@ -5,14 +5,6 @@
 Open an exchange about a subject and collect authored responses, so people can carry
 the exchange forward and close it deliberately.
 
-## Principle
-
-Mina opens a discussion about proposal `p1`. Sol responds with "Proceed in two
-stages." and the response is visible. Mina closes the discussion. A later response is
-refused, as is an attempt to open a second discussion about `p1` while the first one
-is open. After closure, a new discussion about `p1` may be opened without changing the
-old discussion or its responses.
-
 ## State
 
 ```state

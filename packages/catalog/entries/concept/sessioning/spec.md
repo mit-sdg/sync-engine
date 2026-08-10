@@ -5,13 +5,6 @@
 Keep a short-lived opaque session for an external subject, so temporary access can end
 without changing that subject's identity.
 
-## Principle
-
-Ari starts a session for subject `ari`. Before the session expires, `_active` reports
-its subject and expiry and `current` resolves it to `ari`. Ending the session makes it
-unknown. An invented, ended, or expired session is refused in the same way. A session
-expires 30 minutes after it starts and does not extend when used.
-
 ## State
 
 ```state

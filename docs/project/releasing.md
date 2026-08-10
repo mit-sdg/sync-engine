@@ -1,18 +1,11 @@
 # Contributor release procedure
 
-This procedure is for maintainers publishing an approved v1 beta release
-after its source changes are reviewed and merged. It does not define public
-behavior; use the
-[changelog](../../CHANGELOG.md), [support policy](../../SUPPORT.md), [security
-policy](../../SECURITY.md), and [Execution semantics](../user/reference/semantics.md) for those
-contracts. Published versions, tags, and tarballs are immutable.
+This procedure publishes an approved v1 beta release after its changes are
+merged. Published versions, tags, and tarballs are immutable.
 
 ## External settings
 
-Every item in this section is external repository, GitHub organization, GitHub
-environment, or npm state. Source changes and workflows do not establish or
-prove these settings. Maintainers must configure them manually and recheck them
-before every tag:
+Configure these external settings manually and recheck them before every tag:
 
 - Enable GitHub private vulnerability reporting. Security reports must follow
   `SECURITY.md`, not public issues.
@@ -41,8 +34,7 @@ before every tag:
   Beta publications use the `beta` dist-tag and must not create or move
   `latest`.
 
-Record the independent checks in the release review. A green workflow does not
-replace this external-setting verification.
+Record the checks in the release review.
 
 ## Prepare the release
 
@@ -83,12 +75,9 @@ bun install
 | `tests/packaging/application/package.json`   | Packed-application dependency           |
 | `packages/*/tests/packaging/**/package.json` | Workspace consumer-fixture dependencies |
 
-The following `bun install` regenerates `bun.lock` from the projected
-manifests. Review the lockfile and manifest diffs together. `bun run release:check` rejects
-stale projections; review and commit every updated manifest and `bun.lock`.
-Publication uses that committed package metadata unchanged. Run frozen
-verification only after the lockfile is current; `bun run release:verify` begins
-with `bun install --frozen-lockfile`.
+`bun install` regenerates `bun.lock`. Review and commit the lockfile and
+projected manifests together. `bun run release:check` rejects stale projections,
+and `bun run release:verify` begins with `bun install --frozen-lockfile`.
 
 ### Changelog
 
@@ -125,28 +114,9 @@ commit:
 bun run release:verify
 ```
 
-`release:verify` runs the listed publish gates sequentially in a shell-independent
-Bun script and stops at the first failure. `declarations:check` performs the
-shared build; the release-only scenario gate reuses it, while the public
-`bun run scenario` command remains self-contained. The publish workflow keeps
-the gates as separate steps so GitHub identifies the failing gate and so
-`package:check` can receive the verified-tarball output directory used by the
-publication job.
-
 Confirm regeneration leaves no unexplained diff and review the npm pack file
-listing. `package:check` invokes npm's real pack lifecycle for each workspace;
-the root package's `prepack` performs their shared build. The check inspects all
-workspace tarballs and policy links, installs packages both independently and
-together, exercises each workspace's packed consumer
-contract, runs examples and scenarios, and verifies Node and Bun behavior
-without workspace links. In the publish workflow, the check exports every npm
-workspace tarball. The
-unprivileged job records their digests and transfers them unchanged to the
-protected publication jobs. The core package
-intentionally includes all three complete, independently runnable teaching
-examples; file-count, packed-size, and unpacked-size budgets prevent accidental
-growth. Wait for **CI required** on the final `main`
-commit, then repeat every external-setting check above.
+listing. Wait for **CI required** on the final `main` commit, then repeat every
+external-setting check above.
 
 ## Tag and publish
 
@@ -193,14 +163,8 @@ version or moves or reuses a release tag or tarball.
   immutable: never
   overwrite an existing tag or tarball.
 
-- Confirm `npm view @mit-sdg/sync-engine dist-tags versions` shows the new exact
-  version under `beta` and that `latest` did not move.
-- Confirm `npm view @mit-sdg/sync-engine-analysis dist-tags versions` shows its
-  new matching exact version under `beta` and that `latest` did not move.
-- Confirm `npm view @mit-sdg/sync-engine-http dist-tags versions` shows its new
-  matching exact version under `beta` and that `latest` did not move.
-- Confirm `npm view @mit-sdg/sync-engine-catalog dist-tags versions` shows its
-  new matching exact version under `beta` and that `latest` did not move.
+- For each published workspace, confirm `npm view <package> dist-tags versions`
+  shows the new exact version under `beta` and that `latest` did not move.
 - Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` shows alpha
   versions as unsupported, with historical messages pointing at the exact beta
   or `@beta`, never `@alpha`.

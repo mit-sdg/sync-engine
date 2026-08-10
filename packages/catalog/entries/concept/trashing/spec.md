@@ -5,12 +5,6 @@
 Record a reversible removal before making that removal irreversible, so an accidental
 removal can be restored without leaving every removal permanently reversible.
 
-## Principle
-
-Item `post-8` is trashed at `t1` and appears among trashed items. It is restored and no
-longer appears there. The item is trashed again and then purged. A later restore and a
-later trash are refused because purge is permanent.
-
 ## State
 
 ```state

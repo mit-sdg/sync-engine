@@ -39,9 +39,3 @@ without duplicate open discussions or alerts. The repair caller supplies one mem
 from the selection-time roster; the recipe does not retain or validate that roster. A
 member who joins after selection does not receive the old alert unless incorrectly
 supplied to repair. A member who leaves retains an already raised alert.
-
-## Variants
-
-Version 1 is endpoint-led. Optional standalone reaction packs and replaceable policy
-packs require catalog support for non-endpoint composition roots and are not hidden in
-this recipe.
