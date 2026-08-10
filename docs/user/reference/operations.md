@@ -77,11 +77,11 @@ deduplication, or exactly-once action or reaction execution.
 
 ## Timeouts, abort, and shutdown
 
-Without an execution profile, invocation timeout defaults to 30 seconds. A
-profile supplies the default and maximum request duration. Timeout and
-`AbortSignal` stop waiting; neither cancels accepted concept work nor rolls back
-completed actions. Continued work remains subject to flow limits and can outlive
-its transport request.
+Without an execution profile, invocation timeout defaults to 30 seconds. With a
+profile, `maxRequestDurationMs` is both the default and the maximum accepted
+`timeoutMs`. Timeout and `AbortSignal` stop waiting; neither cancels accepted
+concept work nor rolls back completed actions. Continued work remains subject to
+flow limits and can outlive its transport request.
 
 Shutdown must account for that continued work. Stop public admission, call
 `beginDrain()`, and wait for the returned promise or `whenIdle()` until accepted
@@ -134,13 +134,17 @@ process-local occurrence index. `FileLogSink` appends JSONL audit output but doe
 not load it, rebuild the index, restore concept state, or replay reactions on
 startup. The engine also does not restore pending requests or interrupted paths.
 
-Persist domain state in concept implementations and design an application-specific
-recovery procedure. Drain accepted work before replacing an assembly, then
-reconstruct derived state from durable domain state rather than from occurrence
-records. An occurrence file can support audit or diagnosis, but it is not a
-recovery log. `FileLogSink` appends synchronously, provides no locking,
-shared-writer coordination, flush, or network-filesystem durability contract,
-and has no close method. Use a host-owned sink when those properties matter.
+Persist domain state in concept implementations and design an
+application-specific recovery procedure. Drain accepted work before replacing
+an assembly. Reconstruct derived state from durable domain state before exposing
+the replacement assembly to traffic; otherwise requests can observe or modify
+partially recovered state. If old and new processes overlap, concept storage
+must coordinate them because their action queues are independent.
+
+An occurrence file can support audit or diagnosis, but it is not a recovery log.
+`FileLogSink` appends synchronously, provides no locking, shared-writer
+coordination, flush, or network-filesystem durability contract, and has no close
+method. Use a host-owned sink when those properties matter.
 The [persistence and restart recipe](../guide/persistence-recovery.md#persistence-restart-and-recovery)
 demonstrates the separation.
 

@@ -3,10 +3,9 @@
 This page defines the observable execution contract for actions, reactions,
 reads, formed results, and application boundaries in the current beta. It
 separates engine guarantees from host-owned storage, transport, and lifecycle
-policy.
-The [Public API](public-api.md) lists the exports. The [read construction
-cookbook](../guide/read-construction.md) demonstrates representative declarations without extending
-this contract.
+policy. The [Public API](public-api.md) lists the exports. The [read construction
+cookbook](../guide/read-construction.md) demonstrates representative declarations
+without extending this contract.
 
 ## Contract index
 
@@ -751,9 +750,9 @@ responsibilities.
 
 ### Execution and resource bounds
 
-Automatic log retention bounds settled-flow inspection, and `ExecutionLimits`
-provides the engine-owned production budget. Row limits stop engine-owned
-expansion during reaction matching, where evaluation, direct reads, and former
+Automatic occurrence retention bounds settled-flow inspection, and
+`ExecutionLimits` provides the engine-owned production budget. Row limits stop
+engine-owned expansion during reaction matching, where evaluation, direct reads, and former
 evaluation. A query implementation still owns the memory needed to construct its
 answer.
 These limits do not replace host limits for connections, request rate, DDoS
@@ -875,8 +874,8 @@ unanswered. Continued work can later ask `respond`; after pending state is gone,
 that ask is recorded and refuses with `NOT_PENDING`. If an answer was accepted
 first, it remains authoritative. The
 invoker allows its causal dispatch to finish only until the original deadline
-or a later abort, then returns that answer even if unrelated sibling work is
-still running.
+or a later abort, then returns that answer even if other sibling work is still
+running.
 
 Gateway and application invokers each apply `timeoutMs` as their own duration
 when their layer begins waiting. The option is not an absolute deadline shared
@@ -953,7 +952,9 @@ An application may persist concept state while leaving occurrence logs in
 memory, or vice versa. The engine does not load prior occurrence files, rebuild
 concept state, resume interrupted reactions, restore pending requests, or
 replay firings. Restart recovery must reconstruct state from concept-owned
-storage and explicit host procedures.
+storage and explicit host procedures. A new assembly admits roots immediately;
+the host must complete recovery before exposing it to traffic, or provide its
+own admission barrier.
 
 ### Boundary operations
 

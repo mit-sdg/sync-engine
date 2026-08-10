@@ -112,13 +112,16 @@ async function recoverSearchIndex(
    paths.
 2. Call `Notes.save`. The concept writes its state file, the reaction updates
    the process-local index, and `FileLogSink` appends occurrence evidence.
-3. Stop admission and await `application.beginDrain()` before closing resources
-   or constructing a replacement process. Drain is required so accepted work is
-   not still mutating concept state when recovery begins.
+3. Stop the external listener, then await `application.beginDrain()` before
+   closing resources or starting the replacement. Drain closes assembly root
+   admission and waits for accepted, engine-tracked causal flows. Detached work
+   is not tracked and must be settled through the concept or host lifecycle.
 4. Construct a new assembly. `FileBackedNotes` loads durable state, while the
-   new search index and the assembly's occurrence index begin empty.
+   new search index and the assembly's occurrence index begin empty. Do not
+   attach the new assembly to a listener yet.
 5. Call `recoverSearchIndex`. The recovery procedure reads durable concept
-   state and invokes the index action explicitly.
+   state and invokes the index action explicitly. Start admission only after it
+   succeeds.
 
 A successful `Notes.save` writes `notes.json`, while the assembly records the
 `Notes.save`, `SearchIndex.index`, and reaction evidence in a separate
@@ -129,12 +132,20 @@ On reconstruction, `FileBackedNotes` loads `notes.json`. A new `FileLogSink` ove
 the existing `occurrences.jsonl` does **not** read that file into the assembly's
 index, replay the old reaction, or rebuild the search index. The derived query
 therefore remains empty until the host explicitly calls `recoverSearchIndex`,
-which reads durable concept state and invokes the derived concept's action. If
-recovery fails, the host must decide whether to retry it, record the failure, or
-stop startup; the engine does not provide a recovery transaction.
+which reads durable concept state and invokes the derived concept's action.
+Recovery is not transactional: a failure can leave a partially rebuilt index.
+The host must retry an idempotent recovery, discard and rebuild the derived
+state, or stop startup.
+
+The state and occurrence writes in this example do not form one commit.
+`FileBackedNotes.save` changes its in-memory state before writing `notes.json`, and the engine appends
+outcome and reaction evidence after the action body returns. A state-file write
+failure can leave changed process memory; a later occurrence append failure can
+leave durable concept state without complete occurrence evidence or derived
+state. The engine rolls back none of these effects.
 
 `FileLogSink` provides synchronous append-only JSONL audit output. It does not
 provide locking, shared-writer coordination, flush or durability guarantees, or
 a close method. Production concept-state storage and custom log sinks must
-separately define atomic writes, schema migration, concurrency, durability, and
-recovery failure handling.
+define atomic writes, schema migration, concurrency, durability, and recovery
+failure handling separately.
