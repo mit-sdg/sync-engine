@@ -8,9 +8,15 @@ import {
   type MessageBoardOverrides,
 } from "./assembly.ts";
 
-export function messageBoardHttpPolicy(publicOrigin: string): HttpPolicy {
+export function messageBoardHttpPolicy(
+  publicOrigin: string,
+  additionalRequestOrigins: readonly string[] = [],
+): HttpPolicy {
   return httpPolicy({
     publicOrigin,
+    ...(additionalRequestOrigins.length === 0
+      ? {}
+      : { requestOrigins: { allowed: [publicOrigin, ...additionalRequestOrigins] } }),
     basePath: "/api",
     publicErrors: {
       INVALID_USERNAME: "INVALID_REQUEST",

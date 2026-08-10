@@ -6,14 +6,21 @@ import { buildMessageBoard, messageBoardHttpPolicy } from "./edge.ts";
 export interface MessageBoardHostOptions {
   readonly hostname?: string;
   readonly port?: number;
+  readonly publicOrigin?: string;
+  readonly additionalRequestOrigins?: readonly string[];
 }
 
 export async function startMessageBoardHost({
   hostname = "localhost",
   port = 3000,
+  publicOrigin,
+  additionalRequestOrigins = [],
 }: MessageBoardHostOptions = {}): Promise<Server<undefined>> {
   const publicHostname = hostname.includes(":") ? `[${hostname}]` : hostname;
-  const policy = messageBoardHttpPolicy(`http://${publicHostname}:${port}`);
+  const policy = messageBoardHttpPolicy(
+    publicOrigin ?? `http://${publicHostname}:${port}`,
+    additionalRequestOrigins,
+  );
   const [{ handler }, html, bundle] = await Promise.all([
     Promise.resolve(buildMessageBoard({}, policy)),
     readFile(new URL("./web/index.html", import.meta.url), "utf8"),
@@ -54,6 +61,10 @@ if (import.meta.main) {
   const server = await startMessageBoardHost({
     hostname: process.env.HOST ?? "localhost",
     port: Number(process.env.PORT ?? 3000),
+    ...(process.env.PUBLIC_ORIGIN === undefined ? {} : { publicOrigin: process.env.PUBLIC_ORIGIN }),
+    additionalRequestOrigins: (process.env.ADDITIONAL_REQUEST_ORIGINS ?? "")
+      .split(",")
+      .filter((origin) => origin !== ""),
   });
   console.log(`Message board listening on ${server.url}`);
 }
