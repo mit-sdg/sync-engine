@@ -457,6 +457,9 @@ describe("release source facts", () => {
   });
 
   test.each([
+    "push:\n    branches: [main]",
+    "pull_request:",
+    "concurrency:\n  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}\n  cancel-in-progress: true",
     "name: Generated artifacts",
     "run: bun run examples:check",
     "name: CI required",
@@ -465,6 +468,32 @@ describe("release source facts", () => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/ci.yml", fact, "omitted-ci-fact");
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining(`missing ${fact}`));
+  });
+
+  test.each([
+    ["package", "os: [ubuntu-latest]"],
+    ["test", "os: [ubuntu-latest, windows-latest, macos-latest]"],
+    ["test", "- name: Platform application scenarios"],
+    ["test", "if: runner.os != 'Linux'"],
+  ])("rejects a %s job without %s", (job, fact) => {
+    const sources = fixture();
+    replaceSource(sources, ".github/workflows/ci.yml", fact, "omitted-platform-fact");
+    expect(checkRelease(sources)).toContain(
+      `.github/workflows/ci.yml: ${job} job is missing ${fact}`,
+    );
+  });
+
+  test("requires the platform application scenario command", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/ci.yml",
+      "      - name: Platform application scenarios\n        if: runner.os != 'Linux'\n        run: bun run scenario",
+      "      - name: Platform application scenarios\n        if: runner.os != 'Linux'\n        run: bun run test",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/ci.yml: test job is missing run: bun run scenario",
+    );
   });
 
   test("rejects a privileged publish verification job", () => {

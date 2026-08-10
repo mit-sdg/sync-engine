@@ -46,6 +46,15 @@ bun run package:check
 bun audit
 ```
 
+### CI platform coverage
+
+CI runs the complete test suite on Linux, Windows, and macOS. Windows and macOS
+also build every workspace and run the application scenarios, establishing that
+the engine works from built output on both platforms. Release-oriented checks —
+npm packing, isolated consumer installation, scaffold verification, and package
+policy inspection — run on Linux only; the publication workflow repeats those
+checks on Linux before publishing the verified tarballs.
+
 ## Generated files
 
 Do not hand-edit these outputs:

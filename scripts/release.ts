@@ -729,6 +729,9 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
 
   const ci = activeWorkflowSource(sources.get(".github/workflows/ci.yml") ?? "");
   for (const fact of [
+    "push:\n    branches: [main]",
+    "pull_request:",
+    "concurrency:\n  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}\n  cancel-in-progress: true",
     "permissions:\n  contents: read",
     "name: Pack & import workspaces",
     "run: bun run package:check",
@@ -741,6 +744,25 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
   if (ci.includes("id-token: write")) {
     failures.push(".github/workflows/ci.yml: CI must not receive id-token: write");
+  }
+  for (const [name, facts] of [
+    ["package", ["os: [ubuntu-latest]"]],
+    [
+      "test",
+      [
+        "os: [ubuntu-latest, windows-latest, macos-latest]",
+        "- name: Platform application scenarios",
+        "if: runner.os != 'Linux'",
+        "run: bun run scenario",
+      ],
+    ],
+  ] as const) {
+    const job = workflowJob(ci, name);
+    for (const fact of facts) {
+      if (!hasWorkflowLine(job, fact)) {
+        failures.push(`.github/workflows/ci.yml: ${name} job is missing ${fact}`);
+      }
+    }
   }
   if (nodeMajor !== undefined) {
     for (const name of ["package", "test"]) {
