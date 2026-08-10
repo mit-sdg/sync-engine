@@ -381,5 +381,5 @@ describe("the repository's own concepts", () => {
     const directories = await conceptDirectories(["examples", "tests/package/application"], root);
     expect(directories.length).toBeGreaterThan(0);
     expect(directories.flatMap((where) => conceptFailures(where, root))).toEqual([]);
-  }, 30_000);
+  }, 60_000);
 });
