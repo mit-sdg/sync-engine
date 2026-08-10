@@ -510,7 +510,7 @@ const client = createClient<ScenarioWire>({
 const written = await client["/notes/write"]({ text: "buy milk" });
 
 if ("error" in written || written.note !== "note-1") {
-  throw new Error("The custom transport/server binding scenario failed.");
+  throw new Error("The custom transport binding scenario failed.");
 }
 `;
 
@@ -569,7 +569,7 @@ async function verifyCoreOnlyConsumer(
   await writeFile(resolve(consumer, "all-entrypoints.ts"), entrypointImports([core]));
   await writeFile(resolve(consumer, "runtime-import.mjs"), runtimeEntrypointImports([core]));
   await copyFile(
-    resolve(root, "tests/package/node-runtime-scenario.ts"),
+    resolve(root, "tests/packaging/node-runtime-scenario.ts"),
     resolve(consumer, "node-runtime-scenario.ts"),
   );
   await writeFile(resolve(consumer, "core-transport-scenario.ts"), coreTransportScenario);
@@ -619,20 +619,25 @@ async function verifyCombinedConsumer(
   await writeFile(resolve(consumer, "all-entrypoints.ts"), entrypointImports(packed));
   await writeFile(resolve(consumer, "runtime-import.mjs"), runtimeEntrypointImports(packed));
   await copyFile(
-    resolve(root, "tests/package/consumer-contract.ts"),
+    resolve(root, "tests/packaging/consumer-contract.ts"),
     resolve(consumer, "consumer-contract.ts"),
   );
   await copyFile(
-    resolve(root, "tests/package/analysis-consumer-scenario.mjs"),
+    resolve(root, "packages/http/tests/packaging/consumer-contract.ts"),
+    resolve(consumer, "http-consumer-contract.ts"),
+  );
+  await copyFile(
+    resolve(root, "packages/analysis/tests/packaging/analysis-consumer-scenario.mjs"),
     resolve(consumer, "analysis-consumer-scenario.mjs"),
   );
   await copyFile(
-    resolve(root, "tests/package/analysis-ir-import-isolation.mjs"),
+    resolve(root, "packages/analysis/tests/packaging/analysis-ir-import-isolation.mjs"),
     resolve(consumer, "analysis-ir-import-isolation.mjs"),
   );
   await writeTypeScriptConfig(resolve(consumer, "tsconfig.json"), [
     "all-entrypoints.ts",
     "consumer-contract.ts",
+    "http-consumer-contract.ts",
   ]);
   run(
     "node",
@@ -682,7 +687,7 @@ async function verifyScaffoldAndExamples(
   }
 
   const standalone = resolve(temporary, "application");
-  await cp(resolve(root, "tests/package/application"), standalone, { recursive: true });
+  await cp(resolve(root, "tests/packaging/application"), standalone, { recursive: true });
   await rename(resolve(standalone, "tsconfig.project.json"), resolve(standalone, "tsconfig.json"));
   const standaloneManifestPath = resolve(standalone, "package.json");
   const standaloneManifest = await prepareWorkspaceDependencies(
@@ -700,7 +705,9 @@ async function verifyScaffoldAndExamples(
 
 async function verifyMultiInstance(artifacts: ReadonlyMap<string, PackedWorkspace>): Promise<void> {
   const multiInstance = resolve(temporary, "multi-instance");
-  await cp(resolve(root, "tests/package/multi-instance"), multiInstance, { recursive: true });
+  await cp(resolve(root, "packages/http/tests/packaging/multi-instance"), multiInstance, {
+    recursive: true,
+  });
   const clientProject = resolve(multiInstance, "client");
   const backendProject = resolve(multiInstance, "backend");
   const clientManifestPath = resolve(clientProject, "package.json");

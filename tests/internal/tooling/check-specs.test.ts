@@ -378,7 +378,7 @@ describe("membership, checked without constructing anything", () => {
 describe("the repository's own concepts", () => {
   test("every shipped concept agrees with its specification", async () => {
     const root = resolve(import.meta.dirname, "../../..");
-    const directories = await conceptDirectories(["examples", "tests/package/application"], root);
+    const directories = await conceptDirectories(["examples", "tests/packaging/application"], root);
     expect(directories.length).toBeGreaterThan(0);
     expect(directories.flatMap((where) => conceptFailures(where, root))).toEqual([]);
   }, 30_000);

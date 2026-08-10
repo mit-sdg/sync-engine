@@ -25,7 +25,7 @@ import { loadGeneratedApplication } from "@command/generated-config";
  * A real config location — the packaged sample application — so the defaults
  * resolve against a project laid out the way the generator writes one.
  */
-const configUrl = new URL("../../package/application/generated.config.ts", import.meta.url);
+const configUrl = new URL("../../packaging/application/generated.config.ts", import.meta.url);
 const languageModule = new URL("../../../src/language/index.ts", import.meta.url);
 
 class SessioningConcept {

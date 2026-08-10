@@ -13,7 +13,7 @@ import {
   type HttpCookieBinding,
   type HttpPolicyInit,
 } from "@mit-sdg/sync-engine-http/policy";
-import { createHttpHandler } from "@mit-sdg/sync-engine-http/server";
+import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 
 class UnknownSession extends Error {}

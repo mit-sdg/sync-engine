@@ -1,14 +1,16 @@
 # @mit-sdg/sync-engine-http
 
-`@mit-sdg/sync-engine-http` exposes an assembled sync-engine application as
-Fetch-native POST/JSON endpoints and supplies a typed Fetch client. Start with a
-plain handler when callers send credentials and other inputs as JSON. Add an HTTP
-policy when the deployment needs browser cookies, CORS, a route prefix, or
-reviewed public error mappings.
+This package adapts `Request` to `Response`; it does not open a listener.
+`@mit-sdg/sync-engine-http` exposes an assembled sync-engine application through
+a Fetch handler and supplies a typed Fetch client. A host passes complete
+requests to the handler, returns its responses, and owns the listener and
+process lifecycle.
 
-The package adapts `Request` to `Response`; it does not own a listener, web
-framework, or server lifecycle. A host passes complete requests to the handler
-and returns its responses.
+Start with plain POST/JSON when callers send credentials and other inputs in the
+request body. Add an HTTP policy when the deployment needs cookies or
+request-origin protection, and add browser policy when it needs CORS. A route
+prefix, request-body limit, and reviewed public error mappings do not require
+browser policy.
 
 ## Install
 
@@ -26,7 +28,7 @@ has no root export and no supported deep imports.
 | Public subpath                      | Purpose                                      |
 | ----------------------------------- | -------------------------------------------- |
 | `@mit-sdg/sync-engine-http/policy`  | Immutable deployment policy and policy types |
-| `@mit-sdg/sync-engine-http/server`  | Fetch handler and server options             |
+| `@mit-sdg/sync-engine-http/handler` | Fetch handler and handler options            |
 | `@mit-sdg/sync-engine-http/client`  | Typed Fetch client and lower-level transport |
 | `@mit-sdg/sync-engine-http/tooling` | Generated HTTP wire projection               |
 
@@ -49,7 +51,7 @@ a Fetch handler, and give the handler's returned `Response` to the host:
 
 ```ts
 import { createGateway } from "@mit-sdg/sync-engine/boundary";
-import { createHttpHandler } from "@mit-sdg/sync-engine-http/server";
+import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
 import { assembleApplication } from "./assembly.ts";
 
 const application = assembleApplication();
@@ -66,7 +68,16 @@ shapes beyond the application's endpoint validators.
 
 A Fetch-native host calls `handler(request)`. The host must route the complete
 request URL to this handler; the handler selects an endpoint from the URL
-pathname.
+pathname. For example, Bun can use the handler as its `fetch` callback:
+
+```ts
+const listener = Bun.serve({ hostname: "127.0.0.1", port: 3000, fetch: handler });
+```
+
+`Bun.serve` opens the listener; `createHttpHandler` does not. The package does
+not provide a plain-host executable. Node, frameworks, workers, and serverless
+platforms may supply the same Fetch `Request` and consume the returned
+`Response`.
 
 ### Public errors, base path, and generated contract
 
@@ -130,8 +141,12 @@ for exact validation, result, timeout, abort, and response-size behavior.
 
 ## Tier 1: browser sessions
 
-Tier 1 adds a browser policy and one or more named cookie bindings. The following
-policy supports a credentialed frontend at `https://app.example.com`:
+Tier 1 binds browser-visible credentials to cookies and, when needed, declares
+cross-origin browser access. Browser deployment also requires a host that opens
+the listener and serves or routes the frontend; neither responsibility belongs
+to this package. The following policy supports an API at
+`https://api.example.com` and a credentialed frontend at
+`https://app.example.com`:
 
 ```ts
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
@@ -219,8 +234,8 @@ allowed origin.
 Request-origin protection controls which origins may invoke cookie-touched
 paths: protected, issuing, and clearing endpoints. By default, the allowlist is
 `publicOrigin` plus `browser.origins`. A present disallowed `Origin` returns
-`FORBIDDEN`/403. A missing `Origin` is allowed by default so non-browser and
-server-side callers can attach credentials deliberately. Set
+`FORBIDDEN`/403. A missing `Origin` is allowed by default so non-browser callers can attach
+credentials deliberately. Set
 `requestOrigins.requireOrigin: true` only when every caller is expected to send
 `Origin`.
 
@@ -296,8 +311,8 @@ tier, not a deep-import workaround.
 
 The package does not own:
 
-- an HTTP listener, connection limits, request-rate limits, DDoS controls, health
-  checks, autoscaling, or process lifecycle;
+- an HTTP listener, static files, SPA routing, connection limits, request-rate
+  limits, DDoS controls, health checks, autoscaling, or process lifecycle;
 - TLS termination, HSTS, certificate management, or trusted-proxy interpretation;
 - authentication semantics, authorization policy, credential storage, or a Node
   cookie jar;

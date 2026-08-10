@@ -42,7 +42,7 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 - [HTTP package guide](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/http/README.md) — tier 0 plain JSON, tier 1 browser sessions, and tier 2 extension and custom-transport paths
 - [HTTP Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/http/public-surface.md) — authoritative HTTP exports, signatures, validation, errors, and security behavior
 - Install the exact same beta of `@mit-sdg/sync-engine-http` and `@mit-sdg/sync-engine`; the HTTP package declares an exact core peer dependency.
-- Supported HTTP subpaths are `/policy`, `/server`, `/client`, and `/tooling`. The companion root and deep imports are unsupported.
+- Supported HTTP subpaths are `/policy`, `/handler`, `/client`, and `/tooling`. The companion root and deep imports are unsupported.
 - A plain `createHttpHandler({ application, gateway })` needs no policy. For public errors, browser origins, cookies, a base path, or a request limit, construct one `httpPolicy(...)` and reuse it in the handler and `httpWire({ policy, name })`.
 - The typed HTTP client takes no policy, sends `POST`, and defaults credentials to `same-origin`. Cross-origin browser sessions select `credentials: "include"` explicitly.
 - CORS controls browser response access; request-origin protection separately rejects present disallowed origins on cookie-touched paths. Missing `Origin` is allowed unless `requireOrigin` is true.

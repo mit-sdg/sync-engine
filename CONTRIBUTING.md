@@ -50,7 +50,7 @@ bun audit
 
 Do not hand-edit these outputs:
 
-- `tests/package/declarations.snapshot.txt` — update with
+- `tests/packaging/declarations.snapshot.txt` — update with
   `bun run declarations:pin` after an intentional declaration change;
 - `packages/http/tests/declarations.snapshot.txt` — update with
   `bun run declarations:pin` after an intentional HTTP-package declaration change;

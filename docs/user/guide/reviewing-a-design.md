@@ -96,7 +96,7 @@ early denial; exact enforcement belongs in the owner action and storage.
 
 Review what leaves the boundary. Generated types are not runtime validators, and
 the production HTTP policy exposes only its configured public categories. See
-the [HTTP server contract](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#server).
+the [HTTP Fetch handler contract](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md#handler).
 
 ## 6. Record revisions and evidence
 

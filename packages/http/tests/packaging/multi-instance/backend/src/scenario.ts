@@ -13,7 +13,7 @@ import {
 } from "@mit-sdg/sync-engine/assembly";
 import { createGateway, FrameworkErrorCode } from "@mit-sdg/sync-engine/boundary";
 import { inspectAssembly } from "@mit-sdg/sync-engine/tooling";
-import { createHttpHandler } from "@mit-sdg/sync-engine-http/server";
+import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
 import {
   Conflict,
   composition,

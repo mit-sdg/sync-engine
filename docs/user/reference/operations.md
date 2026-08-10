@@ -174,13 +174,17 @@ API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surfa
 defines exact method, body, status, CORS, origin, cookie, correlation, timeout,
 and response-limit behavior.
 
-The Fetch handler is not a listener and does not terminate TLS. A declared
-browser policy supplies exact-origin CORS and preflight handling; a separate
-request-origin policy protects cookie-touched paths. The host still owns
-connection and request-rate limits, denial-of-service controls, TLS, HSTS,
-certificate and trusted-proxy handling, health checks, autoscaling, listener
-lifecycle, and authentication integration. Application concepts own credential
-meaning and domain authorization.
+The Fetch handler maps one `Request` to a `Promise<Response>`. It does not open a
+listener, serve static files, or terminate TLS. A declared browser policy
+supplies exact-origin CORS and preflight handling; a separate request-origin
+policy protects cookie-touched paths. Plain POST/JSON deployments do not need
+browser or cookie policy when callers exchange every input in JSON.
+
+The host owns connection and request-rate limits, denial-of-service controls,
+TLS, HSTS, certificate and trusted-proxy handling, static-file and SPA routing,
+health checks, autoscaling, listener and process lifecycle, and authentication
+integration. Application concepts own credential meaning and domain
+authorization.
 
 Methods other than `POST`, streaming, resource-oriented REST routing,
 framework-owned routing, request preprocessing, and unrestricted response

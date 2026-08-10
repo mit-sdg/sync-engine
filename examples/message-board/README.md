@@ -1,15 +1,17 @@
 # Message board
 
-Message board is a small browser application built with sync-engine. A visitor
-can register, sign in, publish posts, attach comments, read the board, and sign
-out. The example shows how four independent stateful behaviors become one web
-application without making any one behavior responsible for the whole workflow.
+Message board is a small application built with sync-engine. Its application
+constructor has no HTTP policy. Two Bun hosts bind the same application to a
+Fetch handler: one exposes a plain POST/JSON API, while the other adds a
+cookie-backed browser session and serves the browser assets.
 
-Start with [Reading Circle](../reading-circle/README.md) if you want the shortest
-transport-neutral example. Message board adds authentication, browser sessions,
-and the maintained HTTP package.
+A visitor can register, sign in, publish posts, attach comments, read the board,
+and sign out. The example shows how four independent stateful behaviors become
+one application without making any one behavior responsible for the whole
+workflow. Start with [Reading Circle](../reading-circle/README.md) for the
+shortest transport-neutral example.
 
-## Run the browser application
+## Run the browser deployment
 
 From this directory:
 
@@ -18,25 +20,52 @@ bun install
 bun run start
 ```
 
-Open <http://localhost:3000>. Set `HOST` or `PORT` to select another listener:
+Open <http://localhost:3000>. The Bun host serves the browser UI and routes
+`/api/*` requests to the Fetch handler. The handler issues and reads the session
+cookie; Bun owns the listener, static assets, and process lifecycle.
+
+Set `HOST` or `PORT` to select another listener. Set `PUBLIC_ORIGIN` when the URL
+used by callers differs from the origin derived from `HOST` and `PORT`:
 
 ```sh
-HOST=127.0.0.1 PORT=4000 bun run start
+HOST=127.0.0.1 PORT=4000 PUBLIC_ORIGIN=http://127.0.0.1:4000 bun run start
 ```
 
-The host serves both the browser UI and the `/api` endpoints. It keeps accounts,
-sessions, posts, and comments in memory, so stopping the process clears the
-board.
+`HOST` must be nonempty, `PORT` must be an integer from 1 through 65535, and
+`PUBLIC_ORIGIN` must be an absolute HTTP or HTTPS origin without credentials,
+path, query, or fragment. Invalid values terminate startup before `Bun.serve`.
+This host serves the frontend and API from one origin. It does not configure
+CORS for a frontend on another origin.
 
-Run the example's checks separately:
+## Run the plain POST/JSON API
+
+Use the API-only host when every endpoint input, including the session value, is
+carried in JSON:
+
+```sh
+bun run start:api
+```
+
+The API listens at <http://localhost:3000/api> by default. It serves no frontend
+assets, emits no cookie or CORS headers, and returns `session` and `expiresAt`
+from successful registration and sign-in calls. Send the returned `session` in
+the JSON body of current-user, sign-out, board-list, post, and comment requests.
+The cookie-projected `MessageBoardWireHttp` client is for the browser deployment;
+the plain API retains the session fields in the logical `MessageBoardWire`.
+
+`HOST` and `PORT` select another API listener. The plain host does not read
+`PUBLIC_ORIGIN` because it has no cookie or browser policy.
+
+Both hosts keep accounts, sessions, posts, and comments in memory. Stopping a
+host clears its board. Run the checks separately:
 
 ```sh
 bun run check
 ```
 
 `check` runs formatting, type checking, tests, and generated-artifact checks.
-This example has no standalone command-line scenario; `start` runs the web host
-until it is stopped.
+The example has no standalone command-line scenario; each start command runs its
+host until stopped.
 
 ## The four concepts
 
@@ -64,6 +93,25 @@ explicitly owns its post strings.
 Each concept has a specification and direct tests under `src/concepts/`. The
 specification states the concept's purpose, actions, queries, and expected
 refusals without relying on another concept.
+
+## Application construction and HTTP binding
+
+`createMessageBoard()` in `src/application.ts` assembles the concepts and
+composition, applies execution limits to a gateway, and returns
+`{ application, gateway }`. The function imports no HTTP package code and
+selects no cookie, CORS, origin, listener, or static-file policy. Direct callers
+and other transports can use the same application and gateway.
+
+`src/edge.ts` defines two deployment policies. `messageBoardApiPolicy()` adds
+only `/api` and reviewed public error mappings. `messageBoardHttpPolicy(...)`
+also binds the logical `session` input and registration and sign-in outputs to a secure cookie.
+Each host passes its selected policy, application, and gateway to
+`createHttpHandler(...)` from `@mit-sdg/sync-engine-http/handler`.
+
+`src/api-host.ts` gives that Fetch handler directly to `Bun.serve`.
+`src/host.ts` wraps the handler with routing for the browser HTML and JavaScript.
+The HTTP package owns protocol behavior inside the handler; Bun owns both
+listeners and the browser host owns static-file routing.
 
 ## How composition makes the application
 
@@ -95,12 +143,14 @@ and testable on their own.
 The browser uses the generated typed client rather than constructing endpoint
 requests with raw `fetch` calls. A normal visit follows this lifecycle:
 
-1. Register a username and password.
-2. Sign in. Successful sign-in starts a session and issues an `HttpOnly` cookie.
-3. Publish a post or attach a comment. The server obtains the author from the
-   session rather than from browser input.
-4. List the board. The former combines post state with attached comment state.
-5. Sign out. Sessioning ends the session and the HTTP boundary clears the
+1. Register a username and password. Successful registration starts a session
+   and issues an `HttpOnly` cookie. Sign-in performs the same session step for an
+   existing account.
+2. Publish a post or attach a comment. The Fetch handler obtains the session
+   from the cookie, and composition obtains the author from that session rather
+   than from browser input.
+3. List the board. The former combines post state with attached comment state.
+4. Sign out. Sessioning ends the session and the HTTP boundary clears the
    cookie.
 
 The [technical notes](TECHNICAL.md) describe the endpoint branches, cookie
@@ -114,9 +164,11 @@ test evidence.
 | `src/concepts/*/`                                          | Concept specifications, implementations, and principle tests |
 | `src/composition.ts`                                       | Endpoint workflows, runtime validators, and board former     |
 | `src/assembly.ts`                                          | Concept assembly and execution limits                        |
-| `src/edge.ts`                                              | Gateway, HTTP policy, cookie binding, and Fetch handler      |
-| `src/client.ts`                                            | Typed projected HTTP client                                  |
-| `src/host.ts`, `src/web/`                                  | Bun host and browser UI                                      |
+| `src/application.ts`                                       | Policy-independent application and gateway construction      |
+| `src/edge.ts`                                              | Plain and cookie-backed HTTP policies                        |
+| `src/api-host.ts`                                          | Bun host for the plain POST/JSON API                         |
+| `src/client.ts`                                            | Typed cookie-projected HTTP client                           |
+| `src/host.ts`, `src/web/`                                  | Bun browser host, static routing, and browser UI             |
 | `tests/`                                                   | Network lifecycle, security, artifact, and type checks       |
 | [`generated/message-board.md`](generated/message-board.md) | Pinned assembled read-back                                   |
 | [`generated/wire.ts`](generated/wire.ts)                   | Pinned logical and browser-projected contracts               |

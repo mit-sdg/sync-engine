@@ -121,7 +121,7 @@ const allowedTestDirectories = new Set([
   "examples",
   "fixtures",
   "internal",
-  "package",
+  "packaging",
   "utils",
 ]);
 
@@ -709,7 +709,11 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
         (workspace.requiredPackedFiles as readonly string[]).includes(workspaceRelative) ||
         ["tsconfig.json", "tsconfig.build.json"].includes(workspaceRelative) ||
         (workspaceRelative.startsWith("src/") && workspaceRelative.endsWith(".ts")) ||
-        (workspaceRelative.startsWith("tests/") && workspaceRelative.endsWith(".ts")));
+        (workspaceRelative.startsWith("tests/") &&
+          (workspaceRelative.endsWith(".ts") ||
+            workspaceRelative.endsWith(".json") ||
+            workspaceRelative.endsWith(".md") ||
+            workspaceRelative.endsWith(".mjs"))));
     const known =
       (parts.length === 1 && allowedRootFiles.has(path)) ||
       (head === ".github" &&

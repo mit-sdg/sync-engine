@@ -19,10 +19,10 @@ const exampleManifests = [
   "examples/operations-room/package.json",
   "examples/message-board/package.json",
 ] as const;
-const bunFixtureManifests = ["tests/package/application/package.json"] as const;
+const bunFixtureManifests = ["tests/packaging/application/package.json"] as const;
 const nodeFixtureManifests = [
-  "tests/package/multi-instance/client/package.json",
-  "tests/package/multi-instance/backend/package.json",
+  "packages/http/tests/packaging/multi-instance/client/package.json",
+  "packages/http/tests/packaging/multi-instance/backend/package.json",
 ] as const;
 export const ownedDependencyManifests = [
   ...exampleManifests,
@@ -37,7 +37,10 @@ const bunProjectManifests = [...exampleManifests, ...bunFixtureManifests] as con
 const scaffoldManifest = "src/command/scaffold/package.json";
 const sharedDevelopmentDependencies = [
   ["@types/bun", ["examples/message-board/package.json"]],
-  ["@types/node", [...exampleManifests, "tests/package/multi-instance/backend/package.json"]],
+  [
+    "@types/node",
+    [...exampleManifests, "packages/http/tests/packaging/multi-instance/backend/package.json"],
+  ],
   ["vite", exampleManifests],
   ["vite-plus", exampleManifests],
 ] as const;

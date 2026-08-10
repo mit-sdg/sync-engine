@@ -11,7 +11,7 @@ package is ESM-only and supports Node.js 24 (`>=24 <25`).
 | Package path                                    | Role                                  |
 | ----------------------------------------------- | ------------------------------------- |
 | [`@mit-sdg/sync-engine-http/policy`](#policy)   | Validated immutable deployment policy |
-| [`@mit-sdg/sync-engine-http/server`](#server)   | Fetch handler                         |
+| [`@mit-sdg/sync-engine-http/handler`](#handler) | Fetch handler                         |
 | [`@mit-sdg/sync-engine-http/client`](#client)   | Fetch transport and typed client      |
 | [`@mit-sdg/sync-engine-http/tooling`](#tooling) | Generated HTTP wire projection        |
 
@@ -177,13 +177,13 @@ when `httpWire(...).project` projects one:
 - every issue endpoint output alternative must contain the declared value and
   expiry fields.
 
-## `server`
+## `handler`
 
-<!-- register:http-server:start -->
+<!-- register:http-handler:start -->
 
 `HttpCorrelationOptions`, `HttpHandlerOptions`, `HttpResponseHeadersContext`, `createHttpHandler`
 
-<!-- register:http-server:end -->
+<!-- register:http-handler:end -->
 
 ### `createHttpHandler`
 
@@ -231,7 +231,7 @@ core portable JSON serialization. An invocation throw, invalid cookie issue
 value, invalid or non-future expiry, oversized serialized cookie, or response
 serialization failure returns opaque `INTERNAL_ERROR`/500.
 
-### Server errors
+### Handler errors
 
 | Result            | Status | Condition                                                                                                               |
 | ----------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
@@ -302,7 +302,10 @@ package's security boundary and can invalidate the handler's header and error
 guarantees.
 
 Handler calls may overlap. The handler has no disposal method and does not own
-the application, gateway, concept store, listener, or other host resources.
+the application, gateway, concept store, listener, static files, TLS, process
+lifecycle, or other host resources. The host must route complete Fetch requests
+to the handler, return its responses, and close every resource that the host
+creates.
 
 ## `client`
 

@@ -73,17 +73,17 @@ bun install
 `release:update` projects the canonical facts into every owned package
 dependency location:
 
-| Location                                            | Owned version fact                                                   |
-| --------------------------------------------------- | -------------------------------------------------------------------- |
-| `package.json`                                      | Published version and `publishConfig.tag`                            |
-| `packages/http/package.json`                        | HTTP package version and exact core peer                             |
-| `packages/analysis/package.json`                    | Analysis version, exact core peer, and TypeScript runtime dependency |
-| `examples/reading-circle/package.json`              | Shipped example dependency                                           |
-| `examples/operations-room/package.json`             | Shipped example dependency                                           |
-| `examples/message-board/package.json`               | Shipped example dependency                                           |
-| `tests/package/application/package.json`            | Standalone packed-application dependency                             |
-| `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
-| `tests/package/multi-instance/backend/package.json` | Independent backend dependency                                       |
+| Location                                                            | Owned version fact                                                   |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `package.json`                                                      | Published version and `publishConfig.tag`                            |
+| `packages/http/package.json`                                        | HTTP package version and exact core peer                             |
+| `packages/analysis/package.json`                                    | Analysis version, exact core peer, and TypeScript runtime dependency |
+| `examples/reading-circle/package.json`                              | Shipped example dependency                                           |
+| `examples/operations-room/package.json`                             | Shipped example dependency                                           |
+| `examples/message-board/package.json`                               | Shipped example dependency                                           |
+| `tests/packaging/application/package.json`                          | Standalone packed-application dependency                             |
+| `packages/http/tests/packaging/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
+| `packages/http/tests/packaging/multi-instance/backend/package.json` | Independent backend dependency                                       |
 
 The scaffold keeps placeholders and generation reads the canonical root facts.
 The following `bun install` regenerates `bun.lock` from the projected manifests.

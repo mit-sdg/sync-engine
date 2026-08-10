@@ -13,7 +13,7 @@ browser-session API.
 
 ### Compatibility
 
-- `@mit-sdg/sync-engine-http` now exposes `/policy`, `/server`, `/client`, and
+- `@mit-sdg/sync-engine-http` now exposes `/policy`, `/handler`, `/client`, and
   `/tooling`. One branded immutable policy supplies deployment facts to the
   handler and wire projector; the typed client remains policy-free. The handler
   accepts POST/JSON only and can derive exact-origin CORS, request-origin

@@ -42,8 +42,8 @@ export default defineConfig({
   lint: {
     ignorePatterns: [
       "src/command/scaffold/**",
-      "tests/package/application/**",
-      "tests/package/multi-instance/**",
+      "tests/packaging/application/**",
+      "packages/http/tests/packaging/multi-instance/**",
       ...Object.values(applicationExamples).flatMap((example) =>
         example.generated.map((path) => `examples/${example.directory}/${path}`),
       ),
@@ -77,7 +77,7 @@ export default defineConfig({
   },
   test: {
     include: ["examples/**/*.test.ts", "packages/*/tests/**/*.test.ts", "tests/**/*.test.ts"],
-    exclude: ["tests/package/application/**", "tests/package/multi-instance/**"],
+    exclude: ["tests/packaging/application/**", "packages/http/tests/packaging/multi-instance/**"],
     coverage: {
       thresholds: {
         statements: 90,

@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 import { createMessageBoardClient } from "../client.ts";
 
 const client = createMessageBoardClient({ baseUrl: "/api" });
