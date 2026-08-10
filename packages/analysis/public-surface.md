@@ -1,7 +1,7 @@
 # Analysis Public Surface
 
-`@mit-sdg/sync-engine-analysis` exports only `/ir` and `/project`; root and deep
-imports are unsupported.
+`@mit-sdg/sync-engine-analysis` is a public package that exports only `/ir` and
+`/project`; root and deep imports are unsupported.
 
 Install analysis and core at the same exact beta version. The package is
 ESM-only and supports Node.js 24 (`>=24 <25`). Project analysis also installs

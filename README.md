@@ -51,7 +51,7 @@ mkdir workshop-app
 cd workshop-app
 bun init -y
 bun add --exact @mit-sdg/sync-engine@beta
-bunx sync-engine setup
+bunx --package @mit-sdg/sync-engine@beta sync-engine setup
 ```
 
 For a reproducible evaluation, replace `@beta` with a pinned version. `setup`

@@ -1,9 +1,10 @@
 # @mit-sdg/sync-engine-analysis
 
-`@mit-sdg/sync-engine-analysis` lists and describes design elements and
-contracts, finds related reactions, and traces possible impact. It requires a
-host-supplied Application Manifest V5; it neither connects to an application nor
-discovers a manifest. Source-aware analysis can add checkout evidence.
+`@mit-sdg/sync-engine-analysis` is an independently published public package
+that lists and describes design elements and contracts, finds related reactions,
+and traces possible impact. It requires a host-supplied Application Manifest V5;
+it neither connects to an application nor discovers a manifest. Source-aware
+analysis can add checkout evidence.
 
 ## What you can do
 
