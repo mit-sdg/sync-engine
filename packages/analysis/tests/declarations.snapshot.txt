@@ -940,6 +940,7 @@ export declare class TypeScriptProjectGraph {
     private readonly underlyingRead;
     private readonly customRead;
     private readonly snapshots;
+    private readonly sourceFiles;
     private readFailure;
     constructor(options: LoadTypeScriptProjectGraphOptions);
     projectPath(path: string): string;
