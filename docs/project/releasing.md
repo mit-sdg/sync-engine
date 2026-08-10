@@ -134,7 +134,7 @@ shared build; the release-only scenario gate reuses it, while the public
 `bun run scenario` command remains self-contained. The publish workflow keeps
 the gates as separate steps so GitHub identifies the failing gate and so
 `package:check` can receive the verified-tarball output directory used by the
-publication jobs.
+publication job.
 
 Confirm regeneration leaves no unexplained diff and review the npm pack file
 listing. `package:check` invokes npm's real pack lifecycle for each workspace;
@@ -161,12 +161,10 @@ commit, then repeat every external-setting check above.
 
 ## Tag and publish
 
-Core, analysis, and HTTP are independently published. Each release publishes
-core first, analysis only after core succeeds, and HTTP only after both core and
-analysis succeed. Both companions declare the exact matching core beta as their
-peer dependency. Analysis declares TypeScript as a normal runtime dependency.
-The workflow never overwrites an npm version or moves or reuses a release tag or
-tarball.
+Core, analysis, and HTTP are independently published in that order. Both
+companions declare the exact matching core beta as their peer dependency.
+Analysis declares TypeScript as a normal runtime dependency. The workflow never
+overwrites an npm version or moves or reuses a release tag or tarball.
 
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
    of `origin/main`, then create and push one annotated `v$VERSION` tag. Never
@@ -178,13 +176,15 @@ tarball.
    no OIDC permission.
 3. Approve the protected `npm` environment only after `verify` succeeds and an
    independent reviewer has repeated the source and external-setting checks.
-   The three publication jobs are the only jobs with the `npm` environment and
-   `id-token: write`. Each checks out the same commit, refetches and verifies the
-   live annotated tag and main ancestry, downloads the verified tarballs, and
-   checks its recorded digest. The core job publishes under `beta`; analysis
-   runs only after core succeeds; HTTP runs only after both predecessors
-   succeed. All three publish under `beta` with public access. No publication
-   job installs dependencies, runs Bun, packs, prepackages, or rebuilds a
+   The single publication job is the only job with the `npm` environment and
+   `id-token: write`, so this is one approval for the complete package set. It
+   checks out the same commit, refetches and verifies the live annotated tag and
+   main ancestry, downloads the verified tarballs, checks every recorded digest,
+   and binds each packed `package.json` name and version to the validated source
+   manifest. It rejects an artifact directory that is not exactly the reviewed
+   tarball/checksum set. It then publishes core, analysis, and HTTP sequentially
+   under `beta` with public access, stopping at the first failure. No publication
+   step installs dependencies, runs Bun, packs, prepackages, or rebuilds a
    package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.

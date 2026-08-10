@@ -3,13 +3,14 @@ import { isDeepStrictEqual } from "node:util";
 import { activeWorkflowSource, externalWorkflowActions, workflowUses } from "./workflow.ts";
 import { workspaceById, workspaceCatalog, type Workspace } from "./workspaces.ts";
 
-const coreWorkspace = workspaceById("core");
-const httpWorkspace = workspaceById("http");
-const analysisWorkspace = workspaceById("analysis");
+// The catalog defines release package membership and publication order. These
+// named entries remain only for root-workspace and analysis-specific policies.
 const releaseWorkspaces: readonly Workspace[] = workspaceCatalog;
 const publishedWorkspaces = releaseWorkspaces.filter(
   (workspace) => workspace.publication === "npm",
 );
+const coreWorkspace = workspaceById("core");
+const analysisWorkspace = workspaceById("analysis");
 const workspaceReleaseManifests = releaseWorkspaces
   .filter((workspace) => workspace.id !== coreWorkspace.id)
   .map((workspace) => workspace.packageManifest);
@@ -75,6 +76,7 @@ export const releaseSourcePaths = [
   ".github/dependabot.yml",
   "scripts/update-release-manifests.ts",
   "scripts/check-release.ts",
+  "scripts/check-release-source.ts",
   "scripts/verify-release.ts",
   "scripts/verify-package.ts",
   "scripts/build.ts",
@@ -678,6 +680,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "/docs/project/releasing.md",
     "/scripts/release.ts",
     "/scripts/check-release.ts",
+    "/scripts/check-release-source.ts",
     "/scripts/update-release-manifests.ts",
     "/scripts/verify-release.ts",
     "/scripts/verify-package.ts",
@@ -751,26 +754,10 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
 
   const publish = activeWorkflowSource(sources.get(".github/workflows/publish.yml") ?? "");
   const verify = workflowJob(publish, "verify");
-  const publicationPolicies = [
-    { workspace: coreWorkspace, jobName: "publish-core", needs: "needs: verify" },
-    {
-      workspace: analysisWorkspace,
-      jobName: "publish-analysis",
-      needs: "needs: [verify, publish-core]",
-    },
-    {
-      workspace: httpWorkspace,
-      jobName: "publish-http",
-      needs: "needs: [verify, publish-core, publish-analysis]",
-    },
-  ] as const;
-  const publicationJobs = publicationPolicies.map((policy) => ({
-    ...policy,
-    source: workflowJob(publish, policy.jobName),
-  }));
+  const publication = workflowJob(publish, "publish");
   const checkedPublishJobs: Array<readonly [string, string]> = [
     ["verify", verify],
-    ...publicationJobs.map(({ jobName, source }) => [jobName, source] as const),
+    ["publish", publication],
   ];
   for (const fact of [
     "name: Publish beta",
@@ -808,18 +795,16 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   if (verify.includes("environment:") || verify.includes("id-token: write")) {
     failures.push(".github/workflows/publish.yml: verify must be unprivileged");
   }
-  if (/^\s+(?:-\s+)?if:/m.test(verify)) {
-    failures.push(".github/workflows/publish.yml: verify steps must not be conditional");
+  for (const [name, job] of checkedPublishJobs) {
+    if (/^\s+(?:-\s+)?if:/m.test(job)) {
+      failures.push(`.github/workflows/publish.yml: ${name} steps must not be conditional`);
+    }
+    if (/^\s+continue-on-error:/m.test(job)) {
+      failures.push(`.github/workflows/publish.yml: ${name} steps must not continue on error`);
+    }
   }
-  if (/^\s+continue-on-error:/m.test(verify)) {
-    failures.push(".github/workflows/publish.yml: verify steps must not continue on error");
-  }
-  const reviewedJobOrder = ["verify", ...publicationPolicies.map(({ jobName }) => jobName)];
-  const jobPositions = reviewedJobOrder.map((name) => publish.indexOf(`\n  ${name}:`));
-  if (
-    jobPositions.some((position) => position < 0) ||
-    jobPositions.some((position, index) => index > 0 && position <= jobPositions[index - 1])
-  ) {
+  const jobPositions = ["verify", "publish"].map((name) => publish.indexOf(`\n  ${name}:`));
+  if (jobPositions.some((position) => position < 0) || jobPositions[1] <= jobPositions[0]) {
     failures.push(
       ".github/workflows/publish.yml: verify and publication jobs must remain in reviewed order",
     );
@@ -829,107 +814,68 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
     "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
   ];
-  for (const { workspace, jobName, needs, source } of publicationJobs) {
-    for (const fact of [needs, "id-token: write", "name: npm"]) {
-      if (!hasWorkflowLine(source, fact)) {
-        failures.push(`.github/workflows/publish.yml: ${jobName} job is missing ${fact}`);
-      }
-    }
-    if (!isDeepStrictEqual(workflowUses(source), publicationActions)) {
-      failures.push(
-        `.github/workflows/publish.yml: ${jobName} must use checkout, setup-node, and download-artifact only`,
-      );
-    }
-    const tarball = `release/${workspace.verifiedTarball}`;
-    const checksum = `sha256sum --check ${tarball}.sha256`;
-    const publication = `npm publish ./${tarball} --provenance --tag beta --access public`;
-    const checksumPosition = runCommandPosition(source, checksum);
-    const publicationPosition = runCommandPosition(source, publication);
-    if (checksumPosition < 0) {
-      failures.push(`.github/workflows/publish.yml: ${jobName} job is missing ${checksum}`);
-    }
-    if (publicationPosition < 0) {
-      failures.push(`.github/workflows/publish.yml: ${jobName} job is missing ${publication}`);
-    }
-    if (
-      checksumPosition >= 0 &&
-      publicationPosition >= 0 &&
-      checksumPosition >= publicationPosition
-    ) {
-      failures.push(
-        `.github/workflows/publish.yml: ${jobName} checksum verification must precede npm publish`,
-      );
-    }
-    if ((source.match(/\bnpm\s+publish\b/g) ?? []).length !== 1) {
-      failures.push(
-        `.github/workflows/publish.yml: ${jobName} job must contain exactly one npm publish command`,
-      );
-    }
-    if (!source.includes(tarball)) {
-      failures.push(`.github/workflows/publish.yml: publish must include ${workspace.id} tarball`);
-    }
-    for (const forbidden of [
-      "setup-bun@",
-      "bun install",
-      "bun run",
-      "npm install",
-      "npm pack",
-      "npm run",
-      "prepack",
-    ]) {
-      if (source.includes(forbidden)) {
-        failures.push(
-          `.github/workflows/publish.yml: ${jobName} job must not rebuild (${forbidden})`,
-        );
-      }
-    }
-    if (/^\s+(?:-\s+)?if:/m.test(source)) {
-      failures.push(`.github/workflows/publish.yml: ${jobName} steps must not be conditional`);
-    }
-    if (/^\s+continue-on-error:/m.test(source)) {
-      failures.push(`.github/workflows/publish.yml: ${jobName} steps must not continue on error`);
+  for (const fact of ["needs: verify", "id-token: write", "name: npm"]) {
+    if (!hasWorkflowLine(publication, fact)) {
+      failures.push(`.github/workflows/publish.yml: publish job is missing ${fact}`);
     }
   }
-  if ((publish.match(/id-token:\s*write/g) ?? []).length !== publicationJobs.length) {
+  if (!isDeepStrictEqual(workflowUses(publication), publicationActions)) {
     failures.push(
-      ".github/workflows/publish.yml: only publication jobs may receive id-token: write",
+      ".github/workflows/publish.yml: publish must use checkout, setup-node, and download-artifact only",
     );
   }
-  const sourceValidation = [
-    ["GITHUB_REF_NAME", "if (process.env.GITHUB_REF_NAME !=="],
-    ["GITHUB_SHA", 'test "$(git rev-parse HEAD)" = "$GITHUB_SHA"'],
-    ["origin/main", 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main'],
-    ["origin main fetch", "git fetch --no-tags origin main"],
-    [
-      "live tag fetch",
-      'git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"',
-    ],
-    ["annotated tag", 'test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag'],
-    ["live tag commit", 'test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"'],
-    ["v1 beta", "/^1\\.0\\.0-beta\\.(0|[1-9]\\d*)$/"],
-    ["safe numeric components", "Number.isSafeInteger(Number(beta[1]))"],
-    ["`v${core.version}`", "`v${core.version}`"],
-    ["core.version !== http.version", "core.version !== http.version"],
-    ["core.version !== analysis.version", "core.version !== analysis.version"],
-  ] as const;
-  for (const [fact, source] of sourceValidation) {
-    for (const [jobName, job] of checkedPublishJobs) {
-      if (!job.includes(source)) {
-        failures.push(
-          `.github/workflows/publish.yml: ${jobName} source validation is missing ${fact}`,
-        );
-      }
+  const publications = publishedWorkspaces.map(
+    (workspace) =>
+      `npm publish ./release/${workspace.verifiedTarball} --provenance --tag beta --access public`,
+  );
+  const publicationPositions = publications.map((command) =>
+    runCommandPosition(publication, command),
+  );
+  for (const [index, command] of publications.entries()) {
+    if (publicationPositions[index] < 0) {
+      failures.push(`.github/workflows/publish.yml: publish job is missing ${command}`);
     }
   }
-  for (const workspace of releaseWorkspaces) {
-    for (const [jobName, job] of checkedPublishJobs) {
-      const manifestPath = `./${workspace.packageManifest}`;
-      if (!job.includes(manifestPath)) {
-        failures.push(
-          `.github/workflows/publish.yml: ${jobName} source validation is missing ${workspace.packageManifest}`,
-        );
-      }
+  if (
+    publicationPositions.some((position) => position < 0) ||
+    publicationPositions.some(
+      (position, index) => index > 0 && position <= publicationPositions[index - 1],
+    )
+  ) {
+    failures.push(".github/workflows/publish.yml: publications must remain in catalog order");
+  }
+  if ((publication.match(/\bnpm\s+publish\b/g) ?? []).length !== publications.length) {
+    failures.push(
+      ".github/workflows/publish.yml: publish job must contain exactly one npm publish per published workspace",
+    );
+  }
+  for (const forbidden of [
+    "setup-bun@",
+    "bun install",
+    "bun run",
+    "npm install",
+    "npm pack",
+    "npm run",
+    "prepack",
+  ]) {
+    if (publication.includes(forbidden)) {
+      failures.push(`.github/workflows/publish.yml: publish job must not rebuild (${forbidden})`);
     }
+  }
+  if ((publish.match(/id-token:\s*write/g) ?? []).length !== 1) {
+    failures.push(
+      ".github/workflows/publish.yml: only the publication job may receive id-token: write",
+    );
+  }
+  if (!hasRunCommand(verify, "node scripts/check-release-source.ts")) {
+    failures.push(
+      ".github/workflows/publish.yml: verify source validation must invoke check-release-source.ts",
+    );
+  }
+  if (!hasRunCommand(publication, "node scripts/check-release-source.ts release")) {
+    failures.push(
+      ".github/workflows/publish.yml: publish source validation must invoke check-release-source.ts with verified artifacts",
+    );
   }
   for (const fact of ["SYNC_ENGINE_VERIFIED_TARBALLS: release", "name: verified-npm-package"]) {
     if (!verify.includes(fact)) {
@@ -948,6 +894,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       }
     }
   }
+
   if (/\bgh\s+release\b/.test(publish)) {
     failures.push(".github/workflows/publish.yml: must not create a GitHub release");
   }
