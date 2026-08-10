@@ -1,10 +1,9 @@
 # Reviewing a design
 
-This procedure reviews concept boundaries before state and actions, then reviews
-composition and whole-system failure. It assumes the criteria in [Designing with
-concepts](../design.md). Record the evidence and unresolved decisions from each
-step. Do not begin field-level review while a purpose or boundary remains
-disputed.
+Review concept boundaries before state and actions, then composition and
+whole-system failure. Apply [Designing with concepts](../design.md), record
+evidence and unresolved decisions, and defer field-level review until purpose and
+boundaries are settled.
 
 ## 1. Inventory the design
 
@@ -13,9 +12,8 @@ identities. For each reaction, record its trigger, reads, effects, and the
 application decision it expresses. For each endpoint, record its route, admitted
 input, concepts reached, and possible answers.
 
-A purpose that cannot be stated in one line often contains several mechanisms. A
-reaction whose decision cannot be stated often reconstructs a missing action or
-connects an artificial split.
+If a reaction's decision cannot be stated, it may reconstruct a missing action or
+connect an artificial split.
 
 ## 2. Review each concept
 
@@ -36,16 +34,11 @@ boundary defect.
 | Documentation     | States each bound, lifetime, and order in the declaration that enforces it; matches each refusal sentence to its rule; and does not restate declarations in prose.      |
 
 Trace the specification in both directions. Every purpose commitment must appear
-in the principle and be supported by the applicable actions, queries, refusals,
-and owned state. Every declared member and owned fact must contribute to a
-purpose commitment. Treat the specification as authored evidence, not proof that
-the implementation satisfies the prose. The [concept specification writing
-conventions](../reference/concept-specification.md#writing-conventions) define
-section placement, prose notation, and the documentation criterion.
-
-Use [Choosing concept boundaries](../design.md#choosing-concept-boundaries) when
-state partitions or several purposes appear, or when reactions mostly pass calls
-between the same pair of concepts.
+in the principle and be supported by actions, queries, refusals, and owned state;
+every declared member and owned fact must support a commitment. The specification
+is authored evidence, not proof of implementation behavior. Apply the [writing
+conventions](../reference/concept-specification.md#writing-conventions) and
+[boundary criteria](../design.md#choosing-concept-boundaries).
 
 ## 3. Review the composition
 
@@ -60,17 +53,16 @@ For every reaction and endpoint:
 - move local invariants and race-sensitive decisions into owner actions; and
 - ensure case-split endpoints have deliberate coverage and overlap.
 
-Trace cycles from effects back to triggers. For each cross-concept invariant,
-record its false interval and repair behavior. Consolidate duplicated policy into
-a named view.
+Trace cycles from effects back to triggers. Record each cross-concept invariant's
+false interval and repair behavior. Consolidate duplicated policy into a named
+view.
 
 ## 4. Trace scenarios end to end
 
-For each representative scenario, follow every matching rule, state which owner
-changes each fact, identify authorization decisions, note fan-out and cycles, and
-record the final observable result. Record the state and durable effects after
-each refusal, fault, timeout, or interruption; do not collapse those outcomes into
-a single success/failure label.
+For each representative scenario, follow every matching rule. Record each fact's
+owner, authorization decisions, fan-out, cycles, and final result. After each
+refusal, fault, timeout, or interruption, record state and durable effects rather
+than one success/failure label.
 
 At minimum, trace:
 
@@ -91,10 +83,10 @@ make that statement true.
 
 ## 5. Review failure and security
 
-For each effect, ask what remains if the next step does not happen. Identify
-unanswered endpoint paths, compensation that can itself fail, and work that can
-outlive its caller. Use [failure delivery](../reference/semantics.md#failures-between-action-asks)
-and [cancellation](../reference/semantics.md#cancellation) for the runtime contract.
+For each effect, record what remains if the next step fails. Identify unanswered
+endpoint paths, compensation failures, and work that can outlive its caller. See
+[failure delivery](../reference/semantics.md#failures-between-action-asks) and
+[cancellation](../reference/semantics.md#cancellation).
 
 For each protected effect, record the actor, authenticated identity, resource,
 owner of every fact, condition, and enforcement point. Check direct
@@ -120,7 +112,6 @@ validation boundary.
 | Several endpoints repeat a condition               | Name one policy view.                                  |
 | Reusable behavior has an application name          | Rename the mechanism and bind meaning in composition.  |
 
-For each accepted revision, record the failed criterion, the changed owner or
-rule, the new failure boundary, and the test or design evidence that demonstrates
-the correction. Retain rejected alternatives when they explain why the chosen
-boundary is necessary.
+For each accepted revision, record the failed criterion, changed owner or rule,
+new failure boundary, and evidence of correction. Retain rejected alternatives
+only when they explain the chosen boundary.

@@ -1,15 +1,11 @@
 # Concept specification processing
 
-This project document maps how the current implementation extracts and uses
-machine-readable facts from `spec.md`. It describes the implementation in this
-checkout, including deliberate enforcement gaps; it is not a consumer contract
-or a replacement for the supported [concept specification
-format](../user/reference/concept-specification.md). See [Engine
-architecture](architecture.md) for the surrounding subsystem boundaries.
+This document maps how this checkout extracts and uses machine-readable facts
+from `spec.md`, including enforcement gaps. The supported [concept specification
+format](../user/reference/concept-specification.md) remains the consumer contract;
+[engine architecture](architecture.md) defines surrounding boundaries.
 
 ## Contract boundary
-
-Keep these sources of truth distinct when changing this path:
 
 | Source                                        | Establishes                                              |
 | --------------------------------------------- | -------------------------------------------------------- |
@@ -18,9 +14,8 @@ Keep these sources of truth distinct when changing this path:
 | Focused tests and `bun run check`             | Cases the repository currently verifies                  |
 | [Extension directions](#extension-directions) | Options only; no implementation or compatibility promise |
 
-The supported format uses Markdown for both machine declarations and human
-explanation. The engine does not infer schemas or behavior from the human
-parts. [Known gaps](#known-gaps) records the remaining enforcement differences.
+The engine does not infer schemas or behavior from human-readable Markdown.
+[Known gaps](#known-gaps) records enforcement differences.
 
 ## Processing pipeline
 
@@ -34,14 +29,11 @@ parts. [Known gaps](#known-gaps) records the remaining enforcement differences.
 | Execute reads | `src/engine/reads/queries.ts`                             | Enforce query answer containers and cardinality during reaction, view, and former reads |
 | Inspect       | `src/engine/reactions/concepts/introspect.ts` and tooling | Emit the parsed contract in inventories, manifests, and read-back                       |
 
-The stages are not interchangeable. Registration can recover some runtime
-parameter names; source checking reads the class declaration and therefore
-catches forms erased from JavaScript. Query enforcement applies to the
-instrumented read path, not every direct method call.
-
-The lower-level `vocabulary({ class, spec })` path also parses a specification,
-but it is not equivalent to `registerConcept`; see [Vocabulary-only
-parsing](#vocabulary-only-parsing).
+Registration recovers some runtime parameter names; source checking reads class
+declarations and catches forms erased from JavaScript. Query enforcement applies
+to instrumented reads, not every direct method call. The lower-level
+`vocabulary({ class, spec })` path differs from `registerConcept`; see
+[Vocabulary-only parsing](#vocabulary-only-parsing).
 
 ## Parser behavior
 
@@ -60,11 +52,9 @@ fields:
 
 Type expressions are an implementation-language-independent tree of named
 references, generic arguments, unions, `null`, and `undefined`. Results are
-either inline fields or a type expression. `ConceptSpec` retains no State
-descriptor or executable action behavior tree.
-
-The parser has no explicit document-size or declaration-count limit. It holds
-the supplied string and its complete line array while parsing.
+inline fields or a type expression. `ConceptSpec` has no State descriptor or
+executable action behavior tree. Parsing has no explicit document-size or
+declaration-count limit and retains the string and complete line array.
 
 ### Sections and fences
 
@@ -78,9 +68,6 @@ because State is not parsed.
 fence only inside `## Queries`. A declaration fence in an example, State, or an
 unrelated section is ignored. A second matching fence or an unterminated
 matching fence fails with its location.
-
-There is no State parser, and `ConceptSpec` has no State field. Fenced State
-content cannot create document sections or declaration blocks.
 
 `documentationOf` retains `## Types` as a typed documentation block and every
 other non-reserved second-level section as an extension block. Purpose,
@@ -111,9 +98,9 @@ followed by a JSON-compatible quoted string. Messages are decoded, must be
 nonempty, and may contain escaped quotes. One action cannot repeat a code;
 several actions may use the same code.
 
-Parsed type, output, row, and body data remain documentation rather than runtime
-schema or behavior. The parser does not interpret `where`, `then`, `return`,
-state changes, ordering, or other natural-language claims.
+Parsed types, outputs, rows, and bodies are documentation, not runtime schemas or
+behavior. The parser does not interpret `where`, `then`, `return`, state changes,
+ordering, or other prose.
 
 ## Enforcement stages
 
@@ -133,8 +120,8 @@ Registration enforces:
 - a distinct `Error` class for each refusal code.
 
 Placeholder, plain, absent, empty, or unsupported destructured parameters skip
-the runtime input comparison. Registration does not inspect return values,
-output declarations, State, action behavior, class fields, or storage.
+runtime input comparison. Registration does not inspect returns, outputs, State,
+action behavior, fields, or storage.
 
 `conceptSet` retains the parsed specification in metadata. Refusals become
 action-specific triples of code, normative specification message, and
@@ -144,10 +131,9 @@ registered `Error` class. Query promises become a map keyed by query name.
 
 `specifiedContracts` in `src/engine/reactions/authoring/refs.ts` retains the
 parsed contract and derives Purpose, Principle, and query promises from a
-`{ class, spec }` vocabulary descriptor. It does not derive executable refusal
-contracts because those require registered Error classes. Explicit descriptor
-metadata is spread after parsed metadata and can override it. This path does not
-perform `registerConcept` conformance checks.
+`{ class, spec }` descriptor. It cannot derive refusal contracts, which require
+registered Error classes. Explicit descriptor metadata can override parsed
+metadata. This path omits `registerConcept` conformance checks.
 
 ### `sync-engine check`
 
@@ -193,13 +179,12 @@ application.
 
 ### Runtime and tooling
 
-Purpose and Principle become descriptive inventory metadata, not executable
-assertions. Refusal metadata makes a registered exception on its declared
-action produce the specification code and message. Ordinary assembly rejects
-an undeclared advanced `Refuse` as a fault; manual `createEngine` remains open
-to undeclared `Refuse` codes. A registered refusal mapping is action-specific:
-the same `Error` class thrown by another action is a fault unless that action
-declares the code.
+Purpose and Principle are descriptive inventory metadata, not assertions.
+Refusal metadata maps a registered exception on its declared action to the
+specification code and message. Ordinary assembly treats undeclared advanced
+`Refuse` codes as faults; manual `createEngine` may accept them. Refusal mappings
+are action-specific: another action throwing the same `Error` class faults unless
+it declares the code.
 
 Query promises are attached to vocabulary references and instrumented query
 wrappers. `queryRows` enforces them when reactions, views, or formers evaluate a
@@ -214,8 +199,8 @@ query:
 A direct instrumented query call returns the implementation result without
 passing through `queryRows`; the promise is not checked on that path.
 
-TypeScript class signatures, not parsed Markdown types or results, drive
-authoring types and wire provenance.
+TypeScript class signatures, not Markdown types or results, drive authoring types
+and wire provenance.
 
 `ConceptInventoryIR.specification` is optional, so concepts declared without a
 specification retain the narrower inventory. Registered concepts carry the
@@ -237,9 +222,8 @@ backend tests:
 - query purity; and
 - persistence, transaction, concurrency, and durability behavior.
 
-Natural-language Purpose, Principle, and action bodies remain useful design
-evidence, but registration does not prove that the implementation satisfies
-them.
+Purpose, Principle, and action bodies are design evidence, not proof of
+implementation behavior.
 
 ## Known gaps
 
@@ -261,9 +245,8 @@ them.
 | `tests/internal/tooling/check-specs.test.ts`    | TypeScript source forms and repository roots   |
 | `tests/internal/reads/query-answers.test.ts`    | Read-path query normalization and cardinality  |
 
-Run `bun run check` after changing parsing, registration, source checking, or
-the documented format. Add focused tests for every newly accepted or rejected
-form; the current tests do not exhaust the gaps above.
+After changing parsing, registration, source checking, or the format, run
+`bun run check`. Add focused tests for each newly accepted or rejected form.
 
 ## Extension directions
 

@@ -1,11 +1,11 @@
 # Designing with concepts
 
 This page defines how to choose concept boundaries and reconnect concepts through
-composition. It assumes the [application model](overview.md). The
-[authoring guides](index.md#application-authoring-path) show the TypeScript API;
-[Execution semantics](reference/semantics.md) defines runtime behavior; and the
-[concept specification reference](reference/concept-specification.md) defines the
-`spec.md` format and its enforcement boundaries.
+composition. It assumes the [application model](overview.md). See the
+[authoring guides](index.md#application-authoring-path) for the TypeScript API,
+[execution semantics](reference/semantics.md) for runtime behavior, and the
+[concept specification reference](reference/concept-specification.md) for the
+`spec.md` format.
 
 A **concept** is a semantic mechanism with one purpose, owned state, actions, and
 queries. Its purpose and principle can be understood without reading another
@@ -52,14 +52,9 @@ Mechanism descriptions such as “store memberships in a set” and goals such a
 implementation; the second describes an application composed from several
 mechanisms.
 
-A broad goal or value does not determine a concept. Several mechanisms can serve
-the same goal while imposing different state, authority, lifecycle, and failure
-rules. Reduce the goal to a concrete capability people need or a failure the
-design must prevent, then derive the mechanism from that case.
-
-Application-specific concepts are valid when the mechanism genuinely exists
-only in that application. Name that scope explicitly rather than disguising it
-as a reusable concept.
+Reduce a broad goal to a concrete capability or failure. Several mechanisms can
+serve one goal while imposing different state, authority, lifecycle, and failure
+rules. Name application-specific scope explicitly.
 
 A principle is one concrete scenario that demonstrates the purpose. Start from
 empty state, perform setup through the concept's own actions, observe results
@@ -140,9 +135,8 @@ state. Gathering checks for an existing membership and creates the new membershi
 inside `join`; a preceding composition read would not make uniqueness atomic.
 Shared durable state also needs a storage transaction or constraint.
 
-Every action must serve the concept's purpose. Remove unrelated operations,
-model getters as queries, and avoid loop wrappers that add no domain transition
-of their own.
+Remove actions unrelated to the purpose, model getters as queries, and avoid
+loop wrappers that add no domain transition.
 
 Expected domain rejection is a declared refusal with a stable code. Unexpected
 failures are faults. [Actions, refusals, and
@@ -159,10 +153,9 @@ promise is a domain cardinality claim, not a performance hint. The promise
 determines whether composition can require one row, tolerate absence, or fan out.
 [Query semantics](reference/semantics.md#queries) defines runtime checking and caching.
 
-Walk each managed entity through the lifecycle stages that apply: creation,
-ordinary use, completion, expiry, retention, reversal, deletion, or deliberate
-permanence. Do not add CRUD symmetry where the mechanism has no corresponding
-transition.
+Cover each applicable lifecycle stage: creation, use, completion, expiry,
+retention, reversal, deletion, or deliberate permanence. Do not add CRUD
+symmetry where the mechanism has no corresponding transition.
 
 ### Failure, reversal, and repetition
 
@@ -228,13 +221,10 @@ the gathering's existence, and creating a gathering establishes its host's
 membership as one invariant-preserving transition. A reaction would turn that
 transition into two independently failing actions.
 
-A familiar concept name carries behavioral expectations. Use one only when the
-observable choices, lifecycle, and refusal behavior match the familiar mechanism;
-similar terminology, interface, or storage is insufficient. Narrow or rename the
-concept when a defining expectation does not fit. Keep reuse domain-specific: a
-candidate equally suitable in every domain is often a utility or data structure.
-Test change containment by naming likely changes and the concepts or rules each
-would touch.
+Use a familiar concept name only when its observable choices, lifecycle, and
+refusals match that mechanism. Otherwise narrow or rename it. A candidate
+suitable in every domain is often a utility or data structure. Test change
+containment by naming likely changes and the concepts or rules each would touch.
 
 ## Designing reactions
 
@@ -320,8 +310,6 @@ shared durable state changes, enforce it in the same storage transaction.
 | Stale observation                 | Move exact decisions into the owner action; otherwise state why the observation window is acceptable. |
 
 The engine does not detect reaction cycles, roll back earlier actions, cancel
-accepted work, or provide exactly-once execution. [Execution
-semantics](reference/semantics.md) defines these limits; [Operational
-limits](reference/operations.md) assigns the corresponding storage and host
-responsibilities. Use the [design review procedure](guide/reviewing-a-design.md)
-to turn these criteria into recorded design evidence.
+accepted work, or provide exactly-once execution. See [execution
+semantics](reference/semantics.md), [operational limits](reference/operations.md),
+and the [design review procedure](guide/reviewing-a-design.md).

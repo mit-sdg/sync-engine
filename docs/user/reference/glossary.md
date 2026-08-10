@@ -1,8 +1,7 @@
 # Glossary
 
-These terms have project-specific meanings. The [Public API](public-api.md)
-defines named interfaces; [Execution semantics](semantics.md) defines observable
-behavior.
+Project-specific terms. See the [public API](public-api.md) for named interfaces
+and [execution semantics](semantics.md) for observable behavior.
 
 ## Action
 
@@ -45,17 +44,15 @@ concept APIs; composition connects them.
 ## Concept specification
 
 A Markdown document containing a concept's purpose, principle, action and query
-declarations, refusal branches, and reader-facing documentation. The parser
-retains selected declarations and prose; registration and source checks enforce
-only the contracts described in the [concept specification reference](concept-specification.md).
-State notation and natural-language behavior are not runtime schemas.
+declarations, refusals, and reader documentation. Only the contracts in the
+[concept specification reference](concept-specification.md) are enforced. State
+notation and natural-language behavior are not runtime schemas.
 
 ## Concept floor
 
-A named complete implementation map for one concept set, together with
-host-owned resources and a `close()` operation. The host, not assembly, owns the
-floor lifecycle. A floor selects implementations; it does not change a concept's
-vocabulary or specification.
+A named complete implementation map for one concept set, with host-owned
+resources and `close()`. The host owns its lifecycle. A floor selects
+implementations without changing vocabulary or specifications.
 
 ## Consequence
 
@@ -65,8 +62,8 @@ returns.
 
 ## Correlation ID
 
-A tracing identifier carried through gateway and application observation. It is
-not an idempotency key.
+A tracing identifier carried through gateway and application observation, not an
+idempotency key.
 
 ## Deferred trigger
 
@@ -87,9 +84,9 @@ input, and may produce one boundary response.
 
 ## Fault
 
-An unexpected failure attached to an action ask, such as an action throw or a
-former-evaluation failure. An interpreter failure between asks is recorded
-separately as a reaction failure. A refusal is a deliberate domain outcome.
+An unexpected failure attached to an action ask, such as an action throw or
+former-evaluation failure. Interpreter failures between asks are reaction
+failures; refusals are deliberate domain outcomes.
 
 ## Firing
 
@@ -142,8 +139,8 @@ Ordinary assembly rejects local behavior; manual engines may execute it.
 ## Log sink
 
 An optional synchronous application-owned destination for validated, redacted
-occurrence entries. A sink is for audit output; it does not provide matching,
-retention, replay, or concept-state persistence. See [occurrence index and log
+occurrence entries. It provides audit output, not matching, retention, replay,
+or concept-state persistence. See [occurrence index and log
 sinks](public-api.md#occurrence-index-and-log-sinks).
 
 ## Occurrence
@@ -190,16 +187,15 @@ or expands.
 
 ## Read-back
 
-A generated textual description of an assembled application's declarations,
-paths, bindings, and cardinality behavior. Read-back describes a design; it does
-not define execution semantics.
+A generated description of an assembled application's declarations, paths,
+bindings, and cardinality behavior. It does not define execution semantics.
 
 ## Refusal
 
-A concept's deliberate rejection of an action. A refusal code is the stable code
-for that domain outcome, and its registered specification sentence supplies the
-boundary detail. Ordinary assembly treats an undeclared advanced `Refuse` code as
-a fault; a manual engine may accept it as a refusal.
+A concept's deliberate rejection of an action. Its stable code identifies the
+domain outcome; its registered specification sentence supplies boundary detail.
+Ordinary assembly treats an undeclared advanced `Refuse` code as a fault, while a
+manual engine may accept it as a refusal.
 
 ## Settlement frontier
 
