@@ -11,9 +11,10 @@ Inviting owns the offer, recipient, and terminal invitation decision.
 
 ## Decisions
 
-Issuing first confirms that the Gathering exists. Accepting uses the authenticated
-invitee identity. An accepted Invitation is durable evidence even when the later
-Gathering join faults.
+Issuing first confirms that the Gathering exists. A public adapter must bind the
+inviter to the authenticated caller when issuing or revoking, and bind the invitee
+when accepting, declining, repairing, or reading the private invitation list. An
+accepted Invitation is durable evidence even when the later Gathering join faults.
 
 ## Endpoints
 

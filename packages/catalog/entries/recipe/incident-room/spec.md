@@ -16,7 +16,9 @@ all alerts caused by a selection.
 
 Choosing a mitigation records the Selection, opens a Discussion whose Subject is that
 Selection, and raises one Alert for each current member. Alert replay is idempotent by
-recipient and Selection cause. Contributions require a current member by default.
+recipient and Selection cause. Contributions require current membership. A public
+adapter must bind the contributor and acknowledging recipient to the authenticated
+caller.
 
 ## Endpoints
 
@@ -33,8 +35,10 @@ recipient and Selection cause. Contributions require a current member by default
 
 Selecting may commit before opening the Discussion or raising every Alert. Repair uses
 the Selection identity as the Discussion Subject and Alert Cause, so retries converge
-without duplicate open discussions or alerts. A member who joins after selection does
-not receive the old alert. A member who leaves retains an already raised alert.
+without duplicate open discussions or alerts. The repair caller supplies one member
+from the selection-time roster; the recipe does not retain or validate that roster. A
+member who joins after selection does not receive the old alert unless incorrectly
+supplied to repair. A member who leaves retains an already raised alert.
 
 ## Variants
 

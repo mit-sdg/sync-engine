@@ -26,7 +26,7 @@ a set of Accounts with
 
 ```actions
 register (username: Username, password: Password) : return (username: Username)
-  where username is not 3 to 32 letters, digits, underscores, or hyphens
+  where username is not 3 to 32 ASCII letters, digits, underscores, or hyphens
   then
     refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
   where password is shorter than 8 characters or longer than 128 characters

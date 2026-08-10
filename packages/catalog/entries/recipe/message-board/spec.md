@@ -14,7 +14,7 @@ comment event.
 
 ## Decisions
 
-Registration and successful authentication may start a Session. Protected endpoints
+Registration and successful authentication each start a Session. Protected endpoints
 resolve the Session and use its Subject as Author; callers never choose their own
 Author. Adding a Comment first confirms that its Post Target exists. Posting has no
 removal action, so that observation cannot become stale through a catalog concept
@@ -46,7 +46,7 @@ claim atomic session revocation.
 ## Host variants
 
 The catalog recipe is transport-neutral. A plain JSON API may carry Session in its
-body. A browser host may project Session into a secure, HTTP-only cookie. Those are
+body. A browser host may project Session into a `Secure`, `HttpOnly` cookie. Those are
 host policies, not separate recipe entries or concept variants. A public host remains
 responsible for runtime input validation, request-rate controls, TLS, and its chosen
 session transport.
