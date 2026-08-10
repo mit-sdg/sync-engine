@@ -189,14 +189,14 @@ format.
   instead return an explicitly incomplete result.
 - `parseApplicationProjectAnalysis()` synchronously consumes its complete input
   string and has no input-size option. Bound untrusted input before calling it.
-- The package returns neutral inspection evidence. It provides no prompts,
-  workflow guidance, context packing, change targets, review orchestration,
-  authorization decisions, coverage verdicts, rendered advice, or approval
-  verdicts.
+- The package returns inspection evidence. It does not turn that evidence into
+  workflow, change, coverage, authorization, or approval recommendations.
 
 `DEFAULT_ANALYSIS_RESOURCE_LIMITS` contains the producer defaults. See the
-[public surface resource table](public-surface.md#ir) for exact limits and error
-behavior.
+[public surface resource table](public-surface.md#producer-resource-limits) for
+those defaults, and [facade operation
+bounds](public-surface.md#facade-operation-bounds-and-failures) for query and
+traversal limits.
 
 ## Support and security
 

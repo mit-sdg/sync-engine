@@ -69,9 +69,10 @@ pathname. For example, Bun can use the handler as its `fetch` callback:
 const listener = Bun.serve({ hostname: "127.0.0.1", port: 3000, fetch: handler });
 ```
 
-`Bun.serve` opens the listener; `createHttpHandler` does not. The package does
-not provide a plain-host executable. Node, frameworks, workers, and serverless
-platforms may supply the same Fetch `Request` and consume the returned
+`Bun.serve` opens the listener; `createHttpHandler` does not. This example shows
+the Fetch host boundary, but Bun is outside the package's Node.js 24 support
+contract. The package does not provide a plain-host executable. A Node.js 24
+host or adapter can supply the same Fetch `Request` and consume the returned
 `Response`.
 
 ### Public errors, base path, and generated contract
