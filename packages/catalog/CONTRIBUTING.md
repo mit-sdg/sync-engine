@@ -1,8 +1,8 @@
 # Contributing catalog entries
 
-The catalog discovers entries only through `entries/index.json`, in index order.
-An entry is unavailable until its id is listed there. Read the [catalog command
-reference](public-surface.md#manifest-fields) before writing a manifest.
+The catalog discovers entries in `entries/index.json` order; unlisted ids are
+unavailable. Read the [manifest reference](public-surface.md#manifest-fields)
+before writing one.
 
 ## Add an entry
 
@@ -20,13 +20,12 @@ Every relative import in an installed floor must resolve to another selected
 file; reserved `@catalog/*` imports are the only additional installer-resolved
 imports.
 
-Copied tests are source assets. Do not use repository-only aliases. Recipe
-source may use `@catalog/concepts`; installation rewrites that reserved alias to
-a relative import of the application's concept set. A declared recipe test may
-use `@catalog/registrations` to construct real selected-floor fixtures;
-installation rewrites it to a relative import of
+Copied tests are source assets and cannot use repository-only aliases. Recipe
+source may use `@catalog/concepts`, which installation rewrites to a relative
+concept-set import. A declared recipe test may use `@catalog/registrations` for
+selected-floor fixtures; installation rewrites it to
 `src/catalog/registrations.generated.ts`. Production recipe modules must remain
-composition-only and must not import registrations.
+composition-only and cannot import registrations.
 
 ## Separate implementation floors
 
@@ -36,13 +35,11 @@ requirements inside that floor. A memory installation must not retain Mongo
 source or imports, and a Mongo installation must not retain memory source or
 imports.
 
-A Mongo implementation receives exactly `{ db: Db }`. The host owns and closes
-`MongoClient`; concept assembly receives the database handle and does not own
-the client. Export index creation as a module function rather than adding an
-undeclared public concept method. When an implementation uses transactions, its
-floor summary and package documentation must require a transaction-capable replica
-set or sharded cluster. Its Mongo tests must reject unsupported topology and must
-exercise rollback after a later write in the transaction faults.
+A Mongo implementation receives exactly `{ db: Db }`; the host owns and closes
+`MongoClient`. Export index creation as a module function, not an undeclared
+public concept method. Transactional implementations must document the need for
+a transaction-capable replica set or sharded cluster. Their tests must reject
+unsupported topology and exercise rollback after a later write faults.
 
 ## Verify an entry
 

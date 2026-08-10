@@ -1,13 +1,9 @@
 # @mit-sdg/sync-engine-analysis
 
-Use this package to inspect a sync-engine application as data. It lists
-concepts and other design elements, reads definitions and contracts, finds
-reactions related to an action, and follows possible impact through the design.
-
-This independently published package inspects an explicit Application
-Manifest V5 supplied by the host. It does not connect to a running app or
-discover a manifest. Source-aware analysis can add evidence from a checkout, but
-the host must still supply the manifest.
+`@mit-sdg/sync-engine-analysis` lists and describes design elements and
+contracts, finds related reactions, and traces possible impact. It requires a
+host-supplied Application Manifest V5; it neither connects to an application nor
+discovers a manifest. Source-aware analysis can add checkout evidence.
 
 ## What you can do
 
@@ -25,31 +21,16 @@ the host must still supply the manifest.
 - Optionally map design elements to checkout source ranges, then read and verify
   the corresponding source bytes.
 
-## Mental model
-
-```text
-Manifest V5 -> createApplicationAnalysis() [/ir] -> manifest-only facade
-
-checkout + Manifest V5 -> analyzeApplicationProject() [/project] -> project snapshot
-Manifest V5 + project snapshot + expectedProjectDigest
-  -> createApplicationAnalysis() [/ir] -> source-enriched facade
-```
-
-The facade exposes `catalog`, `search`, `describe`, `sources`, `impact`,
-`navigate`, `diagnostics`, `contracts`, and `provenance`.
-
 ## Install
 
-The analysis package requires the exact matching core beta. Pin both packages to
-the same exact version:
+Pin analysis and core to the same exact beta:
 
 ```sh
 bun add --exact @mit-sdg/sync-engine@1.0.0-beta.7 @mit-sdg/sync-engine-analysis@1.0.0-beta.7
 ```
 
-Keep the two version pins identical when upgrading. The built ESM package
-supports Node.js `>=24 <25`. TypeScript `>=6 <7` is a runtime dependency for
-project analysis, although importing `/ir` does not load the compiler.
+The ESM package supports Node.js `>=24 <25`. Project analysis depends on
+TypeScript `>=6 <7`; importing `/ir` does not load it.
 
 ## Choose `/ir` or `/project`
 
@@ -63,13 +44,9 @@ are unsupported. Use one of these exact entrypoints:
 
 ## Inspect a manifest
 
-The host supplies the `ApplicationManifestV5` value. For example, the host can
-produce it with `applicationManifest()` or load it with
-`parseApplicationManifest()` from the core tooling entrypoint. The analysis
-package validates the supplied manifest but does not search for it.
-
-This example pages through the complete concept catalog and describes the first
-concept's raw definition:
+Supply an `ApplicationManifestV5` produced by core `applicationManifest()` or
+loaded by `parseApplicationManifest()`. Analysis validates but does not search
+for it. This example pages through concepts and describes the first definition:
 
 ```ts
 import { type ApplicationManifestV5 } from "@mit-sdg/sync-engine/tooling";
@@ -140,16 +117,14 @@ export async function inspectCheckout(
 }
 ```
 
-Computing the digest immediately is appropriate here because the same host just
-produced the snapshot from its selected checkout. If a snapshot is stored or
-crosses a trust boundary, retain its digest in a trusted location and pass that
-previously retained value as `expectedProjectDigest`; hashing a snapshot at the
-trust boundary would not establish prior trust.
+Here the host can compute the digest immediately because it produced the
+snapshot. For a stored or externally supplied snapshot, pass a previously
+trusted digest; hashing the snapshot on receipt does not establish trust.
 
 ## Source bytes
 
 Project snapshots store paths, ranges, lengths, byte lengths, and SHA-256
-digests. They do not store source text or excerpts.
+digests, not source text or excerpts.
 
 `readApplicationSourceDocument(sourceIndex, path, { readFile })` asks the caller's
 `readFile` function for the complete file. It checks the indexed length, UTF-8
@@ -189,8 +164,8 @@ format.
   instead return an explicitly incomplete result.
 - `parseApplicationProjectAnalysis()` synchronously consumes its complete input
   string and has no input-size option. Bound untrusted input before calling it.
-- The package returns inspection evidence. It does not turn that evidence into
-  workflow, change, coverage, authorization, or approval recommendations.
+- The package provides inspection evidence, not workflow, change, coverage,
+  authorization, or approval recommendations.
 
 `DEFAULT_ANALYSIS_RESOURCE_LIMITS` contains the producer defaults. See the
 [public surface resource table](public-surface.md#producer-resource-limits) for
@@ -200,11 +175,9 @@ traversal limits.
 
 ## Support and security
 
-Only the newest beta is supported. Keep the analysis and core versions pinned
-to the same exact beta and review the repository changelog before upgrading.
-Treat project snapshots and source readers according to the trust boundaries
-above. Report suspected vulnerabilities through the repository's [private
-reporting process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
+Only the newest beta is supported. Keep analysis and core pinned to it and
+review the changelog before upgrading. Report vulnerabilities through the
+[private reporting process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
 
 ## Reference
 

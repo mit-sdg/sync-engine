@@ -1,9 +1,8 @@
 # Public API
 
-This reference defines the supported exports and observable behavior of
-`@mit-sdg/sync-engine-http`. The package has no root export or supported deep
-imports. The export registers are exact; the generated TypeScript declarations
-remain authoritative for complete structural types.
+`@mit-sdg/sync-engine-http` has no root export or supported deep imports. The
+registers below are exact; generated declarations define complete structural
+types.
 
 Install the HTTP companion and core at the same exact beta version. The HTTP
 package is ESM-only and supports Node.js 24 (`>=24 <25`).
@@ -15,11 +14,9 @@ package is ESM-only and supports Node.js 24 (`>=24 <25`).
 | [`@mit-sdg/sync-engine-http/client`](#client)   | Fetch transport and typed client      |
 | [`@mit-sdg/sync-engine-http/tooling`](#tooling) | Generated HTTP wire projection        |
 
-A policy records deployment facts that the package cannot infer: the public
-origin, browser caller origins, public error mapping, and cookie bindings. The
-package derives CORS, request-origin checks, cookie attributes, and wire
-projection from those facts. It does not authenticate users or authorize
-application operations.
+Policy supplies public and browser origins, public error mappings, and cookie
+bindings. The package derives CORS, request-origin checks, cookie attributes,
+and wire projection; it does not authenticate users or authorize operations.
 
 ## `policy`
 
@@ -35,11 +32,8 @@ application operations.
 httpPolicy(init: HttpPolicyInit): HttpPolicy
 ```
 
-`httpPolicy` validates the supplied deployment facts, creates an immutable
-snapshot, and marks the result with `HttpPolicyBrand`. The snapshot and its
-policy-owned nested arrays and records are frozen. A consumer accepts a policy
-only when it was created by `httpPolicy(...)`; a raw structural object is
-rejected.
+`httpPolicy` validates and copies deployment facts into a frozen snapshot marked
+with `HttpPolicyBrand`. Consumers reject raw structural objects.
 
 ```ts
 interface HttpPolicyInit {
@@ -104,8 +98,8 @@ accepted preflight returns 204 and advertises `POST, OPTIONS`; a rejected
 preflight returns `FORBIDDEN`/403. Preflight responses also vary on
 `Access-Control-Request-Method` and `Access-Control-Request-Headers`.
 
-CORS controls browser response access. It does not authorize a cookie-bearing
-request. Request-origin protection is a separate control.
+CORS controls browser response access, not authorization of cookie-bearing
+requests; request-origin protection is separate.
 
 ### Request-origin protection
 
@@ -297,9 +291,8 @@ rejection, or invalid returned initializer replaces the response with
 `INTERNAL_ERROR`/500; CORS and correlation are then applied to that failure
 response.
 
-There are no preprocessing or response-decoration hooks. Wrap the returned
-Fetch handler for behavior outside these controls. A wrapper is outside the
-package's security boundary and can invalidate the handler's header and error
+Wrap the Fetch handler for preprocessing or response decoration. Wrappers are
+outside the package's security boundary and can invalidate header and error
 guarantees.
 
 Handler calls may overlap. The handler has no disposal method. The caller owns
@@ -323,7 +316,7 @@ createHttpClient<Contract extends ContractShape>(
 ): Client<Contract, HttpClientError>
 ```
 
-The client takes no HTTP policy. It is typed by the generated projected wire.
+The client takes no policy and uses the generated projected wire type.
 
 | `HttpClientOptions` field | Default and effect                                                                     |
 | ------------------------- | -------------------------------------------------------------------------------------- |
@@ -405,8 +398,8 @@ fields from every issue endpoint. Application-dependent cookie validation runs
 when the projection's `project(facts)` method executes, before artifacts are
 compared or written.
 
-Use the same policy for `createHttpHandler(...)` and `httpWire(...)`. The client
-uses the resulting generated type and does not receive that policy.
+Use the same policy for `createHttpHandler(...)` and `httpWire(...)`; the client
+receives only the resulting generated type.
 
 The [package README](README.md) provides tiered setup and the supported custom
 transport building blocks. Core [execution semantics](https://github.com/mit-sdg/sync-engine/blob/main/docs/user/reference/semantics.md#boundary-gateway-and-client)

@@ -1,15 +1,14 @@
 # `@mit-sdg/sync-engine-catalog`
 
-`catalog` copies curated sync-engine concept and recipe source into an existing
-application. Copied files become application source; generated registration and
-composition modules connect those files to the application. The package has no
-runtime import API.
+`catalog` copies curated concept and recipe source into an application and
+generates registration and composition modules. The package has no runtime
+import API.
 
 ## Install and inspect
 
-Install the catalog as a development dependency, then inspect the entries
-shipped by that exact version. `list` and `show` read the package's manifest and
-source assets; they do not load the core package or entry modules:
+Install the catalog as a development dependency, then inspect that version's
+entries. `list` and `show` read manifests and source assets without loading core
+or entry modules:
 
 ```sh
 bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.7
@@ -19,23 +18,20 @@ bunx catalog show <entry>
 
 ## Add source
 
-Run `add` from an application package root. Replace `<entry>` with an id from
-`catalog list`.
+From an application package root, use an id from `catalog list`:
 
 ```sh
 bunx catalog add <entry> --floor memory
 ```
 
-The first successful add selects the project floor. Later adds use the floor in
-`catalog.lock`; the catalog rejects a different floor and does not migrate an
-existing project between floors. If no floor is supplied, all resolved concepts
-must share one `defaultFloor`.
+The first add selects the project floor. Later adds use the floor in
+`catalog.lock`; a different floor is rejected and cannot migrate the project.
+Without `--floor`, all resolved concepts must share one `defaultFloor`.
 
-The command checks package requirements before writing. When a package is
-missing or incompatible, it prints the `bun add --exact` command to run and
-makes no changes. After a successful add, apply every integration step printed
-by the command. The catalog does not edit application-owned setup, TypeScript,
-package, assembly, or host files.
+Before writing, the command checks package requirements. Missing or incompatible
+packages produce a `bun add --exact` command and no changes. After an add, apply
+every printed integration step; the catalog does not edit application-owned
+setup, TypeScript, package, assembly, or host files.
 
 To select the Mongo floor on the first add:
 
@@ -49,11 +45,10 @@ is unsupported for those installations.
 
 ## Ownership and updates
 
-The catalog records copied and generated files in `catalog.lock`. It never
-rewrites copy-owned source. It rewrites rendered registries and generated files
-only while their bytes match the hashes in the lock. Repeating an unchanged add
-performs no writes. Review the copied source and generated integration before
-committing it.
+`catalog.lock` records copied and generated files. The catalog never rewrites
+copy-owned source; it rewrites rendered registries and generated files only when
+their bytes match locked hashes. An unchanged add writes nothing. Review copied
+source and generated integration before committing.
 
 For command behavior, manifest rules, lock ownership, and failure details, see
 [`public-surface.md`](public-surface.md). Entry authors should read

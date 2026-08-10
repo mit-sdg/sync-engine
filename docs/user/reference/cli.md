@@ -1,11 +1,9 @@
 # Command-line reference
 
 The installed `sync-engine` executable initializes concept-free application
-files, compares parsed concept action/query declarations with class source, and
-checks or generates assembly artifacts. The CLI runs on the supported Bun range
-listed in the [runtime and toolchain support policy](../../../SUPPORT.md). It
-uses the current working directory unless a command or option supplies another
-path.
+files, compares concept action/query declarations with class source, and checks or generates
+assembly artifacts. It supports the Bun range in the [runtime and toolchain
+policy](../../../SUPPORT.md) and defaults paths to the current working directory.
 
 ```text
 sync-engine <command> [arguments]
@@ -34,11 +32,10 @@ a command applies defaults, imports configuration, or writes files.
 sync-engine setup [directory]
 ```
 
-`setup` initializes the concept-free files used by [Getting
-started](../guide/getting-started.md). The directory defaults to the current
-working directory. It must already exist and contain a valid `package.json`.
-When `packageManager` is present, it must name Bun. The command does not create
-a directory or package manifest.
+`setup` initializes the files used by [Getting started](../guide/getting-started.md).
+The directory defaults to the current working directory and must contain a valid
+`package.json`. When present, `packageManager` must name Bun. The command creates
+neither the directory nor package manifest.
 
 The setup targets are `tsconfig.json`, `generated.config.ts`,
 `src/concept-set.ts`, `src/composition.ts`, `src/assembly.ts`, and
@@ -51,8 +48,6 @@ The setup targets are `tsconfig.json`, `generated.config.ts`,
 Before creating a file that imports another setup target, the command checks
 whether the dependency exports the expected identifiers. If the check fails,
 setup leaves the dependent file absent and prints the required integration.
-This prevents setup from creating imports against an incompatible partial
-project.
 
 Setup checks `package.json` for the exact core version, a compatible TypeScript
 declaration, `generate` and `start` scripts, and either a `check` or `typecheck`
@@ -79,10 +74,10 @@ sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
 is `src/concepts`. Each discovered concept directory must contain `registry.ts`,
 and that registry must call `registerConcept` with a class imported by name.
 
-The command parses the specification, locates the registered class, and compares
+The command compares the parsed specification with the registered class's
 action and query names and input keys. It resolves typed parameters through the
-nearest TypeScript project, including supported imported interfaces, aliases,
-re-exports, intersections, mapped and utility types, and path mappings.
+nearest TypeScript project, including imported interfaces, aliases, re-exports,
+intersections, mapped and utility types, and path mappings.
 Ambiguous or dynamic shapes fail closed with their type operation and source
 location. The command does not read State notation as grammar or compare it with
 class fields or storage. [Concept specification
@@ -106,9 +101,8 @@ An existing concept root with no concepts succeeds and reports zero checked
 concepts, which permits a concept-free setup application. An explicitly named
 root that does not exist fails. The command also fails when any discovered
 concept fails. Concept-specific parse, registry-shape, source-resolution, and
-declaration findings are collected and printed as bullets. A missing registry
-file or concept-discovery filesystem error instead aborts the command as one
-stackless error. The command does not modify files.
+declaration findings are collected as bullets. A missing registry or discovery filesystem
+error instead aborts with one stackless error. The command does not modify files.
 
 ## `sync-engine artifacts`
 
@@ -122,19 +116,17 @@ lists its fields and defaults.
 
 ### `check`
 
-Renders the assembled Markdown read-back and wire contract in memory, then
-compares both with their configured files. Success is silent. A mismatch names
-the differing file or files and exits with status 1. `check` does not rewrite
-artifacts.
+Compares the assembled Markdown read-back and wire contract with their
+configured files. Success is silent; a mismatch names the files and exits with
+status 1. `check` does not rewrite artifacts.
 
 ### `pin`
 
-Renders and validates both artifacts before its first filesystem effect. The
-command creates configured parent directories, skips byte-identical files, and
-replaces changed files through a same-directory temporary file and rename. It
-does not delete unknown files and is silent on success. Replacement is atomic
-for each file. The pair has no all-or-nothing transaction: a later write failure
-can leave an earlier artifact updated, and completed writes remain in place.
+Renders and validates both artifacts before creating parent directories or
+replacing changed files through same-directory temporary files and renames. It
+skips byte-identical files, deletes no unknown files, and is silent on success.
+Each replacement is atomic, but the pair is not: a later failure leaves completed
+writes in place.
 
 ### `pin-spec`
 
@@ -162,10 +154,9 @@ sections, source paths, object identity, and other runtime state.
 
 ### `spec`
 
-For a valid assembly, prints assembly counts and the assembled read-back. The
-counts cover registered reactions, views, formers, and serialized `compute`
-operations in the exported IR. The last value counts every operation occurrence,
-including repeated uses of one named computation.
+For a valid assembly, prints the assembled read-back and counts of registered
+reactions, views, formers, and every serialized `compute` occurrence, including
+repeated uses of one named computation.
 
 The concept portion renders authored signatures, behavior prose, refusal
 messages, Types, and extension sections. It distinguishes registration checks,
@@ -190,11 +181,9 @@ and the limits of its proof.
 
 ## Artifact failure conditions
 
-Every artifact command imports and assembles the configured application.
-Assembly, import, configuration, or rendering failures therefore fail the
-command before comparison or writing.
-
-Projection failures also occur before comparison or writing. `projections` must
+Every artifact command imports and assembles the application; import,
+configuration, assembly, rendering, and projection failures occur before
+comparison or writing. `projections` must
 be an array whose entries provide `project(facts)`. Logical and projected wire
 names, app-wide error names, and generated helper names must be distinct valid
 TypeScript identifiers, and every projector must provide a nonblank package name

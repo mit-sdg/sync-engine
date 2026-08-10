@@ -1,9 +1,8 @@
 # Public API
 
-This reference lists every supported core package subpath and export in the
-current beta release. There is no root export and no supported deep import.
-The export registers are exact; compact signatures and tables summarize the
-principal call shapes and do not replace the generated TypeScript declarations.
+This reference lists every supported core subpath and export. Root and deep
+imports are unsupported. Registers are exact; generated TypeScript declarations
+define complete signatures.
 
 The [support policy](../../../SUPPORT.md) defines beta compatibility,
 generated-assembly compatibility, and format-version rules. The
@@ -18,15 +17,6 @@ generated-assembly compatibility, and format-version rules. The
 | [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation        |
 | [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches               |
 
-| Task                                      | Primary APIs                                                |
-| ----------------------------------------- | ----------------------------------------------------------- |
-| Declare reactions and current-state reads | `reaction`, `when`, `view`, `former`, `where`, `each`       |
-| Register and install concepts             | `registerConcept`, `conceptSet`, `assemble`                 |
-| Expose application routes                 | `endpoint`, `receive`, `respond`, `createGateway`           |
-| Call generated routes                     | `createLocalClient`, `createClient`, or a transport package |
-| Inspect or generate contracts             | `inspectAssembly`, `applicationManifest`, `renderWireTypes` |
-| Construct a manual local engine           | `createEngine` from `advanced`                              |
-
 ## `language`
 
 <!-- register:language:start -->
@@ -35,8 +25,7 @@ generated-assembly compatibility, and format-version rules. The
 
 <!-- register:language:end -->
 
-`language` declares designs; it does not execute them. These are the primary
-call shapes:
+`language` declares but does not execute designs.
 
 | API                    | Compact signature                                                                               |
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
@@ -97,10 +86,9 @@ Runtime evaluation checks each fragment's declared promise and faults if it
 produces several rows. A fragment must be record-rooted; the host may be a record
 form or an `each(...).form(...)` selection row.
 
-For worked examples, see [Application
-authoring](../guide/authoring.md#connect-independent-behaviors). [Reaction
-semantics](semantics.md#reactions) defines matching and siblings. [Views and
-formers](semantics.md#views-and-formers) defines absence and production.
+See [Application authoring](../guide/authoring.md#connect-independent-behaviors),
+[reaction semantics](semantics.md#reactions), and [views and
+formers](semantics.md#views-and-formers).
 
 ## `assembly`
 
@@ -136,8 +124,8 @@ be a finite, non-negative integer. Window enforcement runs automatically only
 after a causal flow settles. `{ window: 0 }` therefore allows an active flow to
 complete before evicting it. The public assembly and engine surfaces expose no
 manual prune operation.
-Every assembly owns an internal occurrence index. `logSink` does not replace
-that index, and `logSink` may be combined with any `retention` policy.
+Every assembly owns an internal occurrence index; `logSink` neither replaces it
+nor restricts `retention`.
 
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
 `whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
@@ -154,10 +142,9 @@ asynchronous and conservatively resolve to their awaited result or an
 `ActionRefusal`; underscore-prefixed queries resolve asynchronously to their
 declared implementation answer.
 
-Closures, explicit `custom` operations, `$is` object-identity patterns, raw
-transforms, and whole unlowered reactions are local. Ordinary assembly rejects
-every local reaction, view, and former before returning an invoker or public
-route set. Manual engines under `advanced` retain those explicit escape hatches.
+Ordinary assembly rejects local closures, explicit `custom` operations, `$is`
+object-identity patterns, raw transforms, and whole unlowered reactions before
+returning an invoker or routes. Manual `advanced` engines retain these escapes.
 Assembly recursively discovers tagged declarations in nested plain records and
 module namespace objects. Reactions and endpoints use their dotted record path
 as the registration name; views and formers retain the names supplied to their
@@ -201,12 +188,10 @@ that type restriction, selection fails at runtime. The zero-argument
 `implementations()` form is available only when every canonical class can be
 constructed without required arguments; otherwise use a named floor.
 
-The optional second `conceptSet` argument is a record of named pure computation
-functions. The returned set exposes vocabulary-owned references under both
-`set.computations` and `set.vocabulary.computations`; their names, inputs, and
-results remain inferred from the supplied functions. Compose raw computation
-records before constructing one set. Refs from separate vocabularies cannot be
-combined.
+The optional second `conceptSet` argument supplies named pure computations.
+The set exposes inferred references under `set.computations` and
+`set.vocabulary.computations`. Compose raw records before constructing one set;
+refs from separate vocabularies cannot be combined.
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`
@@ -227,14 +212,12 @@ requires a separately designed backend-neutral descriptor.
 
 ### Occurrence index and log sinks
 
-Every engine owns a process-local occurrence index used for reaction matching
-and retained inspection. `RetentionPolicy` governs its contents. The package
-exposes no interface for replacing the index.
+Every engine owns a nonreplaceable process-local occurrence index for reaction
+matching and retained inspection, governed by `RetentionPolicy`.
 
-`LogSink.append(entry)` is the synchronous application-owned audit extension
-point. The engine validates an entry and redacts engine-created mappings, calls
-the sink with a structural snapshot, and only then folds the entry into the
-internal index. Arrays and plain records are recursively copied and frozen.
+`LogSink.append(entry)` is the synchronous audit extension point. The engine
+validates the entry, redacts engine-created mappings, calls the sink with a
+structural snapshot, then folds it into the internal index. Arrays and plain records are copied and frozen.
 Invocation concept and action fields become frozen, name-preserving
 representatives. `Date` values are copied.
 Opaque leaves such as class instances, `Map`, `Set`, and functions
@@ -397,12 +380,11 @@ asks](semantics.md#failures-between-action-asks) and
 | `assertPortableRoutePath` | Rejects noncanonical public route spellings                 |
 | `serializeJsonValue`      | Shared JSON serialization for a transport adapter           |
 
-`bindTransport(...)` verifies that a gateway belongs to the supplied assembly
-and returns only a narrowed invoker plus frozen route and logical-wire facts.
-It never exposes reaction state, mutable assembly registries, or lifecycle
-controls. Same-version duplicate core packages retain the existing global
-identity behavior. A custom server adapter can invoke this capability without
-installing any first-party transport package.
+`bindTransport(...)` verifies that a gateway belongs to the assembly and returns
+a narrowed invoker plus frozen route and logical-wire facts, without reaction
+state, mutable registries, or lifecycle controls. Same-version duplicate core
+packages retain global identity behavior. Custom adapters need no first-party
+transport package.
 
 `WireProjectionFacts` is the immutable route and logical-wire input passed to a
 generated projection. It remains transport-neutral; core owns strict leaf
@@ -443,8 +425,8 @@ from an unknown failure is omitted.
 | `createClient`      | `createClient<Contract, TransportError = ClientError>({ transport, validateResponse? }): Client<Contract, TransportError>` |
 
 `ClientOptions.transport` and `createLocalClient`'s `invoker` are required.
-`ClientOptions.validateResponse` is an optional synchronous check of each
-complete untrusted transport result. It receives `(value, { path })`. A
+The optional synchronous `validateResponse(value, { path })` checks each complete
+untrusted transport result. A
 `{ ok: false }` result, throw, or promise-like result resolves to
 `{ error: "TRANSPORT_ERROR" }`; an accepted value is returned unchanged.
 `ClientTransport` and `ClientRequest` name the extension contract. Every
@@ -574,9 +556,8 @@ and a final newline. Named collections use stable order while authored reaction,
 view-alternative, and former-node sequences retain semantics.
 
 `ApplicationDiagnostic`, `DiagnosticCode`, and `DiagnosticSeverity` define the
-machine-readable advisory surface. `diagnosticsFail` treats error diagnostics as
-failures by default and can promote warnings; informational diagnostics remain
-advisory.
+advisory surface. `diagnosticsFail` fails on errors by default and can promote
+warnings; informational diagnostics remain advisory.
 Endpoint diagnostics trace causal `by` provenance to attribute an eventual
 response to its request path. Only a response that uses the traced request
 identifier contributes to a proof. Direct response paths and recognized total
@@ -684,10 +665,8 @@ defines derivation guarantees.
 
 <!-- register:advanced:end -->
 
-This subpath crosses the ordinary application boundary. Prefer the ordinary
-assembly APIs unless the host needs manual engine construction or an explicit
-escape hatch. `/advanced` follows the same beta compatibility policy as every
-other public subpath.
+Use `/advanced` only for manual engine construction or explicit escape hatches.
+It follows the same beta compatibility policy as other public subpaths.
 
 | API            | Compact signature / role                         |
 | -------------- | ------------------------------------------------ |
