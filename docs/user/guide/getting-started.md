@@ -1,11 +1,11 @@
 # Getting started
 
 This tutorial initializes and runs a concept-free sync-engine application in
-an existing Bun package. It ends with generated artifacts checked, TypeScript
-checked, and `src/main.ts` printing the empty route list. The generated files
-are extension points: add registrations to `src/concept-set.ts`, composition to
-`src/composition.ts`, and runtime options to `src/assembly.ts` as the
-application grows.
+an existing Bun package. It ends with generated artifacts and TypeScript
+checked, and with `src/main.ts` printing the empty route list. The setup files
+are application-owned extension points: add registrations to
+`src/concept-set.ts`, composition to `src/composition.ts`, and runtime options
+to `src/assembly.ts` as the application grows.
 
 For setup behavior in partial or already-authored projects, see the
 [command-line reference](../reference/cli.md). For the next step, use the
@@ -13,9 +13,10 @@ For setup behavior in partial or already-authored projects, see the
 
 ## Prerequisites
 
-Create a Bun package and install the exact core beta selected for the
-application. This tutorial uses the repository's current beta and TypeScript
-major version:
+Use a Bun version in the [supported range](../../../SUPPORT.md#runtime-and-toolchain),
+then create a package and install the exact core beta selected for the
+application. These commands pin the core release and development dependencies
+used by this tutorial:
 
 ```sh
 mkdir workshop-app
@@ -42,8 +43,7 @@ this tutorial, add these scripts to `package.json`:
   "scripts": {
     "generate": "sync-engine artifacts pin",
     "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check && tsc --noEmit",
-    "start": "bun src/main.ts",
-    "test": "vp test"
+    "start": "bun src/main.ts"
   }
 }
 ```
@@ -104,9 +104,10 @@ bun run check
 bun run start
 ```
 
-`generate` writes the configured read-back and wire contract. `check` validates
-the setup and TypeScript. Because the empty application declares no endpoints,
-`start` prints `[]`.
+`generate` writes the configured read-back and wire contract. `check` compares
+concept specifications with their classes, inspects application diagnostics,
+verifies the generated files, and runs TypeScript. The concept-free application
+has no concepts or endpoints, so `start` prints `[]`.
 
 Run `sync-engine setup` again only when you want to reconcile setup files. It
 writes nothing for unchanged setup files and reports them as verified. If an

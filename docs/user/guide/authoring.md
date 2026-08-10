@@ -1,11 +1,11 @@
 # Application authoring
 
 This guide follows one Operations Room application from concept registration
-to a generated client. It is a how-to guide for an application that already
-has a Bun package and a concept-free assembly; it assumes TypeScript and the
-[application model](../overview.md). The linked source belongs to the standalone
-Operations Room example, so the snippets show the roles and order of the work,
-not a second setup template.
+to a client typed by its generated wire contract. It assumes TypeScript, an
+existing Bun package with a concept-free assembly, and the [application
+model](../overview.md). The linked source belongs to the standalone Operations
+Room example. The snippets show the roles and order of the work; they are not a
+second setup template.
 
 Follow the sections in order: define and register a concept; connect concepts;
 build current-state reads; expose actions through endpoints; assemble, generate,
@@ -16,12 +16,16 @@ semantics](../reference/semantics.md) for runtime guarantees.
 
 ## Prerequisites
 
-Start from the files created by [Getting started](getting-started.md), or work
-from a copy of [`examples/operations-room`](../../../examples/operations-room/).
-The example's `package.json` supplies the `artifacts:pin`, `check`, and `start`
-scripts used below. A concept specification, implementation, registry, and
-principle test belong together; this guide shows the specification and the
-implementation shape, while the example contains the complete test setup.
+Use a copy of [`examples/operations-room`](../../../examples/operations-room/)
+to run this guide's commands unchanged. When extending the files created by
+[Getting started](getting-started.md), follow the same sequence but adapt the
+module names and package scripts to the application. The example's
+`package.json` supplies every script used below.
+
+The example keeps each concept's specification, implementation, registry, and
+principle test together. This guide shows the specification and implementation
+shape; the linked files contain the imports, declarations, and complete test
+setup needed to reproduce it.
 
 ## Define one behavior
 
@@ -173,7 +177,7 @@ The module also exports the complementary denial relation and response code. The
 host-only policy exports the same names, so assembly can select either module
 without changing the endpoints.
 
-## Views and formers
+## Build current-state reads
 
 A view names a relation or policy decision. A former constructs a current result
 tree from queries, views, or other formers. This former captures every member
@@ -217,10 +221,11 @@ export const ChooseMitigation = endpoint(
 );
 ```
 
-Registered concept refusals use the standard refusal path. Case-split endpoints
-must answer every admitted case deliberately; branches have no fall-through
-priority. See [endpoint
-settlement](../reference/semantics.md#sibling-paths-and-endpoint-settlement).
+When a concept action throws a registered refusal class, the boundary returns
+the registered code as a domain error. An unregistered throw instead follows
+the opaque framework-failure path. Case-split endpoints must answer every
+admitted case deliberately; branches have no fall-through priority. See
+[endpoint settlement](../reference/semantics.md#sibling-paths-and-endpoint-settlement).
 
 ### Assemble the application
 
@@ -265,9 +270,9 @@ the resulting records but does not invoke function leaves. Ordinary assembly
 rejects local executable declarations before exposing routes.
 
 [`src/edge.ts`](../../../examples/operations-room/src/edge.ts) places
-`createGateway(...)` in front of the assembly. The gateway adds public admission,
-limits, observation, timeout and abort waiting, and ordered drain without
-creating another reaction engine.
+`createGateway(...)` in front of the assembly. The gateway provides public
+admission, timeout and abort waiting, optional limits and observers, and ordered
+drain without creating another reaction engine.
 
 ### Generate the wire contract
 
@@ -290,7 +295,7 @@ the current assembly:
 
 ```sh
 bun run artifacts:pin
-bunx sync-engine artifacts check
+bun run artifacts:check
 ```
 
 Do not generate inside an example installed under `node_modules`. Commit the
@@ -339,11 +344,13 @@ bun run check
 bun run start
 ```
 
-The scenario crosses the assembly, gateway, generated local client, and
-`roomDashboard` former. `check` covers the example's source, types, tests, and
-pinned artifacts; `start` exercises the deterministic workflow. Keep those
-checks separate from deployment checks, which must also account for persistence,
-traffic, and shutdown responsibilities.
+The scenario crosses the assembly, gateway, a local client typed from the
+generated contract, and the `roomDashboard` former. `check` covers the example's
+formatting, types, tests, and pinned artifacts. `start` prints the deterministic
+dashboard and the `ALREADY_JOINED` refusal from a repeated join; a missing
+refusal makes the scenario fail. Keep those checks separate from deployment
+checks, which must also account for persistence, traffic, and shutdown
+responsibilities.
 
 [Operational limits](../reference/operations.md) defines those deployment
 responsibilities. [Execution semantics](../reference/semantics.md) remains the
