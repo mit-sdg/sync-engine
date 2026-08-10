@@ -25,6 +25,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./policy": {
+      "types": "./dist/policy/index.d.ts",
+      "import": "./dist/policy/index.js"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js"

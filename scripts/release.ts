@@ -16,7 +16,7 @@ const workspaceReleaseManifests = releaseWorkspaces
 const exampleManifests = [
   "examples/reading-circle/package.json",
   "examples/operations-room/package.json",
-  "examples/production-http/package.json",
+  "examples/message-board/package.json",
 ] as const;
 const bunFixtureManifests = ["tests/package/application/package.json"] as const;
 const nodeFixtureManifests = [
@@ -35,6 +35,7 @@ export const releaseManifestPaths = [
 const bunProjectManifests = [...exampleManifests, ...bunFixtureManifests] as const;
 const scaffoldManifest = "src/command/scaffold/package.json";
 const sharedDevelopmentDependencies = [
+  ["@types/bun", ["examples/message-board/package.json"]],
   ["@types/node", [...exampleManifests, "tests/package/multi-instance/backend/package.json"]],
   ["vite", exampleManifests],
   ["vite-plus", exampleManifests],

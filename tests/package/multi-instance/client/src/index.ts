@@ -5,7 +5,7 @@ export {
   Conflict,
   composition,
   multiInstanceConcepts,
-  multiInstanceHttpProfile,
+  multiInstanceHttpPolicy,
   vocabulary,
 } from "./contract.ts";
 export type { MultiInstanceHttpWire, MultiInstanceWire } from "./generated/wire.ts";

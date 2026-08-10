@@ -108,11 +108,12 @@ An `Invoker` decorator that adds route admission, limits, observation, timeout
 and abort waiting, and ordered drain. It uses the target assembly's reaction
 engine.
 
-## HTTP floor
+## HTTP cookie binding
 
-A production HTTP profile plus one cookie credential binding. The floor consumes
-the credential input on protected requests and removes issued credential fields
-from the public response and generated contract.
+A named mapping between one logical credential input and the cookie paths that
+protect, issue, or clear it. The HTTP handler injects the cookie on protected
+requests. The handler and generated wire omit transport-owned credential and
+issue fields from the public JSON contract.
 
 ## Input contract
 

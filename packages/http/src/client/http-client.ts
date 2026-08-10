@@ -28,7 +28,7 @@ export interface HttpClientOptions {
   fetch?: typeof fetch;
   /** Extra headers merged into every request after `Content-Type`. */
   headers?: HeadersOption;
-  /** Request credentials mode. Defaults to `include` for cookie-bearing policies. */
+  /** Request credentials mode. Defaults to `same-origin`. */
   credentials?: "include" | "omit" | "same-origin";
   /** Optional synchronous runtime check for each complete HTTP result. */
   validateResponse?: ClientResponseValidator;
@@ -207,7 +207,7 @@ async function httpRequest(
           method: "POST",
           headers: { "Content-Type": "application/json", ...resolvedHeaders.headers },
           body: JSON.stringify(body ?? {}),
-          credentials: credentials ?? "include",
+          credentials: credentials ?? "same-origin",
           signal,
         }),
       );

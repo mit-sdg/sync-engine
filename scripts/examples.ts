@@ -18,7 +18,8 @@ function run(command: string, args: string[]): void {
 for (const [, example] of selected) {
   const directory = `examples/${example.directory}`;
   if (operation === "scenario") {
-    run("bun", [`${directory}/src/scenario.ts`]);
+    if (!("scenario" in example)) continue;
+    run("bun", [`${directory}/${example.scenario}`]);
   } else if (operation === "check") {
     run("bun", [
       "src/command/main.ts",
