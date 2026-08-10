@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
 [![HTTP npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
 [![Analysis npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-analysis/beta?label=analysis%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-analysis)
+[![Catalog npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine-catalog/beta?label=catalog%20npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine-catalog)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is a TypeScript library for composing independently implemented
@@ -43,8 +44,12 @@ bun add @mit-sdg/sync-engine@beta
 | `@mit-sdg/sync-engine`                                                                                | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
 | [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Deterministic IR queries and optional TypeScript project/source evidence |
 | [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | Maintained HTTP handler, fetch client, and generated wire projection     |
+| [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)   | CLI-only curated concept and recipe source installer                     |
 
-The analysis and HTTP companions each require the exact matching core beta.
+The analysis and HTTP companions each require the exact matching core beta. The
+catalog declares that exact core peer as optional, so `catalog list` and
+`catalog show` work without core installed.
+
 Analysis exposes a lightweight `@mit-sdg/sync-engine-analysis/ir` surface and a
 TypeScript-backed `@mit-sdg/sync-engine-analysis/project` producer surface.
 TypeScript remains an analysis runtime dependency, but importing `/ir` does not
@@ -63,20 +68,24 @@ Git verification.
 
 ## Create an application
 
+Create a Bun package, install core, and initialize the concept-free application
+files:
+
 ```sh
-bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
-cd note-keeper
-bun install
+mkdir workshop-app
+cd workshop-app
+bun init -y
+bun add --exact @mit-sdg/sync-engine@beta
+bunx --package @mit-sdg/sync-engine@beta sync-engine setup
 ```
 
-For a reproducible evaluation, replace `@beta` with a pinned version.
+For a reproducible evaluation, replace `@beta` with a pinned version. `setup`
+never edits `package.json` or overwrites an application file. It reports missing
+dependencies and scripts as guidance.
 
-The generated project declares its own package dependency and contains one
-complete behavior: a specification, plain TypeScript class, principle test,
-registry, concept set, composition, assembly, gateway scenario, and
-generated-artifact configuration. Continue with [Getting
-started](docs/user/guide/getting-started.md#run-the-complete-lifecycle) to run and
-inspect it.
+Continue with [Getting started](docs/user/guide/getting-started.md) to run the
+empty application and, optionally, copy the example-derived workshop recipe
+from the catalog.
 
 ## Documentation
 
@@ -86,17 +95,17 @@ Choose the path that matches the work:
 | ------------------------------------------------------------ | --------------------------------------------------------------- |
 | Understand concepts, composition, assembly, and the boundary | [Application model](docs/user/overview.md)                      |
 | Decide what the concepts are and review a design             | [Designing with concepts](docs/user/design.md)                  |
-| Build and run the generated application                      | [Getting started](docs/user/guide/getting-started.md)           |
+| Initialize and run a concept-free application                | [Getting started](docs/user/guide/getting-started.md)           |
 | Add concepts, reactions, views, formers, and endpoints       | [Authoring path](docs/user/index.md#application-authoring-path) |
 | Look up exports, options, and defaults                       | [Public API](docs/user/reference/public-api.md)                 |
 | Determine exact runtime behavior                             | [Execution semantics](docs/user/reference/semantics.md)         |
 | Select a deployment and identify host responsibilities       | [Operational limits](docs/user/reference/operations.md)         |
 | Inspect complete applications                                | [Example applications](examples/README.md)                      |
 
-The [consumer documentation index](docs/user/index.md) routes application designers,
-authors, callers, and operators. Human and software agents using the engine can
-start with [`docs/user/llms.txt`](docs/user/llms.txt), which records the supported imports,
-authoring sequence, commands, and source-of-truth order.
+The [consumer documentation index](docs/user/index.md) routes application
+designers, authors, callers, and operators. Human and software agents using the
+engine can start with [`docs/user/llms.txt`](docs/user/llms.txt), which records
+the supported imports, authoring sequence, commands, and source-of-truth order.
 
 ## How composition works
 
@@ -181,8 +190,8 @@ contributors use these repository documents:
 
 A newer beta may make incompatible changes. Before changing a pinned version,
 read the [changelog](CHANGELOG.md), regenerate and review pinned artifacts, keep
-core and every installed companion on the exact same beta, and typecheck consumers. The
-[support policy](SUPPORT.md) defines the current window.
+core and every installed companion on the exact same beta, and typecheck
+consumers. The [support policy](SUPPORT.md) defines the current window.
 
 ## License
 

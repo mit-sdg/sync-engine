@@ -1,193 +1,136 @@
 # Getting started
 
-This introductory tutorial creates and runs the smallest complete sync-engine
-application. The result is a Note Keeper project with one concept, two
-endpoints, generated contracts, and a local client scenario. The tutorial does
-not cover every authoring form; use the [Public API](../reference/public-api.md) and
-[Execution semantics](../reference/semantics.md) as the authoritative references.
+This tutorial initializes and runs a concept-free sync-engine application in
+an existing Bun package. The empty application establishes the extension points
+used by hand-authored concepts and by the optional source catalog. For setup
+behavior in partial projects, see the [command-line reference](../reference/cli.md).
 
 ## Prerequisites
 
-Use a supported Bun release and a shell that can run the commands below. The
-[runtime and toolchain support policy](../../../SUPPORT.md#runtime-and-toolchain)
-lists the exact ranges. The scaffold writes its own TypeScript and package
-configuration.
-
-## Create the project
+Create a Bun package and install the exact core beta selected for the
+application:
 
 ```sh
-bunx --package @mit-sdg/sync-engine@beta sync-engine new note-keeper
-cd note-keeper
-bun install
+mkdir workshop-app
+cd workshop-app
+bun init -y
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.7
+bun add --dev --exact typescript@6
 ```
 
-The command writes a project only when none of its template files would be
-overwritten. The generated application has one Noting concept, two endpoints,
-an assembly, a local-gateway scenario, and generated-artifact configuration.
-Pin the package selector to a chosen release when reproducing an evaluation or
-deployment exactly.
+## Initialize the application files
 
-## Generated files
+```sh
+bunx sync-engine setup
+```
+
+`setup` writes only missing files. It neither edits `package.json` nor replaces
+an existing file. Apply the dependency and script guidance printed by the
+command. For this tutorial, add these scripts to `package.json`:
+
+```json
+{
+  "scripts": {
+    "generate": "sync-engine artifacts pin",
+    "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check && tsc --noEmit",
+    "start": "bun src/main.ts",
+    "test": "vp test"
+  }
+}
+```
+
+The command creates this concept-free structure:
 
 ```text
-note-keeper/
-├── README.md
-├── generated.config.ts
-├── package.json
-├── text.d.ts
-├── tsconfig.json
-└── src/
-    ├── assembly.ts
-    ├── composition.ts
-    ├── concept-set.ts
-    ├── edge.ts
-    ├── scenario.ts
-    └── concepts/
-        └── noting/
-            ├── noting.test.ts
-            ├── noting.ts
-            ├── registry.ts
-            └── spec.md
+generated.config.ts
+tsconfig.json
+src/
+  assembly.ts
+  composition.ts
+  concept-set.ts
+  main.ts
 ```
 
-The files form one lifecycle: specify and implement a behavior, register it,
-compose it, assemble it, generate its public contract, and invoke it through a
-boundary.
+## Stable extension points
 
-## Run the complete lifecycle
-
-```sh
-bun run generate
-bun run check
-bun run principle
-bun run start
-```
-
-`generate` writes `generated/note-keeper.md` and `generated/wire.ts`. `check`
-compares parsed action and query declarations with the class source, verifies
-that generated files match the assembly, and typechecks the project. A
-successful source check reports one checked concept; artifact and type checks
-are silent on success.
-
-`principle` runs the Noting class directly and prints `principle holds`.
-`start` calls the application through its gateway and prints JSON containing a
-generated note identifier and the text `buy milk`. The identifier changes
-between runs.
-
-If the aggregate check fails, isolate its stages with:
-
-```sh
-bun run typecheck
-bunx sync-engine check
-bunx sync-engine artifacts check
-```
-
-## Tour the generated project
-
-`src/concepts/noting/spec.md` is the authored specification. It states the
-concept's purpose and principle, declares action signatures and refusal
-branches, and declares query cardinality. Indented query bodies document
-reader-facing behavior beside each signature; implementation tests enforce
-those claims. Its optional State section is reader notation. [Concept specification
-format](../reference/concept-specification.md) defines exactly which parts are parsed and
-checked.
-
-`src/concepts/noting/noting.ts` implements the contract as an ordinary class.
-Public methods are actions. Methods prefixed with `_` are queries. The class has
-no engine base class and no peer concept imports.
-
-`src/concepts/noting/noting.test.ts` drives the principle directly against the
-class. This test establishes the concept's behavior independently of any
-application composition.
-
-`src/concepts/noting/registry.ts` joins the specification and class. It also
-maps each declared refusal code to the `Error` class that signals that refusal.
-
-## Name the concept
-
-`src/concept-set.ts` gives the registration its application name and derives
-the vocabulary and implementation set:
+`src/concept-set.ts` starts with no registrations:
 
 ```ts
-export const noteKeeperConcepts = conceptSet({ Noting: noting });
-export const { concepts, vocabulary } = noteKeeperConcepts;
+import { conceptSet } from "@mit-sdg/sync-engine/assembly";
+
+export const applicationConcepts = conceptSet({});
+export const { concepts, vocabulary } = applicationConcepts;
 ```
 
-`concepts` contains typed, inert references used while authoring composition.
-`vocabulary` contains the corresponding names and metadata used by assembly and
-tooling.
-
-## Declare the application boundary
-
-`src/composition.ts` defines a former and two endpoints:
+`src/composition.ts` starts with no composition members:
 
 ```ts
-const { Noting } = concepts;
-
-export const notePage = former("the note (note)", ({ note }, { text }) =>
-  where(Noting._get({ note }).is({ text })).form({ note, text }),
-);
-
-export const WriteNote = endpoint("/notes/write", ({ text, note }) =>
-  receive({ text }).then(Noting.write({ text }).responds({ note })).then(respond({ note })),
-);
-
-export const GetNote = endpoint("/notes/get", ({ note }) =>
-  receive({ note }).then(
-    where(Noting._get({ note }))
-      .then(respond({ page: notePage({ note }) }))
-      .named("found"),
-    where(no(Noting._get({ note })))
-      .then(respond({ error: "NOTE_NOT_FOUND" }))
-      .named("missing"),
-  ),
-);
+export const applicationComposition = {};
 ```
 
-`WriteNote` receives `text`, asks `Noting.write`, waits for its returned
-occurrence, and responds with the new identifier. `GetNote` forms a page when
-the note exists and returns `NOTE_NOT_FOUND` when it does not. These declarations
-do not execute while the module is loaded.
-
-## Assemble and invoke
-
-`src/assembly.ts` installs one vocabulary, implementation set, and composition:
+`src/assembly.ts` assembles those two application-owned extension points:
 
 ```ts
-export function assembleNoteKeeper() {
+import { assemble } from "@mit-sdg/sync-engine/assembly";
+import { applicationComposition } from "./composition.ts";
+import { applicationConcepts, vocabulary } from "./concept-set.ts";
+
+export function assembleApplication() {
   return assemble({
     vocabulary,
-    instances: noteKeeperConcepts.implementations(),
-    composition,
+    instances: applicationConcepts.implementations(),
+    composition: applicationComposition,
   });
 }
 ```
 
-`src/edge.ts` places the standard gateway in front of the assembly.
-`src/scenario.ts` creates a local client, calls `/notes/write`, then calls
-`/notes/get`. The local client applies the same JSON serialization boundary as
-the HTTP client; it does not expose richer in-process values.
+## Run the empty application
 
-## Generated artifacts
+```sh
+bun run generate
+bun run check
+bun run start
+```
 
-`generated/note-keeper.md` is the assembled design read-back.
-`generated/wire.ts` maps each endpoint path to its TypeScript input, output, and
-error contract. Both files are derived and should remain in source control.
-Change the source declaration, run `bun run generate`, and review the resulting
-diff; do not edit generated files directly.
+Artifact generation writes the configured read-back and wire contract. The
+empty application has no routes, so `start` prints `[]`.
 
-The read-back keeps Noting's authored signatures, descriptions, refusal
-messages, Types, and extension sections beside the assembled composition. It
-separates registration checks and evaluated-read cardinality checks from type,
-result, and behavior prose that the engine does not execute.
+A second `sync-engine setup` invocation writes nothing and reports
+byte-identical setup files as verified. If an application file has changed,
+setup treats it as application-owned and reports any dependent setup it could
+not verify.
 
-Generated TypeScript checks typed callers. Gateway admission only checks the
-route, an outer object, and required-key presence. It does not validate
-primitive or nested values by default. Public endpoints can attach explicit
-runtime input, successful-output, and domain-error validators as shown in
-[Add runtime validation](authoring.md#add-runtime-validation).
+## Add the optional catalog recipe
 
-The [application authoring guide](authoring.md) continues with the shipped
-Operations Room case study. Read [How sync-engine applications fit
-together](../overview.md) first when the distinction between a concept,
-composition, and assembly is not yet clear.
+The independent catalog package copies curated source into the application. It
+does not edit the setup files.
+
+```sh
+bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.7
+bunx catalog add recipe/workshop-selection --floor memory
+```
+
+If package requirements are missing, `catalog add` writes nothing and prints
+one `bun add --exact` command. Run that command, then repeat the command after
+`Next:`. A successful add copies the concepts, recipe, and tests; writes catalog
+wiring under `src/catalog/`; and prints the remaining integration work.
+
+Apply every printed step. For this memory-floor example, import and spread
+`catalogRegistrations` in `src/concept-set.ts`, import and spread
+`catalogComposition` in `src/composition.ts`, and set the assembly's `instances`
+to `applicationConcepts.implementations("memory", {})`.
+
+Then verify the integrated application:
+
+```sh
+bun run test
+bun run generate
+bun run check
+bun run start
+```
+
+See the [catalog package guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)
+for floor selection and ownership rules. Continue with [Application
+authoring](authoring.md) to design and register application-specific concepts.
+[Execution semantics](../reference/semantics.md) remains authoritative for
+runtime ordering and failure behavior.

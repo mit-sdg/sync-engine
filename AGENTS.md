@@ -44,7 +44,10 @@ The consumer document owners are:
 - Progressive application authoring: `docs/user/guide/`
 - Application model explanation: `docs/user/overview.md`
 - Small tested read constructions: `docs/user/guide/read-construction.md`
-- Exact core exports and API summaries: `docs/user/reference/public-api.md`; HTTP exports and API summaries: `packages/http/public-surface.md`; analysis exports and API summaries: `packages/analysis/public-surface.md`
+- Exact core exports and API summaries: `docs/user/reference/public-api.md`
+- HTTP exports and API summaries: `packages/http/public-surface.md`
+- Analysis exports and API summaries: `packages/analysis/public-surface.md`
+- Catalog command and schema contract: `packages/catalog/public-surface.md`
 - Concept file grammar: `docs/user/reference/concept-specification.md`
 - Installed command behavior: `docs/user/reference/cli.md`
 - Execution guarantees: `docs/user/reference/semantics.md`
@@ -87,6 +90,7 @@ the book.
 | `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, and `wire/`                      |
 | `packages/http/`                 | Independently published HTTP transport and its package-owned API, declaration, and packaging tests                                  |
 | `packages/analysis/`             | Independently published analysis companion and its package-owned API, declaration, and packaging tests                              |
+| `packages/catalog/`              | CLI-only curated source catalog, entry assets, lock/installer implementation, and package-owned tests                               |
 | `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
 | `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
 | `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |

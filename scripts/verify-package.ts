@@ -74,6 +74,7 @@ interface PackedWorkspace {
 
 interface DependencyManifest {
   dependencies: Record<string, string>;
+  [key: string]: unknown;
 }
 
 function commandEnv(): NodeJS.ProcessEnv {
@@ -322,13 +323,12 @@ async function verifyPackedWorkspace(
     requireEntry(entries, target.import.replace(/^\.\//, ""));
     requireEntry(entries, target.types.replace(/^\.\//, ""));
   }
-  if (workspace.scaffold !== undefined) {
-    const executable = manifest.bin?.["sync-engine"];
-    if (executable !== `./${workspace.scaffold.executable}`) {
-      throw new Error(`package must expose sync-engine as ./${workspace.scaffold.executable}`);
-    }
-    requireEntry(entries, executable.replace(/^\.\//, ""));
-    requireExecutable(packed, executable.replace(/^\.\//, ""));
+  const declaredBins = Object.values(manifest.bin ?? {}).map((path) => path.replace(/^\.\//, ""));
+  for (const executable of workspace.bins) {
+    if (!declaredBins.includes(executable))
+      throw new Error(`${workspace.id} package must expose ./${executable} as a bin`);
+    requireEntry(entries, executable);
+    requireExecutable(packed, executable);
   }
   if (workspace.id === coreWorkspace.id) {
     for (const forbiddenId of coreWorkspace.forbiddenWorkspaceIds) {
@@ -675,28 +675,158 @@ async function verifyCombinedConsumer(
   }
 }
 
-async function verifyScaffoldAndExamples(
+async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace>): Promise<void> {
+  const catalog = workspaceArtifact(artifacts, workspaceById("catalog"));
+  const consumer = resolve(temporary, "catalog-only");
+  await mkdir(consumer, { recursive: true });
+  await writePackageManifest(resolve(consumer, "package.json"), {
+    name: "catalog-only",
+    version: "1.0.0",
+    private: true,
+    type: "module",
+    packageManager: "bun@1.3.14",
+    dependencies: { [catalog.workspace.packageName]: tarballSpecifier(consumer, catalog.tarball) },
+  });
+  run("bun", ["install", "--ignore-scripts"], consumer);
+  if (existsSync(resolve(consumer, "node_modules/@mit-sdg/sync-engine"))) {
+    throw new Error("catalog-only installation unexpectedly installed optional core peer");
+  }
+  const executable = catalog.manifest.bin?.catalog;
+  if (executable === undefined) throw new Error("catalog package does not provide catalog");
+  const command = resolve(
+    consumer,
+    "node_modules",
+    ...catalog.workspace.packageName.split("/"),
+    executable,
+  );
+  run("bun", [command, "list"], consumer);
+  run("bun", [command, "show", "recipe/workshop-selection"], consumer);
+}
+
+async function verifySetupAndExamples(
   artifacts: ReadonlyMap<string, PackedWorkspace>,
   coreConsumer: string,
 ): Promise<void> {
   const core = workspaceArtifact(artifacts, coreWorkspace);
+  const catalog = workspaceArtifact(artifacts, workspaceById("catalog"));
   const installed = resolve(coreConsumer, "node_modules", ...core.workspace.packageName.split("/"));
-  const scaffold = resolve(temporary, "scaffold");
+  const setup = resolve(temporary, "setup-application");
   const executable = core.manifest.bin?.["sync-engine"];
   if (executable === undefined) throw new Error("core package does not provide sync-engine");
-  run("bun", [resolve(installed, executable), "new", scaffold], temporary);
-  const scaffoldManifestPath = resolve(scaffold, "package.json");
-  const scaffoldManifest = await prepareWorkspaceDependencies(
-    scaffoldManifestPath,
-    "packed scaffold",
-    artifacts,
+  await mkdir(setup, { recursive: true });
+  await writePackageManifest(resolve(setup, "package.json"), {
+    name: "setup-application",
+    version: "1.0.0",
+    private: true,
+    type: "module",
+    packageManager: "bun@1.3.14",
+    scripts: {
+      generate: "sync-engine artifacts pin",
+      check:
+        "sync-engine check --config generated.config.ts && sync-engine artifacts check && tsc --noEmit",
+      start: "bun src/main.ts",
+      test: "vp test",
+      typecheck: "tsc --noEmit",
+    },
+    dependencies: {
+      [core.workspace.packageName]: core.manifest.version,
+      [catalog.workspace.packageName]: tarballSpecifier(setup, catalog.tarball),
+    },
+    devDependencies: { typescript: "^6.0.0", "vite-plus": "0.2.6" },
+  });
+  run("bun", [resolve(installed, executable), "setup"], setup);
+  run("bun", [resolve(installed, executable), "setup"], setup);
+  const setupManifestPath = resolve(setup, "package.json");
+  const setupManifest = JSON.parse(await readFile(setupManifestPath, "utf8")) as DependencyManifest;
+  setupManifest.dependencies[core.workspace.packageName] = tarballSpecifier(setup, core.tarball);
+  await writePackageManifest(setupManifestPath, setupManifest);
+  run("bun", ["install", "--ignore-scripts"], setup);
+  run("bun", ["run", "generate"], setup);
+  run("bun", ["run", "check"], setup);
+  run("bun", ["run", "start"], setup);
+
+  await writeFile(
+    resolve(setup, "vite.config.ts"),
+    'import { readFileSync } from "node:fs";\nimport { defineConfig } from "vite-plus";\n\nexport default defineConfig({\n  plugins: [{\n    name: "markdown-as-text",\n    enforce: "pre",\n    load(id: string) {\n      return id.endsWith(".md") ? `export default ${JSON.stringify(readFileSync(id, "utf8"))};` : null;\n    },\n  }],\n});\n',
   );
-  await writePackageManifest(scaffoldManifestPath, scaffoldManifest);
-  run("bun", ["install", "--ignore-scripts"], scaffold);
-  run("bun", ["run", "generate"], scaffold);
-  run("bun", ["run", "check"], scaffold);
-  run("bun", ["run", "principle"], scaffold);
-  run("bun", ["run", "start"], scaffold);
+  setupManifest.dependencies[core.workspace.packageName] = core.manifest.version;
+  await writePackageManifest(setupManifestPath, setupManifest);
+  const mongoSetup = resolve(temporary, "setup-application-mongo");
+  await cp(setup, mongoSetup, {
+    recursive: true,
+    filter: (path) => {
+      const entry = relative(setup, path).split(sep).join("/");
+      return entry !== "node_modules" && !entry.startsWith("node_modules/");
+    },
+  });
+  const catalogExecutable = catalog.manifest.bin?.catalog;
+  if (catalogExecutable === undefined) throw new Error("catalog package does not provide catalog");
+  const catalogCommand = resolve(
+    setup,
+    "node_modules",
+    ...catalog.workspace.packageName.split("/"),
+    catalogExecutable,
+  );
+  run("bun", [catalogCommand, "add", "recipe/workshop-selection", "--floor", "memory"], setup);
+  await writeFile(
+    resolve(setup, "src/concept-set.ts"),
+    'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\nimport { catalogRegistrations } from "./catalog/registrations.generated.ts";\n\nexport const applicationConcepts = conceptSet({ ...catalogRegistrations });\nexport const { concepts, vocabulary } = applicationConcepts;\n',
+  );
+  await writeFile(
+    resolve(setup, "src/composition.ts"),
+    'import { catalogComposition } from "./catalog/composition.generated.ts";\n\nexport const applicationComposition = { ...catalogComposition };\n',
+  );
+  await writeFile(
+    resolve(setup, "src/assembly.ts"),
+    'import { assemble } from "@mit-sdg/sync-engine/assembly";\nimport { applicationComposition } from "./composition.ts";\nimport { applicationConcepts, vocabulary } from "./concept-set.ts";\n\nexport function assembleApplication() {\n  return assemble({\n    vocabulary,\n    instances: applicationConcepts.implementations("memory", {}),\n    composition: applicationComposition,\n  });\n}\n',
+  );
+  run("bun", ["run", "typecheck"], setup);
+  run("bun", ["run", "test"], setup);
+  run("bun", ["run", "generate"], setup);
+  run("bun", ["run", "check"], setup);
+
+  const mongoManifestPath = resolve(mongoSetup, "package.json");
+  const mongoManifest = JSON.parse(await readFile(mongoManifestPath, "utf8")) as DependencyManifest;
+  mongoManifest.dependencies[core.workspace.packageName] = tarballSpecifier(
+    mongoSetup,
+    core.tarball,
+  );
+  mongoManifest.dependencies.mongodb = "6.21.0";
+  await writePackageManifest(mongoManifestPath, mongoManifest);
+  run("bun", ["install", "--ignore-scripts"], mongoSetup);
+  mongoManifest.dependencies[core.workspace.packageName] = core.manifest.version;
+  await writePackageManifest(mongoManifestPath, mongoManifest);
+  const mongoCatalogCommand = resolve(
+    mongoSetup,
+    "node_modules",
+    ...catalog.workspace.packageName.split("/"),
+    catalogExecutable,
+  );
+  run(
+    "bun",
+    [mongoCatalogCommand, "add", "recipe/workshop-selection", "--floor", "mongo"],
+    mongoSetup,
+  );
+  await writeFile(
+    resolve(mongoSetup, "src/concept-set.ts"),
+    'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\nimport { catalogRegistrations } from "./catalog/registrations.generated.ts";\n\nexport const applicationConcepts = conceptSet({ ...catalogRegistrations });\nexport const { concepts, vocabulary } = applicationConcepts;\n',
+  );
+  await writeFile(
+    resolve(mongoSetup, "src/composition.ts"),
+    'import { catalogComposition } from "./catalog/composition.generated.ts";\n\nexport const applicationComposition = { ...catalogComposition };\n',
+  );
+  await writeFile(
+    resolve(mongoSetup, "src/assembly.ts"),
+    'import type { Db } from "mongodb";\nimport { assemble } from "@mit-sdg/sync-engine/assembly";\nimport { applicationComposition } from "./composition.ts";\nimport { applicationConcepts, vocabulary } from "./concept-set.ts";\n\nconst db = undefined as unknown as Db;\nexport function assembleApplication() {\n  return assemble({\n    vocabulary,\n    instances: applicationConcepts.implementations("mongo", { db }),\n    composition: applicationComposition,\n  });\n}\n',
+  );
+  if (
+    (await filesBelow(resolve(mongoSetup, "src"))).some((path) =>
+      relative(mongoSetup, path).includes("memory"),
+    )
+  )
+    throw new Error("mongo catalog consumer contains memory source");
+  run("bun", ["run", "typecheck"], mongoSetup);
+  run("bun", ["run", "test"], mongoSetup);
 
   for (const example of Object.values(applicationExamples)) {
     const { directory } = example;
@@ -859,8 +989,9 @@ try {
 
   const coreConsumer = await verifyCoreOnlyConsumer(artifacts);
   await verifyCombinedConsumer(artifacts);
+  await verifyCatalogAlone(artifacts);
   await verifyMultiInstance(artifacts);
-  await verifyScaffoldAndExamples(artifacts, coreConsumer);
+  await verifySetupAndExamples(artifacts, coreConsumer);
   await copyVerifiedTarballs(artifacts);
 } finally {
   await rm(temporary, { recursive: true, force: true });

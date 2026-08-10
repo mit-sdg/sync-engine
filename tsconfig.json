@@ -14,6 +14,7 @@
     "resolveJsonModule": true,
     "types": ["node"],
     "paths": {
+      "@catalog/concepts": ["./packages/catalog/entries/_typecheck/concept-set.ts"],
       "@command/*": ["./src/command/*"],
       "@engine/*": ["./src/engine/*"],
       "@examples/operations-room/*": ["./examples/operations-room/src/*"],
@@ -33,7 +34,7 @@
   },
   "include": ["examples", "packages", "scripts", "src", "tests"],
   "exclude": [
-    "src/command/scaffold",
+    "src/command/setup",
     "tests/packaging/application",
     "packages/http/tests/packaging/multi-instance"
   ]

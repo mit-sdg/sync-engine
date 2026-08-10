@@ -1,0 +1,208 @@
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import ts from "typescript";
+import { describe, expect, test } from "vite-plus/test";
+import { CatalogRegistry } from "../src/registry.ts";
+import { addEntries } from "../src/install.ts";
+
+async function fixture(dependencies: Record<string, string>): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "catalog-install-"));
+  await writeFile(
+    join(root, "package.json"),
+    `${JSON.stringify({ name: "fixture", packageManager: "bun@1.3.14", dependencies, scripts: { test: "vp test", typecheck: "tsc --noEmit" } }, null, 2)}\n`,
+  );
+  return root;
+}
+
+async function typescriptFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  return (
+    await Promise.all(
+      entries.map((entry) => {
+        const path = join(directory, entry.name);
+        return entry.isDirectory()
+          ? typescriptFiles(path)
+          : entry.name.endsWith(".ts")
+            ? [path]
+            : [];
+      }),
+    )
+  ).flat();
+}
+
+async function expectTypechecks(root: string): Promise<void> {
+  const repository = resolve(dirname(new URL(import.meta.url).pathname), "../../..");
+  await symlink(resolve(repository, "node_modules"), join(root, "node_modules"), "dir");
+  await writeFile(
+    join(root, "src/concept-set.ts"),
+    'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\nimport { catalogRegistrations } from "./catalog/registrations.generated.ts";\nexport const applicationConcepts = conceptSet({ ...catalogRegistrations });\nexport const { concepts, vocabulary } = applicationConcepts;\n',
+  );
+  const program = ts.createProgram({
+    rootNames: await typescriptFiles(join(root, "src")),
+    options: {
+      allowImportingTsExtensions: true,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
+      paths: {
+        "@engine/*": [resolve(repository, "src/engine/*")],
+        "@mit-sdg/sync-engine/*": [resolve(repository, "src/*/index.ts")],
+      },
+      types: ["node"],
+      skipLibCheck: true,
+      strict: true,
+      target: ts.ScriptTarget.ESNext,
+    },
+  });
+  expect(
+    ts
+      .getPreEmitDiagnostics(program)
+      .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
+  ).toEqual([]);
+}
+
+describe("catalog installer", () => {
+  test("copies only the selected memory floor and deduplicates recipe concepts", async () => {
+    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" });
+    try {
+      const registry = await CatalogRegistry.load();
+      const result = await addEntries(registry, ["recipe/workshop-selection"], {
+        root,
+        floor: "memory",
+        originalCommand: "catalog add recipe/workshop-selection --floor memory",
+      });
+      expect(result.written).toContain("src/concepts/gathering/gathering.memory.ts");
+      expect(result.written.some((path) => path.includes("mongo"))).toBe(false);
+      const registration = await readFile(join(root, "src/concepts/gathering/registry.ts"), "utf8");
+      expect(registration).toContain("class: GatheringMemoryConcept");
+      expect(registration).not.toContain("Mongo");
+      const lock = JSON.parse(await readFile(join(root, "catalog.lock"), "utf8")) as {
+        floor: string;
+        entries: Record<string, unknown>;
+      };
+      expect(lock.floor).toBe("memory");
+      expect(Object.keys(lock.entries)).toEqual([
+        "concept/gathering",
+        "concept/selecting",
+        "recipe/workshop-selection",
+      ]);
+      await expectTypechecks(root);
+      const repeated = await addEntries(registry, ["recipe/workshop-selection"], {
+        root,
+        floor: "memory",
+        originalCommand: "catalog add recipe/workshop-selection --floor memory",
+      });
+      expect(repeated.written).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("copies a mongo-only tree with no memory source or import", async () => {
+    const root = await fixture({
+      "@mit-sdg/sync-engine": "1.0.0-beta.7",
+      mongodb: "6.21.0",
+      "vite-plus": "0.2.6",
+    });
+    try {
+      const result = await addEntries(await CatalogRegistry.load(), ["recipe/workshop-selection"], {
+        root,
+        floor: "mongo",
+        originalCommand: "catalog add recipe/workshop-selection --floor mongo",
+      });
+      expect(result.written).toContain("src/concepts/selecting/selecting.mongo.ts");
+      expect(result.written.some((path) => path.includes("memory"))).toBe(false);
+      const registry = await readFile(join(root, "src/concepts/selecting/registry.ts"), "utf8");
+      expect(registry).toContain("class: SelectingMongoConcept");
+      expect(registry).not.toContain("Memory");
+      await expectTypechecks(root);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects unavailable floors and untracked collisions before writing", async () => {
+    const dependencies = { "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" };
+    const unavailable = await fixture(dependencies);
+    try {
+      await expect(
+        addEntries(await CatalogRegistry.load(), ["concept/selecting"], {
+          root: unavailable,
+          floor: "sqlite",
+          originalCommand: "catalog add concept/selecting --floor sqlite",
+        }),
+      ).rejects.toThrow("does not provide floor");
+      await expect(readFile(join(unavailable, "catalog.lock"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(unavailable, { recursive: true, force: true });
+    }
+
+    const collision = await fixture(dependencies);
+    try {
+      await mkdir(join(collision, "src/concepts/selecting"), { recursive: true });
+      await writeFile(join(collision, "src/concepts/selecting/spec.md"), "application source\n");
+      await expect(
+        addEntries(await CatalogRegistry.load(), ["concept/selecting"], {
+          root: collision,
+          originalCommand: "catalog add concept/selecting",
+        }),
+      ).rejects.toThrow("not catalog-owned");
+      await expect(readFile(join(collision, "catalog.lock"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(collision, { recursive: true, force: true });
+    }
+  });
+
+  test("protects the locked floor and edited generated and rendered files", async () => {
+    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" });
+    try {
+      const registry = await CatalogRegistry.load();
+      await addEntries(registry, ["concept/selecting"], {
+        root,
+        floor: "memory",
+        originalCommand: "catalog add concept/selecting --floor memory",
+      });
+      await expect(
+        addEntries(registry, ["concept/gathering"], {
+          root,
+          floor: "mongo",
+          originalCommand: "catalog add concept/gathering --floor mongo",
+        }),
+      ).rejects.toThrow("selects floor memory");
+      const generatedPath = join(root, "src/catalog/composition.generated.ts");
+      const originalGenerated = await readFile(generatedPath, "utf8");
+      await writeFile(generatedPath, "edited\n");
+      await expect(
+        addEntries(registry, ["concept/selecting"], {
+          root,
+          originalCommand: "catalog add concept/selecting",
+        }),
+      ).rejects.toThrow("generated file was edited");
+      await writeFile(generatedPath, originalGenerated);
+      await writeFile(join(root, "src/concepts/selecting/registry.ts"), "edited\n");
+      await expect(
+        addEntries(registry, ["concept/selecting"], {
+          root,
+          originalCommand: "catalog add concept/selecting",
+        }),
+      ).rejects.toThrow("edited");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("reports one install command and writes nothing when packages are missing", async () => {
+    const root = await fixture({});
+    try {
+      const result = await addEntries(await CatalogRegistry.load(), ["concept/selecting"], {
+        root,
+        originalCommand: "catalog add concept/selecting",
+      });
+      expect(result.install).toContain("bun add --exact");
+      await expect(readFile(join(root, "catalog.lock"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});

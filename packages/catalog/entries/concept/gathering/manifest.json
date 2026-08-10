@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "id": "concept/gathering",
+  "kind": "concept",
+  "summary": "Create named gatherings and manage their members.",
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "concept": {
+    "name": "Gathering",
+    "export": "gathering",
+    "registration": "$concepts/gathering/registry.ts"
+  },
+  "defaultFloor": "memory",
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$concepts/gathering/spec.md"
+    },
+    {
+      "source": "gathering.shared.ts",
+      "target": "$concepts/gathering/gathering.shared.ts"
+    },
+    {
+      "source": "registry.ts",
+      "target": "$concepts/gathering/registry.ts",
+      "render": "floor"
+    }
+  ],
+  "floors": {
+    "memory": {
+      "summary": "Process-local state with injectable identity allocation.",
+      "files": [
+        {
+          "source": "gathering.memory.ts",
+          "target": "$concepts/gathering/gathering.memory.ts"
+        },
+        {
+          "source": "gathering.memory.test.ts",
+          "target": "$concepts/gathering/gathering.memory.test.ts"
+        }
+      ]
+    },
+    "mongo": {
+      "summary": "MongoDB collections with a unique gathering membership index.",
+      "packages": {
+        "mongodb": "^6.20.0"
+      },
+      "files": [
+        {
+          "source": "gathering.mongo.ts",
+          "target": "$concepts/gathering/gathering.mongo.ts"
+        },
+        {
+          "source": "gathering.mongo.test.ts",
+          "target": "$concepts/gathering/gathering.mongo.test.ts"
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { activeWorkflowSource, externalWorkflowActions, workflowUses } from "./workflow.ts";
 import { workspaceById, workspaceCatalog, type Workspace } from "./workspaces.ts";
@@ -29,12 +30,31 @@ export const ownedDependencyManifests = [
   ...bunFixtureManifests,
   ...nodeFixtureManifests,
 ] as const;
+const catalogEntryIndexPath = "packages/catalog/entries/index.json";
+const indexedCatalogEntries: unknown = JSON.parse(
+  readFileSync(new URL("../packages/catalog/entries/index.json", import.meta.url), "utf8"),
+);
+if (
+  !Array.isArray(indexedCatalogEntries) ||
+  indexedCatalogEntries.some(
+    (path) =>
+      typeof path !== "string" ||
+      path.startsWith("/") ||
+      path.includes("\\") ||
+      path.split("/").includes("..") ||
+      !path.endsWith("/manifest.json"),
+  )
+)
+  throw new Error(`${catalogEntryIndexPath} contains an invalid manifest path`);
+const catalogEntryManifests = indexedCatalogEntries.map(
+  (path) => `packages/catalog/entries/${path as string}`,
+);
 export const releaseManifestPaths = [
   ...workspaceReleaseManifests,
   ...ownedDependencyManifests,
+  ...catalogEntryManifests,
 ] as const;
 const bunProjectManifests = [...exampleManifests, ...bunFixtureManifests] as const;
-const scaffoldManifest = "src/command/scaffold/package.json";
 const sharedDevelopmentDependencies = [
   ["@types/bun", ["examples/message-board/package.json"]],
   [
@@ -53,6 +73,10 @@ export const releaseSourcePaths = [
   "packages/http/public-surface.md",
   "packages/analysis/README.md",
   "packages/analysis/public-surface.md",
+  "packages/catalog/README.md",
+  "packages/catalog/public-surface.md",
+  "packages/catalog/CONTRIBUTING.md",
+  catalogEntryIndexPath,
   "README.md",
   "CHANGELOG.md",
   "docs/project/releasing.md",
@@ -72,7 +96,7 @@ export const releaseSourcePaths = [
   "docs/user/guide/getting-started.md",
   "SUPPORT.md",
   "SECURITY.md",
-  scaffoldManifest,
+  ...catalogEntryManifests,
   ...ownedDependencyManifests,
   ".github/workflows/ci.yml",
   ".github/workflows/publish.yml",
@@ -245,6 +269,15 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
         delete peerDependencies[dependency];
       }
     }
+    projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+
+  for (const path of catalogEntryManifests) {
+    const manifest = object(JSON.parse(sources.get(path) ?? ""));
+    const requirements = object(manifest?.packages);
+    if (manifest === undefined || requirements === undefined)
+      throw new Error(`${path} is missing packages`);
+    requirements[coreWorkspace.packageName] = facts.version;
     projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
   }
 
@@ -527,18 +560,6 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
         `release manifests: projection failed (${error instanceof Error ? error.message : String(error)})`,
       );
     }
-  }
-
-  const scaffold = manifest(scaffoldManifest);
-  const scaffoldDevelopment = object(scaffold?.devDependencies);
-  const scaffoldEngines = object(scaffold?.engines);
-  for (const [owner, actual, expected] of [
-    ["TypeScript range", scaffoldDevelopment?.typescript, "{{typescript}}"],
-    ["engines.node", scaffoldEngines?.node, "{{node}}"],
-    ["engines.bun", scaffoldEngines?.bun, "{{bun}}"],
-    ["packageManager", scaffold?.packageManager, "{{packageManager}}"],
-  ] as const) {
-    if (actual !== expected) failures.push(`${scaffoldManifest}: ${owner} must be ${expected}`);
   }
 
   const changelog = sources.get("CHANGELOG.md") ?? "";

@@ -59,7 +59,7 @@ const projectDirectories = new Set([
   ...workspaceCatalog
     .filter((workspace) => workspace.directory !== ".")
     .map((workspace) => `${workspace.directory}/`),
-  "src/command/scaffold/",
+  "src/command/setup/",
   "tests/packaging/application/",
   "packages/http/tests/packaging/multi-instance/",
 ]);

@@ -175,9 +175,10 @@ TypeScript diagnostic, and differing key sets.
 
 The checker does not traverse base classes. Runtime registration can therefore
 accept an inherited member that the source checker rejects.
-`scripts/check-specs.ts` checks `examples` and `tests/packaging/application`; the
-installed command defaults to `src/concepts`. The repository wrapper does not
-check the scaffold template.
+`scripts/check-specs.ts` checks examples, catalog concept entries, and the
+packed application fixture. The installed command defaults to `src/concepts`;
+an existing root with no concepts is valid for the concept-free setup
+application.
 
 ### Runtime and tooling
 

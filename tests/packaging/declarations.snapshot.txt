@@ -77,24 +77,15 @@ export declare function loadGeneratedApplication(configPath: string, root: strin
 #!/usr/bin/env bun
 export {};
 
-=== dist/command/scaffold.d.ts ===
-/**
- * **`sync-engine new`** — write a runnable project.
- *
- * The generated project is the smallest complete slice: one concept with its
- * specification, class, registry and principle test; a concept set; a
- * composition holding an endpoint; an assembly; and the config the artifact
- * commands read. It is the same shape the getting-started guide builds, so a
- * reader can continue from either one.
- */
-/** Write a new project into `directory`, refusing to overwrite existing files. */
-export declare function scaffoldProject(directory: string): Promise<string[]>;
-
-=== dist/command/scaffold/text.d.ts ===
-declare module "*.md" {
-  const text: string;
-  export default text;
+=== dist/command/setup.d.ts ===
+export interface SetupResult {
+    readonly root: string;
+    readonly written: readonly string[];
+    readonly verified: readonly string[];
+    readonly guidance: readonly string[];
 }
+/** Initialize missing concept-free application files in an existing Bun package. */
+export declare function setupProject(directory?: string): Promise<SetupResult>;
 
 === dist/engine/boundary/assembly/assemble.d.ts ===
 /**

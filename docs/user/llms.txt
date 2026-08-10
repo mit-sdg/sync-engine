@@ -12,7 +12,7 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 
 - [Documentation index](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/index.md) — reader paths by task
 - [Application model](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/overview.md) — concepts, composition, assembly, clients, and occurrence evidence
-- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/getting-started.md) — scaffold and run one complete application
+- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/getting-started.md) — initialize and run a concept-free application, then optionally add catalog source
 - [Core Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/public-api.md) — supported core subpaths, exports, signatures, and defaults
 - [Execution semantics](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/semantics.md) — authoritative runtime behavior
 - [Operational limits](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/operations.md) — deployment suitability and host responsibilities
@@ -29,6 +29,12 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 - [Concept specification format](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/concept-specification.md)
 - [Command-line reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/cli.md)
 - [Glossary](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/glossary.md)
+
+## Source catalog
+
+- [Catalog package guide](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/README.md) — inspect and copy curated concept or recipe source
+- [Catalog command reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/packages/catalog/public-surface.md) — command, manifest, lock, ownership, and write-boundary contract
+- The catalog is CLI-only; do not import it at runtime. One project selects one floor. `catalog add` copies source and generated wiring but does not edit application-owned integration files.
 
 ## Examples
 

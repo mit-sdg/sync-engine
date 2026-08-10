@@ -35,12 +35,21 @@ evaluate TypeScript, `fs`, `fs/promises`, `node:fs`, `node:fs/promises`, worker,
 project-loader, or source-index-builder modules. The supported TypeScript range
 is still the one listed under [Runtime and toolchain](#runtime-and-toolchain).
 
+`@mit-sdg/sync-engine-catalog` is an independently published CLI-only package.
+It has no supported runtime imports; `exports` is empty. The [catalog command
+reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/public-surface.md)
+defines its executable and shipped entry format. Its exact core peer is optional
+so `catalog list` and `catalog show` work without core installed. Before adding
+source, the application must satisfy every package requirement of the selected
+entries.
+
 ## Beta compatibility
 
 Beta releases use Semantic Versioning prerelease identifiers. A newer beta may
 make incompatible changes to all six public core subpaths, including
-`/advanced`, both analysis subpaths, and the four HTTP subpaths. Every
-release identifies compatibility and migration effects in the
+`/advanced`, both analysis subpaths, the four HTTP subpaths, and the catalog
+command, manifest, and lock formats. Every release identifies compatibility and
+migration effects in the
 [changelog](CHANGELOG.md). Consumers should pin an exact version and review the
 changelog before upgrading.
 
@@ -130,11 +139,11 @@ not timer-preemptive, operations.
 
 The supported runtime and toolchain ranges are:
 
-| Surface                                     | Supported range     |
-| ------------------------------------------- | ------------------- |
-| Built ESM library                           | Node.js `>=24 <25`  |
-| CLI, source scripts, examples, and scaffold | Bun `>=1.3.14 <1.4` |
-| Type checking and generated TypeScript      | TypeScript `>=6 <7` |
+| Surface                                           | Supported range     |
+| ------------------------------------------------- | ------------------- |
+| Built ESM library                                 | Node.js `>=24 <25`  |
+| CLI, setup, catalog, source scripts, and examples | Bun `>=1.3.14 <1.4` |
+| Type checking and generated TypeScript            | TypeScript `>=6 <7` |
 
 CI exercises current GitHub-hosted Linux, macOS, and Windows images for package
 and test behavior. Host-specific filesystems, databases, proxies, TLS, process

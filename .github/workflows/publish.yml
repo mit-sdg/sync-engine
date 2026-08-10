@@ -33,7 +33,11 @@ jobs:
       - run: bun run release:check
       - run: bun run check
       - run: bun run test
+        env:
+          CATALOG_MONGO: "1"
       - run: bun run coverage
+        env:
+          CATALOG_MONGO: "1"
       - run: bun run declarations:check
       - run: bun run examples:check
       - run: bun scripts/examples.ts scenario
@@ -45,6 +49,7 @@ jobs:
       - run: sha256sum release/package.tgz > release/package.tgz.sha256
       - run: sha256sum release/analysis-package.tgz > release/analysis-package.tgz.sha256
       - run: sha256sum release/http-package.tgz > release/http-package.tgz.sha256
+      - run: sha256sum release/catalog-package.tgz > release/catalog-package.tgz.sha256
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: verified-npm-package
@@ -55,6 +60,8 @@ jobs:
             release/analysis-package.tgz.sha256
             release/http-package.tgz
             release/http-package.tgz.sha256
+            release/catalog-package.tgz
+            release/catalog-package.tgz.sha256
           if-no-files-found: error
           retention-days: 1
 
@@ -85,3 +92,4 @@ jobs:
       - run: npm publish ./release/package.tgz --provenance --tag beta --access public
       - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public
       - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public
+      - run: npm publish ./release/catalog-package.tgz --provenance --tag beta --access public

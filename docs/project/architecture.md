@@ -282,9 +282,10 @@ checks or writes the two pinned files only after the complete plan succeeds.
 
 The installed executable under `src/command/` is an adapter over those
 capabilities. `check.ts` parses supported TypeScript method signatures;
-`artifacts.ts` imports an application descriptor; `scaffold.ts` renders the
-project template. Command code may import engine concerns through `@engine`,
-but engine concerns do not import the command.
+`artifacts.ts` imports an application descriptor; and `setup.ts` initializes
+missing concept-free application files without merging application-owned files.
+Command code may import engine concerns through `@engine`, but engine concerns
+do not import the command.
 
 ## Public package boundary
 
@@ -297,10 +298,16 @@ remain with the workspace whose package they exercise. Combined consumer
 verification copies these inputs into one isolated installation and checks the
 emitted type and runtime graphs.
 
+`packages/catalog/` is the fourth workspace. Its CLI reads strict entry assets,
+plans one-floor source copies, validates lock ownership and package ranges,
+generates mechanical wiring, and leaves application integration to guidance. It
+exports no runtime API.
+
 Workspace packaging and npm publication are separate policies. Every cataloged
 workspace builds, packs, and participates in combined-consumer checks. A
 workspace is published to npm only when its catalog entry selects `npm`.
-Analysis consumes only supported core subpaths and exposes generic, non-verdict surfaces through
+Analysis consumes only supported core subpaths and exposes generic, non-verdict
+surfaces through
 `@mit-sdg/sync-engine-analysis/ir` and
 `@mit-sdg/sync-engine-analysis/project`. Plain source/project models and pure
 queries live on the compiler-free `/ir` side. The package still declares

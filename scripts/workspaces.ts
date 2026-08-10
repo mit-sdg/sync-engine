@@ -22,7 +22,12 @@ export interface Workspace {
   readonly publication: "npm" | "private";
   readonly requiredPackedFiles: readonly string[];
   readonly packageBudget: Readonly<{ files: number; packedBytes: number; unpackedBytes: number }>;
-  readonly scaffold?: Readonly<{ source: string; destination: string; executable: string }>;
+  readonly assets: readonly Readonly<{
+    source: string;
+    destination: string;
+    exclude?: readonly string[];
+  }>[];
+  readonly bins: readonly string[];
 }
 
 export const workspaceCatalog = [
@@ -39,9 +44,9 @@ export const workspaceCatalog = [
     buildAfter: [],
     peerWorkspaceIds: [],
     rootRuntimeDependencies: [],
-    forbiddenWorkspaceIds: ["http", "analysis"],
+    forbiddenWorkspaceIds: ["http", "analysis", "catalog"],
     internalSourceDirectories: ["command", "engine"],
-    runtimeEntrypoints: [],
+    runtimeEntrypoints: ["command/main.ts"],
     publicSubpathContainsOnlyEntrypoint: true,
     copiesExamples: true,
     publication: "npm",
@@ -54,11 +59,8 @@ export const workspaceCatalog = [
       "package.json",
     ],
     packageBudget: { files: 420, packedBytes: 500_000, unpackedBytes: 1_500_000 },
-    scaffold: {
-      source: "src/command/scaffold",
-      destination: "dist/command/scaffold",
-      executable: "dist/command/main.js",
-    },
+    assets: [{ source: "src/command/setup", destination: "dist/command/setup" }],
+    bins: ["dist/command/main.js"],
   },
   {
     id: "analysis",
@@ -73,7 +75,7 @@ export const workspaceCatalog = [
     buildAfter: ["core"],
     peerWorkspaceIds: ["core"],
     rootRuntimeDependencies: ["typescript"],
-    forbiddenWorkspaceIds: ["http"],
+    forbiddenWorkspaceIds: ["http", "catalog"],
     internalSourceDirectories: [],
     runtimeEntrypoints: ["project/application-project-worker.ts"],
     publicSubpathContainsOnlyEntrypoint: false,
@@ -88,6 +90,8 @@ export const workspaceCatalog = [
       "dist/project/application-project-worker.js",
     ],
     packageBudget: { files: 40, packedBytes: 78_000, unpackedBytes: 380_000 },
+    assets: [],
+    bins: [],
   },
   {
     id: "http",
@@ -102,7 +106,7 @@ export const workspaceCatalog = [
     buildAfter: ["core"],
     peerWorkspaceIds: ["core"],
     rootRuntimeDependencies: [],
-    forbiddenWorkspaceIds: ["analysis"],
+    forbiddenWorkspaceIds: ["analysis", "catalog"],
     internalSourceDirectories: [],
     runtimeEntrypoints: [],
     publicSubpathContainsOnlyEntrypoint: false,
@@ -110,6 +114,41 @@ export const workspaceCatalog = [
     publication: "npm",
     requiredPackedFiles: ["LICENSE", "NOTICE", "README.md", "public-surface.md", "package.json"],
     packageBudget: { files: 80, packedBytes: 150_000, unpackedBytes: 600_000 },
+    assets: [],
+    bins: [],
+  },
+  {
+    id: "catalog",
+    packageName: "@mit-sdg/sync-engine-catalog",
+    directory: "packages/catalog",
+    packageManifest: "packages/catalog/package.json",
+    sourceDirectory: "src",
+    distDirectory: "dist",
+    buildConfig: "tsconfig.build.json",
+    declarationSnapshot: undefined,
+    verifiedTarball: "catalog-package.tgz",
+    buildAfter: ["core"],
+    peerWorkspaceIds: ["core"],
+    rootRuntimeDependencies: ["semver"],
+    forbiddenWorkspaceIds: ["analysis", "http"],
+    internalSourceDirectories: [],
+    runtimeEntrypoints: ["command.ts"],
+    publicSubpathContainsOnlyEntrypoint: false,
+    copiesExamples: false,
+    publication: "npm",
+    requiredPackedFiles: [
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "NOTICE",
+      "README.md",
+      "public-surface.md",
+      "package.json",
+      "dist/command.js",
+      "dist/entries/index.json",
+    ],
+    packageBudget: { files: 45, packedBytes: 120_000, unpackedBytes: 500_000 },
+    assets: [{ source: "entries", destination: "dist/entries", exclude: ["_typecheck"] }],
+    bins: ["dist/command.js"],
   },
 ] as const satisfies readonly Workspace[];
 

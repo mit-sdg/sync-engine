@@ -7,6 +7,13 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: "@catalog/concepts",
+        replacement: resolve(
+          import.meta.dirname,
+          "packages/catalog/entries/_typecheck/concept-set.ts",
+        ),
+      },
+      {
         find: /^@mit-sdg\/sync-engine\/([^/]+)$/,
         replacement: resolve(import.meta.dirname, "src/$1/index.ts"),
       },
@@ -33,7 +40,7 @@ export default defineConfig({
   ],
   fmt: {
     ignorePatterns: [
-      "src/command/scaffold/**",
+      "src/command/setup/**",
       ...Object.values(applicationExamples).flatMap((example) =>
         example.generated.map((path) => `examples/${example.directory}/${path}`),
       ),
@@ -41,7 +48,7 @@ export default defineConfig({
   },
   lint: {
     ignorePatterns: [
-      "src/command/scaffold/**",
+      "src/command/setup/**",
       "tests/packaging/application/**",
       "packages/http/tests/packaging/multi-instance/**",
       ...Object.values(applicationExamples).flatMap((example) =>
@@ -76,9 +83,16 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
-    include: ["examples/**/*.test.ts", "packages/*/tests/**/*.test.ts", "tests/**/*.test.ts"],
+    globalSetup: ["packages/catalog/tests/mongo-setup.ts"],
+    include: [
+      "examples/**/*.test.ts",
+      "packages/*/tests/**/*.test.ts",
+      "packages/catalog/entries/**/*.test.ts",
+      "tests/**/*.test.ts",
+    ],
     exclude: ["tests/packaging/application/**", "packages/http/tests/packaging/multi-instance/**"],
     coverage: {
+      exclude: ["packages/catalog/entries/**"],
       thresholds: {
         statements: 90,
         branches: 82,

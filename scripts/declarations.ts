@@ -20,6 +20,10 @@ async function declarationsFor(workspace: Workspace): Promise<string[]> {
 }
 
 async function validateDeclarations(workspace: Workspace): Promise<void> {
+  const manifest = JSON.parse(
+    await readFile(resolve(root, workspace.packageManifest), "utf8"),
+  ) as PackageManifest;
+  if (Object.keys(manifest.exports).length === 0) return;
   const declarations = await declarationsFor(workspace);
   for (const path of declarations) {
     const source = await readFile(path, "utf8");
@@ -28,9 +32,6 @@ async function validateDeclarations(workspace: Workspace): Promise<void> {
     }
   }
 
-  const manifest = JSON.parse(
-    await readFile(resolve(root, workspace.packageManifest), "utf8"),
-  ) as PackageManifest;
   for (const [entrypoint, target] of Object.entries(manifest.exports)) {
     if (typeof target.types !== "string") {
       throw new Error(`${workspace.id} export ${entrypoint} does not declare a types target`);

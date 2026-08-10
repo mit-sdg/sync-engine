@@ -7,7 +7,7 @@ through them. The [Public API](reference/public-api.md) defines signatures and d
 
 ## Application layers
 
-The scaffolded, registered, and generated path is built in this order:
+A registered application is assembled and exposed in this order:
 
 ```text
 concept specifications + TypeScript classes

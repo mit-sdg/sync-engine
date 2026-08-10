@@ -405,7 +405,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     if (workspace.id !== "core") return filesBelow(files, sourceDirectory);
     return [
       ...filesBelow(files, `${sourceDirectory}/command`).filter(
-        (path) => !path.startsWith(`${sourceDirectory}/command/scaffold/`),
+        (path) => !path.startsWith(`${sourceDirectory}/command/setup/`),
       ),
       ...[...subpaths].flatMap((subpath) => filesBelow(files, `${sourceDirectory}/${subpath}`)),
       ...filesBelow(files, `${sourceDirectory}/engine`),
@@ -702,10 +702,17 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
     );
     const workspaceRelative =
       workspace === undefined ? undefined : posix.relative(workspace.directory, path);
+    const knownWorkspaceAsset =
+      workspace !== undefined &&
+      workspaceRelative !== undefined &&
+      workspace.assets.some(
+        ({ source }) => workspaceRelative === source || workspaceRelative.startsWith(`${source}/`),
+      );
     const knownWorkspaceFile =
       workspace !== undefined &&
       workspaceRelative !== undefined &&
       (workspace.declarationSnapshot === path ||
+        knownWorkspaceAsset ||
         (workspace.requiredPackedFiles as readonly string[]).includes(workspaceRelative) ||
         ["tsconfig.json", "tsconfig.build.json"].includes(workspaceRelative) ||
         (workspaceRelative.startsWith("src/") && workspaceRelative.endsWith(".ts")) ||
@@ -723,7 +730,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       (head === "src" &&
         ((parts[1] === "command" &&
           ((parts.length === 3 && path.endsWith(".ts")) ||
-            (parts.length >= 3 && parts[2] === "scaffold"))) ||
+            (parts.length >= 3 && parts[2] === "setup"))) ||
           (publicSubpaths.has(parts[1] ?? "") && parts.length === 3 && parts[2] === "index.ts") ||
           (parts[1] === "engine" && path.endsWith(".ts")))) ||
       (head === "docs" &&
