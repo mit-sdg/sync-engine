@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["bun", "node"],
+    "paths": {
+      "@root/*": ["../../*"],
+      "@engine/*": ["../../src/engine/*"],
+      "@mit-sdg/sync-engine/*": ["../../src/*/index.ts"],
+      "@mit-sdg/sync-engine-http/*": ["../../packages/http/src/*/index.ts"]
+    }
+  },
+  "include": ["src", "tests", "generated.config.ts", "generated", "*.d.ts"]
+}

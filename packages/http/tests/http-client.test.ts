@@ -374,7 +374,7 @@ describe("createHttpClient", () => {
     });
   });
 
-  test("requests include credentials by default", async () => {
+  test("requests use same-origin credentials by default", async () => {
     const fetch = mockFetch({ token: "x" });
     const client = makeClient(fetch);
 
@@ -382,11 +382,11 @@ describe("createHttpClient", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost/auth/login",
-      expect.objectContaining({ credentials: "include" }),
+      expect.objectContaining({ credentials: "same-origin" }),
     );
   });
 
-  test("a credentials option replaces the include default", async () => {
+  test("a credentials option replaces the same-origin default", async () => {
     const fetch = mockFetch({ token: "x" });
     const client = createHttpClient<TestApi>({
       baseUrl: "http://localhost",

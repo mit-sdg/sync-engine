@@ -14,7 +14,7 @@ semantics](semantics.md) defines the underlying runtime contract.
 | Validate endpoint values at runtime             | Explicit endpoint validators | Application-supplied input, output, and domain-error checks         |
 | Bound engine-owned work                         | Optional `ExecutionLimits`   | Configure limits and retain host traffic limits                     |
 | Cancel work after acceptance                    | Not provided                 | Design idempotency and recovery for work that outlives the caller   |
-| Serve a public JSON boundary                    | Maintained Fetch handler     | Host supplies listener, TLS, CORS, traffic controls, and lifecycle  |
+| Serve a public JSON boundary                    | Maintained Fetch handler     | Host supplies listener, TLS, traffic controls, and lifecycle        |
 
 Use sync-engine only when the application and host can own every requirement in
 the final column.
@@ -165,18 +165,29 @@ queueing, retries, and network export into host-owned infrastructure.
 
 ## HTTP host responsibilities
 
-Install the exact matching beta of `@mit-sdg/sync-engine-http`. Use
-`productionHttpProfile(...)` for a credential-free public JSON policy or
-`httpFloor(...)` for its narrow cookie credential binding. The [HTTP Public
+Install the exact matching beta of `@mit-sdg/sync-engine-http`. A plain
+`createHttpHandler({ application, gateway })` exposes POST/JSON without policy.
+Use one immutable `httpPolicy(...)` value for deployment facts that must also
+shape `httpWire(...)`, including a base path, public errors, browser origins,
+request-origin protection, cookies, and the request-body limit. The [HTTP Public
 API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)
-defines method, body, status, origin, cookie, correlation, timeout, and response
-limits.
+defines exact method, body, status, CORS, origin, cookie, correlation, timeout,
+and response-limit behavior.
 
-The Fetch handler is not a listener and does not terminate TLS. The host owns
-CORS, connection and request-rate limits, denial-of-service controls, TLS, HSTS,
-proxy trust, health checks, autoscaling, listener lifecycle, and authentication
-integration. Application concepts own credential meaning and domain
-authorization.
+The Fetch handler is not a listener and does not terminate TLS. A declared
+browser policy supplies exact-origin CORS and preflight handling; a separate
+request-origin policy protects cookie-touched paths. The host still owns
+connection and request-rate limits, denial-of-service controls, TLS, HSTS,
+certificate and trusted-proxy handling, health checks, autoscaling, listener
+lifecycle, and authentication integration. Application concepts own credential
+meaning and domain authorization.
+
+Methods other than `POST`, streaming, resource-oriented REST routing,
+framework-owned routing, request preprocessing, and unrestricted response
+transformation are unsupported. Wrap the handler when middleware must operate
+outside the package's security boundary, or implement a custom transport from
+supported core subpaths. The HTTP package does not provide a Node cookie jar,
+retry policy, idempotency, persistence, or cancellation of accepted work.
 
 ## Logs and sensitive values
 

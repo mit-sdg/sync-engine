@@ -669,7 +669,8 @@ async function verifyScaffoldAndExamples(
   run("bun", ["run", "principle"], scaffold);
   run("bun", ["run", "start"], scaffold);
 
-  for (const { directory } of Object.values(applicationExamples)) {
+  for (const example of Object.values(applicationExamples)) {
+    const { directory } = example;
     const isolated = resolve(temporary, directory);
     await cp(resolve(installed, "examples", directory), isolated, { recursive: true });
     const manifestPath = resolve(isolated, "package.json");
@@ -677,7 +678,7 @@ async function verifyScaffoldAndExamples(
     await writePackageManifest(manifestPath, manifest);
     run("bun", ["install", "--ignore-scripts"], isolated);
     run("bun", ["run", "check"], isolated);
-    run("bun", ["run", "start"], isolated);
+    if ("scenario" in example) run("bun", ["run", "start"], isolated);
   }
 
   const standalone = resolve(temporary, "application");

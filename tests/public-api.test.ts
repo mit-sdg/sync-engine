@@ -409,6 +409,23 @@ const register = {
 } as const;
 
 const httpRegister = {
+  policy: [
+    "HttpBrowserPolicy",
+    "HttpCookieBinding",
+    "HttpLimits",
+    "HttpPolicy",
+    "HttpPolicyBrand",
+    "HttpPolicyInit",
+    "HttpPublicErrorCategory",
+    "HttpRequestOriginPolicy",
+    "httpPolicy",
+  ],
+  server: [
+    "HttpCorrelationOptions",
+    "HttpHandlerOptions",
+    "HttpResponseHeadersContext",
+    "createHttpHandler",
+  ],
   client: [
     "HeadersOption",
     "HttpClientError",
@@ -417,17 +434,6 @@ const httpRegister = {
     "HttpRequestContext",
     "createHttpClient",
     "createHttpTransport",
-  ],
-  server: [
-    "HttpCorrelationOptions",
-    "HttpCredentialBinding",
-    "HttpFloor",
-    "HttpPublicErrorCategory",
-    "HttpPublicErrorPolicy",
-    "ProductionHttpProfile",
-    "createHttpHandler",
-    "httpFloor",
-    "productionHttpProfile",
   ],
   tooling: ["HttpWireOptions", "httpWire"],
 } as const;

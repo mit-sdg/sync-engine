@@ -6,16 +6,16 @@ The directories are independently installable; no example imports source from
 another. Each example declares its requirements in `package.json` and follows
 the repository [support policy](../SUPPORT.md).
 
-| Example                                      | Use it to study                                                                                                                           |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [Reading Circle](reading-circle/README.md)   | The shortest complete multi-concept application: one composition module, policy views, one page former, endpoints, gateway, and client    |
-| [Operations Room](operations-room/README.md) | A modular composition: selectable reaction packs, replaceable policy, implementation overrides, staged formers, and a nested dashboard    |
-| [Production HTTP](production-http/README.md) | Registered public-error projection with and without same-origin cookie credentials, correlation, base paths, and projected generated wire |
+| Example                                      | Use it to study                                                                                                                             |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Reading Circle](reading-circle/README.md)   | The shortest complete multi-concept application: one composition module, policy views, one page former, endpoints, gateway, and client      |
+| [Operations Room](operations-room/README.md) | A modular composition: selectable reaction packs, replaceable policy, implementation overrides, staged formers, and a nested dashboard      |
+| [Message board](message-board/README.md)     | Complete same-origin browser app with independent concepts, authentication, secure cookies, typed HTTP, runtime validation, and a real host |
 
 Start with Reading Circle when learning the complete request lifecycle. Use
 Operations Room after the basic concept, reaction, view, former, and endpoint
-roles are familiar. Use Production HTTP when selecting a public transport
-boundary.
+roles are familiar. Use Message board to study a complete public transport and
+browser-session boundary.
 
 From any example directory:
 

@@ -80,7 +80,7 @@ dependency location:
 | `packages/analysis/package.json`                    | Analysis version, exact core peer, and TypeScript runtime dependency |
 | `examples/reading-circle/package.json`              | Shipped example dependency                                           |
 | `examples/operations-room/package.json`             | Shipped example dependency                                           |
-| `examples/production-http/package.json`             | Shipped example dependency                                           |
+| `examples/message-board/package.json`               | Shipped example dependency                                           |
 | `tests/package/application/package.json`            | Standalone packed-application dependency                             |
 | `tests/package/multi-instance/client/package.json`  | Packed generated-client dependency                                   |
 | `tests/package/multi-instance/backend/package.json` | Independent backend dependency                                       |

@@ -9,7 +9,7 @@ import { vocabulary } from "@sync-engine/language";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
-import { httpFloor, productionHttpProfile } from "@mit-sdg/sync-engine-http/server";
+import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import {
   checkGenerated,
@@ -195,7 +195,7 @@ describe("generated application artifacts", () => {
     }
   });
 
-  test("an HTTP floor emits logical and projected named contracts", async () => {
+  test("an HTTP cookie policy emits logical and projected named contracts", async () => {
     const application = assemble({
       vocabulary: vocabularyDeclaration,
       composition: { Login, Current },
@@ -210,13 +210,15 @@ describe("generated application artifacts", () => {
           projections: [
             httpWire({
               name: "ApplicationWireHttp",
-              policy: httpFloor({
-                origin: "http://localhost:3000",
-                credential: {
-                  name: "session",
-                  input: "session",
-                  issue: { path: "/login", output: "session", expires: "expiresAt" },
-                  clear: [],
+              policy: httpPolicy({
+                publicOrigin: "http://localhost:3000",
+                cookies: {
+                  session: {
+                    name: "session",
+                    input: "session",
+                    issue: [{ path: "/login", value: "session", expires: "expiresAt" }],
+                    clear: [],
+                  },
                 },
               }),
             }),
@@ -235,7 +237,7 @@ describe("generated application artifacts", () => {
     expect(projected).not.toContain('"session":');
   });
 
-  test("a production HTTP profile projects errors without consuming logical fields", async () => {
+  test("an HTTP policy projects errors without consuming logical fields", async () => {
     const application = assemble({
       vocabulary: vocabularyDeclaration,
       composition: { Login, Current },
@@ -250,7 +252,7 @@ describe("generated application artifacts", () => {
           projections: [
             httpWire({
               name: "ApplicationWireHttp",
-              policy: productionHttpProfile({ origin: "https://example.test" }),
+              policy: httpPolicy({ publicOrigin: "https://example.test" }),
             }),
           ],
         },

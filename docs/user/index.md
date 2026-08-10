@@ -6,19 +6,20 @@ repository work.
 
 ## Start by task
 
-| Task                                        | Start with                                                                                                                                                 |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                   |
-| Design concepts                             | [Designing with concepts](design.md)                                                                                                                       |
-| Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
-| Build the first application                 | [Getting started](guide/getting-started.md)                                                                                                                |
-| Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                |
-| Call an existing application                | [`client` API](reference/public-api.md#client), then [Call the typed client](guide/authoring.md#call-the-typed-client)                                     |
-| Construct a read                            | [Read construction cookbook](guide/read-construction.md)                                                                                                   |
-| Add persistence, restart, or recovery       | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                        |
-| Determine exact runtime behavior            | [Execution semantics](reference/semantics.md)                                                                                                              |
-| Look up an export, command, format, or term | [Public API](reference/public-api.md), [CLI](reference/cli.md), [concept format](reference/concept-specification.md), or [glossary](reference/glossary.md) |
-| Evaluate a deployment                       | [Operational limits](reference/operations.md)                                                                                                              |
+| Task                                        | Start with                                                                                                                                                                                               |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                                                                 |
+| Design concepts                             | [Designing with concepts](design.md)                                                                                                                                                                     |
+| Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                                                                        |
+| Build the first application                 | [Getting started](guide/getting-started.md)                                                                                                                                                              |
+| Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                                                              |
+| Call an existing application                | [`client` API](reference/public-api.md#client), then [Call the typed client](guide/authoring.md#call-the-typed-client)                                                                                   |
+| Construct a read                            | [Read construction cookbook](guide/read-construction.md)                                                                                                                                                 |
+| Add persistence, restart, or recovery       | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                                                                      |
+| Determine exact runtime behavior            | [Execution semantics](reference/semantics.md)                                                                                                                                                            |
+| Look up an export, command, format, or term | [Public API](reference/public-api.md), [CLI](reference/cli.md), [concept format](reference/concept-specification.md), or [glossary](reference/glossary.md)                                               |
+| Expose an application over HTTP             | [HTTP package tiers](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md), then [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md) |
+| Evaluate a deployment                       | [Operational limits](reference/operations.md)                                                                                                                                                            |
 
 ## Application authoring path
 
@@ -61,13 +62,14 @@ grouped under `guide/`.
 
 ## Packages, examples, and policies
 
-| Resource                                                                                                    | Scope                                                              |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)         | HTTP companion exports and transport behavior                      |
-| [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md) | Compiler-free IR queries and optional TypeScript project evidence  |
-| [Reading Circle](../../examples/reading-circle/README.md)                                                   | Shortest complete multi-concept application                        |
-| [Operations Room](../../examples/operations-room/README.md)                                                 | Selectable reactions, replaceable policy, and staged formers       |
-| [Production HTTP](../../examples/production-http/README.md)                                                 | Validation, public errors, limits, correlation, and credentials    |
-| [Support policy](../../SUPPORT.md)                                                                          | Supported versions, runtimes, toolchains, and generated formats    |
-| [Security policy](../../SECURITY.md)                                                                        | Vulnerability reporting and the host/application security boundary |
-| [Changelog](../../CHANGELOG.md)                                                                             | Release-specific compatibility and migration                       |
+| Resource                                                                                                    | Scope                                                                                    |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [HTTP package guide](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)              | Plain JSON, browser-session, and advanced transport tiers                                |
+| [HTTP Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/public-surface.md)         | HTTP policy, handler, client, projection, and security behavior                          |
+| [Analysis Public API](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/public-surface.md) | Compiler-free IR queries and optional TypeScript project evidence                        |
+| [Reading Circle](../../examples/reading-circle/README.md)                                                   | Shortest complete multi-concept application                                              |
+| [Operations Room](../../examples/operations-room/README.md)                                                 | Selectable reactions, replaceable policy, and staged formers                             |
+| [Message board](../../examples/message-board/README.md)                                                     | Complete same-origin browser app, authentication, typed HTTP, and secure cookie sessions |
+| [Support policy](../../SUPPORT.md)                                                                          | Supported versions, runtimes, toolchains, and generated formats                          |
+| [Security policy](../../SECURITY.md)                                                                        | Vulnerability reporting and the host/application security boundary                       |
+| [Changelog](../../CHANGELOG.md)                                                                             | Release-specific compatibility and migration                                             |

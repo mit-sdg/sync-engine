@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Message board</title>
+    <style>
+      :root {
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+        color-scheme: light dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        max-width: 48rem;
+        margin: 2rem auto;
+        padding: 0 1rem 3rem;
+      }
+      #auth-panel:not([hidden]) {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+        gap: 1.5rem;
+      }
+      form {
+        display: grid;
+        gap: 0.75rem;
+        margin: 1rem 0;
+      }
+      label {
+        display: grid;
+        gap: 0.25rem;
+      }
+      input,
+      textarea,
+      button {
+        width: 100%;
+        font: inherit;
+        padding: 0.55rem;
+      }
+      textarea {
+        min-height: 6rem;
+        resize: vertical;
+      }
+      button {
+        width: fit-content;
+        cursor: pointer;
+      }
+      article {
+        border: 1px solid #8888;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+        padding: 1rem;
+      }
+      h2 {
+        margin-bottom: 0.5rem;
+        font-size: 1rem;
+      }
+      ul {
+        padding-left: 1.25rem;
+      }
+      #status {
+        min-height: 1.5rem;
+      }
+      .error {
+        color: #c33;
+      }
+      .note {
+        opacity: 0.75;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Message board</h1>
+    <p id="status" role="status"></p>
+    <section id="auth-panel">
+      <div>
+        <h2>Create an account</h2>
+        <form id="register">
+          <label>Username <input name="username" minlength="3" maxlength="32" required /></label>
+          <label
+            >Password <input name="password" type="password" minlength="8" maxlength="128" required
+          /></label>
+          <button type="submit">Register</button>
+        </form>
+      </div>
+      <div>
+        <h2>Sign in</h2>
+        <form id="sign-in">
+          <label>Username <input name="username" required /></label>
+          <label>Password <input name="password" type="password" required /></label>
+          <button type="submit">Sign in</button>
+        </form>
+      </div>
+    </section>
+    <section id="board-panel" hidden>
+      <p>
+        Signed in as <strong id="who"></strong>.
+        <button id="sign-out" type="button">Sign out</button>
+      </p>
+      <form id="new-post">
+        <label>New post <textarea name="content" maxlength="500" required></textarea></label>
+        <button type="submit">Publish</button>
+      </form>
+      <p class="note">
+        Commenting models target, author, and content as external identities. This UI uses the
+        entered comment string as the content identity and displays it verbatim.
+      </p>
+      <div id="posts"></div>
+    </section>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
