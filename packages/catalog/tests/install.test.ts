@@ -138,6 +138,53 @@ describe("catalog installer", () => {
     }
   }, 15_000);
 
+  test.each(["memory", "mongo"] as const)(
+    "installs and typechecks the coordination recipes on the %s floor",
+    async (floor) => {
+      const root = await fixture({
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
+        "vite-plus": "0.2.6",
+      });
+      try {
+        const ids = [
+          "recipe/member-reservations",
+          "recipe/ranked-discussion",
+          "recipe/invite-only-workshop",
+        ];
+        const result = await addEntries(await CatalogRegistry.load(), ids, {
+          root,
+          floor,
+          originalCommand: `catalog add ${ids.join(" ")} --floor ${floor}`,
+        });
+        for (const concept of ["gathering", "reserving", "discussing", "upvoting", "inviting"])
+          expect(result.written).toContain(`src/concepts/${concept}/${concept}.${floor}.ts`);
+        expect(
+          result.written.some((path) => path.includes(floor === "memory" ? ".mongo." : ".memory.")),
+        ).toBe(false);
+        const composition = await readFile(
+          join(root, "src/catalog/composition.generated.ts"),
+          "utf8",
+        );
+        for (const member of [
+          "ReserveForMember",
+          "GetMemberReservations",
+          "UpvoteResponse",
+          "GetRankedDiscussion",
+          "AcceptWorkshopInvitation",
+          "RepairAcceptedWorkshopInvitation",
+        ])
+          expect(composition).toContain(JSON.stringify(member));
+        for (const local of ["activeReservations", "rankedResponses", "pendingInvitations"])
+          expect(composition).not.toContain(local);
+        await expectTypechecks(root);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+
   test("copies and typechecks the Batch D memory floor without Mongo source", async () => {
     const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" });
     try {

@@ -21,6 +21,9 @@ describe("catalog registry", () => {
       "concept/sessioning",
       "concept/authenticating",
       "recipe/workshop-selection",
+      "recipe/member-reservations",
+      "recipe/ranked-discussion",
+      "recipe/invite-only-workshop",
     ]);
     expect(
       registry.resolve(["recipe/workshop-selection", "concept/gathering"]).map(({ id }) => id),
