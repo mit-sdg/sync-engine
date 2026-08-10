@@ -13,23 +13,28 @@ import {
   validateApplicationProjectAnalysis,
   type ApplicationProjectAnalysis,
 } from "@mit-sdg/sync-engine-analysis/project";
-import { afterEach, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import {
   applicationProjectFixture,
   fixtureOptions,
   type ApplicationProjectFixture,
 } from "./application-project-fixture.ts";
 
-const fixtures: ApplicationProjectFixture[] = [];
+let sharedFixture: ApplicationProjectFixture;
+let sharedSnapshot: ApplicationProjectAnalysis;
 
-afterEach(() => {
-  for (const fixture of fixtures.splice(0)) fixture.cleanup();
+beforeAll(() => {
+  sharedFixture = applicationProjectFixture();
+  sharedSnapshot = loadApplicationProject(fixtureOptions(sharedFixture));
 });
 
+afterAll(() => sharedFixture.cleanup());
+
 function project(): { fixture: ApplicationProjectFixture; snapshot: ApplicationProjectAnalysis } {
-  const fixture = applicationProjectFixture();
-  fixtures.push(fixture);
-  return { fixture, snapshot: loadApplicationProject(fixtureOptions(fixture)) };
+  return {
+    fixture: { ...sharedFixture, manifest: structuredClone(sharedFixture.manifest) },
+    snapshot: sharedSnapshot,
+  };
 }
 
 function trustedFacade(
