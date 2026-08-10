@@ -119,7 +119,7 @@ describe("message board application", () => {
     const origin = `http://127.0.0.1:${port}`;
     const page = await fetch(`${origin}/`);
     expect(page.status).toBe(200);
-    expect(await page.text()).toContain("content as external identities");
+    expect(await page.text()).toContain("New post");
     const script = await fetch(`${origin}/app.js`);
     expect(script.status).toBe(200);
     expect(script.headers.get("Content-Type")).toContain("text/javascript");

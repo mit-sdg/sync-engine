@@ -43,7 +43,11 @@ acknowledge (alert: Alert) : return (alert: Alert)
 
 ```queries
 _openFor (recipient: Person) : many (alert: Alert, subject: Subject)
+  answers no rows for a Person with no open Alerts
+  orders rows by when each Alert was raised
 ```
 
-`_openFor` answers in the order the alerts were raised. Alerting does not decide
-which events deserve attention or what an alert's subject represents.
+## Types
+
+`Alert` is an identity allocated by Alerting. `Person` and `Subject` are opaque
+external identities.

@@ -1,16 +1,15 @@
-# Message board
+# Message Board
 
-The message board runs the same sync-engine application behind two Bun hosts.
-`bun run start` serves a browser UI with cookie-backed sessions. `bun run
-start:api` exposes the logical endpoint inputs and outputs as plain POST/JSON.
-Both hosts create the application with the same policy-independent constructor.
+Message Board is a web app for creating an account, signing in, publishing
+posts, commenting, retracting your own comments, and signing out. It runs the
+same sync-engine application behind two Bun hosts: a web deployment with
+cookie-backed sessions and a plain POST/JSON API whose callers carry the session
+value themselves.
 
-The application supports registration, sign-in, posting, commenting, comment
-retraction, board reads, and sign-out. Each of its four concepts owns one
-independent part of that behavior. For a shorter transport-neutral example, see [Reading
-Circle](../reading-circle/README.md).
+Accounts, sessions, posts, and comments remain in memory. Stopping either host
+clears the board.
 
-## Run the browser deployment
+## Run the web app
 
 From this directory:
 
@@ -19,153 +18,96 @@ bun install
 bun run start
 ```
 
-Open <http://localhost:3000>. The Bun host serves the browser UI and routes
-`/api/*` requests to the Fetch handler. The handler issues and reads the session
-cookie; Bun owns the listener, static assets, and process lifecycle.
+Open <http://localhost:3000>. The host serves the web app and handles `/api/*`
+requests on the same origin.
 
-Set `HOST` or `PORT` to select another listener. Set `PUBLIC_ORIGIN` when the URL
-used by callers differs from the origin derived from `HOST` and `PORT`:
+Set `HOST` or `PORT` to select another listener. Set `PUBLIC_ORIGIN` when callers
+use an origin different from the one implied by `HOST` and `PORT`:
 
 ```sh
 HOST=127.0.0.1 PORT=4000 PUBLIC_ORIGIN=http://127.0.0.1:4000 bun run start
 ```
 
-`HOST` must be nonempty, `PORT` must be an integer from 1 through 65535, and
 `PUBLIC_ORIGIN` must be an absolute HTTP or HTTPS origin without credentials,
-path, query, or fragment. Invalid values terminate startup before `Bun.serve`.
-This host serves the frontend and API from one origin. It does not configure
-CORS for a frontend on another origin.
+path, query, or fragment. The example does not configure CORS for a frontend on
+another origin.
 
-## Run the plain POST/JSON API
-
-Use the API-only host when every endpoint input, including the session value, is
-carried in JSON:
+## Run the plain JSON API
 
 ```sh
 bun run start:api
 ```
 
-The API listens at <http://localhost:3000/api> by default. It serves no frontend
-assets, emits no cookie or CORS headers, and returns `session` and `expiresAt`
-from successful registration and sign-in calls. Send the returned `session` in
-the JSON body of current-user, sign-out, board-list, post, and comment requests.
-The cookie-projected `MessageBoardWireHttp` client is for the browser deployment;
-the plain API retains the session fields in the logical `MessageBoardWire`.
+The API listens at <http://localhost:3000/api> by default. Registration and
+sign-in return `session` and `expiresAt`. Send that `session` in the JSON body of
+current-user, sign-out, board-list, post, comment, and comment-retraction
+requests. This host serves no frontend, reads no cookies, and emits no cookie or
+CORS headers.
 
-`HOST` and `PORT` select another API listener. The plain host does not read
-`PUBLIC_ORIGIN` because it has no cookie or browser policy.
+## Application workflow
 
-Both hosts keep accounts, sessions, posts, and comments in memory. Stopping a
-host clears its board. Run the checks separately:
+The web app follows this sequence:
+
+1. Registration creates an account and starts a session. Sign-in starts another
+   session for an existing account.
+2. Posting and commenting resolve the session to the current username. Requests
+   cannot choose their own author.
+3. Listing the board combines posts with their comments. The web app offers a
+   retract button for the current user's comments; Commenting enforces the same
+   author rule for every caller.
+4. Sign-out ends the session and clears its cookie. A session also becomes
+   inactive 30 minutes after it starts.
+
+Four independent concepts own this behavior:
+
+- **Authenticating** owns accounts and password verification.
+- **Sessioning** owns opaque, expiring sessions for an external subject.
+- **Posting** owns each post's author, text, and publication order.
+- **Commenting** owns ordered attachments between an external target, author,
+  and content identity, including author-controlled retraction.
+
+Composition connects them. Registration and sign-in pass an authenticated
+username to Sessioning. Protected endpoints resolve the session and use its
+subject as Posting's or Commenting's external author. The board former lists
+Posting's posts and nests Commenting attachments whose target is each post.
+Before adding a comment, the endpoint checks that its target post exists.
+
+Each concept has a standalone specification and principle tests under
+`src/concepts/`. The [technical notes](TECHNICAL.md) describe endpoint branches,
+HTTP policy, cookie projection, runtime validation, execution limits, failure
+boundaries, session cleanup, generated contracts, and network-test evidence.
+
+## Application and hosts
+
+`createMessageBoard()` in `src/application.ts` builds the application and
+standard gateway without choosing an HTTP deployment policy. Both hosts use that
+constructor.
+
+`src/edge.ts` defines the two policies. The plain policy exposes logical session
+fields as JSON. The browser policy projects those fields into a secure,
+`HttpOnly`, same-origin session cookie. The HTTP package converts each policy,
+application, and gateway into a Fetch handler; Bun owns the listener and static
+file routing.
+
+This separation lets tests and other transports use the application without the
+browser's cookie policy.
+
+## Checks
 
 ```sh
 bun run check
 ```
 
-`check` runs formatting, type checking, tests, and generated-artifact checks.
-The example has no standalone command-line scenario; each start command runs its
-host until stopped.
+Use narrower commands when diagnosing a failure:
 
-## The concepts
+```sh
+bun run test
+bun run typecheck
+bun run artifacts:check
+```
 
-A **concept** is one independently meaningful stateful behavior. A concept owns
-its own facts and rules, but does not import or name the other concepts in the
-application. Message board registers these:
-
-- **Authenticating** owns accounts and username/password verification.
-  Registration records a password verifier. Authentication returns a username
-  only when the supplied password verifies.
-- **Sessioning** owns opaque, expiring sessions for an external subject. It does
-  not decide what a subject means or authenticate that subject.
-- **Posting** publishes string messages in order. Posting owns each post's text,
-  while its `Author` is an external identity supplied by composition.
-- **Commenting** records ordered attachments between a `Target`, an `Author`, and
-  a `Content` identity. All three are opaque external identities; Commenting
-  owns the attachment, not the post, person, or content they identify. Only the
-  author who created an attachment may retract it.
-
-Posting and Commenting treat text differently. Posting owns post text. The
-browser passes entered comment text to Commenting as a `Content` identity and
-renders the returned value verbatim, but Commenting does not own or validate
-that text.
-
-Each concept has a specification and direct tests under `src/concepts/`. The
-specification states the concept's purpose, actions, queries, and expected
-refusals without relying on another concept.
-
-## Application construction and HTTP binding
-
-`createMessageBoard()` in `src/application.ts` assembles the concepts and
-composition, applies execution limits to a gateway, and returns
-`{ application, gateway }`. HTTP policy is selected by each host. Direct callers
-and other transports can use the same application and gateway.
-
-`src/edge.ts` defines two deployment policies. `messageBoardApiPolicy()` adds
-`/api` and reviewed public error mappings. `messageBoardHttpPolicy(...)` also
-binds the logical `session` input and the registration and sign-in outputs to a
-secure cookie. Each host passes its selected policy, application, and gateway to
-`createHttpHandler(...)` from `@mit-sdg/sync-engine-http/handler`.
-
-`src/api-host.ts` gives that Fetch handler directly to `Bun.serve`.
-`src/host.ts` wraps the handler with routing for the browser HTML and JavaScript.
-The HTTP package owns protocol behavior inside the handler; Bun owns both
-listeners and the browser host owns static-file routing.
-
-## How composition makes the application
-
-**Composition** contains the application-specific rules that connect concepts.
-The sign-in endpoint first asks Authenticating to verify the username and
-password. If authentication succeeds, composition passes the returned username
-as Sessioning's external subject and asks Sessioning to start a session. The HTTP
-boundary stores the resulting opaque session value in a cookie.
-
-Protected endpoints reverse that adaptation. They ask Sessioning for the subject
-of the session cookie, bind the returned subject as the current username, and
-use that username as Posting's or Commenting's external `Author` identity. A
-post or comment request therefore does not choose its own author.
-
-The board read is also composition. A **former** constructs the page-shaped
-result by listing Posting's posts and, for each post identity, listing
-Commenting's attachments whose target is that post. Before adding a comment, the
-endpoint checks that Posting currently has the target post.
-
-A **reaction** responds to one concept action by asking another. These workflows
-need the result of each step, so authentication, session resolution, the requested
-action, and the response are ordered endpoint stages instead of reactions.
-
-Sessioning owns session expiry and cleanup. A session becomes inactive at its
-expiry even if the application is idle. In the in-memory implementation,
-`start` removes every expired record before allocating a new session; `current` and
-`end` remove an expired record when they encounter it; and `_active` reports an
-expired session as absent without removing its record. An expired record can
-therefore remain stored until an applicable Sessioning action removes it.
-Assembly performs no cleanup initialization, the host schedules no cleanup, and
-Sessioning does not guarantee periodic reclamation.
-
-Composition contains the application connections, while each concept retains
-its own lifecycle rules.
-
-## Browser and session flow
-
-The browser uses the generated typed client rather than constructing endpoint
-requests with raw `fetch` calls. A normal visit follows this lifecycle:
-
-1. Register a username and password. Successful registration starts a session
-   and issues an `HttpOnly` cookie. Sign-in performs the same session step for an
-   existing account.
-2. Publish a post or attach a comment. The Fetch handler obtains the session
-   from the cookie, and composition obtains the author from that session rather
-   than from browser input.
-3. List the board. The former combines post state with attached comment state.
-   Comments by the current user have a retract button. Hiding the button for
-   other comments is a presentation choice; Commenting enforces the author rule.
-4. Sign out. Sessioning ends the session and the HTTP boundary clears the
-   cookie. If the visitor does not sign out, the session becomes inactive at its
-   expiry.
-
-The [technical notes](TECHNICAL.md) describe the endpoint branches, cookie
-policy, runtime validation, failure boundaries, generated wire projection, and
-test evidence.
+Run `bun run artifacts:pin` only after an intentional specification,
+composition, or contract change, then review both generated files.
 
 ## Source map
 
@@ -173,12 +115,11 @@ test evidence.
 | ---------------------------------------------------------- | ------------------------------------------------------------ |
 | `src/concepts/*/`                                          | Concept specifications, implementations, and principle tests |
 | `src/compositions/sessions.ts`                             | Registration, sign-in, current-user, and sign-out endpoints  |
-| `src/compositions/board.ts`                                | Board former and the post, comment, and retract endpoints    |
-| `src/compositions/validators.ts`                           | Runtime endpoint validators shared by both modules           |
-| `src/assembly.ts`                                          | Concept assembly and execution limits                        |
-| `src/application.ts`                                       | Policy-independent application and gateway construction      |
+| `src/compositions/board.ts`                                | Board former and post, comment, and retraction endpoints     |
+| `src/compositions/validators.ts`                           | Runtime endpoint validators                                  |
+| `src/assembly.ts`, `src/application.ts`                    | Assembly, execution limits, application, and gateway         |
 | `src/edge.ts`                                              | Plain and cookie-backed HTTP policies                        |
-| `src/api-host.ts`                                          | Bun host for the plain POST/JSON API                         |
+| `src/api-host.ts`                                          | Bun host for the plain JSON API                              |
 | `src/client.ts`                                            | Typed cookie-projected HTTP client                           |
 | `src/host.ts`, `src/web/`                                  | Bun browser host, static routing, and browser UI             |
 | `tests/`                                                   | Network lifecycle, security, artifact, and type checks       |
@@ -186,5 +127,6 @@ test evidence.
 | [`generated/wire.ts`](generated/wire.ts)                   | Pinned logical and browser-projected contracts               |
 
 Continue with [Designing with concepts](../../docs/user/design.md) for concept
-boundaries and composition criteria, or the [application model](../../docs/user/overview.md)
-for the roles of assembly, endpoints, formers, gateways, and clients.
+boundaries and composition criteria, or the [application
+model](../../docs/user/overview.md) for assembly, endpoint, former, gateway, and
+client roles.

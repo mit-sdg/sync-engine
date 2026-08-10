@@ -41,7 +41,7 @@ async function loadBoard(): Promise<void> {
     ...result.board.posts.map((post) => {
       const article = document.createElement("article");
       const heading = document.createElement("h2");
-      heading.textContent = post.author;
+      heading.textContent = `@${post.author}`;
       const body = document.createElement("p");
       body.textContent = post.content;
       const comments = document.createElement("ul");
@@ -70,8 +70,8 @@ async function loadBoard(): Promise<void> {
       }
       const commentForm = document.createElement("form");
       commentForm.innerHTML =
-        '<label>Comment content reference <input name="content" maxlength="500" required></label>' +
-        '<button type="submit">Attach comment</button>';
+        '<label>Comment <input name="content" maxlength="500" required></label>' +
+        '<button type="submit">Add comment</button>';
       commentForm.addEventListener("submit", (event) => {
         event.preventDefault();
         void (async () => {
@@ -80,7 +80,7 @@ async function loadBoard(): Promise<void> {
           if ("error" in added) show(`Could not comment: ${added.error}`, true);
           else {
             commentForm.reset();
-            show("Comment attached. Its content reference is displayed verbatim.");
+            show("Comment added.");
             await loadBoard();
           }
         })();
@@ -162,6 +162,11 @@ required("sign-out").addEventListener("click", () => {
     );
     if (!("error" in result)) signedOut();
   })();
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  show("Could not complete the request. Try again.", true);
+  event.preventDefault();
 });
 
 void (async () => {
