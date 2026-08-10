@@ -5,6 +5,13 @@
 Separate a request from an assigned reviewer's durable decision, so pending work is
 not mistaken for accepted work and a requester cannot approve the request alone.
 
+## Principle
+
+Ari requests review of subject `change-7` from Bo. A second pending review of the same
+subject is refused. Ari cannot approve the request. Bo approves it, after which a
+second decision and Ari's withdrawal are refused. A later request may create a new
+review of the same subject without changing the first decision.
+
 ## State
 
 ```state

@@ -5,6 +5,14 @@
 Keep one current item for a shared scope, so everyone working in that scope can
 begin from the same choice.
 
+## Principle
+
+A workshop chooses Essay A and it becomes the workshop's current selection.
+Later it chooses Essay B; the new selection replaces Essay A as current without
+changing another workshop's selection. Clearing the workshop removes its
+current selection. A second clear is refused because there is nothing left to
+clear.
+
 ## State
 
 ```state

@@ -5,6 +5,14 @@
 Classify an item under several stable names in one scope, so the item can be found
 through overlapping categories instead of being placed in one exclusive container.
 
+## Principle
+
+Ari creates labels "urgent" and "customer" in scope `board-1`, applies both to item
+`post-8`, and finds the item through either label. Renaming "urgent" to "immediate"
+changes the displayed name without losing its assignments. A duplicate name and a
+duplicate application are refused. Removing the customer label assignment leaves the
+immediate assignment intact.
+
 ## State
 
 ```state

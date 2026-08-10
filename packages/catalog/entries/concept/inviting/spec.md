@@ -5,6 +5,13 @@
 Record a directed offer that only its intended recipient may accept or decline, so
 participation requires consent from both the inviter and invitee.
 
+## Principle
+
+Ari invites Bo to target `workshop-4`. Another pending invitation for Bo and the same
+target is refused. Cy cannot accept Bo's invitation. Bo accepts it, after which a
+second acceptance and Ari's attempt to revoke it are refused. Ari may issue a new
+invitation after an earlier invitation is declined or revoked.
+
 ## State
 
 ```state

@@ -5,6 +5,12 @@
 Record one current preference from each voter about an item, so an aggregate score
 reflects distinct voters rather than repeated clicks.
 
+## Principle
+
+Ari upvotes proposal `p1`, giving it score 1. Bo downvotes `p1`, returning the score to 0. Ari changes the vote to down, making the score -2 without creating a second vote.
+A second downvote from Ari is refused. Ari unvotes, leaving Bo's downvote and score -1;
+a second unvote is refused.
+
 ## State
 
 ```state

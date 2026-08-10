@@ -5,6 +5,14 @@
 Keep an addressed matter visible until its recipient acknowledges it, so pending
 attention survives retries and does not depend on memory.
 
+## Principle
+
+An alert is raised for Mina about subject `deployment-7` with cause `selection-12`.
+Replaying the same raise returns the same alert instead of creating a duplicate. Mina
+sees the alert and acknowledges it. A second acknowledgement and an acknowledgement
+by Jo are refused. Replaying the original raise after acknowledgement does not reopen
+the matter.
+
 ## State
 
 ```state

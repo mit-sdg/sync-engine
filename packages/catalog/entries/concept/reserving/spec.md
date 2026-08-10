@@ -5,6 +5,12 @@
 Give one claimant an exclusive claim on a reservable unit, so the same unit is not
 promised to competing claimants.
 
+## Principle
+
+Ari reserves resource `slot-9`. Bo's attempt to reserve `slot-9` is refused. Ari
+cancels, after which Bo can reserve it. Bo fulfills the reservation, permanently
+consuming `slot-9`; another reservation of that resource is refused.
+
 ## State
 
 ```state

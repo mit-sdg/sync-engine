@@ -5,6 +5,13 @@
 Publish immutable authored messages in chronological order, so a contribution remains
 visible and attributed without depending on an external content store.
 
+## Principle
+
+Ari publishes "First post" at `t1` and Bo publishes "Second post" at `t2`. Both posts
+are listed in that order with their authors, and each post is readable by identity.
+Publishing a blank message or one longer than 500 characters is refused and creates no
+Post.
+
 ## State
 
 ```state
