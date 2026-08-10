@@ -7,6 +7,8 @@ describe("catalog registry", () => {
     expect([...registry.entries.keys()]).toEqual([
       "concept/gathering",
       "concept/selecting",
+      "concept/alerting",
+      "concept/reserving",
       "concept/timing",
       "concept/upvoting",
       "recipe/workshop-selection",

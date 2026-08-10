@@ -184,6 +184,49 @@ describe("catalog installer", () => {
     },
   );
 
+  test("installs the Alerting and Reserving memory and mongo floors independently", async () => {
+    for (const floor of ["memory", "mongo"] as const) {
+      const root = await fixture({
+        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
+        "vite-plus": "0.2.6",
+      });
+      try {
+        const registry = await CatalogRegistry.load();
+        const originalCommand = `catalog add concept/alerting concept/reserving --floor ${floor}`;
+        const result = await addEntries(registry, ["concept/alerting", "concept/reserving"], {
+          root,
+          floor,
+          originalCommand,
+        });
+        expect(result.written).toContain(`src/concepts/alerting/alerting.${floor}.ts`);
+        expect(result.written).toContain(`src/concepts/reserving/reserving.${floor}.ts`);
+        const omittedFloor = floor === "memory" ? "mongo" : "memory";
+        expect(result.written.some((path) => path.includes(`.${omittedFloor}.`))).toBe(false);
+        for (const concept of ["alerting", "reserving"] as const) {
+          const conceptName = concept === "alerting" ? "Alerting" : "Reserving";
+          const selectedClass = `${conceptName}${floor === "memory" ? "Memory" : "Mongo"}Concept`;
+          const omittedClass = `${conceptName}${floor === "memory" ? "Mongo" : "Memory"}Concept`;
+          const registration = await readFile(
+            join(root, `src/concepts/${concept}/registry.ts`),
+            "utf8",
+          );
+          expect(registration).toContain(`class: ${selectedClass}`);
+          expect(registration).not.toContain(omittedClass);
+        }
+        await expectTypechecks(root);
+        const repeated = await addEntries(registry, ["concept/alerting", "concept/reserving"], {
+          root,
+          floor,
+          originalCommand,
+        });
+        expect(repeated.written).toEqual([]);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  }, 30_000);
+
   test("rejects unavailable floors and untracked collisions before writing", async () => {
     const dependencies = { "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" };
     const unavailable = await fixture(dependencies);
