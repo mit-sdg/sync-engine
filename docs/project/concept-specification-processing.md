@@ -1,8 +1,9 @@
 # Concept specification processing
 
-This project document describes how the current implementation extracts and
-uses machine-readable facts from `spec.md`. It is a maintainer map, not a
-replacement for the supported consumer [Concept specification
+This project document maps how the current implementation extracts and uses
+machine-readable facts from `spec.md`. It describes the implementation in this
+checkout, including deliberate enforcement gaps; it is not a consumer contract
+or a replacement for the supported [concept specification
 format](../user/reference/concept-specification.md). See [Engine
 architecture](architecture.md) for the surrounding subsystem boundaries.
 
@@ -32,6 +33,11 @@ parts. [Known gaps](#known-gaps) records the remaining enforcement differences.
 | Attach        | `src/engine/boundary/assembly/assemble.ts`                | Attach vocabulary metadata to selected instances                                        |
 | Execute reads | `src/engine/reads/queries.ts`                             | Enforce query answer containers and cardinality during reaction, view, and former reads |
 | Inspect       | `src/engine/reactions/concepts/introspect.ts` and tooling | Emit the parsed contract in inventories, manifests, and read-back                       |
+
+The stages are not interchangeable. Registration can recover some runtime
+parameter names; source checking reads the class declaration and therefore
+catches forms erased from JavaScript. Query enforcement applies to the
+instrumented read path, not every direct method call.
 
 The lower-level `vocabulary({ class, spec })` path also parses a specification,
 but it is not equivalent to `registerConcept`; see [Vocabulary-only
@@ -186,7 +192,9 @@ Purpose and Principle become descriptive inventory metadata, not executable
 assertions. Refusal metadata makes a registered exception on its declared
 action produce the specification code and message. Ordinary assembly rejects
 an undeclared advanced `Refuse` as a fault; manual `createEngine` remains open
-to undeclared `Refuse` codes.
+to undeclared `Refuse` codes. A registered refusal mapping is action-specific:
+the same `Error` class thrown by another action is a fault unless that action
+declares the code.
 
 Query promises are attached to vocabulary references and instrumented query
 wrappers. `queryRows` enforces them when reactions, views, or formers evaluate a
@@ -236,6 +244,8 @@ them.
 | Runtime role recovery reads function text               | Runtime registration can skip an erased comparison  |
 | Registration sees inheritance; source checking does not | The two checks can disagree on inherited members    |
 | Direct query roots bypass `queryRows`                   | Cardinality enforcement depends on the call path    |
+| Parsed action bodies are not interpreted                | Conditions and effects require implementation tests |
+| State has no parsed representation                      | State claims require implementation and backend tests |
 
 ## Verification ownership
 

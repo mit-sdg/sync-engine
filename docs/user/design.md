@@ -1,16 +1,17 @@
 # Designing with concepts
 
-This page defines the design criteria for dividing an application into concepts
-and reconnecting them through composition. It assumes the [application
-model](overview.md). The [authoring guides](index.md#application-authoring-path)
-show the TypeScript API; [Execution semantics](reference/semantics.md) defines runtime
-behavior.
+This page defines how to choose concept boundaries and reconnect concepts through
+composition. It assumes the [application model](overview.md). The
+[authoring guides](index.md#application-authoring-path) show the TypeScript API;
+[Execution semantics](reference/semantics.md) defines runtime behavior; and the
+[concept specification reference](reference/concept-specification.md) defines the
+`spec.md` format and its enforcement boundaries.
 
 A **concept** is a semantic mechanism with one purpose, owned state, actions, and
-queries. Its specification can be understood without reading another concept. A
-**reaction** is an application-level rule that connects concepts. Registration
-does not enforce these design constraints against arbitrary TypeScript imports;
-peer imports remain a design-review finding.
+queries. Its purpose and principle can be understood without reading another
+concept. A **reaction** is an application-level rule that connects concepts.
+Registration checks selected declarations, not these design criteria: TypeScript
+peer imports therefore remain a design-review finding.
 
 ## Concepts and composition
 
@@ -26,11 +27,12 @@ Concept boundaries follow behavior, not implementation layout.
 | Workflow           | A workflow sequences independently complete behaviors.                                                                       |
 | Data structure     | Domain-neutral builders, caches, indexes, and graphs remain implementation modules unless they implement a domain mechanism. |
 
-A concept names no peer concept, stores peer identities rather than peer-owned
-facts, and completes its lifecycle through its own actions. Cross-concept policy,
-workflow, notification, adaptation, and repair belong in composition. This puts
-each dependency in one inspectable rule and permits a concept to participate in
-another composition.
+A concept's specification and implementation do not depend on a peer concept's
+API. A concept may store an opaque identity also used by another concept, but it
+does not store facts owned by that peer. The concept completes its own lifecycle
+through its own actions. Cross-concept policy, workflow, notification, adaptation,
+and repair belong in composition. This puts each dependency in one inspectable
+rule and permits a concept to participate in another composition.
 
 ## Purpose and principle
 
@@ -95,8 +97,8 @@ shared concept boundary.
 ### State sufficiency
 
 Every precondition, result, and effect must be expressible from the concept's
-state and action input, plus explicit non-peer environmental dependencies. When a
-fact is missing, choose among these moves in order:
+state and action input, plus explicit environmental dependencies that are not peer
+concepts. When a fact is missing, choose among these moves in order:
 
 1. Add it to state when the concept owns the fact.
 2. Accept it as input when the caller owns and can establish the fact.
@@ -235,7 +237,8 @@ would touch.
 
 ## Designing reactions
 
-A reaction states one application decision through three parts:
+A reaction states one application decision. Describe that decision through three
+parts:
 
 | Part      | Question                                                                      |
 | --------- | ----------------------------------------------------------------------------- |
@@ -318,5 +321,5 @@ The engine does not detect reaction cycles, roll back earlier actions, cancel
 accepted work, or provide exactly-once execution. [Execution
 semantics](reference/semantics.md) defines these limits; [Operational
 limits](reference/operations.md) assigns the corresponding storage and host
-responsibilities. Apply this page through the [design review
-procedure](guide/reviewing-a-design.md).
+responsibilities. Use the [design review procedure](guide/reviewing-a-design.md)
+to turn these criteria into recorded design evidence.

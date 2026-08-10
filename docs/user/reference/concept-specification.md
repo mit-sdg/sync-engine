@@ -1,12 +1,17 @@
 # Concept specification format
 
-A concept specification is a Markdown file passed to `registerConcept` as text.
-The parser extracts `Purpose`, `Principle`, structured action and query
-signatures, descriptive bodies, refusal branches, and source locations. The
-resulting `ConceptSpec` is independent of TypeScript syntax. Registration checks
-member names, recoverable input names, and refusal mappings. Query cardinalities
-are enforced later when a reaction, view, or former evaluates a query. The other
-parsed fields remain authored contract data.
+A concept specification is Markdown text, normally stored as `spec.md` and
+passed to `registerConcept`. The parser extracts `Purpose`, `Principle`,
+structured action and query signatures, descriptive bodies, refusal branches,
+documentation sections, and source locations. The resulting `ConceptSpec` is
+independent of TypeScript syntax.
+
+Registration checks member names, recoverable input names, and refusal mappings.
+The source checker (`sync-engine check`) performs a separate comparison against
+class source and can inspect erased parameter types. Query cardinalities are
+enforced when a reaction, view, or former evaluates a registered query. Parsed
+prose, types, results, and State notation do not become runtime schemas or
+executable behavior.
 
 ## Complete example
 
@@ -64,6 +69,9 @@ expressions, results, or prose.
 | Engine-evaluated reads             | Query result container and declared cardinality                                |
 | Principle and implementation tests | Behavioral sequence, state changes, returned values, and invariants            |
 
+No row in this table makes the specification prose executable. The last row is
+the evidence for behavior that the earlier rows do not validate.
+
 ## Required sections
 
 The document must contain non-empty `Purpose` and `Principle` sections. The
@@ -84,7 +92,8 @@ Describe one concrete sequence that demonstrates the behavior.
 The parser includes all text after each heading up to the next second-level
 heading outside fenced code. Heading text, capitalization, and level are
 significant. Duplicate `Purpose`, `Principle`, `Actions`, and `Queries` sections
-are rejected. State is not parsed.
+are rejected. A duplicate `State` section is not rejected because State is not
+parsed.
 
 An `actions` fence is recognized only within `## Actions`, and a `queries` fence
 only within `## Queries`. Fences may use at least three backticks or tildes; the
@@ -126,7 +135,8 @@ at runtime.
 reader-facing documentation blocks. `Types` is identified explicitly; every
 other heading is an extension block. Each such section must have a nonempty
 body. The Markdown bodies and source locations survive in `ConceptSpec`,
-application manifests, and generated read-back.
+application manifests, and generated read-back. These blocks do not participate
+in registration or runtime evaluation.
 
 `Purpose`, `Principle`, `State`, `Actions`, and `Queries` are reserved and are
 not extension blocks. State remains deliberately excluded. Documentation blocks
@@ -276,7 +286,8 @@ type expression, and normalized body. Registration does not interpret query
 bodies or give them refusal or runtime semantics; establish their claims in
 implementation tests. The engine checks the result container and cardinality
 when a reaction, view, or former reads the query. It does not check row values
-against the parsed row declaration.
+against the parsed row declaration. A direct instrumented query call bypasses
+that read-path check; see [the processing map](../../project/concept-specification-processing.md#runtime-and-tooling).
 
 An omitted `## Actions` or `## Queries` section, or a section without its
 matching fence, declares no members of that kind. A present declaration fence

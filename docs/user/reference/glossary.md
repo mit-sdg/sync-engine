@@ -38,14 +38,24 @@ Composition connects concepts without adding peer dependencies to them.
 
 ## Concept
 
-An independently implemented behavior with its own purpose, state, actions,
-queries, expected refusals, specification, and principle test.
+A behavior boundary with its own purpose, owned state, actions, queries, expected
+refusals, specification, and principle test. Concepts do not depend on peer
+concept APIs; composition connects them.
+
+## Concept specification
+
+A Markdown document containing a concept's purpose, principle, action and query
+declarations, refusal branches, and reader-facing documentation. The parser
+retains selected declarations and prose; registration and source checks enforce
+only the contracts described in the [concept specification reference](concept-specification.md).
+State notation and natural-language behavior are not runtime schemas.
 
 ## Concept floor
 
 A named complete implementation map for one concept set, together with
 host-owned resources and a `close()` operation. The host, not assembly, owns the
-floor lifecycle.
+floor lifecycle. A floor selects implementations; it does not change a concept's
+vocabulary or specification.
 
 ## Consequence
 
@@ -150,13 +160,15 @@ behavior only.
 
 ## Principle
 
-A concrete behavioral sequence in a concept specification. A principle test
-runs the concept directly, without assembly.
+A concrete behavioral sequence in a concept specification that demonstrates the
+concept's purpose from its initial state. A principle test runs the concept
+directly, without assembly; the specification text itself is not executable.
 
 ## Query
 
 An underscore-prefixed concept operation that reads current state without side
-effects. A registered query may promise `one`, `optional`, or `many` rows.
+effects. A registered query may promise `one`, `optional`, or `many` rows; the
+engine checks that promise when a reaction, view, or former evaluates the query.
 
 ## Raw fault report
 
@@ -184,9 +196,10 @@ not define execution semantics.
 
 ## Refusal
 
-A concept's deliberate rejection of an action. Registered refusal codes are
-expected domain outcomes. Ordinary assembly treats an undeclared advanced
-`Refuse` code as a fault; a manual engine may accept it as a refusal.
+A concept's deliberate rejection of an action. A refusal code is the stable code
+for that domain outcome, and its registered specification sentence supplies the
+boundary detail. Ordinary assembly treats an undeclared advanced `Refuse` code as
+a fault; a manual engine may accept it as a refusal.
 
 ## Settlement frontier
 

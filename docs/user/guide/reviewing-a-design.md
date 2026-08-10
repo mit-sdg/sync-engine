@@ -2,8 +2,9 @@
 
 This procedure reviews concept boundaries before state and actions, then reviews
 composition and whole-system failure. It assumes the criteria in [Designing with
-concepts](../design.md). Record the output of each step; do not begin field-level
-review while a purpose or boundary remains disputed.
+concepts](../design.md). Record the evidence and unresolved decisions from each
+step. Do not begin field-level review while a purpose or boundary remains
+disputed.
 
 ## 1. Inventory the design
 
@@ -37,7 +38,8 @@ boundary defect.
 Trace the specification in both directions. Every purpose commitment must appear
 in the principle and be supported by the applicable actions, queries, refusals,
 and owned state. Every declared member and owned fact must contribute to a
-purpose commitment. The [concept specification writing
+purpose commitment. Treat the specification as authored evidence, not proof that
+the implementation satisfies the prose. The [concept specification writing
 conventions](../reference/concept-specification.md#writing-conventions) define
 section placement, prose notation, and the documentation criterion.
 
@@ -66,7 +68,9 @@ a named view.
 
 For each representative scenario, follow every matching rule, state which owner
 changes each fact, identify authorization decisions, note fan-out and cycles, and
-record the final observable result.
+record the final observable result. Record the state and durable effects after
+each refusal, fault, timeout, or interruption; do not collapse those outcomes into
+a single success/failure label.
 
 At minimum, trace:
 
@@ -116,4 +120,5 @@ validation boundary.
 
 For each accepted revision, record the failed criterion, the changed owner or
 rule, the new failure boundary, and the test or design evidence that demonstrates
-the correction.
+the correction. Retain rejected alternatives when they explain why the chosen
+boundary is necessary.
