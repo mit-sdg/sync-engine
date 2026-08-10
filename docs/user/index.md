@@ -28,16 +28,20 @@ add behavior.
 
 ## Application authoring path
 
-The guides form one progression:
+The core path is:
 
 1. [Getting started](guide/getting-started.md) initializes and runs a
    concept-free application.
-2. [Application authoring](guide/authoring.md) adds concepts, composition,
+2. [Application model](overview.md) explains the parts introduced by the setup
+   files. Read [Designing with concepts](design.md) before choosing concept
+   boundaries.
+3. [Application authoring](guide/authoring.md) adds concepts, composition,
    assembly, generated artifacts, validation, and a typed client.
-3. [Read construction cookbook](guide/read-construction.md) supplies smaller
-   tested alternatives when a former needs optional, repeated, or folded data.
-4. [Persistence, restart, and recovery](guide/persistence-recovery.md) covers
-   host responsibilities beyond the in-memory first application.
+
+Use the [read construction cookbook](guide/read-construction.md) when a former
+needs optional, repeated, or folded data. Use [Persistence, restart, and
+recovery](guide/persistence-recovery.md) when the application must survive a
+process restart.
 
 The guides demonstrate representative constructions. [Execution
 semantics](reference/semantics.md) is authoritative when a guide simplifies
@@ -71,10 +75,13 @@ grouped under `guide/`.
 | [`docs/user/reference/operations.md`](reference/operations.md)                       | Reference    | Deployment selection, limits, and host responsibilities |
 | [`docs/user/reference/glossary.md`](reference/glossary.md)                           | Reference    | Preferred terminology                                   |
 
-## Examples and policies
+## Packages, examples, and policies
 
 | Resource                                                    | Scope                                                                                  |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [HTTP package](../../packages/http/README.md)               | POST/JSON handler, Fetch client, browser policy, and HTTP wire projection              |
+| [Analysis package](../../packages/analysis/README.md)       | Manifest and optional checkout-source inspection                                       |
+| [Catalog package](../../packages/catalog/README.md)         | Curated concept and recipe source installer                                            |
 | [Reading Circle](../../examples/reading-circle/README.md)   | Shortest complete multi-concept application                                            |
 | [Operations Room](../../examples/operations-room/README.md) | Selectable reactions, replaceable policy, and staged formers                           |
 | [Message board](../../examples/message-board/README.md)     | Complete same-origin browser app, authentication, typed transport, and secure sessions |

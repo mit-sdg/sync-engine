@@ -25,9 +25,10 @@ read-back and TypeScript boundary contract from that assembly.
 
 ## Status and requirements
 
-Version 1 is in beta, and only the newest beta release is supported. The package
-requires Bun and is ESM-only. Read the [support policy](SUPPORT.md) for the
-supported runtime and toolchain versions, and review the [operational
+Version 1 is in beta, and only the newest beta release is supported. Core is
+ESM-only. The built library supports Node.js 24; the CLI, setup, and examples
+require Bun 1.3; and typechecking requires TypeScript 6. Read the [support
+policy](SUPPORT.md) for the exact supported ranges, and review the [operational
 limits](docs/user/reference/operations.md) before choosing a deployment.
 
 ## Install in an existing project
@@ -55,7 +56,7 @@ mkdir workshop-app
 cd workshop-app
 bun init -y
 bun add --exact @mit-sdg/sync-engine@beta
-bunx --package @mit-sdg/sync-engine@beta sync-engine setup
+bunx sync-engine setup
 ```
 
 For a reproducible evaluation, replace `@beta` with a pinned version. `setup`
