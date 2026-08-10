@@ -732,7 +732,7 @@ async function verifySetupAndExamples(
       [core.workspace.packageName]: core.manifest.version,
       [catalog.workspace.packageName]: tarballSpecifier(setup, catalog.tarball),
     },
-    devDependencies: { typescript: "^6.0.0", "vite-plus": "0.2.6" },
+    devDependencies: { "@types/node": "^24.0.0", typescript: "^6.0.0", "vite-plus": "0.2.6" },
   });
   run("bun", [resolve(installed, executable), "setup"], setup);
   run("bun", [resolve(installed, executable), "setup"], setup);
