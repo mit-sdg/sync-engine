@@ -1,7 +1,9 @@
 # Operational limits
 
 This page states the deployment properties that determine whether sync-engine is
-suitable for an application. It applies to the current beta. [Execution
+suitable for an application. It applies to the current beta. Treat the engine as
+an in-process execution component: storage, transport, traffic control, and
+restart policy remain application and host responsibilities. [Execution
 semantics](semantics.md) defines the underlying runtime contract.
 
 ## Deployment fit at a glance
@@ -133,12 +135,14 @@ not load it, rebuild the index, restore concept state, or replay reactions on
 startup. The engine also does not restore pending requests or interrupted paths.
 
 Persist domain state in concept implementations and design an application-specific
-recovery procedure. An occurrence file can support audit or diagnosis, but it is
-not a recovery log. `FileLogSink` provides no locking, shared-writer, flush, or
-network-filesystem durability contract. Use a host-owned sink when those
-properties matter. The [persistence and restart
-recipe](../guide/persistence-recovery.md#persistence-restart-and-recovery) demonstrates the
-separation.
+recovery procedure. Drain accepted work before replacing an assembly, then
+reconstruct derived state from durable domain state rather than from occurrence
+records. An occurrence file can support audit or diagnosis, but it is not a
+recovery log. `FileLogSink` appends synchronously, provides no locking,
+shared-writer coordination, flush, or network-filesystem durability contract,
+and has no close method. Use a host-owned sink when those properties matter.
+The [persistence and restart recipe](../guide/persistence-recovery.md#persistence-restart-and-recovery)
+demonstrates the separation.
 
 ## Retention and memory
 
@@ -186,8 +190,9 @@ read-only sensitive values.
 A sink runs synchronously before an entry reaches the internal occurrence index.
 An invocation append failure can prevent the action body from running; an outcome
 append failure can occur after concept state changed. The engine neither retries
-the append nor rolls back state. Custom sink availability, recovery, and resource
-lifecycle are host responsibilities.
+the append nor rolls back state. A sink append failure is therefore not a
+persistence transaction for concept state. Custom sink availability, recovery,
+and resource lifecycle are host responsibilities.
 
 `rawFaultReporter` receives original thrown values outside the sanitized
 occurrence path. Treat it as privileged application code, restrict access, and

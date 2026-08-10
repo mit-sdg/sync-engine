@@ -1,12 +1,12 @@
 # Persistence, restart, and recovery
 
-This how-to separates durable concept state, occurrence evidence, and recovery
-of process-local derived state. It assumes an application already has concepts,
-composition, and an assembly. Start with the [application authoring
-guide](../index.md#application-authoring-path) for that lifecycle. [Operational
-limits](../reference/operations.md#persistence-and-restart) and [Execution
-semantics](../reference/semantics.md#logs-concept-implementations-and-restart) define the
-underlying contracts.
+This how-to shows one restart arrangement for an application that already has
+concepts, composition, and an assembly. It keeps durable concept state,
+occurrence evidence, and process-local derived state in separate owners. Start
+with the [application authoring guide](../index.md#application-authoring-path)
+for the assembly lifecycle. The [persistence and restart reference](../reference/operations.md#persistence-and-restart)
+and [execution semantics](../reference/semantics.md#logs-concept-implementations-and-restart)
+define the contracts used here.
 
 The executable examples use only Node APIs and supported package subpaths:
 
@@ -24,7 +24,9 @@ import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
 Keep domain state, occurrence evidence, and recovery policy separate. This
 example gives `FileBackedNotes` ownership of durable note state, supplies a
 different JSONL path to the assembly's `FileLogSink`, and derives a process-local
-search index through a reaction.
+search index through a reaction. The example writes the state file directly for
+clarity; production state storage must provide the atomicity and coordination
+that the concept requires.
 
 | Concern             | Owner                                | What survives restart                               |
 | ------------------- | ------------------------------------ | --------------------------------------------------- |
@@ -111,7 +113,8 @@ async function recoverSearchIndex(
 2. Call `Notes.save`. The concept writes its state file, the reaction updates
    the process-local index, and `FileLogSink` appends occurrence evidence.
 3. Stop admission and await `application.beginDrain()` before closing resources
-   or constructing a replacement process.
+   or constructing a replacement process. Drain is required so accepted work is
+   not still mutating concept state when recovery begins.
 4. Construct a new assembly. `FileBackedNotes` loads durable state, while the
    new search index and the assembly's occurrence index begin empty.
 5. Call `recoverSearchIndex`. The recovery procedure reads durable concept
@@ -119,15 +122,19 @@ async function recoverSearchIndex(
 
 A successful `Notes.save` writes `notes.json`, while the assembly records the
 `Notes.save`, `SearchIndex.index`, and reaction evidence in a separate
-`occurrences.jsonl`. Drain the old assembly before closing host resources and
-constructing the replacement.
+`occurrences.jsonl`. The JSONL file is evidence of what the old assembly
+observed; it is not the source used to reconstruct the new assembly.
 
 On reconstruction, `FileBackedNotes` loads `notes.json`. A new `FileLogSink` over
 the existing `occurrences.jsonl` does **not** read that file into the assembly's
 index, replay the old reaction, or rebuild the search index. The derived query
 therefore remains empty until the host explicitly calls `recoverSearchIndex`,
-which reads durable concept state and invokes the derived concept's action.
+which reads durable concept state and invokes the derived concept's action. If
+recovery fails, the host must decide whether to retry it, record the failure, or
+stop startup; the engine does not provide a recovery transaction.
 
-`FileLogSink` provides append-only JSONL audit output. Production concept-state
-storage must separately define atomic writes, schema migration, concurrency,
-durability, and recovery failure handling.
+`FileLogSink` provides synchronous append-only JSONL audit output. It does not
+provide locking, shared-writer coordination, flush or durability guarantees, or
+a close method. Production concept-state storage and custom log sinks must
+separately define atomic writes, schema migration, concurrency, durability, and
+recovery failure handling.

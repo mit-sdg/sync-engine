@@ -1,20 +1,28 @@
 # Read construction cookbook
 
-Use this cookbook to look up a representative reading construction and compare
-it with a close variant. The [Public API](../reference/public-api.md#language) lists the
-exported forms, and [Execution
-semantics](../reference/semantics.md#reading-declarations-govern) defines matching and
-cardinality.
+Use this cookbook to compare representative reading constructions with close
+variants. It is an example book, not a replacement for the [language API
+reference](../reference/public-api.md#language). [Execution
+semantics](../reference/semantics.md#reading-declarations-govern) defines the
+matching, binding, and cardinality rules behind the examples.
 
 For your own assembly, `inspectAssembly(assemble(...)).readBack` returns the
-same kind of read-back shown here.
+same kind of read-back shown here. The read-back is diagnostic output: it makes
+opened names, tests, fan-out, and drop points explicit, but it does not change
+the runtime contract.
 
 Each entry describes four parts of the construction:
 
 1. What is the **English**?
-2. What **runs**, and why was it forced?
+2. What **runs**, and why was it schedulable?
 3. What happens on **none**, and on **many**?
 4. Which names did the line **open**?
+
+A plain line is not ordered by its position in a reaction or former. The
+engine schedules a line when its inputs are bound; the examples put supplying
+lines first where that makes the data flow easier to read. Views are the
+exception documented in the reference: write each view line after the line
+that supplies its inputs.
 
 Entries labelled **Invalid construction** show a rejected form beside the exact
 error from the phase that rejects it. Most fail during assembly registration;
@@ -61,7 +69,9 @@ discussion collects responses. Its queries declare every promise used here:
 | Discussing | `open`, `respond`, `close` | `_openFor (subject) → discussion` at most one · `_responses (discussion) → response, author, text` any number                                     |
 
 The entries register as one composition named `book`, so reactions print under
-`book.` in the read-backs quoted below.
+`book.` in the read-backs quoted below. The concept query promises in the table
+are part of the vocabulary contract; a read does not restate them at the use
+site.
 
 ## 1 · A plain line
 
@@ -133,8 +143,9 @@ const theStandingOf = view(
   when the view is read.
 - **Opens**: `joined`.
 
-A `one` promise guarantees the source row. A literal or already-bound name in
-`.is(...)` can reject that row and drop the case.
+A `one` promise guarantees one source record, not that every output pattern
+will match it. A literal or already-bound name in `.is(...)` can reject that row
+and drop the case.
 
 ```
 the standing of (member) in (circle) — inputs (member, circle); outputs (joined); bindings () — promises exactly one (joined); checked when read
@@ -355,6 +366,8 @@ Former "the first reading of (circle)": the source already promises at most one 
 
 Folds reduce genuine pluralities. When the declaration already answers "how
 many," the fold is refused, and the plain read above is the accepted spelling.
+A fold is therefore a change of result shape, not a way to repair a violated
+query promise; a promise violation remains an integrity fault.
 
 ## 9 · Folds consume a captured range
 

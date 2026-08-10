@@ -1,7 +1,9 @@
 # Execution semantics
 
 This page defines the observable execution contract for actions, reactions,
-reads, formed results, and application boundaries in the current beta.
+reads, formed results, and application boundaries in the current beta. It
+separates engine guarantees from host-owned storage, transport, and lifecycle
+policy.
 The [Public API](public-api.md) lists the exports. The [read construction
 cookbook](../guide/read-construction.md) demonstrates representative declarations without extending
 this contract.
@@ -52,7 +54,8 @@ The action then settles in one of two outcome postures:
 The engine classifies the outcome after the action body settles; it does not
 create a concept-state transaction. State changed before the action returns or
 throws is not rolled back by the engine. The concept implementation and backing
-store determine whether those changes persist.
+store determine whether those changes persist. A reaction chain therefore does
+not become one transaction: each action owns its own state change.
 
 A registered exception must belong to that action; an exception registered only
 for another action is a fault. Ordinary `assemble(...)` accepts `Refuse` only
@@ -346,7 +349,9 @@ array, or a violation of declared cardinality raises a query fault. Class
 instances and other non-null, non-array objects pass this container check. This
 is not row-schema validation. A record missing a field named in `.is` does not
 match that pattern. A direct query root returns the implementation result
-without this `where`-read container and cardinality check.
+without this `where`-read container and cardinality check. Callers using a
+query as a reaction or former read therefore receive stricter runtime checking
+than callers invoking the query root directly.
 
 An ordinary assembly defaults to `queryCache: "memoize"`, which memoizes queries
 by concept instance and argument between invalidation points. Instrumented
@@ -433,7 +438,7 @@ Without `.arranged(...)`, a selection retains source-row order. A view-level
 Record entries may read named formers directly, plainly or under `whether`,
 so absence is declared once at the source and every reader chooses how to
 handle it. The engine evaluates a former when asked; it does not store the
-formed result.
+formed result as concept state or turn it into an occurrence.
 
 `.splicing(...uses)` merges one or more record-rooted former fragments into a
 host record or selection row. Each variable referenced by a fragment input must
