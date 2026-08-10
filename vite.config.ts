@@ -14,6 +14,13 @@ export default defineConfig({
         ),
       },
       {
+        find: "@catalog/registrations",
+        replacement: resolve(
+          import.meta.dirname,
+          "packages/catalog/entries/_typecheck/registrations.ts",
+        ),
+      },
+      {
         find: /^@mit-sdg\/sync-engine\/([^/]+)$/,
         replacement: resolve(import.meta.dirname, "src/$1/index.ts"),
       },

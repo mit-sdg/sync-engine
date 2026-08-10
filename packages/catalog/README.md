@@ -49,13 +49,20 @@ memory implementation, test, import, or factory. Construct the floor with
 `applicationConcepts.implementations("mongo", { db })`. The host creates and
 closes `MongoClient`; assembly does not own that resource.
 
-`concept/discussing` requires a transaction-capable MongoDB replica set or
-sharded deployment. Its response transaction updates the discussion and inserts
-the response together, which prevents `close` from completing between the
-open-state check and response insertion. A standalone MongoDB deployment is not
-supported for an installation that includes Discussing. Other catalog Mongo
-floors do not acquire this topology requirement merely by sharing the project
-floor.
+`concept/gathering`, `concept/selecting`, and `concept/discussing` require a
+transaction-capable MongoDB replica set or sharded deployment. Gathering creates
+the gathering and initial host membership in one transaction, then allocates each
+later join order and inserts that Membership in one transaction. Selecting retains
+the new Selection and advances the current projection in one transaction. Discussing
+updates the open discussion and inserts its response in one transaction. These
+transactions use snapshot read concern and majority write concern and remove the
+partial states that otherwise remain when the second write fails.
+
+A standalone MongoDB deployment is not supported for an installation that includes
+any of these entries. The Mongo floor of `recipe/workshop-selection` includes
+Gathering and Selecting and therefore has this requirement. A catalog Mongo entry
+that does not use one of these concepts does not acquire the requirement merely by
+sharing the project floor.
 
 The selected floor is stored in `catalog.lock`. Every later add uses that floor.
 The catalog does not install a second floor or migrate between floors.

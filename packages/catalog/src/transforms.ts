@@ -2,11 +2,21 @@ import { posix } from "node:path";
 
 export function transformConceptSpecifier(source: string, target: string): string {
   const from = posix.dirname(target);
-  let replacement = posix.relative(from, "src/concept-set.ts");
-  if (!replacement.startsWith(".")) replacement = `./${replacement}`;
-  return source
-    .replaceAll('"@catalog/concepts"', `"${replacement}"`)
-    .replaceAll("'@catalog/concepts'", `'${replacement}'`);
+  const relativeTo = (destination: string): string => {
+    const relative = posix.relative(from, destination);
+    return relative.startsWith(".") ? relative : `./${relative}`;
+  };
+  const replacements = new Map([
+    ["@catalog/concepts", relativeTo("src/concept-set.ts")],
+    ["@catalog/registrations", relativeTo("src/catalog/registrations.generated.ts")],
+  ]);
+  let transformed = source;
+  for (const [specifier, replacement] of replacements) {
+    transformed = transformed
+      .replaceAll(`"${specifier}"`, `"${replacement}"`)
+      .replaceAll(`'${specifier}'`, `'${replacement}'`);
+  }
+  return transformed;
 }
 
 const START = /^\s*\/\/#floor ([a-z][a-z0-9-]*)\s*$/;

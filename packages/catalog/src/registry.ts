@@ -226,6 +226,12 @@ async function parseManifest(path: string): Promise<EntryManifest> {
     for (const specifier of moduleSpecifiers(source)) {
       if (specifier.startsWith(".") || specifier.startsWith("node:")) continue;
       if (specifier === "@catalog/concepts" && kind === "recipe") continue;
+      if (
+        specifier === "@catalog/registrations" &&
+        result.kind === "recipe" &&
+        declaration.target === result.recipe.test
+      )
+        continue;
       const name = specifier.startsWith("@")
         ? specifier.split("/").slice(0, 2).join("/")
         : (specifier.split("/", 1)[0] ?? "");

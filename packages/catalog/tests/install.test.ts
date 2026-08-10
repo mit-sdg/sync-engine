@@ -79,6 +79,13 @@ describe("catalog installer", () => {
       const registration = await readFile(join(root, "src/concepts/gathering/registry.ts"), "utf8");
       expect(registration).toContain("class: GatheringMemoryConcept");
       expect(registration).not.toContain("Mongo");
+      const recipeTest = await readFile(
+        join(root, "src/composition/workshop-selection.test.ts"),
+        "utf8",
+      );
+      expect(recipeTest).toContain('from "../concept-set.ts"');
+      expect(recipeTest).toContain('from "../catalog/registrations.generated.ts"');
+      expect(recipeTest).not.toContain("@catalog/");
       const lock = JSON.parse(await readFile(join(root, "catalog.lock"), "utf8")) as {
         floor: string;
         entries: Record<string, unknown>;

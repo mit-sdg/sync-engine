@@ -20,9 +20,11 @@ a set of Gatherings with
   a name String
   a host Person
 
-a set of Memberships with
+a seq of Memberships with
   a gathering Gathering
   a member Person
+
+at most one Membership has each gathering and member pair
 ```
 
 ## Actions
@@ -75,3 +77,10 @@ _membership (gathering: Gathering, member: Person) : one (joined: Flag)
 
 `Gathering` and `Membership` are identities allocated by Gathering. `Person` is
 an opaque external identity. `String` is owned text. `Flag` is a Boolean value.
+
+## Scope
+
+Gathering does not authenticate a Person or give the recorded host authority over
+membership actions. The host starts as the first member but may leave. Leaving does
+not change the recorded host; a host who rejoins appears at the end of membership
+order with a new Membership identity.

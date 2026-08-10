@@ -1,41 +1,99 @@
+import type { Db } from "mongodb";
 import { MongoClient } from "mongodb";
-import { expect, test } from "vite-plus/test";
-import { AlreadyJoined, NotJoined } from "./gathering.shared.ts";
-import { GatheringMongoConcept } from "./gathering.mongo.ts";
+import { describe, expect, test } from "vite-plus/test";
+import { gatheringConformance } from "./gathering.conformance.ts";
+import { ensureGatheringIndexes, GatheringMongoConcept } from "./gathering.mongo.ts";
 
 const environment = (
   globalThis as unknown as { process: { env: Record<string, string | undefined> } }
 ).process.env;
 const enabled = environment.MONGODB_URI !== undefined && environment.CATALOG_SKIP_MONGO !== "1";
-test.skipIf(!enabled)("Gathering mongo principle", async () => {
-  const client = new MongoClient(environment.MONGODB_URI ?? "");
-  await client.connect();
-  try {
-    const db = client.db(`catalog_gathering_${crypto.randomUUID()}`);
-    const ids = ["workshop", "host", "guest"];
-    const gathering = new GatheringMongoConcept(db, () => ids.shift() ?? "unexpected");
-    await gathering.create({ name: "Workshop", host: "Asha" });
-    expect(await gathering._get({ gathering: "workshop" })).toEqual([
-      { gathering: "workshop", name: "Workshop", host: "Asha" },
-    ]);
-    expect(await gathering._membership({ gathering: "workshop", member: "Asha" })).toEqual({
-      joined: true,
-    });
-    await gathering.join({ gathering: "workshop", member: "Bo" });
-    expect(await gathering._members({ gathering: "workshop" })).toEqual([
-      { member: "Asha" },
-      { member: "Bo" },
-    ]);
-    await expect(gathering.join({ gathering: "workshop", member: "Bo" })).rejects.toThrow(
-      AlreadyJoined,
+
+function identityReader(values: readonly string[]): () => string {
+  const remaining = [...values];
+  return () => {
+    const identity = remaining.shift();
+    if (identity === undefined) throw new Error("No deterministic identity remains.");
+    return identity;
+  };
+}
+
+async function requireTransactionTopology(db: Db): Promise<void> {
+  const hello = (await db.admin().command({ hello: 1 })) as {
+    logicalSessionTimeoutMinutes?: unknown;
+    msg?: unknown;
+    setName?: unknown;
+  };
+  if (
+    typeof hello.logicalSessionTimeoutMinutes !== "number" ||
+    (typeof hello.setName !== "string" && hello.msg !== "isdbgrid")
+  )
+    throw new Error(
+      "The Gathering Mongo floor requires a transaction-capable replica set or sharded cluster.",
     );
-    await gathering.leave({ gathering: "workshop", member: "Bo" });
-    await expect(gathering.leave({ gathering: "workshop", member: "Bo" })).rejects.toThrow(
-      NotJoined,
-    );
-    await expect(gathering.join({ gathering: "missing", member: "Bo" })).rejects.toThrow();
-    await db.dropDatabase();
-  } finally {
-    await client.close();
-  }
+}
+
+describe("Gathering mongo", () => {
+  gatheringConformance(
+    "mongo",
+    async (identities) => {
+      const client = new MongoClient(environment.MONGODB_URI ?? "");
+      await client.connect();
+      const db = client.db(`catalog_gathering_${crypto.randomUUID()}`);
+      try {
+        await requireTransactionTopology(db);
+      } catch (error) {
+        await client.close();
+        throw error;
+      }
+      return {
+        concept: new GatheringMongoConcept(db, identityReader(identities)),
+        close: async () => {
+          try {
+            await db.dropDatabase();
+          } finally {
+            await client.close();
+          }
+        },
+      };
+    },
+    !enabled,
+  );
+
+  test.skipIf(!enabled)("rolls back creation when the host membership write faults", async () => {
+    const client = new MongoClient(environment.MONGODB_URI ?? "");
+    await client.connect();
+    const db = client.db(`catalog_gathering_rollback_${crypto.randomUUID()}`);
+    try {
+      await requireTransactionTopology(db);
+      await ensureGatheringIndexes(db);
+      await db.command({
+        collMod: "gathering_memberships",
+        validator: { gathering: { $ne: "rolled-back-gathering" } },
+        validationAction: "error",
+        validationLevel: "strict",
+      });
+      const gathering = new GatheringMongoConcept(
+        db,
+        identityReader(["rolled-back-gathering", "host-membership"]),
+      );
+
+      await expect(
+        gathering.create({ name: "Interrupted Workshop", host: "Asha" }),
+      ).rejects.toMatchObject({ code: 121 });
+      expect(await gathering._get({ gathering: "rolled-back-gathering" })).toEqual([]);
+      expect(
+        await gathering._membership({ gathering: "rolled-back-gathering", member: "Asha" }),
+      ).toEqual({ joined: false });
+      expect(
+        await db.collection("gatherings").countDocuments({ gathering: "rolled-back-gathering" }),
+      ).toBe(0);
+    } finally {
+      try {
+        await db.dropDatabase();
+      } finally {
+        await client.close();
+      }
+    }
+  });
 });

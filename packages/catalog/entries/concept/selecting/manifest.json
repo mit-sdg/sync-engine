@@ -19,6 +19,10 @@
       "target": "$concepts/selecting/spec.md"
     },
     {
+      "source": "selecting.conformance.ts",
+      "target": "$concepts/selecting/selecting.conformance.ts"
+    },
+    {
       "source": "selecting.shared.ts",
       "target": "$concepts/selecting/selecting.shared.ts"
     },
@@ -43,7 +47,7 @@
       ]
     },
     "mongo": {
-      "summary": "A MongoDB collection with one current selection document per scope.",
+      "summary": "MongoDB replica set or sharded deployment using transactions to retain history and advance one current projection.",
       "packages": {
         "mongodb": "^6.20.0"
       },

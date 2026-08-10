@@ -2,13 +2,17 @@ import { describe, expect, test } from "vite-plus/test";
 import { renderFloor, transformConceptSpecifier } from "../src/transforms.ts";
 
 describe("catalog transforms", () => {
-  test("rewrites recipe vocabulary relative to its destination", () => {
+  test("rewrites recipe vocabulary and test registrations relative to each destination", () => {
     expect(
       transformConceptSpecifier(
-        'import { concepts } from "@catalog/concepts";\n',
-        "src/composition/recipe.ts",
+        'import { concepts } from "@catalog/concepts";\n' +
+          'import { catalogRegistrations } from "@catalog/registrations";\n',
+        "src/composition/recipe.test.ts",
       ),
-    ).toBe('import { concepts } from "../concept-set.ts";\n');
+    ).toBe(
+      'import { concepts } from "../concept-set.ts";\n' +
+        'import { catalogRegistrations } from "../catalog/registrations.generated.ts";\n',
+    );
   });
   test("prunes unselected floors and chooses the class", () => {
     const source = `//#floor memory\nimport { Memory } from "./memory.ts";\n//#endfloor\n//#floor mongo\nimport { Mongo } from "./mongo.ts";\n//#endfloor\n//#class memory Memory\n//#class mongo Mongo\nconst value = {\n  class: Memory, // selected-class\n};\n`;

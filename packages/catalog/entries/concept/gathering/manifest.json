@@ -19,6 +19,10 @@
       "target": "$concepts/gathering/spec.md"
     },
     {
+      "source": "gathering.conformance.ts",
+      "target": "$concepts/gathering/gathering.conformance.ts"
+    },
+    {
       "source": "gathering.shared.ts",
       "target": "$concepts/gathering/gathering.shared.ts"
     },
@@ -43,7 +47,7 @@
       ]
     },
     "mongo": {
-      "summary": "MongoDB collections with a unique gathering membership index.",
+      "summary": "MongoDB replica set or sharded deployment using transactions for coherent creation and ordered membership.",
       "packages": {
         "mongodb": "^6.20.0"
       },

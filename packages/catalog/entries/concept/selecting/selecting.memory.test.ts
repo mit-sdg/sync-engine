@@ -1,18 +1,16 @@
-import { expect, test } from "vite-plus/test";
-import { NoCurrentSelection } from "./selecting.shared.ts";
+import { selectingConformance } from "./selecting.conformance.ts";
 import { SelectingMemoryConcept } from "./selecting.memory.ts";
 
-test("Selecting memory principle", () => {
-  const ids = ["first", "second"];
-  const selecting = new SelectingMemoryConcept(() => ids.shift() ?? "unexpected");
-  const first = selecting.choose({ scope: "workshop", item: "Essay A" });
-  expect(selecting._get(first)).toEqual([
-    { selection: "first", scope: "workshop", item: "Essay A" },
-  ]);
-  expect(selecting._current({ scope: "workshop" })).toEqual([
-    { selection: "first", scope: "workshop", item: "Essay A" },
-  ]);
-  selecting.choose({ scope: "workshop", item: "Essay B" });
-  expect(selecting.clear({ scope: "workshop" }).selection).toBe("second");
-  expect(() => selecting.clear({ scope: "workshop" })).toThrow(NoCurrentSelection);
-});
+function identityReader(values: readonly string[]): () => string {
+  const remaining = [...values];
+  return () => {
+    const identity = remaining.shift();
+    if (identity === undefined) throw new Error("No deterministic identity remains.");
+    return identity;
+  };
+}
+
+selectingConformance("memory", (identities) => ({
+  concept: new SelectingMemoryConcept(identityReader(identities)),
+  close: () => {},
+}));

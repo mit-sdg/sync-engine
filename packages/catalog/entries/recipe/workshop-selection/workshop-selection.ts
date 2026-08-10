@@ -1,5 +1,5 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { former, whether, where } from "@mit-sdg/sync-engine/language";
+import { former, no, whether, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Gathering, Selecting } = concepts;
@@ -24,9 +24,15 @@ export const JoinWorkshop = endpoint("/workshops/join", ({ workshop: id, member,
 export const ChooseWorkshopItem = endpoint(
   "/workshops/choose",
   ({ workshop: id, item, selection }) =>
-    receive({ workshop: id, item })
-      .then(Selecting.choose({ scope: id, item }).responds({ selection }))
-      .then(respond({ selection })),
+    receive({ workshop: id, item }).then(
+      where(Gathering._get({ gathering: id }))
+        .then(Selecting.choose({ scope: id, item }).responds({ selection }))
+        .then(respond({ selection }))
+        .named("known-workshop"),
+      where(no(Gathering._get({ gathering: id })))
+        .then(respond({ error: "GATHERING_NOT_FOUND" }))
+        .named("unknown-workshop"),
+    ),
 );
 export const GetWorkshop = endpoint("/workshops/get", ({ workshop: id }) =>
   receive({ workshop: id }).then(respond({ workshop: workshop({ workshop: id }) })),

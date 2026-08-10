@@ -1,4 +1,8 @@
-import { NoCurrentSelection, type SelectionRecord } from "./selecting.shared.ts";
+import {
+  NoCurrentSelection,
+  NO_CURRENT_SELECTION_MESSAGE,
+  type SelectionRecord,
+} from "./selecting.shared.ts";
 
 export class SelectingMemoryConcept {
   private readonly selections = new Map<string, SelectionRecord>();
@@ -12,8 +16,7 @@ export class SelectingMemoryConcept {
   }
   clear({ scope }: { scope: string }) {
     const selection = this.current.get(scope);
-    if (selection === undefined)
-      throw new NoCurrentSelection("This scope has no current selection.");
+    if (selection === undefined) throw new NoCurrentSelection(NO_CURRENT_SELECTION_MESSAGE);
     this.current.delete(scope);
     return { selection };
   }

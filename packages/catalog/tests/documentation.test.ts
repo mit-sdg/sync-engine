@@ -22,4 +22,24 @@ describe("catalog documentation", () => {
     ])
       expect(reference).toContain(term);
   });
+
+  test.each(["gathering", "selecting"])(
+    "keeps the %s catalog contract byte-identical in both tutorial examples",
+    async (concept) => {
+      const catalog = await readFile(
+        new URL(`../entries/concept/${concept}/spec.md`, import.meta.url),
+        "utf8",
+      );
+      for (const example of ["reading-circle", "operations-room"])
+        expect(
+          await readFile(
+            new URL(
+              `../../../examples/${example}/src/concepts/${concept}/spec.md`,
+              import.meta.url,
+            ),
+            "utf8",
+          ),
+        ).toBe(catalog);
+    },
+  );
 });

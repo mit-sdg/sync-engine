@@ -1,6 +1,7 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { expect, test } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 import { vocabulary } from "@catalog/concepts";
+import { catalogRegistrations } from "@catalog/registrations";
 import {
   ChooseWorkshopItem,
   CreateWorkshop,
@@ -8,86 +9,208 @@ import {
   JoinWorkshop,
 } from "./workshop-selection.ts";
 
-test("exports the declared composition members", () => {
+type Awaitable<T> = T | Promise<T>;
+type FloorFactory = (context: unknown) => object;
+
+interface RegistrationWithFloors {
+  floors?: Record<string, FloorFactory>;
+}
+
+interface SelectingTestImplementation {
+  _current(input: {
+    scope: string;
+  }): Awaitable<{ selection: string; scope: string; item: string }[]>;
+}
+
+interface WorkshopInstances {
+  Gathering: object;
+  Selecting: object & SelectingTestImplementation;
+}
+
+interface TestDatabase {
+  admin(): {
+    command(input: Record<string, unknown>): Promise<Record<string, unknown>>;
+  };
+  dropDatabase(): Promise<unknown>;
+}
+
+interface TestMongoClient {
+  connect(): Promise<unknown>;
+  db(name: string): TestDatabase;
+  close(): Promise<unknown>;
+}
+
+type TestMongoClientConstructor = new (uri: string) => TestMongoClient;
+
+const registrations = catalogRegistrations as unknown as Record<
+  "Gathering" | "Selecting",
+  RegistrationWithFloors
+>;
+const environment = (
+  globalThis as unknown as { process: { env: Record<string, string | undefined> } }
+).process.env;
+const mongoEnabled =
+  environment.MONGODB_URI !== undefined && environment.CATALOG_SKIP_MONGO !== "1";
+
+function floorAvailable(floor: string): boolean {
+  return [registrations.Gathering, registrations.Selecting].every((registration) =>
+    Object.hasOwn(registration.floors ?? {}, floor),
+  );
+}
+
+function workshopInstances(floor: string, context: unknown): WorkshopInstances {
+  const gatheringFactory = registrations.Gathering.floors?.[floor];
+  const selectingFactory = registrations.Selecting.floors?.[floor];
+  if (gatheringFactory === undefined || selectingFactory === undefined)
+    throw new Error(`Workshop Selection test cannot construct the ${floor} floor.`);
+  return {
+    Gathering: gatheringFactory(context),
+    Selecting: selectingFactory(context) as object & SelectingTestImplementation,
+  };
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function successValue(result: unknown): Record<string, unknown> {
+  if (!record(result) || result.ok !== true || !record(result.value))
+    throw new Error("Workshop Selection expected a successful object result.");
+  return result.value;
+}
+
+function stringField(value: Record<string, unknown>, field: string): string {
+  const found = value[field];
+  if (typeof found !== "string")
+    throw new Error(`Workshop Selection expected ${field} to be a string.`);
+  return found;
+}
+
+async function exerciseWorkshopSelection(instances: WorkshopInstances): Promise<void> {
+  const application = assemble({
+    vocabulary,
+    instances: { Gathering: instances.Gathering, Selecting: instances.Selecting } as never,
+    composition: { ChooseWorkshopItem, CreateWorkshop, GetWorkshop, JoinWorkshop },
+  });
+
+  const created: unknown = await application.invoker.invoke(
+    "/workshops/create" as never,
+    { name: "Saturday Workshop", host: "Asha" } as never,
+  );
+  const workshop = stringField(successValue(created), "workshop");
+  expect(created).toEqual({ ok: true, value: { workshop } });
+
+  const initial: unknown = await application.invoker.invoke(
+    "/workshops/get" as never,
+    { workshop } as never,
+  );
+  expect(initial).toEqual({
+    ok: true,
+    value: {
+      workshop: {
+        workshop,
+        name: "Saturday Workshop",
+        host: "Asha",
+        item: null,
+      },
+    },
+  });
+
+  const joined: unknown = await application.invoker.invoke(
+    "/workshops/join" as never,
+    { workshop, member: "Bo" } as never,
+  );
+  const membership = stringField(successValue(joined), "membership");
+  expect(joined).toEqual({ ok: true, value: { membership } });
+  expect(
+    await application.invoker.invoke(
+      "/workshops/join" as never,
+      { workshop, member: "Bo" } as never,
+    ),
+  ).toEqual({ ok: false, error: { kind: "domain", value: "ALREADY_JOINED" } });
+  expect(
+    await application.invoker.invoke(
+      "/workshops/join" as never,
+      { workshop: "unknown", member: "Cy" } as never,
+    ),
+  ).toEqual({ ok: false, error: { kind: "domain", value: "GATHERING_NOT_FOUND" } });
+
+  expect(
+    await application.invoker.invoke(
+      "/workshops/choose" as never,
+      { workshop: "unknown", item: "Essay X" } as never,
+    ),
+  ).toEqual({ ok: false, error: { kind: "domain", value: "GATHERING_NOT_FOUND" } });
+  expect(await instances.Selecting._current({ scope: "unknown" })).toEqual([]);
+
+  const chosen: unknown = await application.invoker.invoke(
+    "/workshops/choose" as never,
+    { workshop, item: "Essay A" } as never,
+  );
+  const selection = stringField(successValue(chosen), "selection");
+  expect(chosen).toEqual({ ok: true, value: { selection } });
+  expect(
+    await application.invoker.invoke("/workshops/get" as never, { workshop } as never),
+  ).toEqual({
+    ok: true,
+    value: {
+      workshop: {
+        workshop,
+        name: "Saturday Workshop",
+        host: "Asha",
+        item: "Essay A",
+      },
+    },
+  });
+}
+
+async function mongoClientConstructor(): Promise<TestMongoClientConstructor> {
+  const packageName = "mongodb";
+  const loaded: unknown = await import(packageName);
+  if (!record(loaded) || typeof loaded.MongoClient !== "function")
+    throw new Error("The mongodb package does not export MongoClient.");
+  return loaded.MongoClient as TestMongoClientConstructor;
+}
+
+async function requireTransactionTopology(db: TestDatabase): Promise<void> {
+  const hello = await db.admin().command({ hello: 1 });
+  if (
+    typeof hello.logicalSessionTimeoutMinutes !== "number" ||
+    (typeof hello.setName !== "string" && hello.msg !== "isdbgrid")
+  )
+    throw new Error(
+      "Workshop Selection's Mongo floor requires a transaction-capable replica set or sharded cluster.",
+    );
+}
+
+test("exports only the declared endpoint composition members", () => {
   expect(CreateWorkshop).toBeDefined();
   expect(JoinWorkshop).toBeDefined();
   expect(ChooseWorkshopItem).toBeDefined();
   expect(GetWorkshop).toBeDefined();
 });
 
-test("runs the declared workshop endpoints", async () => {
-  const gatherings = new Map<string, { gathering: string; name: string; host: string }>();
-  const members = new Map<string, string[]>();
-  const gathering = {
-    create({ name, host }: { name: string; host: string }) {
-      const id = "workshop";
-      gatherings.set(id, { gathering: id, name, host });
-      members.set(id, [host]);
-      return { gathering: id };
-    },
-    join({ gathering: id, member }: { gathering: string; member: string }) {
-      members.get(id)?.push(member);
-      return { membership: `${id}:${member}` };
-    },
-    leave({ gathering: id, member }: { gathering: string; member: string }) {
-      members.set(
-        id,
-        (members.get(id) ?? []).filter((candidate) => candidate !== member),
-      );
-      return { membership: `${id}:${member}` };
-    },
-    _get({ gathering: id }: { gathering: string }) {
-      const found = gatherings.get(id);
-      return found === undefined ? [] : [found];
-    },
-    _members({ gathering: id }: { gathering: string }) {
-      return (members.get(id) ?? []).map((member) => ({ member }));
-    },
-    _membership({ gathering: id, member }: { gathering: string; member: string }) {
-      return { joined: members.get(id)?.includes(member) ?? false };
-    },
-  };
-  const selections = new Map<string, { selection: string; scope: string; item: string }>();
-  const selecting = {
-    choose({ scope, item }: { scope: string; item: string }) {
-      const selection = "selection";
-      selections.set(scope, { selection, scope, item });
-      return { selection };
-    },
-    clear({ scope }: { scope: string }) {
-      const selection = selections.get(scope)?.selection ?? "selection";
-      selections.delete(scope);
-      return { selection };
-    },
-    _current({ scope }: { scope: string }) {
-      const found = selections.get(scope);
-      return found === undefined ? [] : [found];
-    },
-    _get({ selection }: { selection: string }) {
-      return [...selections.values()].filter((found) => found.selection === selection);
-    },
-  };
-  const application = assemble({
-    vocabulary,
-    instances: { Gathering: gathering, Selecting: selecting } as never,
-    composition: { ChooseWorkshopItem, CreateWorkshop, GetWorkshop, JoinWorkshop },
+describe.skipIf(!floorAvailable("memory"))("Workshop Selection memory", () => {
+  test("returns exact endpoint results and refusals with real concepts", async () => {
+    await exerciseWorkshopSelection(workshopInstances("memory", {}));
   });
-  const created = await application.invoker.invoke(
-    "/workshops/create" as never,
-    {
-      name: "Workshop",
-      host: "Asha",
-    } as never,
-  );
-  expect(created).toMatchObject({ ok: true });
-  const workshop = "workshop";
-  await expect(
-    application.invoker.invoke("/workshops/join" as never, { workshop, member: "Bo" } as never),
-  ).resolves.toMatchObject({ ok: true });
-  await expect(
-    application.invoker.invoke("/workshops/choose" as never, { workshop, item: "Essay" } as never),
-  ).resolves.toMatchObject({ ok: true });
-  await expect(
-    application.invoker.invoke("/workshops/get" as never, { workshop } as never),
-  ).resolves.toMatchObject({ ok: true });
+});
+
+describe.skipIf(!mongoEnabled || !floorAvailable("mongo"))("Workshop Selection mongo", () => {
+  test("returns the same exact endpoint results and refusals with real concepts", async () => {
+    const MongoClient = await mongoClientConstructor();
+    const client = new MongoClient(environment.MONGODB_URI ?? "");
+    await client.connect();
+    const db = client.db(`catalog_workshop_selection_${crypto.randomUUID()}`);
+    try {
+      await requireTransactionTopology(db);
+      await exerciseWorkshopSelection(workshopInstances("mongo", { db }));
+    } finally {
+      try {
+        await db.dropDatabase();
+      } finally {
+        await client.close();
+      }
+    }
+  });
 });

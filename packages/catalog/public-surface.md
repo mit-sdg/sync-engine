@@ -127,6 +127,12 @@ only declared recipe members and exports `catalogComposition`.
 `src/catalog/text.generated.d.ts` declares Markdown text modules. Each generated
 file carries a do-not-edit provenance banner.
 
+Recipe assets may import the reserved `@catalog/concepts` specifier, which the
+installer rewrites to the application's `src/concept-set.ts`. A recipe's declared
+test may also import `@catalog/registrations`; the installer rewrites that specifier
+to `src/catalog/registrations.generated.ts` so the test can construct the selected
+real floor. Other entry files must declare nonrelative imports as packages.
+
 The catalog does not import generated modules into application-owned files.
 Guidance supplies snippets for `src/concept-set.ts` and `src/composition.ts`,
 selected-floor assembly construction, TypeScript coverage, generated

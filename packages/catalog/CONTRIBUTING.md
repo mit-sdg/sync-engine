@@ -20,7 +20,10 @@ file.
 
 Copied tests are source assets. Do not use repository-only aliases. Recipe
 source may use `@catalog/concepts`; installation rewrites that reserved alias to
-the application's concept set.
+the application's concept set. A declared recipe test may use
+`@catalog/registrations` to construct real selected-floor fixtures; installation
+rewrites it to `src/catalog/registrations.generated.ts`. Production recipe modules
+must remain composition-only and must not import registrations.
 
 ## Separate implementation floors
 
@@ -32,7 +35,10 @@ Mongo installation must not retain memory source or imports.
 A Mongo implementation receives exactly `{ db: Db }`. The host owns and closes
 `MongoClient`; concept assembly receives the database handle and does not own
 the client. Export index creation as a module function rather than adding an
-undeclared public concept method.
+undeclared public concept method. When an implementation uses transactions, its
+floor summary and package documentation must require a transaction-capable replica
+set or sharded cluster. Its Mongo tests must reject unsupported topology and must
+exercise rollback after a later write in the transaction faults.
 
 ## Verify an entry
 
