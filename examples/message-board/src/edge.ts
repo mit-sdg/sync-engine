@@ -32,7 +32,10 @@ export function messageBoardHttpPolicy(
       session: {
         name: "message-board-session",
         input: "session",
-        issue: [{ path: "/auth/sign-in", value: "session", expires: "expiresAt" }],
+        issue: [
+          { path: "/auth/register", value: "session", expires: "expiresAt" },
+          { path: "/auth/sign-in", value: "session", expires: "expiresAt" },
+        ],
         clear: ["/auth/sign-out"],
       },
     },

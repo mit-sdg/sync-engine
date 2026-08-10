@@ -113,13 +113,24 @@ export const board = former(
 
 export const Register = endpoint(
   "/auth/register",
-  ({ username, password }) =>
+  ({ username, password, session, expiresAt }) =>
     receive({ username, password })
       .then(Authenticating.register({ username, password }).responds({ username }))
-      .then(respond({ username })),
+      .then(Sessioning.start({ subject: username }).responds({ session, expiresAt }))
+      .then(respond({ username, session, expiresAt })),
   {
     input: { required: ["username", "password"] },
-    validators: { input: credentialsInput, output: usernameOutput },
+    validators: {
+      input: credentialsInput,
+      output: validator(
+        (value) =>
+          hasOnly(value, ["username", "session", "expiresAt"]) &&
+          typeof value.username === "string" &&
+          typeof value.session === "string" &&
+          value.expiresAt instanceof Date,
+        "registration response must contain username, session, and Date expiry",
+      ),
+    },
   },
 );
 

@@ -105,11 +105,13 @@ describe("message board application", () => {
     await expect(
       client.auth.register({ username: "ari", password: "correct horse" }),
     ).resolves.toEqual({ username: "ari" });
+    expect(jar.cookie()).toMatch(/^__Host-message-board-session=/);
+    await expect(client.auth.current({})).resolves.toEqual({ username: "ari" });
+
+    await expect(client.auth["sign-out"]({})).resolves.toEqual({ signedOut: true });
     await expect(
       client.auth["sign-in"]({ username: "ari", password: "correct horse" }),
     ).resolves.toEqual({ username: "ari" });
-    expect(jar.cookie()).toMatch(/^__Host-message-board-session=/);
-    await expect(client.auth.current({})).resolves.toEqual({ username: "ari" });
 
     const posted = await client.board.post({ content: "A small complete app" });
     if ("error" in posted) throw new Error(`Could not publish: ${posted.error}`);

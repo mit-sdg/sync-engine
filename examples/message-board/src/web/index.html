@@ -11,10 +11,18 @@
           sans-serif;
         color-scheme: light dark;
       }
+      * {
+        box-sizing: border-box;
+      }
       body {
         max-width: 48rem;
         margin: 2rem auto;
-        padding: 0 1rem;
+        padding: 0 1rem 3rem;
+      }
+      #auth-panel:not([hidden]) {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+        gap: 1.5rem;
       }
       form {
         display: grid;
@@ -28,8 +36,17 @@
       input,
       textarea,
       button {
+        width: 100%;
         font: inherit;
         padding: 0.55rem;
+      }
+      textarea {
+        min-height: 6rem;
+        resize: vertical;
+      }
+      button {
+        width: fit-content;
+        cursor: pointer;
       }
       article {
         border: 1px solid #8888;
@@ -38,7 +55,11 @@
         padding: 1rem;
       }
       h2 {
+        margin-bottom: 0.5rem;
         font-size: 1rem;
+      }
+      ul {
+        padding-left: 1.25rem;
       }
       #status {
         min-height: 1.5rem;
@@ -55,20 +76,24 @@
     <h1>Message board</h1>
     <p id="status" role="status"></p>
     <section id="auth-panel">
-      <h2>Create an account</h2>
-      <form id="register">
-        <label>Username <input name="username" minlength="3" maxlength="32" required /></label>
-        <label
-          >Password <input name="password" type="password" minlength="8" maxlength="128" required
-        /></label>
-        <button type="submit">Register</button>
-      </form>
-      <h2>Sign in</h2>
-      <form id="sign-in">
-        <label>Username <input name="username" required /></label>
-        <label>Password <input name="password" type="password" required /></label>
-        <button type="submit">Sign in</button>
-      </form>
+      <div>
+        <h2>Create an account</h2>
+        <form id="register">
+          <label>Username <input name="username" minlength="3" maxlength="32" required /></label>
+          <label
+            >Password <input name="password" type="password" minlength="8" maxlength="128" required
+          /></label>
+          <button type="submit">Register</button>
+        </form>
+      </div>
+      <div>
+        <h2>Sign in</h2>
+        <form id="sign-in">
+          <label>Username <input name="username" required /></label>
+          <label>Password <input name="password" type="password" required /></label>
+          <button type="submit">Sign in</button>
+        </form>
+      </div>
     </section>
     <section id="board-panel" hidden>
       <p>

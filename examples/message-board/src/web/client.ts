@@ -90,10 +90,12 @@ form("register").addEventListener("submit", (event) => {
       username: text(data, "username"),
       password: text(data, "password"),
     });
-    show(
-      "error" in result ? `Could not register: ${result.error}` : "Registered. Sign in now.",
-      "error" in result,
-    );
+    if ("error" in result) show(`Could not register: ${result.error}`, true);
+    else {
+      form("register").reset();
+      show(`Account created. Signed in as ${result.username}.`);
+      signedIn(result.username);
+    }
   })();
 });
 

@@ -398,10 +398,18 @@ then
 
 ```reaction
 when Authenticating.register (password, username), asked by Register
+then
+  Sessioning.start (subject: username)
+```
+
+### Register#3
+
+```reaction
+when Sessioning.start (subject: username, expiresAt, session), asked by Register#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/register", requestId, username)
 then
-  RequestBoundary.respond (requestId, username)
+  RequestBoundary.respond (expiresAt, requestId, session, username)
 ```
 
 ### SignIn

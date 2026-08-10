@@ -5,7 +5,6 @@ import type { vocabulary as ApplicationVocabulary } from "../src/concept-set.ts"
 
 type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : never : T;
 type QueryRow<T> = T extends readonly (infer Row)[] ? Row : T;
-type AllOf<T extends readonly unknown[]> = T extends readonly [infer Head, ...infer Rest] ? Head & AllOf<Rest> : unknown;
 type OneOf<T extends readonly unknown[]> = T[number];
 type Jsonify<T> = T extends Date ? string : T extends null | boolean | number | string ? T : T extends (...args: never[]) => unknown ? never : T extends readonly (infer Item)[] ? Jsonify<Item>[] : T extends object ? { [K in keyof T]: Jsonify<T[K]> } : never;
 
@@ -26,10 +25,12 @@ export type MessageBoardWire = {
   "/auth/register": {
     input: {
       "password": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>[0], ["password"]>>;
-      "username": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>[0], ["username"]>>;
+      "username": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>[0], ["username"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>[0], ["subject"]>]>>;
     };
     output: {
-      "username": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>[0], ["username"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>>, ["username"]>]>>;
+      "expiresAt": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>>, ["expiresAt"]>>;
+      "session": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>>, ["session"]>>;
+      "username": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>[0], ["subject"]>>;
     };
     error: { error: AppWideError | "INVALID_INPUT" | "INVALID_USERNAME" | "USERNAME_TAKEN" | "WEAK_PASSWORD" };
   };
@@ -110,10 +111,10 @@ export type MessageBoardWireHttp = {
   "/auth/register": {
     input: {
       "password": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>[0], ["password"]>>;
-      "username": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>[0], ["username"]>>;
+      "username": Jsonify<OneOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>[0], ["username"]>, AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>[0], ["subject"]>]>>;
     };
     output: {
-      "username": Jsonify<AllOf<[AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>[0], ["username"]>, AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Authenticating"]["register"]>>, ["username"]>]>>;
+      "username": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.concepts)["Sessioning"]["start"]>[0], ["subject"]>>;
     };
     error: { error: HttpAppWideError | "CONFLICT" | "INVALID_REQUEST" };
   };
