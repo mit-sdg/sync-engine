@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "id": "concept/posting",
+  "kind": "concept",
+  "summary": "Publish permanent authored messages in deterministic chronological order.",
+  "packages": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "vite-plus": "^0.2.6"
+  },
+  "concept": {
+    "name": "Posting",
+    "export": "posting",
+    "registration": "$concepts/posting/registry.ts"
+  },
+  "defaultFloor": "memory",
+  "files": [
+    {
+      "source": "spec.md",
+      "target": "$concepts/posting/spec.md"
+    },
+    {
+      "source": "posting.shared.ts",
+      "target": "$concepts/posting/posting.shared.ts"
+    },
+    {
+      "source": "posting.conformance.ts",
+      "target": "$concepts/posting/posting.conformance.ts"
+    },
+    {
+      "source": "registry.ts",
+      "target": "$concepts/posting/registry.ts",
+      "render": "floor"
+    }
+  ],
+  "floors": {
+    "memory": {
+      "summary": "Process-local permanent Post records with injectable identity allocation.",
+      "files": [
+        {
+          "source": "posting.memory.ts",
+          "target": "$concepts/posting/posting.memory.ts"
+        },
+        {
+          "source": "posting.memory.test.ts",
+          "target": "$concepts/posting/posting.memory.test.ts"
+        }
+      ]
+    },
+    "mongo": {
+      "summary": "MongoDB Post records indexed by explicit publication time and identity.",
+      "packages": {
+        "mongodb": "^6.20.0"
+      },
+      "files": [
+        {
+          "source": "posting.mongo.ts",
+          "target": "$concepts/posting/posting.mongo.ts"
+        },
+        {
+          "source": "posting.mongo.test.ts",
+          "target": "$concepts/posting/posting.mongo.test.ts"
+        }
+      ]
+    }
+  }
+}

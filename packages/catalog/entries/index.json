@@ -5,6 +5,10 @@
   "concept/reserving/manifest.json",
   "concept/discussing/manifest.json",
   "concept/inviting/manifest.json",
+  "concept/posting/manifest.json",
+  "concept/commenting/manifest.json",
+  "concept/labeling/manifest.json",
+  "concept/trashing/manifest.json",
   "concept/timing/manifest.json",
   "concept/upvoting/manifest.json",
   "recipe/workshop-selection/manifest.json"

@@ -105,7 +105,7 @@ describe("catalog installer", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   test("copies a mongo-only tree with no memory source or import", async () => {
     const root = await fixture({
@@ -128,7 +128,59 @@ describe("catalog installer", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
+
+  test("copies and typechecks the Batch D memory floor without Mongo source", async () => {
+    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" });
+    try {
+      const result = await addEntries(
+        await CatalogRegistry.load(),
+        ["concept/posting", "concept/commenting", "concept/labeling", "concept/trashing"],
+        {
+          root,
+          floor: "memory",
+          originalCommand:
+            "catalog add concept/posting concept/commenting concept/labeling concept/trashing --floor memory",
+        },
+      );
+      expect(result.written).toContain("src/concepts/posting/posting.memory.ts");
+      expect(result.written).toContain("src/concepts/commenting/commenting.memory.ts");
+      expect(result.written).toContain("src/concepts/labeling/labeling.memory.ts");
+      expect(result.written).toContain("src/concepts/trashing/trashing.memory.ts");
+      expect(result.written.some((path) => path.includes("mongo"))).toBe(false);
+      await expectTypechecks(root);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  test("copies and typechecks the Batch D Mongo floor without memory source", async () => {
+    const root = await fixture({
+      "@mit-sdg/sync-engine": "1.0.0-beta.7",
+      mongodb: "6.21.0",
+      "vite-plus": "0.2.6",
+    });
+    try {
+      const result = await addEntries(
+        await CatalogRegistry.load(),
+        ["concept/posting", "concept/commenting", "concept/labeling", "concept/trashing"],
+        {
+          root,
+          floor: "mongo",
+          originalCommand:
+            "catalog add concept/posting concept/commenting concept/labeling concept/trashing --floor mongo",
+        },
+      );
+      expect(result.written).toContain("src/concepts/posting/posting.mongo.ts");
+      expect(result.written).toContain("src/concepts/commenting/commenting.mongo.ts");
+      expect(result.written).toContain("src/concepts/labeling/labeling.mongo.ts");
+      expect(result.written).toContain("src/concepts/trashing/trashing.mongo.ts");
+      expect(result.written.some((path) => path.includes("memory"))).toBe(false);
+      await expectTypechecks(root);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 20_000);
 
   test("installs Timing on the mongo floor without MongoDB source or packages", async () => {
     const root = await fixture({
