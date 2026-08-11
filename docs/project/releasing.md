@@ -29,6 +29,12 @@ Configure these external settings manually and recheck them before every tag:
   `@mit-sdg/sync-engine-catalog`. Each publisher uses GitHub organization
   `mit-sdg`, repository `sync-engine`, workflow `.github/workflows/publish.yml`,
   and environment `npm`. Verify every publisher identity before each release.
+- Before the first release of a new workspace, bootstrap its npm package under
+  the `mit-sdg` organization, set public access, and verify ownership before
+  configuring the trusted publisher. Do not bootstrap with the intended release
+  version or the `beta` tag. If npm requires a placeholder publication, use only
+  version `0.0.0` under a `bootstrap` tag; the protected workflow remains the
+  first publisher of the real release version.
 - Verify npm package and organization ownership, require 2FA for owners and
   maintainers, remove stale owners, and confirm recovery access is controlled.
   Beta publications use the `beta` dist-tag and must not create or move
