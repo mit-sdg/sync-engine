@@ -11,7 +11,7 @@ entries. `list` and `show` read manifests and source assets without loading core
 or entry modules:
 
 ```sh
-bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.7
+bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.8
 bunx catalog list
 bunx catalog show <entry>
 ```

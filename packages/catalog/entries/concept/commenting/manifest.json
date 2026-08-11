@@ -4,7 +4,7 @@
   "kind": "concept",
   "summary": "Attach owned authored comments and enforce author-only retraction.",
   "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "@mit-sdg/sync-engine": "1.0.0-beta.8",
     "vite-plus": "^0.2.6"
   },
   "concept": {

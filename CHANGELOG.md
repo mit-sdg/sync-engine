@@ -5,67 +5,60 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
-## [1.0.0-beta.7] - 2026-08-07
+## [1.0.0-beta.8] - 2026-08-11
 
-This beta advances the canonical application manifest, publishes a lean
-two-surface analysis companion, and replaces the HTTP companion's policy and
-browser-session API.
+This beta adds the curated source catalog and concept-free setup flow, replaces
+the HTTP policy and browser-session API, and extends endpoint diagnostics across
+linear action chains.
 
 ### Compatibility
 
-- Added the CLI-only `@mit-sdg/sync-engine-catalog` package. It copies curated
-  concept and recipe source for one selected storage floor, records ownership in
-  `catalog.lock`, generates mechanical wiring, and leaves application
-  integration to explicit guidance.
+- Added the CLI-only `@mit-sdg/sync-engine-catalog` package. Its 16 concepts and
+  8 recipes install reviewed source for a selected memory or MongoDB floor,
+  record ownership in `catalog.lock`, and generate registration and composition
+  modules. The catalog never imports generated modules into application-owned
+  files.
+- `catalog add` validates the complete dependency graph, selected floor, package
+  requirements, portable paths, source imports, and existing lock ownership
+  before writing. It never rewrites copy-owned source. Schema 1 has no catalog
+  migration operation; changed requirements or integration metadata for an
+  installed entry are rejected.
 - Replaced `sync-engine new` and its example-bearing scaffold with
   `sync-engine setup [directory]`. Setup initializes only missing concept-free
-  files in an existing Bun package and never edits `package.json` or overwrites
-  an application file. `new` has no compatibility alias.
+  files in an existing Bun package. It never edits `package.json`, merges an
+  existing configuration, or overwrites an application file. `new` has no
+  compatibility alias.
 - `@mit-sdg/sync-engine-http` now exposes `/policy`, `/handler`, `/client`, and
-  `/tooling`. One branded immutable policy supplies deployment facts to the
-  handler and wire projector; the typed client remains policy-free. The handler
-  accepts POST/JSON only and can derive exact-origin CORS, request-origin
-  protection, and secure cookie behavior.
-- HTTP policy construction now rejects raw mutable policy objects, insecure or
-  inert cookie declarations, and unsafe origin combinations. Handler binding
-  and wire projection reject bindings that disagree with endpoint contracts.
-  The HTTP API has no compatibility aliases.
-- The canonical `sync-engine.application-manifest` format advances to V5.
-  `ApplicationManifestV5` and `ManifestEndpointV5` replace the version-4 public
-  type names; V4 input is rejected rather than upgraded.
-- `@mit-sdg/sync-engine-analysis` is now a public package with supported
-  `/ir` and `/project` entrypoints and an exact
-  `@mit-sdg/sync-engine@1.0.0-beta.7` peer.
-  There was no published analysis beta.6; beta.7 is its first public release.
-- `/ir` provides compiler-free manifest, graph, source-data, and neutral facade
-  queries. `/project` owns TypeScript-backed source indexing, filesystem and
-  worker analysis, project diagnostics and producer options, and strict project
-  codecs. TypeScript `>=6 <7` is an analysis runtime dependency, not a peer, but
-  importing `/ir` does not evaluate it.
-- The unpublished oversized preview surface has been removed without aliases:
-  there is no `/tooling`, `/guidance`, persisted granular-result codec, impact
-  context bundle, change target, review orchestration, packaged guidance, or
-  workflow-shaped supporting API.
-- Durable source indexes retain only document and anchor metadata, ranges, and
-  digests. Source-text search, retained anchor/excerpt text, full-text
-  descriptions, source content modes, facade contract rendering, and
-  caller-supplied wire projections are removed.
-- Project-backed facade construction recomputes the canonical manifest index and
-  rejects even a structurally self-consistent project index when its semantic
-  composition differs from the supplied manifest. Supplying a project now also
-  requires a caller-held `expectedProjectDigest`; optional `limits` govern the
-  canonical recomputation.
+  `/tooling`. A branded immutable `HttpPolicy` supplies deployment facts to the
+  Fetch handler and wire projector; the typed client remains policy-free. The
+  package has no `/server` compatibility entrypoint.
+- HTTP policy can derive exact-origin CORS, separate request-origin protection,
+  multiple secure cookie bindings, public error projection, request-body
+  limits, response headers, and correlation. Construction rejects raw mutable
+  policy objects and invalid deployment facts. Handler binding and wire
+  projection reject policies that disagree with endpoint contracts.
+- Endpoint diagnostics now prove coverage and overlap through recognized linear
+  action chains whose inputs, successful postures, ancestor reads, and standard
+  refusal/fault delivery are total. Assembly reserves the reaction names
+  `DeliverRefusalToAsker` and `DeliverFaultToAsker` for those boundary outcomes.
+- The shipped message-board browser application demonstrates HTTP sessions,
+  request-origin policy, response projection, startup, drain, and shutdown. The
+  former production-HTTP example has been replaced.
 
 ### Migration
 
 Applications that used `sync-engine new` must create a Bun package, install
-core, and run `sync-engine setup`. Add concepts manually or install the matching
-catalog package and run `catalog add`. The catalog does not edit the
-application-owned concept set, composition, assembly, host, TypeScript
-configuration, or scripts.
+core, and run `sync-engine setup`. Add concepts manually or install
+`@mit-sdg/sync-engine-catalog@1.0.0-beta.8` and run `catalog add`. Apply the
+printed integration guidance: the catalog does not edit the application concept
+set, composition, assembly, host, TypeScript configuration, package manifest, or
+scripts.
 
-Upgrade core and HTTP to `1.0.0-beta.7` together. The HTTP rework uses the
-following replacements.
+Install core, HTTP, analysis, and catalog at `1.0.0-beta.8` when using those
+packages together. Rename application reactions that use either reserved
+boundary-outcome name.
+
+The HTTP rework uses the following replacements.
 
 #### Removed HTTP identifiers
 
@@ -102,11 +95,84 @@ following replacements.
 | Clearing scoped to applicable bindings; `FORBIDDEN` excluded                              | Authorization refusal no longer signs out a valid session.                         |
 | Construction rejects overlapping bindings, inert bindings, and optional credential inputs | Previously accepted assemblies may fail during handler binding or wire projection. |
 
-- When adopting the HTTP API, import policy declarations from `/policy`, pass
-  the same `HttpPolicy` to the handler and projector, and configure
-  cross-origin browser clients with `credentials: "include"`. CORS and
-  request-origin protection are separate controls; a missing `Origin` remains
-  allowed unless `requestOrigins.requireOrigin` is true.
+Import HTTP policy declarations from `/policy`, pass the same `HttpPolicy` to
+the handler and projector, and configure cross-origin browser clients with
+`credentials: "include"`. CORS and request-origin protection are separate
+controls. A missing `Origin` remains allowed unless
+`requestOrigins.requireOrigin` is true.
+
+### Generated formats
+
+- The canonical application manifest remains at version 5. Regeneration updates
+  core, analysis, and HTTP producer provenance to `1.0.0-beta.8`.
+- Lowered continuation stages now retain stable logic-variable names across the
+  complete reaction family. Regenerated manifest and read-back output may differ
+  where a later stage reuses a binding from an earlier stage; no persisted format
+  version changes.
+- Catalog `manifest.json` and `catalog.lock` remain schema 1. A lock records the
+  catalog version that first installed each entry as provenance; it is not an
+  update marker.
+
+### Runtime and security support
+
+- Cookie policy always enforces `HttpOnly` and `Secure`, derives `__Host-` or
+  `__Secure-` names, bounds cookie headers and serialized cookies, and requires
+  HTTPS or loopback deployment. Credentialed cross-origin policy derives
+  `SameSite=None` and cannot disable request-origin protection.
+- CORS controls browser response access; request-origin policy separately guards
+  cookie-protected, issuing, and clearing routes. Neither authenticates a user or
+  authorizes domain behavior. The host still owns TLS, proxy trust, traffic
+  controls, static routing, and process lifecycle.
+- Catalog entries are application source, not an opaque runtime dependency.
+  Applications must review installed code, select and operate the storage floor,
+  apply generated integration explicitly, and retain `catalog.lock`. MongoDB
+  transaction requirements remain application and deployment responsibilities.
+- Endpoint coverage diagnostics prove the recognized static chain shape after a
+  watched posture lands. They do not prove that actions or reads settle, that
+  runtime values match TypeScript types, or that live object identity is
+  portable.
+- The beta publication workflow now verifies and packs every workspace before
+  one protected npm environment approval, then publishes the reviewed tarballs
+  in dependency order. Publication still stops at the first registry failure and
+  never overwrites an accepted package version.
+
+[Release][1.0.0-beta.8] | [Changes since 1.0.0-beta.7][1.0.0-beta.8-compare]
+
+## [1.0.0-beta.7] - 2026-08-07
+
+This beta advances the canonical application manifest and publishes a lean,
+two-surface analysis companion for the first time.
+
+### Compatibility
+
+- The canonical `sync-engine.application-manifest` format advances to V5.
+  `ApplicationManifestV5` and `ManifestEndpointV5` replace the version-4 public
+  type names; V4 input is rejected rather than upgraded.
+- `@mit-sdg/sync-engine-analysis` is now a public package with supported
+  `/ir` and `/project` entrypoints and an exact
+  `@mit-sdg/sync-engine@1.0.0-beta.7` peer.
+  There was no published analysis beta.6; beta.7 is its first public release.
+- `/ir` provides compiler-free manifest, graph, source-data, and neutral facade
+  queries. `/project` owns TypeScript-backed source indexing, filesystem and
+  worker analysis, project diagnostics and producer options, and strict project
+  codecs. TypeScript `>=6 <7` is an analysis runtime dependency, not a peer, but
+  importing `/ir` does not evaluate it.
+- The unpublished oversized preview surface has been removed without aliases:
+  there is no `/tooling`, `/guidance`, persisted granular-result codec, impact
+  context bundle, change target, review orchestration, packaged guidance, or
+  workflow-shaped supporting API.
+- Durable source indexes retain only document and anchor metadata, ranges, and
+  digests. Source-text search, retained anchor/excerpt text, full-text
+  descriptions, source content modes, facade contract rendering, and
+  caller-supplied wire projections are removed.
+- Project-backed facade construction recomputes the canonical manifest index and
+  rejects even a structurally self-consistent project index when its semantic
+  composition differs from the supplied manifest. Supplying a project now also
+  requires a caller-held `expectedProjectDigest`; optional `limits` govern the
+  canonical recomputation.
+
+### Migration
+
 - Upgrade core and HTTP to `1.0.0-beta.7` together. When adopting analysis,
   install `@mit-sdg/sync-engine-analysis@1.0.0-beta.7` alongside that exact core
   beta; do not infer an analysis beta.6 package from the core release history.
@@ -664,6 +730,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.8]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.8
+[1.0.0-beta.8-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.7...v1.0.0-beta.8
 [1.0.0-beta.7]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.7
 [1.0.0-beta.7-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.6...v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.6
