@@ -5,7 +5,7 @@
   "summary": "Let current gathering members reserve exclusive resources.",
   "requires": ["concept/timing", "concept/gathering", "concept/reserving"],
   "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "@mit-sdg/sync-engine": "1.0.0-beta.8",
     "vite-plus": "^0.2.6"
   },
   "files": [

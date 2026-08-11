@@ -51,7 +51,7 @@ describe("catalog lock", () => {
     ];
     const entry = {
       kind: "concept" as const,
-      catalogVersion: "1.0.0-beta.7",
+      catalogVersion: "1.0.0-beta.8",
       sourceDigest: "a".repeat(64),
       requires: [],
       floor: "memory",

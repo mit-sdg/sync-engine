@@ -67,7 +67,7 @@ async function expectTypechecks(root: string): Promise<void> {
 
 describe("catalog installer", () => {
   test("copies only the selected memory floor and deduplicates recipe concepts", async () => {
-    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" });
+    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.8", "vite-plus": "0.2.6" });
     try {
       const registry = await CatalogRegistry.load();
       const result = await addEntries(registry, ["recipe/workshop-selection"], {
@@ -118,7 +118,7 @@ describe("catalog installer", () => {
 
   test("copies a mongo-only tree with no memory source or import", async () => {
     const root = await fixture({
-      "@mit-sdg/sync-engine": "1.0.0-beta.7",
+      "@mit-sdg/sync-engine": "1.0.0-beta.8",
       mongodb: "6.21.0",
       "vite-plus": "0.2.6",
     });
@@ -143,7 +143,7 @@ describe("catalog installer", () => {
     "installs and typechecks the coordination recipes on the %s floor",
     async (floor) => {
       const root = await fixture({
-        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@mit-sdg/sync-engine": "1.0.0-beta.8",
         ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
         "vite-plus": "0.2.6",
       });
@@ -187,7 +187,7 @@ describe("catalog installer", () => {
   );
 
   test("copies and typechecks the Batch D memory floor without Mongo source", async () => {
-    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" });
+    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.8", "vite-plus": "0.2.6" });
     try {
       const result = await addEntries(
         await CatalogRegistry.load(),
@@ -212,7 +212,7 @@ describe("catalog installer", () => {
 
   test("copies and typechecks the Batch D Mongo floor without memory source", async () => {
     const root = await fixture({
-      "@mit-sdg/sync-engine": "1.0.0-beta.7",
+      "@mit-sdg/sync-engine": "1.0.0-beta.8",
       mongodb: "6.21.0",
       "vite-plus": "0.2.6",
     });
@@ -240,7 +240,7 @@ describe("catalog installer", () => {
 
   test("installs Timing on the mongo floor without MongoDB source or packages", async () => {
     const root = await fixture({
-      "@mit-sdg/sync-engine": "1.0.0-beta.7",
+      "@mit-sdg/sync-engine": "1.0.0-beta.8",
       "vite-plus": "0.2.6",
     });
     try {
@@ -264,7 +264,7 @@ describe("catalog installer", () => {
     "installs and typechecks Batch A on the %s floor",
     async (floor) => {
       const root = await fixture({
-        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@mit-sdg/sync-engine": "1.0.0-beta.8",
         ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
         "vite-plus": "0.2.6",
       });
@@ -295,7 +295,7 @@ describe("catalog installer", () => {
   test("installs the Alerting and Reserving memory and mongo floors independently", async () => {
     for (const floor of ["memory", "mongo"] as const) {
       const root = await fixture({
-        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@mit-sdg/sync-engine": "1.0.0-beta.8",
         ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
         "vite-plus": "0.2.6",
       });
@@ -339,7 +339,7 @@ describe("catalog installer", () => {
     "copies and typechecks Approving on the %s floor",
     async (floor) => {
       const dependencies: Record<string, string> = {
-        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@mit-sdg/sync-engine": "1.0.0-beta.8",
         "vite-plus": "0.2.6",
       };
       if (floor === "mongo") dependencies.mongodb = "6.21.0";
@@ -370,7 +370,7 @@ describe("catalog installer", () => {
     "copies and typechecks Auditing on the %s floor",
     async (floor) => {
       const dependencies: Record<string, string> = {
-        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@mit-sdg/sync-engine": "1.0.0-beta.8",
         "vite-plus": "0.2.6",
       };
       if (floor === "mongo") dependencies.mongodb = "6.21.0";
@@ -404,7 +404,7 @@ describe("catalog installer", () => {
     "copies and typechecks the security concepts on the %s floor",
     async (floor) => {
       const root = await fixture({
-        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@mit-sdg/sync-engine": "1.0.0-beta.8",
         "@node-rs/argon2": "2.0.2",
         ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
         "vite-plus": "0.2.6",
@@ -453,7 +453,7 @@ describe("catalog installer", () => {
     for (const recipe of ["incident-room", "recoverable-board"] as const) {
       for (const floor of ["memory", "mongo"] as const) {
         const root = await fixture({
-          "@mit-sdg/sync-engine": "1.0.0-beta.7",
+          "@mit-sdg/sync-engine": "1.0.0-beta.8",
           ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
           "vite-plus": "0.2.6",
         });
@@ -490,7 +490,7 @@ describe("catalog installer", () => {
     "installs and typechecks the security recipes on the %s floor",
     async (floor) => {
       const root = await fixture({
-        "@mit-sdg/sync-engine": "1.0.0-beta.7",
+        "@mit-sdg/sync-engine": "1.0.0-beta.8",
         "@node-rs/argon2": "2.0.2",
         ...(floor === "mongo" ? { mongodb: "6.21.0" } : {}),
         "vite-plus": "0.2.6",
@@ -525,7 +525,7 @@ describe("catalog installer", () => {
   );
 
   test("rejects unavailable floors and untracked collisions before writing", async () => {
-    const dependencies = { "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" };
+    const dependencies = { "@mit-sdg/sync-engine": "1.0.0-beta.8", "vite-plus": "0.2.6" };
     const unavailable = await fixture(dependencies);
     try {
       await expect(
@@ -557,7 +557,7 @@ describe("catalog installer", () => {
   });
 
   test("protects the locked floor and edited generated and rendered files", async () => {
-    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.7", "vite-plus": "0.2.6" });
+    const root = await fixture({ "@mit-sdg/sync-engine": "1.0.0-beta.8", "vite-plus": "0.2.6" });
     try {
       const registry = await CatalogRegistry.load();
       await addEntries(registry, ["concept/selecting"], {

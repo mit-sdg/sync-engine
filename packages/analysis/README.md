@@ -27,7 +27,7 @@ analysis can add checkout evidence.
 Pin analysis and core to the same exact beta:
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.7 @mit-sdg/sync-engine-analysis@1.0.0-beta.7
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.8 @mit-sdg/sync-engine-analysis@1.0.0-beta.8
 ```
 
 The ESM package supports Node.js `>=24 <25`. Project analysis depends on

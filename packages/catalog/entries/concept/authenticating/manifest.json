@@ -4,7 +4,7 @@
   "kind": "concept",
   "summary": "Register, verify, rotate, and remove username-password credentials.",
   "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "@mit-sdg/sync-engine": "1.0.0-beta.8",
     "@node-rs/argon2": "2.0.2",
     "vite-plus": "^0.2.6"
   },

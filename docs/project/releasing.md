@@ -10,15 +10,19 @@ Configure these external settings manually and recheck them before every tag:
 - Enable GitHub private vulnerability reporting. Security reports must follow
   `SECURITY.md`, not public issues.
 - Require full-SHA pinning for third-party GitHub Actions. Dependabot may propose
-  GitHub Actions pin updates, but two reviewers, including a code owner, must
-  review the resolved SHA and upstream release before merge.
+  GitHub Actions pin updates, but a code owner must review the resolved SHA and
+  upstream release before merge.
 - Protect `main` with pull-request review and only the stable **CI required**
-  status context. Require two approving reviews, CODEOWNERS review, dismissal of
-  stale approvals, approval after the last push, and administrator enforcement.
-  Do not require individual or matrix job names as branch protection contexts.
+  status context. Require one approving review, CODEOWNERS review, dismissal of
+  stale approvals, and approval after the last push. Do not require individual
+  or matrix job names as branch protection contexts.
+- Allow repository administrators to bypass `main` branch protection. Use this
+  bypass only after **CI required** succeeds, and record its use in the pull
+  request or release review. The bypass does not permit moving, deleting, or
+  reusing a release tag or npm version.
 - Require CODEOWNERS review for workflow, release, support, and security-policy
-  files. Apply the rule to administrators and require review of any bypass;
-  disable unreviewed administrator or ruleset bypass where the plan permits.
+  files during ordinary pull-request merges. An administrator bypass of those
+  reviews must follow the recorded-bypass rule above.
 - Protect the `v1.0.0-beta.*` tag namespace against movement, deletion, and
   creation by unapproved actors.
 - Keep the GitHub environment identity `npm`. Restrict it to the
@@ -29,6 +33,12 @@ Configure these external settings manually and recheck them before every tag:
   `@mit-sdg/sync-engine-catalog`. Each publisher uses GitHub organization
   `mit-sdg`, repository `sync-engine`, workflow `.github/workflows/publish.yml`,
   and environment `npm`. Verify every publisher identity before each release.
+- Before the first release of a new workspace, bootstrap its npm package under
+  the `mit-sdg` organization, set public access, and verify ownership before
+  configuring the trusted publisher. Do not bootstrap with the intended release
+  version or the `beta` tag. If npm requires a placeholder publication, use only
+  version `0.0.0` under a `bootstrap` tag; the protected workflow remains the
+  first publisher of the real release version.
 - Verify npm package and organization ownership, require 2FA for owners and
   maintainers, remove stale owners, and confirm recovery access is controlled.
   Beta publications use the `beta` dist-tag and must not create or move

@@ -84,7 +84,7 @@ describe("sync-engine setup", () => {
     [
       "conflicting core declarations",
       JSON.stringify({
-        dependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.7" },
+        dependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.8" },
         devDependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.6" },
       }),
       "conflicting @mit-sdg/sync-engine",

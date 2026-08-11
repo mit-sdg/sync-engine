@@ -298,6 +298,7 @@ describe("release source facts", () => {
   });
 
   test.each([
+    ["1.0.0-beta.7", "This beta advances the canonical application manifest"],
     ["1.0.0-beta.6", "This beta makes authored concept contracts structured"],
     ["1.0.0-beta.5", "This entry adds deferred triggers"],
     ["1.0.0-beta.4", "This beta tightens assembly, validation, persistence"],

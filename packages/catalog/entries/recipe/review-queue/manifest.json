@@ -5,7 +5,7 @@
   "summary": "Assign durable reviews and keep reviewer alerts convergent through repair.",
   "requires": ["concept/timing", "concept/approving", "concept/alerting"],
   "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.7",
+    "@mit-sdg/sync-engine": "1.0.0-beta.8",
     "vite-plus": "^0.2.6"
   },
   "files": [

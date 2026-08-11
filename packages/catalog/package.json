@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine-catalog",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-beta.8",
   "description": "Curated source installer for @mit-sdg/sync-engine applications",
   "keywords": [
     "catalog",
@@ -43,7 +43,7 @@
     "mongodb-memory-server": "^10.4.1"
   },
   "peerDependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.7"
+    "@mit-sdg/sync-engine": "1.0.0-beta.8"
   },
   "peerDependenciesMeta": {
     "@mit-sdg/sync-engine": {
