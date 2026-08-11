@@ -1,6 +1,9 @@
 # sync-engine
 
-[![npm](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=npm)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
+[![npm: core](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=core)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
+[![npm: analysis](https://img.shields.io/npm/v/@mit-sdg/sync-engine-analysis/beta?label=analysis)](https://www.npmjs.com/package/@mit-sdg/sync-engine-analysis)
+[![npm: HTTP](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
+[![npm: catalog](https://img.shields.io/npm/v/@mit-sdg/sync-engine-catalog/beta?label=catalog)](https://www.npmjs.com/package/@mit-sdg/sync-engine-catalog)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is an ESM-only TypeScript library for composing independently

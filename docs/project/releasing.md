@@ -26,8 +26,9 @@ Configure these external settings manually and recheck them before every tag:
 - Protect the `v1.0.0-beta.*` tag namespace against movement, deletion, and
   creation by unapproved actors.
 - Keep the GitHub environment identity `npm`. Restrict it to the
-  `v1.0.0-beta.*` tag policy, require an independent reviewer, and verify
-  `prevent_self_review=true` and `can_admins_bypass=false`.
+  `v1.0.0-beta.*` tag policy, configure no required reviewers or wait timer, and
+  verify `can_admins_bypass=false`. Publication begins automatically after the
+  unprivileged verification job succeeds.
 - Configure npm trusted publishing for `@mit-sdg/sync-engine`,
   `@mit-sdg/sync-engine-analysis`, `@mit-sdg/sync-engine-http`, and
   `@mit-sdg/sync-engine-catalog`. Each publisher uses GitHub organization
@@ -142,18 +143,16 @@ version or moves or reuses a release tag or tarball.
    equality, canonical beta version syntax, `origin/main`
    ancestry, release facts, all gates, and the audit. It has no environment and
    no OIDC permission.
-3. Approve the protected `npm` environment only after `verify` succeeds and an
-   independent reviewer has repeated the source and external-setting checks.
-   The single publication job is the only job with the `npm` environment and
-   `id-token: write`, so this is one approval for the complete package set. It
-   checks out the same commit, refetches and verifies the live annotated tag and
-   main ancestry, downloads the verified tarballs, checks every recorded digest,
-   and binds each packed `package.json` name and version to the validated source
+3. After `verify` succeeds, the publication job starts automatically in the
+   `npm` environment. This is the only job with `id-token: write`. It checks out
+   the same commit, refetches and verifies the live annotated tag and main
+   ancestry, downloads the verified tarballs, checks every recorded digest, and
+   binds each packed `package.json` name and version to the validated source
    manifest. It rejects an artifact directory that is not exactly the reviewed
    tarball/checksum set. It then publishes each npm workspace in catalog build
-   order under `beta` with public access, stopping at the first failure. No publication
-   step installs dependencies, runs Bun, packs, prepackages, or rebuilds a
-   package.
+   order under `beta` with public access, stopping at the first failure. No
+   publication step installs dependencies, runs Bun, packs, prepackages, or
+   rebuilds a package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.
    After npm verification, manually create a GitHub prerelease from the same
@@ -193,8 +192,8 @@ version or moves or reuses a release tag or tarball.
 
 ## Bad release response
 
-Stop or reject the environment deployment if publication has not happened. If
-npm accepted any package version, do not retag, overwrite, recreate, or
+Cancel the workflow before the publication job starts if the release must stop.
+If npm accepted any package version, do not retag, overwrite, recreate, or
 republish it. Mark any GitHub release and npm version as affected, deprecate the
 exact version with a clear message, move `beta` back to the last known-good beta
 when appropriate, and publish a new incremented beta
