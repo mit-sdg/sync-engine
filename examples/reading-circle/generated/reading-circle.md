@@ -303,7 +303,7 @@ then
   RequestBoundary.respond (error: message, requestId)
 ```
 
-### compositions.CircleMembership.CreateCircle
+### ReadingCircle.CircleMembership.CreateCircle
 
 ```reaction
 when RequestBoundary.request (host, name, path: "/circles/create", requestId)
@@ -311,17 +311,17 @@ then
   Gathering.create (host, name)
 ```
 
-### compositions.CircleMembership.CreateCircle#2
+### ReadingCircle.CircleMembership.CreateCircle#2
 
 ```reaction
-when Gathering.create (host, name, gathering: circle), asked by compositions.CircleMembership.CreateCircle
+when Gathering.create (host, name, gathering: circle), asked by ReadingCircle.CircleMembership.CreateCircle
 where
   earlier, RequestBoundary.request (host, name, path: "/circles/create", requestId)
 then
   RequestBoundary.respond (circle, requestId)
 ```
 
-### compositions.CircleMembership.JoinCircle
+### ReadingCircle.CircleMembership.JoinCircle
 
 ```reaction
 when RequestBoundary.request (circle, member, path: "/circles/join", requestId)
@@ -329,17 +329,17 @@ then
   Gathering.join (gathering: circle, member)
 ```
 
-### compositions.CircleMembership.JoinCircle#2
+### ReadingCircle.CircleMembership.JoinCircle#2
 
 ```reaction
-when Gathering.join (gathering: circle, member, membership), asked by compositions.CircleMembership.JoinCircle
+when Gathering.join (gathering: circle, member, membership), asked by ReadingCircle.CircleMembership.JoinCircle
 where
   earlier, RequestBoundary.request (circle, member, path: "/circles/join", requestId)
 then
   RequestBoundary.respond (member, requestId)
 ```
 
-### compositions.CirclePages.GetCirclePage
+### ReadingCircle.CirclePages.GetCirclePage
 
 ```reaction
 when RequestBoundary.request (circle, path: "/circles/page", requestId)
@@ -347,7 +347,7 @@ then
   RequestBoundary.respond (page: former "the circle page (circle)" with (circle), requestId)
 ```
 
-### compositions.ReadingDiscussion.AddResponse
+### ReadingCircle.ReadingDiscussion.AddResponse
 
 ```reaction
 when RequestBoundary.request (circle, member, path: "/circles/respond", reading, requestId, text)
@@ -359,17 +359,17 @@ then
   Discussing.respond (author: member, discussion, text)
 ```
 
-### compositions.ReadingDiscussion.AddResponse#2
+### ReadingCircle.ReadingDiscussion.AddResponse#2
 
 ```reaction
-when Discussing.respond (author: member, discussion, text, response), asked by compositions.ReadingDiscussion.AddResponse
+when Discussing.respond (author: member, discussion, text, response), asked by ReadingCircle.ReadingDiscussion.AddResponse
 where
   earlier, RequestBoundary.request (circle, member, path: "/circles/respond", reading, requestId, text)
 then
   RequestBoundary.respond (requestId, response)
 ```
 
-### compositions.ReadingDiscussion.ChooseReading
+### ReadingCircle.ReadingDiscussion.ChooseReading
 
 ```reaction
 when RequestBoundary.request (circle, path: "/circles/choose", reading, requestId)
@@ -377,17 +377,17 @@ then
   Selecting.choose (item: reading, scope: circle)
 ```
 
-### compositions.ReadingDiscussion.ChooseReading#2
+### ReadingCircle.ReadingDiscussion.ChooseReading#2
 
 ```reaction
-when Selecting.choose (item: reading, scope: circle, selection), asked by compositions.ReadingDiscussion.ChooseReading
+when Selecting.choose (item: reading, scope: circle, selection), asked by ReadingCircle.ReadingDiscussion.ChooseReading
 where
   earlier, RequestBoundary.request (circle, path: "/circles/choose", reading, requestId)
 then
   RequestBoundary.respond (reading, requestId)
 ```
 
-### compositions.ReadingDiscussion.RejectNonmemberResponse
+### ReadingCircle.ReadingDiscussion.RejectNonmemberResponse
 
 ```reaction
 when RequestBoundary.request (circle, member, path: "/circles/respond", reading, requestId, text)
@@ -397,7 +397,7 @@ then
   RequestBoundary.respond (error: "NOT_A_MEMBER", requestId)
 ```
 
-### compositions.ReadingDiscussion.SelectedReadingOpensDiscussion
+### ReadingCircle.ReadingDiscussion.SelectedReadingOpensDiscussion
 
 ```reaction
 when Selecting.choose (selection)

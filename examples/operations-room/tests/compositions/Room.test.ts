@@ -8,15 +8,17 @@ import { DiscussingConcept } from "../../src/concepts/Discussing.ts";
 import { GatheringConcept } from "../../src/concepts/Gathering.ts";
 import { SelectingConcept } from "../../src/concepts/Selecting.ts";
 import { assembleOperationsRoom } from "../../src/assembly.ts";
-import {
-  currentMitigation,
-  responseStats,
-  requiredCurrentMitigation,
-  roomSummary,
-} from "../../src/formers/Room.ts";
+import { formers } from "../../src/compositions/Room.ts";
 import { buildOperationsRoom } from "../../src/edge.ts";
 import { runScenario } from "../../src/scenario.ts";
 import { identities } from "../../src/identities.ts";
+
+const {
+  CurrentMitigation: currentMitigation,
+  ResponseStats: responseStats,
+  RequiredCurrentMitigation: requiredCurrentMitigation,
+  RoomSummary: roomSummary,
+} = formers;
 
 function buildRoom(options: {
   alerts: boolean;

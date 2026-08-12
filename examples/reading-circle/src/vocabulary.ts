@@ -12,9 +12,9 @@
  */
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 export { default as spec } from "@design/vocabulary.md" with { type: "text" };
-import { discussing } from "./concepts/DiscussingRegistry.ts";
-import { gathering } from "./concepts/GatheringRegistry.ts";
-import { selecting } from "./concepts/SelectingRegistry.ts";
+import { discussing } from "./concepts/Discussing.registry.ts";
+import { gathering } from "./concepts/Gathering.registry.ts";
+import { selecting } from "./concepts/Selecting.registry.ts";
 import { identitiesFor } from "./identities.ts";
 
 export const readingCircleConcepts = conceptSet({

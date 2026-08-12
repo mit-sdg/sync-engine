@@ -7,9 +7,8 @@
  */
 import spec from "@design/compositions/Board.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { no, where } from "@mit-sdg/sync-engine/language";
+import { each, form, former, no, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../vocabulary.ts";
-import { Board } from "../formers/Board.ts";
 
 export { spec };
 import {
@@ -24,7 +23,27 @@ import {
 
 const { Commenting, Posting, Sessioning } = concepts;
 
-export const ListBoard = endpoint(
+/** Join each published post to the comments attached to its identity. */
+const Board = former(
+  "the message board",
+  (_input, { post, author, content, comment, commentAuthor, commentContent }) =>
+    form({
+      posts: each(Posting._all({}).is({ post, author, content })).form({
+        post,
+        author,
+        content,
+        comments: each(
+          Commenting._for({ target: post }).is({
+            comment,
+            author: commentAuthor,
+            content: commentContent,
+          }),
+        ).form({ comment, author: commentAuthor, content: commentContent }),
+      }),
+    }),
+);
+
+const ListBoard = endpoint(
   "/board/list",
   ({ session, username }) =>
     receive({ session })
@@ -36,7 +55,7 @@ export const ListBoard = endpoint(
   },
 );
 
-export const PublishPost = endpoint(
+const PublishPost = endpoint(
   "/board/post",
   ({ session, username, content, post }) =>
     receive({ session, content })
@@ -54,7 +73,7 @@ export const PublishPost = endpoint(
  * exist is this application's decision, so it is a sibling split here rather
  * than a refusal inside the concept.
  */
-export const AddComment = endpoint(
+const AddComment = endpoint(
   "/board/comment",
   ({ session, username, target, content, comment }) =>
     receive({ session, target, content })
@@ -79,7 +98,7 @@ export const AddComment = endpoint(
  * session subject as the claimed author and lets COMMENT_AUTHOR_MISMATCH
  * answer. The rule holds for a direct concept call too, not only this route.
  */
-export const RetractComment = endpoint(
+const RetractComment = endpoint(
   "/board/retract-comment",
   ({ session, username, comment }) =>
     receive({ session, comment })
@@ -91,3 +110,11 @@ export const RetractComment = endpoint(
     validators: { input: sessionCommentIdInput, output: commentOutput },
   },
 );
+
+export const compositions = {
+  BoardReading: { ListBoard },
+  BoardPublishing: { PublishPost },
+  BoardComments: { AddComment, RetractComment },
+};
+
+export const formers = { Board };

@@ -7,8 +7,10 @@ export { spec };
 const { Alerting, Gathering, Selecting } = concepts;
 
 // Only current room members receive an alert from this selectable pack.
-export const SelectedMitigationAlertsResponders = reaction(({ room, selection, responder }) =>
+const SelectedMitigationAlertsResponders = reaction(({ room, selection, responder }) =>
   when(Selecting.choose({ scope: room }).responds({ selection }))
     .where(Gathering._members({ gathering: room }).is({ member: responder }))
     .then(Alerting.raise({ recipient: responder, subject: selection })),
 );
+
+export const compositions = { SelectedMitigationAlertsResponders };

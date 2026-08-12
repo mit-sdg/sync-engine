@@ -20,7 +20,7 @@ import {
 
 const { Authenticating, Sessioning } = concepts;
 
-export const Register = endpoint(
+const Register = endpoint(
   "/auth/register",
   ({ username, password, session, expiresAt }) =>
     receive({ username, password })
@@ -33,7 +33,7 @@ export const Register = endpoint(
   },
 );
 
-export const SignIn = endpoint(
+const SignIn = endpoint(
   "/auth/sign-in",
   ({ username, password, session, expiresAt }) =>
     receive({ username, password })
@@ -46,7 +46,7 @@ export const SignIn = endpoint(
   },
 );
 
-export const CurrentUser = endpoint(
+const CurrentUser = endpoint(
   "/auth/current",
   ({ session, username }) =>
     receive({ session })
@@ -58,7 +58,7 @@ export const CurrentUser = endpoint(
   },
 );
 
-export const SignOut = endpoint(
+const SignOut = endpoint(
   "/auth/sign-out",
   ({ session, signedOut }) =>
     receive({ session })
@@ -69,3 +69,9 @@ export const SignOut = endpoint(
     validators: { input: sessionOnlyInput, output: signedOutOutput },
   },
 );
+
+export const compositions = {
+  EnteringApplication: { Register, SignIn },
+  CurrentAccount: { CurrentUser },
+  LeavingApplication: { SignOut },
+};

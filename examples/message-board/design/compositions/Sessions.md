@@ -1,22 +1,23 @@
 # Sessions
 
+Sessions connect accepted account credentials to opaque, independently expiring
+application sessions.
+
 ## Compositions
 
-### Entering the application
+### EnteringApplication
 
 Registration establishes a new account and starts a session for that account's
 username. Sign-in proves an existing account's credentials and starts a new
-session for the same username. A session subject is therefore always a username
-that Authenticating has accepted; callers cannot choose a different subject.
+session for the same username. Callers cannot choose a different subject.
 
-### Acting as the current account
+### CurrentAccount
 
 An active session resolves to its subject username. Board activity uses that
-resolved username as its author rather than accepting an author claim from the
-caller. An unknown, ended, or expired session does not identify a current
-account.
+resolved username as its author. An unknown, ended, or expired session does not
+identify a current account.
 
-### Leaving the application
+### LeavingApplication
 
 Signing out ends the presented active session. Other sessions for the same
 account remain independent, and an ended session no longer grants access to the

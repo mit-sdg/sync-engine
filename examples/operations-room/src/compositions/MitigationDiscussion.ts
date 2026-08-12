@@ -7,6 +7,8 @@ export { spec };
 const { Discussing, Selecting } = concepts;
 
 // An empty input pattern ({}) matches any choose regardless of scope or item.
-export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
+const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
   when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
+
+export const compositions = { SelectedMitigationOpensDiscussion };

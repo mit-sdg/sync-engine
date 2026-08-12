@@ -2,7 +2,6 @@ import { assemble, type ImplementationOverrides } from "@mit-sdg/sync-engine/ass
 import type { ExecutionLimits } from "@mit-sdg/sync-engine/boundary";
 import * as Board from "./compositions/Board.ts";
 import * as Sessions from "./compositions/Sessions.ts";
-import * as formers from "./formers/Board.ts";
 import { messageBoardConcepts, vocabulary } from "./vocabulary.ts";
 
 export type MessageBoardOverrides = ImplementationOverrides<typeof vocabulary>;
@@ -20,7 +19,10 @@ export function assembleMessageBoard(instances: MessageBoardOverrides = {}) {
   return assemble({
     vocabulary,
     instances: { ...messageBoardConcepts.implementations(), ...instances },
-    composition: { compositions: { Sessions, Board }, views: {}, formers },
+    composition: {
+      Sessions: { spec: Sessions.spec, ...Sessions.compositions },
+      Board: { spec: Board.spec, ...Board.compositions, formers: Board.formers },
+    },
     executionLimits: messageBoardExecutionLimits,
   });
 }
