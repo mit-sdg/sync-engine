@@ -1,8 +1,9 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "recipe/message-board",
   "kind": "recipe",
   "summary": "Authenticate users and bind session subjects to authored posts and comments.",
+  "design": "spec.md",
   "requires": [
     "concept/timing",
     "concept/authenticating",
@@ -10,58 +11,10 @@
     "concept/posting",
     "concept/commenting"
   ],
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$recipes/message-board.spec.md"
-    },
-    {
-      "source": "message-board.ts",
-      "target": "$recipes/message-board.ts"
-    },
-    {
-      "source": "message-board.behavior.ts",
-      "target": "$recipes/message-board.behavior.ts"
-    },
-    {
-      "source": "message-board.test.ts",
-      "target": "$recipes/message-board.test.ts"
-    },
-    {
-      "source": "message-board.security.test.ts",
-      "target": "$recipes/message-board.security.test.ts"
-    }
-  ],
-  "recipe": {
-    "module": "$recipes/message-board.ts",
-    "test": "$recipes/message-board.test.ts",
-    "members": [
-      "RegisterBoardUser",
-      "SignInBoardUser",
-      "CurrentBoardUser",
-      "SignOutBoardUser",
-      "ChangeBoardPassword",
-      "DeleteBoardAccount",
-      "PublishMessageBoardPost",
-      "AddMessageBoardComment",
-      "RetractMessageBoardComment",
-      "ListMessageBoard"
-    ],
-    "routes": {
-      "RegisterBoardUser": "/message-board/register",
-      "SignInBoardUser": "/message-board/sign-in",
-      "CurrentBoardUser": "/message-board/current-user",
-      "SignOutBoardUser": "/message-board/sign-out",
-      "ChangeBoardPassword": "/message-board/change-password",
-      "DeleteBoardAccount": "/message-board/delete-account",
-      "PublishMessageBoardPost": "/message-board/post",
-      "AddMessageBoardComment": "/message-board/comment",
-      "RetractMessageBoardComment": "/message-board/retract-comment",
-      "ListMessageBoard": "/message-board/list"
-    }
-  }
+  "sources": [
+    "message-board.ts",
+    "message-board.behavior.ts",
+    "message-board.test.ts",
+    "message-board.security.test.ts"
+  ]
 }

@@ -1,15 +1,46 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { CatalogRegistry } from "./registry.ts";
-import { addEntries } from "./install.ts";
+import type { EntryManifest } from "./types.ts";
 
 const USAGE = `Usage: catalog <command> [arguments]
 
   catalog list [concept|recipe]
-  catalog show <entry>
-  catalog add <entry...> [--floor <name>]
+  catalog show <entry> [--raw]
+  catalog source <entry> <selector> [--raw]
   catalog help`;
-function target(path: string): string {
-  return path.replace(/^\$concepts\//, "src/concepts/").replace(/^\$recipes\//, "src/composition/");
+
+function rawArgument(args: readonly string[], count: number): { values: string[]; raw: boolean } {
+  const raw = args.at(-1) === "--raw";
+  const values = raw ? args.slice(0, -1) : [...args];
+  if (values.length !== count || values.some((value) => value.startsWith("-")))
+    throw new Error(USAGE);
+  return { values, raw };
 }
+
+function entryFrom(registry: CatalogRegistry, id: string): EntryManifest {
+  const entry = registry.entries.get(id);
+  if (entry === undefined) throw new Error(`unknown catalog entry: ${id}`);
+  return entry;
+}
+
+async function printAsset(
+  entry: EntryManifest,
+  role: string,
+  file: string,
+  raw: boolean,
+): Promise<void> {
+  const contents = await readFile(resolve(entry.directory, file), "utf8");
+  if (raw) process.stdout.write(contents);
+  else {
+    console.log(`Entry: ${entry.id}`);
+    console.log(`Asset: ${role}`);
+    console.log(`File: ${file}`);
+    console.log("---");
+    process.stdout.write(contents);
+  }
+}
+
 export async function runCatalog(args: readonly string[]): Promise<void> {
   const [command, ...rest] = args;
   if (command === undefined || command === "help" || command === "--help" || command === "-h") {
@@ -27,57 +58,28 @@ export async function runCatalog(args: readonly string[]): Promise<void> {
     return;
   }
   if (command === "show") {
-    if (rest.length !== 1) throw new Error(USAGE);
-    const entry = registry.entries.get(rest[0] ?? "");
-    if (entry === undefined) throw new Error(`unknown catalog entry: ${rest[0]}`);
-    console.log(`${entry.id} (${entry.kind})\n${entry.summary}`);
-    console.log(`Requires: ${entry.requires.length ? entry.requires.join(", ") : "none"}`);
-    if (entry.kind === "concept")
-      for (const [floor, value] of Object.entries(entry.floors ?? {})) {
-        console.log(
-          `Floor ${floor}${floor === entry.defaultFloor ? " (default)" : ""}: ${value.summary}`,
-        );
-        const requirements = { ...entry.packages, ...value.packages };
-        console.log(
-          `  Packages: ${Object.entries(requirements)
-            .map(([name, range]) => `${name}@${range}`)
-            .join(", ")}`,
-        );
-        for (const file of [...entry.files, ...value.files])
-          console.log(`  ${target(file.target)}`);
-      }
-    if (entry.kind === "recipe") {
-      console.log(`Members: ${entry.recipe.members.join(", ")}`);
-      for (const member of entry.recipe.members)
-        console.log(`  ${member}: ${entry.recipe.routes[member]}`);
-      for (const file of entry.files) console.log(`  ${target(file.target)}`);
+    const { values, raw } = rawArgument(rest, 1);
+    const entry = entryFrom(registry, values[0] ?? "");
+    if (!raw) {
+      console.log(`${entry.id}\t${entry.kind}\t${entry.summary}`);
+      if (entry.kind === "recipe") console.log(`Requires: ${entry.requires.join(", ") || "none"}`);
+      console.log("Sources:");
+      for (const source of CatalogRegistry.sources(entry)) console.log(`  ${source.selector}`);
+      console.log("");
     }
+    await printAsset(entry, "design", entry.design, raw);
     return;
   }
-  if (command === "add") {
-    const ids: string[] = [];
-    let floor: string | undefined;
-    for (let index = 0; index < rest.length; index++) {
-      const argument = rest[index] ?? "";
-      if (argument === "--floor") {
-        if (floor !== undefined) throw new Error("--floor may be specified only once");
-        floor = rest[++index];
-        if (floor === undefined || floor === "" || floor.includes(","))
-          throw new Error("--floor requires one nonempty floor name without commas");
-      } else if (argument.startsWith("-")) throw new Error(`unknown option: ${argument}`);
-      else ids.push(argument);
-    }
-    if (ids.length === 0) throw new Error(USAGE);
-    const result = await addEntries(registry, ids, {
-      floor,
-      originalCommand: `catalog ${args.join(" ")}`,
-    });
-    if (result.written.length > 0) {
-      console.log("Wrote:");
-      for (const path of result.written) console.log(`  ${path}`);
-    }
-    for (const line of result.guidance) console.log(line);
-    if (result.install !== undefined) process.exitCode = 1;
+  if (command === "source") {
+    const { values, raw } = rawArgument(rest, 2);
+    const entry = entryFrom(registry, values[0] ?? "");
+    const selector = values[1] ?? "";
+    const source = CatalogRegistry.sources(entry).find(
+      (candidate) => candidate.selector === selector,
+    );
+    if (source === undefined)
+      throw new Error(`unknown source selector for ${entry.id}: ${selector}`);
+    await printAsset(entry, `source (${selector})`, source.path, raw);
     return;
   }
   throw new Error(USAGE);

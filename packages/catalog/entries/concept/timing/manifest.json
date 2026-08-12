@@ -1,45 +1,18 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "concept/timing",
   "kind": "concept",
   "summary": "Expose one host wall-clock read as explicit application data.",
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "concept": {
-    "name": "Timing",
-    "export": "timing",
-    "registration": "$concepts/timing/registry.ts"
-  },
-  "defaultFloor": "memory",
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$concepts/timing/spec.md"
-    },
-    {
-      "source": "timing.ts",
-      "target": "$concepts/timing/timing.ts"
-    },
-    {
-      "source": "timing.test.ts",
-      "target": "$concepts/timing/timing.test.ts"
-    },
-    {
-      "source": "registry.ts",
-      "target": "$concepts/timing/registry.ts",
-      "render": "floor"
-    }
-  ],
-  "floors": {
+  "design": "spec.md",
+  "sources": ["timing.ts", "timing.test.ts", "registry.ts"],
+  "implementations": {
     "memory": {
       "summary": "A process-local implementation with an injectable wall-clock reader.",
-      "files": []
+      "sources": []
     },
     "mongo": {
       "summary": "The same process-local implementation, without MongoDB storage.",
-      "files": []
+      "sources": []
     }
   }
 }

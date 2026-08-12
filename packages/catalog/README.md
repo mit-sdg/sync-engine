@@ -1,55 +1,29 @@
 # `@mit-sdg/sync-engine-catalog`
 
-`catalog` copies curated concept and recipe source into an application and
-generates registration and composition modules. The package has no runtime
-import API.
+`catalog` is a read-only browser for curated sync-engine concept and recipe source. It prints designs and explicitly selected source files so you can decide whether and where each asset belongs. It has no runtime import API and never writes to the current project.
 
-## Install and inspect
-
-Install the catalog as a development dependency, then inspect that version's
-entries. `list` and `show` read manifests and source assets without loading core
-or entry modules:
+Install it as a development dependency, then browse:
 
 ```sh
 bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.8
 bunx catalog list
-bunx catalog show <entry>
+bunx catalog show recipe/workshop-selection
+bunx catalog source recipe/workshop-selection workshop-selection.ts
 ```
 
-## Add source
-
-From an application package root, use an id from `catalog list`:
+`show` labels the entry's design and lists selectors accepted by `source`. Concept implementation selectors include their implementation name, for example:
 
 ```sh
-bunx catalog add <entry> --floor memory
+bunx catalog source concept/selecting memory/selecting.memory.ts
 ```
 
-The first add selects the project floor. Later adds use the floor in
-`catalog.lock`; a different floor is rejected and cannot migrate the project.
-Without `--floor`, all resolved concepts must share one `defaultFloor`.
-
-Before writing, the command checks package requirements. Missing or incompatible
-packages produce a `bun add --exact` command and no changes. After an add, apply
-every printed integration step; the catalog does not edit application-owned
-setup, TypeScript, package, assembly, or host files.
-
-To select the Mongo floor on the first add:
+Use `--raw` with `show` or `source` when stdout must contain only the selected file bytes:
 
 ```sh
-bunx catalog add <entry> --floor mongo
+bunx catalog show concept/selecting --raw
+bunx catalog source concept/selecting selecting.shared.ts --raw
 ```
 
-The application host creates and closes `MongoClient`. Entries that use MongoDB
-transactions require a replica set or sharded deployment; standalone MongoDB
-is unsupported for those installations.
+The printed names identify catalog assets, not proposed destinations. In an application, the current convention uses `src/vocabulary.ts`, composition modules under `src/compositions/`, and the `@design/*` alias; the catalog neither assumes nor creates that layout. Recipe assets use an entry-local relative design import because one packaged catalog typecheck covers many independent entries, while an application-owned `@design/*` alias has application-specific targets.
 
-## Ownership and updates
-
-`catalog.lock` records copied and generated files. The catalog never rewrites
-copy-owned source; it rewrites rendered registries and generated files only when
-their bytes match locked hashes. An unchanged add writes nothing. Review copied
-source and generated integration before committing.
-
-For command behavior, manifest rules, lock ownership, and failure details, see
-[`public-surface.md`](public-surface.md). Entry authors should read
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+See [`public-surface.md`](public-surface.md) for the exact command and manifest contract. Entry authors should read [`CONTRIBUTING.md`](CONTRIBUTING.md).

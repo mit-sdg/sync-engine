@@ -1,5 +1,7 @@
 import { expect, test } from "vite-plus/test";
-import {
+import { compositions } from "./incident-room.ts";
+
+const {
   AcknowledgeMitigationAlert,
   ChooseMitigation,
   CloseMitigationDiscussion,
@@ -8,7 +10,7 @@ import {
   GetIncidentDashboard,
   JoinIncidentRoom,
   RepairMitigationEffects,
-} from "./incident-room.ts";
+} = compositions;
 
 test("exports the Incident Room endpoint set", () => {
   expect({

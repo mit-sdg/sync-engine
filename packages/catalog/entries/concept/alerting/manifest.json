@@ -1,66 +1,18 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "concept/alerting",
   "kind": "concept",
   "summary": "Keep recipient alerts pending through retries until acknowledgement.",
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "concept": {
-    "name": "Alerting",
-    "export": "alerting",
-    "registration": "$concepts/alerting/registry.ts"
-  },
-  "defaultFloor": "memory",
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$concepts/alerting/spec.md"
-    },
-    {
-      "source": "alerting.shared.ts",
-      "target": "$concepts/alerting/alerting.shared.ts"
-    },
-    {
-      "source": "alerting.conformance.ts",
-      "target": "$concepts/alerting/alerting.conformance.ts"
-    },
-    {
-      "source": "registry.ts",
-      "target": "$concepts/alerting/registry.ts",
-      "render": "floor"
-    }
-  ],
-  "floors": {
+  "design": "spec.md",
+  "sources": ["alerting.shared.ts", "alerting.conformance.ts", "registry.ts"],
+  "implementations": {
     "memory": {
       "summary": "Process-local indexes with injectable identity allocation and retained closed alerts.",
-      "files": [
-        {
-          "source": "alerting.memory.ts",
-          "target": "$concepts/alerting/alerting.memory.ts"
-        },
-        {
-          "source": "alerting.memory.test.ts",
-          "target": "$concepts/alerting/alerting.memory.test.ts"
-        }
-      ]
+      "sources": ["alerting.memory.ts", "alerting.memory.test.ts"]
     },
     "mongo": {
       "summary": "MongoDB alerts with injectable identities, atomic recipient-cause deduplication, and conditional acknowledgement.",
-      "packages": {
-        "mongodb": "^6.20.0"
-      },
-      "files": [
-        {
-          "source": "alerting.mongo.ts",
-          "target": "$concepts/alerting/alerting.mongo.ts"
-        },
-        {
-          "source": "alerting.mongo.test.ts",
-          "target": "$concepts/alerting/alerting.mongo.test.ts"
-        }
-      ]
+      "sources": ["alerting.mongo.ts", "alerting.mongo.test.ts"]
     }
   }
 }

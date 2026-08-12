@@ -1,3 +1,4 @@
+import design from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
@@ -84,19 +85,19 @@ const incidentDashboard = former(
     }),
 );
 
-export const CreateIncidentRoom = endpoint("/incident-rooms/create", ({ name, host, room }) =>
+const CreateIncidentRoom = endpoint("/incident-rooms/create", ({ name, host, room }) =>
   receive({ name, host })
     .then(Gathering.create({ name, host }).responds({ gathering: room }))
     .then(respond({ room })),
 );
 
-export const JoinIncidentRoom = endpoint("/incident-rooms/join", ({ room, member, membership }) =>
+const JoinIncidentRoom = endpoint("/incident-rooms/join", ({ room, member, membership }) =>
   receive({ room, member })
     .then(Gathering.join({ gathering: room, member }).responds({ membership }))
     .then(respond({ membership })),
 );
 
-export const ChooseMitigation = endpoint(
+const ChooseMitigation = endpoint(
   "/incident-rooms/choose",
   ({ room, mitigation, selection, at, discussion, member }) =>
     receive({ room, mitigation })
@@ -122,7 +123,7 @@ export const ChooseMitigation = endpoint(
       .then(respond({ selection, discussion })),
 );
 
-export const ContributeUpdate = endpoint(
+const ContributeUpdate = endpoint(
   "/incident-rooms/contribute",
   ({ room, member, text, discussion, at, response }) =>
     receive({ room, member, text }).then(
@@ -143,7 +144,7 @@ export const ContributeUpdate = endpoint(
     ),
 );
 
-export const CloseMitigationDiscussion = endpoint(
+const CloseMitigationDiscussion = endpoint(
   "/incident-rooms/close-discussion",
   ({ room, discussion, at }) =>
     receive({ room }).then(
@@ -157,18 +158,16 @@ export const CloseMitigationDiscussion = endpoint(
     ),
 );
 
-export const AcknowledgeMitigationAlert = endpoint(
-  "/incident-rooms/acknowledge",
-  ({ alert, member }) =>
-    receive({ alert, member })
-      .then(Alerting.acknowledge({ alert, recipient: member }).responds({ alert }))
-      .then(respond({ alert })),
+const AcknowledgeMitigationAlert = endpoint("/incident-rooms/acknowledge", ({ alert, member }) =>
+  receive({ alert, member })
+    .then(Alerting.acknowledge({ alert, recipient: member }).responds({ alert }))
+    .then(respond({ alert })),
 );
 
 // Repair one member from the original selection-time roster. The route does not
 // enumerate current members, so it can repair a departed recipient without
 // backfilling an alert for somebody who joined after the selection.
-export const RepairMitigationEffects = endpoint(
+const RepairMitigationEffects = endpoint(
   "/incident-rooms/repair",
   ({ room, selection, member, at, discussion, alert }) =>
     receive({ room, selection, member })
@@ -201,6 +200,29 @@ export const RepairMitigationEffects = endpoint(
       .then(respond({ selection, discussion, alert })),
 );
 
-export const GetIncidentDashboard = endpoint("/incident-rooms/dashboard", ({ room }) =>
+const GetIncidentDashboard = endpoint("/incident-rooms/dashboard", ({ room }) =>
   receive({ room }).then(respond({ dashboard: incidentDashboard({ room }) })),
 );
+
+export { design };
+
+export const compositions = {
+  CreateIncidentRoom,
+  JoinIncidentRoom,
+  ChooseMitigation,
+  ContributeUpdate,
+  CloseMitigationDiscussion,
+  AcknowledgeMitigationAlert,
+  RepairMitigationEffects,
+  GetIncidentDashboard,
+};
+
+export const views = {
+  memberOfRoom,
+  notMemberOfRoom,
+  openMitigationDiscussion,
+};
+
+export const formers = {
+  incidentDashboard,
+};

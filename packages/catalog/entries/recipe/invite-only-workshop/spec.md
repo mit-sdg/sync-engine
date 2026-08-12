@@ -16,7 +16,7 @@ inviter to the authenticated caller when issuing or revoking, and bind the invit
 when accepting, declining, repairing, or reading the private invitation list. An
 accepted Invitation is durable evidence even when the later Gathering join faults.
 
-## Endpoints
+## Compositions
 
 - `CreateInviteOnlyWorkshop` — `/invite-workshops/create`
 - `IssueWorkshopInvitation` — `/invite-workshops/invite`
@@ -25,6 +25,10 @@ accepted Invitation is durable evidence even when the later Gathering join fault
 - `RevokeWorkshopInvitation` — `/invite-workshops/revoke`
 - `RepairAcceptedWorkshopInvitation` — `/invite-workshops/repair`
 - `GetWorkshopInvitations` — `/invite-workshops/invitations`
+
+## Formers
+
+`pendingInvitations`.
 
 ## Failure and repair
 

@@ -1,4 +1,4 @@
-# Member Reservations recipe
+# Member Reservations
 
 ## Purpose
 
@@ -17,12 +17,16 @@ eligibility snapshot; leaving later does not cancel an existing Reservation. A p
 adapter must bind claimant inputs to the authenticated caller. Reading another
 claimant's reservations requires authorization.
 
-## Endpoints
+## Compositions
 
 - `ReserveForMember` — `/member-reservations/reserve`
 - `CancelMemberReservation` — `/member-reservations/cancel`
 - `FulfillMemberReservation` — `/member-reservations/fulfill`
 - `GetMemberReservations` — `/member-reservations/get`
+
+## Formers
+
+`activeReservations`.
 
 ## Failure
 

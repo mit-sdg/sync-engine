@@ -1,4 +1,4 @@
-# Workshop Selection recipe
+# Workshop Selection
 
 ## Purpose
 
@@ -15,12 +15,16 @@ A current item may be chosen only for a known Gathering. Selecting deliberately 
 not enforce that rule because Scope is opaque to it. Workshop host and member values
 are attribution unless the containing application binds authenticated identities.
 
-## Endpoints
+## Compositions
 
 - `CreateWorkshop` — `/workshops/create`
 - `JoinWorkshop` — `/workshops/join`
 - `ChooseWorkshopItem` — `/workshops/choose`
 - `GetWorkshop` — `/workshops/get`
+
+## Formers
+
+`workshop`.
 
 ## Failure
 

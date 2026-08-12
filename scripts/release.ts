@@ -251,7 +251,6 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
     manifest.engines = engines;
     engines.node = facts.node;
     const peerDependencies = object(manifest.peerDependencies) ?? {};
-    manifest.peerDependencies = peerDependencies;
     for (const peerId of workspace.peerWorkspaceIds) {
       const peer = workspaceById(peerId);
       const peerVersion = workspaceVersions.get(peer.packageName);
@@ -270,15 +269,8 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
         delete peerDependencies[dependency];
       }
     }
-    projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
-  }
-
-  for (const path of catalogEntryManifests) {
-    const manifest = object(JSON.parse(sources.get(path) ?? ""));
-    const requirements = object(manifest?.packages);
-    if (manifest === undefined || requirements === undefined)
-      throw new Error(`${path} is missing packages`);
-    requirements[coreWorkspace.packageName] = facts.version;
+    if (Object.keys(peerDependencies).length > 0) manifest.peerDependencies = peerDependencies;
+    else delete manifest.peerDependencies;
     projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
   }
 
