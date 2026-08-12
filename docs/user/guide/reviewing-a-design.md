@@ -8,12 +8,17 @@ boundaries are settled.
 ## 1. Inventory the design
 
 For each concept, record its purpose, managed entities, owned facts, and external
-identities. For each reaction, record its trigger, reads, effects, and the
-application decision it expresses. For each endpoint, record its route, admitted
-input, concepts reached, and possible answers.
+identities. For each larger composition group, record its overall purpose and the
+names of its executable reaction or endpoint groups. For each reaction, record
+its trigger, reads, effects, and the application decision it expresses. For each
+endpoint, record its route, admitted input, concepts reached, and possible
+answers. Inventory independently meaningful views and formers separately.
 
-If a reaction's decision cannot be stated, it may reconstruct a missing action or
-connect an artificial split.
+Confirm that registered specifications live under `design/concepts/`, composition
+prose under `design/compositions/`, and any application-wide type-role edges and
+pure computations in `design/vocabulary.md`. The authored files should explain
+intent without copying generated mechanics. If a reaction's decision cannot be
+stated, it may reconstruct a missing action or connect an artificial split.
 
 ## 2. Review each concept
 
@@ -36,7 +41,9 @@ boundary defect.
 Trace the specification in both directions. Every purpose commitment must appear
 in the principle and be supported by actions, queries, refusals, and owned state;
 every declared member and owned fact must support a commitment. The specification
-is authored evidence, not proof of implementation behavior. Apply the [writing
+is authored evidence, not proof of implementation behavior. Compare it with the
+executable declaration and its focused test; use generated read-back only to
+confirm what the selected assembly contains. Apply the [writing
 conventions](../reference/concept-specification.md#writing-conventions) and
 [boundary criteria](../design.md#choosing-concept-boundaries).
 
@@ -55,7 +62,10 @@ For every reaction and endpoint:
 
 Trace cycles from effects back to triggers. Record each cross-concept invariant's
 false interval and repair behavior. Consolidate duplicated policy into a named
-view.
+view. Confirm the canonical `compositions`, `views`, and `formers` categories
+remain separate, whether one group exports all three or assembly collects
+separately owned modules. Assembly must install every view and former exactly
+once. Reuse by import must not become re-export from another owner.
 
 ## 4. Trace scenarios end to end
 

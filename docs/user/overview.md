@@ -12,13 +12,12 @@ A registered application moves from declarations to an assembly and,
 optionally, to a public boundary in this order:
 
 ```text
-concept specifications + TypeScript classes
+authored design
+  concept specifications + composition prose + optional vocabulary
                     |
                     v
-       registrations + concept set
-                    |
-                    v
- composition: reactions, views, formers, endpoints
+executable declarations
+  classes + registrations + reactions, endpoints, views, and formers
                     |
                     v
                   assembly
@@ -33,10 +32,48 @@ concept specifications + TypeScript classes
           typed client ------+
 ```
 
-Concepts define independent behavior, composition connects it, and assembly
-installs one combination. Tooling and a generated client are optional. The
-lower-level `vocabulary(...)` path can assemble concepts without specification
-registration.
+Authored design explains the intended application. Executable TypeScript declares
+the application the engine can assemble. Generated read-back reports what one
+assembly contains; it is derived evidence, not the source of either the authored
+design or runtime semantics. Concepts define independent behavior, composition
+connects it, and assembly installs one combination. Tooling and a generated
+client are optional. The lower-level `vocabulary(...)` path can assemble concepts
+without specification registration.
+
+## Application-owned design and source
+
+A conventional application keeps authored design separate from executable source:
+
+```text
+design/
+  concepts/Name.md
+  compositions/Group.md
+  vocabulary.md              # optional
+src/
+  concepts/Name.ts
+  concepts/Name.registry.ts  # optional
+  compositions/Group.ts
+  vocabulary.ts
+tests/
+  concepts/Name.test.ts
+  compositions/Group.test.ts
+```
+
+Configure the application's TypeScript or bundler Markdown mapping so
+`@design/*` resolves to `design/*`. Registries import specifications by stable
+application path, such as `@design/concepts/Name.md`, rather than by proximity to
+the implementation. Applications do not add a `design/README.md` or design
+index: the registered concept files, composition modules, and optional vocabulary
+module are the entrypoints.
+
+`design/concepts/Name.md` is the registered specification for one concept.
+`design/compositions/Group.md` explains one larger executable composition group;
+`src/compositions/Group.ts` imports and exports it as `spec` through
+`@design/compositions/Group.md`. `design/vocabulary.md`, when needed, records
+application-wide cross-concept type roles and named pure computations. The matching `src/vocabulary.ts` is the
+conventional `conceptSet(...)` module, not a semantically special filename; it
+imports and re-exports `@design/vocabulary.md` as `spec` when that design file is
+present.
 
 ## Concepts own behavior and state
 

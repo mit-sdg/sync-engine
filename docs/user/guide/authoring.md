@@ -20,13 +20,40 @@ module names and package scripts to the application. The example's
 The linked files contain the imports, declarations, and test setup omitted from
 the excerpts.
 
+## Organize application-owned design
+
+Configure `@design/*` to resolve to `design/*`, then use these paired locations:
+
+| Authored design                 | Executable source and focused test                                                     |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| `design/concepts/Name.md`       | `src/concepts/Name.ts`, optional `Name.registry.ts`, and `tests/concepts/Name.test.ts` |
+| `design/compositions/Group.md`  | `src/compositions/Group.ts` and `tests/compositions/Group.test.ts`                     |
+| optional `design/vocabulary.md` | `src/vocabulary.ts`                                                                    |
+
+Do not add a design README or index. A concept registry imports
+`@design/concepts/Name.md`; `src/vocabulary.ts` collects the registrations in
+`conceptSet(...)`. When `design/vocabulary.md` exists, `src/vocabulary.ts`
+imports and exports it as `spec`. The filename is conventional and has no
+special registration or runtime meaning. Each `src/compositions/Group.ts`
+likewise imports and exports `@design/compositions/Group.md` as `spec`.
+
+Write each composition document around its overall purpose. Under
+`## Compositions`, add `###` entries whose names match the larger executable
+reaction or endpoint groups. Add `## Views` or `## Formers` only for reads with
+independent application meaning. Keep the canonical application categories
+separate: `compositions` contains the larger reaction and endpoint groups, while
+`views` and `formers` are separately owned. A self-contained group may export
+all three records; an application with shared read modules may build the same
+shape at assembly. Install every read exactly once. Another group may reuse an
+imported read without re-exporting it.
+
 ## Define one behavior
 
 Design the concept's purpose, principle, owned state, actions, queries, and
 expected refusals before writing its class. [Designing with
 concepts](../design.md) gives the criteria.
 
-_Source: [`examples/operations-room/src/concepts/alerting/spec.md`](../../../examples/operations-room/src/concepts/alerting/spec.md)_
+_Source: [`examples/operations-room/design/concepts/Alerting.md`](../../../examples/operations-room/design/concepts/Alerting.md)_
 
 ````text
 ## Actions
@@ -59,7 +86,7 @@ _openFor (recipient: Person) : many (alert: Alert, subject: Subject)
 Non-underscore prototype methods are actions; underscore-prefixed methods are
 queries. Use ECMAScript `#private` methods or module functions for helpers.
 
-_Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../../examples/operations-room/src/concepts/alerting/alerting.ts)_
+_Source: [`examples/operations-room/src/concepts/Alerting.ts`](../../../examples/operations-room/src/concepts/Alerting.ts)_
 
 ```ts
   raise({ recipient, subject }: { recipient: string; subject: string }) {
@@ -79,11 +106,10 @@ _Source: [`examples/operations-room/src/concepts/alerting/alerting.ts`](../../..
 ```
 
 Test the principle against the class directly, as
-[`alerting.test.ts`](../../../examples/operations-room/src/concepts/alerting/alerting.test.ts)
-does with deterministic identities. This separates concept behavior from
-assembly and composition.
+`tests/concepts/Alerting.test.ts` does with deterministic identities. This
+separates concept behavior from assembly and composition.
 
-_Source: [`examples/operations-room/src/concepts/alerting/registry.ts`](../../../examples/operations-room/src/concepts/alerting/registry.ts)_
+_Source: [`examples/operations-room/src/concepts/Alerting.registry.ts`](../../../examples/operations-room/src/concepts/Alerting.registry.ts)_
 
 ```ts
 export const alerting = registerConcept({
@@ -100,7 +126,7 @@ export const alerting = registerConcept({
 `conceptSet(...)` gives registrations their application names and derives the
 inert authoring references and vocabulary.
 
-_Source: [`examples/operations-room/src/concept-set.ts`](../../../examples/operations-room/src/concept-set.ts)_
+_Source: [`examples/operations-room/src/vocabulary.ts`](../../../examples/operations-room/src/vocabulary.ts)_
 
 ```ts
 export const operationsRoomConcepts = conceptSet({
@@ -124,15 +150,19 @@ Keep concept implementations independent of peer concepts and put
 cross-concept decisions in composition. Operations Room installs two reactions
 after a mitigation is selected:
 
-_Source: [`examples/operations-room/src/composition/packs.ts`](../../../examples/operations-room/src/composition/packs.ts)_
+_Source: [`examples/operations-room/src/compositions/MitigationDiscussion.ts`](../../../examples/operations-room/src/compositions/MitigationDiscussion.ts)_
 
 ```ts
 export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
   when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
+```
 
-// .where() after .when() filters which matchings of the trigger cause the action
-// to fire — here we only alert responders who are members of the room.
+The independently selectable alert pack states the other consequence:
+
+_Source: [`examples/operations-room/src/compositions/MitigationAlerts.ts`](../../../examples/operations-room/src/compositions/MitigationAlerts.ts)_
+
+```ts
 export const SelectedMitigationAlertsResponders = reaction(({ room, selection, responder }) =>
   when(Selecting.choose({ scope: room }).responds({ selection }))
     .where(Gathering._members({ gathering: room }).is({ member: responder }))
@@ -150,7 +180,7 @@ matching and failure.
 
 Name reusable or replaceable policy as views:
 
-_Source: [`examples/operations-room/src/composition/responders-may-contribute.ts`](../../../examples/operations-room/src/composition/responders-may-contribute.ts)_
+_Source: [`examples/operations-room/src/views/RespondersMayContribute.ts`](../../../examples/operations-room/src/views/RespondersMayContribute.ts)_
 
 ```ts
 export const responderMayContribute = view(
@@ -169,7 +199,7 @@ without changing the endpoints.
 A former constructs a current result tree from queries, views, or other
 formers:
 
-_Source: [`examples/operations-room/src/composition/room.ts`](../../../examples/operations-room/src/composition/room.ts)_
+_Source: [`examples/operations-room/src/formers/Room.ts`](../../../examples/operations-room/src/formers/Room.ts)_
 
 ```ts
 export const responderRoster = former("the responder roster of (room)", ({ room }, { responder }) =>
@@ -182,7 +212,7 @@ export const responderRoster = former("the responder roster of (room)", ({ room 
 ```
 
 The complete
-[`roomDashboard`](../../../examples/operations-room/src/composition/room.ts) combines
+[`roomDashboard`](../../../examples/operations-room/src/formers/Room.ts) combines
 queries from all four concepts and handles optional current state. Use the [read
 construction cookbook](read-construction.md) for `no`, `whether`, folds, splicing, and
 cardinality contrasts; [Views and formers](../reference/semantics.md#views-and-formers)
@@ -192,7 +222,7 @@ defines production behavior.
 
 ### Receive, ask, respond
 
-_Source: [`examples/operations-room/src/composition/room.ts`](../../../examples/operations-room/src/composition/room.ts)_
+_Source: [`examples/operations-room/src/compositions/Room.ts`](../../../examples/operations-room/src/compositions/Room.ts)_
 
 ```ts
 export const ChooseMitigation = endpoint(
@@ -226,22 +256,24 @@ export function assembleOperationsRoom({
   instances = {},
 }: OperationsRoomOptions = {}) {
   const policy = contributions === "responders" ? respondersMayContribute : hostMayContribute;
-
   const selected = { ...operationsRoomConcepts.implementations(), ...instances };
 
   return assemble({
     vocabulary,
     instances: selected,
     composition: {
-      room,
-      discussion: discussion ? { SelectedMitigationOpensDiscussion } : {},
-      alerts: alerts ? { SelectedMitigationAlertsResponders } : {},
-      policy,
-      contributions: contributionEndpoints({
-        denied: policy.deniedContribution,
-        mayContribute: policy.responderMayContribute,
-        mayNotContribute: policy.responderMayNotContribute,
-      }),
+      compositions: {
+        room,
+        mitigationDiscussion: discussion ? mitigationDiscussion : {},
+        mitigationAlerts: alerts ? mitigationAlerts : {},
+        contributions: contributionEndpoints({
+          denied: policy.deniedContribution,
+          mayContribute: policy.responderMayContribute,
+          mayNotContribute: policy.responderMayNotContribute,
+        }),
+      },
+      views: { contributionPolicy: policy },
+      formers: roomFormers,
     },
   });
 }
@@ -267,6 +299,7 @@ import { assembleOperationsRoom } from "./src/assembly.ts";
 export default {
   assemble: assembleOperationsRoom,
   title: "Operations room",
+  vocabulary: { module: new URL("./src/vocabulary.ts", import.meta.url) },
 };
 ```
 

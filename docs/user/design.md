@@ -5,7 +5,7 @@ composition. It assumes the [application model](overview.md). See the
 [authoring guides](index.md#application-authoring-path) for the TypeScript API,
 [execution semantics](reference/semantics.md) for runtime behavior, and the
 [concept specification reference](reference/concept-specification.md) for the
-`spec.md` format.
+registered concept-file format.
 
 A **concept** is a semantic mechanism with one purpose, owned state, actions, and
 queries. Its purpose and principle can be understood without reading another
@@ -35,6 +35,51 @@ through its own actions. Cross-concept policy, workflow, notification, adaptatio
 and repair belong in composition. This puts each dependency in one inspectable
 rule and permits a concept to participate in another composition.
 
+## Recording the application design
+
+Keep authored intent, executable declarations, and generated evidence distinct.
+The application owns concept specifications under `design/concepts/Name.md` and
+lean composition explanations under `design/compositions/Group.md`. It may add
+`design/vocabulary.md` when application-wide type roles or named pure
+computations need one shared record. Do not add a design README or index, and do
+not copy generated paths, binding mechanics, or other read-back into authored
+design.
+
+A composition document opens with the group's overall purpose. Its
+`## Compositions` section has one `###` entry per larger executable reaction or
+endpoint group, using the same group names as TypeScript. Optional `## Views` and
+`## Formers` sections describe only reads that carry an independently meaningful
+application decision or result. The canonical application shape keeps
+`compositions`, `views`, and `formers` separate: `compositions` contains the
+larger reaction and endpoint groups, while each read has one owner and is
+installed exactly once. Several groups may reuse a read by import without
+re-exporting it. A composition document should not enumerate hundreds of
+individual reactions or reproduce declaration mechanics. Failure names remain ordinary application choices; this convention
+defines no reserved failure keywords.
+
+When cross-concept type roles need a structured application-wide record,
+`design/vocabulary.md` uses one edge per line:
+
+````md
+## Types
+
+```types
+Consumer.External <- Owner.Owned
+```
+````
+
+The identity allocated and owned by the role on the right is supplied to the
+opaque external role on the left. The edge does not transfer ownership and does
+not promise TypeScript assignability, runtime validation, a shared
+representation, or an exhaustive inventory. Record named pure computations in
+this vocabulary document as well. Views remain composition because they express
+application decisions over current state rather than pure vocabulary
+computations.
+
+These files state design intent. TypeScript classes, registrations, reactions,
+endpoints, views, and formers are the executable declarations. Generated
+read-back describes the selected assembly and does not replace either layer.
+
 ## Purpose and principle
 
 A purpose states the useful need that justifies the concept. A usable purpose:
@@ -62,7 +107,7 @@ through its queries, and include the refusals that distinguish the mechanism. A
 principle that requires a peer action describes a workflow or exposes a wrong
 boundary.
 
-[Gathering](../../examples/reading-circle/src/concepts/gathering/spec.md) is the
+[Gathering](../../examples/reading-circle/design/concepts/Gathering.md) is the
 throughline. It creates a named gathering, establishes its host as a member,
 allows another person to join and leave, refuses duplicate membership, and makes
 membership visible. The scenario needs no selecting, discussing, or alerting
@@ -208,10 +253,10 @@ An initial Operations Room model can place membership, current mitigation,
 discussion responses, and alerts in one `Room` concept. These behaviors have
 different state, purposes, authority questions, reuse patterns, and failure
 rules, so the example separates them into
-[Gathering](../../examples/operations-room/src/concepts/gathering/spec.md),
-[Selecting](../../examples/operations-room/src/concepts/selecting/spec.md),
-[Discussing](../../examples/operations-room/src/concepts/discussing/spec.md), and
-[Alerting](../../examples/operations-room/src/concepts/alerting/spec.md). Reactions
+[Gathering](../../examples/operations-room/design/concepts/Gathering.md),
+[Selecting](../../examples/operations-room/design/concepts/Selecting.md),
+[Discussing](../../examples/operations-room/design/concepts/Discussing.md), and
+[Alerting](../../examples/operations-room/design/concepts/Alerting.md). Reactions
 state the application decisions that a selection opens a discussion and alerts
 responders.
 
@@ -290,11 +335,9 @@ resource, owner of every consulted fact, authorization condition, and effect.
 An identifier in a request body is a claim, not authentication.
 
 Composition may name replaceable policy as a view. Operations Room supplies
-[host-only](../../examples/operations-room/src/composition/host-may-contribute.ts)
-and [responder](../../examples/operations-room/src/composition/responders-may-contribute.ts)
-implementations of the same policy contract without changing concepts or
-endpoints. A security-critical decision must still be enforced by the owner
-action so direct calls cannot bypass it. If the decision must remain true when
+host-only and responder implementations of the same policy contract without
+changing concepts or endpoints. A security-critical decision must still be
+enforced by the owner action so direct calls cannot bypass it. If the decision must remain true when
 shared durable state changes, enforce it in the same storage transaction.
 
 ## Composition hazards

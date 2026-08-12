@@ -1,7 +1,8 @@
 # Concept specification format
 
-A concept specification is Markdown text, normally `spec.md`, passed to
-`registerConcept`. The parser produces a TypeScript-independent `ConceptSpec`
+A concept specification is Markdown text passed to `registerConcept`. Application
+source conventionally keeps it at `design/concepts/Name.md` and imports it through
+`@design/concepts/Name.md`. The parser produces a TypeScript-independent `ConceptSpec`
 containing purpose, principle, action and query declarations, refusals,
 documentation, and source locations.
 
@@ -311,7 +312,7 @@ imports the module selected by `--vocabulary-module`, or uses
 The default filename is not part of registration semantics. Direct
 `registerConcept(...)` calls and registrations imported from optional registry
 modules use the same runtime discovery path. Discovery does not depend on a
-`spec.md` filename or an adjacent `registry.ts`; Markdown elsewhere in the
+Markdown filename, location, or registry module; Markdown elsewhere in the
 project is ignored unless a selected registration loaded it.
 
 Static analysis is used only where runtime reflection is insufficient: locating
@@ -364,12 +365,16 @@ runtime endpoint values.
 ## Caller obligations
 
 Import the Markdown as text and pass it to `registerConcept`, then include that
-registration in the application's `conceptSet`. A registry module and an
-adjacent `spec.md` remain a useful convention but are optional; direct
-registration in `concept-set.ts` and names such as `design/concepts/Name.md` are
-supported. After signature changes, run `sync-engine check`; after behavior or
-State changes, run the relevant principle, implementation, and backend
-constraint tests.
+registration in the application's `conceptSet`. In a conventional application,
+configure `@design/*` to resolve to `design/*`, import
+`@design/concepts/Name.md` from `src/concepts/Name.registry.ts` or the direct
+registration site, and collect registrations in `src/vocabulary.ts`. Registry
+modules remain optional, and neither these paths nor filenames affect
+registration semantics or discovery.
+
+After signature changes, run `sync-engine check`; after behavior or State
+changes, run the relevant principle, implementation, and backend constraint
+tests.
 
 See [Define one behavior](../guide/authoring.md#define-one-behavior) for a worked example and [CLI
 reference](cli.md#sync-engine-check) for command behavior.

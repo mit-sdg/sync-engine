@@ -1,7 +1,7 @@
 # Concept specification processing
 
 This document maps how this checkout extracts and uses machine-readable facts
-from `spec.md`, including enforcement gaps. The supported [concept specification
+from registered concept Markdown, including enforcement gaps. The supported [concept specification
 format](../user/reference/concept-specification.md) remains the consumer contract;
 [engine architecture](architecture.md) defines surrounding boundaries.
 
@@ -137,21 +137,31 @@ metadata. This path omits `registerConcept` conformance checks.
 
 ### `sync-engine check`
 
-The command discovers `spec.md`, reads the neighboring `registry.ts`, and finds
-the class identifier passed to `registerConcept`. That identifier must be a
-named import whose local name matches a class declared directly in the target
-file. The checker resolves the import path relative to the registry without
-TypeScript module resolution, support for aliased imports, or re-export
-traversal.
-It compares direct, non-static, non-TypeScript-`private` methods with parsed
-action/query names.
+The installed command discovers concepts from registrations, not Markdown paths.
+With `--config`, `assembledConcepts` selects application-owned canonical concepts
+from the assembled manifest. Without a config, `loadRegisteredConcepts` imports
+the selected vocabulary module and reads the classes and specification metadata
+retained by `conceptSet`. Both paths reject a selected registration without a
+parsed specification. The specification's filename and location therefore have
+no role after its registration module imports it.
+
+Static discovery in `registeredClassSources` locates only the TypeScript class
+source needed for erased input checks. It scans `conceptSet(...)` calls whose
+registration map is an object literal or local object variable, follows local
+and imported object spreads, and follows direct or imported registration
+variables to `registerConcept(...)`. The registered class must be a named import
+with a directly resolvable filesystem module specifier. This locator is
+syntactic: it does not apply TypeScript path mapping to registration or class
+module specifiers and does not follow class re-exports. Runtime registration
+already owns member agreement; source checking compares only members whose input
+names runtime reflection could not recover and verifies that the located class
+matches the registered canonical class.
 
 `checkerFor` loads the nearest `tsconfig.json`, preserving compiler options,
 module resolution, paths, and project references. Config-included concepts share
 a cached Program; an excluded concept source is added explicitly. Without a
-config, one NodeNext Program starts from the class source. Registry-to-class
-discovery remains syntactic and direct, but parameter type imports and
-re-exports use normal TypeScript resolution.
+config, one NodeNext Program starts from the class source. Parameter types and
+inherited method declarations use normal TypeScript resolution.
 
 For inputs, the checker supports no parameter, one flat untyped destructuring,
 or one typed parameter whose semantic type resolves to a finite object key set.
@@ -170,12 +180,14 @@ contributes no keys, while `Record<"known", never>` contributes its finite key.
 Diagnostics retain the parameter type, first unsupported operation, declaration
 location, relevant TypeScript diagnostic, and differing key sets.
 
-The checker does not traverse base classes. Runtime registration can therefore
-accept an inherited member that the source checker rejects.
-`scripts/check-specs.ts` checks examples, catalog concept entries, and the
-packed application fixture. The installed command defaults to `src/concepts`;
-an existing root with no concepts is valid for the concept-free setup
-application.
+`scripts/check-specs.ts` separately passes the example, catalog-entry, and packed
+fixture roots to the older `conceptDirectories` helper. That repository gate
+checks only directories containing adjacent `spec.md` and `registry.ts` files;
+it does not discover application design files such as
+`design/concepts/Name.md`. This scan is not installed-command discovery. The
+installed command defaults to importing `src/concept-set.ts` only as a no-option
+compatibility convention. An empty selected `conceptSet({})` is valid for a
+concept-free application.
 
 ### Runtime and tooling
 
@@ -227,14 +239,13 @@ implementation behavior.
 
 ## Known gaps
 
-| Current behavior                                        | Consequence                                           |
-| ------------------------------------------------------- | ----------------------------------------------------- |
-| Named specification types are not resolved              | Parsed references do not prove a declaration exists   |
-| Runtime role recovery reads function text               | Runtime registration can skip an erased comparison    |
-| Registration sees inheritance; source checking does not | The two checks can disagree on inherited members      |
-| Direct query roots bypass `queryRows`                   | Cardinality enforcement depends on the call path      |
-| Parsed action bodies are not interpreted                | Conditions and effects require implementation tests   |
-| State has no parsed representation                      | State claims require implementation and backend tests |
+| Current behavior                           | Consequence                                           |
+| ------------------------------------------ | ----------------------------------------------------- |
+| Named specification types are not resolved | Parsed references do not prove a declaration exists   |
+| Runtime role recovery reads function text  | Runtime registration can skip an erased comparison    |
+| Direct query roots bypass `queryRows`      | Cardinality enforcement depends on the call path      |
+| Parsed action bodies are not interpreted   | Conditions and effects require implementation tests   |
+| State has no parsed representation         | State claims require implementation and backend tests |
 
 ## Verification ownership
 
