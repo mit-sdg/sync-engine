@@ -5,8 +5,11 @@
  * Authenticating proves a username. Sessioning holds an opaque session for an
  * external subject. Neither names the other; the adaptation lives here.
  */
+import spec from "@design/compositions/Sessions.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { concepts } from "../concept-set.ts";
+
+export { spec };
+import { concepts } from "../vocabulary.ts";
 import {
   credentialsInput,
   issuedSessionOutput,

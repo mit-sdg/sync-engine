@@ -6,5 +6,6 @@ export default {
   assemble: assembleMessageBoard,
   title: "Message board",
   wireName: "MessageBoardWire",
+  vocabulary: { module: new URL("./src/vocabulary.ts", import.meta.url) },
   projections: [httpWire({ policy: messageBoardPolicy, name: "MessageBoardWireHttp" })],
 };

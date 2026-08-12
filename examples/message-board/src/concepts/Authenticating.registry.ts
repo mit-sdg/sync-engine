@@ -5,8 +5,8 @@ import {
   InvalidUsername,
   UsernameTaken,
   WeakPassword,
-} from "./authenticating.ts";
-import spec from "./spec.md" with { type: "text" };
+} from "./Authenticating.ts";
+import spec from "@design/concepts/Authenticating.md" with { type: "text" };
 
 export const authenticating = registerConcept({
   class: AuthenticatingConcept,
