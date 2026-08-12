@@ -10,6 +10,7 @@ Start with [Getting started](guide/getting-started.md), then read the
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                   |
 | Design concepts                             | [Designing with concepts](design.md)                                                                                                                       |
+| Organize application design files           | [Organize application-owned design](guide/authoring.md#organize-application-owned-design)                                                                  |
 | Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
 | Initialize the first application            | [Getting started](guide/getting-started.md)                                                                                                                |
 | Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                |

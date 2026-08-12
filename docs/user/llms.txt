@@ -41,6 +41,7 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
 - Keep concept implementations independent of peer concepts and application composition.
+- Keep application-owned Markdown design distinct from executable declarations and generated read-back.
 - Treat generated TypeScript as a caller contract. Add explicit validators for
   runtime values.
 - Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.
