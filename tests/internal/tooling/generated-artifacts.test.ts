@@ -138,7 +138,7 @@ describe("generated application artifacts", () => {
 
   sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
     Check registered concepts against erased TypeScript source and optionally inspect application diagnostics.
-    Without a config, defaults to the conventional src/concept-set.ts vocabulary module.\n`;
+    Without a config, uses src/concept-set.ts as a compatibility default.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,
       encoding: "utf8",
@@ -503,29 +503,37 @@ describe("an artifact configuration's defaults", () => {
     }
   });
 
-  test("a title and an assembly are enough", () => {
-    const resolved = resolveApplication(
-      {
-        assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
-        title: "Reading circle",
-      },
-      configUrl,
-    );
-    expect({
-      directory: resolved.directory.href,
-      specification: resolved.specification,
-      wire: resolved.wire,
-      wireName: resolved.wireName,
-      wireBanner: resolved.wireBanner,
-      vocabularyFrom: resolved.vocabularyFrom,
-    }).toEqual({
-      directory: new URL("./generated/", configUrl).href,
-      specification: "reading-circle.md",
-      wire: "wire.ts",
-      wireName: "ReadingCircleWire",
-      wireBanner: undefined,
-      vocabularyFrom: { from: "../src/concept-set.ts", export: "vocabulary" },
-    });
+  test("a title and an assembly are enough with the compatibility source name", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "sync-engine-default-config-"));
+    try {
+      await mkdir(join(directory, "src"));
+      await writeFile(join(directory, "src/concept-set.ts"), "export const vocabulary = {};\n");
+      const compatibilityConfigUrl = pathToFileURL(join(directory, "generated.config.ts"));
+      const resolved = resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
+          title: "Reading circle",
+        },
+        compatibilityConfigUrl,
+      );
+      expect({
+        directory: resolved.directory.href,
+        specification: resolved.specification,
+        wire: resolved.wire,
+        wireName: resolved.wireName,
+        wireBanner: resolved.wireBanner,
+        vocabularyFrom: resolved.vocabularyFrom,
+      }).toEqual({
+        directory: new URL("./generated/", compatibilityConfigUrl).href,
+        specification: "reading-circle.md",
+        wire: "wire.ts",
+        wireName: "ReadingCircleWire",
+        wireBanner: undefined,
+        vocabularyFrom: { from: "../src/concept-set.ts", export: "vocabulary" },
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test("explicit names, paths, and banners override the derived output", async () => {
