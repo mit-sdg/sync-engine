@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { operationsRoomConcepts, vocabulary } from "./concept-set.ts";
-import * as composition from "./composition.ts";
+import { operationsRoomConcepts, vocabulary } from "./vocabulary.ts";
+import * as composition from "./compositions/OperationsRoom.ts";
 
 export function assembleOperationsRoom() {
   return assemble({

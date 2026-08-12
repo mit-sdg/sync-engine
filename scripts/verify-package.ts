@@ -769,16 +769,22 @@ async function verifySetupAndExamples(
   );
   run("bun", [catalogCommand, "add", "recipe/workshop-selection", "--floor", "memory"], setup);
   await writeFile(
-    resolve(setup, "src/concept-set.ts"),
+    resolve(setup, "src/vocabulary.ts"),
     'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\nimport { catalogRegistrations } from "./catalog/registrations.generated.ts";\n\nexport const applicationConcepts = conceptSet({ ...catalogRegistrations });\nexport const { concepts, vocabulary } = applicationConcepts;\n',
   );
+  // Catalog recipes still target the package's compatibility source name.
   await writeFile(
-    resolve(setup, "src/composition.ts"),
-    'import { catalogComposition } from "./catalog/composition.generated.ts";\n\nexport const applicationComposition = { ...catalogComposition };\n',
+    resolve(setup, "src/concept-set.ts"),
+    'export { applicationConcepts, concepts, vocabulary } from "./vocabulary.ts";\n',
+  );
+  await mkdir(resolve(setup, "src/compositions"), { recursive: true });
+  await writeFile(
+    resolve(setup, "src/compositions/Catalog.ts"),
+    'import { catalogComposition } from "../catalog/composition.generated.ts";\n\nexport const applicationComposition = { ...catalogComposition };\n',
   );
   await writeFile(
     resolve(setup, "src/assembly.ts"),
-    'import { assemble } from "@mit-sdg/sync-engine/assembly";\nimport { applicationComposition } from "./composition.ts";\nimport { applicationConcepts, vocabulary } from "./concept-set.ts";\n\nexport function assembleApplication() {\n  return assemble({\n    vocabulary,\n    instances: applicationConcepts.implementations("memory", {}),\n    composition: applicationComposition,\n  });\n}\n',
+    'import { assemble } from "@mit-sdg/sync-engine/assembly";\nimport { applicationComposition } from "./compositions/Catalog.ts";\nimport { applicationConcepts, vocabulary } from "./vocabulary.ts";\n\nexport function assembleApplication() {\n  return assemble({\n    vocabulary,\n    instances: applicationConcepts.implementations("memory", {}),\n    composition: applicationComposition,\n  });\n}\n',
   );
   run("bun", ["run", "typecheck"], setup);
   run("bun", ["run", "test"], setup);
@@ -808,16 +814,21 @@ async function verifySetupAndExamples(
     mongoSetup,
   );
   await writeFile(
-    resolve(mongoSetup, "src/concept-set.ts"),
+    resolve(mongoSetup, "src/vocabulary.ts"),
     'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\nimport { catalogRegistrations } from "./catalog/registrations.generated.ts";\n\nexport const applicationConcepts = conceptSet({ ...catalogRegistrations });\nexport const { concepts, vocabulary } = applicationConcepts;\n',
   );
   await writeFile(
-    resolve(mongoSetup, "src/composition.ts"),
-    'import { catalogComposition } from "./catalog/composition.generated.ts";\n\nexport const applicationComposition = { ...catalogComposition };\n',
+    resolve(mongoSetup, "src/concept-set.ts"),
+    'export { applicationConcepts, concepts, vocabulary } from "./vocabulary.ts";\n',
+  );
+  await mkdir(resolve(mongoSetup, "src/compositions"), { recursive: true });
+  await writeFile(
+    resolve(mongoSetup, "src/compositions/Catalog.ts"),
+    'import { catalogComposition } from "../catalog/composition.generated.ts";\n\nexport const applicationComposition = { ...catalogComposition };\n',
   );
   await writeFile(
     resolve(mongoSetup, "src/assembly.ts"),
-    'import type { Db } from "mongodb";\nimport { assemble } from "@mit-sdg/sync-engine/assembly";\nimport { applicationComposition } from "./composition.ts";\nimport { applicationConcepts, vocabulary } from "./concept-set.ts";\n\nconst db = undefined as unknown as Db;\nexport function assembleApplication() {\n  return assemble({\n    vocabulary,\n    instances: applicationConcepts.implementations("mongo", { db }),\n    composition: applicationComposition,\n  });\n}\n',
+    'import type { Db } from "mongodb";\nimport { assemble } from "@mit-sdg/sync-engine/assembly";\nimport { applicationComposition } from "./compositions/Catalog.ts";\nimport { applicationConcepts, vocabulary } from "./vocabulary.ts";\n\nconst db = undefined as unknown as Db;\nexport function assembleApplication() {\n  return assemble({\n    vocabulary,\n    instances: applicationConcepts.implementations("mongo", { db }),\n    composition: applicationComposition,\n  });\n}\n',
   );
   if (
     (await filesBelow(resolve(mongoSetup, "src"))).some((path) =>
