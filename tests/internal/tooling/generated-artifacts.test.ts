@@ -136,9 +136,9 @@ describe("generated application artifacts", () => {
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
-    Check parsed action/query declarations against class source and optionally inspect application diagnostics.
-    Defaults to src/concepts.\n`;
+  sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
+    Check registered concepts against erased TypeScript source and optionally inspect application diagnostics.
+    Without a config, defaults to the conventional src/concept-set.ts vocabulary module.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,
       encoding: "utf8",
@@ -189,7 +189,20 @@ describe("generated application artifacts", () => {
 
       const unknown = run("check", "--unknown");
       expect(unknown.status).toBe(1);
-      expect(unknown.stderr).toContain("sync-engine check [--concepts <path...>]");
+      expect(unknown.stderr).toContain(
+        "sync-engine check [--vocabulary-module path | --config path]",
+      );
+
+      const twoRoots = run(
+        "check",
+        "--vocabulary-module",
+        "src/application-concepts.ts",
+        "--config",
+        "generated.config.ts",
+      );
+      expect(twoRoots.status).toBe(1);
+      expect(twoRoots.stderr).toContain("--vocabulary-module path | --config path");
+      expect(existsSync(join(temporary, "imported"))).toBe(false);
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }

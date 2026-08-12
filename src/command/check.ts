@@ -1,10 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 import { applicationManifest } from "@engine/tooling/manifest";
 import { diagnosticsFail } from "@engine/tooling/diagnostics";
 import { inspectGenerated } from "@engine/tooling/generated-artifacts";
+import { assembledConcepts, loadRegisteredConcepts } from "./concept-discovery.ts";
+import { registeredClassSources } from "./concept-source-discovery.ts";
 import { filesBelow } from "./files-below.ts";
 import { loadGeneratedApplication } from "./generated-config.ts";
 
@@ -409,7 +412,23 @@ interface Member {
   inputs: Inputs;
 }
 
-function membersOfClass(declaration: ts.ClassDeclaration, context: CheckerContext): Member[] {
+function membersOfClass(
+  declaration: ts.ClassDeclaration,
+  context: CheckerContext,
+  includeInherited = false,
+): Member[] {
+  if (includeInherited && declaration.name !== undefined) {
+    const symbol = context.checker.getSymbolAtLocation(declaration.name);
+    if (symbol === undefined) return [];
+    const instance = context.checker.getDeclaredTypeOfSymbol(symbol);
+    return context.checker.getPropertiesOfType(instance).flatMap((property) => {
+      const method = property.declarations?.find(ts.isMethodDeclaration);
+      return method === undefined || !ts.isIdentifier(method.name)
+        ? []
+        : [{ name: method.name.text, inputs: inputsOfMethod(method, context) }];
+    });
+  }
+
   const members: Member[] = [];
   for (const member of declaration.members) {
     if (!ts.isMethodDeclaration(member) || !ts.isIdentifier(member.name)) continue;
@@ -471,21 +490,38 @@ function compare(
   members: readonly Member[],
   locationBase: string,
   report: (what: string) => void,
+  options: { checkMembership: boolean; sourceInputMembers?: ReadonlySet<string> } = {
+    checkMembership: true,
+  },
 ): void {
-  const declared = declarations.map(({ name }) => name);
-  const implemented = members.map(({ name }) => name);
-
-  const missing = declared.filter((name) => !implemented.includes(name));
-  if (missing.length > 0) {
-    report(`the specification declares the ${kind} ${listed(missing)}, which the class lacks`);
-  }
-  const unspecified = implemented.filter((name) => !declared.includes(name));
-  if (unspecified.length > 0) {
-    report(`the class declares the ${kind} ${listed(unspecified)}, which the specification lacks`);
+  if (options.checkMembership) {
+    const declared = declarations.map(({ name }) => name);
+    const implemented = members.map(({ name }) => name);
+    const missing = declared.filter((name) => !implemented.includes(name));
+    if (missing.length > 0) {
+      report(`the specification declares the ${kind} ${listed(missing)}, which the class lacks`);
+    }
+    const unspecified = implemented.filter((name) => !declared.includes(name));
+    if (unspecified.length > 0) {
+      report(
+        `the class declares the ${kind} ${listed(unspecified)}, which the specification lacks`,
+      );
+    }
   }
   for (const declaration of declarations) {
+    if (
+      options.sourceInputMembers !== undefined &&
+      !options.sourceInputMembers.has(declaration.name)
+    ) {
+      continue;
+    }
     const member = members.find(({ name }) => name === declaration.name);
-    if (member === undefined) continue;
+    if (member === undefined) {
+      if (options.sourceInputMembers !== undefined) {
+        report(`the ${kind} \`${declaration.name}\` source declaration could not be located`);
+      }
+      continue;
+    }
     if (!member.inputs.ok) {
       const source = member.inputs.site.getSourceFile();
       const position = source.getLineAndCharacterOfPosition(member.inputs.site.getStart(source));
@@ -505,27 +541,16 @@ function compare(
   }
 }
 
-export function conceptFailures(directory: string, projectRoot = ""): string[] {
-  const within = projectRoot === "" ? directory : directory.slice(projectRoot.length + 1);
-  const label = within === "" || within.startsWith("..") ? directory : within;
+function sourceFailures(
+  classPath: string,
+  className: string,
+  spec: ConceptSpec,
+  label: string,
+  locationBase: string,
+  sourceInputMembers?: ReadonlySet<string>,
+): string[] {
   const findings: string[] = [];
   const report = (what: string): void => void findings.push(`${label}: ${what}.`);
-
-  const registryPath = join(directory, "registry.ts");
-  let spec: ConceptSpec;
-  try {
-    spec = parseSpec(readFileSync(join(directory, "spec.md"), "utf8"));
-  } catch (error) {
-    report(error instanceof Error ? error.message : String(error));
-    return findings;
-  }
-
-  const registered = registeredClass(parseFile(registryPath));
-  if (registered === undefined) {
-    report("registry.ts does not register a class imported by name");
-    return findings;
-  }
-  const classPath = resolve(dirname(registryPath), registered.from);
   let context: CheckerContext;
   try {
     context = checkerFor(classPath);
@@ -538,20 +563,22 @@ export function conceptFailures(directory: string, projectRoot = ""): string[] {
     report(`${basename(classPath)} could not be loaded by the TypeScript project`);
     return findings;
   }
-  const declaration = classIn(source, registered.name);
+  const declaration = classIn(source, className);
   if (declaration === undefined) {
-    report(`${basename(classPath)} does not declare ${registered.name}`);
+    report(`${basename(classPath)} does not declare ${className}`);
     return findings;
   }
 
-  const members = membersOfClass(declaration, context);
-  const locationBase = projectRoot === "" ? directory : projectRoot;
+  const runtimeSelected = sourceInputMembers !== undefined;
+  const members = membersOfClass(declaration, context, runtimeSelected);
+  const options = { checkMembership: !runtimeSelected, sourceInputMembers };
   compare(
     "action",
     spec.actions,
     members.filter(({ name }) => !name.startsWith("_")),
     locationBase,
     report,
+    options,
   );
   compare(
     "query",
@@ -559,8 +586,33 @@ export function conceptFailures(directory: string, projectRoot = ""): string[] {
     members.filter(({ name }) => name.startsWith("_")),
     locationBase,
     report,
+    options,
   );
   return findings;
+}
+
+export function conceptFailures(directory: string, projectRoot = ""): string[] {
+  const within = projectRoot === "" ? directory : directory.slice(projectRoot.length + 1);
+  const label = within === "" || within.startsWith("..") ? directory : within;
+  const registryPath = join(directory, "registry.ts");
+  let spec: ConceptSpec;
+  try {
+    spec = parseSpec(readFileSync(join(directory, "spec.md"), "utf8"));
+  } catch (error) {
+    return [`${label}: ${error instanceof Error ? error.message : String(error)}.`];
+  }
+
+  const registered = registeredClass(parseFile(registryPath));
+  if (registered === undefined) {
+    return [`${label}: registry.ts does not register a class imported by name.`];
+  }
+  return sourceFailures(
+    resolve(dirname(registryPath), registered.from),
+    registered.name,
+    spec,
+    label,
+    projectRoot === "" ? directory : projectRoot,
+  );
 }
 
 export async function conceptDirectories(
@@ -579,28 +631,30 @@ export async function conceptDirectories(
     .sort();
 }
 
-const usage = `sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
-  Check parsed action/query declarations against class source and optionally inspect application diagnostics.
-  Defaults to src/concepts.`;
+const usage = `sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
+  Check registered concepts against erased TypeScript source and optionally inspect application diagnostics.
+  Without a config, defaults to the conventional src/concept-set.ts vocabulary module.`;
 
 export async function checkCommand(args: readonly string[]): Promise<void> {
-  let conceptRoots: string[] | undefined;
+  let vocabularyModuleArgument: string | undefined;
   let configPath: string | undefined;
   let failOnWarnings = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (argument === "--concepts" && conceptRoots === undefined) {
-      conceptRoots = [];
-      while (args[index + 1] !== undefined && !args[index + 1].startsWith("-")) {
-        conceptRoots.push(args[index + 1]);
-        index += 1;
+    if (argument === "--vocabulary-module" && vocabularyModuleArgument === undefined) {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("-") || configPath !== undefined) {
+        throw new Error(usage);
       }
-      if (conceptRoots.length === 0) throw new Error(usage);
+      vocabularyModuleArgument = value;
+      index += 1;
       continue;
     }
     if (argument === "--config" && configPath === undefined) {
       const value = args[index + 1];
-      if (value === undefined || value.startsWith("-")) throw new Error(usage);
+      if (value === undefined || value.startsWith("-") || vocabularyModuleArgument !== undefined) {
+        throw new Error(usage);
+      }
       configPath = value;
       index += 1;
       continue;
@@ -612,27 +666,59 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
     throw new Error(usage);
   }
   const root = process.cwd();
-  if (conceptRoots !== undefined)
-    for (const directory of conceptRoots)
-      if (!existsSync(resolve(root, directory)))
-        throw new Error(`Concept root does not exist: ${directory}`);
-  conceptRoots ??= ["src/concepts"];
+  const application =
+    configPath === undefined ? undefined : await loadGeneratedApplication(configPath, root);
+  const vocabularyModulePath =
+    application !== undefined
+      ? resolve(fileURLToPath(application.directory), application.vocabularyFrom.from)
+      : resolve(root, vocabularyModuleArgument ?? "src/concept-set.ts");
+  if (!existsSync(vocabularyModulePath)) {
+    throw new Error(`Vocabulary module does not exist: ${relative(root, vocabularyModulePath)}`);
+  }
 
-  const directories = await conceptDirectories(conceptRoots, root);
-  const failures = directories.flatMap((directory) => conceptFailures(directory, root));
+  const manifest =
+    application === undefined
+      ? undefined
+      : await inspectGenerated(application, (assembled) => applicationManifest(assembled));
+  const concepts =
+    manifest === undefined
+      ? await loadRegisteredConcepts(vocabularyModulePath)
+      : assembledConcepts(manifest);
+  const sources = registeredClassSources(vocabularyModulePath);
+  const failures: string[] = [];
+  for (const concept of concepts) {
+    const source = sources.find(({ conceptName }) => conceptName === concept.name);
+    const label = `${relative(root, vocabularyModulePath)} (${concept.name})`;
+    if (source === undefined) {
+      failures.push(`${label}: registered class import could not be resolved.`);
+      continue;
+    }
+    if (source.className !== concept.className) {
+      failures.push(
+        `${label}: source resolves ${source.className}, but registration selected ${concept.className}.`,
+      );
+      continue;
+    }
+    failures.push(
+      ...sourceFailures(
+        source.classPath,
+        source.className,
+        concept.specification,
+        label,
+        root,
+        concept.sourceInputMembers,
+      ),
+    );
+  }
   if (failures.length > 0) {
     throw new Error(
       `Concept action/query source check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
     );
   }
-  console.log(`Concept action/query source check passed for ${directories.length} concepts.`);
+  console.log(`Concept action/query source check passed for ${concepts.length} concepts.`);
 
-  if (configPath !== undefined) {
-    const application = await loadGeneratedApplication(configPath, root);
-    const diagnostics = await inspectGenerated(
-      application,
-      (assembled) => applicationManifest(assembled).diagnostics,
-    );
+  if (manifest !== undefined) {
+    const diagnostics = manifest.diagnostics;
     for (const diagnostic of diagnostics) {
       console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
     }

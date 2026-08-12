@@ -1177,18 +1177,10 @@ describe("application manifest", () => {
     });
     expect(printed.stdout.endsWith("\n")).toBe(true);
 
-    const checked = spawnSync(
-      "bun",
-      [
-        "src/command/main.ts",
-        "check",
-        "--concepts",
-        "tests/packaging/application/src/concepts",
-        "--config",
-        config,
-      ],
-      { cwd: root, encoding: "utf8" },
-    );
+    const checked = spawnSync("bun", ["src/command/main.ts", "check", "--config", config], {
+      cwd: root,
+      encoding: "utf8",
+    });
     expect(checked.status).toBe(0);
     expect(checked.stdout).toContain("Application diagnostic check passed");
   }, 20_000);

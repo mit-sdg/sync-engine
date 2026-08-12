@@ -67,29 +67,59 @@ resulting usage text names `setup`.
 ## `sync-engine check`
 
 ```text
-sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
+sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
 ```
 
-`check` recursively finds `spec.md` under each supplied root. The default root
-is `src/concepts`. Each discovered concept directory must contain `registry.ts`,
-and that registry must call `registerConcept` with a class imported by name.
+With `--config`, `check` calls the descriptor's `assemble` function and uses the
+assembled application's application-owned concept inventory as the registration
+source of truth; built-in engine concepts are excluded. The descriptor's
+`vocabulary.module` is used only to locate TypeScript class
+source; `vocabulary.export` remains the generated wire type anchor and is not
+needed for check discovery.
+
+Without a config, `--vocabulary-module` names a module to import and expects its
+`vocabulary` export. With neither option, the command uses
+`src/concept-set.ts` and `vocabulary` in the current project as a compatibility
+convention. The filename has no semantic role. The configured descriptor also
+defaults its vocabulary module to `src/concept-set.ts` beside the descriptor,
+but can point at any module.
+
+A registration can be imported from a registry module or created by a direct
+`registerConcept(...)` call in the concept-set module. Unregistered Markdown
+files are not checked.
+
+The runtime registration supplies the class and parsed specification, so the
+checker does not statically search for Markdown. The Markdown filename and
+location are unrestricted; for example, `design/concepts/Sessioning.md` is
+supported. A registry module and an adjacent `spec.md` are conventions, not
+discovery requirements.
 
 The command compares the parsed specification with the registered class's
 action and query names and input keys. It resolves typed parameters through the
 nearest TypeScript project, including imported interfaces, aliases, re-exports,
-intersections, mapped and utility types, and path mappings.
-Ambiguous or dynamic shapes fail closed with their type operation and source
-location. The command does not read State notation as grammar or compare it with
-class fields or storage. [Concept specification
-format](concept-specification.md) defines the accepted grammar, supported source
-shapes, and uninterpreted boundary.
+intersections, mapped and utility types, and path mappings. Ambiguous or dynamic
+shapes fail closed with their type operation and source location. The command
+does not read State notation as grammar or compare it with class fields or
+storage. [Concept specification format](concept-specification.md) defines the
+accepted grammar, supported source shapes, and uninterpreted boundary.
 
-`--concepts` consumes one or more paths, ending at the next option. Each of
-`--concepts`, `--config`, and `--fail-on-warnings` may appear at most once.
+Static analysis is limited to locating the selected class source needed for
+erased TypeScript input types. The `conceptSet` argument must be an object
+literal or a local variable initialized with one. Properties and object-spread
+registration maps must resolve to direct or imported `registerConcept(...)`
+calls, and each registration's `class` must be a named import whose module
+specifier resolves directly as a filesystem path. Unsupported or unresolved
+class-source shapes fail rather than being omitted.
 
-`--config` also assembles the application and prints its structured diagnostics.
-`--fail-on-warnings` promotes warning diagnostics only when `--config` is
-present. Without a config, `check` has no application diagnostics to promote.
+`--vocabulary-module` and `--config` are mutually exclusive and may each appear
+at most once. The former `--concepts` filesystem-root option is unsupported;
+use `--vocabulary-module` for an explicit unconfigured root or `--config` for
+assembly-driven discovery. Use the descriptor's `vocabulary.module` when a nondefault source
+module also needs application diagnostics. `--config` prints the diagnostics
+from the same assembly used for discovery; the command assembles and drains the
+application once. `--fail-on-warnings` promotes warning diagnostics only when
+`--config` is present. Without a config, `check` has no application diagnostics
+to promote.
 
 Success prints:
 
@@ -97,12 +127,11 @@ Success prints:
 Concept action/query source check passed for N concepts.
 ```
 
-An existing concept root with no concepts succeeds and reports zero checked
-concepts, which permits a concept-free setup application. An explicitly named
-root that does not exist fails. The command also fails when any discovered
-concept fails. Concept-specific parse, registry-shape, source-resolution, and
-declaration findings are collected as bullets. A missing registry or discovery filesystem
-error instead aborts with one stackless error. The command does not modify files.
+An empty `conceptSet({})` succeeds and reports zero checked concepts, which
+permits a concept-free setup application. A missing selected module fails.
+The command also fails when registration discovery, specification parsing,
+source resolution, or declaration comparison fails. Findings are collected as
+bullets. The command does not modify files.
 
 ## `sync-engine artifacts`
 

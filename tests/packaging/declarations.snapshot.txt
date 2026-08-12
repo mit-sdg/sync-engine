@@ -56,6 +56,32 @@ export declare function conceptFailures(directory: string, projectRoot?: string)
 export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;
 export declare function checkCommand(args: readonly string[]): Promise<void>;
 
+=== dist/command/concept-discovery.d.ts ===
+import type { ConceptSpec } from "../engine/reactions/concepts/concept-spec.ts";
+import type { ApplicationManifestV5 } from "../engine/tooling/manifest.ts";
+export interface RegisteredSourceConcept {
+    name: string;
+    className: string;
+    specification: ConceptSpec;
+    /** Members whose input names TypeScript erased before runtime registration. */
+    sourceInputMembers: ReadonlySet<string>;
+}
+/** Read the registrations retained by the vocabulary that conceptSet produced. */
+export declare function registeredConcepts(vocabulary: unknown): RegisteredSourceConcept[];
+/** Read the same registration facts from an assembled application's manifest. */
+export declare function assembledConcepts(manifest: ApplicationManifestV5): RegisteredSourceConcept[];
+/** Import the explicitly selected vocabulary module when no assembly config is used. */
+export declare function loadRegisteredConcepts(modulePath: string, exportName?: string): Promise<RegisteredSourceConcept[]>;
+
+=== dist/command/concept-source-discovery.d.ts ===
+export interface RegisteredClassSource {
+    conceptName: string;
+    className: string;
+    classPath: string;
+}
+/** Locate only the class source needed for checks; runtime registration owns discovery and specs. */
+export declare function registeredClassSources(conceptSetPath: string): RegisteredClassSource[];
+
 === dist/command/files-below.d.ts ===
 /** List regular files depth-first without following symlinks. */
 export declare function filesBelow(directory: string, filter?: (name: string) => boolean): Promise<string[]>;

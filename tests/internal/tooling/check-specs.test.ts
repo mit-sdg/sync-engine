@@ -4,11 +4,22 @@
  * way: `end(_: { session: string })` arrives as `end(_)`. These cases are the
  * ones only the source can settle.
  */
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { conceptDirectories, conceptFailures } from "@command/check";
+import { checkCommand, conceptDirectories, conceptFailures } from "@command/check";
+import {
+  assembledConcepts,
+  loadRegisteredConcepts,
+  registeredConcepts,
+} from "@command/concept-discovery";
+import { registeredClassSources } from "@command/concept-source-discovery";
+import { assemble } from "@engine/boundary/assembly/assembly-facade";
+import { conceptSet, registerConcept } from "@engine/boundary/assembly/concept-set";
+import { vocabulary as declareVocabulary } from "@engine/reactions/authoring/refs";
+import { applicationManifest } from "@engine/tooling/manifest";
 
 let directory = "";
 
@@ -387,4 +398,201 @@ describe("concept discovery", () => {
 
     expect(await conceptDirectories(["."], directory)).toEqual([first, nested].sort());
   });
+
+  test("uses only minimal static work to locate a selected registry's class", async () => {
+    const conventional = await concept(
+      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "  end({ session }: { session: string }) { return { ok: Boolean(session) }; }",
+    );
+    const design = join(directory, "design", "concepts");
+    await mkdir(design, { recursive: true });
+    await writeFile(join(design, "Sessioning.md"), await readFile(join(conventional, "spec.md")));
+    await writeFile(
+      join(conventional, "registry.ts"),
+      'import { registerConcept } from "@mit-sdg/sync-engine/assembly";\n' +
+        'import { SessioningConcept } from "./sessioning.ts";\n' +
+        'import authored from "../design/concepts/Sessioning.md" with { type: "text" };\n' +
+        "export const sessioning = registerConcept({ class: SessioningConcept, spec: authored });\n",
+    );
+    const source = join(directory, "src", "concept-set.ts");
+    await mkdir(dirname(source), { recursive: true });
+    await writeFile(
+      source,
+      'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\n' +
+        'import { sessioning } from "../sessioning/registry.ts";\n' +
+        "export const applicationConcepts = conceptSet({ Sessioning: sessioning });\n",
+    );
+
+    expect(registeredClassSources(source)).toEqual([
+      {
+        className: "SessioningConcept",
+        classPath: join(conventional, "sessioning.ts"),
+        conceptName: "Sessioning",
+      },
+    ]);
+  });
+
+  test("runtime registration owns concept and specification discovery", async () => {
+    const where = await concept(
+      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "  end({ session }: { session: string }) { return { ok: Boolean(session) }; }",
+    );
+    const specification = await readFile(join(where, "spec.md"), "utf8");
+    class SessioningConcept {
+      end(_: { session: string }) {
+        return { ok: true };
+      }
+    }
+    const selected = conceptSet({
+      Sessioning: registerConcept({ class: SessioningConcept, spec: specification }),
+    });
+
+    const expected = [
+      {
+        name: "Sessioning",
+        className: "SessioningConcept",
+        specification: { purpose: "Identify a caller." },
+        sourceInputMembers: new Set(["end"]),
+      },
+    ];
+    expect(registeredConcepts(selected.vocabulary)).toMatchObject(expected);
+
+    const assembled = assemble({
+      vocabulary: selected.vocabulary,
+      instances: selected.implementations(),
+      composition: {},
+    });
+    const manifest = applicationManifest(assembled);
+    expect(assembledConcepts(manifest)).toMatchObject(expected);
+
+    const applicationConcept = manifest.concepts.find(({ name }) => name === "Sessioning")!;
+    expect(() =>
+      assembledConcepts({
+        ...manifest,
+        concepts: manifest.concepts.map((concept) =>
+          concept === applicationConcept ? { ...concept, specification: undefined } : concept,
+        ),
+      }),
+    ).toThrow('Assembled concept "Sessioning" has no specification');
+    expect(() =>
+      assembledConcepts({
+        ...manifest,
+        conceptImplementations: manifest.conceptImplementations.map((implementation) =>
+          implementation.concept === "Sessioning"
+            ? { ...implementation, canonical: { owner: "application" } }
+            : implementation,
+        ),
+      }),
+    ).toThrow('Assembled concept "Sessioning" has no canonical class name');
+    await assembled.beginDrain();
+  });
+
+  test("runtime discovery rejects a missing vocabulary or specification", async () => {
+    expect(() => registeredConcepts(null)).toThrow("vocabulary export must be an object");
+    class UnspecifiedConcept {
+      act() {}
+    }
+    const unspecified = declareVocabulary({ concepts: { Unspecified: UnspecifiedConcept } });
+    expect(() => registeredConcepts(unspecified)).toThrow(
+      'Concept-set registration "Unspecified" has no specification',
+    );
+
+    const module = join(directory, "missing-vocabulary.mjs");
+    await writeFile(module, "export const other = {};\n");
+    await expect(loadRegisteredConcepts(module)).rejects.toThrow('does not export "vocabulary"');
+  });
+
+  test("follows object-spread registration maps to class imports", async () => {
+    const where = await concept(
+      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "  end({ session }: { session: string }) { return { ok: Boolean(session) }; }",
+    );
+    await writeFile(
+      join(directory, "registrations.ts"),
+      'import { sessioning } from "./sessioning/registry.ts";\n' +
+        "export const selected = { Sessioning: sessioning };\n",
+    );
+    const source = join(directory, "concept-set.ts");
+    await writeFile(
+      source,
+      'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\n' +
+        'import { selected } from "./registrations.ts";\n' +
+        "export const applicationConcepts = conceptSet({ ...selected });\n",
+    );
+
+    expect(registeredClassSources(source)).toEqual([
+      {
+        className: "SessioningConcept",
+        classPath: join(where, "sessioning.ts"),
+        conceptName: "Sessioning",
+      },
+    ]);
+  });
+
+  test("rejects ambiguous or incomplete discovery roots before loading them", async () => {
+    await expect(checkCommand(["--vocabulary-module"])).rejects.toThrow(
+      "--vocabulary-module path | --config path",
+    );
+    await expect(
+      checkCommand(["--vocabulary-module", "one.ts", "--config", "generated.config.ts"]),
+    ).rejects.toThrow("--vocabulary-module path | --config path");
+    await expect(
+      checkCommand(["--config", "generated.config.ts", "--vocabulary-module", "one.ts"]),
+    ).rejects.toThrow("--vocabulary-module path | --config path");
+  });
+
+  test("the CLI supports direct registration with nonconventional Markdown", async () => {
+    const root = resolve(import.meta.dirname, "../../..");
+    const project = await mkdtemp(join(root, "tests/.sync-engine-discovery-"));
+    try {
+      await mkdir(join(project, "src"), { recursive: true });
+      await mkdir(join(project, "design", "concepts"), { recursive: true });
+      await writeFile(
+        join(project, "design", "concepts", "Sessioning.md"),
+        "# Sessioning\n\n## Purpose\n\nIdentify a caller.\n\n## Principle\n\nA session expires.\n\n" +
+          "## Actions\n\n```actions\nend (session: Session) : return (ok: Flag)\n  then\n    return ok\n```\n",
+      );
+      await writeFile(join(project, "src", "unregistered-spec.md"), "not a specification");
+      await writeFile(
+        join(project, "src", "sessioning.ts"),
+        "class SessioningBase {\n" +
+          "  end(_: { session: string }) { return { ok: true }; }\n" +
+          "}\n" +
+          "export class SessioningConcept extends SessioningBase {}\n",
+      );
+      await writeFile(
+        join(project, "src", "application-concepts.ts"),
+        'import { conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";\n' +
+          'import { SessioningConcept } from "./sessioning.ts";\n' +
+          'import spec from "../design/concepts/Sessioning.md" with { type: "text" };\n' +
+          "const Sessioning = registerConcept({ class: SessioningConcept, spec });\n" +
+          "export const { vocabulary } = conceptSet({ Sessioning });\n",
+      );
+
+      expect(registeredClassSources(join(project, "src", "application-concepts.ts"))).toEqual([
+        {
+          className: "SessioningConcept",
+          classPath: join(project, "src", "sessioning.ts"),
+          conceptName: "Sessioning",
+        },
+      ]);
+      const checked = spawnSync(
+        "bun",
+        [
+          join(root, "src/command/main.ts"),
+          "check",
+          "--vocabulary-module",
+          "src/application-concepts.ts",
+        ],
+        { cwd: project, encoding: "utf8" },
+      );
+      expect({ status: checked.status, stdout: checked.stdout, stderr: checked.stderr }).toEqual({
+        status: 0,
+        stdout: "Concept action/query source check passed for 1 concepts.\n",
+        stderr: "",
+      });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  }, 20_000);
 });
