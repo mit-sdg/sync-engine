@@ -31,7 +31,7 @@ describe("catalog documentation", () => {
         expect(
           await readFile(
             new URL(
-              `../../../examples/${example}/src/concepts/${concept}/spec.md`,
+              `../../../examples/${example}/design/concepts/${concept[0]?.toUpperCase()}${concept.slice(1)}.md`,
               import.meta.url,
             ),
             "utf8",
