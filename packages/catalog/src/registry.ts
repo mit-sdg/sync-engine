@@ -126,8 +126,7 @@ export class CatalogRegistry {
     ];
   }
 
-  static async load(): Promise<CatalogRegistry> {
-    const root = entriesRoot();
+  static async load(root = entriesRoot()): Promise<CatalogRegistry> {
     const index = stringArray(
       JSON.parse(await readFile(resolve(root, "index.json"), "utf8")),
       "entries/index.json",
