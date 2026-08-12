@@ -38,8 +38,8 @@ The directory defaults to the current working directory and must contain a valid
 neither the directory nor package manifest.
 
 The setup targets are `tsconfig.json`, `generated.config.ts`,
-`src/concept-set.ts`, `src/composition.ts`, `src/assembly.ts`, and
-`src/main.ts`. Setup handles each target as follows:
+`src/vocabulary.ts`, `src/assembly.ts`, and `src/main.ts`. A concept-free setup
+creates no placeholder design or composition file. Setup handles each target as follows:
 
 - An absent target is eligible to be created.
 - A byte-identical target is reported as verified.

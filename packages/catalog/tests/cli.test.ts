@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { runCatalog } from "../src/cli.ts";
 
@@ -73,14 +74,20 @@ describe("catalog CLI", () => {
   });
 
   test("commands do not modify the current project", async () => {
-    const root = resolve(import.meta.dirname, "../../..");
-    const before = await treeDigest(resolve(root, "packages/catalog/tests"));
-    const { restore } = capture();
-    await runCatalog(["list"]);
-    await runCatalog(["show", "recipe/workshop-selection", "--raw"]);
-    await runCatalog(["source", "recipe/workshop-selection", "workshop-selection.ts", "--raw"]);
-    restore();
-    expect(await treeDigest(resolve(root, "packages/catalog/tests"))).toBe(before);
+    const project = await mkdtemp(join(tmpdir(), "catalog-read-only-"));
+    try {
+      await writeFile(join(project, "sentinel.txt"), "application-owned\n");
+      const before = await treeDigest(project);
+      vi.spyOn(process, "cwd").mockReturnValue(project);
+      const { restore } = capture();
+      await runCatalog(["list"]);
+      await runCatalog(["show", "recipe/workshop-selection", "--raw"]);
+      await runCatalog(["source", "recipe/workshop-selection", "workshop-selection.ts", "--raw"]);
+      restore();
+      expect(await treeDigest(project)).toBe(before);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
   });
 
   test.each([
