@@ -82,7 +82,10 @@ function commandEnv(): NodeJS.ProcessEnv {
 }
 
 function run(command: string, args: string[], cwd = root, timeout?: number): void {
-  execFileSync(command, args, {
+  // Reuse the Bun executable that launched this check. A toolchain shim may
+  // require package-manager metadata that intentionally npm-only consumers omit.
+  const executable = command === "bun" ? process.execPath : command;
+  execFileSync(executable, args, {
     cwd,
     env: commandEnv(),
     stdio: "inherit",
@@ -90,8 +93,12 @@ function run(command: string, args: string[], cwd = root, timeout?: number): voi
   });
 }
 
+function npmCommand(): string {
+  return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
 function runNpm(args: string[], cwd = root): void {
-  run("bun", ["run", "npm", ...args], cwd);
+  run(npmCommand(), args, cwd);
 }
 
 function requireEntry(entries: Set<string>, path: string): void {
@@ -124,8 +131,8 @@ function packageEntrypoint(workspace: Workspace, entrypoint: string): string {
 
 function packWithNpm(cwd: string, destination: string): NpmPackResult {
   const output = execFileSync(
-    "bun",
-    ["run", "npm", "pack", "--json", "--loglevel=error", "--pack-destination", destination],
+    npmCommand(),
+    ["pack", "--json", "--loglevel=error", "--pack-destination", destination],
     {
       cwd,
       env: commandEnv(),

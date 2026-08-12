@@ -69,7 +69,7 @@ under `guide/`.
 | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | [HTTP package](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | POST/JSON handler, Fetch client, browser policy, and HTTP wire projection              |
 | [Analysis package](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Manifest and optional checkout-source inspection                                       |
-| [Catalog package](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)   | Read-only browser for curated concept and recipe source                                            |
+| [Catalog package](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)   | Read-only browser for curated concept and recipe source                                |
 | [Reading Circle](../../examples/reading-circle/README.md)                              | Shortest complete multi-concept application                                            |
 | [Operations Room](../../examples/operations-room/README.md)                            | Selectable reactions, replaceable policy, and staged formers                           |
 | [Message board](../../examples/message-board/README.md)                                | Complete same-origin browser app, authentication, typed transport, and secure sessions |

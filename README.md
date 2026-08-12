@@ -43,7 +43,7 @@ bun add @mit-sdg/sync-engine@beta
 | [`@mit-sdg/sync-engine`](README.md)                                                                             | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
 | [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/README.md) | Deterministic IR queries and optional TypeScript project/source evidence |
 | [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)         | Maintained HTTP handler, Fetch client, and generated wire projection     |
-| [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)   | CLI-only read-only browser for curated concept and recipe source                     |
+| [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)   | CLI-only read-only browser for curated concept and recipe source         |
 
 ## Create your first application
 
