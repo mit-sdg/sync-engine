@@ -11,9 +11,10 @@
  * floor uses fixed IDs so scenario output is stable enough to snapshot.
  */
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { discussing } from "./concepts/discussing/registry.ts";
-import { gathering } from "./concepts/gathering/registry.ts";
-import { selecting } from "./concepts/selecting/registry.ts";
+export { default as spec } from "@design/vocabulary.md" with { type: "text" };
+import { discussing } from "./concepts/DiscussingRegistry.ts";
+import { gathering } from "./concepts/GatheringRegistry.ts";
+import { selecting } from "./concepts/SelectingRegistry.ts";
 import { identitiesFor } from "./identities.ts";
 
 export const readingCircleConcepts = conceptSet({

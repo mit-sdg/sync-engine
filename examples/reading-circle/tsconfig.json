@@ -12,10 +12,19 @@
     "esModuleInterop": true,
     "types": ["node"],
     "paths": {
+      "@design/*": ["./design/*"],
       "@engine/*": ["../../src/engine/*"],
       "@examples/reading-circle/*": ["./src/*"],
       "@mit-sdg/sync-engine/*": ["../../src/*/index.ts"]
     }
   },
-  "include": ["src", "tests", "generated.config.ts", "generated", "*.d.ts", "vite.config.ts"]
+  "include": [
+    "design",
+    "src",
+    "tests",
+    "generated.config.ts",
+    "generated",
+    "*.d.ts",
+    "vite.config.ts"
+  ]
 }

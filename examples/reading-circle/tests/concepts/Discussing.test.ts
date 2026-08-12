@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
 import { identities as ids } from "@examples/reading-circle/identities";
-import { DiscussingConcept, DiscussionAlreadyOpen, DiscussionNotOpen } from "./discussing.ts";
+import {
+  DiscussingConcept,
+  DiscussionAlreadyOpen,
+  DiscussionNotOpen,
+} from "../../src/concepts/Discussing.ts";
 
 describe("Discussing", () => {
   test("its principle: open, respond in order, close, refuse", () => {
