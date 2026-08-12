@@ -404,17 +404,7 @@ then
   RequestBoundary.respond (error: message, requestId)
 ```
 
-### alerts.SelectedMitigationAlertsResponders
-
-```reaction
-when Selecting.choose (scope: room, selection)
-where
-  Gathering._members (gathering: room) has (member: responder)
-then
-  Alerting.raise (recipient: responder, subject: selection)
-```
-
-### contributions.AddContribution
+### compositions.contributions.AddContribution
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
@@ -426,17 +416,17 @@ then
   Discussing.respond (author: responder, discussion, text)
 ```
 
-### contributions.AddContribution#2
+### compositions.contributions.AddContribution#2
 
 ```reaction
-when Discussing.respond (author: responder, discussion, text, response), asked by contributions.AddContribution
+when Discussing.respond (author: responder, discussion, text, response), asked by compositions.contributions.AddContribution
 where
   earlier, RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
 then
   RequestBoundary.respond (requestId, response)
 ```
 
-### contributions.RejectContribution
+### compositions.contributions.RejectContribution
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
@@ -446,7 +436,17 @@ then
   RequestBoundary.respond (error: "RESPONDERS_ONLY", requestId)
 ```
 
-### discussion.SelectedMitigationOpensDiscussion
+### compositions.mitigationAlerts.SelectedMitigationAlertsResponders
+
+```reaction
+when Selecting.choose (scope: room, selection)
+where
+  Gathering._members (gathering: room) has (member: responder)
+then
+  Alerting.raise (recipient: responder, subject: selection)
+```
+
+### compositions.mitigationDiscussion.SelectedMitigationOpensDiscussion
 
 ```reaction
 when Selecting.choose (selection)
@@ -454,7 +454,7 @@ then
   Discussing.open (subject: selection)
 ```
 
-### room.ChooseMitigation
+### compositions.room.ChooseMitigation
 
 ```reaction
 when RequestBoundary.request (mitigation, path: "/rooms/choose-mitigation", requestId, room)
@@ -462,17 +462,17 @@ then
   Selecting.choose (item: mitigation, scope: room)
 ```
 
-### room.ChooseMitigation#2
+### compositions.room.ChooseMitigation#2
 
 ```reaction
-when Selecting.choose (item: mitigation, scope: room, selection), asked by room.ChooseMitigation
+when Selecting.choose (item: mitigation, scope: room, selection), asked by compositions.room.ChooseMitigation
 where
   earlier, RequestBoundary.request (mitigation, path: "/rooms/choose-mitigation", requestId, room)
 then
   RequestBoundary.respond (mitigation, requestId)
 ```
 
-### room.CreateRoom
+### compositions.room.CreateRoom
 
 ```reaction
 when RequestBoundary.request (host, name, path: "/rooms/create", requestId)
@@ -480,17 +480,17 @@ then
   Gathering.create (host, name)
 ```
 
-### room.CreateRoom#2
+### compositions.room.CreateRoom#2
 
 ```reaction
-when Gathering.create (host, name, gathering: room), asked by room.CreateRoom
+when Gathering.create (host, name, gathering: room), asked by compositions.room.CreateRoom
 where
   earlier, RequestBoundary.request (host, name, path: "/rooms/create", requestId)
 then
   RequestBoundary.respond (requestId, room)
 ```
 
-### room.GetRoom
+### compositions.room.GetRoom
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/get", requestId, room)
@@ -498,7 +498,7 @@ then
   RequestBoundary.respond (dashboard: former "the operations room (room)" with (room), requestId)
 ```
 
-### room.JoinRoom
+### compositions.room.JoinRoom
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/join", requestId, responder, room)
@@ -506,10 +506,10 @@ then
   Gathering.join (gathering: room, member: responder)
 ```
 
-### room.JoinRoom#2
+### compositions.room.JoinRoom#2
 
 ```reaction
-when Gathering.join (gathering: room, member: responder, membership), asked by room.JoinRoom
+when Gathering.join (gathering: room, member: responder, membership), asked by compositions.room.JoinRoom
 where
   earlier, RequestBoundary.request (path: "/rooms/join", requestId, responder, room)
 then

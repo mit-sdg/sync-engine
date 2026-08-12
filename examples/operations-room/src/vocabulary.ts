@@ -10,12 +10,15 @@
  * A "floor" is a preconfigured set of concept instances. The `"deterministic"`
  * floor uses fixed IDs so scenario output is stable enough to snapshot.
  */
+import spec from "@design/vocabulary.md" with { type: "text" };
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
-import { alerting } from "./concepts/alerting/registry.ts";
-import { discussing } from "./concepts/discussing/registry.ts";
-import { gathering } from "./concepts/gathering/registry.ts";
-import { selecting } from "./concepts/selecting/registry.ts";
+import { alerting } from "./concepts/Alerting.registry.ts";
+import { discussing } from "./concepts/Discussing.registry.ts";
+import { gathering } from "./concepts/Gathering.registry.ts";
+import { selecting } from "./concepts/Selecting.registry.ts";
 import { identitiesFor } from "./identities.ts";
+
+export { spec };
 
 export const operationsRoomConcepts = conceptSet({
   Gathering: gathering,

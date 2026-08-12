@@ -1,5 +1,5 @@
 import { view, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts } from "../vocabulary.ts";
 
 const { Gathering } = concepts;
 
