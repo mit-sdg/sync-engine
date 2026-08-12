@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { identities as ids } from "@examples/operations-room/identities";
-import { AlertingConcept, AlertNotFound } from "./alerting.ts";
+import { AlertingConcept, AlertNotFound } from "../../src/concepts/Alerting.ts";
 
 describe("Alerting", () => {
   test("its principle: keep each recipient's alerts in order until acknowledged", () => {

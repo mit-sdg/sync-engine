@@ -1,6 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { AlertingConcept, AlertNotFound } from "./alerting.ts";
-import spec from "./spec.md" with { type: "text" };
+import { AlertingConcept, AlertNotFound } from "./Alerting.ts";
+import spec from "@design/concepts/Alerting.md" with { type: "text" };
 
 export const alerting = registerConcept({
   class: AlertingConcept,

@@ -1,22 +1,22 @@
 import { readFile } from "node:fs/promises";
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
 import { describe, expect, test } from "vite-plus/test";
-import type { OperationsRoomWire } from "../generated/wire.ts";
-import { loadRoomDashboard } from "../src/client.ts";
-import { AlertingConcept } from "../src/concepts/alerting/alerting.ts";
-import { DiscussingConcept } from "../src/concepts/discussing/discussing.ts";
-import { GatheringConcept } from "../src/concepts/gathering/gathering.ts";
-import { SelectingConcept } from "../src/concepts/selecting/selecting.ts";
-import { assembleOperationsRoom } from "../src/assembly.ts";
+import type { OperationsRoomWire } from "../../generated/wire.ts";
+import { loadRoomDashboard } from "../../src/client.ts";
+import { AlertingConcept } from "../../src/concepts/Alerting.ts";
+import { DiscussingConcept } from "../../src/concepts/Discussing.ts";
+import { GatheringConcept } from "../../src/concepts/Gathering.ts";
+import { SelectingConcept } from "../../src/concepts/Selecting.ts";
+import { assembleOperationsRoom } from "../../src/assembly.ts";
 import {
   currentMitigation,
   responseStats,
   requiredCurrentMitigation,
   roomSummary,
-} from "../src/composition/room.ts";
-import { buildOperationsRoom } from "../src/edge.ts";
-import { runScenario } from "../src/scenario.ts";
-import { identities } from "../src/identities.ts";
+} from "../../src/formers/Room.ts";
+import { buildOperationsRoom } from "../../src/edge.ts";
+import { runScenario } from "../../src/scenario.ts";
+import { identities } from "../../src/identities.ts";
 
 function buildRoom(options: {
   alerts: boolean;
@@ -228,7 +228,7 @@ describe("operations-room composition", () => {
 
   test("the rendered design has no unwritten concept prose", async () => {
     const spec = await readFile(
-      new URL("../generated/operations-room.md", import.meta.url),
+      new URL("../../generated/operations-room.md", import.meta.url),
       "utf8",
     );
     expect(spec).not.toContain("[unwritten");

@@ -1,6 +1,9 @@
+import spec from "@design/compositions/Contributions.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { type RelationView } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts } from "../vocabulary.ts";
+
+export { spec };
 
 const { Discussing, Selecting } = concepts;
 

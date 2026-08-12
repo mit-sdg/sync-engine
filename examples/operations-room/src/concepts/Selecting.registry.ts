@@ -1,6 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { SelectingConcept, NoCurrentSelection } from "./selecting.ts";
-import spec from "./spec.md" with { type: "text" };
+import { SelectingConcept, NoCurrentSelection } from "./Selecting.ts";
+import spec from "@design/concepts/Selecting.md" with { type: "text" };
 
 export const selecting = registerConcept({
   class: SelectingConcept,

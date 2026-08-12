@@ -1,8 +1,7 @@
-/** Compose generic gathering and selection behavior as an operations room. */
+/** Shared read models for the operations room. */
 
-import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, whether, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { concepts } from "../vocabulary.ts";
 
 const { Alerting, Discussing, Gathering, Selecting } = concepts;
 
@@ -101,28 +100,4 @@ export const roomDashboard = former(
         ).count(),
       }),
     }),
-);
-
-export const CreateRoom = endpoint("/rooms/create", ({ name, host, room }) =>
-  receive({ name, host })
-    .then(Gathering.create({ name, host }).responds({ gathering: room }))
-    .then(respond({ room })),
-);
-
-export const JoinRoom = endpoint("/rooms/join", ({ room, responder, membership }) =>
-  receive({ room, responder })
-    .then(Gathering.join({ gathering: room, member: responder }).responds({ membership }))
-    .then(respond({ responder })),
-);
-
-export const ChooseMitigation = endpoint(
-  "/rooms/choose-mitigation",
-  ({ room, mitigation, selection }) =>
-    receive({ room, mitigation })
-      .then(Selecting.choose({ scope: room, item: mitigation }).responds({ selection }))
-      .then(respond({ mitigation })),
-);
-
-export const GetRoom = endpoint("/rooms/get", ({ room }) =>
-  receive({ room }).then(respond({ dashboard: roomDashboard({ room }) })),
 );

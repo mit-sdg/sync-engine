@@ -1,23 +1,13 @@
-/**
- * Assembles the operations room application with selectable options.
- *
- * Composition modules (read in this order):
- *   1. room.ts           — formers (dashboard, mitigation status) and endpoints
- *   2. packs.ts          — optional reaction packs (alerts, discussion)
- *   3. contributions.ts  — parameterized contribution endpoints (receives policy)
- *   4. host-may-contribute.ts    — policy: only the incident host may contribute
- *   5. responders-may-contribute.ts — policy: any responder may contribute
- */
+/** Assemble the operations room with selectable reaction packs and policy. */
 import { assemble, type ImplementationOverrides } from "@mit-sdg/sync-engine/assembly";
-import { contributionEndpoints } from "./composition/contributions.ts";
-import * as hostMayContribute from "./composition/host-may-contribute.ts";
-import {
-  SelectedMitigationAlertsResponders,
-  SelectedMitigationOpensDiscussion,
-} from "./composition/packs.ts";
-import * as respondersMayContribute from "./composition/responders-may-contribute.ts";
-import * as room from "./composition/room.ts";
-import { operationsRoomConcepts, vocabulary } from "./concept-set.ts";
+import { contributionEndpoints } from "./compositions/Contributions.ts";
+import * as mitigationAlerts from "./compositions/MitigationAlerts.ts";
+import * as mitigationDiscussion from "./compositions/MitigationDiscussion.ts";
+import * as room from "./compositions/Room.ts";
+import * as roomFormers from "./formers/Room.ts";
+import * as hostMayContribute from "./views/HostMayContribute.ts";
+import * as respondersMayContribute from "./views/RespondersMayContribute.ts";
+import { operationsRoomConcepts, vocabulary } from "./vocabulary.ts";
 
 export type OperationsRoomOverrides = ImplementationOverrides<typeof vocabulary>;
 
@@ -35,22 +25,24 @@ export function assembleOperationsRoom({
   instances = {},
 }: OperationsRoomOptions = {}) {
   const policy = contributions === "responders" ? respondersMayContribute : hostMayContribute;
-
   const selected = { ...operationsRoomConcepts.implementations(), ...instances };
 
   return assemble({
     vocabulary,
     instances: selected,
     composition: {
-      room,
-      discussion: discussion ? { SelectedMitigationOpensDiscussion } : {},
-      alerts: alerts ? { SelectedMitigationAlertsResponders } : {},
-      policy,
-      contributions: contributionEndpoints({
-        denied: policy.deniedContribution,
-        mayContribute: policy.responderMayContribute,
-        mayNotContribute: policy.responderMayNotContribute,
-      }),
+      compositions: {
+        room,
+        mitigationDiscussion: discussion ? mitigationDiscussion : {},
+        mitigationAlerts: alerts ? mitigationAlerts : {},
+        contributions: contributionEndpoints({
+          denied: policy.deniedContribution,
+          mayContribute: policy.responderMayContribute,
+          mayNotContribute: policy.responderMayNotContribute,
+        }),
+      },
+      views: { contributionPolicy: policy },
+      formers: roomFormers,
     },
   });
 }
