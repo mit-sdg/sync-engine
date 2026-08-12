@@ -3,14 +3,11 @@ import { applicationConcepts } from "@catalog/concepts";
 import { exerciseReviewQueue, exerciseReviewQueueRepair } from "./review-queue.behavior.ts";
 import { compositions } from "./review-queue.ts";
 
-const {
-  ApproveQueuedReview,
-  GetReviewQueue,
-  RejectQueuedReview,
-  RepairReviewAlert,
-  RequestQueuedReview,
-  WithdrawQueuedReview,
-} = compositions;
+const { ApproveQueuedReview, RejectQueuedReview, WithdrawQueuedReview } =
+  compositions.ReviewDecisions;
+const { GetReviewQueue } = compositions.ReviewQueues;
+const { RepairReviewAlert } = compositions.ReviewRepair;
+const { RequestQueuedReview } = compositions.ReviewRequests;
 
 function memoryInstances() {
   try {

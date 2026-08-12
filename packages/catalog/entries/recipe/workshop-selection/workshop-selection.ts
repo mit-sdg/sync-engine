@@ -1,10 +1,10 @@
-import design from "./spec.md";
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { former, no, whether, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Gathering, Selecting } = concepts;
-const workshop = former(
+const Workshop = former(
   "the workshop (workshop)",
   ({ workshop }, { name, host, selection, item }) =>
     where(
@@ -34,18 +34,14 @@ const ChooseWorkshopItem = endpoint("/workshops/choose", ({ workshop: id, item, 
   ),
 );
 const GetWorkshop = endpoint("/workshops/get", ({ workshop: id }) =>
-  receive({ workshop: id }).then(respond({ workshop: workshop({ workshop: id }) })),
+  receive({ workshop: id }).then(respond({ workshop: Workshop({ workshop: id }) })),
 );
 
-export { design };
+export { spec };
 
 export const compositions = {
-  CreateWorkshop,
-  JoinWorkshop,
-  ChooseWorkshopItem,
-  GetWorkshop,
+  WorkshopMembership: { CreateWorkshop, JoinWorkshop },
+  WorkshopSelection: { ChooseWorkshopItem },
+  WorkshopPages: { GetWorkshop },
 };
-
-export const formers = {
-  workshop,
-};
+export const formers = { Workshop };

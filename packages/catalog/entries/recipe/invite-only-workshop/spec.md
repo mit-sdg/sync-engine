@@ -1,38 +1,19 @@
-# Invite-only Workshop recipe
+# Invite-only Workshop
 
-## Purpose
-
-Require a directed accepted invitation before a person joins a workshop.
-
-## Concepts
-
-Timing timestamps invitation decisions. Gathering owns workshops and membership.
-Inviting owns the offer, recipient, and terminal invitation decision.
-
-## Decisions
-
-Issuing first confirms that the Gathering exists. A public adapter must bind the
-inviter to the authenticated caller when issuing or revoking, and bind the invitee
-when accepting, declining, repairing, or reading the private invitation list. An
-accepted Invitation is durable evidence even when the later Gathering join faults.
+An invite-only workshop requires a directed accepted invitation before a person joins.
 
 ## Compositions
 
-- `CreateInviteOnlyWorkshop` — `/invite-workshops/create`
-- `IssueWorkshopInvitation` — `/invite-workshops/invite`
-- `AcceptWorkshopInvitation` — `/invite-workshops/accept`
-- `DeclineWorkshopInvitation` — `/invite-workshops/decline`
-- `RevokeWorkshopInvitation` — `/invite-workshops/revoke`
-- `RepairAcceptedWorkshopInvitation` — `/invite-workshops/repair`
-- `GetWorkshopInvitations` — `/invite-workshops/invitations`
+### WorkshopMembership
+
+A host creates a workshop. Accepting an invitation records acceptance before joining its invitee, so a failed join leaves durable evidence rather than rolling the invitation back. Trusted repair joins an accepted invitee only when membership is missing and treats existing membership as convergence.
+
+### InvitationManagement
+
+A workshop may issue, decline, or revoke invitations, and an invitee may read their pending invitations. Issuing first confirms that the workshop exists. Public boundaries must bind inviter and invitee inputs to authenticated callers because the recipe treats those identities as trusted authority.
 
 ## Formers
 
-`pendingInvitations`.
+### PendingInvitations
 
-## Failure and repair
-
-Acceptance is recorded before the membership consequence. If joining faults, repair
-reads the accepted Invitation and current membership and retries only the missing
-join. Repair treats an existing membership as convergence, not as a reason to reverse
-acceptance. The recipe does not claim atomicity between Inviting and Gathering.
+The pending invitation read lists the invitations currently addressed to one invitee.

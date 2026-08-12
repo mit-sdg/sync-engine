@@ -4,7 +4,9 @@ import { vocabulary } from "@catalog/concepts";
 import { catalogRegistrations } from "@catalog/registrations";
 import { compositions } from "./workshop-selection.ts";
 
-const { ChooseWorkshopItem, CreateWorkshop, GetWorkshop, JoinWorkshop } = compositions;
+const { ChooseWorkshopItem } = compositions.WorkshopSelection;
+const { CreateWorkshop, JoinWorkshop } = compositions.WorkshopMembership;
+const { GetWorkshop } = compositions.WorkshopPages;
 
 type Awaitable<T> = T | Promise<T>;
 type FloorFactory = (context: unknown) => object;

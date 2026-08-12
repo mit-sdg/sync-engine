@@ -3,12 +3,9 @@ import { describe, expect, test } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
 import { compositions } from "./member-reservations.ts";
 
-const {
-  CancelMemberReservation,
-  FulfillMemberReservation,
-  GetMemberReservations,
-  ReserveForMember,
-} = compositions;
+const { CancelMemberReservation, FulfillMemberReservation, ReserveForMember } =
+  compositions.Reservations;
+const { GetMemberReservations } = compositions.ReservationLists;
 
 type Floor = "memory" | "mongo";
 type Instances = ReturnType<(typeof applicationConcepts)["implementations"]>;

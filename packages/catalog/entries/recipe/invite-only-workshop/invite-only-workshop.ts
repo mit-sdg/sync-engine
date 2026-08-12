@@ -1,11 +1,11 @@
-import design from "./spec.md";
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, former, no, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Gathering, Inviting, Timing } = concepts;
 
-const pendingInvitations = former(
+const PendingInvitations = former(
   "the pending workshop invitations of (invitee)",
   ({ invitee }, { invitation, target, inviter, issuedAt }) =>
     each(Inviting._pendingFor({ invitee }).is({ invitation, target, inviter, issuedAt })).form({
@@ -102,21 +102,22 @@ const RepairAcceptedWorkshopInvitation = endpoint(
 
 /** `invitee` selects a private inbox and must be bound to the authenticated caller. */
 const GetWorkshopInvitations = endpoint("/invite-workshops/invitations", ({ invitee }) =>
-  receive({ invitee }).then(respond({ invitations: pendingInvitations({ invitee }) })),
+  receive({ invitee }).then(respond({ invitations: PendingInvitations({ invitee }) })),
 );
 
-export { design };
+export { spec };
 
 export const compositions = {
-  CreateInviteOnlyWorkshop,
-  IssueWorkshopInvitation,
-  AcceptWorkshopInvitation,
-  DeclineWorkshopInvitation,
-  RevokeWorkshopInvitation,
-  RepairAcceptedWorkshopInvitation,
-  GetWorkshopInvitations,
+  WorkshopMembership: {
+    CreateInviteOnlyWorkshop,
+    AcceptWorkshopInvitation,
+    RepairAcceptedWorkshopInvitation,
+  },
+  InvitationManagement: {
+    IssueWorkshopInvitation,
+    DeclineWorkshopInvitation,
+    RevokeWorkshopInvitation,
+    GetWorkshopInvitations,
+  },
 };
-
-export const formers = {
-  pendingInvitations,
-};
+export const formers = { PendingInvitations };
