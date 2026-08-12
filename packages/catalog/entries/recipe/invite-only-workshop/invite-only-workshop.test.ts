@@ -1,7 +1,9 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
-import {
+import { compositions } from "./invite-only-workshop.ts";
+
+const {
   AcceptWorkshopInvitation,
   CreateInviteOnlyWorkshop,
   DeclineWorkshopInvitation,
@@ -9,7 +11,7 @@ import {
   IssueWorkshopInvitation,
   RepairAcceptedWorkshopInvitation,
   RevokeWorkshopInvitation,
-} from "./invite-only-workshop.ts";
+} = compositions;
 
 type Floor = "memory" | "mongo";
 type Instances = ReturnType<(typeof applicationConcepts)["implementations"]>;

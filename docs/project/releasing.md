@@ -81,7 +81,7 @@ bun install
 | Location                                     | Projected facts                         |
 | -------------------------------------------- | --------------------------------------- |
 | `packages/*/package.json`                    | Workspace versions and dependencies     |
-| `packages/catalog/entries/**/manifest.json`  | Shipped entry requirements              |
+| `packages/catalog/entries/**/manifest.json`  | Shipped display metadata                |
 | `examples/*/package.json`                    | Shipped example dependencies            |
 | `tests/packaging/application/package.json`   | Packed-application dependency           |
 | `packages/*/tests/packaging/**/package.json` | Workspace consumer-fixture dependencies |

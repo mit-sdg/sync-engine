@@ -689,7 +689,7 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
   });
   run("bun", ["install", "--ignore-scripts"], consumer);
   if (existsSync(resolve(consumer, "node_modules/@mit-sdg/sync-engine"))) {
-    throw new Error("catalog-only installation unexpectedly installed optional core peer");
+    throw new Error("catalog-only installation unexpectedly installed core");
   }
   const executable = catalog.manifest.bin?.catalog;
   if (executable === undefined) throw new Error("catalog package does not provide catalog");
@@ -701,6 +701,11 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
   );
   run("bun", [command, "list"], consumer);
   run("bun", [command, "show", "recipe/workshop-selection"], consumer);
+  run(
+    "bun",
+    [command, "source", "concept/selecting", "memory/selecting.memory.ts", "--raw"],
+    consumer,
+  );
 }
 
 async function verifySetupAndExamples(
@@ -708,7 +713,6 @@ async function verifySetupAndExamples(
   coreConsumer: string,
 ): Promise<void> {
   const core = workspaceArtifact(artifacts, coreWorkspace);
-  const catalog = workspaceArtifact(artifacts, workspaceById("catalog"));
   const installed = resolve(coreConsumer, "node_modules", ...core.workspace.packageName.split("/"));
   const setup = resolve(temporary, "setup-application");
   const executable = core.manifest.bin?.["sync-engine"];
@@ -730,7 +734,6 @@ async function verifySetupAndExamples(
     },
     dependencies: {
       [core.workspace.packageName]: core.manifest.version,
-      [catalog.workspace.packageName]: tarballSpecifier(setup, catalog.tarball),
     },
     devDependencies: { "@types/node": "^24.0.0", typescript: "^6.0.0", "vite-plus": "0.2.6" },
   });
@@ -744,100 +747,6 @@ async function verifySetupAndExamples(
   run("bun", ["run", "generate"], setup);
   run("bun", ["run", "check"], setup);
   run("bun", ["run", "start"], setup);
-
-  await writeFile(
-    resolve(setup, "vite.config.ts"),
-    'import { readFileSync } from "node:fs";\nimport { defineConfig } from "vite-plus";\n\nexport default defineConfig({\n  plugins: [{\n    name: "markdown-as-text",\n    enforce: "pre",\n    load(id: string) {\n      return id.endsWith(".md") ? `export default ${JSON.stringify(readFileSync(id, "utf8"))};` : null;\n    },\n  }],\n});\n',
-  );
-  setupManifest.dependencies[core.workspace.packageName] = core.manifest.version;
-  await writePackageManifest(setupManifestPath, setupManifest);
-  const mongoSetup = resolve(temporary, "setup-application-mongo");
-  await cp(setup, mongoSetup, {
-    recursive: true,
-    filter: (path) => {
-      const entry = relative(setup, path).split(sep).join("/");
-      return entry !== "node_modules" && !entry.startsWith("node_modules/");
-    },
-  });
-  const catalogExecutable = catalog.manifest.bin?.catalog;
-  if (catalogExecutable === undefined) throw new Error("catalog package does not provide catalog");
-  const catalogCommand = resolve(
-    setup,
-    "node_modules",
-    ...catalog.workspace.packageName.split("/"),
-    catalogExecutable,
-  );
-  run("bun", [catalogCommand, "add", "recipe/workshop-selection", "--floor", "memory"], setup);
-  await writeFile(
-    resolve(setup, "src/vocabulary.ts"),
-    'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\nimport { catalogRegistrations } from "./catalog/registrations.generated.ts";\n\nexport const applicationConcepts = conceptSet({ ...catalogRegistrations });\nexport const { concepts, vocabulary } = applicationConcepts;\n',
-  );
-  // Catalog recipes still target the package's compatibility source name.
-  await writeFile(
-    resolve(setup, "src/concept-set.ts"),
-    'export { applicationConcepts, concepts, vocabulary } from "./vocabulary.ts";\n',
-  );
-  await mkdir(resolve(setup, "src/compositions"), { recursive: true });
-  await writeFile(
-    resolve(setup, "src/compositions/Catalog.ts"),
-    'import { catalogComposition } from "../catalog/composition.generated.ts";\n\nexport const applicationComposition = { ...catalogComposition };\n',
-  );
-  await writeFile(
-    resolve(setup, "src/assembly.ts"),
-    'import { assemble } from "@mit-sdg/sync-engine/assembly";\nimport { applicationComposition } from "./compositions/Catalog.ts";\nimport { applicationConcepts, vocabulary } from "./vocabulary.ts";\n\nexport function assembleApplication() {\n  return assemble({\n    vocabulary,\n    instances: applicationConcepts.implementations("memory", {}),\n    composition: applicationComposition,\n  });\n}\n',
-  );
-  run("bun", ["run", "typecheck"], setup);
-  run("bun", ["run", "test"], setup);
-  run("bun", ["run", "generate"], setup);
-  run("bun", ["run", "check"], setup);
-
-  const mongoManifestPath = resolve(mongoSetup, "package.json");
-  const mongoManifest = JSON.parse(await readFile(mongoManifestPath, "utf8")) as DependencyManifest;
-  mongoManifest.dependencies[core.workspace.packageName] = tarballSpecifier(
-    mongoSetup,
-    core.tarball,
-  );
-  mongoManifest.dependencies.mongodb = "6.21.0";
-  await writePackageManifest(mongoManifestPath, mongoManifest);
-  run("bun", ["install", "--ignore-scripts"], mongoSetup);
-  mongoManifest.dependencies[core.workspace.packageName] = core.manifest.version;
-  await writePackageManifest(mongoManifestPath, mongoManifest);
-  const mongoCatalogCommand = resolve(
-    mongoSetup,
-    "node_modules",
-    ...catalog.workspace.packageName.split("/"),
-    catalogExecutable,
-  );
-  run(
-    "bun",
-    [mongoCatalogCommand, "add", "recipe/workshop-selection", "--floor", "mongo"],
-    mongoSetup,
-  );
-  await writeFile(
-    resolve(mongoSetup, "src/vocabulary.ts"),
-    'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\nimport { catalogRegistrations } from "./catalog/registrations.generated.ts";\n\nexport const applicationConcepts = conceptSet({ ...catalogRegistrations });\nexport const { concepts, vocabulary } = applicationConcepts;\n',
-  );
-  await writeFile(
-    resolve(mongoSetup, "src/concept-set.ts"),
-    'export { applicationConcepts, concepts, vocabulary } from "./vocabulary.ts";\n',
-  );
-  await mkdir(resolve(mongoSetup, "src/compositions"), { recursive: true });
-  await writeFile(
-    resolve(mongoSetup, "src/compositions/Catalog.ts"),
-    'import { catalogComposition } from "../catalog/composition.generated.ts";\n\nexport const applicationComposition = { ...catalogComposition };\n',
-  );
-  await writeFile(
-    resolve(mongoSetup, "src/assembly.ts"),
-    'import type { Db } from "mongodb";\nimport { assemble } from "@mit-sdg/sync-engine/assembly";\nimport { applicationComposition } from "./compositions/Catalog.ts";\nimport { applicationConcepts, vocabulary } from "./vocabulary.ts";\n\nconst db = undefined as unknown as Db;\nexport function assembleApplication() {\n  return assemble({\n    vocabulary,\n    instances: applicationConcepts.implementations("mongo", { db }),\n    composition: applicationComposition,\n  });\n}\n',
-  );
-  if (
-    (await filesBelow(resolve(mongoSetup, "src"))).some((path) =>
-      relative(mongoSetup, path).includes("memory"),
-    )
-  )
-    throw new Error("mongo catalog consumer contains memory source");
-  run("bun", ["run", "typecheck"], mongoSetup);
-  run("bun", ["run", "test"], mongoSetup);
 
   for (const example of Object.values(applicationExamples)) {
     const { directory } = example;

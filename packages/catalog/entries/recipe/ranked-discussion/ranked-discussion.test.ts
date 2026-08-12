@@ -1,7 +1,9 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
-import {
+import { compositions } from "./ranked-discussion.ts";
+
+const {
   CloseRankedDiscussion,
   DownvoteResponse,
   GetRankedDiscussion,
@@ -9,7 +11,7 @@ import {
   RespondToDiscussion,
   UnvoteResponse,
   UpvoteResponse,
-} from "./ranked-discussion.ts";
+} = compositions;
 
 type Floor = "memory" | "mongo";
 type Instances = ReturnType<(typeof applicationConcepts)["implementations"]>;

@@ -1,4 +1,4 @@
-# Recoverable Board recipe
+# Recoverable Board
 
 ## Purpose
 
@@ -20,7 +20,7 @@ purge does not claim physical erasure of Post or Comment storage. A public adapt
 must bind author inputs to authenticated identities when attribution and author-only
 comment retraction matter.
 
-## Endpoints
+## Compositions
 
 - `PublishBoardPost` — `/recoverable-board/post`
 - `AddBoardComment` — `/recoverable-board/comment`
@@ -32,6 +32,14 @@ comment retraction matter.
 - `RestoreBoardPost` — `/recoverable-board/restore`
 - `PurgeBoardPost` — `/recoverable-board/purge`
 - `ListRecoverableBoard` — `/recoverable-board/list`
+
+## Views
+
+`postExists`, `postIsVisible`, `boardLabel`.
+
+## Formers
+
+`recoverableBoard`.
 
 ## Failure
 

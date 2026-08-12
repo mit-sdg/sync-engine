@@ -1,70 +1,26 @@
 # Contributing catalog entries
 
-The catalog discovers entries in `entries/index.json` order; unlisted ids are
-unavailable. Read the [manifest reference](public-surface.md#manifest-fields)
-before writing one.
+The catalog is a read-only collection of designs and source examples. `entries/index.json` defines display order; an unlisted manifest is unavailable.
 
-## Add an entry
+## Entry shape
 
-A concept entry includes:
+Use a Name-style concept design (`# Selecting`, for example) for a concept. Preserve implementations as examples, but list shared source separately from each named implementation so `catalog source` has unambiguous selectors.
 
-- one specification and shared declarations;
-- an implementation and principle test for every floor, with shared files when
-  the same implementation serves more than one floor; and
-- one registry containing the exact floor and class markers consumed by the
-  renderer.
+Keep a recipe design lean and organize its authored behavior under `## Compositions`, with `## Views` and `## Formers` when those declarations exist. Recipe TypeScript exports its design and separate canonical `compositions`, `views`, and `formers` objects as applicable. Do not export the same declaration both individually and through one of those objects.
 
-A recipe declares every concept dependency, the exact exported composition
-members that may enter `catalogComposition`, and one route for each member.
-Every relative import in an installed floor must resolve to another selected
-file; reserved `@catalog/*` imports are the only additional installer-resolved
-imports.
+Recipe source imports its adjacent `spec.md` relatively. This is the smallest entry-local equivalent of an application's `@design/*` alias: catalog entries are typechecked together, but each independent entry has its own `spec.md`, so one catalog-wide alias cannot identify the importing entry. Applications may adapt the import to their own `@design/*` mapping.
 
-Copied tests are source assets and cannot use repository-only aliases. Recipe
-source may use `@catalog/concepts`, which installation rewrites to a relative
-concept-set import. A declared recipe test may use `@catalog/registrations` for
-selected-floor fixtures; installation rewrites it to
-`src/catalog/registrations.generated.ts`. Production recipe modules must remain
-composition-only and cannot import registrations.
-
-## Separate implementation floors
-
-Declare every non-`node:` external package import in the manifest. Keep
-floor-specific imports, implementation code, factories, tests, and package
-requirements inside that floor. A memory installation must not retain Mongo
-source or imports, and a Mongo installation must not retain memory source or
-imports.
-
-A Mongo implementation receives exactly `{ db: Db }`; the host owns and closes
-`MongoClient`. Export index creation as a module function, not an undeclared
-public concept method. Transactional implementations must document the need for
-a transaction-capable replica set or sharded cluster. Their tests must reject
-unsupported topology and exercise rollback after a later write faults.
+Manifests describe only display: identity, summary, design, source names, recipe relationships, and concept implementation labels. Do not add destinations, package requirements, project inspection, mutation guidance, lock state, ownership, transforms, generation, or installation metadata.
 
 ## Verify an entry
 
-Add focused evidence for:
+Add tests for manifest validation, exact selectors, and source behavior where needed. Concept principle and implementation tests and recipe behavior tests remain catalog-owned evidence for the curated assets; they are not installation machinery.
 
-- manifest and byte-exact rendering failures;
-- the concept principle against each implementation;
-- memory-only and Mongo-only installed-project typechecking; and
-- installer collision, lock ownership, and repeated-add behavior.
-
-Run the repository typecheck against full registries through
-`entries/_typecheck/concept-set.ts`. Mongo tests must skip unless
-`MONGODB_URI` is available and must honor `CATALOG_SKIP_MONGO=1`. To let the
-repository test setup start a temporary Mongo server, run:
+Run:
 
 ```sh
-CATALOG_MONGO=1 bun run test
-```
-
-Before submitting an entry change, run:
-
-```sh
-bun run check
+bun run typecheck
 bun run test
-bun run coverage
 bun run build
 bun run package:check
 ```

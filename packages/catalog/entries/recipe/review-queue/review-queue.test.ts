@@ -1,14 +1,16 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 import { applicationConcepts } from "@catalog/concepts";
 import { exerciseReviewQueue, exerciseReviewQueueRepair } from "./review-queue.behavior.ts";
-import {
+import { compositions } from "./review-queue.ts";
+
+const {
   ApproveQueuedReview,
   GetReviewQueue,
   RejectQueuedReview,
   RepairReviewAlert,
   RequestQueuedReview,
   WithdrawQueuedReview,
-} from "./review-queue.ts";
+} = compositions;
 
 function memoryInstances() {
   try {

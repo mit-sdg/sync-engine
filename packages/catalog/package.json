@@ -1,7 +1,7 @@
 {
   "name": "@mit-sdg/sync-engine-catalog",
   "version": "1.0.0-beta.8",
-  "description": "Curated source installer for @mit-sdg/sync-engine applications",
+  "description": "Read-only browser for curated @mit-sdg/sync-engine designs and source",
   "keywords": [
     "catalog",
     "concept",
@@ -34,21 +34,9 @@
     "access": "public",
     "tag": "beta"
   },
-  "dependencies": {
-    "semver": "^7.7.3"
-  },
   "devDependencies": {
     "@node-rs/argon2": "2.0.2",
-    "mongodb": "^6.20.0",
-    "mongodb-memory-server": "^10.4.1"
-  },
-  "peerDependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8"
-  },
-  "peerDependenciesMeta": {
-    "@mit-sdg/sync-engine": {
-      "optional": true
-    }
+    "mongodb": "^6.20.0"
   },
   "engines": {
     "bun": ">=1.3.14 <1.4",
