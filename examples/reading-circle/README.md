@@ -33,10 +33,13 @@ Reading Circle gives three independent concepts application-specific roles:
 Each selection identifies a separate discussion. Choosing the same reading text
 in two circles therefore does not combine their responses.
 
-The composition in `src/composition/reading-circle.ts` connects them. When
-Selecting chooses a reading, a reaction opens a Discussing discussion for that
-selection. Two policy views divide response requests: a member may respond, while
-a nonmember receives `NOT_A_MEMBER`. The `circlePage` former joins the three
+The authored application design lives in
+`design/compositions/ReadingCircle.md`, with cross-concept identity bindings in
+`design/vocabulary.md`. Its implementation in
+`src/compositions/ReadingCircle.ts` connects the concepts. When Selecting
+chooses a reading, a reaction opens a Discussing discussion for that selection.
+Two policy views divide response requests: a member may respond, while a
+nonmember receives `NOT_A_MEMBER`. The `CirclePage` former joins the three
 concepts into the page returned by `/circles/page`.
 
 The endpoints expose this workflow through the standard gateway and generated
@@ -50,28 +53,35 @@ client contract:
 5. `/circles/page` forms the complete page.
 
 The concepts do not import one another or contain these application-specific
-connections. Their specifications and direct tests live under `src/concepts/`;
-`tests/application.test.ts` checks the assembled behavior.
+connections. Their specifications live under `design/concepts/`, their flat
+PascalCase implementations and registries under `src/concepts/`, and their
+direct tests under `tests/concepts/`. `tests/compositions/ReadingCircle.test.ts`
+checks the assembled behavior.
 
 ## Source map
 
-| Path                                                         | Role                                                                     |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `src/concepts/*/`                                            | Independent concept specifications, implementations, and principle tests |
-| `src/concept-set.ts`                                         | Named registrations, vocabulary, and implementations                     |
-| `src/composition/reading-circle.ts`                          | Reading reaction, membership policy, page former, and endpoints          |
-| `src/assembly.ts`                                            | Application assembly                                                     |
-| `src/edge.ts`                                                | Standard gateway                                                         |
-| `src/client.ts`                                              | Transport-neutral generated-contract client helper                       |
-| `src/scenario.ts`                                            | Complete local-gateway workflow                                          |
-| `tests/application.test.ts`                                  | Assembled behavior and deterministic scenario tests                      |
-| `generated.config.ts`                                        | Artifact command configuration                                           |
-| [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                                               |
-| [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                                          |
+| Path                                                         | Role                                                        |
+| ------------------------------------------------------------ | ----------------------------------------------------------- |
+| `design/concepts/*.md`                                       | Registered concept specifications                           |
+| `design/compositions/ReadingCircle.md`                       | Lean authored application composition                       |
+| `design/vocabulary.md`                                       | Cross-concept identity-role bindings                        |
+| `src/concepts/*.ts`                                          | Flat concept implementations and registries                 |
+| `src/vocabulary.ts`                                          | Named registrations, vocabulary design, and implementations |
+| `src/compositions/ReadingCircle.ts`                          | Composition declarations grouped by exported namespace      |
+| `src/assembly.ts`                                            | Application assembly                                        |
+| `src/edge.ts`                                                | Standard gateway                                            |
+| `src/client.ts`                                              | Transport-neutral generated-contract client helper          |
+| `src/scenario.ts`                                            | Complete local-gateway workflow                             |
+| `tests/concepts/`                                            | Concept principle tests                                     |
+| `tests/compositions/ReadingCircle.test.ts`                   | Assembled behavior and deterministic scenario tests         |
+| `generated.config.ts`                                        | Artifact command configuration                              |
+| [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                                  |
+| [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                             |
 
 ## Individual checks
 
 ```sh
+bun run design:check
 bun run test
 bun run typecheck
 bun run artifacts:check
