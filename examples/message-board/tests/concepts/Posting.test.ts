@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { InvalidPostContent, PostingConcept } from "./posting.ts";
+import { InvalidPostContent, PostingConcept } from "../../src/concepts/Posting.ts";
 
 function identities(...values: string[]) {
   return () => {

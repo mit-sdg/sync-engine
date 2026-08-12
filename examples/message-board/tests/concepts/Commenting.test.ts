@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
-import { CommentAuthorMismatch, CommentingConcept, CommentNotFound } from "./commenting.ts";
+import {
+  CommentAuthorMismatch,
+  CommentingConcept,
+  CommentNotFound,
+} from "../../src/concepts/Commenting.ts";
 
 function identities(...values: string[]) {
   return () => {
