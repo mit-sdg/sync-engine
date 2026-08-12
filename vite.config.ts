@@ -90,8 +90,6 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
-    globalSetup: ["packages/catalog/tests/mongo-setup.ts"],
-    setupFiles: ["packages/catalog/tests/mongo-floor-context.ts"],
     include: [
       "examples/**/*.test.ts",
       "packages/*/tests/**/*.test.ts",

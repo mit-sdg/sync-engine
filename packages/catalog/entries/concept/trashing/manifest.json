@@ -1,66 +1,18 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "concept/trashing",
   "kind": "concept",
   "summary": "Control reversible and irreversible visibility without deleting peer records.",
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "concept": {
-    "name": "Trashing",
-    "export": "trashing",
-    "registration": "$concepts/trashing/registry.ts"
-  },
-  "defaultFloor": "memory",
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$concepts/trashing/spec.md"
-    },
-    {
-      "source": "trashing.shared.ts",
-      "target": "$concepts/trashing/trashing.shared.ts"
-    },
-    {
-      "source": "trashing.conformance.ts",
-      "target": "$concepts/trashing/trashing.conformance.ts"
-    },
-    {
-      "source": "registry.ts",
-      "target": "$concepts/trashing/registry.ts",
-      "render": "floor"
-    }
-  ],
-  "floors": {
+  "design": "spec.md",
+  "sources": ["trashing.shared.ts", "trashing.conformance.ts", "registry.ts"],
+  "implementations": {
     "memory": {
       "summary": "Process-local disposition records with explicit transition times.",
-      "files": [
-        {
-          "source": "trashing.memory.ts",
-          "target": "$concepts/trashing/trashing.memory.ts"
-        },
-        {
-          "source": "trashing.memory.test.ts",
-          "target": "$concepts/trashing/trashing.memory.test.ts"
-        }
-      ]
+      "sources": ["trashing.memory.ts", "trashing.memory.test.ts"]
     },
     "mongo": {
       "summary": "MongoDB disposition records with unique Items and conditional transitions.",
-      "packages": {
-        "mongodb": "^6.20.0"
-      },
-      "files": [
-        {
-          "source": "trashing.mongo.ts",
-          "target": "$concepts/trashing/trashing.mongo.ts"
-        },
-        {
-          "source": "trashing.mongo.test.ts",
-          "target": "$concepts/trashing/trashing.mongo.test.ts"
-        }
-      ]
+      "sources": ["trashing.mongo.ts", "trashing.mongo.test.ts"]
     }
   }
 }

@@ -1,47 +1,9 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "recipe/invite-only-workshop",
   "kind": "recipe",
   "summary": "Admit workshop members only after a directed invitation is accepted.",
+  "design": "spec.md",
   "requires": ["concept/timing", "concept/gathering", "concept/inviting"],
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$recipes/invite-only-workshop.spec.md"
-    },
-    {
-      "source": "invite-only-workshop.ts",
-      "target": "$recipes/invite-only-workshop.ts"
-    },
-    {
-      "source": "invite-only-workshop.test.ts",
-      "target": "$recipes/invite-only-workshop.test.ts"
-    }
-  ],
-  "recipe": {
-    "module": "$recipes/invite-only-workshop.ts",
-    "test": "$recipes/invite-only-workshop.test.ts",
-    "members": [
-      "CreateInviteOnlyWorkshop",
-      "IssueWorkshopInvitation",
-      "AcceptWorkshopInvitation",
-      "DeclineWorkshopInvitation",
-      "RevokeWorkshopInvitation",
-      "RepairAcceptedWorkshopInvitation",
-      "GetWorkshopInvitations"
-    ],
-    "routes": {
-      "CreateInviteOnlyWorkshop": "/invite-workshops/create",
-      "IssueWorkshopInvitation": "/invite-workshops/invite",
-      "AcceptWorkshopInvitation": "/invite-workshops/accept",
-      "DeclineWorkshopInvitation": "/invite-workshops/decline",
-      "RevokeWorkshopInvitation": "/invite-workshops/revoke",
-      "RepairAcceptedWorkshopInvitation": "/invite-workshops/repair",
-      "GetWorkshopInvitations": "/invite-workshops/invitations"
-    }
-  }
+  "sources": ["invite-only-workshop.ts", "invite-only-workshop.test.ts"]
 }

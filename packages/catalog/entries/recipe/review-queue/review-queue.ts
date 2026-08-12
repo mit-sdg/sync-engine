@@ -1,3 +1,4 @@
+import design from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
@@ -55,7 +56,7 @@ const terminalReviewForRepair = view(
   ],
 ).optional();
 
-export const RequestQueuedReview = endpoint(
+const RequestQueuedReview = endpoint(
   "/review-queue/request",
   ({ subject, requester, reviewer, time, review, alert }) =>
     receive({ subject, requester, reviewer })
@@ -72,24 +73,22 @@ export const RequestQueuedReview = endpoint(
       .then(respond({ review, alert })),
 );
 
-export const ApproveQueuedReview = endpoint(
-  "/review-queue/approve",
-  ({ review, reviewer, time, alert }) =>
-    receive({ review, reviewer })
-      .where(Timing._now({}).is({ time }))
-      .then(Approving.approve({ review, reviewer, at: time }).responds({ review }))
-      .then(
-        where(openReviewAlert({ review, reviewer }).is({ alert }))
-          .then(Alerting.acknowledge({ alert, recipient: reviewer }).responds({ alert }))
-          .then(respond({ review, alert }))
-          .named("alert-open"),
-        where(no(openReviewAlert({ review, reviewer })))
-          .then(respond({ error: "REVIEW_ALERT_MISSING" }))
-          .named("alert-missing"),
-      ),
+const ApproveQueuedReview = endpoint("/review-queue/approve", ({ review, reviewer, time, alert }) =>
+  receive({ review, reviewer })
+    .where(Timing._now({}).is({ time }))
+    .then(Approving.approve({ review, reviewer, at: time }).responds({ review }))
+    .then(
+      where(openReviewAlert({ review, reviewer }).is({ alert }))
+        .then(Alerting.acknowledge({ alert, recipient: reviewer }).responds({ alert }))
+        .then(respond({ review, alert }))
+        .named("alert-open"),
+      where(no(openReviewAlert({ review, reviewer })))
+        .then(respond({ error: "REVIEW_ALERT_MISSING" }))
+        .named("alert-missing"),
+    ),
 );
 
-export const RejectQueuedReview = endpoint(
+const RejectQueuedReview = endpoint(
   "/review-queue/reject",
   ({ review, reviewer, reason, time, alert }) =>
     receive({ review, reviewer, reason })
@@ -106,7 +105,7 @@ export const RejectQueuedReview = endpoint(
       ),
 );
 
-export const WithdrawQueuedReview = endpoint(
+const WithdrawQueuedReview = endpoint(
   "/review-queue/withdraw",
   ({ review, requester, reviewer, time, alert }) =>
     receive({ review, requester })
@@ -129,7 +128,7 @@ export const WithdrawQueuedReview = endpoint(
       ),
 );
 
-export const RepairReviewAlert = endpoint(
+const RepairReviewAlert = endpoint(
   "/review-queue/repair",
   ({ review, reviewer, requestedAt, alert }) =>
     receive({ review }).then(
@@ -162,6 +161,28 @@ export const RepairReviewAlert = endpoint(
     ),
 );
 
-export const GetReviewQueue = endpoint("/review-queue/get", ({ reviewer }) =>
+const GetReviewQueue = endpoint("/review-queue/get", ({ reviewer }) =>
   receive({ reviewer }).then(respond({ queue: reviewQueue({ reviewer }) })),
 );
+
+export { design };
+
+export const compositions = {
+  RequestQueuedReview,
+  ApproveQueuedReview,
+  RejectQueuedReview,
+  WithdrawQueuedReview,
+  RepairReviewAlert,
+  GetReviewQueue,
+};
+
+export const views = {
+  openReviewAlert,
+  pendingReviewForRepair,
+  terminalReviewForRepair,
+};
+
+export const formers = {
+  queuedAlert,
+  reviewQueue,
+};

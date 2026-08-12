@@ -1,3 +1,4 @@
+import design from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, former, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
@@ -18,7 +19,7 @@ const activeReservations = former(
  * `claimant` is an identity claim at this boundary. A public adapter must bind it
  * to the authenticated caller rather than trust a caller-selected value.
  */
-export const ReserveForMember = endpoint(
+const ReserveForMember = endpoint(
   "/member-reservations/reserve",
   ({ gathering, resource, claimant, at, reservation }) =>
     receive({ gathering, resource, claimant }).then(
@@ -36,7 +37,7 @@ export const ReserveForMember = endpoint(
 );
 
 /** `claimant` must be supplied from the authenticated caller at a public boundary. */
-export const CancelMemberReservation = endpoint(
+const CancelMemberReservation = endpoint(
   "/member-reservations/cancel",
   ({ reservation, claimant, at }) =>
     receive({ reservation, claimant })
@@ -46,7 +47,7 @@ export const CancelMemberReservation = endpoint(
 );
 
 /** `claimant` must be supplied from the authenticated caller at a public boundary. */
-export const FulfillMemberReservation = endpoint(
+const FulfillMemberReservation = endpoint(
   "/member-reservations/fulfill",
   ({ reservation, claimant, at }) =>
     receive({ reservation, claimant })
@@ -56,6 +57,19 @@ export const FulfillMemberReservation = endpoint(
 );
 
 /** `claimant` selects whose reservations are read; authenticate or authorize that identity. */
-export const GetMemberReservations = endpoint("/member-reservations/get", ({ claimant }) =>
+const GetMemberReservations = endpoint("/member-reservations/get", ({ claimant }) =>
   receive({ claimant }).then(respond({ reservations: activeReservations({ claimant }) })),
 );
+
+export { design };
+
+export const compositions = {
+  ReserveForMember,
+  CancelMemberReservation,
+  FulfillMemberReservation,
+  GetMemberReservations,
+};
+
+export const formers = {
+  activeReservations,
+};

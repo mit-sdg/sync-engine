@@ -1,4 +1,4 @@
-# Review Queue recipe
+# Review Queue
 
 ## Purpose
 
@@ -19,7 +19,7 @@ trusted callers and derives the recipient from the Review rather than from reque
 input. Approval is evidence only and does not itself authorize another concept
 action.
 
-## Endpoints
+## Compositions
 
 - `RequestQueuedReview` — `/review-queue/request`
 - `ApproveQueuedReview` — `/review-queue/approve`
@@ -27,6 +27,14 @@ action.
 - `WithdrawQueuedReview` — `/review-queue/withdraw`
 - `RepairReviewAlert` — `/review-queue/repair`
 - `GetReviewQueue` — `/review-queue/get`
+
+## Views
+
+`openReviewAlert`, `pendingReviewForRepair`, `terminalReviewForRepair`.
+
+## Formers
+
+`queuedAlert`, `reviewQueue`.
 
 ## Failure and repair
 

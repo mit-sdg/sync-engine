@@ -4,7 +4,9 @@ import {
   exerciseMessageBoard,
   exerciseRegistrationPartialFailure,
 } from "./message-board.behavior.ts";
-import {
+import { compositions } from "./message-board.ts";
+
+const {
   AddMessageBoardComment,
   ChangeBoardPassword,
   CurrentBoardUser,
@@ -15,7 +17,7 @@ import {
   RetractMessageBoardComment,
   SignInBoardUser,
   SignOutBoardUser,
-} from "./message-board.ts";
+} = compositions;
 
 function memoryInstances() {
   try {

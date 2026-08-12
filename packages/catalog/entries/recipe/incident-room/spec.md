@@ -1,4 +1,4 @@
-# Incident Room recipe
+# Incident Room
 
 ## Purpose
 
@@ -20,7 +20,7 @@ recipient and Selection cause. Contributions require current membership. A publi
 adapter must bind the contributor and acknowledging recipient to the authenticated
 caller.
 
-## Endpoints
+## Compositions
 
 - `CreateIncidentRoom` — `/incident-rooms/create`
 - `JoinIncidentRoom` — `/incident-rooms/join`
@@ -30,6 +30,14 @@ caller.
 - `AcknowledgeMitigationAlert` — `/incident-rooms/acknowledge`
 - `RepairMitigationEffects` — `/incident-rooms/repair`
 - `GetIncidentDashboard` — `/incident-rooms/dashboard`
+
+## Views
+
+`memberOfRoom`, `notMemberOfRoom`, `openMitigationDiscussion`.
+
+## Formers
+
+`incidentDashboard`.
 
 ## Failure and repair
 

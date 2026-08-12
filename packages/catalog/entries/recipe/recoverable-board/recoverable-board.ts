@@ -1,3 +1,4 @@
+import design from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, no, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
@@ -52,16 +53,14 @@ const recoverableBoard = former(
     }),
 );
 
-export const PublishBoardPost = endpoint(
-  "/recoverable-board/post",
-  ({ author, content, at, post }) =>
-    receive({ author, content })
-      .where(Timing._now({}).is({ time: at }))
-      .then(Posting.publish({ author, content, at }).responds({ post }))
-      .then(respond({ post })),
+const PublishBoardPost = endpoint("/recoverable-board/post", ({ author, content, at, post }) =>
+  receive({ author, content })
+    .where(Timing._now({}).is({ time: at }))
+    .then(Posting.publish({ author, content, at }).responds({ post }))
+    .then(respond({ post })),
 );
 
-export const AddBoardComment = endpoint(
+const AddBoardComment = endpoint(
   "/recoverable-board/comment",
   ({ post, author, text, at, comment }) =>
     receive({ post, author, text }).then(
@@ -75,21 +74,19 @@ export const AddBoardComment = endpoint(
     ),
 );
 
-export const RetractBoardComment = endpoint(
-  "/recoverable-board/retract-comment",
-  ({ comment, author }) =>
-    receive({ comment, author })
-      .then(Commenting.retract({ comment, author }).responds({ comment }))
-      .then(respond({ comment })),
+const RetractBoardComment = endpoint("/recoverable-board/retract-comment", ({ comment, author }) =>
+  receive({ comment, author })
+    .then(Commenting.retract({ comment, author }).responds({ comment }))
+    .then(respond({ comment })),
 );
 
-export const CreateBoardLabel = endpoint("/recoverable-board/create-label", ({ name, label }) =>
+const CreateBoardLabel = endpoint("/recoverable-board/create-label", ({ name, label }) =>
   receive({ name })
     .then(Labeling.create({ scope: BOARD_SCOPE, name }).responds({ label }))
     .then(respond({ label })),
 );
 
-export const LabelBoardPost = endpoint("/recoverable-board/label", ({ post, label }) =>
+const LabelBoardPost = endpoint("/recoverable-board/label", ({ post, label }) =>
   receive({ post, label }).then(
     where(postIsVisible({ post }), boardLabel({ label }))
       .then(Labeling.apply({ label, item: post }).responds({ label, item: post }))
@@ -104,7 +101,7 @@ export const LabelBoardPost = endpoint("/recoverable-board/label", ({ post, labe
   ),
 );
 
-export const UnlabelBoardPost = endpoint("/recoverable-board/unlabel", ({ post, label }) =>
+const UnlabelBoardPost = endpoint("/recoverable-board/unlabel", ({ post, label }) =>
   receive({ post, label }).then(
     where(postExists({ post }), boardLabel({ label }))
       .then(Labeling.remove({ label, item: post }).responds({ label, item: post }))
@@ -119,7 +116,7 @@ export const UnlabelBoardPost = endpoint("/recoverable-board/unlabel", ({ post, 
   ),
 );
 
-export const TrashBoardPost = endpoint("/recoverable-board/trash", ({ post, at }) =>
+const TrashBoardPost = endpoint("/recoverable-board/trash", ({ post, at }) =>
   receive({ post }).then(
     where(postExists({ post }), Timing._now({}).is({ time: at }))
       .then(Trashing.trash({ item: post, at }).responds({ item: post }))
@@ -131,7 +128,7 @@ export const TrashBoardPost = endpoint("/recoverable-board/trash", ({ post, at }
   ),
 );
 
-export const RestoreBoardPost = endpoint("/recoverable-board/restore", ({ post }) =>
+const RestoreBoardPost = endpoint("/recoverable-board/restore", ({ post }) =>
   receive({ post }).then(
     where(postExists({ post }))
       .then(Trashing.restore({ item: post }).responds({ item: post }))
@@ -143,7 +140,7 @@ export const RestoreBoardPost = endpoint("/recoverable-board/restore", ({ post }
   ),
 );
 
-export const PurgeBoardPost = endpoint("/recoverable-board/purge", ({ post, at }) =>
+const PurgeBoardPost = endpoint("/recoverable-board/purge", ({ post, at }) =>
   receive({ post }).then(
     where(postExists({ post }), Timing._now({}).is({ time: at }))
       .then(Trashing.purge({ item: post, at }).responds({ item: post }))
@@ -155,6 +152,31 @@ export const PurgeBoardPost = endpoint("/recoverable-board/purge", ({ post, at }
   ),
 );
 
-export const ListRecoverableBoard = endpoint("/recoverable-board/list", () =>
+const ListRecoverableBoard = endpoint("/recoverable-board/list", () =>
   receive({}).then(respond({ board: recoverableBoard({}) })),
 );
+
+export { design };
+
+export const compositions = {
+  PublishBoardPost,
+  AddBoardComment,
+  RetractBoardComment,
+  CreateBoardLabel,
+  LabelBoardPost,
+  UnlabelBoardPost,
+  TrashBoardPost,
+  RestoreBoardPost,
+  PurgeBoardPost,
+  ListRecoverableBoard,
+};
+
+export const views = {
+  postExists,
+  postIsVisible,
+  boardLabel,
+};
+
+export const formers = {
+  recoverableBoard,
+};

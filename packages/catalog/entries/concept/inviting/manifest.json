@@ -1,62 +1,18 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "concept/inviting",
   "kind": "concept",
   "summary": "Issue directed invitations and record recipient or inviter decisions.",
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "concept": {
-    "name": "Inviting",
-    "export": "inviting",
-    "registration": "$concepts/inviting/registry.ts"
-  },
-  "defaultFloor": "memory",
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$concepts/inviting/spec.md"
-    },
-    {
-      "source": "inviting.shared.ts",
-      "target": "$concepts/inviting/inviting.shared.ts"
-    },
-    {
-      "source": "registry.ts",
-      "target": "$concepts/inviting/registry.ts",
-      "render": "floor"
-    }
-  ],
-  "floors": {
+  "design": "spec.md",
+  "sources": ["inviting.shared.ts", "registry.ts"],
+  "implementations": {
     "memory": {
       "summary": "Process-local invitation state with injectable identity allocation.",
-      "files": [
-        {
-          "source": "inviting.memory.ts",
-          "target": "$concepts/inviting/inviting.memory.ts"
-        },
-        {
-          "source": "inviting.memory.test.ts",
-          "target": "$concepts/inviting/inviting.memory.test.ts"
-        }
-      ]
+      "sources": ["inviting.memory.ts", "inviting.memory.test.ts"]
     },
     "mongo": {
       "summary": "A MongoDB collection with pending-pair uniqueness and conditional decision transitions.",
-      "packages": {
-        "mongodb": "^6.20.0"
-      },
-      "files": [
-        {
-          "source": "inviting.mongo.ts",
-          "target": "$concepts/inviting/inviting.mongo.ts"
-        },
-        {
-          "source": "inviting.mongo.test.ts",
-          "target": "$concepts/inviting/inviting.mongo.test.ts"
-        }
-      ]
+      "sources": ["inviting.mongo.ts", "inviting.mongo.test.ts"]
     }
   }
 }

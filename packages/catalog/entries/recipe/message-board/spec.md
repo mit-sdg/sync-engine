@@ -1,4 +1,4 @@
-# Message Board recipe
+# Message Board
 
 ## Purpose
 
@@ -20,7 +20,7 @@ Author. Adding a Comment first confirms that its Post Target exists. Posting has
 removal action, so that observation cannot become stale through a catalog concept
 transition.
 
-## Endpoints
+## Compositions
 
 - `RegisterBoardUser` — `/message-board/register`
 - `SignInBoardUser` — `/message-board/sign-in`
@@ -32,6 +32,14 @@ transition.
 - `AddMessageBoardComment` — `/message-board/comment`
 - `RetractMessageBoardComment` — `/message-board/retract-comment`
 - `ListMessageBoard` — `/message-board/list`
+
+## Views
+
+`postTargetExists`, `postTargetIsMissing`.
+
+## Formers
+
+`messageBoard`.
 
 ## Failure
 

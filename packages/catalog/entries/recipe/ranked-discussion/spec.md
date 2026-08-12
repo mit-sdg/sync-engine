@@ -1,4 +1,4 @@
-# Ranked Discussion recipe
+# Ranked Discussion
 
 ## Purpose
 
@@ -16,7 +16,7 @@ A vote is accepted only when the Response exists. The recipe exposes aggregate s
 but not voter identities. Author and Voter identities must be bound by the containing
 application when attribution or one-person-one-vote matters.
 
-## Endpoints
+## Compositions
 
 - `OpenRankedDiscussion` — `/ranked-discussions/open`
 - `RespondToDiscussion` — `/ranked-discussions/respond`
@@ -25,3 +25,7 @@ application when attribution or one-person-one-vote matters.
 - `UnvoteResponse` — `/ranked-discussions/unvote`
 - `CloseRankedDiscussion` — `/ranked-discussions/close`
 - `GetRankedDiscussion` — `/ranked-discussions/get`
+
+## Formers
+
+`rankedResponses`.

@@ -1,69 +1,21 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "concept/auditing",
   "kind": "concept",
   "summary": "Keep permanent numbered accountability entries for the activity an application performs.",
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "concept": {
-    "name": "Auditing",
-    "export": "auditing",
-    "registration": "$concepts/auditing/registry.ts"
-  },
-  "defaultFloor": "memory",
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$concepts/auditing/spec.md"
-    },
-    {
-      "source": "auditing.shared.ts",
-      "target": "$concepts/auditing/auditing.shared.ts"
-    },
-    {
-      "source": "auditing.conformance.ts",
-      "target": "$concepts/auditing/auditing.conformance.ts"
-    },
-    {
-      "source": "registry.ts",
-      "target": "$concepts/auditing/registry.ts",
-      "render": "floor"
-    }
-  ],
-  "floors": {
+  "design": "spec.md",
+  "sources": ["auditing.shared.ts", "auditing.conformance.ts", "registry.ts"],
+  "implementations": {
     "memory": {
       "summary": "Process-local trails holding entries in position order with injectable identity allocation.",
-      "files": [
-        {
-          "source": "auditing.memory.ts",
-          "target": "$concepts/auditing/auditing.memory.ts"
-        },
-        {
-          "source": "auditing.memory.test.ts",
-          "target": "$concepts/auditing/auditing.memory.test.ts"
-        }
-      ]
+      "sources": ["auditing.memory.ts", "auditing.memory.test.ts"]
     },
     "mongo": {
       "summary": "MongoDB entries with unique trail position and event indexes and duplicate-key position retry.",
-      "packages": {
-        "mongodb": "^6.20.0"
-      },
-      "files": [
-        {
-          "source": "auditing.mongo.ts",
-          "target": "$concepts/auditing/auditing.mongo.ts"
-        },
-        {
-          "source": "auditing.mongo.test.ts",
-          "target": "$concepts/auditing/auditing.mongo.test.ts"
-        },
-        {
-          "source": "auditing.mongo.concurrent.test.ts",
-          "target": "$concepts/auditing/auditing.mongo.concurrent.test.ts"
-        }
+      "sources": [
+        "auditing.mongo.ts",
+        "auditing.mongo.test.ts",
+        "auditing.mongo.concurrent.test.ts"
       ]
     }
   }

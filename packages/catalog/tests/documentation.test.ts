@@ -2,29 +2,26 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
 
 describe("catalog documentation", () => {
-  test("covers every command and contract category", async () => {
+  test("documents the complete read-only command contract", async () => {
     const reference = await readFile(new URL("../public-surface.md", import.meta.url), "utf8");
     for (const term of [
       "catalog list",
       "catalog show",
-      "catalog add",
-      "--floor",
-      "schema",
-      "defaultFloor",
-      "members",
-      "routes",
-      "sourceDigest",
-      "Copy-owned",
-      "Rendered",
-      "Generated",
-      "Package requirements",
-      "Write boundary",
+      "catalog source",
+      "--raw",
+      "stdout",
+      "never writes",
+      "schema: 2",
+      "implementations",
+      "selector",
     ])
       expect(reference).toContain(term);
+    for (const removed of ["catalog add", "catalog.lock", "generated.ts", "src/concept-set.ts"])
+      expect(reference).not.toContain(removed);
   });
 
   test.each(["gathering", "selecting"])(
-    "keeps the %s catalog contract byte-identical in both tutorial examples",
+    "keeps the %s concept design byte-identical in both tutorial examples",
     async (concept) => {
       const catalog = await readFile(
         new URL(`../entries/concept/${concept}/spec.md`, import.meta.url),
