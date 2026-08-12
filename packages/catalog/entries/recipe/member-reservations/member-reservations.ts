@@ -1,11 +1,11 @@
-import design from "./spec.md";
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, former, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Gathering, Reserving, Timing } = concepts;
 
-const activeReservations = former(
+const ActiveReservations = former(
   "the active reservations of (claimant)",
   ({ claimant }, { reservation, resource, reservedAt }) =>
     each(Reserving._activeFor({ claimant }).is({ reservation, resource, reservedAt })).form({
@@ -58,18 +58,13 @@ const FulfillMemberReservation = endpoint(
 
 /** `claimant` selects whose reservations are read; authenticate or authorize that identity. */
 const GetMemberReservations = endpoint("/member-reservations/get", ({ claimant }) =>
-  receive({ claimant }).then(respond({ reservations: activeReservations({ claimant }) })),
+  receive({ claimant }).then(respond({ reservations: ActiveReservations({ claimant }) })),
 );
 
-export { design };
+export { spec };
 
 export const compositions = {
-  ReserveForMember,
-  CancelMemberReservation,
-  FulfillMemberReservation,
-  GetMemberReservations,
+  Reservations: { ReserveForMember, CancelMemberReservation, FulfillMemberReservation },
+  ReservationLists: { GetMemberReservations },
 };
-
-export const formers = {
-  activeReservations,
-};
+export const formers = { ActiveReservations };

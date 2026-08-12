@@ -1,35 +1,19 @@
 # Member Reservations
 
-## Purpose
-
-Let current members claim reservable units while Reserving remains the sole owner of
-exclusive allocation.
-
-## Concepts
-
-Timing supplies one event time. Gathering supplies current membership. Reserving owns
-claims and the one-blocking-reservation invariant.
-
-## Decisions
-
-A claimant must be a Gathering member when requesting a reservation. Membership is an
-eligibility snapshot; leaving later does not cancel an existing Reservation. A public
-adapter must bind claimant inputs to the authenticated caller. Reading another
-claimant's reservations requires authorization.
+Current gathering members may claim reservable resources while Reserving remains the sole owner of exclusive allocation.
 
 ## Compositions
 
-- `ReserveForMember` — `/member-reservations/reserve`
-- `CancelMemberReservation` — `/member-reservations/cancel`
-- `FulfillMemberReservation` — `/member-reservations/fulfill`
-- `GetMemberReservations` — `/member-reservations/get`
+### Reservations
+
+A claimant may reserve only while currently joined to the named Gathering, then may cancel or fulfill their Reservation. Membership is an eligibility snapshot: leaving does not cancel an existing claim. Reserving decides competing claims atomically, while this recipe performs no cross-concept rollback.
+
+### ReservationLists
+
+A claimant may read their active reservations. A public boundary must bind or authorize claimant identities for every reservation operation.
 
 ## Formers
 
-`activeReservations`.
+### ActiveReservations
 
-## Failure
-
-The membership read may become stale, but it cannot violate Reserving's exclusivity
-invariant. Reserving decides competing claims atomically. This recipe performs no
-cross-concept rollback.
+The active reservation read lists one claimant's currently blocking Reservations and their resources.

@@ -6,18 +6,17 @@ import {
 } from "./message-board.behavior.ts";
 import { compositions } from "./message-board.ts";
 
+const { AddMessageBoardComment, PublishMessageBoardPost, RetractMessageBoardComment } =
+  compositions.BoardPublishing;
 const {
-  AddMessageBoardComment,
   ChangeBoardPassword,
   CurrentBoardUser,
   DeleteBoardAccount,
-  ListMessageBoard,
-  PublishMessageBoardPost,
   RegisterBoardUser,
-  RetractMessageBoardComment,
   SignInBoardUser,
   SignOutBoardUser,
-} = compositions;
+} = compositions.Accounts;
+const { ListMessageBoard } = compositions.BoardPages;
 
 function memoryInstances() {
   try {

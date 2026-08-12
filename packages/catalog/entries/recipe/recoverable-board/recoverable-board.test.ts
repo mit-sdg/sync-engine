@@ -1,18 +1,10 @@
 import { expect, test } from "vite-plus/test";
 import { compositions } from "./recoverable-board.ts";
 
-const {
-  AddBoardComment,
-  CreateBoardLabel,
-  LabelBoardPost,
-  ListRecoverableBoard,
-  PublishBoardPost,
-  PurgeBoardPost,
-  RestoreBoardPost,
-  RetractBoardComment,
-  TrashBoardPost,
-  UnlabelBoardPost,
-} = compositions;
+const { AddBoardComment, PublishBoardPost, RetractBoardComment } = compositions.BoardContent;
+const { CreateBoardLabel, LabelBoardPost, UnlabelBoardPost } = compositions.BoardLabels;
+const { ListRecoverableBoard } = compositions.BoardPages;
+const { PurgeBoardPost, RestoreBoardPost, TrashBoardPost } = compositions.PostRecovery;
 
 test("exports the Recoverable Board endpoint set", () => {
   expect({

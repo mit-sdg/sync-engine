@@ -3,15 +3,14 @@ import { describe, expect, test } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
 import { compositions } from "./invite-only-workshop.ts";
 
+const { AcceptWorkshopInvitation, CreateInviteOnlyWorkshop, RepairAcceptedWorkshopInvitation } =
+  compositions.WorkshopMembership;
 const {
-  AcceptWorkshopInvitation,
-  CreateInviteOnlyWorkshop,
   DeclineWorkshopInvitation,
   GetWorkshopInvitations,
   IssueWorkshopInvitation,
-  RepairAcceptedWorkshopInvitation,
   RevokeWorkshopInvitation,
-} = compositions;
+} = compositions.InvitationManagement;
 
 type Floor = "memory" | "mongo";
 type Instances = ReturnType<(typeof applicationConcepts)["implementations"]>;

@@ -1,20 +1,20 @@
-import design from "./spec.md";
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, no, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Authenticating, Commenting, Posting, Sessioning, Timing } = concepts;
 
-const postTargetExists = view("the Post target exists (post)", ({ post }, _outputs, _bindings) =>
+const PostTargetExists = view("the Post target exists (post)", ({ post }, _outputs, _bindings) =>
   where(Posting._get({ post })),
 ).holds();
 
-const postTargetIsMissing = view(
+const PostTargetIsMissing = view(
   "the Post target is missing (post)",
   ({ post }, _outputs, _bindings) => where(no(Posting._get({ post }))),
 ).holds();
 
-const messageBoard = former(
+const MessageBoard = former(
   "the message board",
   (_input, { post, postAuthor, content, publishedAt, comment, commentAuthor, text, addedAt }) =>
     form({
@@ -108,11 +108,11 @@ const AddMessageBoardComment = endpoint(
     receive({ session, target, text })
       .then(Sessioning.current({ session }).responds({ subject: author }))
       .then(
-        where(postTargetExists({ post: target }), Timing._now({}).is({ time }))
+        where(PostTargetExists({ post: target }), Timing._now({}).is({ time }))
           .then(Commenting.add({ target, author, text, at: time }).responds({ comment }))
           .then(respond({ comment }))
           .named("post-exists"),
-        where(postTargetIsMissing({ post: target }))
+        where(PostTargetIsMissing({ post: target }))
           .then(respond({ error: "POST_NOT_FOUND" }))
           .named("post-missing"),
       ),
@@ -130,29 +130,22 @@ const RetractMessageBoardComment = endpoint(
 const ListMessageBoard = endpoint("/message-board/list", ({ session }) =>
   receive({ session })
     .then(Sessioning.current({ session }).responds({}))
-    .then(respond({ board: messageBoard({}) })),
+    .then(respond({ board: MessageBoard({}) })),
 );
 
-export { design };
+export { spec };
 
 export const compositions = {
-  RegisterBoardUser,
-  SignInBoardUser,
-  CurrentBoardUser,
-  SignOutBoardUser,
-  ChangeBoardPassword,
-  DeleteBoardAccount,
-  PublishMessageBoardPost,
-  AddMessageBoardComment,
-  RetractMessageBoardComment,
-  ListMessageBoard,
+  Accounts: {
+    RegisterBoardUser,
+    SignInBoardUser,
+    CurrentBoardUser,
+    SignOutBoardUser,
+    ChangeBoardPassword,
+    DeleteBoardAccount,
+  },
+  BoardPublishing: { PublishMessageBoardPost, AddMessageBoardComment, RetractMessageBoardComment },
+  BoardPages: { ListMessageBoard },
 };
-
-export const views = {
-  postTargetExists,
-  postTargetIsMissing,
-};
-
-export const formers = {
-  messageBoard,
-};
+export const views = { PostTargetExists, PostTargetIsMissing };
+export const formers = { MessageBoard };
