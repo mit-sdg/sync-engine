@@ -25,6 +25,12 @@ One installed vocabulary, concept implementation set, and composition, with its
 own execution lifecycle and occurrence index. Creating another assembly creates
 another runtime.
 
+## Authored design
+
+Application-owned Markdown that states intended concept contracts, larger
+composition purposes, and optional application-wide vocabulary. It is distinct
+from executable TypeScript declarations and generated read-back.
+
 ## Binding
 
 One named value in a reaction, view, or former match. A fresh name opens a
@@ -33,7 +39,9 @@ binding; reusing a bound name tests equality.
 ## Composition
 
 The application-level collection of reactions, views, formers, and endpoints.
-Composition connects concepts without adding peer dependencies to them.
+Composition connects concepts without adding peer dependencies to them. An
+authored composition document explains larger groups and independently meaningful
+reads; it is not the executable collection itself.
 
 ## Concept
 
@@ -81,6 +89,12 @@ framework errors.
 
 A reaction specialized for an outside request. It has a route, receives admitted
 input, and may produce one boundary response.
+
+## Executable declaration
+
+TypeScript declaration data for a concept registration, reaction, endpoint,
+view, or former. Assembly validates and installs selected declarations; authored
+design explains their intent.
 
 ## Fault
 
@@ -213,7 +227,9 @@ cardinality.
 
 The named action, query, and optional computation references for a concept set,
 together with concept metadata. Vocabulary references are inert until resolved
-against an engine.
+against an engine. An application's optional authored vocabulary document
+records cross-concept type-role edges and named pure computations; it is not the
+runtime vocabulary object.
 
 ## Wire contract
 
