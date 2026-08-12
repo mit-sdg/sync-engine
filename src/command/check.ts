@@ -633,7 +633,7 @@ export async function conceptDirectories(
 
 const usage = `sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
   Check registered concepts against erased TypeScript source and optionally inspect application diagnostics.
-  Without a config, defaults to the conventional src/concept-set.ts vocabulary module.`;
+  Without a config, uses src/concept-set.ts as a compatibility default.`;
 
 export async function checkCommand(args: readonly string[]): Promise<void> {
   let vocabularyModuleArgument: string | undefined;
