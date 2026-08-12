@@ -37,11 +37,12 @@ constraints do not apply to direct calls through `Assembly.concepts`.
 ## Endpoint composition
 
 The application divides endpoint declarations between
-`src/compositions/Sessions.ts` and `src/compositions/Board.ts`.
-`src/formers/Board.ts` owns the board former as a separately installed read.
-`src/compositions/validators.ts` contains shared runtime validator helpers but no
-design or composition declarations. Each composition module exports its matching
-authored specification from `design/compositions/` alongside its endpoints.
+`src/compositions/Sessions.ts` and `src/compositions/Board.ts`. The `Board`
+composition module also owns the board former and exports it only through its
+`formers` aggregate. `src/compositions/validators.ts` contains shared runtime
+validator helpers but no design or composition declarations. Each composition
+module exports its matching authored specification and tagged declarations
+through canonical aggregates.
 
 | Endpoint                 | Ordered workflow                                                                  |
 | ------------------------ | --------------------------------------------------------------------------------- |

@@ -5,9 +5,8 @@
  *   src/vocabulary.ts                    — concept set and design vocabulary
  *   src/compositions/Room.ts             — room endpoints
  *   src/compositions/Mitigation*.ts      — selectable reaction packs
- *   src/compositions/Contributions.ts    — policy-parameterized endpoints
- *   src/views/*MayContribute.ts           — replaceable contribution policies
- *   src/formers/Room.ts                   — shared room read models
+ *   src/compositions/Contributions.ts    — endpoints and selectable policy views
+ *   src/compositions/Room.ts             — room endpoints and owned read models
  *   src/assembly.ts                       — option selection and installation
  *   src/edge.ts                           — local gateway construction
  */

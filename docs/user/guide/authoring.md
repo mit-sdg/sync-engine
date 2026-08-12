@@ -153,7 +153,7 @@ after a mitigation is selected:
 _Source: [`examples/operations-room/src/compositions/MitigationDiscussion.ts`](../../../examples/operations-room/src/compositions/MitigationDiscussion.ts)_
 
 ```ts
-export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
+const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
   when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
 ```
@@ -163,7 +163,7 @@ The independently selectable alert pack states the other consequence:
 _Source: [`examples/operations-room/src/compositions/MitigationAlerts.ts`](../../../examples/operations-room/src/compositions/MitigationAlerts.ts)_
 
 ```ts
-export const SelectedMitigationAlertsResponders = reaction(({ room, selection, responder }) =>
+const SelectedMitigationAlertsResponders = reaction(({ room, selection, responder }) =>
   when(Selecting.choose({ scope: room }).responds({ selection }))
     .where(Gathering._members({ gathering: room }).is({ member: responder }))
     .then(Alerting.raise({ recipient: responder, subject: selection })),
@@ -180,29 +180,37 @@ matching and failure.
 
 Name reusable or replaceable policy as views:
 
-_Source: [`examples/operations-room/src/views/RespondersMayContribute.ts`](../../../examples/operations-room/src/views/RespondersMayContribute.ts)_
+_Source: [`examples/operations-room/src/compositions/Contributions.ts`](../../../examples/operations-room/src/compositions/Contributions.ts)_
 
 ```ts
-export const responderMayContribute = view(
-  "(responder) may contribute in (room)",
-  ({ responder, room }, _outputs, _bindings) =>
-    where(Gathering._membership({ gathering: room, member: responder }).is({ joined: true })),
-).holds();
+const responderPolicy = {
+  ResponderMayContribute: view(
+    "(responder) may contribute in (room)",
+    ({ responder, room }, _outputs, _bindings) =>
+      where(Gathering._membership({ gathering: room, member: responder }).is({ joined: true })),
+  ).holds(),
+  ResponderMayNotContribute: view(
+    "(responder) may not contribute in (room)",
+    ({ responder, room }, _outputs, _bindings) =>
+      where(Gathering._membership({ gathering: room, member: responder }).is({ joined: false })),
+  ).holds(),
+  denied: "RESPONDERS_ONLY",
+};
 ```
 
-The module also exports the complementary denial relation and response code. The
-host-only policy exports the same names, so assembly can select either module
-without changing the endpoints.
+The composition module owns both complete policy variants under its structured
+`views` export. Assembly selects one variant and installs its complementary
+permission and denial views with the matching endpoint pair.
 
 ## Build current-state reads
 
 A former constructs a current result tree from queries, views, or other
 formers:
 
-_Source: [`examples/operations-room/src/formers/Room.ts`](../../../examples/operations-room/src/formers/Room.ts)_
+_Source: [`examples/operations-room/src/compositions/Room.ts`](../../../examples/operations-room/src/compositions/Room.ts)_
 
 ```ts
-export const responderRoster = former("the responder roster of (room)", ({ room }, { responder }) =>
+const responderRoster = former("the responder roster of (room)", ({ room }, { responder }) =>
   form({
     responders: each(Gathering._members({ gathering: room }).is({ member: responder })).form({
       responder,
@@ -212,7 +220,7 @@ export const responderRoster = former("the responder roster of (room)", ({ room 
 ```
 
 The complete
-[`roomDashboard`](../../../examples/operations-room/src/formers/Room.ts) combines
+[`roomDashboard`](../../../examples/operations-room/src/compositions/Room.ts) combines
 queries from all four concepts and handles optional current state. Use the [read
 construction cookbook](read-construction.md) for `no`, `whether`, folds, splicing, and
 cardinality contrasts; [Views and formers](../reference/semantics.md#views-and-formers)
@@ -225,12 +233,10 @@ defines production behavior.
 _Source: [`examples/operations-room/src/compositions/Room.ts`](../../../examples/operations-room/src/compositions/Room.ts)_
 
 ```ts
-export const ChooseMitigation = endpoint(
-  "/rooms/choose-mitigation",
-  ({ room, mitigation, selection }) =>
-    receive({ room, mitigation })
-      .then(Selecting.choose({ scope: room, item: mitigation }).responds({ selection }))
-      .then(respond({ mitigation })),
+const ChooseMitigation = endpoint("/rooms/choose-mitigation", ({ room, mitigation, selection }) =>
+  receive({ room, mitigation })
+    .then(Selecting.choose({ scope: room, item: mitigation }).responds({ selection }))
+    .then(respond({ mitigation })),
 );
 ```
 
@@ -255,34 +261,36 @@ export function assembleOperationsRoom({
   discussion = true,
   instances = {},
 }: OperationsRoomOptions = {}) {
-  const policy = contributions === "responders" ? respondersMayContribute : hostMayContribute;
-  const selected = { ...operationsRoomConcepts.implementations(), ...instances };
+  const policy = contributions === "responders" ? "Responders" : "Host";
 
   return assemble({
     vocabulary,
-    instances: selected,
+    instances: { ...operationsRoomConcepts.implementations(), ...instances },
     composition: {
-      compositions: {
-        room,
-        mitigationDiscussion: discussion ? mitigationDiscussion : {},
-        mitigationAlerts: alerts ? mitigationAlerts : {},
-        contributions: contributionEndpoints({
-          denied: policy.deniedContribution,
-          mayContribute: policy.responderMayContribute,
-          mayNotContribute: policy.responderMayNotContribute,
-        }),
+      Room: { spec: Room.spec, ...Room.compositions, formers: Room.formers },
+      MitigationDiscussion: {
+        spec: MitigationDiscussion.spec,
+        ...(discussion ? MitigationDiscussion.compositions : {}),
       },
-      views: { contributionPolicy: policy },
-      formers: roomFormers,
+      MitigationAlerts: {
+        spec: MitigationAlerts.spec,
+        ...(alerts ? MitigationAlerts.compositions : {}),
+      },
+      Contributions: {
+        spec: Contributions.spec,
+        ...Contributions.compositions.Contributions[policy],
+        views: Contributions.views[policy],
+      },
     },
   });
 }
 ```
 
-Use fixed records for selectable packs, interchangeable modules for policy, and
-application-called factories when declarations depend on policy. Assembly walks
-the resulting records but does not invoke function leaves. Ordinary assembly
-rejects local executable declarations before exposing routes.
+Each top-level group retains its authored `spec`, flattens its canonical
+`compositions` aggregate, and keeps owned `views` or `formers` nested. The
+contribution module owns both policy variants; assembly selects exactly one
+endpoint pair and its views. Assembly walks the resulting records but does not
+invoke function leaves.
 
 [`src/edge.ts`](../../../examples/operations-room/src/edge.ts) places
 `createGateway(...)` in front of the assembly. The gateway provides public

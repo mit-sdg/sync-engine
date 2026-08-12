@@ -1,12 +1,9 @@
 /** Assemble the operations room with selectable reaction packs and policy. */
 import { assemble, type ImplementationOverrides } from "@mit-sdg/sync-engine/assembly";
-import { contributionEndpoints } from "./compositions/Contributions.ts";
-import * as mitigationAlerts from "./compositions/MitigationAlerts.ts";
-import * as mitigationDiscussion from "./compositions/MitigationDiscussion.ts";
-import * as room from "./compositions/Room.ts";
-import * as roomFormers from "./formers/Room.ts";
-import * as hostMayContribute from "./views/HostMayContribute.ts";
-import * as respondersMayContribute from "./views/RespondersMayContribute.ts";
+import * as Contributions from "./compositions/Contributions.ts";
+import * as MitigationAlerts from "./compositions/MitigationAlerts.ts";
+import * as MitigationDiscussion from "./compositions/MitigationDiscussion.ts";
+import * as Room from "./compositions/Room.ts";
 import { operationsRoomConcepts, vocabulary } from "./vocabulary.ts";
 
 export type OperationsRoomOverrides = ImplementationOverrides<typeof vocabulary>;
@@ -24,25 +21,26 @@ export function assembleOperationsRoom({
   discussion = true,
   instances = {},
 }: OperationsRoomOptions = {}) {
-  const policy = contributions === "responders" ? respondersMayContribute : hostMayContribute;
-  const selected = { ...operationsRoomConcepts.implementations(), ...instances };
+  const policy = contributions === "responders" ? "Responders" : "Host";
 
   return assemble({
     vocabulary,
-    instances: selected,
+    instances: { ...operationsRoomConcepts.implementations(), ...instances },
     composition: {
-      compositions: {
-        room,
-        mitigationDiscussion: discussion ? mitigationDiscussion : {},
-        mitigationAlerts: alerts ? mitigationAlerts : {},
-        contributions: contributionEndpoints({
-          denied: policy.deniedContribution,
-          mayContribute: policy.responderMayContribute,
-          mayNotContribute: policy.responderMayNotContribute,
-        }),
+      Room: { spec: Room.spec, ...Room.compositions, formers: Room.formers },
+      MitigationDiscussion: {
+        spec: MitigationDiscussion.spec,
+        ...(discussion ? MitigationDiscussion.compositions : {}),
       },
-      views: { contributionPolicy: policy },
-      formers: roomFormers,
+      MitigationAlerts: {
+        spec: MitigationAlerts.spec,
+        ...(alerts ? MitigationAlerts.compositions : {}),
+      },
+      Contributions: {
+        spec: Contributions.spec,
+        ...Contributions.compositions.Contributions[policy],
+        views: Contributions.views[policy],
+      },
     },
   });
 }

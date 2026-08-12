@@ -1,14 +1,47 @@
+# Room
+
+The room composition owns the incident-room boundary and the read models used to
+present current room state.
+
 ## Compositions
 
-### Room
+### RoomMembership
 
-The room boundary lets a host create an incident room, responders join it, and
-the room choose a current mitigation. Its read endpoint returns the shared room
-dashboard rather than rebuilding that read model at the boundary.
+A host creates an incident room and responders join it.
+
+### MitigationSelection
+
+The room chooses a current mitigation through Selecting.
+
+### RoomDashboard
+
+The read endpoint returns the owned room dashboard rather than rebuilding that
+read at the boundary.
 
 ## Formers
 
-The room read models own the roster, summary, current mitigation, response
-statistics, and dashboard shapes. They are shared independently of the endpoint
-group, so scenarios and other composition groups can ask the same questions
-without registering another copy.
+### ResponderRoster
+
+The responder roster lists the current room members.
+
+### RoomSummary
+
+The room summary combines the room's name and host with its responder roster.
+
+### RequiredCurrentMitigation
+
+This read requires the room to have a current mitigation.
+
+### CurrentMitigation
+
+This optional read returns the current mitigation when one has been selected.
+
+### ResponseStats
+
+Response statistics report the response count, first response, and distinct
+responders for a discussion.
+
+### RoomDashboard
+
+The dashboard combines room details, responders, current mitigation,
+discussion, responses, and alerts.

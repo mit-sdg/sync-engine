@@ -274,6 +274,120 @@ Former "the message board" — inputs (); bindings (post, author, content, comme
 
 ## Reactions
 
+### Board.BoardComments.AddComment
+
+```reaction
+when RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
+then
+  Sessioning.current (session)
+```
+
+### Board.BoardComments.AddComment:post-exists#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by Board.BoardComments.AddComment
+where
+  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
+  Posting._get (post: target)
+then
+  Commenting.add (author: username, content, target)
+```
+
+### Board.BoardComments.AddComment:post-exists#3
+
+```reaction
+when Commenting.add (author: username, content, target, comment), asked by Board.BoardComments.AddComment:post-exists#2
+where
+  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
+then
+  RequestBoundary.respond (comment, requestId)
+```
+
+### Board.BoardComments.AddComment:post-missing#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by Board.BoardComments.AddComment
+where
+  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
+  no Posting._get (post: target)
+then
+  RequestBoundary.respond (error: "POST_NOT_FOUND", requestId)
+```
+
+### Board.BoardComments.RetractComment
+
+```reaction
+when RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Board.BoardComments.RetractComment#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by Board.BoardComments.RetractComment
+where
+  earlier, RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
+then
+  Commenting.retract (author: username, comment)
+```
+
+### Board.BoardComments.RetractComment#3
+
+```reaction
+when Commenting.retract (author: username, comment), asked by Board.BoardComments.RetractComment#2
+where
+  earlier, RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
+then
+  RequestBoundary.respond (comment, requestId)
+```
+
+### Board.BoardPublishing.PublishPost
+
+```reaction
+when RequestBoundary.request (content, path: "/board/post", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Board.BoardPublishing.PublishPost#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by Board.BoardPublishing.PublishPost
+where
+  earlier, RequestBoundary.request (content, path: "/board/post", requestId, session)
+then
+  Posting.publish (author: username, content)
+```
+
+### Board.BoardPublishing.PublishPost#3
+
+```reaction
+when Posting.publish (author: username, content, post), asked by Board.BoardPublishing.PublishPost#2
+where
+  earlier, RequestBoundary.request (content, path: "/board/post", requestId, session)
+then
+  RequestBoundary.respond (post, requestId)
+```
+
+### Board.BoardReading.ListBoard
+
+```reaction
+when RequestBoundary.request (path: "/board/list", requestId, session)
+then
+  Sessioning.current (session)
+```
+
+### Board.BoardReading.ListBoard#2
+
+```reaction
+when Sessioning.current (session, subject: username), asked by Board.BoardReading.ListBoard
+where
+  earlier, RequestBoundary.request (path: "/board/list", requestId, session)
+then
+  RequestBoundary.respond (board: former "the message board", requestId)
+```
+
 ### DeliverFaultToAsker
 
 ```reaction
@@ -294,121 +408,7 @@ then
   RequestBoundary.respond (error: message, requestId)
 ```
 
-### compositions.Board.AddComment
-
-```reaction
-when RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
-then
-  Sessioning.current (session)
-```
-
-### compositions.Board.AddComment:post-exists#2
-
-```reaction
-when Sessioning.current (session, subject: username), asked by compositions.Board.AddComment
-where
-  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
-  Posting._get (post: target)
-then
-  Commenting.add (author: username, content, target)
-```
-
-### compositions.Board.AddComment:post-exists#3
-
-```reaction
-when Commenting.add (author: username, content, target, comment), asked by compositions.Board.AddComment:post-exists#2
-where
-  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
-then
-  RequestBoundary.respond (comment, requestId)
-```
-
-### compositions.Board.AddComment:post-missing#2
-
-```reaction
-when Sessioning.current (session, subject: username), asked by compositions.Board.AddComment
-where
-  earlier, RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
-  no Posting._get (post: target)
-then
-  RequestBoundary.respond (error: "POST_NOT_FOUND", requestId)
-```
-
-### compositions.Board.ListBoard
-
-```reaction
-when RequestBoundary.request (path: "/board/list", requestId, session)
-then
-  Sessioning.current (session)
-```
-
-### compositions.Board.ListBoard#2
-
-```reaction
-when Sessioning.current (session, subject: username), asked by compositions.Board.ListBoard
-where
-  earlier, RequestBoundary.request (path: "/board/list", requestId, session)
-then
-  RequestBoundary.respond (board: former "the message board", requestId)
-```
-
-### compositions.Board.PublishPost
-
-```reaction
-when RequestBoundary.request (content, path: "/board/post", requestId, session)
-then
-  Sessioning.current (session)
-```
-
-### compositions.Board.PublishPost#2
-
-```reaction
-when Sessioning.current (session, subject: username), asked by compositions.Board.PublishPost
-where
-  earlier, RequestBoundary.request (content, path: "/board/post", requestId, session)
-then
-  Posting.publish (author: username, content)
-```
-
-### compositions.Board.PublishPost#3
-
-```reaction
-when Posting.publish (author: username, content, post), asked by compositions.Board.PublishPost#2
-where
-  earlier, RequestBoundary.request (content, path: "/board/post", requestId, session)
-then
-  RequestBoundary.respond (post, requestId)
-```
-
-### compositions.Board.RetractComment
-
-```reaction
-when RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
-then
-  Sessioning.current (session)
-```
-
-### compositions.Board.RetractComment#2
-
-```reaction
-when Sessioning.current (session, subject: username), asked by compositions.Board.RetractComment
-where
-  earlier, RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
-then
-  Commenting.retract (author: username, comment)
-```
-
-### compositions.Board.RetractComment#3
-
-```reaction
-when Commenting.retract (author: username, comment), asked by compositions.Board.RetractComment#2
-where
-  earlier, RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
-then
-  RequestBoundary.respond (comment, requestId)
-```
-
-### compositions.Sessions.CurrentUser
+### Sessions.CurrentAccount.CurrentUser
 
 ```reaction
 when RequestBoundary.request (path: "/auth/current", requestId, session)
@@ -416,17 +416,17 @@ then
   Sessioning.current (session)
 ```
 
-### compositions.Sessions.CurrentUser#2
+### Sessions.CurrentAccount.CurrentUser#2
 
 ```reaction
-when Sessioning.current (session, subject: username), asked by compositions.Sessions.CurrentUser
+when Sessioning.current (session, subject: username), asked by Sessions.CurrentAccount.CurrentUser
 where
   earlier, RequestBoundary.request (path: "/auth/current", requestId, session)
 then
   RequestBoundary.respond (requestId, username)
 ```
 
-### compositions.Sessions.Register
+### Sessions.EnteringApplication.Register
 
 ```reaction
 when RequestBoundary.request (password, path: "/auth/register", requestId, username)
@@ -434,25 +434,25 @@ then
   Authenticating.register (password, username)
 ```
 
-### compositions.Sessions.Register#2
+### Sessions.EnteringApplication.Register#2
 
 ```reaction
-when Authenticating.register (password, username), asked by compositions.Sessions.Register
+when Authenticating.register (password, username), asked by Sessions.EnteringApplication.Register
 then
   Sessioning.start (subject: username)
 ```
 
-### compositions.Sessions.Register#3
+### Sessions.EnteringApplication.Register#3
 
 ```reaction
-when Sessioning.start (subject: username, expiresAt, session), asked by compositions.Sessions.Register#2
+when Sessioning.start (subject: username, expiresAt, session), asked by Sessions.EnteringApplication.Register#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/register", requestId, username)
 then
   RequestBoundary.respond (expiresAt, requestId, session, username)
 ```
 
-### compositions.Sessions.SignIn
+### Sessions.EnteringApplication.SignIn
 
 ```reaction
 when RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
@@ -460,25 +460,25 @@ then
   Authenticating.authenticate (password, username)
 ```
 
-### compositions.Sessions.SignIn#2
+### Sessions.EnteringApplication.SignIn#2
 
 ```reaction
-when Authenticating.authenticate (password, username), asked by compositions.Sessions.SignIn
+when Authenticating.authenticate (password, username), asked by Sessions.EnteringApplication.SignIn
 then
   Sessioning.start (subject: username)
 ```
 
-### compositions.Sessions.SignIn#3
+### Sessions.EnteringApplication.SignIn#3
 
 ```reaction
-when Sessioning.start (subject: username, expiresAt, session), asked by compositions.Sessions.SignIn#2
+when Sessioning.start (subject: username, expiresAt, session), asked by Sessions.EnteringApplication.SignIn#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
 then
   RequestBoundary.respond (expiresAt, requestId, session, username)
 ```
 
-### compositions.Sessions.SignOut
+### Sessions.LeavingApplication.SignOut
 
 ```reaction
 when RequestBoundary.request (path: "/auth/sign-out", requestId, session)
@@ -486,10 +486,10 @@ then
   Sessioning.end (session)
 ```
 
-### compositions.Sessions.SignOut#2
+### Sessions.LeavingApplication.SignOut#2
 
 ```reaction
-when Sessioning.end (session, ended: signedOut), asked by compositions.Sessions.SignOut
+when Sessioning.end (session, ended: signedOut), asked by Sessions.LeavingApplication.SignOut
 where
   earlier, RequestBoundary.request (path: "/auth/sign-out", requestId, session)
 then

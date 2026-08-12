@@ -1,9 +1,11 @@
 /** Compose generic gathering, selection, and discussion behavior as a reading circle. */
 
+import spec from "@design/compositions/ReadingCircle.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { former, reaction, each, view, when, where } from "@mit-sdg/sync-engine/language";
-export { default as spec } from "@design/compositions/ReadingCircle.md" with { type: "text" };
 import { concepts } from "../vocabulary.ts";
+
+export { spec };
 
 const { Discussing, Gathering, Selecting } = concepts;
 

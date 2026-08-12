@@ -8,6 +8,13 @@ export function assembleReadingCircle(instances: ReadingCircleOverrides = {}) {
   return assemble({
     vocabulary,
     instances: { ...readingCircleConcepts.implementations(), ...instances },
-    composition: ReadingCircle,
+    composition: {
+      ReadingCircle: {
+        spec: ReadingCircle.spec,
+        ...ReadingCircle.compositions,
+        views: ReadingCircle.views,
+        formers: ReadingCircle.formers,
+      },
+    },
   });
 }

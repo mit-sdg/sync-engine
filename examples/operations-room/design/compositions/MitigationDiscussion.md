@@ -1,7 +1,11 @@
+# Mitigation Discussion
+
+This selectable composition connects a room's mitigation selection to its
+conversation.
+
 ## Compositions
 
-### Mitigation discussion
+### SelectedMitigationOpensDiscussion
 
-This selectable pack opens one discussion for a newly selected mitigation. An
-assembly can omit the pack when it needs selection without conversation; the
-Selecting and Discussing concepts remain unchanged.
+A newly selected mitigation opens one discussion for its selection identity.
+Assembly may omit this reaction when selection is needed without conversation.
