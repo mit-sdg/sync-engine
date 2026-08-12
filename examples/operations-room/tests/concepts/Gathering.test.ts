@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
 import { identities as ids } from "@examples/operations-room/identities";
-import { GatheringConcept, AlreadyJoined, GatheringNotFound, NotJoined } from "./gathering.ts";
+import {
+  GatheringConcept,
+  AlreadyJoined,
+  GatheringNotFound,
+  NotJoined,
+} from "../../src/concepts/Gathering.ts";
 
 describe("Gathering", () => {
   test("its principle: create, join once, leave once", () => {
