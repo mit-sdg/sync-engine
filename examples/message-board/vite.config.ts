@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  resolve: { tsconfigPaths: true },
   plugins: [
     {
       name: "markdown-as-text",
@@ -28,5 +29,5 @@ export default defineConfig({
     },
     options: { typeAware: true, typeCheck: true },
   },
-  test: { include: ["src/concepts/**/*.test.ts", "tests/**/*.test.ts"] },
+  test: { include: ["tests/**/*.test.ts"] },
 });

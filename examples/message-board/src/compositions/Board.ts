@@ -5,9 +5,13 @@
  * Every endpoint here resolves the session subject first and passes it on as
  * Posting's or Commenting's `Author`, so a request never chooses its own author.
  */
+import spec from "@design/compositions/Board.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { each, form, former, no, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../concept-set.ts";
+import { no, where } from "@mit-sdg/sync-engine/language";
+import { concepts } from "../vocabulary.ts";
+import { Board } from "../formers/Board.ts";
+
+export { spec };
 import {
   boardOutput,
   commentOutput,
@@ -20,36 +24,12 @@ import {
 
 const { Commenting, Posting, Sessioning } = concepts;
 
-/**
- * Posting owns each post; Commenting owns the attachments whose target is that
- * post identity. Neither concept knows the other exists, so this former is
- * where the two readings are joined.
- */
-export const board = former(
-  "the message board",
-  (_input, { post, author, content, comment, commentAuthor, commentContent }) =>
-    form({
-      posts: each(Posting._all({}).is({ post, author, content })).form({
-        post,
-        author,
-        content,
-        comments: each(
-          Commenting._for({ target: post }).is({
-            comment,
-            author: commentAuthor,
-            content: commentContent,
-          }),
-        ).form({ comment, author: commentAuthor, content: commentContent }),
-      }),
-    }),
-);
-
 export const ListBoard = endpoint(
   "/board/list",
   ({ session, username }) =>
     receive({ session })
       .then(Sessioning.current({ session }).responds({ subject: username }))
-      .then(respond({ board: board({}) })),
+      .then(respond({ board: Board({}) })),
   {
     input: { required: ["session"] },
     validators: { input: sessionOnlyInput, output: boardOutput },

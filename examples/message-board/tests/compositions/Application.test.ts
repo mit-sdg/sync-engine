@@ -5,12 +5,12 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
 import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
-import { createMessageBoard } from "../src/application.ts";
-import { createMessageBoardClient } from "../src/client.ts";
-import { AuthenticatingConcept } from "../src/concepts/authenticating/authenticating.ts";
-import { SessioningConcept } from "../src/concepts/sessioning/sessioning.ts";
-import { messageBoardCorrelation, messageBoardPolicy } from "../src/edge.ts";
-import { listenerOptionsFromEnvironment, validateHttpOrigin } from "../src/host-config.ts";
+import { createMessageBoard } from "../../src/application.ts";
+import { createMessageBoardClient } from "../../src/client.ts";
+import { AuthenticatingConcept } from "../../src/concepts/Authenticating.ts";
+import { SessioningConcept } from "../../src/concepts/Sessioning.ts";
+import { messageBoardCorrelation, messageBoardPolicy } from "../../src/edge.ts";
+import { listenerOptionsFromEnvironment, validateHttpOrigin } from "../../src/host-config.ts";
 
 const hosts: ChildProcess[] = [];
 afterEach(() => {
@@ -38,9 +38,9 @@ async function startHost(
 ): Promise<ChildProcess> {
   const host = spawn(
     process.platform === "win32" ? "bun.exe" : "bun",
-    [fileURLToPath(new URL(`../src/${source}`, import.meta.url))],
+    [fileURLToPath(new URL(`../../src/${source}`, import.meta.url))],
     {
-      cwd: fileURLToPath(new URL("../../..", import.meta.url)),
+      cwd: fileURLToPath(new URL("../../../..", import.meta.url)),
       env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
       stdio: ["ignore", "pipe", "inherit"],
     },
@@ -274,7 +274,7 @@ describe("message board application", () => {
         ({ validators }) => validators.input && validators.output,
       ),
     ).toBe(true);
-    const wire = await readFile(new URL("../generated/wire.ts", import.meta.url), "utf8");
+    const wire = await readFile(new URL("../../generated/wire.ts", import.meta.url), "utf8");
     const projected = wire.slice(wire.indexOf("MessageBoardWireHttp"));
     expect(projected).not.toContain('"session":');
     expect(projected).not.toContain('"expiresAt":');

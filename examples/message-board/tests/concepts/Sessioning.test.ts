@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { SessioningConcept, UnknownSession } from "./sessioning.ts";
+import { SessioningConcept, UnknownSession } from "../../src/concepts/Sessioning.ts";
 
 describe("Sessioning", () => {
   test("its principle: start, resolve, and end an opaque session", () => {

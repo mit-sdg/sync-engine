@@ -5,7 +5,7 @@ import {
   InvalidUsername,
   UsernameTaken,
   WeakPassword,
-} from "./authenticating.ts";
+} from "../../src/concepts/Authenticating.ts";
 
 describe("Authenticating", () => {
   test("its principle: register and prove a password without exposing its verifier", () => {

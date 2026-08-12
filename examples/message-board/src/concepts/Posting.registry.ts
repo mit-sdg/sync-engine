@@ -1,6 +1,6 @@
 import { registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { InvalidPostContent, PostingConcept } from "./posting.ts";
-import spec from "./spec.md" with { type: "text" };
+import { InvalidPostContent, PostingConcept } from "./Posting.ts";
+import spec from "@design/concepts/Posting.md" with { type: "text" };
 
 export const posting = registerConcept({
   class: PostingConcept,
