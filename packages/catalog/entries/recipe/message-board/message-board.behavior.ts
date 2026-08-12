@@ -3,18 +3,17 @@ import { expect } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
 import { compositions } from "./message-board.ts";
 
+const { AddMessageBoardComment, PublishMessageBoardPost, RetractMessageBoardComment } =
+  compositions.BoardPublishing;
 const {
-  AddMessageBoardComment,
   ChangeBoardPassword,
   CurrentBoardUser,
   DeleteBoardAccount,
-  ListMessageBoard,
-  PublishMessageBoardPost,
   RegisterBoardUser,
-  RetractMessageBoardComment,
   SignInBoardUser,
   SignOutBoardUser,
-} = compositions;
+} = compositions.Accounts;
+const { ListMessageBoard } = compositions.BoardPages;
 
 export type CatalogInstances = ReturnType<typeof applicationConcepts.implementations>;
 

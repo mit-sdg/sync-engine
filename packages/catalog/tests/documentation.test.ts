@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
 
 describe("catalog documentation", () => {
@@ -18,6 +18,33 @@ describe("catalog documentation", () => {
       expect(reference).toContain(term);
     for (const removed of ["catalog add", "catalog.lock", "generated.ts", "src/concept-set.ts"])
       expect(reference).not.toContain(removed);
+  });
+
+  test("keeps every recipe on the structured design and export convention", async () => {
+    const root = new URL("../entries/recipe/", import.meta.url);
+    for (const name of await readdir(root)) {
+      const source = await readFile(new URL(`${name}/${name}.ts`, root), "utf8");
+      const spec = await readFile(new URL(`${name}/spec.md`, root), "utf8");
+
+      expect(source).toContain('import spec from "./spec.md";');
+      expect(source).toContain("export { spec };");
+      expect(source).not.toMatch(/export \{ design \}|export const (?!compositions|views|formers)/);
+      expect(spec).toContain("## Compositions");
+      expect(spec).not.toMatch(
+        /^## (Purpose|Concepts|Decisions|Endpoints|Failure|Failure and repair|Host variants)$/m,
+      );
+      expect(spec).not.toMatch(/\/[-a-z]+\//);
+
+      const compositionBlock = source.match(/export const compositions = \{([\s\S]*?)\n\};/)?.[1];
+      expect(compositionBlock).toBeDefined();
+      for (const group of compositionBlock?.matchAll(/^  (\w+):/gm) ?? [])
+        expect(spec).toContain(`### ${group[1]}`);
+      for (const aggregate of ["views", "formers"])
+        for (const names of source
+          .match(new RegExp(`export const ${aggregate} = \\{ ([^}]+) \\};`))?.[1]
+          ?.split(",") ?? [])
+          expect(spec).toContain(`### ${names.trim()}`);
+    }
   });
 
   test.each(["gathering", "selecting"])(

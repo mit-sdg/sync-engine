@@ -24,6 +24,6 @@ bunx catalog show concept/selecting --raw
 bunx catalog source concept/selecting selecting.shared.ts --raw
 ```
 
-The printed names identify catalog assets, not proposed destinations. In an application, the current convention uses `src/vocabulary.ts`, composition modules under `src/compositions/`, and the `@design/*` alias; the catalog neither assumes nor creates that layout. Recipe assets use an entry-local relative design import because one packaged catalog typecheck covers many independent entries, while an application-owned `@design/*` alias has application-specific targets.
+The printed names identify catalog assets, not proposed destinations. In an application, the current convention uses `src/vocabulary.ts`, composition modules under `src/compositions/`, and the `@design/*` alias; the catalog neither assumes nor creates that layout. Recipe assets import their adjacent Markdown and export it as `spec`. They use an entry-local relative import because one packaged catalog typecheck covers many independent entries, while an application-owned `@design/*` alias has application-specific targets.
 
 See [`public-surface.md`](public-surface.md) for the exact command and manifest contract. Entry authors should read [`CONTRIBUTING.md`](CONTRIBUTING.md).

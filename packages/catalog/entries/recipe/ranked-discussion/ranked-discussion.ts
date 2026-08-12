@@ -1,11 +1,11 @@
-import design from "./spec.md";
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, former, no, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Discussing, Timing, Upvoting } = concepts;
 
-const rankedResponses = former(
+const RankedResponses = former(
   "the ranked responses of (discussion)",
   ({ discussion }, { response, author, text, addedAt, score }) =>
     each(Discussing._responses({ discussion }).is({ response, author, text, addedAt }))
@@ -77,21 +77,14 @@ const CloseRankedDiscussion = endpoint("/ranked-discussions/close", ({ discussio
 );
 
 const GetRankedDiscussion = endpoint("/ranked-discussions/get", ({ discussion }) =>
-  receive({ discussion }).then(respond({ discussion, responses: rankedResponses({ discussion }) })),
+  receive({ discussion }).then(respond({ discussion, responses: RankedResponses({ discussion }) })),
 );
 
-export { design };
+export { spec };
 
 export const compositions = {
-  OpenRankedDiscussion,
-  RespondToDiscussion,
-  UpvoteResponse,
-  DownvoteResponse,
-  UnvoteResponse,
-  CloseRankedDiscussion,
-  GetRankedDiscussion,
+  DiscussionLifecycle: { OpenRankedDiscussion, RespondToDiscussion, CloseRankedDiscussion },
+  ResponseVoting: { UpvoteResponse, DownvoteResponse, UnvoteResponse },
+  DiscussionPages: { GetRankedDiscussion },
 };
-
-export const formers = {
-  rankedResponses,
-};
+export const formers = { RankedResponses };

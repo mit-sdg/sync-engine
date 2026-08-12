@@ -1,4 +1,4 @@
-import design from "./spec.md";
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, no, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
@@ -6,22 +6,22 @@ import { concepts } from "@catalog/concepts";
 const { Commenting, Labeling, Posting, Timing, Trashing } = concepts;
 const BOARD_SCOPE = "recoverable-board";
 
-const postExists = view("recoverable board Post (post) exists", ({ post }, _outputs, _bindings) =>
+const PostExists = view("recoverable board Post (post) exists", ({ post }, _outputs, _bindings) =>
   where(Posting._get({ post })),
 ).holds();
 
-const postIsVisible = view(
+const PostIsVisible = view(
   "recoverable board Post (post) is visible",
   ({ post }, _outputs, _bindings) =>
     where(Posting._get({ post }), Trashing._state({ item: post }).is({ status: "active" })),
 ).holds();
 
-const boardLabel = view(
+const BoardLabel = view(
   "Label (label) belongs to the recoverable board",
   ({ label }, _outputs, _bindings) => where(Labeling._get({ label }).is({ scope: BOARD_SCOPE })),
 ).holds();
 
-const recoverableBoard = former(
+const RecoverableBoard = former(
   "the recoverable board",
   (
     _input,
@@ -64,11 +64,11 @@ const AddBoardComment = endpoint(
   "/recoverable-board/comment",
   ({ post, author, text, at, comment }) =>
     receive({ post, author, text }).then(
-      where(postIsVisible({ post }), Timing._now({}).is({ time: at }))
+      where(PostIsVisible({ post }), Timing._now({}).is({ time: at }))
         .then(Commenting.add({ target: post, author, text, at }).responds({ comment }))
         .then(respond({ comment }))
         .named("visible-post"),
-      where(no(postIsVisible({ post })))
+      where(no(PostIsVisible({ post })))
         .then(respond({ error: "POST_NOT_VISIBLE" }))
         .named("hidden-or-missing-post"),
     ),
@@ -88,14 +88,14 @@ const CreateBoardLabel = endpoint("/recoverable-board/create-label", ({ name, la
 
 const LabelBoardPost = endpoint("/recoverable-board/label", ({ post, label }) =>
   receive({ post, label }).then(
-    where(postIsVisible({ post }), boardLabel({ label }))
+    where(PostIsVisible({ post }), BoardLabel({ label }))
       .then(Labeling.apply({ label, item: post }).responds({ label, item: post }))
       .then(respond({ post, label }))
       .named("visible-post-and-board-label"),
-    where(no(postIsVisible({ post })))
+    where(no(PostIsVisible({ post })))
       .then(respond({ error: "POST_NOT_VISIBLE" }))
       .named("hidden-or-missing-post"),
-    where(postIsVisible({ post }), no(boardLabel({ label })))
+    where(PostIsVisible({ post }), no(BoardLabel({ label })))
       .then(respond({ error: "LABEL_NOT_ON_BOARD" }))
       .named("foreign-or-missing-label"),
   ),
@@ -103,14 +103,14 @@ const LabelBoardPost = endpoint("/recoverable-board/label", ({ post, label }) =>
 
 const UnlabelBoardPost = endpoint("/recoverable-board/unlabel", ({ post, label }) =>
   receive({ post, label }).then(
-    where(postExists({ post }), boardLabel({ label }))
+    where(PostExists({ post }), BoardLabel({ label }))
       .then(Labeling.remove({ label, item: post }).responds({ label, item: post }))
       .then(respond({ post, label }))
       .named("post-and-board-label"),
-    where(no(postExists({ post })))
+    where(no(PostExists({ post })))
       .then(respond({ error: "POST_NOT_FOUND" }))
       .named("missing-post"),
-    where(postExists({ post }), no(boardLabel({ label })))
+    where(PostExists({ post }), no(BoardLabel({ label })))
       .then(respond({ error: "LABEL_NOT_ON_BOARD" }))
       .named("foreign-or-missing-label"),
   ),
@@ -118,11 +118,11 @@ const UnlabelBoardPost = endpoint("/recoverable-board/unlabel", ({ post, label }
 
 const TrashBoardPost = endpoint("/recoverable-board/trash", ({ post, at }) =>
   receive({ post }).then(
-    where(postExists({ post }), Timing._now({}).is({ time: at }))
+    where(PostExists({ post }), Timing._now({}).is({ time: at }))
       .then(Trashing.trash({ item: post, at }).responds({ item: post }))
       .then(respond({ post }))
       .named("post-exists"),
-    where(no(postExists({ post })))
+    where(no(PostExists({ post })))
       .then(respond({ error: "POST_NOT_FOUND" }))
       .named("post-missing"),
   ),
@@ -130,11 +130,11 @@ const TrashBoardPost = endpoint("/recoverable-board/trash", ({ post, at }) =>
 
 const RestoreBoardPost = endpoint("/recoverable-board/restore", ({ post }) =>
   receive({ post }).then(
-    where(postExists({ post }))
+    where(PostExists({ post }))
       .then(Trashing.restore({ item: post }).responds({ item: post }))
       .then(respond({ post }))
       .named("post-exists"),
-    where(no(postExists({ post })))
+    where(no(PostExists({ post })))
       .then(respond({ error: "POST_NOT_FOUND" }))
       .named("post-missing"),
   ),
@@ -142,41 +142,27 @@ const RestoreBoardPost = endpoint("/recoverable-board/restore", ({ post }) =>
 
 const PurgeBoardPost = endpoint("/recoverable-board/purge", ({ post, at }) =>
   receive({ post }).then(
-    where(postExists({ post }), Timing._now({}).is({ time: at }))
+    where(PostExists({ post }), Timing._now({}).is({ time: at }))
       .then(Trashing.purge({ item: post, at }).responds({ item: post }))
       .then(respond({ post }))
       .named("post-exists"),
-    where(no(postExists({ post })))
+    where(no(PostExists({ post })))
       .then(respond({ error: "POST_NOT_FOUND" }))
       .named("post-missing"),
   ),
 );
 
 const ListRecoverableBoard = endpoint("/recoverable-board/list", () =>
-  receive({}).then(respond({ board: recoverableBoard({}) })),
+  receive({}).then(respond({ board: RecoverableBoard({}) })),
 );
 
-export { design };
+export { spec };
 
 export const compositions = {
-  PublishBoardPost,
-  AddBoardComment,
-  RetractBoardComment,
-  CreateBoardLabel,
-  LabelBoardPost,
-  UnlabelBoardPost,
-  TrashBoardPost,
-  RestoreBoardPost,
-  PurgeBoardPost,
-  ListRecoverableBoard,
+  BoardContent: { PublishBoardPost, AddBoardComment, RetractBoardComment },
+  BoardLabels: { CreateBoardLabel, LabelBoardPost, UnlabelBoardPost },
+  PostRecovery: { TrashBoardPost, RestoreBoardPost, PurgeBoardPost },
+  BoardPages: { ListRecoverableBoard },
 };
-
-export const views = {
-  postExists,
-  postIsVisible,
-  boardLabel,
-};
-
-export const formers = {
-  recoverableBoard,
-};
+export const views = { PostExists, PostIsVisible, BoardLabel };
+export const formers = { RecoverableBoard };
