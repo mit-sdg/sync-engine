@@ -5,6 +5,89 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.9] - 2026-08-13
+
+This beta makes the curated catalog read-only, discovers checked concepts from
+actual registrations, and establishes a conventional application-owned design
+layout separate from executable source and generated evidence.
+
+### Compatibility
+
+- The application convention now keeps concept specifications under
+  `design/concepts/`, lean composition explanations under
+  `design/compositions/`, and an optional `design/vocabulary.md`. Executable
+  declarations live under `src/concepts/`, `src/compositions/`, and
+  `src/vocabulary.ts`; focused tests live under matching `tests/` directories.
+  These paths are conventions rather than registration or runtime semantics.
+- `sync-engine setup` now creates `src/vocabulary.ts` and no placeholder design
+  or composition file. Its generated descriptor names that vocabulary module.
+- `sync-engine check` discovers the selected runtime registrations instead of
+  scanning Markdown roots. With `--config`, the assembled application's
+  application-owned concepts are authoritative. Without a config,
+  `--vocabulary-module` selects a module whose `vocabulary` export retains the
+  registrations. The no-option compatibility default remains
+  `src/concept-set.ts`; unregistered Markdown is ignored.
+- Removed the `--concepts` check option. Source analysis now locates only the
+  class declarations needed for TypeScript-erased input names and follows
+  supported direct or imported registrations and registration-map spreads.
+  Inherited method declarations are checked when runtime registration selected
+  them; unsupported or unresolved source shapes fail rather than being omitted.
+- `@mit-sdg/sync-engine-catalog` is now a read-only packaged-asset browser.
+  Removed `catalog add`, floor selection, dependency planning, generated wiring,
+  project inspection, installation transactions, and `catalog.lock` ownership.
+  Added `catalog source <entry> <selector> [--raw]`; `catalog show` now prints
+  the entry design and accepted selectors and also supports `--raw`.
+- The catalog no longer has a core peer or a `semver` runtime dependency. Recipe
+  requirements are display relationships only, and implementation names only
+  label source selectors; neither triggers resolution or installation.
+
+### Migration
+
+Existing applications do not have to move files solely to keep registration or
+runtime behavior. To adopt the layout, move authored Markdown under `design/`,
+map `@design/*` to that directory, collect registrations in
+`src/vocabulary.ts`, and keep executable composition groups and focused tests in
+the matching `src/compositions/` and `tests/` directories. Configure
+`generated.config.ts` with `vocabulary.module` when the module is not the legacy
+`src/concept-set.ts` default.
+
+Replace `sync-engine check --concepts ...` with `--config <path>` for
+assembly-driven discovery or `--vocabulary-module <path>` for an explicitly
+selected unconfigured vocabulary. Ensure the `conceptSet(...)` registration map
+and registered class imports use the supported statically resolvable forms
+listed in the CLI reference.
+
+Catalog users must select and copy source themselves from `catalog show` and
+`catalog source`, then adapt, test, and maintain it as application-owned source.
+The catalog no longer updates or validates previously installed files and does
+not consume an existing `catalog.lock`. Catalog entry authors must replace
+schema-1 destinations, floors, packages, and generated-integration metadata with
+the schema-2 `design`, `sources`, and labeled `implementations` fields.
+
+Install core, HTTP, and analysis at `1.0.0-beta.9` when using those packages
+together. The catalog may be installed independently at `1.0.0-beta.9`.
+
+### Generated formats
+
+- The canonical application manifest remains version 5, and concept
+  specifications remain version 1. Regeneration updates core, analysis, and HTTP
+  producer provenance to `1.0.0-beta.9`.
+- Catalog entry manifests advance from schema 1 to schema 2. There is no
+  `catalog.lock` or generated catalog wiring format in this release.
+- Moving declarations into named composition groups can change generated
+  reaction paths and ordering without changing endpoint wire shapes or the
+  application-manifest format.
+
+### Runtime and security support
+
+- Core, analysis, and HTTP runtime and security behavior are unchanged.
+- The catalog no longer writes project files or resolves package requirements.
+  Consumers own destination choice, dependency selection, source review,
+  integration, testing, updates, and any cleanup of files installed by an older
+  catalog.
+
+[Release][1.0.0-beta.9] | [Changes since 1.0.0-beta.8][1.0.0-beta.9-compare]
+
 ## [1.0.0-beta.8] - 2026-08-11
 
 This beta adds the curated source catalog and concept-free setup flow, replaces
@@ -730,6 +813,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.9]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.9
+[1.0.0-beta.9-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.8...v1.0.0-beta.9
 [1.0.0-beta.8]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.8
 [1.0.0-beta.8-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.7...v1.0.0-beta.8
 [1.0.0-beta.7]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.7
