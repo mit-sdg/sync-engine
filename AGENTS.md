@@ -92,7 +92,7 @@ the book.
 | `src/engine/boundary/`           | Boundary capabilities nested under `protocol/`, `invocation/`, `assembly/`, `client/`, `gateway/`, and `wire/`                      |
 | `packages/http/`                 | Independently published HTTP transport and its package-owned API, declaration, and packaging tests                                  |
 | `packages/analysis/`             | Independently published analysis companion and its package-owned API, declaration, and packaging tests                              |
-| `packages/catalog/`              | CLI-only curated source catalog, entry assets, lock/installer implementation, and package-owned tests                               |
+| `packages/catalog/`              | CLI-only read-only curated source browser, entry assets, manifest decoder, and package-owned tests                                  |
 | `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
 | `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
 | `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |

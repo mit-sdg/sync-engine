@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine-catalog",
-  "version": "1.0.0-beta.8",
+  "version": "1.0.0-beta.9",
   "description": "Read-only browser for curated @mit-sdg/sync-engine designs and source",
   "keywords": [
     "catalog",

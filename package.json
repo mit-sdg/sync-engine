@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine",
-  "version": "1.0.0-beta.8",
+  "version": "1.0.0-beta.9",
   "description": "A TypeScript library for composing independent application behaviors declaratively",
   "keywords": [
     "concept",

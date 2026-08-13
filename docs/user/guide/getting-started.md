@@ -18,7 +18,7 @@ These commands pin the tutorial's core release and development dependencies:
 mkdir workshop-app
 cd workshop-app
 bun init -y
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.8
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.9
 bun add --dev --exact typescript@6
 bun add --dev --exact @types/node@24.0.0
 ```

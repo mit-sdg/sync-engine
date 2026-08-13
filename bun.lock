@@ -19,17 +19,17 @@
     },
     "packages/analysis": {
       "name": "@mit-sdg/sync-engine-analysis",
-      "version": "1.0.0-beta.8",
+      "version": "1.0.0-beta.9",
       "dependencies": {
         "typescript": ">=6 <7",
       },
       "peerDependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.8",
+        "@mit-sdg/sync-engine": "1.0.0-beta.9",
       },
     },
     "packages/catalog": {
       "name": "@mit-sdg/sync-engine-catalog",
-      "version": "1.0.0-beta.8",
+      "version": "1.0.0-beta.9",
       "bin": {
         "catalog": "./dist/command.js",
       },
@@ -41,9 +41,9 @@
     },
     "packages/http": {
       "name": "@mit-sdg/sync-engine-http",
-      "version": "1.0.0-beta.8",
+      "version": "1.0.0-beta.9",
       "peerDependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.8",
+        "@mit-sdg/sync-engine": "1.0.0-beta.9",
       },
     },
   },
