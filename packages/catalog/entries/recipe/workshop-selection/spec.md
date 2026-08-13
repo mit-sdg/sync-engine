@@ -1,30 +1,23 @@
-# Workshop Selection recipe
+# Workshop Selection
 
-## Purpose
+A workshop gathers members around one current item while keeping membership and selection under their respective concept owners.
 
-Create a named workshop, manage its members, and keep one current workshop item.
+## Compositions
 
-## Concepts
+### WorkshopMembership
 
-Gathering owns workshop identity and membership. Selecting owns the current item for
-the workshop identity used as its Scope.
+A host creates a workshop as its first member, and other people may join it. Host and member identities are attribution unless the application binds them to authenticated callers.
 
-## Decisions
+### WorkshopSelection
 
-A current item may be chosen only for a known Gathering. Selecting deliberately does
-not enforce that rule because Scope is opaque to it. Workshop host and member values
-are attribution unless the containing application binds authenticated identities.
+A known workshop may choose one current item. An unknown workshop returns `GATHERING_NOT_FOUND` without changing Selecting; concept refusals retain their own codes.
 
-## Endpoints
+### WorkshopPages
 
-- `CreateWorkshop` — `/workshops/create`
-- `JoinWorkshop` — `/workshops/join`
-- `ChooseWorkshopItem` — `/workshops/choose`
-- `GetWorkshop` — `/workshops/get`
+Opening a workshop presents its name, host, and current item together.
 
-## Failure
+## Formers
 
-Choosing first confirms that the Gathering exists. Gathering has no deletion action,
-so that observation cannot become stale through a catalog concept transition. The
-unknown-Gathering branch answers `GATHERING_NOT_FOUND` without calling Selecting.
-Concept refusals are returned without replacing their codes.
+### Workshop
+
+The workshop read combines Gathering details with the optional current Selection for the same workshop identity.

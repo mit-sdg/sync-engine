@@ -38,8 +38,8 @@ The directory defaults to the current working directory and must contain a valid
 neither the directory nor package manifest.
 
 The setup targets are `tsconfig.json`, `generated.config.ts`,
-`src/concept-set.ts`, `src/composition.ts`, `src/assembly.ts`, and
-`src/main.ts`. Setup handles each target as follows:
+`src/vocabulary.ts`, `src/assembly.ts`, and `src/main.ts`. A concept-free setup
+creates no placeholder design or composition file. Setup handles each target as follows:
 
 - An absent target is eligible to be created.
 - A byte-identical target is reported as verified.
@@ -90,9 +90,9 @@ files are not checked.
 
 The runtime registration supplies the class and parsed specification, so the
 checker does not statically search for Markdown. The Markdown filename and
-location are unrestricted; for example, `design/concepts/Sessioning.md` is
-supported. A registry module and an adjacent `spec.md` are conventions, not
-discovery requirements.
+location are unrestricted. Applications conventionally register
+`design/concepts/Sessioning.md` through the `@design/*` path mapping, but that
+layout and an optional registry module are not discovery requirements.
 
 The command compares the parsed specification with the registered class's
 action and query names and input keys. It resolves typed parameters through the

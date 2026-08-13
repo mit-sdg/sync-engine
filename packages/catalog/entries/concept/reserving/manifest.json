@@ -1,66 +1,18 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "concept/reserving",
   "kind": "concept",
   "summary": "Give one claimant an exclusive claim on an opaque resource unit.",
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "concept": {
-    "name": "Reserving",
-    "export": "reserving",
-    "registration": "$concepts/reserving/registry.ts"
-  },
-  "defaultFloor": "memory",
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$concepts/reserving/spec.md"
-    },
-    {
-      "source": "reserving.shared.ts",
-      "target": "$concepts/reserving/reserving.shared.ts"
-    },
-    {
-      "source": "reserving.conformance.ts",
-      "target": "$concepts/reserving/reserving.conformance.ts"
-    },
-    {
-      "source": "registry.ts",
-      "target": "$concepts/reserving/registry.ts",
-      "render": "floor"
-    }
-  ],
-  "floors": {
+  "design": "spec.md",
+  "sources": ["reserving.shared.ts", "reserving.conformance.ts", "registry.ts"],
+  "implementations": {
     "memory": {
       "summary": "Process-local reservation and blocking-resource indexes with injectable identities.",
-      "files": [
-        {
-          "source": "reserving.memory.ts",
-          "target": "$concepts/reserving/reserving.memory.ts"
-        },
-        {
-          "source": "reserving.memory.test.ts",
-          "target": "$concepts/reserving/reserving.memory.test.ts"
-        }
-      ]
+      "sources": ["reserving.memory.ts", "reserving.memory.test.ts"]
     },
     "mongo": {
       "summary": "MongoDB reservations with injectable identities, a partial unique blocking-resource index, and conditional terminal updates.",
-      "packages": {
-        "mongodb": "^6.20.0"
-      },
-      "files": [
-        {
-          "source": "reserving.mongo.ts",
-          "target": "$concepts/reserving/reserving.mongo.ts"
-        },
-        {
-          "source": "reserving.mongo.test.ts",
-          "target": "$concepts/reserving/reserving.mongo.test.ts"
-        }
-      ]
+      "sources": ["reserving.mongo.ts", "reserving.mongo.test.ts"]
     }
   }
 }

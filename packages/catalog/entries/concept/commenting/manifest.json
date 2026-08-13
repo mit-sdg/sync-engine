@@ -1,66 +1,18 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "concept/commenting",
   "kind": "concept",
   "summary": "Attach owned authored comments and enforce author-only retraction.",
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "vite-plus": "^0.2.6"
-  },
-  "concept": {
-    "name": "Commenting",
-    "export": "commenting",
-    "registration": "$concepts/commenting/registry.ts"
-  },
-  "defaultFloor": "memory",
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$concepts/commenting/spec.md"
-    },
-    {
-      "source": "commenting.shared.ts",
-      "target": "$concepts/commenting/commenting.shared.ts"
-    },
-    {
-      "source": "commenting.conformance.ts",
-      "target": "$concepts/commenting/commenting.conformance.ts"
-    },
-    {
-      "source": "registry.ts",
-      "target": "$concepts/commenting/registry.ts",
-      "render": "floor"
-    }
-  ],
-  "floors": {
+  "design": "spec.md",
+  "sources": ["commenting.shared.ts", "commenting.conformance.ts", "registry.ts"],
+  "implementations": {
     "memory": {
       "summary": "Process-local Comment records with injectable identity allocation.",
-      "files": [
-        {
-          "source": "commenting.memory.ts",
-          "target": "$concepts/commenting/commenting.memory.ts"
-        },
-        {
-          "source": "commenting.memory.test.ts",
-          "target": "$concepts/commenting/commenting.memory.test.ts"
-        }
-      ]
+      "sources": ["commenting.memory.ts", "commenting.memory.test.ts"]
     },
     "mongo": {
       "summary": "MongoDB Comment records with indexed order and conditional author retraction.",
-      "packages": {
-        "mongodb": "^6.20.0"
-      },
-      "files": [
-        {
-          "source": "commenting.mongo.ts",
-          "target": "$concepts/commenting/commenting.mongo.ts"
-        },
-        {
-          "source": "commenting.mongo.test.ts",
-          "target": "$concepts/commenting/commenting.mongo.test.ts"
-        }
-      ]
+      "sources": ["commenting.mongo.ts", "commenting.mongo.test.ts"]
     }
   }
 }

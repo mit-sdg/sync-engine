@@ -149,11 +149,12 @@ describe("documented inventories", () => {
         "tsconfig.json",
         "vite.config.ts",
         "text.d.ts",
-        "tests/application.test.ts",
         "generated.config.ts",
       ]) {
         await expect(stat(new URL(`examples/${directory}/${path}`, root))).resolves.toBeDefined();
       }
+      const tests = await filesBelow(new URL(`examples/${directory}/tests/`, root), "");
+      expect(tests.some((path) => path.endsWith(".test.ts"))).toBe(true);
     }
   });
 

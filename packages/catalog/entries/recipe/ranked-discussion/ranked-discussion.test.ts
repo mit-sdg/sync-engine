@@ -1,15 +1,12 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
-import {
-  CloseRankedDiscussion,
-  DownvoteResponse,
-  GetRankedDiscussion,
-  OpenRankedDiscussion,
-  RespondToDiscussion,
-  UnvoteResponse,
-  UpvoteResponse,
-} from "./ranked-discussion.ts";
+import { compositions } from "./ranked-discussion.ts";
+
+const { CloseRankedDiscussion, OpenRankedDiscussion, RespondToDiscussion } =
+  compositions.DiscussionLifecycle;
+const { DownvoteResponse, UnvoteResponse, UpvoteResponse } = compositions.ResponseVoting;
+const { GetRankedDiscussion } = compositions.DiscussionPages;
 
 type Floor = "memory" | "mongo";
 type Instances = ReturnType<(typeof applicationConcepts)["implementations"]>;

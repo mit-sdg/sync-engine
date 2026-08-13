@@ -1,10 +1,11 @@
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, former, no, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Discussing, Timing, Upvoting } = concepts;
 
-const rankedResponses = former(
+const RankedResponses = former(
   "the ranked responses of (discussion)",
   ({ discussion }, { response, author, text, addedAt, score }) =>
     each(Discussing._responses({ discussion }).is({ response, author, text, addedAt }))
@@ -12,17 +13,15 @@ const rankedResponses = former(
       .form({ response, author, text, addedAt, score }),
 );
 
-export const OpenRankedDiscussion = endpoint(
-  "/ranked-discussions/open",
-  ({ subject, at, discussion }) =>
-    receive({ subject })
-      .where(Timing._now({}).is({ time: at }))
-      .then(Discussing.open({ subject, at }).responds({ discussion }))
-      .then(respond({ discussion })),
+const OpenRankedDiscussion = endpoint("/ranked-discussions/open", ({ subject, at, discussion }) =>
+  receive({ subject })
+    .where(Timing._now({}).is({ time: at }))
+    .then(Discussing.open({ subject, at }).responds({ discussion }))
+    .then(respond({ discussion })),
 );
 
 /** A public adapter must bind `author` to the authenticated caller. */
-export const RespondToDiscussion = endpoint(
+const RespondToDiscussion = endpoint(
   "/ranked-discussions/respond",
   ({ discussion, author, text, at, response }) =>
     receive({ discussion, author, text })
@@ -32,7 +31,7 @@ export const RespondToDiscussion = endpoint(
 );
 
 /** A public adapter must bind `voter` to the authenticated caller. */
-export const UpvoteResponse = endpoint("/ranked-discussions/upvote", ({ response, voter }) =>
+const UpvoteResponse = endpoint("/ranked-discussions/upvote", ({ response, voter }) =>
   receive({ response, voter }).then(
     where(Discussing._response({ response }))
       .then(Upvoting.upvote({ item: response, voter }).responds({}))
@@ -45,7 +44,7 @@ export const UpvoteResponse = endpoint("/ranked-discussions/upvote", ({ response
 );
 
 /** A public adapter must bind `voter` to the authenticated caller. */
-export const DownvoteResponse = endpoint("/ranked-discussions/downvote", ({ response, voter }) =>
+const DownvoteResponse = endpoint("/ranked-discussions/downvote", ({ response, voter }) =>
   receive({ response, voter }).then(
     where(Discussing._response({ response }))
       .then(Upvoting.downvote({ item: response, voter }).responds({}))
@@ -58,7 +57,7 @@ export const DownvoteResponse = endpoint("/ranked-discussions/downvote", ({ resp
 );
 
 /** A public adapter must bind `voter` to the authenticated caller. */
-export const UnvoteResponse = endpoint("/ranked-discussions/unvote", ({ response, voter }) =>
+const UnvoteResponse = endpoint("/ranked-discussions/unvote", ({ response, voter }) =>
   receive({ response, voter }).then(
     where(Discussing._response({ response }))
       .then(Upvoting.unvote({ item: response, voter }).responds({}))
@@ -70,13 +69,22 @@ export const UnvoteResponse = endpoint("/ranked-discussions/unvote", ({ response
   ),
 );
 
-export const CloseRankedDiscussion = endpoint("/ranked-discussions/close", ({ discussion, at }) =>
+const CloseRankedDiscussion = endpoint("/ranked-discussions/close", ({ discussion, at }) =>
   receive({ discussion })
     .where(Timing._now({}).is({ time: at }))
     .then(Discussing.close({ discussion, at }).responds({ discussion }))
     .then(respond({ discussion })),
 );
 
-export const GetRankedDiscussion = endpoint("/ranked-discussions/get", ({ discussion }) =>
-  receive({ discussion }).then(respond({ discussion, responses: rankedResponses({ discussion }) })),
+const GetRankedDiscussion = endpoint("/ranked-discussions/get", ({ discussion }) =>
+  receive({ discussion }).then(respond({ discussion, responses: RankedResponses({ discussion }) })),
 );
+
+export { spec };
+
+export const compositions = {
+  DiscussionLifecycle: { OpenRankedDiscussion, RespondToDiscussion, CloseRankedDiscussion },
+  ResponseVoting: { UpvoteResponse, DownvoteResponse, UnvoteResponse },
+  DiscussionPages: { GetRankedDiscussion },
+};
+export const formers = { RankedResponses };

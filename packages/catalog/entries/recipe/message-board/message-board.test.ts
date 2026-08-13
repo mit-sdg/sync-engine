@@ -4,18 +4,19 @@ import {
   exerciseMessageBoard,
   exerciseRegistrationPartialFailure,
 } from "./message-board.behavior.ts";
-import {
-  AddMessageBoardComment,
+import { compositions } from "./message-board.ts";
+
+const { AddMessageBoardComment, PublishMessageBoardPost, RetractMessageBoardComment } =
+  compositions.BoardPublishing;
+const {
   ChangeBoardPassword,
   CurrentBoardUser,
   DeleteBoardAccount,
-  ListMessageBoard,
-  PublishMessageBoardPost,
   RegisterBoardUser,
-  RetractMessageBoardComment,
   SignInBoardUser,
   SignOutBoardUser,
-} from "./message-board.ts";
+} = compositions.Accounts;
+const { ListMessageBoard } = compositions.BoardPages;
 
 function memoryInstances() {
   try {

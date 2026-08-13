@@ -1,27 +1,23 @@
-# Ranked Discussion recipe
+# Ranked Discussion
 
-## Purpose
+A ranked discussion keeps responses independent from popularity while presenting each response with its current aggregate score.
 
-Collect responses independently from popularity and show each response with its
-current aggregate vote score.
+## Compositions
 
-## Concepts
+### DiscussionLifecycle
 
-Timing timestamps discussion activity. Discussing owns Discussions and Responses.
-Upvoting owns each Voter's stance on a Response identity used as its Item.
+A discussion may open, receive attributed responses, and close using Timing-owned event times. Applications must bind author identities when attribution matters.
 
-## Decisions
+### ResponseVoting
 
-A vote is accepted only when the Response exists. The recipe exposes aggregate scores
-but not voter identities. Author and Voter identities must be bound by the containing
-application when attribution or one-person-one-vote matters.
+A voter may upvote, downvote, or remove their vote only for a Response that exists; a missing response returns `RESPONSE_NOT_FOUND`. Applications must bind voter identities when one-person-one-vote authority matters.
 
-## Endpoints
+### DiscussionPages
 
-- `OpenRankedDiscussion` — `/ranked-discussions/open`
-- `RespondToDiscussion` — `/ranked-discussions/respond`
-- `UpvoteResponse` — `/ranked-discussions/upvote`
-- `DownvoteResponse` — `/ranked-discussions/downvote`
-- `UnvoteResponse` — `/ranked-discussions/unvote`
-- `CloseRankedDiscussion` — `/ranked-discussions/close`
-- `GetRankedDiscussion` — `/ranked-discussions/get`
+Opening a discussion presents its responses together with aggregate scores, without exposing voter identities.
+
+## Formers
+
+### RankedResponses
+
+The ranked response read combines Discussing's response details with Upvoting's current score for each Response.

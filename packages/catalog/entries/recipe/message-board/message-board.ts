@@ -1,19 +1,20 @@
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, no, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Authenticating, Commenting, Posting, Sessioning, Timing } = concepts;
 
-const postTargetExists = view("the Post target exists (post)", ({ post }, _outputs, _bindings) =>
+const PostTargetExists = view("the Post target exists (post)", ({ post }, _outputs, _bindings) =>
   where(Posting._get({ post })),
 ).holds();
 
-const postTargetIsMissing = view(
+const PostTargetIsMissing = view(
   "the Post target is missing (post)",
   ({ post }, _outputs, _bindings) => where(no(Posting._get({ post }))),
 ).holds();
 
-const messageBoard = former(
+const MessageBoard = former(
   "the message board",
   (_input, { post, postAuthor, content, publishedAt, comment, commentAuthor, text, addedAt }) =>
     form({
@@ -34,7 +35,7 @@ const messageBoard = former(
     }),
 );
 
-export const RegisterBoardUser = endpoint(
+const RegisterBoardUser = endpoint(
   "/message-board/register",
   ({ username, password, session, expiresAt }) =>
     receive({ username, password })
@@ -43,7 +44,7 @@ export const RegisterBoardUser = endpoint(
       .then(respond({ username, session, expiresAt })),
 );
 
-export const SignInBoardUser = endpoint(
+const SignInBoardUser = endpoint(
   "/message-board/sign-in",
   ({ username, password, session, expiresAt }) =>
     receive({ username, password })
@@ -52,19 +53,19 @@ export const SignInBoardUser = endpoint(
       .then(respond({ username, session, expiresAt })),
 );
 
-export const CurrentBoardUser = endpoint("/message-board/current-user", ({ session, username }) =>
+const CurrentBoardUser = endpoint("/message-board/current-user", ({ session, username }) =>
   receive({ session })
     .then(Sessioning.current({ session }).responds({ subject: username }))
     .then(respond({ username })),
 );
 
-export const SignOutBoardUser = endpoint("/message-board/sign-out", ({ session, signedOut }) =>
+const SignOutBoardUser = endpoint("/message-board/sign-out", ({ session, signedOut }) =>
   receive({ session })
     .then(Sessioning.end({ session }).responds({ ended: signedOut }))
     .then(respond({ signedOut })),
 );
 
-export const ChangeBoardPassword = endpoint(
+const ChangeBoardPassword = endpoint(
   "/message-board/change-password",
   ({ session, username, currentPassword, newPassword }) =>
     receive({ session, currentPassword, newPassword })
@@ -79,7 +80,7 @@ export const ChangeBoardPassword = endpoint(
       .then(respond({ username })),
 );
 
-export const DeleteBoardAccount = endpoint(
+const DeleteBoardAccount = endpoint(
   "/message-board/delete-account",
   ({ session, username, password }) =>
     receive({ session, password })
@@ -88,7 +89,7 @@ export const DeleteBoardAccount = endpoint(
       .then(respond({ username })),
 );
 
-export const PublishMessageBoardPost = endpoint(
+const PublishMessageBoardPost = endpoint(
   "/message-board/post",
   ({ session, author, content, time, post }) =>
     receive({ session, content })
@@ -101,23 +102,23 @@ export const PublishMessageBoardPost = endpoint(
       .then(respond({ post })),
 );
 
-export const AddMessageBoardComment = endpoint(
+const AddMessageBoardComment = endpoint(
   "/message-board/comment",
   ({ session, author, target, text, time, comment }) =>
     receive({ session, target, text })
       .then(Sessioning.current({ session }).responds({ subject: author }))
       .then(
-        where(postTargetExists({ post: target }), Timing._now({}).is({ time }))
+        where(PostTargetExists({ post: target }), Timing._now({}).is({ time }))
           .then(Commenting.add({ target, author, text, at: time }).responds({ comment }))
           .then(respond({ comment }))
           .named("post-exists"),
-        where(postTargetIsMissing({ post: target }))
+        where(PostTargetIsMissing({ post: target }))
           .then(respond({ error: "POST_NOT_FOUND" }))
           .named("post-missing"),
       ),
 );
 
-export const RetractMessageBoardComment = endpoint(
+const RetractMessageBoardComment = endpoint(
   "/message-board/retract-comment",
   ({ session, author, comment }) =>
     receive({ session, comment })
@@ -126,8 +127,25 @@ export const RetractMessageBoardComment = endpoint(
       .then(respond({ comment })),
 );
 
-export const ListMessageBoard = endpoint("/message-board/list", ({ session }) =>
+const ListMessageBoard = endpoint("/message-board/list", ({ session }) =>
   receive({ session })
     .then(Sessioning.current({ session }).responds({}))
-    .then(respond({ board: messageBoard({}) })),
+    .then(respond({ board: MessageBoard({}) })),
 );
+
+export { spec };
+
+export const compositions = {
+  Accounts: {
+    RegisterBoardUser,
+    SignInBoardUser,
+    CurrentBoardUser,
+    SignOutBoardUser,
+    ChangeBoardPassword,
+    DeleteBoardAccount,
+  },
+  BoardPublishing: { PublishMessageBoardPost, AddMessageBoardComment, RetractMessageBoardComment },
+  BoardPages: { ListMessageBoard },
+};
+export const views = { PostTargetExists, PostTargetIsMissing };
+export const formers = { MessageBoard };

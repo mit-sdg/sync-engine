@@ -1,23 +1,10 @@
-/**
- * Assembles the operations room application with selectable options.
- *
- * Composition modules (read in this order):
- *   1. room.ts           — formers (dashboard, mitigation status) and endpoints
- *   2. packs.ts          — optional reaction packs (alerts, discussion)
- *   3. contributions.ts  — parameterized contribution endpoints (receives policy)
- *   4. host-may-contribute.ts    — policy: only the incident host may contribute
- *   5. responders-may-contribute.ts — policy: any responder may contribute
- */
+/** Assemble the operations room with selectable reaction packs and policy. */
 import { assemble, type ImplementationOverrides } from "@mit-sdg/sync-engine/assembly";
-import { contributionEndpoints } from "./composition/contributions.ts";
-import * as hostMayContribute from "./composition/host-may-contribute.ts";
-import {
-  SelectedMitigationAlertsResponders,
-  SelectedMitigationOpensDiscussion,
-} from "./composition/packs.ts";
-import * as respondersMayContribute from "./composition/responders-may-contribute.ts";
-import * as room from "./composition/room.ts";
-import { operationsRoomConcepts, vocabulary } from "./concept-set.ts";
+import * as Contributions from "./compositions/Contributions.ts";
+import * as MitigationAlerts from "./compositions/MitigationAlerts.ts";
+import * as MitigationDiscussion from "./compositions/MitigationDiscussion.ts";
+import * as Room from "./compositions/Room.ts";
+import { operationsRoomConcepts, vocabulary } from "./vocabulary.ts";
 
 export type OperationsRoomOverrides = ImplementationOverrides<typeof vocabulary>;
 
@@ -34,23 +21,26 @@ export function assembleOperationsRoom({
   discussion = true,
   instances = {},
 }: OperationsRoomOptions = {}) {
-  const policy = contributions === "responders" ? respondersMayContribute : hostMayContribute;
-
-  const selected = { ...operationsRoomConcepts.implementations(), ...instances };
+  const policy = contributions === "responders" ? "Responders" : "Host";
 
   return assemble({
     vocabulary,
-    instances: selected,
+    instances: { ...operationsRoomConcepts.implementations(), ...instances },
     composition: {
-      room,
-      discussion: discussion ? { SelectedMitigationOpensDiscussion } : {},
-      alerts: alerts ? { SelectedMitigationAlertsResponders } : {},
-      policy,
-      contributions: contributionEndpoints({
-        denied: policy.deniedContribution,
-        mayContribute: policy.responderMayContribute,
-        mayNotContribute: policy.responderMayNotContribute,
-      }),
+      Room: { spec: Room.spec, ...Room.compositions, formers: Room.formers },
+      MitigationDiscussion: {
+        spec: MitigationDiscussion.spec,
+        ...(discussion ? MitigationDiscussion.compositions : {}),
+      },
+      MitigationAlerts: {
+        spec: MitigationAlerts.spec,
+        ...(alerts ? MitigationAlerts.compositions : {}),
+      },
+      Contributions: {
+        spec: Contributions.spec,
+        ...Contributions.compositions.Contributions[policy],
+        views: Contributions.views[policy],
+      },
     },
   });
 }

@@ -1,18 +1,19 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { expect } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
-import {
-  AddMessageBoardComment,
+import { compositions } from "./message-board.ts";
+
+const { AddMessageBoardComment, PublishMessageBoardPost, RetractMessageBoardComment } =
+  compositions.BoardPublishing;
+const {
   ChangeBoardPassword,
   CurrentBoardUser,
   DeleteBoardAccount,
-  ListMessageBoard,
-  PublishMessageBoardPost,
   RegisterBoardUser,
-  RetractMessageBoardComment,
   SignInBoardUser,
   SignOutBoardUser,
-} from "./message-board.ts";
+} = compositions.Accounts;
+const { ListMessageBoard } = compositions.BoardPages;
 
 export type CatalogInstances = ReturnType<typeof applicationConcepts.implementations>;
 

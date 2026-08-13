@@ -7,9 +7,10 @@
     "start:api": "bun src/api-host.ts",
     "test": "LOG_LEVEL=error vp test",
     "typecheck": "tsc --noEmit",
+    "design:check": "sync-engine check --config generated.config.ts",
     "artifacts:check": "sync-engine artifacts check --config generated.config.ts",
     "artifacts:pin": "sync-engine artifacts pin --config generated.config.ts",
-    "check": "vp check && bun run test && bun run artifacts:check"
+    "check": "vp check && bun run design:check && bun run test && bun run artifacts:check"
   },
   "dependencies": {
     "@mit-sdg/sync-engine": "1.0.0-beta.8",

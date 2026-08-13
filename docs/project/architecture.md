@@ -129,7 +129,7 @@ references to an assembly for registration. Keeping these files at the root
 avoids assigning common contracts to one subarea and creating a reverse
 dependency from its peers. `engine.ts` is the direct-host facade.
 
-## Authored design to executable reaction
+## Authored declaration to executable reaction
 
 ```text
 vocabulary refs and language words
@@ -151,8 +151,10 @@ vocabulary refs and language words
 | Portability analysis  | `src/engine/reads/local-behavior.ts`                                                           | Walk local and opaque occurrences once so ordinary assembly can reject executable-only definitions.                   |
 | Runtime               | `src/engine/reactions/runtime/matching.ts`, `firing-pipeline.ts`, `firing.ts`, `settlement.ts` | Match one landed occurrence, evaluate reads, invoke consequences, and record firing provenance.                       |
 
-`ReactionIR` in `reads/ir.ts` is the serialized design form consumed by
-inspection, read-back, wire generation, and imported-reaction registration.
+`ReactionIR` in `reads/ir.ts` is the serialized declaration form consumed by
+inspection, read-back, wire generation, and imported-reaction registration. It
+is derived from executable TypeScript authoring and is distinct from the
+application-owned Markdown design record.
 The runtime can still execute explicitly local constructs such as closure-based
 conditions outside the application boundary. Custom operations and `$is`
 patterns remain in IR as opaque markers; whole unlowered reactions retain a

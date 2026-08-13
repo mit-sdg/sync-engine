@@ -1,37 +1,18 @@
-/**
- * Compare parsed action and query declarations with their TypeScript classes.
- *
- * Registration makes the same comparison when an application starts, but by
- * then a parameter's type is gone: `end(_: { session: string })` reaches the
- * engine as `end(_)`, and its declared input cannot be recovered. Runtime
- * therefore compares inputs only for a method that destructures them, and
- * stays silent about one that does not.
- *
- * Reading the source recovers what erasure removed. A parsed action or query
- * signature that disagrees with the class fails here even when the
- * implementation never names its inputs. State prose and class fields are not
- * inputs to this check. Run it from `bun run check`.
- */
+/** Check repository applications and registered catalog concepts through command discovery. */
 
-import { resolve } from "node:path";
-import { conceptDirectories, conceptFailures } from "../src/command/check.ts";
+import { checkCommand } from "../src/command/check.ts";
+import { applicationExamples } from "../examples/register.ts";
 
-const root = resolve(import.meta.dirname, "..");
-
-/** Where authored concepts live: any directory below these holding a `spec.md`. */
-const conceptRoots = [
-  "examples",
-  "packages/catalog/entries/concept",
-  "tests/packaging/application",
+const checks: readonly (readonly string[])[] = [
+  ...Object.values(applicationExamples).map(({ directory }) => [
+    "--config",
+    `examples/${directory}/generated.config.ts`,
+  ]),
+  ["--vocabulary-module", "packages/catalog/entries/_typecheck/concept-set.ts"],
+  ["--config", "tests/packaging/application/generated.config.ts"],
 ];
 
 if (import.meta.main) {
-  const directories = await conceptDirectories(conceptRoots, root);
-  const failures = directories.flatMap((directory) => conceptFailures(directory, root));
-  if (failures.length > 0) {
-    throw new Error(
-      `Concept action/query source check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
-    );
-  }
-  console.log(`concept action/query source check passed for ${directories.length} concepts`);
+  for (const arguments_ of checks) await checkCommand(arguments_);
+  console.log(`repository concept checks passed for ${checks.length} registered roots`);
 }

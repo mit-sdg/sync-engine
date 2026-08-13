@@ -1,79 +1,25 @@
 {
-  "schema": 1,
+  "schema": 2,
   "id": "concept/authenticating",
   "kind": "concept",
   "summary": "Register, verify, rotate, and remove username-password credentials.",
-  "packages": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.8",
-    "@node-rs/argon2": "2.0.2",
-    "vite-plus": "^0.2.6"
-  },
-  "concept": {
-    "name": "Authenticating",
-    "export": "authenticating",
-    "registration": "$concepts/authenticating/registry.ts"
-  },
-  "defaultFloor": "memory",
-  "files": [
-    {
-      "source": "spec.md",
-      "target": "$concepts/authenticating/spec.md"
-    },
-    {
-      "source": "password-verifiers.md",
-      "target": "$concepts/authenticating/password-verifiers.md"
-    },
-    {
-      "source": "authenticating.shared.ts",
-      "target": "$concepts/authenticating/authenticating.shared.ts"
-    },
-    {
-      "source": "authenticating.verifier.ts",
-      "target": "$concepts/authenticating/authenticating.verifier.ts"
-    },
-    {
-      "source": "authenticating.verifier.test.ts",
-      "target": "$concepts/authenticating/authenticating.verifier.test.ts"
-    },
-    {
-      "source": "authenticating.test-support.ts",
-      "target": "$concepts/authenticating/authenticating.test-support.ts"
-    },
-    {
-      "source": "registry.ts",
-      "target": "$concepts/authenticating/registry.ts",
-      "render": "floor"
-    }
+  "design": "spec.md",
+  "sources": [
+    "password-verifiers.md",
+    "authenticating.shared.ts",
+    "authenticating.verifier.ts",
+    "authenticating.verifier.test.ts",
+    "authenticating.test-support.ts",
+    "registry.ts"
   ],
-  "floors": {
+  "implementations": {
     "memory": {
       "summary": "Process-local accounts with an injected versioned password-verifier strategy.",
-      "files": [
-        {
-          "source": "authenticating.memory.ts",
-          "target": "$concepts/authenticating/authenticating.memory.ts"
-        },
-        {
-          "source": "authenticating.memory.test.ts",
-          "target": "$concepts/authenticating/authenticating.memory.test.ts"
-        }
-      ]
+      "sources": ["authenticating.memory.ts", "authenticating.memory.test.ts"]
     },
     "mongo": {
       "summary": "MongoDB accounts with unique usernames and conditional credential replacement.",
-      "packages": {
-        "mongodb": "^6.20.0"
-      },
-      "files": [
-        {
-          "source": "authenticating.mongo.ts",
-          "target": "$concepts/authenticating/authenticating.mongo.ts"
-        },
-        {
-          "source": "authenticating.mongo.test.ts",
-          "target": "$concepts/authenticating/authenticating.mongo.test.ts"
-        }
-      ]
+      "sources": ["authenticating.mongo.ts", "authenticating.mongo.test.ts"]
     }
   }
 }

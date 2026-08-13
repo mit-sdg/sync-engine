@@ -1,52 +1,33 @@
-# Message Board recipe
+# Message Board
 
-## Purpose
+A message board gives authenticated users sessions for publishing posts, commenting, and reading attributed content.
 
-Register and sign in users, publish attributed posts, attach comments, retract one's
-own comments, and end access sessions.
+## Compositions
 
-## Concepts
+### Accounts
 
-Authenticating owns password credentials. Sessioning owns bearer sessions for
-Username values used as Subjects. Posting owns Posts. Commenting owns Comments whose
-Targets are Post identities. Timing supplies one timestamp for each publication or
-comment event.
+A user may register, sign in, inspect the current account, change its password, sign out, or delete it. Registration can persist before session creation faults, after which the user can sign in. Deleting an account does not revoke separately owned sessions; they remain usable until ended or expired.
 
-## Decisions
+### BoardPublishing
 
-Registration and successful authentication each start a Session. Protected endpoints
-resolve the Session and use its Subject as Author; callers never choose their own
-Author. Adding a Comment first confirms that its Post Target exists. Posting has no
-removal action, so that observation cannot become stale through a catalog concept
-transition.
+An active session supplies the author for posts and comments, so callers cannot choose another author. A comment may target only an existing Post; a missing target returns `POST_NOT_FOUND` without adding a Comment. Comment retraction uses the same session-derived author.
 
-## Endpoints
+### BoardPages
 
-- `RegisterBoardUser` — `/message-board/register`
-- `SignInBoardUser` — `/message-board/sign-in`
-- `CurrentBoardUser` — `/message-board/current-user`
-- `SignOutBoardUser` — `/message-board/sign-out`
-- `ChangeBoardPassword` — `/message-board/change-password`
-- `DeleteBoardAccount` — `/message-board/delete-account`
-- `PublishMessageBoardPost` — `/message-board/post`
-- `AddMessageBoardComment` — `/message-board/comment`
-- `RetractMessageBoardComment` — `/message-board/retract-comment`
-- `ListMessageBoard` — `/message-board/list`
+An active session may open the board and see posts with their attached comments.
 
-## Failure
+## Views
 
-Credential registration may succeed before session creation faults. The response
-reports failure without deleting the Account; the user can sign in. An authenticated
-comment request for an unknown Post returns `POST_NOT_FOUND` without adding a Comment.
-Deleting an Account does not end any existing Session because Authenticating and
-Sessioning have separate owners. Until each Session is ended or expires, it continues
-to resolve its Subject and can reach protected recipe operations. Version 1 does not
-claim atomic session revocation.
+### PostTargetExists
 
-## Host variants
+A comment target exists when Posting can read the referenced Post.
 
-The catalog recipe is transport-neutral. A plain JSON API may carry Session in its
-body. A browser host may project Session into a `Secure`, `HttpOnly` cookie. Those are
-host policies, not separate recipe entries or concept variants. A public host remains
-responsible for runtime input validation, request-rate controls, TLS, and its chosen
-session transport.
+### PostTargetIsMissing
+
+A comment target is missing when Posting cannot read the referenced Post.
+
+## Formers
+
+### MessageBoard
+
+The board read lists posts in publication order and nests each post's comments in arrival order.

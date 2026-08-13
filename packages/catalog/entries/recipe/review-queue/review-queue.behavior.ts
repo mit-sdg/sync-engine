@@ -1,14 +1,13 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { expect } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
-import {
-  ApproveQueuedReview,
-  GetReviewQueue,
-  RejectQueuedReview,
-  RepairReviewAlert,
-  RequestQueuedReview,
-  WithdrawQueuedReview,
-} from "./review-queue.ts";
+import { compositions } from "./review-queue.ts";
+
+const { ApproveQueuedReview, RejectQueuedReview, WithdrawQueuedReview } =
+  compositions.ReviewDecisions;
+const { GetReviewQueue } = compositions.ReviewQueues;
+const { RepairReviewAlert } = compositions.ReviewRepair;
+const { RequestQueuedReview } = compositions.ReviewRequests;
 
 export type CatalogInstances = ReturnType<typeof applicationConcepts.implementations>;
 

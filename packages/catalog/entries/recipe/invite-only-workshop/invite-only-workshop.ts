@@ -1,10 +1,11 @@
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, former, no, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Gathering, Inviting, Timing } = concepts;
 
-const pendingInvitations = former(
+const PendingInvitations = former(
   "the pending workshop invitations of (invitee)",
   ({ invitee }, { invitation, target, inviter, issuedAt }) =>
     each(Inviting._pendingFor({ invitee }).is({ invitation, target, inviter, issuedAt })).form({
@@ -16,16 +17,14 @@ const pendingInvitations = former(
 );
 
 /** `host` is attribution unless the containing application binds an authenticated identity. */
-export const CreateInviteOnlyWorkshop = endpoint(
-  "/invite-workshops/create",
-  ({ name, host, workshop }) =>
-    receive({ name, host })
-      .then(Gathering.create({ name, host }).responds({ gathering: workshop }))
-      .then(respond({ workshop })),
+const CreateInviteOnlyWorkshop = endpoint("/invite-workshops/create", ({ name, host, workshop }) =>
+  receive({ name, host })
+    .then(Gathering.create({ name, host }).responds({ gathering: workshop }))
+    .then(respond({ workshop })),
 );
 
 /** A public adapter must bind `inviter` to the authenticated caller. */
-export const IssueWorkshopInvitation = endpoint(
+const IssueWorkshopInvitation = endpoint(
   "/invite-workshops/invite",
   ({ workshop, inviter, invitee, at, invitation }) =>
     receive({ workshop, inviter, invitee }).then(
@@ -43,7 +42,7 @@ export const IssueWorkshopInvitation = endpoint(
  * `invitee` must be the authenticated caller. Acceptance commits before the
  * membership action; a later fault leaves the accepted invitation for repair.
  */
-export const AcceptWorkshopInvitation = endpoint(
+const AcceptWorkshopInvitation = endpoint(
   "/invite-workshops/accept",
   ({ invitation, invitee, at, workshop }) =>
     receive({ invitation, invitee })
@@ -58,7 +57,7 @@ export const AcceptWorkshopInvitation = endpoint(
 );
 
 /** A public adapter must bind `invitee` to the authenticated caller. */
-export const DeclineWorkshopInvitation = endpoint(
+const DeclineWorkshopInvitation = endpoint(
   "/invite-workshops/decline",
   ({ invitation, invitee, at }) =>
     receive({ invitation, invitee })
@@ -68,7 +67,7 @@ export const DeclineWorkshopInvitation = endpoint(
 );
 
 /** A public adapter must bind `inviter` to the authenticated caller. */
-export const RevokeWorkshopInvitation = endpoint(
+const RevokeWorkshopInvitation = endpoint(
   "/invite-workshops/revoke",
   ({ invitation, inviter, at }) =>
     receive({ invitation, inviter })
@@ -78,7 +77,7 @@ export const RevokeWorkshopInvitation = endpoint(
 );
 
 /** `invitee` must be the authenticated caller whose accepted invitation is repaired. */
-export const RepairAcceptedWorkshopInvitation = endpoint(
+const RepairAcceptedWorkshopInvitation = endpoint(
   "/invite-workshops/repair",
   ({ invitation, invitee, workshop }) =>
     receive({ invitation, invitee }).then(
@@ -102,6 +101,23 @@ export const RepairAcceptedWorkshopInvitation = endpoint(
 );
 
 /** `invitee` selects a private inbox and must be bound to the authenticated caller. */
-export const GetWorkshopInvitations = endpoint("/invite-workshops/invitations", ({ invitee }) =>
-  receive({ invitee }).then(respond({ invitations: pendingInvitations({ invitee }) })),
+const GetWorkshopInvitations = endpoint("/invite-workshops/invitations", ({ invitee }) =>
+  receive({ invitee }).then(respond({ invitations: PendingInvitations({ invitee }) })),
 );
+
+export { spec };
+
+export const compositions = {
+  WorkshopMembership: {
+    CreateInviteOnlyWorkshop,
+    AcceptWorkshopInvitation,
+    RepairAcceptedWorkshopInvitation,
+  },
+  InvitationManagement: {
+    IssueWorkshopInvitation,
+    DeclineWorkshopInvitation,
+    RevokeWorkshopInvitation,
+    GetWorkshopInvitations,
+  },
+};
+export const formers = { PendingInvitations };

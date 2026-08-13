@@ -2,12 +2,11 @@ import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
 import { vocabulary } from "@catalog/concepts";
 import { catalogRegistrations } from "@catalog/registrations";
-import {
-  ChooseWorkshopItem,
-  CreateWorkshop,
-  GetWorkshop,
-  JoinWorkshop,
-} from "./workshop-selection.ts";
+import { compositions } from "./workshop-selection.ts";
+
+const { ChooseWorkshopItem } = compositions.WorkshopSelection;
+const { CreateWorkshop, JoinWorkshop } = compositions.WorkshopMembership;
+const { GetWorkshop } = compositions.WorkshopPages;
 
 type Awaitable<T> = T | Promise<T>;
 type FloorFactory = (context: unknown) => object;

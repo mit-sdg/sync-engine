@@ -384,6 +384,38 @@ Former "the room summary (room)" — inputs (room); bindings (name, host); promi
 
 ## Reactions
 
+### Contributions.AddContribution
+
+```reaction
+when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
+where
+  view "(responder) may contribute in (room)" with (responder, room)
+  Selecting._current (scope: room) has (selection)
+  Discussing._openFor (subject: selection) has (discussion)
+then
+  Discussing.respond (author: responder, discussion, text)
+```
+
+### Contributions.AddContribution#2
+
+```reaction
+when Discussing.respond (author: responder, discussion, text, response), asked by Contributions.AddContribution
+where
+  earlier, RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
+then
+  RequestBoundary.respond (requestId, response)
+```
+
+### Contributions.RejectContribution
+
+```reaction
+when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
+where
+  view "(responder) may not contribute in (room)" with (responder, room)
+then
+  RequestBoundary.respond (error: "RESPONDERS_ONLY", requestId)
+```
+
 ### DeliverFaultToAsker
 
 ```reaction
@@ -404,7 +436,7 @@ then
   RequestBoundary.respond (error: message, requestId)
 ```
 
-### alerts.SelectedMitigationAlertsResponders
+### MitigationAlerts.SelectedMitigationAlertsResponders
 
 ```reaction
 when Selecting.choose (scope: room, selection)
@@ -414,39 +446,7 @@ then
   Alerting.raise (recipient: responder, subject: selection)
 ```
 
-### contributions.AddContribution
-
-```reaction
-when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
-where
-  view "(responder) may contribute in (room)" with (responder, room)
-  Selecting._current (scope: room) has (selection)
-  Discussing._openFor (subject: selection) has (discussion)
-then
-  Discussing.respond (author: responder, discussion, text)
-```
-
-### contributions.AddContribution#2
-
-```reaction
-when Discussing.respond (author: responder, discussion, text, response), asked by contributions.AddContribution
-where
-  earlier, RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
-then
-  RequestBoundary.respond (requestId, response)
-```
-
-### contributions.RejectContribution
-
-```reaction
-when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
-where
-  view "(responder) may not contribute in (room)" with (responder, room)
-then
-  RequestBoundary.respond (error: "RESPONDERS_ONLY", requestId)
-```
-
-### discussion.SelectedMitigationOpensDiscussion
+### MitigationDiscussion.SelectedMitigationOpensDiscussion
 
 ```reaction
 when Selecting.choose (selection)
@@ -454,7 +454,7 @@ then
   Discussing.open (subject: selection)
 ```
 
-### room.ChooseMitigation
+### Room.MitigationSelection.ChooseMitigation
 
 ```reaction
 when RequestBoundary.request (mitigation, path: "/rooms/choose-mitigation", requestId, room)
@@ -462,35 +462,17 @@ then
   Selecting.choose (item: mitigation, scope: room)
 ```
 
-### room.ChooseMitigation#2
+### Room.MitigationSelection.ChooseMitigation#2
 
 ```reaction
-when Selecting.choose (item: mitigation, scope: room, selection), asked by room.ChooseMitigation
+when Selecting.choose (item: mitigation, scope: room, selection), asked by Room.MitigationSelection.ChooseMitigation
 where
   earlier, RequestBoundary.request (mitigation, path: "/rooms/choose-mitigation", requestId, room)
 then
   RequestBoundary.respond (mitigation, requestId)
 ```
 
-### room.CreateRoom
-
-```reaction
-when RequestBoundary.request (host, name, path: "/rooms/create", requestId)
-then
-  Gathering.create (host, name)
-```
-
-### room.CreateRoom#2
-
-```reaction
-when Gathering.create (host, name, gathering: room), asked by room.CreateRoom
-where
-  earlier, RequestBoundary.request (host, name, path: "/rooms/create", requestId)
-then
-  RequestBoundary.respond (requestId, room)
-```
-
-### room.GetRoom
+### Room.RoomDashboard.GetRoom
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/get", requestId, room)
@@ -498,7 +480,25 @@ then
   RequestBoundary.respond (dashboard: former "the operations room (room)" with (room), requestId)
 ```
 
-### room.JoinRoom
+### Room.RoomMembership.CreateRoom
+
+```reaction
+when RequestBoundary.request (host, name, path: "/rooms/create", requestId)
+then
+  Gathering.create (host, name)
+```
+
+### Room.RoomMembership.CreateRoom#2
+
+```reaction
+when Gathering.create (host, name, gathering: room), asked by Room.RoomMembership.CreateRoom
+where
+  earlier, RequestBoundary.request (host, name, path: "/rooms/create", requestId)
+then
+  RequestBoundary.respond (requestId, room)
+```
+
+### Room.RoomMembership.JoinRoom
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/join", requestId, responder, room)
@@ -506,10 +506,10 @@ then
   Gathering.join (gathering: room, member: responder)
 ```
 
-### room.JoinRoom#2
+### Room.RoomMembership.JoinRoom#2
 
 ```reaction
-when Gathering.join (gathering: room, member: responder, membership), asked by room.JoinRoom
+when Gathering.join (gathering: room, member: responder, membership), asked by Room.RoomMembership.JoinRoom
 where
   earlier, RequestBoundary.request (path: "/rooms/join", requestId, responder, room)
 then

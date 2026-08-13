@@ -13,6 +13,7 @@
     "esModuleInterop": true,
     "types": ["bun", "node"],
     "paths": {
+      "@design/*": ["./design/*"],
       "@root/*": ["../../*"],
       "@engine/*": ["../../src/engine/*"],
       "@mit-sdg/sync-engine/*": ["../../src/*/index.ts"],

@@ -13,10 +13,11 @@
     "esModuleInterop": true,
     "types": ["node"],
     "paths": {
+      "@design/*": ["./design/*"],
       "@engine/*": ["../../src/engine/*"],
       "@examples/operations-room/*": ["./src/*"],
       "@mit-sdg/sync-engine/*": ["../../src/*/index.ts"]
     }
   },
-  "include": ["src", "tests", "generated.config.ts", "generated", "*.d.ts"]
+  "include": ["design", "src", "tests", "generated.config.ts", "generated", "*.d.ts"]
 }

@@ -5,6 +5,7 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   resolve: {
     alias: {
+      "@design": fileURLToPath(new URL("./design", import.meta.url)),
       "@examples/operations-room": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
@@ -37,6 +38,6 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
-    include: ["src/concepts/**/*.test.ts", "tests/**/*.test.ts"],
+    include: ["tests/**/*.test.ts"],
   },
 });

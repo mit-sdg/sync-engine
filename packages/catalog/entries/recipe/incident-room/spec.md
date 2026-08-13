@@ -1,41 +1,41 @@
-# Incident Room recipe
+# Incident Room
 
-## Purpose
+An incident room coordinates responders around one current mitigation, its discussion, and addressed alerts.
 
-Coordinate responders around one current mitigation, its discussion, and addressed
-alerts.
+## Compositions
 
-## Concepts
+### RoomMembership
 
-Gathering owns the room and responders. Selecting owns its current mitigation.
-Discussing owns the exchange about each Selection identity. Alerting owns one alert per
-recipient and selection Cause. Timing supplies one timestamp for the discussion and
-all alerts caused by a selection.
+A host creates a room as its first responder, and other responders may join it.
 
-## Decisions
+### MitigationDiscussion
 
-Choosing a mitigation records the Selection, opens a Discussion whose Subject is that
-Selection, and raises one Alert for each current member. Alert replay is idempotent by
-recipient and Selection cause. Contributions require current membership. A public
-adapter must bind the contributor and acknowledging recipient to the authenticated
-caller.
+Choosing a mitigation records a Selection, opens a Discussion for that Selection, and alerts every current room member. Only current members may contribute. Selecting may commit before all effects complete, so callers must not assume cross-concept atomicity.
 
-## Endpoints
+### MitigationAlerts
 
-- `CreateIncidentRoom` — `/incident-rooms/create`
-- `JoinIncidentRoom` — `/incident-rooms/join`
-- `ChooseMitigation` — `/incident-rooms/choose`
-- `ContributeUpdate` — `/incident-rooms/contribute`
-- `CloseMitigationDiscussion` — `/incident-rooms/close-discussion`
-- `AcknowledgeMitigationAlert` — `/incident-rooms/acknowledge`
-- `RepairMitigationEffects` — `/incident-rooms/repair`
-- `GetIncidentDashboard` — `/incident-rooms/dashboard`
+A recipient may acknowledge an alert. Trusted repair retries a missing discussion or one original recipient's alert using the Selection as Subject and Cause, so retries converge without duplicate open discussions or alerts. The caller supplies the selection-time recipient; later members are not automatically backfilled.
 
-## Failure and repair
+### IncidentDashboard
 
-Selecting may commit before opening the Discussion or raising every Alert. Repair uses
-the Selection identity as the Discussion Subject and Alert Cause, so retries converge
-without duplicate open discussions or alerts. The repair caller supplies one member
-from the selection-time roster; the recipe does not retain or validate that roster. A
-member who joins after selection does not receive the old alert unless incorrectly
-supplied to repair. A member who leaves retains an already raised alert.
+Opening the dashboard presents room membership, the current mitigation and discussion, responses, and each member's open mitigation alerts.
+
+## Views
+
+### MemberOfRoom
+
+A responder belongs to the room when Gathering reports a joined membership.
+
+### NotMemberOfRoom
+
+A responder is outside the room when Gathering reports no joined membership.
+
+### OpenMitigationDiscussion
+
+The open mitigation discussion is the Discussion whose Subject is the room's current Selection.
+
+## Formers
+
+### IncidentDashboard
+
+The dashboard combines room details, member alerts, the current mitigation, and discussion responses.

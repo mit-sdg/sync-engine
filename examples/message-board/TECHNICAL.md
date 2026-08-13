@@ -36,11 +36,13 @@ constraints do not apply to direct calls through `Assembly.concepts`.
 
 ## Endpoint composition
 
-The application divides composition declarations between two modules.
-`sessions.ts` contains the account and session endpoints. `board.ts` contains the
-board former and its read and write endpoints. `validators.ts` contains shared
-runtime validators but no composition declarations, so assembly does not scan
-it.
+The application divides endpoint declarations between
+`src/compositions/Sessions.ts` and `src/compositions/Board.ts`. The `Board`
+composition module also owns the board former and exports it only through its
+`formers` aggregate. `src/compositions/validators.ts` contains shared runtime
+validator helpers but no design or composition declarations. Each composition
+module exports its matching authored specification and tagged declarations
+through canonical aggregates.
 
 | Endpoint                 | Ordered workflow                                                                  |
 | ------------------------ | --------------------------------------------------------------------------------- |
@@ -65,7 +67,7 @@ maps those refusals to `FORBIDDEN` and `NOT_FOUND`, respectively. Commenting als
 enforces the rule on direct concept calls. The browser's decision to omit the
 button for another author's comment is presentation, not enforcement.
 
-The `board` former iterates over `Posting._all`. For each post row, it asks
+The `Board` former iterates over `Posting._all`. For each post row, it asks
 `Commenting._for` with the post identity as the external target and nests the
 matching attachments. The assembly sets `maxRowsPerEvaluation` to 1,000. If
 former expansion exceeds that limit, evaluation fails instead of returning a
@@ -208,8 +210,9 @@ their sources.
 
 ## Verification
 
-Concept tests under `src/concepts/*/` exercise each concept directly. The
-application test starts both real hosts and verifies:
+Concept tests under `tests/concepts/` exercise each concept directly. The
+application and network test under `tests/compositions/` starts both real hosts
+and verifies:
 
 - the plain host accepts registration as JSON, returns session fields, emits no
   cookie, and serves no frontend root;

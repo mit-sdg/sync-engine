@@ -1,12 +1,11 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
 import { applicationConcepts, vocabulary } from "@catalog/concepts";
-import {
-  CancelMemberReservation,
-  FulfillMemberReservation,
-  GetMemberReservations,
-  ReserveForMember,
-} from "./member-reservations.ts";
+import { compositions } from "./member-reservations.ts";
+
+const { CancelMemberReservation, FulfillMemberReservation, ReserveForMember } =
+  compositions.Reservations;
+const { GetMemberReservations } = compositions.ReservationLists;
 
 type Floor = "memory" | "mongo";
 type Instances = ReturnType<(typeof applicationConcepts)["implementations"]>;

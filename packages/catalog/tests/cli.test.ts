@@ -1,61 +1,104 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { runCatalog } from "../src/cli.ts";
 
+async function treeDigest(root: string): Promise<string> {
+  const hash = createHash("sha256");
+  async function visit(directory: string): Promise<void> {
+    for (const item of await readdir(directory, { withFileTypes: true })) {
+      const path = resolve(directory, item.name);
+      if (item.isDirectory()) await visit(path);
+      else if (item.isFile()) hash.update(path.slice(root.length)).update(await readFile(path));
+    }
+  }
+  await visit(root);
+  return hash.digest("hex");
+}
+
+function capture(): { output: string[]; restore: () => void } {
+  const output: string[] = [];
+  const log = vi
+    .spyOn(console, "log")
+    .mockImplementation((value = "") => output.push(`${String(value)}\n`));
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((
+    value: string | Uint8Array,
+  ) => {
+    output.push(String(value));
+    return true;
+  }) as typeof process.stdout.write);
+  return {
+    output,
+    restore: () => {
+      log.mockRestore();
+      write.mockRestore();
+    },
+  };
+}
+
 describe("catalog CLI", () => {
   afterEach(() => vi.restoreAllMocks());
-  test("lists and shows entries without loading core", async () => {
-    const output: string[] = [];
-    vi.spyOn(console, "log").mockImplementation((value) => output.push(String(value)));
+
+  test("lists entries as tab-separated records", async () => {
+    const { output } = capture();
     await runCatalog(["list", "recipe"]);
-    await runCatalog(["show", "recipe/workshop-selection"]);
+    expect(output.join("")).toContain("recipe/workshop-selection\trecipe\t");
+    expect(output.join("")).not.toContain("concept/selecting");
+  });
+
+  test("shows a labeled design and available source selectors", async () => {
+    const { output } = capture();
     await runCatalog(["show", "concept/selecting"]);
-    expect(output.join("\n")).toContain("recipe/workshop-selection");
-    expect(output.join("\n")).toContain("/workshops/create");
-    expect(output.join("\n")).toContain("Floor mongo");
-  });
-  test("prints help and filters concepts", async () => {
-    const output: string[] = [];
-    vi.spyOn(console, "log").mockImplementation((value) => output.push(String(value)));
-    await runCatalog(["help"]);
-    await runCatalog(["list", "concept"]);
-    expect(output.join("\n")).toContain("Usage: catalog");
-    expect(output.join("\n")).toContain("concept/selecting");
+    expect(output.join("")).toContain("  selecting.shared.ts\n");
+    expect(output.join("")).toContain("  memory/selecting.memory.ts\n");
+    expect(output.join("")).toContain("Asset: design\nFile: spec.md\n---\n# Selecting");
   });
 
-  test.each([
-    [["list", "unknown"]],
-    [["show"]],
-    [["show", "unknown"]],
-    [["add"]],
-    [["add", "concept/selecting", "--unknown"]],
-    [["add", "concept/selecting", "--floor", ""]],
-    [["unknown"]],
-  ])("rejects invalid arguments %j", async (args) => {
-    await expect(runCatalog(args)).rejects.toThrow();
+  test("prints one explicitly selected source with labels", async () => {
+    const { output } = capture();
+    await runCatalog(["source", "concept/selecting", "memory/selecting.memory.ts"]);
+    expect(output.join("")).toContain("Asset: source (memory/selecting.memory.ts)");
+    expect(output.join("")).toContain("File: selecting.memory.ts");
   });
 
-  test("prints package guidance for an add that cannot proceed", async () => {
-    const root = await mkdtemp(join(tmpdir(), "catalog-cli-"));
-    const output: string[] = [];
+  test("raw mode emits only asset bytes", async () => {
+    const expected = await readFile(
+      new URL("../entries/recipe/workshop-selection/spec.md", import.meta.url),
+      "utf8",
+    );
+    const { output } = capture();
+    await runCatalog(["show", "recipe/workshop-selection", "--raw"]);
+    expect(output.join("")).toBe(expected);
+  });
+
+  test("commands do not modify the current project", async () => {
+    const project = await mkdtemp(join(tmpdir(), "catalog-read-only-"));
     try {
-      await writeFile(join(root, "package.json"), '{"name":"fixture"}\n');
-      vi.spyOn(process, "cwd").mockReturnValue(root);
-      vi.spyOn(console, "log").mockImplementation((value) => output.push(String(value)));
-      await runCatalog(["add", "concept/selecting"]);
-      expect(output.join("\n")).toContain("bun add --exact");
-      expect(process.exitCode).toBe(1);
+      await writeFile(join(project, "sentinel.txt"), "application-owned\n");
+      const before = await treeDigest(project);
+      vi.spyOn(process, "cwd").mockReturnValue(project);
+      const { restore } = capture();
+      await runCatalog(["list"]);
+      await runCatalog(["show", "recipe/workshop-selection", "--raw"]);
+      await runCatalog(["source", "recipe/workshop-selection", "workshop-selection.ts", "--raw"]);
+      restore();
+      expect(await treeDigest(project)).toBe(before);
     } finally {
-      process.exitCode = 0;
-      await rm(root, { recursive: true, force: true });
+      await rm(project, { recursive: true, force: true });
     }
   });
 
-  test("rejects repeated floors during parsing", async () => {
-    await expect(
-      runCatalog(["add", "concept/selecting", "--floor", "memory", "--floor", "mongo"]),
-    ).rejects.toThrow("only once");
+  test.each([
+    ["list", "unknown"],
+    ["show"],
+    ["show", "unknown"],
+    ["source", "concept/selecting"],
+    ["source", "concept/selecting", "unknown.ts"],
+    ["add", "concept/selecting"],
+    ["unknown"],
+  ])("rejects invalid arguments", async (...args) => {
+    await expect(runCatalog(args)).rejects.toThrow();
   });
 });

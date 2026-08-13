@@ -39,16 +39,18 @@ It omits the catalog contract's caller-supplied `Cause`, so each repeated `raise
 creates another alert instead of returning an existing alert.
 
 Selecting a mitigation can trigger two independent reaction packs. The
-discussion pack opens a discussion whose subject is the new selection. The alert
-pack raises an alert for every current room member. `roomDashboard` joins each
-discussion and alert to its Selecting selection, then renders the corresponding
-mitigation.
+assembly installs each enabled pack beneath its top-level composition group. The discussion pack opens a discussion whose subject is the new
+selection. The alert pack raises an alert for every current room member.
+`roomDashboard`, owned and installed once through `Room.formers`, joins each discussion and alert
+to its Selecting selection, then renders the corresponding mitigation.
 
 Contribution policy is also replaceable. The default `responders` policy lets
 any room member contribute an update and returns `RESPONDERS_ONLY` for a
 nonmember. The `host` policy accepts only the room host and returns `HOST_ONLY`
 for another responder. Both policies use the same `/rooms/contribute` endpoint
-declaration and leave the concept implementations unchanged.
+declaration. The `Contributions` module exports structured policy variants. Assembly selects
+and installs exactly one variant's complementary views and matching endpoint
+pair; concept implementations remain unchanged.
 
 ## Assembly options
 
@@ -69,23 +71,25 @@ changing the four concept classes.
 
 ## Source map
 
-| Path                                                           | Role                                                                                  |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `src/concepts/`                                                | Independent concept specifications, implementations, registries, and principle tests  |
-| `src/concept-set.ts`                                           | Named registrations, vocabulary, default implementations, and deterministic instances |
-| `src/composition/packs.ts`                                     | Optional discussion and alert reactions                                               |
-| `src/composition/responders-may-contribute.ts`                 | Default member-based contribution policy                                              |
-| `src/composition/host-may-contribute.ts`                       | Replacement host-only contribution policy                                             |
-| `src/composition/room.ts`                                      | Room endpoints and staged dashboard formers                                           |
-| `src/composition/contributions.ts`                             | Policy-parameterized contribution endpoints                                           |
-| `src/assembly.ts`                                              | Reaction, policy, and implementation selection                                        |
-| `src/edge.ts`                                                  | Standard gateway                                                                      |
-| `src/client.ts`                                                | Transport-neutral generated-contract client helper                                    |
-| `src/scenario.ts`                                              | Complete local-gateway workflow                                                       |
-| `tests/application.test.ts`                                    | Default workflow, reaction-pack, policy, former, and client behavior                  |
-| `generated.config.ts`                                          | Artifact command configuration                                                        |
-| [`generated/operations-room.md`](generated/operations-room.md) | Pinned assembled read-back                                                            |
-| [`generated/wire.ts`](generated/wire.ts)                       | Pinned TypeScript wire contract                                                       |
+| Path                                                           | Role                                                             |
+| -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `design/concepts/*.md`                                         | Registered concept specifications                                |
+| `design/compositions/*.md`                                     | Composition-group intent and shared view/former design           |
+| `design/vocabulary.md`                                         | Cross-concept identity-role bindings                             |
+| `src/concepts/`                                                | PascalCase concept classes and adjacent registries               |
+| `src/vocabulary.ts`                                            | Design vocabulary, named concept set, and deterministic floor    |
+| `src/compositions/Room.ts`                                     | Room endpoint groups and the single owning path for room formers |
+| `src/compositions/Contributions.ts`                            | Contribution endpoint and structured policy variants             |
+| `src/compositions/Mitigation*.ts`                              | Independently selectable reaction groups                         |
+| `src/assembly.ts`                                              | Top-level groups, retained specs, and selected read installation |
+| `src/edge.ts`                                                  | Standard gateway                                                 |
+| `src/client.ts`                                                | Transport-neutral generated-contract client helper               |
+| `src/scenario.ts`                                              | Complete local-gateway workflow                                  |
+| `tests/concepts/`                                              | Concept principle tests                                          |
+| `tests/compositions/`                                          | Workflow, reaction-pack, policy, former, and client behavior     |
+| `generated.config.ts`                                          | Artifact configuration anchored to `src/vocabulary.ts`           |
+| [`generated/operations-room.md`](generated/operations-room.md) | Pinned assembled read-back                                       |
+| [`generated/wire.ts`](generated/wire.ts)                       | Pinned TypeScript wire contract                                  |
 
 ## Individual checks
 

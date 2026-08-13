@@ -2,17 +2,16 @@
  * Full end-to-end story through a local gateway.
  *
  * The application is built across these modules:
- *   src/concept-set.ts                — vocabulary and implementations
- *   src/composition/room.ts           — formers (dashboard, mitigation status)
- *   src/composition/packs.ts          — optional reaction packs
- *   src/composition/contributions.ts  — parameterized contribution endpoints
- *   src/composition/host-may-contribute.ts   — policy: host-only contributions
- *   src/composition/responders-may-contribute.ts — policy: any-responder contributions
- *   src/assembly.ts                   — the assemble() call with selectable options
- *   src/edge.ts                       — local gateway construction
+ *   src/vocabulary.ts                    — concept set and design vocabulary
+ *   src/compositions/Room.ts             — room endpoints
+ *   src/compositions/Mitigation*.ts      — selectable reaction packs
+ *   src/compositions/Contributions.ts    — endpoints and selectable policy views
+ *   src/compositions/Room.ts             — room endpoints and owned read models
+ *   src/assembly.ts                       — option selection and installation
+ *   src/edge.ts                           — local gateway construction
  */
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
-import { deterministicImplementations } from "./concept-set.ts";
+import { deterministicImplementations } from "./vocabulary.ts";
 import { buildOperationsRoom } from "./edge.ts";
 import type { OperationsRoomWire } from "../generated/wire.ts";
 

@@ -1,22 +1,23 @@
+import spec from "./spec.md";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
 const { Alerting, Discussing, Gathering, Selecting, Timing } = concepts;
 
-const memberOfRoom = view(
+const MemberOfRoom = view(
   "(member) belongs to incident room (room)",
   ({ member, room }, _outputs, _bindings) =>
     where(Gathering._membership({ gathering: room, member }).is({ joined: true })),
 ).holds();
 
-const notMemberOfRoom = view(
+const NotMemberOfRoom = view(
   "(member) does not belong to incident room (room)",
   ({ member, room }, _outputs, _bindings) =>
     where(Gathering._membership({ gathering: room, member }).is({ joined: false })),
 ).holds();
 
-const openMitigationDiscussion = view(
+const OpenMitigationDiscussion = view(
   "the open mitigation discussion in incident room (room)",
   ({ room }, { discussion }, { selection }) =>
     where(
@@ -25,7 +26,7 @@ const openMitigationDiscussion = view(
     ),
 ).optional();
 
-const incidentDashboard = former(
+const IncidentDashboard = former(
   "the incident room dashboard (room)",
   (
     { room },
@@ -84,19 +85,19 @@ const incidentDashboard = former(
     }),
 );
 
-export const CreateIncidentRoom = endpoint("/incident-rooms/create", ({ name, host, room }) =>
+const CreateIncidentRoom = endpoint("/incident-rooms/create", ({ name, host, room }) =>
   receive({ name, host })
     .then(Gathering.create({ name, host }).responds({ gathering: room }))
     .then(respond({ room })),
 );
 
-export const JoinIncidentRoom = endpoint("/incident-rooms/join", ({ room, member, membership }) =>
+const JoinIncidentRoom = endpoint("/incident-rooms/join", ({ room, member, membership }) =>
   receive({ room, member })
     .then(Gathering.join({ gathering: room, member }).responds({ membership }))
     .then(respond({ membership })),
 );
 
-export const ChooseMitigation = endpoint(
+const ChooseMitigation = endpoint(
   "/incident-rooms/choose",
   ({ room, mitigation, selection, at, discussion, member }) =>
     receive({ room, mitigation })
@@ -122,53 +123,51 @@ export const ChooseMitigation = endpoint(
       .then(respond({ selection, discussion })),
 );
 
-export const ContributeUpdate = endpoint(
+const ContributeUpdate = endpoint(
   "/incident-rooms/contribute",
   ({ room, member, text, discussion, at, response }) =>
     receive({ room, member, text }).then(
       where(
-        memberOfRoom({ member, room }),
-        openMitigationDiscussion({ room }).is({ discussion }),
+        MemberOfRoom({ member, room }),
+        OpenMitigationDiscussion({ room }).is({ discussion }),
         Timing._now({}).is({ time: at }),
       )
         .then(Discussing.respond({ discussion, author: member, text, at }).responds({ response }))
         .then(respond({ response }))
         .named("member"),
-      where(notMemberOfRoom({ member, room }))
+      where(NotMemberOfRoom({ member, room }))
         .then(respond({ error: "NOT_A_ROOM_MEMBER" }))
         .named("nonmember"),
-      where(memberOfRoom({ member, room }), no(openMitigationDiscussion({ room })))
+      where(MemberOfRoom({ member, room }), no(OpenMitigationDiscussion({ room })))
         .then(respond({ error: "NO_OPEN_MITIGATION_DISCUSSION" }))
         .named("no-open-discussion"),
     ),
 );
 
-export const CloseMitigationDiscussion = endpoint(
+const CloseMitigationDiscussion = endpoint(
   "/incident-rooms/close-discussion",
   ({ room, discussion, at }) =>
     receive({ room }).then(
-      where(openMitigationDiscussion({ room }).is({ discussion }), Timing._now({}).is({ time: at }))
+      where(OpenMitigationDiscussion({ room }).is({ discussion }), Timing._now({}).is({ time: at }))
         .then(Discussing.close({ discussion, at }).responds({ discussion }))
         .then(respond({ discussion }))
         .named("open"),
-      where(no(openMitigationDiscussion({ room })))
+      where(no(OpenMitigationDiscussion({ room })))
         .then(respond({ error: "NO_OPEN_MITIGATION_DISCUSSION" }))
         .named("not-open"),
     ),
 );
 
-export const AcknowledgeMitigationAlert = endpoint(
-  "/incident-rooms/acknowledge",
-  ({ alert, member }) =>
-    receive({ alert, member })
-      .then(Alerting.acknowledge({ alert, recipient: member }).responds({ alert }))
-      .then(respond({ alert })),
+const AcknowledgeMitigationAlert = endpoint("/incident-rooms/acknowledge", ({ alert, member }) =>
+  receive({ alert, member })
+    .then(Alerting.acknowledge({ alert, recipient: member }).responds({ alert }))
+    .then(respond({ alert })),
 );
 
 // Repair one member from the original selection-time roster. The route does not
 // enumerate current members, so it can repair a departed recipient without
 // backfilling an alert for somebody who joined after the selection.
-export const RepairMitigationEffects = endpoint(
+const RepairMitigationEffects = endpoint(
   "/incident-rooms/repair",
   ({ room, selection, member, at, discussion, alert }) =>
     receive({ room, selection, member })
@@ -201,6 +200,17 @@ export const RepairMitigationEffects = endpoint(
       .then(respond({ selection, discussion, alert })),
 );
 
-export const GetIncidentDashboard = endpoint("/incident-rooms/dashboard", ({ room }) =>
-  receive({ room }).then(respond({ dashboard: incidentDashboard({ room }) })),
+const GetIncidentDashboard = endpoint("/incident-rooms/dashboard", ({ room }) =>
+  receive({ room }).then(respond({ dashboard: IncidentDashboard({ room }) })),
 );
+
+export { spec };
+
+export const compositions = {
+  RoomMembership: { CreateIncidentRoom, JoinIncidentRoom },
+  MitigationDiscussion: { ChooseMitigation, ContributeUpdate, CloseMitigationDiscussion },
+  MitigationAlerts: { AcknowledgeMitigationAlert, RepairMitigationEffects },
+  IncidentDashboard: { GetIncidentDashboard },
+};
+export const views = { MemberOfRoom, NotMemberOfRoom, OpenMitigationDiscussion };
+export const formers = { IncidentDashboard };
