@@ -302,18 +302,27 @@ parameter can skip input-name comparison.
 
 ## `sync-engine check` checks
 
-`sync-engine check` reads `spec.md`, `registry.ts`, and the registered class's
-TypeScript source. The class identifier passed to `registerConcept` must be a
-named import, and its local name must match the class declaration in the target
-file. The import's module specifier must resolve directly to that file as a
-filesystem path. Relative paths are resolved from `registry.ts`; absolute paths
-remain absolute. Class discovery does not use TypeScript module resolution,
-aliased imports, or re-export chains. The checker compares methods declared
-directly in that class with the action and query names.
+With `--config`, `sync-engine check` discovers application-owned registrations
+from the application returned by the descriptor's `assemble` function; built-in
+engine concepts are excluded. It uses the descriptor's
+`vocabulary.module` only to locate class source. Without a config, the command
+imports the module selected by `--vocabulary-module`, or uses
+`src/concept-set.ts` and `vocabulary` as the no-option compatibility convention.
+The default filename is not part of registration semantics. Direct
+`registerConcept(...)` calls and registrations imported from optional registry
+modules use the same runtime discovery path. Discovery does not depend on a
+`spec.md` filename or an adjacent `registry.ts`; Markdown elsewhere in the
+project is ignored unless a selected registration loaded it.
 
-The checker does not traverse base classes. A specification relying on an
-inherited method can therefore pass `registerConcept` while failing the source
-check.
+Static analysis is used only where runtime reflection is insufficient: locating
+the selected class source and reading erased TypeScript input shapes. For that
+step, the `conceptSet` argument must be an object literal or a local object
+variable. Its properties and object-spread registration maps must resolve to
+direct or imported registrations, and each `class` must be a named import whose
+module specifier resolves directly as a filesystem path. Runtime registration
+checks action/query membership and every input list it can reflect. Source
+analysis checks only input lists erased before registration, resolving inherited
+method declarations when necessary.
 
 Supported method parameter forms are:
 
@@ -343,11 +352,10 @@ The checker loads the nearest `tsconfig.json`, uses its module resolution and
 path mappings, and adds the concept source when the config excludes it. Without
 a config it uses NodeNext resolution for the concept source and its imports.
 
-The source checker skips methods marked TypeScript `private`, but runtime
-registration can still see those prototype methods and may reject them as
-unspecified actions. TypeScript `protected` prototype methods are visible to
-both checks. Neither modifier hides a runtime helper; use ECMAScript `#private`
-methods or module-level functions so both checks observe the same members.
+TypeScript `private` and `protected` modifiers do not hide prototype methods at
+runtime. Runtime registration therefore observes those methods. Use ECMAScript
+`#private` methods or module-level functions for helpers outside the concept
+protocol.
 
 Neither `registerConcept` nor `sync-engine check` validates action output
 fields, query row fields, state notation, class fields, storage layout, or
@@ -355,12 +363,13 @@ runtime endpoint values.
 
 ## Caller obligations
 
-Import the Markdown as text and pass it to `registerConcept`. Place `spec.md` and
-`registry.ts` together under a CLI concept root. The class, refusal mappings, and
-principle test conventionally share that directory, but the checker follows the
-class path imported by `registry.ts`. After signature changes, run
-`sync-engine check`; after behavior or State changes, run the relevant principle,
-implementation, and backend constraint tests.
+Import the Markdown as text and pass it to `registerConcept`, then include that
+registration in the application's `conceptSet`. A registry module and an
+adjacent `spec.md` remain a useful convention but are optional; direct
+registration in `concept-set.ts` and names such as `design/concepts/Name.md` are
+supported. After signature changes, run `sync-engine check`; after behavior or
+State changes, run the relevant principle, implementation, and backend
+constraint tests.
 
 See [Define one behavior](../guide/authoring.md#define-one-behavior) for a worked example and [CLI
 reference](cli.md#sync-engine-check) for command behavior.

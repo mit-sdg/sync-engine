@@ -19,9 +19,9 @@ const usage = `Usage: sync-engine <command> [arguments]
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--concepts <path...>] [--config path] [--fail-on-warnings]
-    Check parsed action/query declarations against class source and optionally inspect application diagnostics.
-    Defaults to src/concepts.`;
+  sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
+    Check registered concepts against erased TypeScript source and optionally inspect application diagnostics.
+    Without a config, defaults to the conventional src/concept-set.ts vocabulary module.`;
 
 const HELP = new Set([undefined, "help", "--help", "-h"]);
 
