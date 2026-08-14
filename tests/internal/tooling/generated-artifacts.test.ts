@@ -290,7 +290,25 @@ export const vocabulary = declareVocabulary({
     }
   }, 15_000);
 
-  test("an HTTP cookie policy emits logical and projected named contracts", async () => {
+  test("HTTP policies project cookie and logical fields in one generated operation", async () => {
+    const cookieProjection = httpWire({
+      name: "ApplicationWireHttpCookie",
+      policy: httpPolicy({
+        publicOrigin: "http://localhost:3000",
+        cookies: {
+          session: {
+            name: "session",
+            input: "session",
+            issue: [{ path: "/login", value: "session", expires: "expiresAt" }],
+            clear: [],
+          },
+        },
+      }),
+    });
+    const logicalProjection = httpWire({
+      name: "ApplicationWireHttp",
+      policy: httpPolicy({ publicOrigin: "https://example.test" }),
+    });
     const application = assemble({
       vocabulary: vocabularyDeclaration,
       composition: { Login, Current },
@@ -304,20 +322,16 @@ export const vocabulary = declareVocabulary({
           design: loginCurrentDesign,
           conceptSet: { module: languageModule },
           projections: [
-            httpWire({
-              name: "ApplicationWireHttp",
-              policy: httpPolicy({
-                publicOrigin: "http://localhost:3000",
-                cookies: {
-                  session: {
-                    name: "session",
-                    input: "session",
-                    issue: [{ path: "/login", value: "session", expires: "expiresAt" }],
-                    clear: [],
-                  },
-                },
-              }),
-            }),
+            cookieProjection,
+            {
+              ...logicalProjection,
+              project(facts) {
+                return {
+                  ...logicalProjection.project(facts),
+                  render: { appWideErrorName: "PlainHttpAppWideError" },
+                };
+              },
+            },
           ],
         },
         configUrl,
@@ -328,38 +342,18 @@ export const vocabulary = declareVocabulary({
     expect(rendered.wire).toContain("export type ApplicationWire = {");
     expect(rendered.wire).toContain('"session": Jsonify<');
     expect(rendered.wire).toContain("export type HttpAppWideError =");
+    expect(rendered.wire).toContain("export type ApplicationWireHttpCookie = {");
+    expect(rendered.wire).toContain("export type PlainHttpAppWideError =");
     expect(rendered.wire).toContain("export type ApplicationWireHttp = {");
-    const projected = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp"));
-    expect(projected).not.toContain('"session":');
-  });
 
-  test("an HTTP policy projects errors without consuming logical fields", async () => {
-    const application = assemble({
-      vocabulary: vocabularyDeclaration,
-      composition: { Login, Current },
-    });
-    const rendered = await renderGenerated(
-      resolveApplication(
-        {
-          assemble: () => application,
-          directory: new URL("./generated/", import.meta.url),
-          title: "Application",
-          design: loginCurrentDesign,
-          conceptSet: { module: languageModule },
-          projections: [
-            httpWire({
-              name: "ApplicationWireHttp",
-              policy: httpPolicy({ publicOrigin: "https://example.test" }),
-            }),
-          ],
-        },
-        configUrl,
-      ),
+    const cookie = rendered.wire.slice(
+      rendered.wire.indexOf("ApplicationWireHttpCookie"),
+      rendered.wire.indexOf("PlainHttpAppWideError"),
     );
-
-    const projected = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp"));
-    expect(projected).toContain('"session":');
-    expect(projected).toContain('error: { error: HttpAppWideError | "INVALID_REQUEST" }');
+    expect(cookie).not.toContain('"session":');
+    const logical = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp ="));
+    expect(logical).toContain('"session":');
+    expect(logical).toContain('error: { error: PlainHttpAppWideError | "INVALID_REQUEST" }');
   });
 
   test("ordinary assembly rejects an executable endpoint absent from portable IR", async () => {
