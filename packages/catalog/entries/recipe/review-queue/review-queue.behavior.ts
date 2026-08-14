@@ -51,6 +51,9 @@ function observedTiming(instances: CatalogInstances) {
   return {
     observed,
     timing: {
+      read(input: Record<string, never>) {
+        return delegate.read(input);
+      },
       async _now() {
         const answer = await delegate._now();
         observed.push(new Date(answer.time.getTime()));
