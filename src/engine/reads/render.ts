@@ -350,6 +350,45 @@ export function renderReaction(reaction: ReactionIR): string {
 // ── The application spec ───────────────────────────────────────────────────
 
 /** Everything `renderApp` needs, as data. */
+interface RenderDesignLocation {
+  source: string;
+  line: number;
+  column: number;
+}
+
+interface RenderDesign {
+  checked: boolean;
+  sources: { id: string; path: string; title?: string; definition?: string; line?: number }[];
+  declarations: {
+    kind: "reaction" | "view" | "former";
+    identity: string;
+    runtimeNames: string[];
+    coverage: RenderDesignLocation[];
+  }[];
+  concepts: {
+    definition: string;
+    source?: string;
+    specification: ConceptSpecificationIR;
+    instances: {
+      name: string;
+      bindings: {
+        external: string;
+        target:
+          | { kind: "concrete"; name: string }
+          | { kind: "qualified"; instance: string; type: string };
+        location: RenderDesignLocation;
+      }[];
+    }[];
+  }[];
+  vocabulary?: { concreteTypes: { name: string; location: RenderDesignLocation }[] };
+  computations: {
+    name: string;
+    inputs: { name: string; optional: boolean; type: string }[];
+    result: string;
+    location: RenderDesignLocation;
+  }[];
+}
+
 interface AppSpecIR {
   /** The application's name, used as the document title. */
   title: string;
@@ -357,12 +396,8 @@ interface AppSpecIR {
   concepts: ConceptInventoryIR[];
   /** The exported reaction IR and the reactions that stayed pipelines. */
   app: AppIR;
-}
-
-const UNWRITTEN = "_[unwritten in the registered concept specification]_";
-
-function renderSignature(name: string, roles: readonly string[] | undefined): string {
-  return roles === undefined ? `${name} (…)` : `${name} (${roles.join(", ")})`;
+  /** Checked config-only authored-design augmentation, when generated from a config. */
+  design?: RenderDesign;
 }
 
 function renderSpecificationType(type: SpecificationTypeIR): string {
@@ -385,100 +420,96 @@ function renderSpecificationFields(fields: readonly SpecificationFieldIR[]): str
 }
 
 function renderSpecificationResult(result: SpecificationResultIR): string {
-  return result.kind === "fields"
-    ? `(${renderSpecificationFields(result.fields)})`
-    : renderSpecificationType(result.type);
+  return `(${renderSpecificationFields(result.fields)})`;
 }
 
 function renderActionSignature(action: SpecificationActionIR): string {
-  return `${action.name} (${renderSpecificationFields(action.parameters)}) : return ${renderSpecificationResult(action.result)}`;
+  return `${action.name}(${renderSpecificationFields(action.parameters)}) : return ${renderSpecificationResult(action.result)}`;
 }
 
 function renderQuerySignature(query: SpecificationQueryIR): string {
-  return `${query.name} (${renderSpecificationFields(query.parameters)}) : ${query.promise} ${renderSpecificationResult(query.result)}`;
+  return `${query.name}(${renderSpecificationFields(query.parameters)}) : ${query.promise} ${renderSpecificationResult(query.result)}`;
 }
 
-function pushAuthoredBody(lines: string[], body: string): void {
-  if (body === "") return;
-  lines.push("**Authored behavior:**", "");
-  for (const line of body.split("\n")) lines.push(`    ${line}`);
-  lines.push("");
+function sourceLink(design: RenderDesign, location: RenderDesignLocation): string {
+  const source = design.sources.find(({ id }) => id === location.source);
+  if (source === undefined) return `unknown source, line ${location.line}`;
+  const label = source.title ?? source.definition ?? source.path;
+  return `[${label}](${encodeURI(source.path)}), line ${location.line}`;
 }
 
-function renderAuthoredConcept(name: string, specification: ConceptSpecificationIR): string {
-  const lines: string[] = [`### ${name}`, ""];
-  lines.push(`**Purpose.** ${specification.purpose}`, "");
-  lines.push(`**Principle.** ${specification.principle}`, "");
-  lines.push(
-    "_Registration checks member names, recoverable input names, and refusal mappings._",
-    "_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._",
-    "",
-  );
+function coverageLines(design: RenderDesign, locations: readonly RenderDesignLocation[]): string[] {
+  if (locations.length === 0) return [];
+  return locations.map((location) => `- Covered by ${sourceLink(design, location)}.`);
+}
+
+function renderCheckedConcept(
+  design: RenderDesign,
+  concept: RenderDesign["concepts"][number],
+): string {
+  const specification = concept.specification;
+  const lines = [`### ${concept.definition}`, ""];
+  if (concept.source !== undefined) {
+    const source = design.sources.find(({ id }) => id === concept.source);
+    if (source !== undefined)
+      lines.push(
+        `Defined in [${source.definition ?? concept.definition}](${encodeURI(source.path)}), line ${source.line ?? 1}.`,
+        "",
+      );
+  }
   if (specification.actions.length > 0) {
     lines.push("#### Actions", "");
     for (const action of specification.actions) {
-      lines.push(`##### \`${renderActionSignature(action)}\``, "");
-      pushAuthoredBody(lines, action.body);
-      if (action.refusals.length > 0) {
-        lines.push(
-          `**Registered refusal codes:** ${action.refusals.map(({ code }) => `\`${code}\``).join(", ")}`,
-          "",
-        );
+      lines.push(`- \`${renderActionSignature(action)}\``);
+      for (const refusal of action.refusals) {
+        lines.push(`  - Refuses \`${refusal.code}\`: ${refusal.message}`);
       }
     }
+    lines.push("");
   }
   if (specification.queries.length > 0) {
     lines.push("#### Queries", "");
-    for (const query of specification.queries) {
-      lines.push(`##### \`${renderQuerySignature(query)}\``, "");
-      pushAuthoredBody(lines, query.body);
+    for (const query of specification.queries) lines.push(`- \`${renderQuerySignature(query)}\``);
+    lines.push("");
+  }
+  lines.push("#### Selected instances and bindings", "");
+  for (const instance of concept.instances) {
+    lines.push(`- \`${instance.name}\``);
+    for (const binding of instance.bindings) {
+      const target =
+        binding.target.kind === "concrete"
+          ? binding.target.name
+          : `${binding.target.instance}.${binding.target.type}`;
+      lines.push(
+        `  - \`${instance.name}.${binding.external}\` is \`${target}\` — ${sourceLink(design, binding.location)}.`,
+      );
     }
   }
-  for (const documentation of specification.documentation) {
-    lines.push(`#### ${documentation.name}`, "", documentation.body, "");
-  }
+  lines.push("");
   return lines.join("\n");
 }
 
-function renderLegacyConcept(concept: ConceptInventoryIR): string {
-  const lines: string[] = [`### ${concept.name}`, ""];
-  lines.push(`**Purpose.** ${concept.purpose ?? UNWRITTEN}`, "");
-  lines.push(`**Principle.** ${concept.principle ?? UNWRITTEN}`, "");
-  if (concept.actions.length > 0) {
-    lines.push("Actions:", "");
-    for (const action of concept.actions) {
-      const refusals =
-        action.refusals === undefined || action.refusals.length === 0
-          ? ""
-          : ` — may refuse ${action.refusals.map((code) => `\`${code}\``).join(", ")}`;
-      lines.push(`- \`${renderSignature(action.name, action.roles)}\`${refusals}`);
-    }
-    lines.push("");
-  }
-  if (concept.queries.length > 0) {
-    lines.push("Queries (standing questions the state answers):", "");
-    for (const query of concept.queries) {
-      const returns =
-        query.returns === undefined
-          ? ""
-          : ` — promises ${
-              query.returns === "one"
-                ? "exactly one row"
-                : query.returns === "optional"
-                  ? "at most one row"
-                  : "any number of rows"
-            }`;
-      lines.push(`- \`${renderSignature(query.name, query.roles)}\`${returns}`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
+function declarationFor(
+  design: RenderDesign | undefined,
+  kind: "reaction" | "view" | "former",
+  runtimeName: string,
+) {
+  return design?.declarations.find(
+    (declaration) => declaration.kind === kind && declaration.runtimeNames.includes(runtimeName),
+  );
 }
 
-function renderConcept(concept: ConceptInventoryIR): string {
-  return concept.specification === undefined
-    ? renderLegacyConcept(concept)
-    : renderAuthoredConcept(concept.name, concept.specification);
+function pushDeclarationCoverage(
+  lines: string[],
+  design: RenderDesign | undefined,
+  declaration: RenderDesign["declarations"][number] | undefined,
+): void {
+  if (design === undefined || declaration === undefined) return;
+  lines.push(
+    `Authored path: \`${declaration.identity}\`.`,
+    ...coverageLines(design, declaration.coverage),
+    "",
+  );
 }
 
 /**
@@ -495,15 +526,39 @@ export function renderApp(spec: AppSpecIR): string {
     "",
   ];
 
-  if (spec.concepts.length > 0) {
+  if (spec.design?.checked === true && spec.design.concepts.length > 0) {
     lines.push("## Concepts", "");
-    for (const concept of spec.concepts) lines.push(renderConcept(concept));
+    for (const concept of spec.design.concepts)
+      lines.push(renderCheckedConcept(spec.design, concept));
+  }
+
+  if (spec.design?.checked === true && spec.design.vocabulary !== undefined) {
+    lines.push("## Application vocabulary", "", "Concrete types:", "");
+    for (const concrete of spec.design.vocabulary.concreteTypes) {
+      lines.push(`- \`${concrete.name}\` — ${sourceLink(spec.design, concrete.location)}.`);
+    }
+    lines.push("");
+  }
+
+  if (spec.design?.checked === true && spec.design.computations.length > 0) {
+    lines.push("## Computations", "");
+    for (const computation of spec.design.computations) {
+      const inputs = computation.inputs
+        .map(({ name, optional, type }) => `${name}${optional ? "?" : ""}: ${type}`)
+        .join(", ");
+      lines.push(
+        `- \`${computation.name}(${inputs}) : ${computation.result}\` — ${sourceLink(spec.design, computation.location)}.`,
+      );
+    }
+    lines.push("");
   }
 
   if (spec.app.views.length > 0) {
     lines.push("## Views", "");
     lines.push("_Views name reusable conditions. Multiple `where` blocks are alternatives._", "");
     for (const view of spec.app.views) {
+      lines.push(`### ${view.name}`, "");
+      pushDeclarationCoverage(lines, spec.design, declarationFor(spec.design, "view", view.name));
       lines.push("```view", renderView(view), "```", "");
     }
   }
@@ -516,6 +571,12 @@ export function renderApp(spec: AppSpecIR): string {
       "",
     );
     for (const formerIR of spec.app.formers) {
+      lines.push(`### ${formerIR.name}`, "");
+      pushDeclarationCoverage(
+        lines,
+        spec.design,
+        declarationFor(spec.design, "former", formerIR.name),
+      );
       lines.push("```former", renderFormer(formerIR), "```", "");
     }
   }
@@ -523,7 +584,13 @@ export function renderApp(spec: AppSpecIR): string {
   if (spec.app.reactions.length > 0) {
     lines.push("## Reactions", "");
     for (const reaction of spec.app.reactions) {
-      lines.push(`### ${reaction.name}`, "", "```reaction", renderReaction(reaction), "```", "");
+      lines.push(`### ${reaction.name}`, "");
+      pushDeclarationCoverage(
+        lines,
+        spec.design,
+        declarationFor(spec.design, "reaction", reaction.name),
+      );
+      lines.push("```reaction", renderReaction(reaction), "```", "");
     }
   }
 

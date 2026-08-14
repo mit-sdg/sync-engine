@@ -13,7 +13,16 @@ import {
   type ArtifactStatus,
   planGenerated,
 } from "./artifact-plan.ts";
-import { applicationManifest, type ApplicationManifestV5 } from "./manifest.ts";
+import {
+  applicationManifest,
+  registerConfiguredAuthoredDesign,
+  type ApplicationManifestV1,
+} from "./manifest.ts";
+import {
+  checkAuthoredDesign,
+  type ConceptSpecificationSourceInput,
+  type ResolveComputationInputs,
+} from "./authored-design-orchestration.ts";
 import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
@@ -32,6 +41,17 @@ export interface GeneratedApplicationDesign {
   documents: readonly URL[];
 }
 
+export interface GeneratedAuthoredDesignAdapters {
+  /** Strict static trace from selected concept instances to their imported Markdown. */
+  conceptSources: (
+    assembly: InspectableAssembly,
+  ) =>
+    | readonly ConceptSpecificationSourceInput[]
+    | Promise<readonly ConceptSpecificationSourceInput[]>;
+  /** Authoritative TypeScript analysis for executable computation input optionality. */
+  resolveComputationInputs: ResolveComputationInputs;
+}
+
 export interface GeneratedApplication {
   assemble: () => InspectableAssembly;
   /** Release resources owned by this generation descriptor after assembly drain. */
@@ -40,6 +60,8 @@ export interface GeneratedApplication {
   title: string;
   /** Authored design sources checked for this exact application variant. */
   design: GeneratedApplicationDesign;
+  /** Required source-analysis adapters when selected concepts or computations need them. */
+  authoredDesignAdapters?: GeneratedAuthoredDesignAdapters;
   /** Where generated files are written; defaults to `generated/` beside the config. */
   directory?: URL;
   /** The read-back's filename; defaults to the title, slugged, with `.md`. */
@@ -161,6 +183,18 @@ export function resolveApplication(
   if (application.projections !== undefined && !Array.isArray(application.projections)) {
     throw new Error("generated config: projections must be an array.");
   }
+  if (application.authoredDesignAdapters !== undefined) {
+    if (
+      typeof application.authoredDesignAdapters !== "object" ||
+      application.authoredDesignAdapters === null ||
+      typeof application.authoredDesignAdapters.conceptSources !== "function" ||
+      typeof application.authoredDesignAdapters.resolveComputationInputs !== "function"
+    ) {
+      throw new Error(
+        "generated config: authoredDesignAdapters must provide conceptSources and resolveComputationInputs functions.",
+      );
+    }
+  }
 
   const design = resolveDesign(application.design);
   const directory = application.directory ?? new URL("./generated/", config);
@@ -185,15 +219,58 @@ export function resolveApplication(
   };
 }
 
-function completeGeneratedPlan(
+async function prepareConfiguredDesign(
   application: ResolvedApplication,
   assembled: InspectableAssembly,
-): {
-  manifest: ApplicationManifestV5;
+): Promise<void> {
+  const adapters = application.authoredDesignAdapters;
+  const conceptSources = await adapters?.conceptSources(assembled);
+  // The generated-operation boundary performs this exactly once for this exact assembly. Every
+  // manifest/spec/wire consumer below reuses the attached checked model and loaded documents.
+  const checked = await checkAuthoredDesign({
+    assembly: assembled,
+    design: application.design,
+    ...(conceptSources === undefined ? {} : { conceptSources }),
+    ...(adapters === undefined
+      ? {}
+      : { resolveComputationInputs: adapters.resolveComputationInputs }),
+  });
+  if (checked.concepts.length > 0 && checked.sources.concepts === undefined) {
+    throw new Error(
+      "generated artifacts: authoredDesignAdapters.conceptSources is required to prove concept Markdown source paths.",
+    );
+  }
+  const unvalidated = checked.computationInputValidation.filter(
+    ({ status }) => status !== "validated",
+  );
+  if (unvalidated.length > 0) {
+    throw new Error(
+      `generated artifacts: authoredDesignAdapters.resolveComputationInputs is required to prove input optionality for ${unvalidated.map(({ name }) => JSON.stringify(name)).join(", ")}.`,
+    );
+  }
+  const specificationPath = fileURLToPath(
+    new URL(application.specification, application.directory),
+  );
+  registerConfiguredAuthoredDesign(assembled, {
+    checked,
+    paths: {
+      relativePath(path) {
+        const linked = relative(dirname(specificationPath), path).split(/[\\/]/).join("/");
+        return linked.startsWith(".") ? linked : `./${linked}`;
+      },
+    },
+  });
+}
+
+async function completeGeneratedPlan(
+  application: ResolvedApplication,
+  assembled: InspectableAssembly,
+): Promise<{
+  manifest: ApplicationManifestV1;
   plan: ArtifactPlan;
-} {
+}> {
   const manifest = applicationManifest(assembled);
-  const facts = wireProjectionFacts(assembled, manifest.wire);
+  const projectionFacts = wireProjectionFacts(assembled, manifest.wire);
   const projections: PlannedWireProjection[] = (application.projections ?? []).map((projection) => {
     if (
       projection === null ||
@@ -202,7 +279,7 @@ function completeGeneratedPlan(
     ) {
       throw new Error("generated config: every projection must provide project(facts).");
     }
-    return { ...projection.project(facts), provenance: projection.provenance };
+    return { ...projection.project(projectionFacts), provenance: projection.provenance };
   });
   return {
     manifest,
@@ -227,6 +304,7 @@ export async function inspectGenerated<T>(
   let assembled: InspectableAssembly | undefined;
   try {
     assembled = application.assemble();
+    await prepareConfiguredDesign(application, assembled);
     return await inspect(assembled);
   } finally {
     try {
@@ -266,7 +344,7 @@ async function generatedPlan(
 ): Promise<ArtifactPlan> {
   const plan = await inspectGenerated(
     application,
-    (assembled) => completeGeneratedPlan(application, assembled).plan,
+    async (assembled) => (await completeGeneratedPlan(application, assembled)).plan,
   );
   if (artifact === "all") return plan;
   return { entries: plan.entries.filter(({ kind }) => kind === artifact) };

@@ -6,6 +6,7 @@ import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
 import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
 import type { AuthoredDeclarationIdentity } from "@engine/reads/declaration-identity";
 import {
+  parseSpec,
   specificationsAreCompatible,
   type ConceptSpec,
 } from "@engine/reactions/concepts/concept-spec";
@@ -38,6 +39,20 @@ export interface LoadedAuthoredDesignSource {
   content: string;
   digest: string;
   lines: readonly DesignSourceLine[];
+}
+
+/** Required static-source adapter input for config-generated concept provenance. */
+export interface ConceptSpecificationSourceInput {
+  instance: string;
+  url: URL;
+  /** Exact text traced from the default Markdown import; no second file read is performed. */
+  content: string;
+}
+
+export interface LoadedConceptSpecificationSource extends LoadedAuthoredDesignSource {
+  instance: string;
+  definition: string;
+  definitionLine: number;
 }
 
 export interface AuthoritativeComputationInput {
@@ -85,6 +100,8 @@ export interface CheckedAuthoredDesignModel {
   sources: {
     vocabulary?: LoadedAuthoredDesignSource;
     documents: readonly LoadedAuthoredDesignSource[];
+    /** Present when a strict static-source adapter supplied every selected concept source. */
+    concepts?: readonly LoadedConceptSpecificationSource[];
   };
   documents: readonly AuthoredApplicationDesignDocument[];
   /** Parsed declarations only; qualified targets make no unparsed SSF ownership claim. */
@@ -260,6 +277,7 @@ export async function checkAuthoredDesign(options: {
   assembly: Assembly<Record<string, new (...args: never[]) => object>>;
   design: AuthoredDesignRegistration;
   resolveComputationInputs?: ResolveComputationInputs;
+  conceptSources?: readonly ConceptSpecificationSourceInput[];
 }): Promise<CheckedAuthoredDesignModel> {
   const sources = await loadRegistration(options.design);
   const documents = sources.documents.map((source) =>
@@ -283,6 +301,21 @@ export async function checkAuthoredDesign(options: {
           assembly: options.assembly,
           computations: executableComputations,
         });
+  const analyzedNames = new Set<string>();
+  const executableNames = new Set(executableComputations.map(({ name }) => name));
+  for (const item of analyzed) {
+    if (analyzedNames.has(item.name)) {
+      throw new Error(
+        `authored design: computation input adapter returned ${JSON.stringify(item.name)} more than once.`,
+      );
+    }
+    if (!executableNames.has(item.name)) {
+      throw new Error(
+        `authored design: computation input adapter returned unselected computation ${JSON.stringify(item.name)}.`,
+      );
+    }
+    analyzedNames.add(item.name);
+  }
   const inputsByComputation = new Map(analyzed.map(({ name, inputs }) => [name, inputs]));
 
   const concepts: SelectedConceptDesignFact[] = [];
@@ -331,6 +364,52 @@ export async function checkAuthoredDesign(options: {
     });
   }
 
+  let conceptSources: LoadedConceptSpecificationSource[] | undefined;
+  if (options.conceptSources !== undefined) {
+    const supplied = new Map<string, ConceptSpecificationSourceInput>();
+    for (const source of options.conceptSources) {
+      if (supplied.has(source.instance)) {
+        throw new Error(
+          `authored design: concept source adapter returned ${JSON.stringify(source.instance)} more than once.`,
+        );
+      }
+      supplied.set(source.instance, source);
+    }
+    conceptSources = concepts.map(({ instance, definition, specification }) => {
+      const source = supplied.get(instance);
+      if (source === undefined) {
+        throw new Error(
+          `authored design: concept source adapter omitted selected instance ${JSON.stringify(instance)}.`,
+        );
+      }
+      const path = localPath(source.url, `conceptSources[${JSON.stringify(instance)}].url`);
+      const scanned = scanDesignMarkdown(source.content, path);
+      const parsed = parseSpec(scanned.content);
+      if (!specificationsAreCompatible(parsed, specification)) {
+        throw new Error(
+          `authored design: traced concept source for ${JSON.stringify(instance)} does not match its registered specification.`,
+        );
+      }
+      return {
+        instance,
+        definition,
+        definitionLine: scanned.headings.find(({ level }) => level === 1)?.location.line ?? 1,
+        url: source.url,
+        path,
+        content: scanned.content,
+        digest: scanned.digest,
+        lines: scanned.lines,
+      };
+    });
+    const selectedNames = new Set(concepts.map(({ instance }) => instance));
+    const extra = options.conceptSources.find(({ instance }) => !selectedNames.has(instance));
+    if (extra !== undefined) {
+      throw new Error(
+        `authored design: concept source adapter supplied unselected instance ${JSON.stringify(extra.instance)}.`,
+      );
+    }
+  }
+
   const selected: SelectedApplicationDesign = {
     reactions: declarations
       .filter(({ kind }) => kind === "reaction")
@@ -360,7 +439,7 @@ export async function checkAuthoredDesign(options: {
 
   const corpus = vocabulary === undefined ? documents : [...documents, vocabulary];
   return {
-    sources,
+    sources: { ...sources, ...(conceptSources === undefined ? {} : { concepts: conceptSources }) },
     documents,
     ...(vocabulary === undefined ? {} : { vocabulary }),
     declarations,

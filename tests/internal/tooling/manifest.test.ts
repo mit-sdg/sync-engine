@@ -101,7 +101,7 @@ describe("application manifest", () => {
 
     expect(manifest).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 5,
+      version: 1,
       generator: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
       digest: expect.stringMatching(/^fnv1a64-[0-9a-f]{16}$/),
       endpoints: [
@@ -687,11 +687,11 @@ describe("application manifest", () => {
       receive({ item }).where(Looking._get({ item })).then(respond({ item })),
     );
     const diagnostics = applicationManifest(
-      assemble({ vocabulary: lookup, composition: { Get, "Get:shadow": Shadow } }),
+      assemble({ vocabulary: lookup, composition: { Get, Group: { Shadow } } }),
     ).diagnostics;
 
     expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
-    expect(diagnostics[0]?.endpoint).toEqual({ name: "Get:shadow", path: "/shadow" });
+    expect(diagnostics[0]?.endpoint).toEqual({ name: "Group.Shadow", path: "/shadow" });
   });
 
   test("does not equate guards whose local variables bind different request fields", () => {
@@ -1005,18 +1005,11 @@ describe("application manifest", () => {
     );
   });
 
-  test("rejects version 4 rather than upconverting it", () => {
-    const {
-      computations: _computations,
-      conceptImplementations: _conceptImplementations,
-      ...previousShape
-    } = applicationManifest(application());
-    const version4 = { ...previousShape, version: 4 };
+  test("rejects old manifest JSON rather than decoding it", () => {
+    const old = { ...applicationManifest(application()), version: 5 };
 
-    expect(() => validateApplicationManifest(version4)).toThrow(/\$\.version.*expected 5/);
-    expect(() => parseApplicationManifest(JSON.stringify(version4))).toThrow(
-      /\$\.version.*expected 5/,
-    );
+    expect(() => validateApplicationManifest(old)).toThrow(/\$\.version.*expected 1/);
+    expect(() => parseApplicationManifest(JSON.stringify(old))).toThrow(/\$\.version.*expected 1/);
   });
 
   test("rejects malformed computation and implementation inventories", () => {
@@ -1204,7 +1197,7 @@ describe("application manifest", () => {
     expect(printed.status).toBe(0);
     expect(JSON.parse(printed.stdout)).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 5,
+      version: 1,
     });
     expect(printed.stdout.endsWith("\n")).toBe(true);
 
