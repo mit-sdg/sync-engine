@@ -1,9 +1,9 @@
 /** Assemble the operations room with selectable reaction packs and policy. */
 import { assemble, type ImplementationOverrides } from "@mit-sdg/sync-engine/assembly";
-import * as Contributions from "./compositions/Contributions.ts";
-import * as MitigationAlerts from "./compositions/MitigationAlerts.ts";
-import * as MitigationDiscussion from "./compositions/MitigationDiscussion.ts";
-import * as Room from "./compositions/Room.ts";
+import { compositionFor as contributionComposition } from "./compositions/Contributions.ts";
+import { composition as mitigationAlertsComposition } from "./compositions/MitigationAlerts.ts";
+import { composition as mitigationDiscussionComposition } from "./compositions/MitigationDiscussion.ts";
+import { composition as roomComposition } from "./compositions/Room.ts";
 import { operationsRoomConcepts, vocabulary } from "./vocabulary.ts";
 
 export type OperationsRoomOverrides = ImplementationOverrides<typeof vocabulary>;
@@ -27,20 +27,10 @@ export function assembleOperationsRoom({
     vocabulary,
     instances: { ...operationsRoomConcepts.implementations(), ...instances },
     composition: {
-      Room: { spec: Room.spec, ...Room.compositions, formers: Room.formers },
-      MitigationDiscussion: {
-        spec: MitigationDiscussion.spec,
-        ...(discussion ? MitigationDiscussion.compositions : {}),
-      },
-      MitigationAlerts: {
-        spec: MitigationAlerts.spec,
-        ...(alerts ? MitigationAlerts.compositions : {}),
-      },
-      Contributions: {
-        spec: Contributions.spec,
-        ...Contributions.compositions.Contributions[policy],
-        views: Contributions.views[policy],
-      },
+      Room: roomComposition,
+      ...(discussion ? { MitigationDiscussion: mitigationDiscussionComposition } : {}),
+      ...(alerts ? { MitigationAlerts: mitigationAlertsComposition } : {}),
+      Contributions: contributionComposition(policy),
     },
   });
 }

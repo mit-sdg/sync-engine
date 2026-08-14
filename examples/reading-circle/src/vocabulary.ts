@@ -11,7 +11,6 @@
  * floor uses fixed IDs so scenario output is stable enough to snapshot.
  */
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
-export { default as spec } from "@design/vocabulary.md" with { type: "text" };
 import { discussing } from "./concepts/Discussing.registry.ts";
 import { gathering } from "./concepts/Gathering.registry.ts";
 import { selecting } from "./concepts/Selecting.registry.ts";

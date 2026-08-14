@@ -1,8 +1,5 @@
-import spec from "@design/compositions/MitigationDiscussion.md" with { type: "text" };
 import { reaction, when } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../vocabulary.ts";
-
-export { spec };
 
 const { Discussing, Selecting } = concepts;
 
@@ -11,4 +8,4 @@ const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
   when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
 
-export const compositions = { SelectedMitigationOpensDiscussion };
+export const composition = { SelectedMitigationOpensDiscussion };

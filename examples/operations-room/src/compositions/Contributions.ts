@@ -1,9 +1,6 @@
-import spec from "@design/compositions/Contributions.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { type RelationView, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../vocabulary.ts";
-
-export { spec };
 
 const { Discussing, Gathering, Selecting } = concepts;
 
@@ -13,7 +10,7 @@ type ContributionPolicy = {
   ResponderMayNotContribute: RelationView;
 };
 
-function contributionEndpoints({
+function contributionComposition({
   denied,
   ResponderMayContribute,
   ResponderMayNotContribute,
@@ -37,7 +34,12 @@ function contributionEndpoints({
       .then(respond({ error: denied })),
   );
 
-  return { AddContribution, RejectContribution };
+  return {
+    AddContribution,
+    RejectContribution,
+    ResponderMayContribute,
+    ResponderMayNotContribute,
+  };
 }
 
 const responderPolicy = {
@@ -68,14 +70,6 @@ const hostPolicy = {
   denied: "HOST_ONLY",
 };
 
-export const views = {
-  Responders: responderPolicy,
-  Host: hostPolicy,
-};
-
-export const compositions = {
-  Contributions: {
-    Responders: contributionEndpoints(responderPolicy),
-    Host: contributionEndpoints(hostPolicy),
-  },
-};
+export function compositionFor(policy: "Responders" | "Host") {
+  return contributionComposition(policy === "Responders" ? responderPolicy : hostPolicy);
+}

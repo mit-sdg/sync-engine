@@ -5,12 +5,10 @@
  * Every endpoint here resolves the session subject first and passes it on as
  * Posting's or Commenting's `Author`, so a request never chooses its own author.
  */
-import spec from "@design/compositions/Board.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, no, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "../vocabulary.ts";
 
-export { spec };
 import {
   boardOutput,
   commentOutput,
@@ -111,10 +109,8 @@ const RetractComment = endpoint(
   },
 );
 
-export const compositions = {
-  BoardReading: { ListBoard },
+export const composition = {
+  BoardReading: { ListBoard, Board },
   BoardPublishing: { PublishPost },
   BoardComments: { AddComment, RetractComment },
 };
-
-export const formers = { Board };
