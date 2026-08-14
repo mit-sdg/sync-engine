@@ -57,6 +57,7 @@ const SOURCE_ROLES = [
   "selection",
   "registration",
   "specification",
+  "design-coverage",
 ] as const;
 const SOURCE_RESOLUTIONS = [
   "symbol",
@@ -81,6 +82,8 @@ const SOURCE_ISSUE_CODES = [
   "SOURCE_OUTSIDE_PROJECT",
   "SPECIFICATION_UNREADABLE",
   "SPECIFICATION_MISMATCH",
+  "DESIGN_SOURCE_UNREADABLE",
+  "DESIGN_SOURCE_MISMATCH",
 ] as const;
 const INDEX_ISSUE_CODES = [
   "OPAQUE_DEFINITION",
@@ -280,8 +283,8 @@ function provenance(value: unknown, path: string): AnalysisProvenance {
   if (manifest.format !== "sync-engine.application-manifest") {
     fail(`${path}.manifest has an unsupported format`, `${path}.manifest.format`);
   }
-  if (manifest.version !== 5) {
-    fail(`${path}.manifest must be version 5`, `${path}.manifest.version`, "UNSUPPORTED_VERSION");
+  if (manifest.version !== 1) {
+    fail(`${path}.manifest must be version 1`, `${path}.manifest.version`, "UNSUPPORTED_VERSION");
   }
   manifestHash(manifest.digest, `${path}.manifest.digest`);
   const generator = object(manifest.generator, `${path}.manifest.generator`);
@@ -400,8 +403,8 @@ function applicationIndex(
   );
   if (index.format !== "sync-engine.application-index")
     fail(`${path} has an unsupported format`, path);
-  if (index.version !== 2)
-    fail(`${path} must be version 2`, `${path}.version`, "UNSUPPORTED_VERSION");
+  if (index.version !== 3)
+    fail(`${path} must be version 3`, `${path}.version`, "UNSUPPORTED_VERSION");
   const indexProvenance = provenance(index.provenance, `${path}.provenance`);
   if (!same(indexProvenance, expectedProvenance) || index.manifestDigest !== manifestDigest) {
     fail(`${path} provenance does not match the project`, path, "SNAPSHOT_MISMATCH");
@@ -588,8 +591,8 @@ function sourceIndex(
   );
   if (source.format !== "sync-engine.application-source-index")
     fail(`${path} has an unsupported format`, path);
-  if (source.version !== 2)
-    fail(`${path} must be version 2`, `${path}.version`, "UNSUPPORTED_VERSION");
+  if (source.version !== 3)
+    fail(`${path} must be version 3`, `${path}.version`, "UNSUPPORTED_VERSION");
   const sourceProvenance = provenance(source.provenance, `${path}.provenance`);
   if (!same(sourceProvenance, expectedProvenance) || source.manifestDigest !== manifestDigest) {
     fail(`${path} provenance does not match the project`, path, "SNAPSHOT_MISMATCH");
@@ -935,8 +938,8 @@ function validate(value: unknown, roundTrip: boolean): asserts value is Applicat
   if (project.format !== "sync-engine.application-project-analysis") {
     fail("application project analysis has an unsupported format", "$.format");
   }
-  if (project.version !== 2) {
-    fail("application project analysis must be version 2", "$.version", "UNSUPPORTED_VERSION");
+  if (project.version !== 3) {
+    fail("application project analysis must be version 3", "$.version", "UNSUPPORTED_VERSION");
   }
   const manifestDigest = manifestHash(project.manifestDigest, "$.manifestDigest");
   const projectProvenance = object(project.provenance, "$.provenance");

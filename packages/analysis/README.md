@@ -2,9 +2,10 @@
 
 `@mit-sdg/sync-engine-analysis` is an independently published public package
 that lists and describes design elements and contracts, finds related reactions,
-and traces possible impact. It requires a host-supplied Application Manifest V5;
+and traces possible impact. It requires a host-supplied Application Manifest V1;
 it neither connects to an application nor discovers a manifest. Source-aware
-analysis can add checkout evidence.
+analysis can add checkout evidence, including the manifest's authoritative
+concept-specification and application-design locations.
 
 ## What you can do
 
@@ -45,15 +46,15 @@ are unsupported. Use one of these exact entrypoints:
 
 ## Inspect a manifest
 
-Supply an `ApplicationManifestV5` produced by core `applicationManifest()` or
+Supply an `ApplicationManifestV1` produced by core `applicationManifest()` or
 loaded by `parseApplicationManifest()`. Analysis validates but does not search
 for it. This example pages through concepts and describes the first definition:
 
 ```ts
-import { type ApplicationManifestV5 } from "@mit-sdg/sync-engine/tooling";
+import { type ApplicationManifestV1 } from "@mit-sdg/sync-engine/tooling";
 import { createApplicationAnalysis, type DesignSummary } from "@mit-sdg/sync-engine-analysis/ir";
 
-export async function inspectConcepts(manifest: ApplicationManifestV5): Promise<void> {
+export async function inspectConcepts(manifest: ApplicationManifestV1): Promise<void> {
   const analysis = createApplicationAnalysis({ manifest });
   const concepts: DesignSummary[] = [];
   let nextOffset: number | null = 0;
@@ -88,7 +89,7 @@ a Node worker and produces a metadata-only project snapshot. The `manifest` and
 identifies the checkout according to the host's own policy.
 
 ```ts
-import { type ApplicationManifestV5 } from "@mit-sdg/sync-engine/tooling";
+import { type ApplicationManifestV1 } from "@mit-sdg/sync-engine/tooling";
 import { createApplicationAnalysis } from "@mit-sdg/sync-engine-analysis/ir";
 import {
   analyzeApplicationProject,
@@ -97,7 +98,7 @@ import {
 
 export async function inspectCheckout(
   repositoryRoot: string,
-  manifest: ApplicationManifestV5,
+  manifest: ApplicationManifestV1,
   sourceRevision: string,
 ) {
   const project = await analyzeApplicationProject({
@@ -107,6 +108,8 @@ export async function inspectCheckout(
     manifest,
     manifestSourceRevision: sourceRevision,
     expectedManifestDigest: manifest.digest,
+    // Directory containing the generated read-back that design source paths use.
+    designSourceBasePath: "generated",
   });
 
   const expectedProjectDigest = applicationProjectAnalysisDigest(project);
@@ -125,7 +128,11 @@ trusted digest; hashing the snapshot on receipt does not establish trust.
 ## Source bytes
 
 Project snapshots store paths, ranges, lengths, byte lengths, and SHA-256
-digests, not source text or excerpts.
+digests, not source text or excerpts. For checked manifests,
+`designSourceBasePath` resolves the manifest's read-back-relative design paths
+inside `repositoryRoot`. Analysis verifies each source's normalized design
+digest and uses manifest coverage and concept-source records directly; it does
+not repeat registration or composition discovery to reconstruct those facts.
 
 `readApplicationSourceDocument(sourceIndex, path, { readFile })` asks the caller's
 `readFile` function for the complete file. It checks the indexed length, UTF-8
@@ -136,13 +143,15 @@ verified text. Slice an anchor range only after that verification succeeds.
 
 | Artifact                  | Persisted format                                     |
 | ------------------------- | ---------------------------------------------------- |
-| Manifest index            | `sync-engine.application-index` version 2            |
-| Possible-impact trace     | `sync-engine.impact-trace` version 2                 |
-| Source index              | `sync-engine.application-source-index` version 2     |
-| Project analysis snapshot | `sync-engine.application-project-analysis` version 2 |
+| Manifest index            | `sync-engine.application-index` version 3            |
+| Possible-impact trace     | `sync-engine.impact-trace` version 3                 |
+| Source index              | `sync-engine.application-source-index` version 3     |
+| Project analysis snapshot | `sync-engine.application-project-analysis` version 3 |
 
 Facade method results are bounded immutable values, not another persisted
-format.
+format. Version 3 is required because authored identities now group lowered
+runtime entries and source indexes now carry manifest-owned design provenance;
+version 2 artifacts would misstate both identities and source semantics.
 
 ## Important boundaries
 

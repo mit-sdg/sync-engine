@@ -4,7 +4,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   parseConceptSpecification,
   validateApplicationManifest,
-  type ApplicationManifestV5,
+  type ApplicationManifestV1,
   type ConceptSpecificationIR,
 } from "@mit-sdg/sync-engine/tooling";
 import ts from "typescript";
@@ -53,11 +53,13 @@ export interface SourceAttributionRoot {
 export interface IndexApplicationSourcesOptions<
   Programs extends ts.Program | readonly ts.Program[] = ts.Program,
 > extends AnalysisOptions {
-  readonly manifest: ApplicationManifestV5;
+  readonly manifest: ApplicationManifestV1;
   /** One program or a deterministic project-graph order of programs. */
   readonly program: Programs;
   readonly projectRoot: string;
   readonly readFile?: (absolutePath: string) => string | undefined;
+  /** Project-relative directory from which manifest design-source paths are resolved. */
+  readonly designSourceBasePath?: string;
   readonly sourceRoots?: readonly SourceAttributionRoot[];
 }
 
@@ -110,6 +112,12 @@ function ordinal(left: string, right: string): number {
 
 function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+function normalizedDesignDigest(text: string): string {
+  const withoutBom = text.startsWith("\uFEFF") ? text.slice(1) : text;
+  const normalized = withoutBom.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+  return `sha256-${sha256(normalized.endsWith("\n") ? normalized : `${normalized}\n`)}`;
 }
 
 function portablePath(path: string): string {
@@ -404,6 +412,14 @@ export function indexApplicationSourcesWithController<
   if (options.readFile !== undefined && typeof options.readFile !== "function") {
     throw new TypeError("readFile must be a function when supplied");
   }
+  if (
+    options.designSourceBasePath !== undefined &&
+    (options.designSourceBasePath.startsWith("/") ||
+      options.designSourceBasePath.includes("\\") ||
+      options.designSourceBasePath.split("/").some((part) => part === "" || part === ".."))
+  ) {
+    throw new TypeError("designSourceBasePath must be a project-relative POSIX directory");
+  }
   const before = controller.usage();
   const { manifest } = options;
   const suppliedPrograms = Array.isArray(options.program)
@@ -529,6 +545,153 @@ export function indexApplicationSourcesWithController<
     controller.addSourceAnchor();
     entry.sources.set(key, anchor);
   };
+
+  const designSourceText = new Map<string, { readonly path: string; readonly text: string }>();
+  const designBase = resolve(projectRoot, options.designSourceBasePath ?? ".");
+  for (const source of manifest.design.sources) {
+    controller.checkpoint();
+    const absolute = resolve(designBase, source.path);
+    const path = canonicalSourcePath(projectRoot, absolute);
+    if (path === undefined) {
+      reportFor(
+        "DESIGN_SOURCE_UNREADABLE",
+        `Manifest design source ${source.id} resolves outside the supplied project root.`,
+      );
+      continue;
+    }
+    let text: string | undefined;
+    try {
+      text = readFile(absolute);
+    } catch {
+      text = undefined;
+    }
+    if (text === undefined) {
+      reportFor(
+        "DESIGN_SOURCE_UNREADABLE",
+        `Manifest design source ${source.id} could not be read at ${path}.`,
+      );
+      continue;
+    }
+    addDocument(path, text);
+    if (normalizedDesignDigest(text) !== source.digest) {
+      reportFor(
+        "DESIGN_SOURCE_MISMATCH",
+        `Manifest design source ${source.id} differs from its authoritative digest.`,
+      );
+      continue;
+    }
+    designSourceText.set(source.id, { path, text });
+  }
+
+  const manifestAnchor = (
+    location: { readonly source: string; readonly line: number; readonly column: number },
+    role: SourceRole,
+  ): SourceAnchor | undefined => {
+    const source = designSourceText.get(location.source);
+    if (source === undefined) return undefined;
+    const starts = [0];
+    for (
+      let offset = source.text.indexOf("\n");
+      offset >= 0;
+      offset = source.text.indexOf("\n", offset + 1)
+    ) {
+      starts.push(offset + 1);
+    }
+    const start = starts[location.line - 1];
+    if (start === undefined) {
+      reportFor(
+        "DESIGN_SOURCE_MISMATCH",
+        `Manifest location ${location.source}:${location.line}:${location.column} is outside its verified design source.`,
+      );
+      return undefined;
+    }
+    const newline = source.text.indexOf("\n", start);
+    const end = newline < 0 ? source.text.length : newline;
+    const focusStart = start + location.column - 1;
+    if (focusStart > end) {
+      reportFor(
+        "DESIGN_SOURCE_MISMATCH",
+        `Manifest location ${location.source}:${location.line}:${location.column} is outside its verified design source.`,
+      );
+      return undefined;
+    }
+    return {
+      role,
+      range: rangeForText(source.path, source.text, start, end),
+      digest: sha256(source.text.slice(start, end)),
+      resolution: "manifest-provenance",
+      focusRange: rangeForText(source.path, source.text, focusStart, Math.min(end, focusStart + 1)),
+    };
+  };
+
+  for (const declaration of manifest.design.declarations) {
+    const ref: DesignRef =
+      declaration.kind === "reaction"
+        ? { kind: "reaction", reaction: declaration.identity }
+        : declaration.kind === "view"
+          ? { kind: "view", view: declaration.identity }
+          : { kind: "former", former: declaration.identity };
+    for (const coverage of declaration.coverage)
+      add(ref, manifestAnchor(coverage, "design-coverage"));
+    if (declaration.source === "endpoint") {
+      for (const endpoint of manifest.endpoints.filter(
+        ({ name }) => name === declaration.identity,
+      )) {
+        for (const coverage of declaration.coverage) {
+          add(
+            { kind: "endpoint", endpoint: endpoint.name, path: endpoint.path },
+            manifestAnchor(coverage, "design-coverage"),
+          );
+        }
+      }
+    }
+  }
+  for (const definition of manifest.design.concepts) {
+    const sourceRecord = manifest.design.sources.find(({ id }) => id === definition.source);
+    const whole =
+      definition.source === undefined ? undefined : designSourceText.get(definition.source);
+    for (const instance of definition.instances) {
+      const concept: DesignRef = { kind: "concept", concept: instance.name };
+      if (whole !== undefined) {
+        add(concept, {
+          role: "specification",
+          range: rangeForText(whole.path, whole.text, 0, whole.text.length),
+          digest: sha256(whole.text),
+          resolution: "manifest-provenance",
+          ...(sourceRecord?.line === undefined
+            ? {}
+            : {
+                focusRange: manifestAnchor(
+                  { source: definition.source!, line: sourceRecord.line, column: 1 },
+                  "specification",
+                )?.range,
+              }),
+        });
+      }
+      for (const action of definition.specification.actions) {
+        add(
+          { kind: "action", concept: instance.name, action: action.name },
+          definition.source === undefined
+            ? undefined
+            : manifestAnchor({ source: definition.source, ...action.location }, "specification"),
+        );
+      }
+      for (const query of definition.specification.queries) {
+        add(
+          { kind: "query", concept: instance.name, query: query.name },
+          definition.source === undefined
+            ? undefined
+            : manifestAnchor({ source: definition.source, ...query.location }, "specification"),
+        );
+      }
+    }
+  }
+  for (const computation of manifest.design.computations) {
+    add(
+      { kind: "computation", computation: computation.name },
+      manifestAnchor(computation.location, "design-coverage"),
+    );
+  }
 
   const anchorForNode = (
     node: ts.Node,
@@ -1093,7 +1256,7 @@ export function indexApplicationSourcesWithController<
 
   const floorImplementation = (
     concept: string,
-    selected: ApplicationManifestV5["conceptImplementations"][number]["selected"],
+    selected: ApplicationManifestV1["conceptImplementations"][number]["selected"],
     instances: StaticProperty,
   ): StaticResolution<StaticValue> | undefined => {
     if (selected.via !== "instances" || selected.floor === undefined) return undefined;
@@ -1400,92 +1563,99 @@ export function indexApplicationSourcesWithController<
     };
   };
 
-  for (const concept of manifest.concepts) {
-    controller.checkpoint();
-    const source = conceptSources.get(concept.name);
-    const specProperty =
-      source?.registration === undefined
-        ? undefined
-        : resolverFor(source.registration.object).property(source.registration.object, "spec");
-    if (specProperty?.kind !== "resolved") continue;
-    const absolute = importedPath(specProperty.value.value);
-    const ref: DesignRef = { kind: "concept", concept: concept.name };
-    if (absolute === undefined) {
-      if (resolverFor(specProperty.value.value).string(specProperty.value.value) !== undefined) {
+  if (!manifest.design.checked)
+    for (const concept of manifest.concepts) {
+      controller.checkpoint();
+      const source = conceptSources.get(concept.name);
+      const specProperty =
+        source?.registration === undefined
+          ? undefined
+          : resolverFor(source.registration.object).property(source.registration.object, "spec");
+      if (specProperty?.kind !== "resolved") continue;
+      const absolute = importedPath(specProperty.value.value);
+      const ref: DesignRef = { kind: "concept", concept: concept.name };
+      if (absolute === undefined) {
+        if (resolverFor(specProperty.value.value).string(specProperty.value.value) !== undefined) {
+          continue;
+        }
+        reportFor(
+          "SPECIFICATION_UNREADABLE",
+          `The specification for ${concept.name} is not a statically resolved project file.`,
+          ref,
+          "specification",
+        );
         continue;
       }
-      reportFor(
-        "SPECIFICATION_UNREADABLE",
-        `The specification for ${concept.name} is not a statically resolved project file.`,
-        ref,
-        "specification",
-      );
-      continue;
-    }
-    const path = canonicalSourcePath(projectRoot, absolute);
-    if (path === undefined) {
-      reportFor(
-        "SOURCE_OUTSIDE_PROJECT",
-        `The specification for ${concept.name} is outside the supplied project root.`,
-        ref,
-        "specification",
-      );
-      continue;
-    }
-    let text: string | undefined;
-    try {
-      text = readFile(absolute);
-    } catch {
-      text = undefined;
-    }
-    if (text === undefined) {
-      reportFor(
-        "SPECIFICATION_UNREADABLE",
-        `The specification for ${concept.name} could not be read at ${path}.`,
-        ref,
-        "specification",
-      );
-      continue;
-    }
-    addDocument(path, text);
-    const wholeRange = rangeForText(path, text, 0, text.length);
-    add(ref, {
-      role: "specification",
-      range: wholeRange,
-      digest: sha256(text),
-      resolution: "manifest-location",
-    });
-    try {
-      const parsed = parseConceptSpecification(text.replaceAll("\r\n", "\n"));
-      if (!sameSpecification(concept.specification, parsed)) {
+      const path = canonicalSourcePath(projectRoot, absolute);
+      if (path === undefined) {
+        reportFor(
+          "SOURCE_OUTSIDE_PROJECT",
+          `The specification for ${concept.name} is outside the supplied project root.`,
+          ref,
+          "specification",
+        );
+        continue;
+      }
+      let text: string | undefined;
+      try {
+        text = readFile(absolute);
+      } catch {
+        text = undefined;
+      }
+      if (text === undefined) {
+        reportFor(
+          "SPECIFICATION_UNREADABLE",
+          `The specification for ${concept.name} could not be read at ${path}.`,
+          ref,
+          "specification",
+        );
+        continue;
+      }
+      addDocument(path, text);
+      const wholeRange = rangeForText(path, text, 0, text.length);
+      add(ref, {
+        role: "specification",
+        range: wholeRange,
+        digest: sha256(text),
+        resolution: "manifest-location",
+      });
+      try {
+        const parsed = parseConceptSpecification(text.replaceAll("\r\n", "\n"));
+        if (!sameSpecification(concept.specification, parsed)) {
+          reportFor(
+            "SPECIFICATION_MISMATCH",
+            `The current specification for ${concept.name} differs from the supplied manifest.`,
+            ref,
+            "specification",
+          );
+        }
+        for (const action of parsed.actions) {
+          add(
+            { kind: "action", concept: concept.name, action: action.name },
+            specificationBlock(
+              path,
+              text,
+              action.location.line,
+              action.location.column,
+              action.name,
+            ),
+          );
+        }
+        for (const query of parsed.queries) {
+          add(
+            { kind: "query", concept: concept.name, query: query.name },
+            specificationBlock(path, text, query.location.line, query.location.column, query.name),
+          );
+        }
+      } catch (error) {
         reportFor(
           "SPECIFICATION_MISMATCH",
-          `The current specification for ${concept.name} differs from the supplied manifest.`,
+          `The current specification for ${concept.name} cannot be parsed (${error instanceof Error ? error.message : String(error)}).`,
           ref,
           "specification",
         );
       }
-      for (const action of parsed.actions) {
-        add(
-          { kind: "action", concept: concept.name, action: action.name },
-          specificationBlock(path, text, action.location.line, action.location.column, action.name),
-        );
-      }
-      for (const query of parsed.queries) {
-        add(
-          { kind: "query", concept: concept.name, query: query.name },
-          specificationBlock(path, text, query.location.line, query.location.column, query.name),
-        );
-      }
-    } catch (error) {
-      reportFor(
-        "SPECIFICATION_MISMATCH",
-        `The current specification for ${concept.name} cannot be parsed (${error instanceof Error ? error.message : String(error)}).`,
-        ref,
-        "specification",
-      );
     }
-  }
 
   const composition = new Map<string, CompositionCandidate[]>();
   const compositionAmbiguities = new Map<string, ts.Node[]>();
@@ -1580,8 +1750,9 @@ export function indexApplicationSourcesWithController<
 
   if (assembly !== undefined) {
     for (const reaction of [...manifest.application.reactions, ...manifest.application.unlowered]) {
-      const ref: DesignRef = { kind: "reaction", reaction: reaction.name };
-      const exact = composition.get(reaction.name) ?? [];
+      const identity = reaction.authored?.identity ?? reaction.name;
+      const ref: DesignRef = { kind: "reaction", reaction: identity };
+      const exact = composition.get(identity) ?? [];
       const family =
         exact.length === 0 ? (composition.get(reactionFamilyBase(reaction.name)) ?? []) : exact;
       const selected = family.filter(
@@ -1602,24 +1773,34 @@ export function indexApplicationSourcesWithController<
     }
 
     for (const view of manifest.application.views) {
-      const ref: DesignRef = { kind: "view", view: view.name };
-      const selected = [...composition.values()]
-        .flat()
-        .filter(
-          ({ candidate }) => candidate.api === "view" && candidateLiteral(candidate) === view.name,
-        );
+      const identity = view.authored?.identity ?? view.name;
+      const ref: DesignRef = { kind: "view", view: identity };
+      const selected =
+        view.authored === undefined
+          ? [...composition.values()]
+              .flat()
+              .filter(
+                ({ candidate }) =>
+                  candidate.api === "view" && candidateLiteral(candidate) === view.name,
+              )
+          : (composition.get(identity)?.filter(({ candidate }) => candidate.api === "view") ?? []);
       const candidate = chooseCandidate(ref, selected);
       if (candidate !== undefined) add(ref, declarationAnchor(candidate));
     }
 
     for (const former of manifest.application.formers) {
-      const ref: DesignRef = { kind: "former", former: former.name };
-      const selected = [...composition.values()]
-        .flat()
-        .filter(
-          ({ candidate }) =>
-            candidate.api === "former" && candidateLiteral(candidate) === former.name,
-        );
+      const identity = former.authored?.identity ?? former.name;
+      const ref: DesignRef = { kind: "former", former: identity };
+      const selected =
+        former.authored === undefined
+          ? [...composition.values()]
+              .flat()
+              .filter(
+                ({ candidate }) =>
+                  candidate.api === "former" && candidateLiteral(candidate) === former.name,
+              )
+          : (composition.get(identity)?.filter(({ candidate }) => candidate.api === "former") ??
+            []);
       const candidate = chooseCandidate(ref, selected);
       if (candidate !== undefined) add(ref, declarationAnchor(candidate));
     }
@@ -1699,7 +1880,7 @@ export function indexApplicationSourcesWithController<
 
   return freezeAnalysisData({
     format: "sync-engine.application-source-index",
-    version: 2,
+    version: 3,
     provenance: analysisProvenance(manifest),
     manifestDigest: manifest.digest,
     typescriptVersion: ts.version,

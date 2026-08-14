@@ -22,13 +22,16 @@ identities, but loads no TypeScript source index builder, project or worker
 modules, `typescript`, filesystem modules, or worker threads.
 
 The persisted formats on this surface are
-`sync-engine.application-index` version 2,
-`sync-engine.impact-trace` version 2, and
-`sync-engine.application-source-index` version 2. `DesignRef` and
-`designRefKey()` provide stable identities for concepts, actions, queries,
-reactions, views, formers, computations, and endpoints. `indexApplication()`
-builds the deterministic inventory and possible-impact graph from an exact V5
-manifest. `traceApplicationImpact()` performs bounded deterministic traversal
+`sync-engine.application-index` version 3,
+`sync-engine.impact-trace` version 3, and
+`sync-engine.application-source-index` version 3. `DesignRef` and
+`designRefKey()` provide stable identities for concept instances, actions,
+queries, authored reactions, authored views, authored formers, computations,
+and endpoints. Runtime lowering names remain in manifest definitions and are
+not substituted for authored design identities. `indexApplication()` builds the
+deterministic inventory and possible-impact graph from an exact V1 manifest.
+Older application manifests are rejected; analysis has no compatibility
+decoder. `traceApplicationImpact()` performs bounded deterministic traversal
 and reports explicit incompleteness when limits or unknown seeds prevent a
 complete trace.
 
@@ -46,7 +49,7 @@ Clients slice that string with an anchor range and may compare the slice SHA-256
 with the anchor digest. `designRefsForSourceRange()` and source queries do not
 load TypeScript.
 
-`createApplicationAnalysis(...)` accepts a manifest and an optional strict V2
+`createApplicationAnalysis(...)` accepts a manifest and an optional strict V3
 project snapshot. Supplying `project` also requires a previously trusted
 `expectedProjectDigest` from `/project`'s
 `applicationProjectAnalysisDigest(project)`. Omission,
@@ -70,6 +73,12 @@ from the supplied manifest. Its methods are:
 | `diagnostics()` | Normalized manifest, TypeScript, index, and source diagnostics |
 | `contracts()`   | Raw logical endpoint, input-contract, and wire IR              |
 | `provenance()`  | Analyzer, manifest, project, revision, TypeScript, and files   |
+
+`describe()` returns a shared authored concept definition with all of its
+application instances when that provenance is present. Authored reaction
+results group every portable or unlowered runtime entry carrying that identity;
+view and former results likewise retain their authored declaration separately
+from runtime lookup entries.
 
 Search trims a 1-256 UTF-16-unit query, applies locale-invariant
 `String.prototype.toLowerCase()`, splits on Unicode whitespace, and requires
@@ -138,10 +147,16 @@ resolution attempt and can produce unresolved or ambiguous source evidence.
 
 <!-- register:analysis-project:end -->
 
-`sync-engine.application-project-analysis` version 2 is the durable aggregate
+`sync-engine.application-project-analysis` version 3 is the durable aggregate
 format. `indexApplicationSources()` is the TypeScript compiler-backed producer
-for metadata-only source indexes. `loadApplicationProject()` loads a complete
-transitive TypeScript project graph through a repository-contained immutable
+for metadata-only source indexes. For checked manifests it also indexes the
+authoritative concept-specification and design-coverage records in
+`manifest.design`; it does not rediscover those records from registration or
+composition source. `designSourceBasePath` selects the project-relative
+directory from which manifest design-source paths are resolved. Source content
+is checked against the manifest's normalized design digest before attribution.
+`loadApplicationProject()` loads a complete transitive TypeScript project graph
+through a repository-contained immutable
 read host. It rejects config, source, import, project-reference, extends, and
 symlink escapes; it never executes a project module. Resource limits cover graph
 data, diagnostics, source documents and anchors, AST work, project files,
@@ -159,7 +174,7 @@ analysis checkpoints, but compiler calls are not timer-preemptive.
 
 `validateApplicationProjectAnalysis()`, `parseApplicationProjectAnalysis()`,
 `renderApplicationProjectAnalysis()`, and `applicationProjectAnalysisDigest()`
-strictly enforce and identify V2. The parser synchronously consumes one complete
+strictly enforce and identify V3. The parser synchronously consumes one complete
 supplied string and has no streaming or input-size option; hosts must bound
 untrusted strings before calling it. Validation checks that issue refs belong to
 the inventory, anchor and candidate ranges belong to indexed documents, source

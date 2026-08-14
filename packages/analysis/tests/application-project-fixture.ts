@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
-import { applicationManifest, type ApplicationManifestV5 } from "@mit-sdg/sync-engine/tooling";
+import { applicationManifest, type ApplicationManifestV1 } from "@mit-sdg/sync-engine/tooling";
 
 class NotesConcept {
   add({ title }: { title: string }) {
@@ -15,7 +15,7 @@ class NotesConcept {
   }
 }
 
-export function projectManifest(): ApplicationManifestV5 {
+export function projectManifest(): ApplicationManifestV1 {
   const words = vocabulary({ concepts: { Notes: NotesConcept }, computations: {} });
   const { Notes } = words.concepts;
   const RecordNote = reaction(({ title }) =>
@@ -36,7 +36,7 @@ function config(path: string, value: unknown): void {
 export interface ApplicationProjectFixture {
   readonly root: string;
   readonly outside: string;
-  readonly manifest: ApplicationManifestV5;
+  readonly manifest: ApplicationManifestV1;
   cleanup(): void;
 }
 

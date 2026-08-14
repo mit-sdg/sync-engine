@@ -1,8 +1,8 @@
 import {
   validateApplicationManifest,
-  type ApplicationManifestV5,
+  type ApplicationManifestV1,
   type FormerNodeIR,
-  type ManifestEndpointV5,
+  type ManifestEndpointV1,
   type ReactionIR,
   type TriggerIR,
   type UnloweredIR,
@@ -81,7 +81,7 @@ export interface AnalysisIssue {
 /** Deterministic dependency and possible-impact data for one exact manifest. */
 export interface ApplicationIndex {
   readonly format: "sync-engine.application-index";
-  readonly version: 2;
+  readonly version: 3;
   readonly provenance: AnalysisProvenance;
   readonly manifestDigest: string;
   readonly inventory: readonly DesignRef[];
@@ -109,7 +109,7 @@ export interface ImpactTraceEntry {
 /** Bounded possible impact from explicit design seeds. */
 export interface ImpactTrace {
   readonly format: "sync-engine.impact-trace";
-  readonly version: 2;
+  readonly version: 3;
   readonly provenance: AnalysisProvenance;
   readonly manifestDigest: string;
   readonly seeds: readonly DesignRef[];
@@ -195,19 +195,45 @@ function reactionRef(reaction: string): Extract<DesignRef, { kind: "reaction" }>
   return { kind: "reaction", reaction };
 }
 
+function runtimeReactionRef(
+  manifest: ApplicationManifestV1,
+  name: string,
+): Extract<DesignRef, { kind: "reaction" }> {
+  const runtime = [...manifest.application.reactions, ...manifest.application.unlowered].find(
+    (candidate) => candidate.name === name,
+  );
+  return reactionRef(runtime?.authored?.identity ?? name);
+}
+
 function viewRef(view: string): Extract<DesignRef, { kind: "view" }> {
   return { kind: "view", view };
+}
+
+function runtimeViewRef(
+  manifest: ApplicationManifestV1,
+  name: string,
+): Extract<DesignRef, { kind: "view" }> {
+  const runtime = manifest.application.views.find((candidate) => candidate.name === name);
+  return viewRef(runtime?.authored?.identity ?? name);
 }
 
 function formerRef(former: string): Extract<DesignRef, { kind: "former" }> {
   return { kind: "former", former };
 }
 
+function runtimeFormerRef(
+  manifest: ApplicationManifestV1,
+  name: string,
+): Extract<DesignRef, { kind: "former" }> {
+  const runtime = manifest.application.formers.find((candidate) => candidate.name === name);
+  return formerRef(runtime?.authored?.identity ?? name);
+}
+
 function computationRef(computation: string): Extract<DesignRef, { kind: "computation" }> {
   return { kind: "computation", computation };
 }
 
-function endpointRef(endpoint: ManifestEndpointV5): Extract<DesignRef, { kind: "endpoint" }> {
+function endpointRef(endpoint: ManifestEndpointV1): Extract<DesignRef, { kind: "endpoint" }> {
   return { kind: "endpoint", endpoint: endpoint.name, path: endpoint.path };
 }
 
@@ -309,14 +335,14 @@ function forEachFormerUse(value: unknown, use: (name: string) => void): void {
 
 /** Build the stable possible-impact graph for one assembled application manifest. */
 export function indexApplication(
-  manifest: ApplicationManifestV5,
+  manifest: ApplicationManifestV1,
   options: AnalysisOptions = {},
 ): ApplicationIndex {
   return indexApplicationWithController(manifest, new AnalysisController(options));
 }
 
 export function indexApplicationWithController(
-  manifest: ApplicationManifestV5,
+  manifest: ApplicationManifestV1,
   controller: AnalysisController,
 ): ApplicationIndex {
   controller.checkpoint();
@@ -383,21 +409,23 @@ export function indexApplicationWithController(
     controller.checkpoint();
     addInventory(computationRef(computation.name));
   }
-  for (const reaction of manifest.application.reactions) {
+  for (const declaration of manifest.design.declarations) {
     controller.checkpoint();
-    addInventory(reactionRef(reaction.name));
+    if (declaration.kind === "reaction") addInventory(reactionRef(declaration.identity));
+    if (declaration.kind === "view") addInventory(viewRef(declaration.identity));
+    if (declaration.kind === "former") addInventory(formerRef(declaration.identity));
   }
-  for (const reaction of manifest.application.unlowered) {
+  for (const reaction of [...manifest.application.reactions, ...manifest.application.unlowered]) {
     controller.checkpoint();
-    addInventory(reactionRef(reaction.name));
+    addInventory(runtimeReactionRef(manifest, reaction.name));
   }
   for (const view of manifest.application.views) {
     controller.checkpoint();
-    addInventory(viewRef(view.name));
+    addInventory(runtimeViewRef(manifest, view.name));
   }
   for (const former of manifest.application.formers) {
     controller.checkpoint();
-    addInventory(formerRef(former.name));
+    addInventory(runtimeFormerRef(manifest, former.name));
   }
   for (const endpoint of manifest.endpoints) {
     controller.checkpoint();
@@ -409,7 +437,9 @@ export function indexApplicationWithController(
     consumer: ConsumerRef,
     certainty: ImpactCertainty,
   ): void => {
-    forEachFormerUse(value, (name) => addEdge(formerRef(name), consumer, "former-use", certainty));
+    forEachFormerUse(value, (name) =>
+      addEdge(runtimeFormerRef(manifest, name), consumer, "former-use", certainty),
+    );
   };
 
   const addRead = (
@@ -426,7 +456,7 @@ export function indexApplicationWithController(
       );
     }
     if ("view" in operation && operation.view !== undefined) {
-      addEdge(viewRef(operation.view), consumer, "view-read", certainty);
+      addEdge(runtimeViewRef(manifest, operation.view), consumer, "view-read", certainty);
     }
     if (operation.op === "holds" || operation.op === "compute") {
       addEdge(computationRef(operation.computation), consumer, "computation-use", certainty);
@@ -439,7 +469,12 @@ export function indexApplicationWithController(
         certainty,
       );
       if (operation.when.by !== undefined) {
-        addEdge(reactionRef(operation.when.by), consumer, "provenance-trigger", certainty);
+        addEdge(
+          runtimeReactionRef(manifest, operation.when.by),
+          consumer,
+          "provenance-trigger",
+          certainty,
+        );
       }
     }
     addFormerUses(operation, consumer, certainty);
@@ -453,7 +488,7 @@ export function indexApplicationWithController(
     if (trigger.kind === "action") {
       addEdge(actionRef(trigger.concept, trigger.action), owner, "action-trigger", certainty);
       if (trigger.by !== undefined) {
-        addEdge(reactionRef(trigger.by), owner, "provenance-trigger", certainty);
+        addEdge(runtimeReactionRef(manifest, trigger.by), owner, "provenance-trigger", certainty);
       }
     } else {
       const channelCertainty = uncertain(certainty, "conservative");
@@ -464,14 +499,14 @@ export function indexApplicationWithController(
         }
       }
       if (trigger.by !== undefined) {
-        addEdge(reactionRef(trigger.by), owner, "provenance-trigger", certainty);
+        addEdge(runtimeReactionRef(manifest, trigger.by), owner, "provenance-trigger", certainty);
       }
     }
     addFormerUses(trigger, owner, certainty);
   };
 
   const addReaction = (definition: ReactionIR | UnloweredIR, certainty: ImpactCertainty): void => {
-    const owner = reactionRef(definition.name);
+    const owner = runtimeReactionRef(manifest, definition.name);
     addReference(owner);
     const body = "known" in definition ? definition.known : definition;
     for (const trigger of body.when) addTrigger(owner, trigger, certainty);
@@ -497,7 +532,7 @@ export function indexApplicationWithController(
       );
     }
     if (source.view !== undefined) {
-      addEdge(viewRef(source.view), owner, "view-read", "structural");
+      addEdge(runtimeViewRef(manifest, source.view), owner, "view-read", "structural");
     }
     addFormerUses(source, owner, "structural");
   };
@@ -512,13 +547,13 @@ export function indexApplicationWithController(
       case "record":
         for (const operation of node.where ?? []) addRead(owner, operation, "structural");
         for (const splice of node.splices ?? []) {
-          addEdge(formerRef(splice.fragment), owner, "former-use", "structural");
+          addEdge(runtimeFormerRef(manifest, splice.fragment), owner, "former-use", "structural");
           addFormerUses(splice.in, owner, "structural");
         }
         for (const entry of Object.values(node.entries)) addFormerNode(owner, entry);
         return;
       case "former":
-        addEdge(formerRef(node.former), owner, "former-use", "structural");
+        addEdge(runtimeFormerRef(manifest, node.former), owner, "former-use", "structural");
         addFormerUses(node.in, owner, "structural");
         return;
       case "each":
@@ -558,7 +593,7 @@ export function indexApplicationWithController(
 
   for (const view of manifest.application.views) {
     controller.checkpoint();
-    const owner = viewRef(view.name);
+    const owner = runtimeViewRef(manifest, view.name);
     addReference(owner);
     for (const alternative of view.alternatives) {
       for (const operation of alternative) addRead(owner, operation, "structural");
@@ -567,7 +602,7 @@ export function indexApplicationWithController(
 
   for (const former of manifest.application.formers) {
     controller.checkpoint();
-    const owner = formerRef(former.name);
+    const owner = runtimeFormerRef(manifest, former.name);
     addReference(owner);
     addFormerNode(owner, former.body);
   }
@@ -582,7 +617,7 @@ export function indexApplicationWithController(
     addIssue({
       code: "OPAQUE_DEFINITION",
       severity: "info",
-      ref: reactionRef(reaction.name),
+      ref: runtimeReactionRef(manifest, reaction.name),
       message: `Reaction ${reaction.name} contains local behavior; only its retained known structure is indexed.`,
     });
   }
@@ -596,13 +631,13 @@ export function indexApplicationWithController(
     addReference(endpointNode);
     const bases = [...new Set(endpoint.reactions)];
     for (const base of bases) {
-      if (!reactionNames.includes(base)) addReference(reactionRef(base));
+      if (!reactionNames.includes(base)) addReference(runtimeReactionRef(manifest, base));
     }
     const family = reactionNames.filter((name) =>
       bases.some((base) => name === base || name.startsWith(`${base}#`)),
     );
     for (const reaction of family) {
-      const reactionNode = reactionRef(reaction);
+      const reactionNode = runtimeReactionRef(manifest, reaction);
       addEdge(endpointNode, reactionNode, "endpoint-stage", "structural");
       addEdge(reactionNode, endpointNode, "stage-affects-endpoint", "structural");
     }
@@ -618,7 +653,7 @@ export function indexApplicationWithController(
 
   return freezeAnalysisData({
     format: "sync-engine.application-index",
-    version: 2,
+    version: 3,
     provenance: analysisProvenance(manifest),
     manifestDigest: manifest.digest,
     inventory: [...inventory.values()].sort((left, right) =>
@@ -660,14 +695,14 @@ export function traceApplicationImpact(
   assertArtifactProvenance(index, "application index");
   if (
     index.format !== "sync-engine.application-index" ||
-    index.version !== 2 ||
+    index.version !== 3 ||
     !Array.isArray(index.inventory) ||
     !Array.isArray(index.referencedOnly) ||
     !Array.isArray(index.nodes) ||
     !Array.isArray(index.edges) ||
     !Array.isArray(index.issues)
   ) {
-    throw new TypeError("application index is not a version-2 application index");
+    throw new TypeError("application index is not a version-3 application index");
   }
   if (!Array.isArray(seeds)) throw new TypeError("seeds must be an array");
   const maxDepth = boundedInteger(options.maxDepth, 12, 0, "maxDepth");
@@ -761,7 +796,7 @@ export function traceApplicationImpact(
   return freezeAnalysisData(
     structuredClone({
       format: "sync-engine.impact-trace" as const,
-      version: 2 as const,
+      version: 3 as const,
       provenance: index.provenance,
       manifestDigest: index.manifestDigest,
       seeds: normalizedSeeds,

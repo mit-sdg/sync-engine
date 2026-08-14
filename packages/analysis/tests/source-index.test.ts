@@ -1,7 +1,7 @@
 import {
   applicationManifestDigest,
   parseConceptSpecification,
-  type ApplicationManifestV5,
+  type ApplicationManifestV1,
 } from "@mit-sdg/sync-engine/tooling";
 import {
   AnalysisAbortedError,
@@ -44,7 +44,7 @@ declare module "@mit-sdg/sync-engine/language" {
 declare module "*.md" { const text: string; export default text; }
 `;
 
-type ManifestSelection = ApplicationManifestV5["conceptImplementations"][number]["selected"];
+type ManifestSelection = ApplicationManifestV1["conceptImplementations"][number]["selected"];
 
 interface ManifestOptions {
   readonly concepts: readonly {
@@ -53,7 +53,7 @@ interface ManifestOptions {
     readonly queries?: readonly string[];
     readonly constructorName?: string;
     readonly selected?: ManifestSelection;
-    readonly specification?: ApplicationManifestV5["concepts"][number]["specification"];
+    readonly specification?: ApplicationManifestV1["concepts"][number]["specification"];
   }[];
   readonly reactions?: readonly string[];
   readonly views?: readonly string[];
@@ -66,11 +66,11 @@ interface ManifestOptions {
   readonly computations?: readonly string[];
 }
 
-function manifestFor(options: ManifestOptions): ApplicationManifestV5 {
+function manifestFor(options: ManifestOptions): ApplicationManifestV1 {
   const endpoints = options.endpoints ?? [];
-  const manifest: ApplicationManifestV5 = {
+  const manifest: ApplicationManifestV1 = {
     format: "sync-engine.application-manifest",
-    version: 5,
+    version: 1,
     generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.6" },
     digest: "pending",
     concepts: [
@@ -148,6 +148,14 @@ function manifestFor(options: ManifestOptions): ApplicationManifestV5 {
       appWide: [],
     },
     diagnostics: [],
+    design: {
+      version: 1,
+      checked: false,
+      sources: [],
+      declarations: [],
+      concepts: [],
+      computations: [],
+    },
   };
   manifest.digest = applicationManifestDigest(manifest);
   return manifest;
@@ -207,7 +215,7 @@ function programFor(files: Readonly<Record<string, string>>): ts.Program {
 }
 
 function index(
-  manifest: ApplicationManifestV5,
+  manifest: ApplicationManifestV1,
   files: Readonly<Record<string, string>>,
   options: Partial<Parameters<typeof indexApplicationSources>[0]> = {},
 ): ApplicationSourceIndex {
@@ -505,7 +513,7 @@ assemble({ vocabulary: words, instances: { Storage: new FloorStorage(), ...dynam
 
   test("uses exact roots, endpoint identities, focus ranking, CRLF ranges, verified reads, and cancellation", async () => {
     const specification =
-      "# Odd\r\n\r\n## Purpose\r\n\r\nKeep an odd value.\r\n\r\n## Principle\r\n\r\nChoosing replaces it.\r\n\r\n## Actions\r\n\r\n```actions\r\nchoose (value: Text) : return (value: Text)\r\n```\r\n\r\n## Queries\r\n\r\n```queries\r\n_read () : optional (value: Text)\r\n```\r\n";
+      "# Odd\r\n\r\n## Purpose\r\n\r\nKeep an odd value.\r\n\r\n## Principle\r\n\r\nChoosing replaces it.\r\n\r\n## Types\r\n\r\n```types\r\nexternal Text\r\n```\r\n\r\n## State\r\n\r\n```state\r\none odd Text\r\n```\r\n\r\n## Actions\r\n\r\n```actions\r\nchoose(value: Text) : return (value: Text)\r\n  where true\r\n  then\r\n    replace the odd value\r\n    return value\r\n```\r\n\r\n## Queries\r\n\r\n```queries\r\n_read() : optional (value: Text)\r\n```\r\n";
     const parsed = parseConceptSpecification(specification.replaceAll("\r\n", "\n"));
     const manifest = manifestFor({
       concepts: [
@@ -597,7 +605,7 @@ export function buildTwo() { return assemble({ vocabulary: set.vocabulary, compo
     expect(specificationAnchor.range.end.offset).toBeGreaterThan(
       specificationAnchor.focusRange!.end.offset,
     );
-    expect(specificationAnchor.range.end.line).toBe(15);
+    expect(specificationAnchor.range.end.line).toBe(31);
     const specificationRead = await readApplicationSourceDocument(sourceIndex, "odd.md", {
       readFile: () => specification,
     });
@@ -606,7 +614,7 @@ export function buildTwo() { return assemble({ vocabulary: set.vocabulary, compo
         specificationAnchor.range.start.offset,
         specificationAnchor.range.end.offset,
       ),
-    ).toContain("choose (value: Text)");
+    ).toContain("choose(value: Text)");
 
     const shared = files["shared.ts"];
     await expect(
@@ -1077,7 +1085,7 @@ assemble({ vocabulary: words, composition: { React } });
     for (const [label, query] of invalidQueries) expect(query, label).toThrow(TypeError);
   });
 
-  test("emits every declared source issue code from a controlled source shape", () => {
+  test("emits source-discovery issue codes from controlled source shapes", () => {
     interface IssueFixture {
       readonly manifest: ManifestOptions;
       readonly files: Readonly<Record<string, string>>;
@@ -1234,14 +1242,16 @@ assemble({ vocabulary: words, composition: {} });
         files: { "app.ts": registeredSpecification("./logical.md") },
         readFile: (path) => (path === resolve("/project/logical.md") ? "# Logical\n" : undefined),
       },
-    } satisfies Record<SourceIndexIssueCode, IssueFixture>;
+    } satisfies Partial<Record<SourceIndexIssueCode, IssueFixture>>;
 
-    for (const code of Object.keys(scenarios).sort() as SourceIndexIssueCode[]) {
-      const scenario: IssueFixture = scenarios[code];
+    for (const [code, scenario] of Object.entries(scenarios).sort(([left], [right]) =>
+      left.localeCompare(right),
+    )) {
+      const selected: IssueFixture = scenario;
       const sourceIndex = index(
-        manifestFor(scenario.manifest),
-        scenario.files,
-        scenario.readFile === undefined ? {} : { readFile: scenario.readFile },
+        manifestFor(selected.manifest),
+        selected.files,
+        selected.readFile === undefined ? {} : { readFile: selected.readFile },
       );
       expect(sourceIndex.issues, code).toContainEqual(
         expect.objectContaining({ code, severity: "warning" }),
@@ -1300,16 +1310,32 @@ Keep a logical value.
 
 Choosing replaces it.
 
+## Types
+
+\`\`\`types
+external Text
+\`\`\`
+
+## State
+
+\`\`\`state
+one logical Text
+\`\`\`
+
 ## Actions
 
 \`\`\`actions
-choose (value: Text) : return (value: Text)
+choose(value: Text) : return (value: Text)
+  where true
+  then
+    replace the logical value
+    return value
 \`\`\`
 
 ## Queries
 
 \`\`\`queries
-_read () : optional (value: Text)
+_read() : optional (value: Text)
 \`\`\`
 `;
     const actualSpecification = expectedSpecification.replace(

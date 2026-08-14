@@ -47,7 +47,7 @@ const application = assemble({ vocabulary: words, composition: { RecordNote } })
 const manifest = parseApplicationManifest(
   renderApplicationManifest(applicationManifest(application)),
 );
-assert(manifest.version === 5, "packed consumer did not generate and parse a V5 manifest");
+assert(manifest.version === 1, "packed consumer did not generate and parse a V1 manifest");
 assert(manifest.generator.version === "1.0.0-beta.9", "packed core provenance is not beta.9");
 
 const consumer = dirname(fileURLToPath(import.meta.url));
@@ -109,9 +109,9 @@ export const application = assemble({ vocabulary: words, composition: { RecordNo
     project.provenance.analyzer.version === "1.0.0-beta.9",
     "packed analyzer provenance is not beta.9",
   );
-  assert(project.version === 2, "packed project analysis is not V2");
-  assert(project.applicationIndex.version === 2, "packed application index is not V2");
-  assert(project.sourceIndex.version === 2, "packed source index is not V2");
+  assert(project.version === 3, "packed project analysis is not V3");
+  assert(project.applicationIndex.version === 3, "packed application index is not V3");
+  assert(project.sourceIndex.version === 3, "packed source index is not V3");
   assert(
     project.provenance.files.reduce((total, file) => total + file.byteLength, 0) ===
       project.resourceUsage.projectBytes,
@@ -173,7 +173,7 @@ export const application = assemble({ vocabulary: words, composition: { RecordNo
     "verified source slice did not match the anchor digest",
   );
   const impact = await facade.impact({ seeds: [action] });
-  assert(impact.trace.version === 2, "packed impact trace is not V2");
+  assert(impact.trace.version === 3, "packed impact trace is not V3");
   assert(impact.trace.seeds.length === 1, "packed impact did not retain its seed");
 
   assert(!("format" in catalog), "granular results must not expose a persisted wire format");
