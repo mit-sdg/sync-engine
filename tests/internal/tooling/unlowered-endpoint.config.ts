@@ -22,5 +22,6 @@ const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
 export default {
   assemble: () => assemble({ vocabulary: declared, composition: { Api: { ClosureEndpoint } } }),
   title: "Incomplete application",
+  design: { version: 1, documents: [] },
   vocabulary: { module: new URL("../../../src/language/index.ts", import.meta.url) },
 };

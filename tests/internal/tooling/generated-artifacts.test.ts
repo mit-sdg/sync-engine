@@ -27,6 +27,7 @@ import { loadGeneratedApplication } from "@command/generated-config";
  */
 const configUrl = new URL("../../packaging/application/generated.config.ts", import.meta.url);
 const languageModule = new URL("../../../src/language/index.ts", import.meta.url);
+const emptyDesign = { version: 1 as const, documents: [] };
 
 class SessioningConcept {
   start({ user }: { user: string }) {
@@ -88,6 +89,7 @@ describe("generated application artifacts", () => {
             assemble: () => application,
             directory: new URL("./generated/", import.meta.url),
             title: "Application",
+            design: emptyDesign,
             vocabulary: { module: languageModule },
           },
           configUrl,
@@ -219,6 +221,7 @@ describe("generated application artifacts", () => {
           assemble: () => application,
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
+          design: emptyDesign,
           vocabulary: { module: languageModule },
           projections: [
             httpWire({
@@ -261,6 +264,7 @@ describe("generated application artifacts", () => {
           assemble: () => application,
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
+          design: emptyDesign,
           vocabulary: { module: languageModule },
           projections: [
             httpWire({
@@ -288,6 +292,7 @@ describe("generated application artifacts", () => {
           }),
         directory: new URL("./not-written/", import.meta.url),
         title: "Incomplete application",
+        design: emptyDesign,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -328,6 +333,7 @@ describe("generated application artifacts", () => {
           }),
         directory,
         title: "Rejected local endpoint",
+        design: emptyDesign,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -352,6 +358,7 @@ describe("generated application artifacts", () => {
         directory: pathToFileURL(`${generated}/`),
         specification: "%2e%2e/escape.md",
         title: "Unsafe path application",
+        design: emptyDesign,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -380,6 +387,7 @@ describe("generated application artifacts", () => {
           assemble({ vocabulary: vocabularyDeclaration, composition: { Login, Current } }),
         directory,
         title: "Filesystem application",
+        design: emptyDesign,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -418,6 +426,7 @@ describe("generated application artifacts", () => {
         directory: pathToFileURL(`${generated}/`),
         specification: "blocked.md",
         title: "Blocked application",
+        design: emptyDesign,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -455,6 +464,7 @@ describe("generated application artifacts", () => {
         },
         directory: new URL("./not-written/", import.meta.url),
         title: "Lifecycle application",
+        design: emptyDesign,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -476,6 +486,7 @@ describe("generated application artifacts", () => {
           closed = true;
         },
         title: "Failed lifecycle application",
+        design: emptyDesign,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -493,7 +504,7 @@ describe("an artifact configuration's defaults", () => {
       await mkdir(join(directory, "src"));
       await writeFile(
         join(directory, "generated.config.ts"),
-        'export default { assemble() {}, title: "Loaded application" };\n',
+        'export default { assemble() {}, title: "Loaded application", design: { version: 1, documents: [] } };\n',
       );
       await writeFile(join(directory, "src/concept-set.ts"), "export const vocabulary = {};\n");
       const resolved = await loadGeneratedApplication("generated.config.ts", directory);
@@ -501,6 +512,74 @@ describe("an artifact configuration's defaults", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  test("resolves registered local design sources outside the application directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sync-engine-design-config-"));
+    try {
+      const applicationDirectory = join(root, "application");
+      const sharedDirectory = join(root, "shared-design");
+      await mkdir(applicationDirectory, { recursive: true });
+      await mkdir(sharedDirectory, { recursive: true });
+      const vocabularyDesign = pathToFileURL(join(applicationDirectory, "vocabulary.md"));
+      const sharedDesign = pathToFileURL(join(sharedDirectory, "behavior.md"));
+      await writeFile(vocabularyDesign, "# Vocabulary\n");
+      await writeFile(sharedDesign, "# Shared behavior\n");
+      const localConfig = pathToFileURL(join(applicationDirectory, "generated.config.ts"));
+
+      const resolved = resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
+          title: "Registered design",
+          design: { version: 1, vocabulary: vocabularyDesign, documents: [sharedDesign] },
+          vocabulary: { module: languageModule },
+        },
+        localConfig,
+      );
+
+      expect(resolved.design).toEqual({
+        version: 1,
+        vocabulary: vocabularyDesign,
+        documents: [sharedDesign],
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("requires and validates every design registration", () => {
+    const application = {
+      assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
+      title: "Design validation",
+      vocabulary: { module: languageModule },
+    };
+    const resolveDesign = (design?: unknown) =>
+      resolveApplication(
+        { ...application, ...(design === undefined ? {} : { design }) } as never,
+        configUrl,
+      );
+
+    expect(() => resolveDesign()).toThrow("design block is required");
+    expect(() => resolveDesign({ version: 2, documents: [] })).toThrow("design.version must be 1");
+    expect(() => resolveDesign({ version: 1 })).toThrow("design.documents must be an array");
+    expect(() => resolveDesign({ version: 1, documents: ["design.md"] })).toThrow(
+      "design.documents[0] must be a URL",
+    );
+    expect(() =>
+      resolveDesign({ version: 1, documents: [new URL("https://example.test/design.md")] }),
+    ).toThrow("design.documents[0] must be a local file URL, not https:");
+    expect(() =>
+      resolveDesign({
+        version: 1,
+        documents: [new URL("./absent-design.md", import.meta.url)],
+      }),
+    ).toThrow(/design\.documents\[0\] does not exist: .*absent-design\.md/);
+    expect(() => resolveDesign({ version: 1, documents: [configUrl, configUrl] })).toThrow(
+      "design.documents[1] duplicates design.documents[0]",
+    );
+    expect(() =>
+      resolveDesign({ version: 1, vocabulary: configUrl, documents: [configUrl] }),
+    ).toThrow("design.documents[0] duplicates design.vocabulary");
   });
 
   test("a title and an assembly are enough with the compatibility source name", async () => {
@@ -513,6 +592,7 @@ describe("an artifact configuration's defaults", () => {
         {
           assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
           title: "Reading circle",
+          design: emptyDesign,
         },
         compatibilityConfigUrl,
       );
@@ -541,6 +621,7 @@ describe("an artifact configuration's defaults", () => {
       {
         assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
         title: "Reading circle",
+        design: emptyDesign,
         specification: "book.md",
         specificationBanner: "<!-- Project specification -->",
         wireName: "CircleContracts",
@@ -571,6 +652,7 @@ describe("an artifact configuration's defaults", () => {
         {
           assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
           title: "Reading circle",
+          design: emptyDesign,
           vocabulary: { module: new URL("./absent/concept-set.ts", import.meta.url) },
         },
         configUrl,

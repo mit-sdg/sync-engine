@@ -19,16 +19,27 @@ import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 
 /**
- * What a project's `generated.config.ts` declares. Only `assemble` and `title`
- * are required — every path and name below follows from the title and the
- * config's own location, and each may be overridden.
+ * What a project's `generated.config.ts` declares. `assemble`, `title`, and
+ * `design` are required; generated output paths and names follow from the title
+ * and the config's own location unless overridden.
  */
+export interface GeneratedApplicationDesign {
+  /** Versioned shape of the authored application-design registration. */
+  version: 1;
+  /** The optional application vocabulary-design document. */
+  vocabulary?: URL;
+  /** Every other application-design document, in registration order. */
+  documents: readonly URL[];
+}
+
 export interface GeneratedApplication {
   assemble: () => InspectableAssembly;
   /** Release resources owned by this generation descriptor after assembly drain. */
   close?: () => void | Promise<void>;
   /** The application's name, used as the document title and to derive the rest. */
   title: string;
+  /** Authored design sources checked for this exact application variant. */
+  design: GeneratedApplicationDesign;
   /** Where generated files are written; defaults to `generated/` beside the config. */
   directory?: URL;
   /** The read-back's filename; defaults to the title, slugged, with `.md`. */
@@ -42,21 +53,21 @@ export interface GeneratedApplication {
   /** The wire contract's banner; defaults to one naming the assembly. */
   wireBanner?: string;
   /**
-   * The module whose export anchors generated wire types to concept
+   * The executable module whose export anchors generated wire types to concept
    * signatures; defaults to `src/concept-set.ts` beside the config, exporting
-   * `vocabulary`.
+   * `vocabulary`. This is distinct from the authored `design.vocabulary` document.
    */
   vocabulary?: { module?: URL; export?: string };
   /** Ordered transport-specific contracts appended after the logical wire. */
   projections?: readonly WireProjection[];
 }
 
-type ResolvedApplication = GeneratedApplication & {
+export type ResolvedApplication = GeneratedApplication & {
   directory: URL;
   specification: string;
   wire: string;
   wireName: string;
-  /** The specifier the generated wire imports its type anchor from. */
+  /** The specifier the generated wire imports its executable type anchor from. */
   vocabularyFrom: { from: string; export: string };
 };
 
@@ -66,14 +77,78 @@ function specifierFrom(directory: URL, target: URL): string {
   return path.startsWith(".") ? path : `./${path}`;
 }
 
-/**
- * Fill an application's defaults from its title and the location of the config
- * that declared it.
- */
+function requiredDesignUrl(value: unknown, label: string): { url: URL; path: string } {
+  if (!(value instanceof URL)) {
+    throw new Error(`generated config: ${label} must be a URL.`);
+  }
+  if (value.protocol !== "file:") {
+    throw new Error(`generated config: ${label} must be a local file URL, not ${value.protocol}.`);
+  }
+  try {
+    return { url: value, path: fileURLToPath(value) };
+  } catch {
+    throw new Error(`generated config: ${label} must be a local file URL.`);
+  }
+}
+
+function resolveDesign(value: unknown): GeneratedApplicationDesign {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("generated config: design block is required.");
+  }
+  const design = value as Record<string, unknown>;
+  if (design.version !== 1) {
+    throw new Error("generated config: design.version must be 1.");
+  }
+  if (!Array.isArray(design.documents)) {
+    throw new Error(
+      "generated config: design.documents must be an array (use [] when there are no design documents).",
+    );
+  }
+
+  const vocabulary =
+    design.vocabulary === undefined
+      ? undefined
+      : {
+          label: "design.vocabulary",
+          ...requiredDesignUrl(design.vocabulary, "design.vocabulary"),
+        };
+  const documents = design.documents.map((document, index) => {
+    const label = `design.documents[${index}]`;
+    return { label, ...requiredDesignUrl(document, label) };
+  });
+  const registered = [...(vocabulary === undefined ? [] : [vocabulary]), ...documents];
+
+  const firstRegistration = new Map<string, string>();
+  for (const source of registered) {
+    const first = firstRegistration.get(source.path);
+    if (first !== undefined) {
+      throw new Error(`generated config: ${source.label} duplicates ${first}: ${source.path}.`);
+    }
+    firstRegistration.set(source.path, source.label);
+  }
+  for (const source of registered) {
+    if (!existsSync(source.path)) {
+      throw new Error(`generated config: ${source.label} does not exist: ${source.path}.`);
+    }
+  }
+
+  return {
+    version: 1,
+    ...(vocabulary === undefined ? {} : { vocabulary: vocabulary.url }),
+    documents: documents.map(({ url }) => url),
+  };
+}
+
+/** Fill and validate defaults relative to the declaring generated config. */
 export function resolveApplication(
   application: GeneratedApplication,
   config: URL,
 ): ResolvedApplication {
+  if (typeof application !== "object" || application === null || Array.isArray(application)) {
+    throw new Error(
+      "generated config: default export must be an application configuration object.",
+    );
+  }
   if (typeof application.title !== "string" || application.title.trim() === "") {
     throw new Error("generated config: title must name the application.");
   }
@@ -86,6 +161,8 @@ export function resolveApplication(
   if (application.projections !== undefined && !Array.isArray(application.projections)) {
     throw new Error("generated config: projections must be an array.");
   }
+
+  const design = resolveDesign(application.design);
   const directory = application.directory ?? new URL("./generated/", config);
   const module = application.vocabulary?.module ?? new URL("./src/concept-set.ts", config);
   if (!existsSync(module)) {
@@ -96,6 +173,7 @@ export function resolveApplication(
   }
   return {
     ...application,
+    design,
     directory,
     specification: application.specification ?? `${slug(application.title)}.md`,
     wire: application.wire ?? "wire.ts",

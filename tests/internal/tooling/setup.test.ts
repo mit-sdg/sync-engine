@@ -27,7 +27,9 @@ describe("sync-engine setup", () => {
       ]);
       expect(await readFile(join(root, "src/vocabulary.ts"), "utf8")).toContain("conceptSet({})");
       expect(await readFile(join(root, "src/assembly.ts"), "utf8")).toContain("composition: {}");
-      expect(await readFile(join(root, "generated.config.ts"), "utf8")).toContain(
+      const generatedConfig = await readFile(join(root, "generated.config.ts"), "utf8");
+      expect(generatedConfig).toContain("design: { version: 1, documents: [] }");
+      expect(generatedConfig).toContain(
         'vocabulary: { module: new URL("./src/vocabulary.ts", import.meta.url) }',
       );
       expect(await readFile(join(root, "tsconfig.json"), "utf8")).toContain('"types": ["node"]');
