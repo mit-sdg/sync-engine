@@ -40,8 +40,10 @@ test("Timing answers the configured wall-clock reader", () => {
   let current = t1;
   const timing = new TimingConcept(() => current);
 
+  expect(timing.read({})).toEqual({ time: t1 });
   expect(timing._now()).toEqual({ time: t1 });
   current = t2;
+  expect(timing.read({})).toEqual({ time: t2 });
   expect(timing._now()).toEqual({ time: t2 });
 });
 

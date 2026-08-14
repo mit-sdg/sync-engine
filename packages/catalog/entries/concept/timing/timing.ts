@@ -1,9 +1,13 @@
 export type TimeReader = () => Date;
 
 export class TimingConcept {
-  constructor(private readonly read: TimeReader = () => new Date()) {}
+  constructor(private readonly reader: TimeReader = () => new Date()) {}
+
+  read(_input: Record<string, never>) {
+    return { time: this.reader() };
+  }
 
   _now() {
-    return { time: this.read() };
+    return { time: this.reader() };
   }
 }
