@@ -77,7 +77,7 @@ apply (label: Label, item: Item) : return (label: Label, item: Item)
   where label is known and no Application has label and item
   then
     add a new Application with label and item
-    return label and item
+    return label, item
 
 remove (label: Label, item: Item) : return (label: Label, item: Item)
   where no Application has label and item
@@ -86,7 +86,7 @@ remove (label: Label, item: Item) : return (label: Label, item: Item)
   where an Application has label and item
   then
     delete that Application
-    return label and item
+    return label, item
 ```
 
 ## Queries

@@ -36,7 +36,7 @@ start (subject: Subject) : return (session: Session, expiresAt: Time)
   then
     delete every expired session
     add a new opaque session for subject expiring 30 minutes from now
-    return session and expiresAt
+    return session, expiresAt
 
 current (session: Session) : return (subject: Subject)
   where session is unknown, ended, or expired

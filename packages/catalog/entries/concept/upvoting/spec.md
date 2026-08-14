@@ -41,11 +41,11 @@ upvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where the current Vote for item and voter is down
   then
     change that Vote to up
-    return item and voter
+    return item, voter
   where there is no Vote for item and voter
   then
     add an up Vote for item and voter
-    return item and voter
+    return item, voter
 
 downvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where the current Vote for item and voter is down
@@ -54,11 +54,11 @@ downvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where the current Vote for item and voter is up
   then
     change that Vote to down
-    return item and voter
+    return item, voter
   where there is no Vote for item and voter
   then
     add a down Vote for item and voter
-    return item and voter
+    return item, voter
 
 unvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where there is no Vote for item and voter
@@ -67,7 +67,7 @@ unvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where there is a Vote for item and voter
   then
     delete that Vote
-    return item and voter
+    return item, voter
 ```
 
 ## Queries

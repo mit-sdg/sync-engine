@@ -59,14 +59,14 @@ record (trail: Trail, event: Event, actor: Actor, action: String, detail: String
   where an Entry in trail has event with the same actor, action, detail, and target
   then
     bind entry and position to that Entry and its position
-    return entry and position
+    return entry, position
   where an Entry in trail has event with a different actor, action, detail, or target
   then
     refuse ENTRY_EVENT_CONFLICT "This event is already recorded in this trail with different facts."
   where action and detail are accepted and no Entry in trail has event
   then
     add a new Entry with trail, event, actor, action, detail, target, and recordedAt at, taking the position after the last Entry in trail and 1 in an empty trail
-    return entry and position
+    return entry, position
 ```
 
 ## Queries

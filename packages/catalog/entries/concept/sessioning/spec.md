@@ -34,7 +34,7 @@ start (subject: Subject) : return (session: Session, expiresAt: DateTime)
   where true
   then
     add a new opaque Session for subject expiring 30 minutes after the trusted current time
-    return session and expiresAt
+    return session, expiresAt
 
 current (session: Session) : return (subject: Subject)
   where session is unknown, ended, or expired at the trusted current time
