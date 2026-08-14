@@ -14,7 +14,7 @@ rollback instead, and the rollback becomes current for that room.
 
 ```types
 external Room
-  The operations room for which one mitigation is current.
+  An operations room whose current mitigation is being selected.
 ```
 
 ## State
@@ -30,7 +30,7 @@ a Current set of Selections
 ## Actions
 
 ```actions
-choose (room: Room, mitigation: String) : return (selection: Selection)
+choose(room: Room, mitigation: String) : return (selection: Selection)
   where true
   then
     remove any selection with room from current
@@ -42,5 +42,5 @@ choose (room: Room, mitigation: String) : return (selection: Selection)
 ## Queries
 
 ```queries
-_current (room: Room) : optional (selection: Selection, mitigation: String)
+_current(room: Room) : optional (selection: Selection, room: Room, mitigation: String)
 ```

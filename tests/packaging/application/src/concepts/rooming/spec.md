@@ -13,6 +13,7 @@ room; a second close is refused because the room is no longer open.
 ## Types
 
 ```types
+
 ```
 
 ## State
@@ -25,7 +26,7 @@ a set of Rooms with
 ## Actions
 
 ```actions
-open (name: String) : return (room: Room)
+open(name: String) : return (room: Room)
   where no room has name
   then
     add a new room with name
@@ -34,7 +35,7 @@ open (name: String) : return (room: Room)
   then
     refuse ROOM_ALREADY_OPEN "A room with this name is already open."
 
-close (room: Room) : return ()
+close(room: Room) : return ()
   where room in rooms
   then
     delete room
@@ -47,5 +48,5 @@ close (room: Room) : return ()
 ## Queries
 
 ```queries
-_get (room: Room) : optional (name: String)
+_get(room: Room) : optional (room: Room, name: String)
 ```
