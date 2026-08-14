@@ -996,7 +996,45 @@ describe("application manifest", () => {
       query: { concept: "Looking", query: "_get" },
       in: { item: { $var: "item" } },
       out: { item: { $var: "found" } },
+      not: {},
     };
+    enriched.application.reactions.push({
+      name: "ChannelReaction",
+      when: [
+        {
+          kind: "channel",
+          channel: "returned",
+          pattern: {},
+          except: [],
+          exceptBy: ["Ignored"],
+          by: "Selected",
+        },
+      ],
+      where: [],
+      then: [],
+    });
+    enriched.application.views = [
+      {
+        name: "RichView",
+        alternatives: [
+          [
+            { op: "custom", fnRef: "predicate", opaque: true, in: ["item"], out: ["ok"] },
+            {
+              op: "count",
+              query: { concept: "Looking", query: "_get" },
+              in: {},
+              out: "total",
+            },
+            { op: "find", view: "OtherView", in: {}, out: {}, not: {} },
+          ],
+        ],
+        ins: ["item"],
+        outs: ["ok", "total"],
+        bindings: [],
+        promise: "many",
+        holds: true,
+      },
+    ] as never;
     enriched.application.formers = [
       {
         name: "RichFormer",
@@ -1012,6 +1050,7 @@ describe("application manifest", () => {
             rows: {
               node: "each",
               from: source,
+              where: [],
               arranged: { by: "item", order: "descending" },
               as: { node: "leaf", var: "found" },
             },
@@ -1020,9 +1059,10 @@ describe("application manifest", () => {
               node: "first",
               from: source,
               value: "found",
+              where: [],
               arranged: { order: "newest" },
             },
-            distinct: { node: "distinct", from: source, value: "found" },
+            distinct: { node: "distinct", from: source, value: "found", where: [] },
           },
           splices: [{ fragment: "OtherFormer", in: {}, whether: true }],
         },
@@ -1084,6 +1124,109 @@ describe("application manifest", () => {
     invalidValues.push({ value: decoratedArray, message: /non-index properties/ });
 
     for (const { value, message } of invalidValues) {
+      expect(() => validateApplicationManifest(value)).toThrow(message);
+    }
+  });
+
+  test("reports structural manifest mistakes at their exact schema paths", () => {
+    const malformed: { value: unknown; message: RegExp }[] = [
+      { value: null, message: /at \$: expected an object/ },
+      { value: [], message: /at \$: expected an object/ },
+      { value: 42, message: /at \$: expected an object/ },
+    ];
+    const changed = (mutate: (manifest: ReturnType<typeof applicationManifest>) => void) => {
+      const manifest = structuredClone(applicationManifest(application()));
+      mutate(manifest);
+      return manifest;
+    };
+
+    malformed.push(
+      {
+        value: changed((manifest) => {
+          delete (manifest.generator as unknown as Record<string, unknown>).name;
+        }),
+        message: /\$\.generator\.name.*required property/,
+      },
+      {
+        value: changed((manifest) => {
+          (manifest.generator as unknown as Record<string, unknown>).extra = true;
+        }),
+        message: /\$\.generator\.extra.*not part of manifest version 1/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.generator.version = "not-semver";
+        }),
+        message: /\$\.generator\.version.*semantic version/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.digest = "";
+        }),
+        message: /\$\.digest.*non-empty string/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.diagnostics = {} as never;
+        }),
+        message: /\$\.diagnostics.*expected an array/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.endpoints[0].validators.input = "yes" as never;
+        }),
+        message: /\$\.endpoints\[0\]\.validators\.input.*boolean/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.design.checked = "yes" as never;
+        }),
+        message: /\$\.design\.checked.*boolean/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].where = [
+            { op: "custom", fnRef: "predicate", opaque: false, in: [], out: [] },
+          ] as never;
+        }),
+        message: /\.opaque.*expected true/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].where = [
+            {
+              op: "count",
+              query: { concept: "Looking", query: "_get" },
+              in: {},
+              out: "total",
+            },
+          ] as never;
+        }),
+        message: /\.op.*count.*not allowed/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].where = [
+            { op: "find", query: {}, view: "Other", in: {}, out: {} },
+          ] as never;
+        }),
+        message: /exactly one of.*query.*view/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].where = [{ op: "unknown" }] as never;
+        }),
+        message: /recognized read operation/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].when[0].kind = "unknown" as never;
+        }),
+        message: /expected.*action.*channel/,
+      },
+    );
+
+    for (const { value, message } of malformed) {
       expect(() => validateApplicationManifest(value)).toThrow(message);
     }
   });

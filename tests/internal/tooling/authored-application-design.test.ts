@@ -137,6 +137,24 @@ score(values: List<Number>) : Number
     expect(() => parseApplicationDesignDocument(markdown, "bad.md")).toThrow(message);
   });
 
+  test("uses CommonMark text alternatives for richly labeled links", () => {
+    const document = parseApplicationDesignDocument(
+      `# Rich labels
+
+[\`Refresh\` ![posts](posts.png)\\
+now](reaction:Forum.Refresh)
+`,
+    );
+
+    expect(document.links).toEqual([
+      expect.objectContaining({
+        kind: "reaction",
+        target: "Forum.Refresh",
+        text: "Refresh posts now",
+      }),
+    ]);
+  });
+
   test("does not parse declarations, links, or headings from code", () => {
     const document = parseApplicationDesignDocument(
       `# Real title

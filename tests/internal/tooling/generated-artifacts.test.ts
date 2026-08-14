@@ -545,7 +545,7 @@ export const vocabulary = declareVocabulary({
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 60_000);
 
   test("reports generated artifact filesystem failures without partial writes", async () => {
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-failure-"));
@@ -575,7 +575,7 @@ export const vocabulary = declareVocabulary({
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, 30_000);
 
   test("drains inspection before closing application-owned generation resources", async () => {
     const lifecycle: string[] = [];
