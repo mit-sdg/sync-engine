@@ -56,7 +56,43 @@ describe("canonical public API", () => {
       concepts: {
         Cataloging: {
           class: Cataloging,
-          spec: "# Cataloging\n\n## Purpose\n\nKeep titles.\n\n## Principle\n\nA title appears once.",
+          spec: `# Cataloging
+
+## Purpose
+
+Keep titles.
+
+## Principle
+
+A title appears once.
+
+## Types
+
+\`\`\`types
+\`\`\`
+
+## State
+
+\`\`\`state
+a set of titles
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+add(title: String) : return (title: String)
+  where true
+  then
+    add title
+    return title
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+_titles() : many (title: String)
+\`\`\`
+`,
         },
       },
       computations: {},
@@ -360,12 +396,13 @@ const register = {
     "QueryRefIR",
     "ReactionIR",
     "SpecificationActionIR",
-    "SpecificationDocumentationIR",
+    "SpecificationExternalTypeIR",
     "SpecificationFieldIR",
     "SpecificationLocationIR",
     "SpecificationQueryIR",
     "SpecificationRefusalIR",
     "SpecificationResultIR",
+    "SpecificationStateIR",
     "SpecificationTypeIR",
     "SpliceIR",
     "TriggerIR",

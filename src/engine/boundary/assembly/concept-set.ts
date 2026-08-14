@@ -14,7 +14,11 @@ import {
   callableConceptMember,
   conceptProtocolOf,
 } from "@engine/reactions/concepts/concept-metadata";
-import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
+import {
+  parseSpec,
+  specificationsAreCompatible,
+  type ConceptSpec,
+} from "@engine/reactions/concepts/concept-spec";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
 import type { CheckedComputationFns, ComputationFn } from "@engine/reads/computations";
 import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
@@ -333,6 +337,22 @@ export function conceptSet<
   computations: Computations & CheckedComputationFns<Computations> = {} as Computations &
     CheckedComputationFns<Computations>,
 ): RegisteredConceptSet<S, Computations> {
+  const definitions = new Map<string, { instance: string; specification: ConceptSpec }>();
+  for (const [instance, registration] of Object.entries(registrations)) {
+    const { definitionName } = registration.specification;
+    const prior = definitions.get(definitionName);
+    if (
+      prior !== undefined &&
+      !specificationsAreCompatible(prior.specification, registration.specification)
+    ) {
+      throw new Error(
+        `conceptSet: instances "${prior.instance}" and "${instance}" use incompatible ` +
+          `specifications for definition "${definitionName}".`,
+      );
+    }
+    definitions.set(definitionName, { instance, specification: registration.specification });
+  }
+
   const entries: Record<string, ConceptEntry> = {};
   for (const [conceptName, registration] of Object.entries(registrations)) {
     const { purpose, principle, actions, queries } = registration.specification;

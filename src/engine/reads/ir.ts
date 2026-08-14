@@ -358,18 +358,12 @@ export interface SpecificationFieldIR {
   location: SpecificationLocationIR;
 }
 
-/** An inline result row or a result type expression. */
-export type SpecificationResultIR =
-  | {
-      kind: "fields";
-      fields: readonly SpecificationFieldIR[];
-      location: SpecificationLocationIR;
-    }
-  | {
-      kind: "type";
-      type: SpecificationTypeIR;
-      location: SpecificationLocationIR;
-    };
+/** The parenthesized named fields returned by an action or query. */
+export interface SpecificationResultIR {
+  kind: "fields";
+  fields: readonly SpecificationFieldIR[];
+  location: SpecificationLocationIR;
+}
 
 /** One authored refusal branch and its normative decoded sentence. */
 export interface SpecificationRefusalIR {
@@ -402,23 +396,34 @@ export interface SpecificationQueryIR {
   location: SpecificationLocationIR;
 }
 
-/** A reader-facing Types or extension section, retained in authored order. */
-export interface SpecificationDocumentationIR {
-  kind: "types" | "extension";
+/** One opaque type parameter supplied by each application use of the concept. */
+export interface SpecificationExternalTypeIR {
   name: string;
-  body: string;
+  /** Optional reader-facing explanation, normalized from its indented lines. */
+  explanation: string;
   location: SpecificationLocationIR;
 }
 
-/** The JSON-safe authored contract parsed from one concept specification; State is excluded. */
+/** Unparsed Simple State Form and the optional prose that follows its fence. */
+export interface SpecificationStateIR {
+  /** Normalized fence contents. Version 1 deliberately assigns these no grammar. */
+  body: string;
+  prose: string;
+  location: SpecificationLocationIR;
+}
+
+/** The JSON-safe authored contract parsed from one concept specification. */
 export interface ConceptSpecificationIR {
   format: "sync-engine.concept-specification";
   version: 1;
+  /** Reusable definition identity from the document's H1, independent of instance names. */
+  definitionName: string;
   purpose: string;
   principle: string;
+  externalTypes: readonly SpecificationExternalTypeIR[];
+  state: SpecificationStateIR;
   actions: readonly SpecificationActionIR[];
   queries: readonly SpecificationQueryIR[];
-  documentation: readonly SpecificationDocumentationIR[];
 }
 
 /** One action as the inventory reports it: its name, observed input roles, declared refusals. */
