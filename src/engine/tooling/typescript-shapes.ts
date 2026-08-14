@@ -1,8 +1,54 @@
+import { dirname, resolve } from "node:path";
 import ts from "typescript";
 
 export interface TypeScriptCheckerContext {
   program: ts.Program;
   checker: ts.TypeChecker;
+}
+
+export interface TypeScriptSourceContext extends TypeScriptCheckerContext {
+  source: ts.SourceFile;
+  options: ts.CompilerOptions;
+}
+
+/** Load a TypeScript project context for an executable source module. */
+export function typeScriptSourceContext(sourcePath: string): TypeScriptSourceContext {
+  const absolute = resolve(sourcePath);
+  const configPath = ts.findConfigFile(dirname(absolute), ts.sys.fileExists);
+  let rootNames = [absolute];
+  let options: ts.CompilerOptions = {
+    allowArbitraryExtensions: true,
+    allowImportingTsExtensions: true,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    noEmit: true,
+    skipLibCheck: true,
+    target: ts.ScriptTarget.ESNext,
+  };
+  let projectReferences: readonly ts.ProjectReference[] | undefined;
+  if (configPath !== undefined) {
+    const loaded = ts.readConfigFile(configPath, ts.sys.readFile);
+    if (loaded.error !== undefined) {
+      throw new Error(
+        `TypeScript project configuration failed: ${ts.flattenDiagnosticMessageText(loaded.error.messageText, "\\n")}`,
+      );
+    }
+    const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, dirname(configPath));
+    if (parsed.errors.length > 0) {
+      throw new Error(
+        `TypeScript project configuration failed: ${ts.flattenDiagnosticMessageText(parsed.errors[0].messageText, "\\n")}`,
+      );
+    }
+    rootNames = parsed.fileNames.some((path) => resolve(path) === absolute)
+      ? parsed.fileNames
+      : [...parsed.fileNames, absolute];
+    options = { ...parsed.options, allowArbitraryExtensions: true, noEmit: true };
+    projectReferences = parsed.projectReferences;
+  }
+  const program = ts.createProgram({ rootNames, options, projectReferences });
+  const source = program.getSourceFile(absolute);
+  if (source === undefined) throw new Error(`TypeScript source cannot be loaded: ${absolute}`);
+  return { program, checker: program.getTypeChecker(), source, options };
 }
 
 export interface ShapeField {

@@ -15,10 +15,7 @@ import {
   loadRegisteredConcepts,
   registeredConcepts,
 } from "@command/concept-discovery";
-import {
-  registeredClassSources,
-  registeredConceptSources,
-} from "@command/concept-source-discovery";
+import { registeredConceptSources } from "@engine/tooling/concept-source-discovery";
 import { assemble } from "@engine/boundary/assembly/assembly-facade";
 import { conceptSet, registerConcept } from "@engine/boundary/assembly/concept-set";
 import { vocabulary as declareVocabulary } from "@engine/reactions/authoring/refs";
@@ -565,7 +562,7 @@ describe("concept discovery", () => {
         "export const applicationConcepts = conceptSet({ Sessioning: sessioning });\n",
     );
 
-    expect(registeredClassSources(source)).toEqual([
+    expect(registeredConceptSources(source)).toEqual([
       {
         className: "SessioningConcept",
         classPath: join(conventional, "sessioning.ts"),
@@ -664,7 +661,7 @@ describe("concept discovery", () => {
         "export const applicationConcepts = conceptSet({ ...selected });\n",
     );
 
-    expect(registeredClassSources(source)).toEqual([
+    expect(registeredConceptSources(source)).toEqual([
       {
         className: "SessioningConcept",
         classPath: join(where, "sessioning.ts"),
@@ -746,7 +743,7 @@ describe("concept discovery", () => {
         "export const set = conceptSet({ Selected: selected });\n",
     );
     await writeFile(join(directory, "authored.md"), "# Authored\n");
-    expect(() => registeredClassSources(source)).toThrow("spec is constructed, dynamic");
+    expect(() => registeredConceptSources(source)).toThrow("spec is constructed, dynamic");
 
     await writeFile(
       source,
@@ -755,7 +752,7 @@ describe("concept discovery", () => {
         "const selected = registerConcept({ class: Concept, spec });\n" +
         "export const set = conceptSet({ Selected: selected });\n",
     );
-    expect(() => registeredClassSources(source)).toThrow(
+    expect(() => registeredConceptSources(source)).toThrow(
       "default specification import `./missing.md` cannot be resolved",
     );
   });
@@ -774,7 +771,7 @@ describe("concept discovery", () => {
         "export const second = conceptSet({ Same: registration });\n",
     );
 
-    expect(() => registeredClassSources(source)).toThrow(
+    expect(() => registeredConceptSources(source)).toThrow(
       "selected concept instance `Same` is ambiguous",
     );
   });
@@ -835,7 +832,7 @@ describe("concept discovery", () => {
           "};\n",
       );
 
-      expect(registeredClassSources(join(project, "src", "application-concepts.ts"))).toEqual([
+      expect(registeredConceptSources(join(project, "src", "application-concepts.ts"))).toEqual([
         {
           className: "SessioningConcept",
           classPath: join(project, "src", "sessioning.ts"),

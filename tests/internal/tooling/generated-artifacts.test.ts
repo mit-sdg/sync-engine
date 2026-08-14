@@ -5,13 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
-import { vocabulary } from "@sync-engine/language";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
-import sessioningSpec from "./fixtures/generated-artifacts/sessioning.md" with { type: "text" };
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
+import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
 import {
   checkGenerated,
   pinGenerated,
@@ -27,7 +26,7 @@ import { loadGeneratedApplication } from "@command/generated-config";
  * resolve against a project laid out the way the generator writes one.
  */
 const configUrl = new URL("../../packaging/application/generated.config.ts", import.meta.url);
-const languageModule = new URL("../../../src/language/index.ts", import.meta.url);
+const languageModule = new URL("./fixtures/generated-artifacts/vocabulary.ts", import.meta.url);
 const fixtureDesign = (documents: readonly string[] = []) => ({
   version: 1 as const,
   documents: documents.map(
@@ -39,35 +38,6 @@ const loginDesign = fixtureDesign(["login"]);
 const loginCurrentDesign = fixtureDesign(["login", "current"]);
 const closureDesign = fixtureDesign(["closure"]);
 const apiClosureDesign = fixtureDesign(["api-closure"]);
-const authoredDesignAdapters = {
-  conceptSources: () => [
-    {
-      instance: "Sessioning",
-      url: new URL("./fixtures/generated-artifacts/sessioning.md", import.meta.url),
-      content: sessioningSpec,
-    },
-  ],
-  resolveComputationInputs: () => [],
-};
-
-class SessioningConcept {
-  start({ user }: { user: string }) {
-    return { session: `session-${user}`, expiresAt: new Date(0) };
-  }
-
-  current({ session }: { session: string }) {
-    return { user: session.slice("session-".length) };
-  }
-}
-
-const vocabularyDeclaration = vocabulary({
-  concepts: {
-    Sessioning: { class: SessioningConcept, spec: sessioningSpec },
-  },
-  computations: {},
-});
-const { Sessioning } = vocabularyDeclaration.concepts;
-
 const Login = endpoint(
   "/login",
   ({ user, session, expiresAt }) =>
@@ -113,7 +83,6 @@ describe("generated application artifacts", () => {
             directory: new URL("./generated/", import.meta.url),
             title: "Application",
             design: loginDesign,
-            authoredDesignAdapters,
             vocabulary: { module: languageModule },
           },
           configUrl,
@@ -130,38 +99,24 @@ describe("generated application artifacts", () => {
     expect(rendered).toContain("RequestBoundary.respond (");
   });
 
-  test("checks authored design exactly once for the exact generated assembly", async () => {
-    let sourceCalls = 0;
-    let computationCalls = 0;
-    const application = assemble({
-      vocabulary: vocabularyDeclaration,
-      composition: { Login },
-    });
+  test("assembles once while checking the exact generated application", async () => {
+    let assemblies = 0;
     await renderGenerated(
       resolveApplication(
         {
-          assemble: () => application,
+          assemble: () => {
+            assemblies += 1;
+            return assemble({ vocabulary: vocabularyDeclaration, composition: { Login } });
+          },
           directory: new URL("./not-written/", import.meta.url),
           title: "Single check",
           design: loginDesign,
-          authoredDesignAdapters: {
-            conceptSources: (selected) => {
-              sourceCalls += 1;
-              expect(selected).toBe(application);
-              return authoredDesignAdapters.conceptSources();
-            },
-            resolveComputationInputs: ({ assembly: selected }) => {
-              computationCalls += 1;
-              expect(selected).toBe(application);
-              return [];
-            },
-          },
           vocabulary: { module: languageModule },
         },
         configUrl,
       ),
     );
-    expect({ sourceCalls, computationCalls }).toEqual({ sourceCalls: 1, computationCalls: 1 });
+    expect(assemblies).toBe(1);
   });
 
   test("warns when an endpoint has no answer path", () => {
@@ -277,7 +232,6 @@ describe("generated application artifacts", () => {
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
           design: loginCurrentDesign,
-          authoredDesignAdapters,
           vocabulary: { module: languageModule },
           projections: [
             httpWire({
@@ -321,7 +275,6 @@ describe("generated application artifacts", () => {
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
           design: loginCurrentDesign,
-          authoredDesignAdapters,
           vocabulary: { module: languageModule },
           projections: [
             httpWire({
@@ -350,7 +303,6 @@ describe("generated application artifacts", () => {
         directory: new URL("./not-written/", import.meta.url),
         title: "Incomplete application",
         design: apiClosureDesign,
-        authoredDesignAdapters,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -392,7 +344,6 @@ describe("generated application artifacts", () => {
         directory,
         title: "Rejected local endpoint",
         design: closureDesign,
-        authoredDesignAdapters,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -418,7 +369,6 @@ describe("generated application artifacts", () => {
         specification: "%2e%2e/escape.md",
         title: "Unsafe path application",
         design: loginDesign,
-        authoredDesignAdapters,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -448,7 +398,6 @@ describe("generated application artifacts", () => {
         directory,
         title: "Filesystem application",
         design: loginCurrentDesign,
-        authoredDesignAdapters,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -488,7 +437,6 @@ describe("generated application artifacts", () => {
         specification: "blocked.md",
         title: "Blocked application",
         design: loginDesign,
-        authoredDesignAdapters,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -527,7 +475,6 @@ describe("generated application artifacts", () => {
         directory: new URL("./not-written/", import.meta.url),
         title: "Lifecycle application",
         design: loginDesign,
-        authoredDesignAdapters,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -550,7 +497,6 @@ describe("generated application artifacts", () => {
         },
         title: "Failed lifecycle application",
         design: emptyDesign,
-        authoredDesignAdapters,
         vocabulary: { module: languageModule },
       },
       configUrl,
@@ -686,7 +632,6 @@ describe("an artifact configuration's defaults", () => {
         assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
         title: "Reading circle",
         design: emptyDesign,
-        authoredDesignAdapters,
         specification: "book.md",
         specificationBanner: "<!-- Project specification -->",
         wireName: "CircleContracts",
@@ -718,7 +663,6 @@ describe("an artifact configuration's defaults", () => {
           assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
           title: "Reading circle",
           design: emptyDesign,
-          authoredDesignAdapters,
           vocabulary: { module: new URL("./absent/concept-set.ts", import.meta.url) },
         },
         configUrl,

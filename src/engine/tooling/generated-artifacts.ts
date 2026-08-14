@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, posix, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
 import { wireProjectionFacts } from "@engine/boundary/gateway/transport-binding";
 import { pascal, slug } from "@engine/utils/case";
@@ -18,11 +18,13 @@ import {
   registerConfiguredAuthoredDesign,
   type ApplicationManifestV1,
 } from "./manifest.ts";
+import { checkAuthoredDesign } from "./authored-design-orchestration.ts";
+import { authoritativeComputationInputs } from "./computation-source-analysis.ts";
 import {
-  checkAuthoredDesign,
-  type ConceptSpecificationSourceInput,
-  type ResolveComputationInputs,
-} from "./authored-design-orchestration.ts";
+  registeredConceptSources,
+  type RegisteredConceptSource,
+} from "./concept-source-discovery.ts";
+import { typeScriptSourceContext, type TypeScriptSourceContext } from "./typescript-shapes.ts";
 import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
@@ -41,17 +43,6 @@ export interface GeneratedApplicationDesign {
   documents: readonly URL[];
 }
 
-export interface GeneratedAuthoredDesignAdapters {
-  /** Strict static trace from selected concept instances to their imported Markdown. */
-  conceptSources: (
-    assembly: InspectableAssembly,
-  ) =>
-    | readonly ConceptSpecificationSourceInput[]
-    | Promise<readonly ConceptSpecificationSourceInput[]>;
-  /** Authoritative TypeScript analysis for executable computation input optionality. */
-  resolveComputationInputs: ResolveComputationInputs;
-}
-
 export interface GeneratedApplication {
   assemble: () => InspectableAssembly;
   /** Release resources owned by this generation descriptor after assembly drain. */
@@ -60,8 +51,6 @@ export interface GeneratedApplication {
   title: string;
   /** Authored design sources checked for this exact application variant. */
   design: GeneratedApplicationDesign;
-  /** Required source-analysis adapters when selected concepts or computations need them. */
-  authoredDesignAdapters?: GeneratedAuthoredDesignAdapters;
   /** Where generated files are written; defaults to `generated/` beside the config. */
   directory?: URL;
   /** The read-back's filename; defaults to the title, slugged, with `.md`. */
@@ -89,9 +78,39 @@ export type ResolvedApplication = GeneratedApplication & {
   specification: string;
   wire: string;
   wireName: string;
+  /** The executable vocabulary module analyzed at the generated-operation boundary. */
+  vocabularyModule: URL;
   /** The specifier the generated wire imports its executable type anchor from. */
   vocabularyFrom: { from: string; export: string };
 };
+
+export interface GeneratedSourceAnalysis {
+  /** Shared checker context; config checking reuses it for source-shape diagnostics. */
+  context: TypeScriptSourceContext;
+  /** Static registrations corresponding exactly to the selected canonical concepts. */
+  concepts: readonly RegisteredConceptSource[];
+}
+
+interface CachedModuleSourceAnalysis {
+  context: TypeScriptSourceContext;
+  concepts: readonly RegisteredConceptSource[];
+  computationInputs: Map<string, ReturnType<typeof authoritativeComputationInputs>>;
+}
+
+const moduleSourceAnalysis = new Map<string, CachedModuleSourceAnalysis>();
+
+function sourceAnalysisFor(vocabularyModulePath: string): CachedModuleSourceAnalysis {
+  const cached = moduleSourceAnalysis.get(vocabularyModulePath);
+  if (cached !== undefined) return cached;
+  const context = typeScriptSourceContext(vocabularyModulePath);
+  const analyzed = {
+    context,
+    concepts: registeredConceptSources(vocabularyModulePath, context),
+    computationInputs: new Map(),
+  };
+  moduleSourceAnalysis.set(vocabularyModulePath, analyzed);
+  return analyzed;
+}
 
 /** The module specifier a file in `directory` uses to reach `target`. */
 function specifierFrom(directory: URL, target: URL): string {
@@ -183,19 +202,6 @@ export function resolveApplication(
   if (application.projections !== undefined && !Array.isArray(application.projections)) {
     throw new Error("generated config: projections must be an array.");
   }
-  if (application.authoredDesignAdapters !== undefined) {
-    if (
-      typeof application.authoredDesignAdapters !== "object" ||
-      application.authoredDesignAdapters === null ||
-      typeof application.authoredDesignAdapters.conceptSources !== "function" ||
-      typeof application.authoredDesignAdapters.resolveComputationInputs !== "function"
-    ) {
-      throw new Error(
-        "generated config: authoredDesignAdapters must provide conceptSources and resolveComputationInputs functions.",
-      );
-    }
-  }
-
   const design = resolveDesign(application.design);
   const directory = application.directory ?? new URL("./generated/", config);
   const module = application.vocabulary?.module ?? new URL("./src/concept-set.ts", config);
@@ -211,6 +217,7 @@ export function resolveApplication(
     directory,
     specification: application.specification ?? `${slug(application.title)}.md`,
     wire: application.wire ?? "wire.ts",
+    vocabularyModule: module,
     wireName: application.wireName ?? `${pascal(application.title)}Wire`,
     vocabularyFrom: {
       from: posix.normalize(specifierFrom(directory, module)),
@@ -222,32 +229,58 @@ export function resolveApplication(
 async function prepareConfiguredDesign(
   application: ResolvedApplication,
   assembled: InspectableAssembly,
-): Promise<void> {
-  const adapters = application.authoredDesignAdapters;
-  const conceptSources = await adapters?.conceptSources(assembled);
-  // The generated-operation boundary performs this exactly once for this exact assembly. Every
-  // manifest/spec/wire consumer below reuses the attached checked model and loaded documents.
+): Promise<GeneratedSourceAnalysis> {
+  const vocabularyModulePath = fileURLToPath(application.vocabularyModule);
+  const sourceAnalysis = sourceAnalysisFor(vocabularyModulePath);
+  const concepts = sourceAnalysis.concepts;
+  const uncheckedManifest = applicationManifest(assembled);
+  const selectedConcepts = uncheckedManifest.conceptImplementations.filter(
+    ({ canonical }) => canonical.owner === "application",
+  );
+  const sourcesByInstance = new Map(concepts.map((source) => [source.conceptName, source]));
+  for (const selected of selectedConcepts) {
+    const source = sourcesByInstance.get(selected.concept);
+    if (source === undefined) {
+      throw new Error(
+        `generated source analysis: selected concept ${JSON.stringify(selected.concept)} is absent from the executable vocabulary module.`,
+      );
+    }
+    if (source.className !== selected.canonical.constructorName) {
+      throw new Error(
+        `generated source analysis: selected concept ${JSON.stringify(selected.concept)} uses canonical class ${JSON.stringify(selected.canonical.constructorName)}, but the executable vocabulary module registers ${JSON.stringify(source.className)}.`,
+      );
+    }
+  }
+  const selectedNames = new Set(selectedConcepts.map(({ concept }) => concept));
+  const extra = concepts.find(({ conceptName }) => !selectedNames.has(conceptName));
+  if (extra !== undefined) {
+    throw new Error(
+      `generated source analysis: executable vocabulary module registers unselected concept ${JSON.stringify(extra.conceptName)}.`,
+    );
+  }
+
   const checked = await checkAuthoredDesign({
     assembly: assembled,
     design: application.design,
-    ...(conceptSources === undefined ? {} : { conceptSources }),
-    ...(adapters === undefined
-      ? {}
-      : { resolveComputationInputs: adapters.resolveComputationInputs }),
+    conceptSources: concepts.map(({ conceptName, specPath, specText }) => ({
+      instance: conceptName,
+      url: pathToFileURL(specPath),
+      content: specText,
+    })),
+    resolveComputationInputs: ({ computations }) => {
+      const names = computations.map(({ name }) => name);
+      const key = names.join("\0");
+      const cached = sourceAnalysis.computationInputs.get(key);
+      if (cached !== undefined) return cached;
+      const inputs = authoritativeComputationInputs(
+        vocabularyModulePath,
+        names,
+        sourceAnalysis.context,
+      );
+      sourceAnalysis.computationInputs.set(key, inputs);
+      return inputs;
+    },
   });
-  if (checked.concepts.length > 0 && checked.sources.concepts === undefined) {
-    throw new Error(
-      "generated artifacts: authoredDesignAdapters.conceptSources is required to prove concept Markdown source paths.",
-    );
-  }
-  const unvalidated = checked.computationInputValidation.filter(
-    ({ status }) => status !== "validated",
-  );
-  if (unvalidated.length > 0) {
-    throw new Error(
-      `generated artifacts: authoredDesignAdapters.resolveComputationInputs is required to prove input optionality for ${unvalidated.map(({ name }) => JSON.stringify(name)).join(", ")}.`,
-    );
-  }
   const specificationPath = fileURLToPath(
     new URL(application.specification, application.directory),
   );
@@ -260,6 +293,7 @@ async function prepareConfiguredDesign(
       },
     },
   });
+  return { context: sourceAnalysis.context, concepts };
 }
 
 async function completeGeneratedPlan(
@@ -299,13 +333,16 @@ async function completeGeneratedPlan(
 
 export async function inspectGenerated<T>(
   application: ResolvedApplication,
-  inspect: (assembly: InspectableAssembly) => T | Promise<T>,
+  inspect: (
+    assembly: InspectableAssembly,
+    sourceAnalysis: GeneratedSourceAnalysis,
+  ) => T | Promise<T>,
 ): Promise<T> {
   let assembled: InspectableAssembly | undefined;
   try {
     assembled = application.assemble();
-    await prepareConfiguredDesign(application, assembled);
-    return await inspect(assembled);
+    const sourceAnalysis = await prepareConfiguredDesign(application, assembled);
+    return await inspect(assembled, sourceAnalysis);
   } finally {
     try {
       if (assembled !== undefined) {

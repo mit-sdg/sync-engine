@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 import { vocabularyClasses, vocabularyMetadata } from "@engine/reactions/authoring/refs";
 import type { ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
-import type { ApplicationManifestV5 } from "@engine/tooling/manifest";
+import type { ApplicationManifestV1 } from "@engine/tooling/manifest";
 
 export interface RegisteredSourceConcept {
   name: string;
@@ -38,7 +38,7 @@ export function registeredConcepts(vocabulary: unknown): RegisteredSourceConcept
 }
 
 /** Read the same registration facts from an assembled application's manifest. */
-export function assembledConcepts(manifest: ApplicationManifestV5): RegisteredSourceConcept[] {
+export function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSourceConcept[] {
   const applicationConcepts = manifest.conceptImplementations.filter(
     ({ canonical }) => canonical.owner === "application",
   );

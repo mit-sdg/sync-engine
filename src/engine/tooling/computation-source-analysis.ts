@@ -1,14 +1,15 @@
-import { dirname, resolve } from "node:path";
 import ts from "typescript";
 import type {
   AuthoritativeComputationInput,
   ResolveComputationInputs,
-} from "@engine/tooling/authored-design-orchestration";
-import { shapeOfTypeNode, type TypeScriptCheckerContext } from "./typescript-shapes.ts";
+} from "./authored-design-orchestration.ts";
+import {
+  shapeOfTypeNode,
+  typeScriptSourceContext,
+  type TypeScriptSourceContext,
+} from "./typescript-shapes.ts";
 
-interface AnalysisContext extends TypeScriptCheckerContext {
-  source: ts.SourceFile;
-}
+type AnalysisContext = TypeScriptSourceContext;
 
 type RegistrationKind = "conceptSet" | "vocabulary";
 
@@ -23,52 +24,6 @@ interface StaticMember extends StaticValue {
 
 function fail(source: ts.SourceFile, detail: string): never {
   throw new Error(`Computation source analysis failed in ${source.fileName}: ${detail}`);
-}
-
-function diagnosticText(diagnostic: ts.Diagnostic): string {
-  return ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
-}
-
-function contextFor(sourcePath: string): AnalysisContext {
-  const absolute = resolve(sourcePath);
-  const configPath = ts.findConfigFile(dirname(absolute), ts.sys.fileExists);
-  let rootNames = [absolute];
-  let options: ts.CompilerOptions = {
-    allowImportingTsExtensions: true,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    noEmit: true,
-    skipLibCheck: true,
-    target: ts.ScriptTarget.ESNext,
-  };
-  let projectReferences: readonly ts.ProjectReference[] | undefined;
-
-  if (configPath !== undefined) {
-    const loaded = ts.readConfigFile(configPath, ts.sys.readFile);
-    if (loaded.error !== undefined) {
-      throw new Error(`TypeScript project configuration failed: ${diagnosticText(loaded.error)}`);
-    }
-    const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, dirname(configPath));
-    if (parsed.errors.length > 0) {
-      throw new Error(
-        `TypeScript project configuration failed: ${diagnosticText(parsed.errors[0])}`,
-      );
-    }
-    rootNames = parsed.fileNames.some((path) => resolve(path) === absolute)
-      ? parsed.fileNames
-      : [...parsed.fileNames, absolute];
-    options = { ...parsed.options, noEmit: true };
-    projectReferences = parsed.projectReferences;
-  }
-
-  const program = ts.createProgram({ rootNames, options, projectReferences });
-  const source = program.getSourceFile(absolute);
-  if (source === undefined)
-    fail(
-      ts.createSourceFile(absolute, "", ts.ScriptTarget.Latest),
-      "the configured vocabulary module cannot be loaded",
-    );
-  return { program, checker: program.getTypeChecker(), source };
 }
 
 function unwrap(expression: ts.Expression): ts.Expression {
@@ -337,8 +292,9 @@ function inputsOf(
 export function authoritativeComputationInputs(
   vocabularyModulePath: string,
   selectedNames: readonly string[],
+  suppliedContext?: TypeScriptSourceContext,
 ): readonly AuthoritativeComputationInput[] {
-  const context = contextFor(vocabularyModulePath);
+  const context = suppliedContext ?? typeScriptSourceContext(vocabularyModulePath);
   const calls: { call: ts.CallExpression; kind: RegistrationKind }[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import ts from "typescript";
+import { typeScriptSourceContext, type TypeScriptSourceContext } from "./typescript-shapes.ts";
 
 /** Static source provenance for one registration selected by a concept set. */
 export interface RegisteredConceptSource {
@@ -15,14 +16,7 @@ export interface RegisteredConceptSource {
   specText: string;
 }
 
-/** @deprecated Use `RegisteredConceptSource`; retained for the existing checker integration. */
-export type RegisteredClassSource = RegisteredConceptSource;
-
-interface DiscoveryContext {
-  program: ts.Program;
-  checker: ts.TypeChecker;
-  options: ts.CompilerOptions;
-}
+type DiscoveryContext = TypeScriptSourceContext;
 
 interface RegistrationEntry {
   name: string;
@@ -37,47 +31,6 @@ interface MarkdownImport {
 
 function failure(source: ts.SourceFile, detail: string): never {
   throw new Error(`Concept source discovery failed in ${source.fileName}: ${detail}`);
-}
-
-function contextFor(sourcePath: string): DiscoveryContext {
-  const absolute = resolve(sourcePath);
-  const configPath = ts.findConfigFile(dirname(absolute), ts.sys.fileExists);
-  let rootNames = [absolute];
-  let options: ts.CompilerOptions = {
-    allowArbitraryExtensions: true,
-    allowImportingTsExtensions: true,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    noEmit: true,
-    skipLibCheck: true,
-    target: ts.ScriptTarget.ESNext,
-  };
-  let projectReferences: readonly ts.ProjectReference[] | undefined;
-
-  if (configPath !== undefined) {
-    const loaded = ts.readConfigFile(configPath, ts.sys.readFile);
-    if (loaded.error !== undefined) {
-      failure(
-        ts.createSourceFile(absolute, "", ts.ScriptTarget.Latest),
-        ts.flattenDiagnosticMessageText(loaded.error.messageText, "\n"),
-      );
-    }
-    const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, dirname(configPath));
-    if (parsed.errors.length > 0) {
-      failure(
-        ts.createSourceFile(absolute, "", ts.ScriptTarget.Latest),
-        ts.flattenDiagnosticMessageText(parsed.errors[0].messageText, "\n"),
-      );
-    }
-    rootNames = parsed.fileNames.some((path) => resolve(path) === absolute)
-      ? parsed.fileNames
-      : [...parsed.fileNames, absolute];
-    options = { ...parsed.options, allowArbitraryExtensions: true, noEmit: true };
-    projectReferences = parsed.projectReferences;
-  }
-
-  const program = ts.createProgram({ rootNames, options, projectReferences });
-  return { program, checker: program.getTypeChecker(), options };
 }
 
 function unwrap(expression: ts.Expression): ts.Expression {
@@ -325,7 +278,9 @@ function textImportPath(imported: MarkdownImport, context: DiscoveryContext): st
     return direct;
   }
 
-  const baseUrl = context.options.baseUrl;
+  const baseUrl =
+    context.options.baseUrl ??
+    (context.options as ts.CompilerOptions & { pathsBasePath?: string }).pathsBasePath;
   const candidates: string[] = [];
   if (baseUrl !== undefined) {
     for (const [pattern, substitutions] of Object.entries(context.options.paths ?? {})) {
@@ -350,37 +305,64 @@ function textImportPath(imported: MarkdownImport, context: DiscoveryContext): st
   failure(importer, `default specification import \`${specifier}\` cannot be resolved`);
 }
 
+function registrationFactory(
+  expression: ts.Expression,
+  context: DiscoveryContext,
+): "conceptSet" | "vocabulary" | undefined {
+  expression = unwrap(expression);
+  if (!ts.isIdentifier(expression)) return undefined;
+  if (expression.text === "conceptSet" || expression.text === "vocabulary") {
+    return expression.text;
+  }
+  for (const declaration of localSymbol(expression, context.checker)?.declarations ?? []) {
+    if (ts.isImportSpecifier(declaration)) {
+      const imported = declaration.propertyName?.text ?? declaration.name.text;
+      if (imported === "conceptSet" || imported === "vocabulary") return imported;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Locate the implementation and exact Markdown source for every registration selected by a
- * `conceptSet(...)` in the supplied module. Static discovery fails closed rather than guessing
- * through computed registrations or specification construction.
+ * `conceptSet(...)` or `vocabulary(...)` in the supplied module. Static discovery fails closed
+ * rather than guessing through computed registrations or specification construction.
  */
-export function registeredConceptSources(conceptSetPath: string): RegisteredConceptSource[] {
+export function registeredConceptSources(
+  conceptSetPath: string,
+  suppliedContext?: TypeScriptSourceContext,
+): RegisteredConceptSource[] {
   const absolute = resolve(conceptSetPath);
-  const context = contextFor(absolute);
-  const source = context.program.getSourceFile(absolute);
-  if (source === undefined) throw new Error(`Concept source discovery could not load ${absolute}`);
+  const context = suppliedContext ?? typeScriptSourceContext(absolute);
+  const source = context.source;
 
-  const calls: ts.CallExpression[] = [];
+  const calls: { call: ts.CallExpression; kind: "conceptSet" | "vocabulary" }[] = [];
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "conceptSet"
-    ) {
-      calls.push(node);
+    if (ts.isCallExpression(node)) {
+      const kind = registrationFactory(node.expression, context);
+      if (kind !== undefined) calls.push({ call: node, kind });
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
 
   const entries: RegistrationEntry[] = [];
-  for (const call of calls) {
+  for (const { call, kind } of calls) {
     const argument = call.arguments[0];
-    if (argument === undefined) failure(source, "conceptSet has no registration map");
-    const registrations = objectLiteral(source, argument, context);
-    if (registrations === undefined)
-      failure(source, "the selected conceptSet registration map is dynamic");
+    if (argument === undefined) failure(source, `${kind} has no declaration object`);
+    const declaration = objectLiteral(source, argument, context);
+    if (declaration === undefined) failure(source, `the selected ${kind} declaration is dynamic`);
+    const registrationValue =
+      kind === "conceptSet"
+        ? { source: declaration.source, expression: declaration.object as ts.Expression }
+        : propertyValue(declaration.source, declaration.object, "concepts", context);
+    if (registrationValue === undefined) continue;
+    const registrations = objectLiteral(
+      registrationValue.source,
+      registrationValue.expression,
+      context,
+    );
+    if (registrations === undefined) failure(source, `the selected ${kind} concept map is dynamic`);
     const selected = new Map<string, RegistrationEntry>();
     for (const entry of registrationEntries(registrations.source, registrations.object, context)) {
       // Object assignment and spread use ordinary JavaScript last-write-wins semantics.
@@ -398,18 +380,21 @@ export function registeredConceptSources(conceptSetPath: string): RegisteredConc
 
   return entries.map((entry) => {
     const registration = registrationCall(entry.source, entry.value, context);
-    if (registration === undefined) {
-      return failure(
-        entry.source,
-        `concept instance \`${entry.name}\` is not a static registerConcept call`,
+    const directOptions = objectLiteral(entry.source, entry.value, context);
+    const argument = registration?.call.arguments[0];
+    if (registration !== undefined && argument === undefined) {
+      failure(registration.source, `registration \`${entry.name}\` has no options`);
+    }
+    const options =
+      registration === undefined
+        ? directOptions
+        : objectLiteral(registration.source, argument!, context);
+    if (options === undefined) {
+      failure(
+        registration?.source ?? entry.source,
+        `registration \`${entry.name}\` is dynamic or not a static registration object`,
       );
     }
-    const argument = registration.call.arguments[0];
-    if (argument === undefined)
-      failure(registration.source, `registration \`${entry.name}\` has no options`);
-    const options = objectLiteral(registration.source, argument, context);
-    if (options === undefined)
-      failure(registration.source, `registration \`${entry.name}\` options are dynamic`);
 
     const classValue = propertyValue(options.source, options.object, "class", context);
     if (classValue === undefined)
@@ -448,9 +433,4 @@ export function registeredConceptSources(conceptSetPath: string): RegisteredConc
       specText: readFileSync(specPath, "utf8"),
     };
   });
-}
-
-/** @deprecated Use `registeredConceptSources`; retained for the existing checker integration. */
-export function registeredClassSources(conceptSetPath: string): RegisteredClassSource[] {
-  return registeredConceptSources(conceptSetPath);
 }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
   authoritativeComputationInputs,
   resolveComputationInputsFromSource,
-} from "@command/computation-source-analysis";
+} from "@engine/tooling/computation-source-analysis";
 
 let directory = "";
 

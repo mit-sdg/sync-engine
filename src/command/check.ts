@@ -3,11 +3,14 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
-import { applicationManifest, type ApplicationManifestV5 } from "@engine/tooling/manifest";
+import { applicationManifest, type ApplicationManifestV1 } from "@engine/tooling/manifest";
 import { diagnosticsFail } from "@engine/tooling/diagnostics";
-import { inspectGenerated, type ResolvedApplication } from "@engine/tooling/generated-artifacts";
+import {
+  inspectGenerated,
+  type GeneratedSourceAnalysis,
+  type ResolvedApplication,
+} from "@engine/tooling/generated-artifacts";
 import { assembledConcepts } from "./concept-discovery.ts";
-import { registeredClassSources } from "./concept-source-discovery.ts";
 import { filesBelow } from "./files-below.ts";
 import { loadGeneratedApplication } from "./generated-config.ts";
 import {
@@ -17,7 +20,7 @@ import {
   resultShapeOfMethod,
   shapeOfTypeNode,
   shapesEqual,
-} from "./typescript-shapes.ts";
+} from "@engine/tooling/typescript-shapes";
 
 function parseFile(path: string): ts.SourceFile {
   return ts.createSourceFile(
@@ -310,12 +313,13 @@ function sourceFailures(
   label: string,
   locationBase: string,
   sourceInputMembers?: ReadonlySet<string>,
+  suppliedContext?: CheckerContext,
 ): string[] {
   const findings: string[] = [];
   const report = (what: string): void => void findings.push(`${label}: ${what}.`);
   let context: CheckerContext;
   try {
-    context = checkerFor(classPath);
+    context = suppliedContext ?? checkerFor(classPath);
   } catch (error) {
     report(error instanceof Error ? error.message : String(error));
     return findings;
@@ -400,9 +404,10 @@ const usage = `sync-engine check [--config path] [--fail-on-warnings]
 function conceptSourceFailures(
   vocabularyModulePath: string,
   concepts: ReturnType<typeof assembledConcepts>,
+  sourceAnalysis: GeneratedSourceAnalysis,
   root: string,
 ): string[] {
-  const sources = registeredClassSources(vocabularyModulePath);
+  const sources = sourceAnalysis.concepts;
   const failures: string[] = [];
   for (const concept of concepts) {
     const source = sources.find(({ conceptName }) => conceptName === concept.name);
@@ -425,6 +430,7 @@ function conceptSourceFailures(
         label,
         root,
         concept.sourceInputMembers,
+        sourceAnalysis.context,
       ),
     );
   }
@@ -443,15 +449,16 @@ async function checkConfiguredApplication(
   root: string,
   failOnWarnings: boolean,
 ): Promise<void> {
-  const manifest = await inspectGenerated(application, (assembled) =>
-    applicationManifest(assembled),
+  const { manifest, sourceAnalysis } = await inspectGenerated(
+    application,
+    (assembled, sourceAnalysis) => ({
+      manifest: applicationManifest(assembled),
+      sourceAnalysis,
+    }),
   );
-  const vocabularyModulePath = resolve(
-    fileURLToPath(application.directory),
-    application.vocabularyFrom.from,
-  );
+  const vocabularyModulePath = fileURLToPath(application.vocabularyModule);
   const concepts = assembledConcepts(manifest);
-  assertConceptSources(conceptSourceFailures(vocabularyModulePath, concepts, root));
+  assertConceptSources(conceptSourceFailures(vocabularyModulePath, concepts, sourceAnalysis, root));
   console.log(`Concept action/query source check passed for ${concepts.length} concepts.`);
 
   // Authored-design loading and coverage belongs at this exact config/manifest boundary.
@@ -460,7 +467,7 @@ async function checkConfiguredApplication(
 }
 
 function reportApplicationDiagnostics(
-  manifest: ApplicationManifestV5,
+  manifest: ApplicationManifestV1,
   failOnWarnings: boolean,
 ): void {
   const diagnostics = manifest.diagnostics;

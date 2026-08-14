@@ -13,7 +13,7 @@ export {
   parseApplicationManifest,
   validateApplicationManifest,
 } from "@engine/tooling/application-manifest-format";
-export type { ApplicationManifestV5, ManifestEndpointV5 } from "@engine/tooling/manifest";
+export type { ApplicationManifestV1, ManifestEndpointV1 } from "@engine/tooling/manifest";
 export { parseSpec as parseConceptSpecification } from "@engine/reactions/concepts/concept-spec";
 export { renderApp, renderReaction } from "@engine/reads/render";
 export { wireContracts } from "@engine/boundary/wire/wire-contracts";
