@@ -1407,6 +1407,8 @@ export type SpecQuery = SpecificationQueryIR;
 export type SpecExternalType = SpecificationExternalTypeIR;
 export type SpecState = SpecificationStateIR;
 export type ConceptSpec = ConceptSpecificationIR;
+/** The normalized full-source digest retained for a specification parsed in this process. */
+export declare function specificationSourceDigest(specification: ConceptSpec): string | undefined;
 /** Parse imported Markdown as the strict version-1 concept-specification format. */
 export declare function parseSpec(markdown: string): ConceptSpec;
 /** Canonical compatibility ignores source positions but retains every authored contract value. */
@@ -5238,6 +5240,15 @@ export declare function raceDeadline<T>(pending: Promise<T>, options: {
     signal?: AbortSignal;
     onAbort?: () => T;
 }): Promise<T>;
+
+=== dist/engine/utils/design-identifiers.d.ts ===
+/** Shared lexical rules for authored design names and dotted declaration paths. */
+export declare const DESIGN_IDENTIFIER_SOURCE = "[A-Za-z_][A-Za-z0-9_]*";
+export declare const AUTHORED_PATH_SEGMENT_SOURCE = "[A-Za-z_][A-Za-z0-9_-]*";
+export declare function isDesignIdentifier(value: string): boolean;
+export declare function isAuthoredPathSegment(value: string): boolean;
+export declare function invalidAuthoredPathSegment(path: string): string | undefined;
+export declare function isAuthoredDeclarationPath(path: string): boolean;
 
 === dist/engine/utils/framework-error-codes.d.ts ===
 export declare const FrameworkErrorCode: {
