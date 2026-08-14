@@ -8,6 +8,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
+import { vocabulary } from "@sync-engine/language";
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
@@ -28,6 +29,11 @@ import { loadGeneratedApplication } from "@command/generated-config";
  */
 const configUrl = new URL("../../packaging/application/generated.config.ts", import.meta.url);
 const languageModule = new URL("./fixtures/generated-artifacts/vocabulary.ts", import.meta.url);
+const conceptFreeModule = new URL(
+  "./fixtures/generated-artifacts/concept-free/vocabulary.ts",
+  import.meta.url,
+);
+const conceptFreeVocabulary = vocabulary({ concepts: {}, computations: {} });
 const fixtureDesign = (documents: readonly string[] = []) => ({
   version: 1 as const,
   documents: documents.map(
@@ -143,6 +149,18 @@ export const vocabulary = declareVocabulary({
 `;
     try {
       await writeFile(specPath, await readFile(join(fixtureDirectory, "sessioning.md"), "utf8"));
+      await writeFile(
+        join(temporary, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            allowArbitraryExtensions: true,
+            module: "NodeNext",
+            moduleResolution: "NodeNext",
+            target: "ESNext",
+          },
+          files: ["vocabulary.ts"],
+        }),
+      );
       await writeFile(modulePath, source("user"));
       const application = resolveApplication(
         {
@@ -416,12 +434,12 @@ export const vocabulary = declareVocabulary({
     const escaped = join(temporary, "escape.md");
     const application = resolveApplication(
       {
-        assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+        assemble: () => assemble({ vocabulary: conceptFreeVocabulary, composition: {} }),
         directory: pathToFileURL(`${generated}/`),
         specification: "%2e%2e/escape.md",
         title: "Unsafe path application",
-        design: loginDesign,
-        vocabulary: { module: languageModule },
+        design: emptyDesign,
+        vocabulary: { module: conceptFreeModule },
       },
       configUrl,
     );
@@ -446,33 +464,40 @@ export const vocabulary = declareVocabulary({
         label: "generated config",
         directory: new URL("../../packaging/application/", import.meta.url),
         specification: "generated.config.ts",
+        authored: false,
       },
       {
         label: "design document",
         directory: fixtureDirectory,
         specification: "login.md",
+        authored: true,
       },
       {
         label: "concept specification",
         directory: fixtureDirectory,
         specification: "sessioning.md",
+        authored: true,
       },
       {
         label: "executable vocabulary module",
-        directory: fixtureDirectory,
+        directory: new URL("./fixtures/generated-artifacts/concept-free/", import.meta.url),
         specification: "vocabulary.ts",
+        authored: false,
       },
     ] as const;
 
     for (const collision of cases) {
       const application = resolveApplication(
         {
-          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+          assemble: () =>
+            collision.authored
+              ? assemble({ vocabulary: vocabularyDeclaration, composition: { Login } })
+              : assemble({ vocabulary: conceptFreeVocabulary, composition: {} }),
           directory: collision.directory,
           specification: collision.specification,
           title: "Colliding application",
-          design: loginDesign,
-          vocabulary: { module: languageModule },
+          design: collision.authored ? loginDesign : emptyDesign,
+          vocabulary: { module: collision.authored ? languageModule : conceptFreeModule },
         },
         configUrl,
       );
@@ -515,12 +540,11 @@ export const vocabulary = declareVocabulary({
     const directory = pathToFileURL(`${generated}/`);
     const application = resolveApplication(
       {
-        assemble: () =>
-          assemble({ vocabulary: vocabularyDeclaration, composition: { Login, Current } }),
+        assemble: () => assemble({ vocabulary: conceptFreeVocabulary, composition: {} }),
         directory,
         title: "Filesystem application",
-        design: loginCurrentDesign,
-        vocabulary: { module: languageModule },
+        design: emptyDesign,
+        vocabulary: { module: conceptFreeModule },
       },
       configUrl,
     );
@@ -554,12 +578,12 @@ export const vocabulary = declareVocabulary({
     await mkdir(blocked, { recursive: true });
     const application = resolveApplication(
       {
-        assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+        assemble: () => assemble({ vocabulary: conceptFreeVocabulary, composition: {} }),
         directory: pathToFileURL(`${generated}/`),
         specification: "blocked.md",
         title: "Blocked application",
-        design: loginDesign,
-        vocabulary: { module: languageModule },
+        design: emptyDesign,
+        vocabulary: { module: conceptFreeModule },
       },
       configUrl,
     );
