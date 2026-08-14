@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname, posix, relative } from "node:path";
+import { mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { basename, dirname, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
 import { wireProjectionFacts } from "@engine/boundary/gateway/transport-binding";
@@ -91,26 +91,23 @@ export interface GeneratedSourceAnalysis {
   concepts: readonly RegisteredConceptSource[];
 }
 
-interface CachedModuleSourceAnalysis {
+interface OperationSourceAnalysis {
   context: TypeScriptSourceContext;
   concepts: readonly RegisteredConceptSource[];
   computationInputs: Map<string, ReturnType<typeof authoritativeComputationInputs>>;
 }
 
-const moduleSourceAnalysis = new Map<string, CachedModuleSourceAnalysis>();
-
-function sourceAnalysisFor(vocabularyModulePath: string): CachedModuleSourceAnalysis {
-  const cached = moduleSourceAnalysis.get(vocabularyModulePath);
-  if (cached !== undefined) return cached;
+/** Source analysis belongs to one inspection so later operations always observe disk edits. */
+function sourceAnalysisForOperation(vocabularyModulePath: string): OperationSourceAnalysis {
   const context = typeScriptSourceContext(vocabularyModulePath);
-  const analyzed = {
+  return {
     context,
     concepts: registeredConceptSources(vocabularyModulePath, context),
     computationInputs: new Map(),
   };
-  moduleSourceAnalysis.set(vocabularyModulePath, analyzed);
-  return analyzed;
 }
+
+const configurationSource = new WeakMap<object, URL>();
 
 /** The module specifier a file in `directory` uses to reach `target`. */
 function specifierFrom(directory: URL, target: URL): string {
@@ -211,7 +208,7 @@ export function resolveApplication(
         "point `vocabulary.module` at the file exporting the concept set.",
     );
   }
-  return {
+  const resolved: ResolvedApplication = {
     ...application,
     design,
     directory,
@@ -224,6 +221,8 @@ export function resolveApplication(
       export: application.vocabulary?.export ?? "vocabulary",
     },
   };
+  configurationSource.set(resolved, config);
+  return resolved;
 }
 
 async function prepareConfiguredDesign(
@@ -231,7 +230,7 @@ async function prepareConfiguredDesign(
   assembled: InspectableAssembly,
 ): Promise<GeneratedSourceAnalysis> {
   const vocabularyModulePath = fileURLToPath(application.vocabularyModule);
-  const sourceAnalysis = sourceAnalysisFor(vocabularyModulePath);
+  const sourceAnalysis = sourceAnalysisForOperation(vocabularyModulePath);
   const concepts = sourceAnalysis.concepts;
   const uncheckedManifest = applicationManifest(assembled);
   const selectedConcepts = uncheckedManifest.conceptImplementations.filter(
@@ -375,30 +374,108 @@ export async function renderGenerated(application: ResolvedApplication) {
   };
 }
 
+async function canonicalPath(path: string): Promise<string> {
+  const absolute = resolve(path);
+  try {
+    return await realpath(absolute);
+  } catch (error) {
+    if ((error as { code?: unknown }).code !== "ENOENT") throw error;
+    const parent = dirname(absolute);
+    if (parent === absolute) return absolute;
+    return resolve(await canonicalPath(parent), basename(absolute));
+  }
+}
+
+async function safeArtifactTargets(
+  application: ResolvedApplication,
+  plan: ArtifactPlan,
+  sourceAnalysis: GeneratedSourceAnalysis,
+): Promise<Map<string, string>> {
+  const inputs: Array<{ label: string; path: string }> = [];
+  const config = configurationSource.get(application);
+  if (config !== undefined) inputs.push({ label: "generated config", path: fileURLToPath(config) });
+  if (application.design.vocabulary !== undefined) {
+    inputs.push({
+      label: "vocabulary design document",
+      path: fileURLToPath(application.design.vocabulary),
+    });
+  }
+  application.design.documents.forEach((document, index) =>
+    inputs.push({
+      label: `design document ${index + 1}`,
+      path: fileURLToPath(document),
+    }),
+  );
+  inputs.push({
+    label: "executable vocabulary module",
+    path: fileURLToPath(application.vocabularyModule),
+  });
+  for (const concept of sourceAnalysis.concepts) {
+    inputs.push(
+      { label: `concept specification for ${concept.conceptName}`, path: concept.specPath },
+      { label: `concept implementation for ${concept.conceptName}`, path: concept.classPath },
+    );
+  }
+
+  const authoritative = new Map<string, string>();
+  for (const input of inputs) {
+    const path = await canonicalPath(input.path);
+    if (!authoritative.has(path)) authoritative.set(path, input.label);
+  }
+
+  const targets = new Map<string, string>();
+  const targetOwners = new Map<string, string>();
+  for (const entry of plan.entries) {
+    const target = await canonicalPath(fileURLToPath(new URL(entry.path, application.directory)));
+    const input = authoritative.get(target);
+    if (input !== undefined) {
+      throw new Error(
+        `generated artifacts: output ${JSON.stringify(entry.path)} collides with authoritative ${input}: ${target}.`,
+      );
+    }
+    const other = targetOwners.get(target);
+    if (other !== undefined) {
+      throw new Error(
+        `generated artifacts: outputs ${JSON.stringify(other)} and ${JSON.stringify(entry.path)} resolve to the same target: ${target}.`,
+      );
+    }
+    targets.set(entry.path, target);
+    targetOwners.set(target, entry.path);
+  }
+  return targets;
+}
+
 async function generatedPlan(
   application: ResolvedApplication,
   artifact: "all" | "specification" | "wire" = "all",
-): Promise<ArtifactPlan> {
-  const plan = await inspectGenerated(
-    application,
-    async (assembled) => (await completeGeneratedPlan(application, assembled)).plan,
-  );
-  if (artifact === "all") return plan;
-  return { entries: plan.entries.filter(({ kind }) => kind === artifact) };
+): Promise<{ plan: ArtifactPlan; targets: Map<string, string> }> {
+  return inspectGenerated(application, async (assembled, sourceAnalysis) => {
+    const complete = (await completeGeneratedPlan(application, assembled)).plan;
+    const plan =
+      artifact === "all"
+        ? complete
+        : { entries: complete.entries.filter(({ kind }) => kind === artifact) };
+    return { plan, targets: await safeArtifactTargets(application, plan, sourceAnalysis) };
+  });
 }
 
-function nodeFilesystem(directory: URL): ArtifactFilesystem {
+function nodeFilesystem(targets: ReadonlyMap<string, string>): ArtifactFilesystem {
+  const targetFor = (path: string): string => {
+    const target = targets.get(path);
+    if (target === undefined) throw new Error(`generated artifacts: unresolved target ${path}.`);
+    return target;
+  };
   return {
     async read(path) {
       try {
-        return await readFile(new URL(path, directory), "utf8");
+        return await readFile(targetFor(path), "utf8");
       } catch (error) {
         if ((error as { code?: unknown }).code === "ENOENT") return undefined;
         throw error;
       }
     },
     async writeAtomic(path, content) {
-      const target = fileURLToPath(new URL(path, directory));
+      const target = targetFor(path);
       await mkdir(dirname(target), { recursive: true });
       const temporary = `${target}.${crypto.randomUUID()}.tmp`;
       try {
@@ -428,18 +505,14 @@ export async function pinGenerated(
   application: ResolvedApplication,
   artifact: "all" | "specification" | "wire" = "all",
 ): Promise<void> {
-  const status = await applyArtifactPlan(
-    await generatedPlan(application, artifact),
-    nodeFilesystem(application.directory),
-  );
+  const { plan, targets } = await generatedPlan(application, artifact);
+  const status = await applyArtifactPlan(plan, nodeFilesystem(targets));
   assertNoArtifactFailures(status, "apply");
 }
 
 export async function checkGenerated(application: ResolvedApplication): Promise<void> {
-  const status = await checkArtifactPlan(
-    await generatedPlan(application),
-    nodeFilesystem(application.directory),
-  );
+  const { plan, targets } = await generatedPlan(application);
+  const status = await checkArtifactPlan(plan, nodeFilesystem(targets));
   assertNoArtifactFailures(status, "check");
   const mismatches = status.filter(({ status: state }) => state !== "unchanged");
   if (mismatches.length > 0) {

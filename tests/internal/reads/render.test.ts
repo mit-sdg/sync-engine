@@ -10,7 +10,7 @@ import { when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
 import type { ReactionIR, WhereOpIR } from "@sync-engine/internal/reads/ir";
-import { renderReaction, renderWhereOp } from "@sync-engine/internal/reads/render";
+import { renderApp, renderReaction, renderWhereOp } from "@sync-engine/internal/reads/render";
 import { inventoryOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import type { StepNode } from "@sync-engine/internal/reactions/types";
@@ -409,6 +409,51 @@ describe("renderApp", () => {
     const spec = mockEngine().renderApp("MockApp");
     expect(spec).toContain("CounterClicked");
     expect(spec).toContain("Inc");
+  });
+
+  test("an unlowered reaction renders its authored identity and every coverage location", () => {
+    const rendered = renderApp({
+      title: "Covered local application",
+      concepts: [],
+      app: {
+        reactions: [],
+        views: [],
+        formers: [],
+        unlowered: [
+          {
+            name: "LocalRuntimeReaction",
+            authored: { kind: "reaction", identity: "Forum.LocalReaction" },
+            reason: "a closure keeps executable behavior local",
+            known: { when: [], where: [], then: [], patterns: [] },
+          },
+        ],
+      },
+      design: {
+        checked: true,
+        sources: [
+          { id: "document-1", path: "../design/forum.md", title: "Forum design" },
+          { id: "document-2", path: "../design/access.md", title: "Access design" },
+        ],
+        declarations: [
+          {
+            kind: "reaction",
+            identity: "Forum.LocalReaction",
+            runtimeNames: ["LocalRuntimeReaction"],
+            coverage: [
+              { source: "document-1", line: 12, column: 4 },
+              { source: "document-2", line: 27, column: 2 },
+            ],
+          },
+        ],
+        concepts: [],
+        computations: [],
+      },
+    });
+
+    expect(rendered).toContain("### LocalRuntimeReaction");
+    expect(rendered).toContain("Authored path: `Forum.LocalReaction`.");
+    expect(rendered).toContain("- Covered by [Forum design](../design/forum.md), line 12.");
+    expect(rendered).toContain("- Covered by [Access design](../design/access.md), line 27.");
   });
 
   test("a reaction that stayed a pipeline is listed with its reason, never dropped", () => {

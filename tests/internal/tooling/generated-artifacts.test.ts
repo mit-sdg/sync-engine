@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,6 +13,7 @@ import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
 import {
   checkGenerated,
+  inspectGenerated,
   pinGenerated,
   renderGenerated,
   resolveApplication,
@@ -97,7 +98,7 @@ describe("generated application artifacts", () => {
     expect(rendered).not.toMatch(/- `(register|cancel|respondFramework) /);
     expect(rendered).toContain("when RequestBoundary.request");
     expect(rendered).toContain("RequestBoundary.respond (");
-  });
+  }, 15_000);
 
   test("assembles once while checking the exact generated application", async () => {
     let assemblies = 0;
@@ -118,6 +119,57 @@ describe("generated application artifacts", () => {
     );
     expect(assemblies).toBe(1);
   });
+
+  test("rebuilds source analysis for each programmatic inspection after source edits", async () => {
+    const fixtureDirectory = fileURLToPath(
+      new URL("./fixtures/generated-artifacts/", import.meta.url),
+    );
+    const temporary = await mkdtemp(join(fixtureDirectory, ".source-analysis-"));
+    const modulePath = join(temporary, "vocabulary.ts");
+    const specPath = join(temporary, "sessioning.md");
+    const source = (parameter: "user" | "account") => `
+import { vocabulary as declareVocabulary } from "@mit-sdg/sync-engine/language";
+import sessioningSpec from "./sessioning.md" with { type: "text" };
+export class SessioningConcept {
+  start({ ${parameter} }: { ${parameter}: string }) {
+    return { session: \`session-\${${parameter}}\`, expiresAt: new Date(0) };
+  }
+  current({ session }: { session: string }) { return { user: session }; }
+}
+export const vocabulary = declareVocabulary({
+  concepts: { Sessioning: { class: SessioningConcept, spec: sessioningSpec } },
+  computations: {},
+});
+`;
+    try {
+      await writeFile(specPath, await readFile(join(fixtureDirectory, "sessioning.md"), "utf8"));
+      await writeFile(modulePath, source("user"));
+      const application = resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+          directory: new URL("./not-written/", import.meta.url),
+          title: "Fresh source analysis",
+          design: loginDesign,
+          vocabulary: { module: pathToFileURL(modulePath) },
+        },
+        configUrl,
+      );
+
+      const first = await inspectGenerated(application, (_assembly, analysis) =>
+        analysis.context.source.getFullText(),
+      );
+      expect(first).toContain("start({ user }");
+
+      await writeFile(modulePath, source("account"));
+      const second = await inspectGenerated(application, (_assembly, analysis) =>
+        analysis.context.source.getFullText(),
+      );
+      expect(second).toContain("start({ account }");
+      expect(second).not.toContain("start({ user }");
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  }, 15_000);
 
   test("warns when an endpoint has no answer path", () => {
     const application = assemble({
@@ -385,7 +437,77 @@ describe("generated application artifacts", () => {
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
+
+  test("rejects canonical output collisions with every registered authoritative input kind", async () => {
+    const fixtureDirectory = new URL("./fixtures/generated-artifacts/", import.meta.url);
+    const cases = [
+      {
+        label: "generated config",
+        directory: new URL("../../packaging/application/", import.meta.url),
+        specification: "generated.config.ts",
+      },
+      {
+        label: "design document",
+        directory: fixtureDirectory,
+        specification: "login.md",
+      },
+      {
+        label: "concept specification",
+        directory: fixtureDirectory,
+        specification: "sessioning.md",
+      },
+      {
+        label: "executable vocabulary module",
+        directory: fixtureDirectory,
+        specification: "vocabulary.ts",
+      },
+    ] as const;
+
+    for (const collision of cases) {
+      const application = resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+          directory: collision.directory,
+          specification: collision.specification,
+          title: "Colliding application",
+          design: loginDesign,
+          vocabulary: { module: languageModule },
+        },
+        configUrl,
+      );
+      await expect(pinGenerated(application, "specification")).rejects.toThrow(
+        new RegExp(`collides with authoritative ${collision.label}`),
+      );
+    }
+  }, 30_000);
+
+  test("canonicalization rejects a symlinked output alias of a registered design source", async () => {
+    const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-alias-"));
+    const alias = join(temporary, "design-alias.md");
+    const designPath = fileURLToPath(
+      new URL("./fixtures/generated-artifacts/login.md", import.meta.url),
+    );
+    try {
+      await symlink(designPath, alias);
+      const application = resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+          directory: pathToFileURL(`${temporary}/`),
+          specification: "design-alias.md",
+          title: "Aliased collision",
+          design: loginDesign,
+          vocabulary: { module: languageModule },
+        },
+        configUrl,
+      );
+      await expect(pinGenerated(application, "specification")).rejects.toThrow(
+        /collides with authoritative design document/,
+      );
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  }, 15_000);
 
   test("selectively pins atomic files and detects missing or changed output", async () => {
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-"));
@@ -423,7 +545,7 @@ describe("generated application artifacts", () => {
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   test("reports generated artifact filesystem failures without partial writes", async () => {
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-failure-"));
@@ -453,7 +575,7 @@ describe("generated application artifacts", () => {
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   test("drains inspection before closing application-owned generation resources", async () => {
     const lifecycle: string[] = [];

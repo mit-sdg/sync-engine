@@ -602,10 +602,17 @@ export function renderApp(spec: AppSpecIR): string {
       "",
     );
     for (const reaction of spec.app.unlowered) {
+      lines.push(`### ${reaction.name}`, "");
+      pushDeclarationCoverage(
+        lines,
+        spec.design,
+        declarationFor(spec.design, "reaction", reaction.name),
+      );
       lines.push(
-        `- \`${reaction.name}\`${
+        `\`${reaction.name}\`${
           reaction.known.deferred === true ? " — at the flow's settlement frontier" : ""
         } — ${reaction.reason}`,
+        "",
       );
     }
     lines.push("");
