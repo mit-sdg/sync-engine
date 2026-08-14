@@ -455,7 +455,7 @@ generated endpoint input and output types.
 
 <!-- register:tooling:start -->
 
-`ActionTriggerIR`, `AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV5`, `ChannelTriggerIR`, `ComputationInventoryIR`, `ConceptImplementationProvenanceIR`, `ConceptInventoryIR`, `ConceptSpecificationIR`, `ConsequenceIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `FormerNodeIR`, `FormerSourceIR`, `GeneratedApplication`, `ManifestEndpointV5`, `ObservedOccurrence`, `PatternIR`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `QueryRefIR`, `ReactionIR`, `SpecificationActionIR`, `SpecificationDocumentationIR`, `SpecificationFieldIR`, `SpecificationLocationIR`, `SpecificationQueryIR`, `SpecificationRefusalIR`, `SpecificationResultIR`, `SpecificationTypeIR`, `SpliceIR`, `TriggerIR`, `UnloweredIR`, `ValueIR`, `ViewIR`, `ViewOpIR`, `WhereOpIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `applicationManifestDigest`, `diagnosticsFail`, `inspectAssembly`, `parseApplicationManifest`, `parseConceptSpecification`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `validateApplicationManifest`, `wireContracts`
+`ActionTriggerIR`, `AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV1`, `ChannelTriggerIR`, `ComputationInventoryIR`, `ConceptImplementationProvenanceIR`, `ConceptInventoryIR`, `ConceptSpecificationIR`, `ConsequenceIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `FormerNodeIR`, `FormerSourceIR`, `GeneratedApplication`, `ManifestEndpointV1`, `ObservedOccurrence`, `PatternIR`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `QueryRefIR`, `ReactionIR`, `SpecificationActionIR`, `SpecificationExternalTypeIR`, `SpecificationFieldIR`, `SpecificationLocationIR`, `SpecificationQueryIR`, `SpecificationRefusalIR`, `SpecificationResultIR`, `SpecificationStateIR`, `SpecificationTypeIR`, `SpliceIR`, `TriggerIR`, `UnloweredIR`, `ValueIR`, `ViewIR`, `ViewOpIR`, `WhereOpIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `applicationManifestDigest`, `diagnosticsFail`, `inspectAssembly`, `parseApplicationManifest`, `parseConceptSpecification`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `validateApplicationManifest`, `wireContracts`
 
 <!-- register:tooling:end -->
 
@@ -469,11 +469,11 @@ generated endpoint input and output types.
 | `renderInputContracts`        | `renderInputContracts(contracts): string`                                    |
 | `wireContracts`               | `wireContracts(app, options?: WireOptions): WireContractsIR`                 |
 | `renderWireTypes`             | `renderWireTypes(wire, moduleName? \| options?): string`                     |
-| `applicationManifest`         | `applicationManifest(assembly): ApplicationManifestV5`                       |
+| `applicationManifest`         | `applicationManifest(assembly): ApplicationManifestV1`                       |
 | `applicationManifestDigest`   | `applicationManifestDigest(manifest): string`                                |
-| `parseApplicationManifest`    | `parseApplicationManifest(source): ApplicationManifestV5`                    |
+| `parseApplicationManifest`    | `parseApplicationManifest(source): ApplicationManifestV1`                    |
 | `renderApplicationManifest`   | `renderApplicationManifest(manifest): string`                                |
-| `validateApplicationManifest` | `validateApplicationManifest(value): asserts value is ApplicationManifestV5` |
+| `validateApplicationManifest` | `validateApplicationManifest(value): asserts value is ApplicationManifestV1` |
 | `applicationDiagnostics`      | `applicationDiagnostics(app, endpoints, wire)`                               |
 | `diagnosticsFail`             | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`                      |
 | `parseConceptSpecification`   | `parseConceptSpecification(markdown): ConceptSpecificationIR`                |

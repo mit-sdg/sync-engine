@@ -389,7 +389,11 @@ describe("release source facts", () => {
   test.each([
     ["SUPPORT.md", "Only the newest beta is supported."],
     ["SUPPORT.md", `Node.js \`${packageManifest.engines.node}\``],
-    ["SUPPORT.md", "sync-engine.application-manifest` version 5"],
+    ["SUPPORT.md", "sync-engine.application-manifest` version 1"],
+    ["packages/analysis/public-surface.md", "sync-engine.application-index` version 3"],
+    ["packages/analysis/public-surface.md", "sync-engine.impact-trace` version 3"],
+    ["packages/analysis/public-surface.md", "sync-engine.application-source-index` version 3"],
+    ["packages/analysis/public-surface.md", "sync-engine.application-project-analysis` version 3"],
     ["SECURITY.md", "security/advisories/new"],
     ["SECURITY.md", "acknowledgement within three business days"],
   ])("requires the policy fact %s: %s", (path, fact) => {

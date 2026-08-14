@@ -58,7 +58,7 @@ export declare function checkCommand(args: readonly string[]): Promise<void>;
 
 === dist/command/concept-discovery.d.ts ===
 import type { ConceptSpec } from "../engine/reactions/concepts/concept-spec.ts";
-import type { ApplicationManifestV5 } from "../engine/tooling/manifest.ts";
+import type { ApplicationManifestV1 } from "../engine/tooling/manifest.ts";
 export interface RegisteredSourceConcept {
     name: string;
     className: string;
@@ -69,35 +69,16 @@ export interface RegisteredSourceConcept {
 /** Read the registrations retained by the vocabulary that conceptSet produced. */
 export declare function registeredConcepts(vocabulary: unknown): RegisteredSourceConcept[];
 /** Read the same registration facts from an assembled application's manifest. */
-export declare function assembledConcepts(manifest: ApplicationManifestV5): RegisteredSourceConcept[];
+export declare function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSourceConcept[];
 /** Import the explicitly selected vocabulary module when no assembly config is used. */
 export declare function loadRegisteredConcepts(modulePath: string, exportName?: string): Promise<RegisteredSourceConcept[]>;
-
-=== dist/command/concept-source-discovery.d.ts ===
-export interface RegisteredClassSource {
-    conceptName: string;
-    className: string;
-    classPath: string;
-}
-/** Locate only the class source needed for checks; runtime registration owns discovery and specs. */
-export declare function registeredClassSources(conceptSetPath: string): RegisteredClassSource[];
 
 === dist/command/files-below.d.ts ===
 /** List regular files depth-first without following symlinks. */
 export declare function filesBelow(directory: string, filter?: (name: string) => boolean): Promise<string[]>;
 
 === dist/command/generated-config.d.ts ===
-import { type GeneratedApplication } from "../engine/tooling/generated-artifacts.ts";
-export declare function loadGeneratedApplication(configPath: string, root: string): Promise<GeneratedApplication & {
-    directory: URL;
-    specification: string;
-    wire: string;
-    wireName: string;
-    vocabularyFrom: {
-        from: string;
-        export: string;
-    };
-}>;
+export declare function loadGeneratedApplication(configPath: string, root: string): Promise<import("../engine/tooling/generated-artifacts.ts").ResolvedApplication>;
 
 === dist/command/main.d.ts ===
 #!/usr/bin/env bun
@@ -133,6 +114,7 @@ import type { OperationalObserver, RawFaultReporter } from "../../reactions/runt
 import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
 import { type ComputationFn } from "../../reads/computations.ts";
+import { type AuthoredDeclarationIdentity } from "../../reads/declaration-identity.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
 import type { ComputationInventoryIR, ConceptImplementationProvenanceIR } from "../../reads/ir.ts";
 import type { RedactionPolicy } from "../../utils/redaction.ts";
@@ -231,6 +213,8 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     whenIdle(): Promise<void>;
     /** The public route and admission facts a separate gateway may consume. */
     publicInterface: ApplicationInterface;
+    /** Every selected authored declaration, once per installed composition object. */
+    authoredDeclarations: readonly AuthoredDeclarationIdentity[];
     /** Every authored endpoint declaration, independent of lowering. */
     endpoints: readonly EndpointDeclaration[];
     /** Evaluate a fused former against this app's concepts, at the moment of asking. */
@@ -1411,64 +1395,22 @@ export declare function refusalFor(concept: object, action: string, thrown: unkn
 export {};
 
 === dist/engine/reactions/concepts/concept-spec.d.ts ===
-/**
- * **The machine-readable parts of a concept specification.**
- *
- * The parser extracts purpose and principle prose plus structured action and
- * query declarations from their corresponding Markdown sections. An optional
- * State section is uninterpreted human notation and is not represented by
- * {@link ConceptSpec}.
- *
- * ````md
- * ## Actions
- *
- * ```actions
- * join (gathering: Gathering, member: Person) : return (membership: Membership)
- *   where gathering not in gatherings
- *   then
- *     refuse GATHERING_NOT_FOUND "There is no such gathering."
- * ```
- *
- * ## Queries
- *
- * ```queries
- * _members (gathering: Gathering) : many (member: Person)
- *   orders rows by when each Person joined
- * ```
- * ````
- *
- * A signature line starts at the left margin and everything indented under it
- * is the member's authored behavior. Names, optionality, type expressions,
- * results, and source locations are retained without assigning runtime schema
- * semantics to them. A refusal's message is the normative sentence the
- * boundary reports.
- */
-import type { ConceptSpecificationIR, SpecificationActionIR, SpecificationDocumentationIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationTypeIR } from "../../reads/ir.ts";
-/** A one-based position in the specification source. */
+/** Parse the complete version-1 authored contract of one concept definition. */
+import type { ConceptSpecificationIR, SpecificationActionIR, SpecificationExternalTypeIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationStateIR, SpecificationTypeIR } from "../../reads/ir.ts";
 export type SpecLocation = SpecificationLocationIR;
-/** A type expression independent of any implementation language. */
 export type SpecType = SpecificationTypeIR;
-/** One named field in an input or inline result row. */
 export type SpecField = SpecificationFieldIR;
-/** An inline result row or a result type expression. */
 export type SpecResult = SpecificationResultIR;
-/** One refusal branch: the code the boundary returns and the sentence it carries. */
 export type SpecRefusal = SpecificationRefusalIR;
-/** One action the specification declares. */
 export type SpecAction = SpecificationActionIR;
-/** One query the specification declares, with the row count it promises. */
 export type SpecQuery = SpecificationQueryIR;
-/** A reader-facing Types or extension section. */
-export type SpecDocumentation = SpecificationDocumentationIR;
-/** The machine-readable authored contract extracted from a concept specification. */
+export type SpecExternalType = SpecificationExternalTypeIR;
+export type SpecState = SpecificationStateIR;
 export type ConceptSpec = ConceptSpecificationIR;
-/**
- * Extract a concept's machine-readable authored contract from specification
- * markdown (import the document with `{ type: "text" }`). Registration assigns
- * runtime meaning only to selected fields. Throws, naming the section or line,
- * when a parsed part is missing or malformed.
- */
+/** Parse imported Markdown as the strict version-1 concept-specification format. */
 export declare function parseSpec(markdown: string): ConceptSpec;
+/** Canonical compatibility ignores source positions but retains every authored contract value. */
+export declare function specificationsAreCompatible(left: ConceptSpec, right: ConceptSpec): boolean;
 
 === dist/engine/reactions/concepts/introspect.d.ts ===
 /**
@@ -2421,6 +2363,7 @@ export declare function renderApp(state: {
 === dist/engine/reactions/runtime/reacting.d.ts ===
 /** Stable internal facade for reaction registration, instrumentation, and execution. */
 import type { ComputationRef } from "../../reads/computations.ts";
+import type { AuthoredDeclarationIdentity } from "../../reads/declaration-identity.ts";
 import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { FormerRef, FusedFormer } from "../../reads/former-nodes.ts";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
@@ -2449,7 +2392,7 @@ export declare class Reacting {
     set logging(level: Logging);
     registerComputations(computations: Record<string, ComputationRef>): void;
     invalidateAllCaches(): void;
-    register(reactions: ReactionMap): void;
+    register(reactions: ReactionMap, authoredByBase?: Readonly<Record<string, AuthoredDeclarationIdentity>>): void;
     readEnv(): ReadEnv;
     form(fused: FusedFormer): Promise<unknown>;
     readBack(): string;
@@ -2459,7 +2402,9 @@ export declare class Reacting {
     registerReactions(reactions: ReactionIR[]): void;
     registerViews(views: ViewIR[]): void;
     declareFormers(...refs: FormerRef[]): void;
+    declareAuthoredFormers(...declarations: ReadonlyArray<readonly [FormerRef, AuthoredDeclarationIdentity]>): void;
     declareViews(...refs: RelationView[]): void;
+    declareAuthoredViews(...declarations: ReadonlyArray<readonly [RelationView, AuthoredDeclarationIdentity]>): void;
     registerFormers(formers: FormerIR[]): void;
     react(record: ActionRecord, durationMs?: number): Promise<void>;
     instrumentConcept<T extends object>(concept: T, name?: string): T;
@@ -2944,9 +2889,32 @@ export declare const is: StandardRelations;
 export declare const standardComputations: readonly ComputationRef<any>[];
 export {};
 
+=== dist/engine/reads/declaration-identity.d.ts ===
+/** Stable identities assigned to authored declarations by the selected composition. */
+export type AuthoredDeclarationKind = "reaction" | "view" | "former";
+export type AuthoredDeclarationSource = AuthoredDeclarationKind | "endpoint";
+/** Provenance shared by an authored declaration and every runtime entry lowered from it. */
+export interface AuthoredDeclarationIdentity {
+    /** The typed design-link kind. Endpoint trees are reactions at the design boundary. */
+    readonly kind: AuthoredDeclarationKind;
+    readonly identity: string;
+    /** Present when the authoring construction differs from the design-link kind. */
+    readonly source?: "endpoint";
+}
+/** Validate and construct one selected composition identity. */
+export declare function authoredDeclarationIdentity(source: AuthoredDeclarationSource, identity: string): AuthoredDeclarationIdentity;
+/** Enforce one selected path per declaration object while retaining its inventory. */
+export declare class AuthoredDeclarationIdentities {
+    private readonly byObject;
+    private readonly selected;
+    install(declaration: object, source: AuthoredDeclarationSource, identity: string): AuthoredDeclarationIdentity;
+    inventory(): readonly AuthoredDeclarationIdentity[];
+}
+
 === dist/engine/reads/definition-registry.d.ts ===
 /** Own the definitions and read environments installed in one engine. */
 import type { InstrumentedQuery, ReactionDeclaration } from "../reactions/types.ts";
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ComputationRef } from "./computations.ts";
 import type { FormerRef } from "./former-nodes.ts";
 import type { FormerIR, QueryRefIR, ReactionIR, ViewIR } from "./ir.ts";
@@ -2969,6 +2937,7 @@ export declare class Registry {
     private readonly computationsByName;
     private readonly viewsByName;
     private readonly formersByName;
+    private readonly authoredByDeclaration;
     private readonly resolver;
     private readonly authored;
     private readonly validator;
@@ -2981,7 +2950,9 @@ export declare class Registry {
     resolveDeclaration(name: string, declaration: ReactionDeclaration): void;
     indexDeclarationReads(declaration: ReactionDeclaration): void;
     declareViews(...refs: RelationView[]): void;
+    declareAuthoredViews(...declarations: ReadonlyArray<readonly [RelationView, AuthoredDeclarationIdentity]>): void;
     declareFormers(...refs: FormerRef[]): void;
+    declareAuthoredFormers(...declarations: ReadonlyArray<readonly [FormerRef, AuthoredDeclarationIdentity]>): void;
     registerViews(views: ViewIR[]): void;
     registerFormers(formers: FormerIR[]): void;
     bindReaction(reaction: ReactionIR): BoundReaction;
@@ -2989,6 +2960,7 @@ export declare class Registry {
     formerRefs(): Iterable<FormerRef>;
     formerNamed(name: string): FormerRef | undefined;
     viewRefs(): Iterable<RelationView>;
+    authoredIdentityOf(ref: object): AuthoredDeclarationIdentity | undefined;
     private viewNamed;
     readBackEnv(): ReadBackEnv;
     readEnv(): ReadEnv;
@@ -3090,11 +3062,12 @@ export {};
 
 === dist/engine/reads/former-lowering.d.ts ===
 /** Lower authored former trees and serialize registered formers. */
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { FormerNode, FormerRef } from "./former-nodes.ts";
 import type { FormerIR, FormerNodeIR } from "./ir.ts";
 export declare function lowerFormerBody(slotVars: readonly symbol[], body: FormerNode): FormerNodeIR;
 /** Serialize one former: the registered body already is IR. */
-export declare function serializeFormer(ref: FormerRef): FormerIR;
+export declare function serializeFormer(ref: FormerRef, authored?: AuthoredDeclarationIdentity): FormerIR;
 
 === dist/engine/reads/former-nodes.d.ts ===
 /**
@@ -3322,6 +3295,7 @@ export declare class ImportedIrBinder {
  * preceding occurrences in the same flow.
  */
 import type { ActionPosture, ChannelPosture } from "../reactions/types.ts";
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 /** A JSON-safe pattern value: literals, variables, matchers, nested shapes. */
 export type ValueIR = null | boolean | number | string | ValueIR[] | {
     $var: string;
@@ -3466,6 +3440,8 @@ export type ViewOpIR = Exclude<WhereOpIR, {
  */
 export interface ViewIR {
     name: string;
+    /** Selected-composition identity; absent for low-level or imported registrations. */
+    authored?: AuthoredDeclarationIdentity;
     alternatives: ViewOpIR[][];
     ins: string[];
     outs: string[];
@@ -3545,6 +3521,8 @@ export type FormerNodeIR = {
 /** One former: explicit input and free bindings, its promise, and its formed tree. */
 export interface FormerIR {
     name: string;
+    /** Selected-composition identity; absent for low-level or imported registrations. */
+    authored?: AuthoredDeclarationIdentity;
     ins: string[];
     bindings: string[];
     promise: "one" | "optional";
@@ -3560,6 +3538,8 @@ export interface ConsequenceIR {
 /** One reaction's when / where / then frame, as data. */
 export interface ReactionIR {
     name: string;
+    /** The top-level authored tree this lowered runtime reaction came from. */
+    authored?: AuthoredDeclarationIdentity;
     when: TriggerIR[];
     /**
      * A deferred trigger: qualification waits for a settlement frontier in the
@@ -3574,6 +3554,8 @@ export interface ReactionIR {
 /** A reaction that could not be lowered to `ReactionIR` — visible, never silent. */
 export interface UnloweredIR {
     name: string;
+    /** The top-level authored tree this local runtime reaction came from. */
+    authored?: AuthoredDeclarationIdentity;
     reason: string;
     /** Inspectable facts retained even though the complete definition is local code. */
     known: {
@@ -3655,16 +3637,12 @@ export interface SpecificationFieldIR {
     type: SpecificationTypeIR;
     location: SpecificationLocationIR;
 }
-/** An inline result row or a result type expression. */
-export type SpecificationResultIR = {
+/** The parenthesized named fields returned by an action or query. */
+export interface SpecificationResultIR {
     kind: "fields";
     fields: readonly SpecificationFieldIR[];
     location: SpecificationLocationIR;
-} | {
-    kind: "type";
-    type: SpecificationTypeIR;
-    location: SpecificationLocationIR;
-};
+}
 /** One authored refusal branch and its normative decoded sentence. */
 export interface SpecificationRefusalIR {
     code: string;
@@ -3693,22 +3671,32 @@ export interface SpecificationQueryIR {
     promise: "one" | "optional" | "many";
     location: SpecificationLocationIR;
 }
-/** A reader-facing Types or extension section, retained in authored order. */
-export interface SpecificationDocumentationIR {
-    kind: "types" | "extension";
+/** One opaque type parameter supplied by each application use of the concept. */
+export interface SpecificationExternalTypeIR {
     name: string;
-    body: string;
+    /** Optional reader-facing explanation, normalized from its indented lines. */
+    explanation: string;
     location: SpecificationLocationIR;
 }
-/** The JSON-safe authored contract parsed from one concept specification; State is excluded. */
+/** Unparsed Simple State Form and the optional prose that follows its fence. */
+export interface SpecificationStateIR {
+    /** Normalized fence contents. Version 1 deliberately assigns these no grammar. */
+    body: string;
+    prose: string;
+    location: SpecificationLocationIR;
+}
+/** The JSON-safe authored contract parsed from one concept specification. */
 export interface ConceptSpecificationIR {
     format: "sync-engine.concept-specification";
     version: 1;
+    /** Reusable definition identity from the document's H1, independent of instance names. */
+    definitionName: string;
     purpose: string;
     principle: string;
+    externalTypes: readonly SpecificationExternalTypeIR[];
+    state: SpecificationStateIR;
     actions: readonly SpecificationActionIR[];
     queries: readonly SpecificationQueryIR[];
-    documentation: readonly SpecificationDocumentationIR[];
 }
 /** One action as the inventory reports it: its name, observed input roles, declared refusals. */
 interface ActionInventoryIR {
@@ -3970,6 +3958,7 @@ export interface QueryMetadata {
 === dist/engine/reads/reaction-lowering.d.ts ===
 /** Lower fluent reaction declarations into one-consequence reaction IR entries. */
 import type { ReactionDeclaration, StepNode, TriggerPattern, WhereFn } from "../reactions/types.ts";
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ReactionIR, UnloweredIR } from "./ir.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
 type LoweredWhereOp = AnyWhereOp;
@@ -3988,9 +3977,9 @@ interface LowerOutcome {
 /** Lower one registered reaction into reaction IR, or report why it remains a pipeline. */
 export declare function lowerReaction(name: string, decl: ReactionDeclaration): LowerOutcome;
 /** Serialize one lowered family with stable variable names across its continuation stages. */
-export declare function serializeReactionFamily(reactions: readonly LoweredReaction[]): ReactionIR[];
+export declare function serializeReactionFamily(reactions: readonly LoweredReaction[], authored?: AuthoredDeclarationIdentity): ReactionIR[];
 /** Keep every inspectable dependency fact from a reaction whose whole pipeline stays local. */
-export declare function serializeUnloweredReaction(name: string, reason: string, declaration: ReactionDeclaration): UnloweredIR;
+export declare function serializeUnloweredReaction(name: string, reason: string, declaration: ReactionDeclaration, authored?: AuthoredDeclarationIdentity): UnloweredIR;
 export {};
 
 === dist/engine/reads/reaction-validation.d.ts ===
@@ -4032,7 +4021,7 @@ export declare function readBackApp(views: readonly ViewIR[], formers: readonly 
  * `when` joins occurrences. The renderer emits only ask consequences;
  * attestations and world effects are not implemented.
  */
-import type { AppIR, ConceptInventoryIR, PatternIR, ReactionIR, ViewOpIR, WhereOpIR } from "./ir.ts";
+import type { AppIR, ConceptInventoryIR, ConceptSpecificationIR, PatternIR, ReactionIR, ViewOpIR, WhereOpIR } from "./ir.ts";
 /** Render a role list: bare names bind, colons rename, and literals test. */
 export declare function renderRoles(pattern: PatternIR): string;
 /** Render one where op — from a reaction or a view block — as its condition sentence. */
@@ -4043,6 +4032,63 @@ export declare function renderWhereOp(op: WhereOpIR | ViewOpIR): string;
  */
 export declare function renderReaction(reaction: ReactionIR): string;
 /** Everything `renderApp` needs, as data. */
+interface RenderDesignLocation {
+    source: string;
+    line: number;
+    column: number;
+}
+interface RenderDesign {
+    checked: boolean;
+    sources: {
+        id: string;
+        path: string;
+        title?: string;
+        definition?: string;
+        line?: number;
+    }[];
+    declarations: {
+        kind: "reaction" | "view" | "former";
+        identity: string;
+        runtimeNames: string[];
+        coverage: RenderDesignLocation[];
+    }[];
+    concepts: {
+        definition: string;
+        source?: string;
+        specification: ConceptSpecificationIR;
+        instances: {
+            name: string;
+            bindings: {
+                external: string;
+                target: {
+                    kind: "concrete";
+                    name: string;
+                } | {
+                    kind: "qualified";
+                    instance: string;
+                    type: string;
+                };
+                location: RenderDesignLocation;
+            }[];
+        }[];
+    }[];
+    vocabulary?: {
+        concreteTypes: {
+            name: string;
+            location: RenderDesignLocation;
+        }[];
+    };
+    computations: {
+        name: string;
+        inputs: {
+            name: string;
+            optional: boolean;
+            type: string;
+        }[];
+        result: string;
+        location: RenderDesignLocation;
+    }[];
+}
 interface AppSpecIR {
     /** The application's name, used as the document title. */
     title: string;
@@ -4050,6 +4096,8 @@ interface AppSpecIR {
     concepts: ConceptInventoryIR[];
     /** The exported reaction IR and the reactions that stayed pipelines. */
     app: AppIR;
+    /** Checked config-only authored-design augmentation, when generated from a config. */
+    design?: RenderDesign;
 }
 /**
  * Render a whole application's assembled read-back as one markdown document:
@@ -4254,12 +4302,13 @@ export {};
 
 === dist/engine/reads/view-lowering.d.ts ===
 /** Lower authored view blocks and serialize registered relation views. */
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ViewIR, ViewOpIR, WhereOpIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
 import type { ViewOp } from "./views.ts";
 export declare function lowerRelationBlocks(named: ReadonlyMap<symbol, string>, alternatives: readonly (readonly ViewOp[])[]): ViewOpIR[][];
 /** Serialize one view: the registered alternatives already are IR. */
-export declare function serializeView(ref: RelationView): ViewIR;
+export declare function serializeView(ref: RelationView, authored?: AuthoredDeclarationIdentity): ViewIR;
 /** Whether a registered read operation names a view. */
 export declare function viewLineIR(op: WhereOpIR | ViewOpIR): op is Extract<ViewOpIR, {
     op: "find" | "whether" | "no";
@@ -4477,16 +4526,16 @@ export declare function custom(fn: (...args: never[]) => unknown | Promise<unkno
 export {};
 
 === dist/engine/tooling/application-manifest-format.d.ts ===
-import type { ApplicationManifestV5 } from "./manifest.ts";
+import type { ApplicationManifestV1 } from "./manifest.ts";
 /** Recompute the canonical digest over every manifest field except `digest`. */
-export declare function applicationManifestDigest(manifest: ApplicationManifestV5): string;
-/** Validate untrusted data as one complete canonical version-5 application manifest. */
-export declare function validateApplicationManifest(value: unknown): asserts value is ApplicationManifestV5;
-/** Parse and validate canonical version-5 application-manifest JSON without executing code. */
-export declare function parseApplicationManifest(source: string): ApplicationManifestV5;
+export declare function applicationManifestDigest(manifest: ApplicationManifestV1): string;
+/** Validate untrusted data as one complete canonical version-1 application manifest. */
+export declare function validateApplicationManifest(value: unknown): asserts value is ApplicationManifestV1;
+/** Parse and validate canonical version-1 application-manifest JSON without executing code. */
+export declare function parseApplicationManifest(source: string): ApplicationManifestV1;
 
 === dist/engine/tooling/artifact-plan.d.ts ===
-import type { ApplicationManifestV5 } from "./manifest.ts";
+import type { ApplicationManifestV1 } from "./manifest.ts";
 import type { PlannedWireProjection } from "./wire-projection.ts";
 type ArtifactKind = "specification" | "wire";
 interface ArtifactPlanEntry {
@@ -4527,10 +4576,243 @@ export interface ArtifactFilesystem {
     writeAtomic(path: string, content: string): Promise<void>;
 }
 export declare function artifactPlan(entries: readonly ArtifactPlanEntry[]): ArtifactPlan;
-export declare function planGenerated(manifest: ApplicationManifestV5, options: GeneratedPlanOptions): ArtifactPlan;
+export declare function planGenerated(manifest: ApplicationManifestV1, options: GeneratedPlanOptions): ArtifactPlan;
 export declare function checkArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export declare function applyArtifactPlan(plan: ArtifactPlan, filesystem: ArtifactFilesystem): Promise<ArtifactStatus[]>;
 export {};
+
+=== dist/engine/tooling/authored-application-design.d.ts ===
+import type { DesignSourceLocation } from "./markdown-design-source.ts";
+export type DesignLinkKind = "reaction" | "view" | "former" | "computation";
+export interface AuthoredDesignLink {
+    kind: DesignLinkKind;
+    target: string;
+    text: string;
+    location: DesignSourceLocation;
+}
+export interface AuthoredComputationInput {
+    name: string;
+    optional: boolean;
+    type: string;
+    location: DesignSourceLocation;
+}
+export interface AuthoredComputation {
+    name: string;
+    inputs: readonly AuthoredComputationInput[];
+    result: string;
+    body: string;
+    location: DesignSourceLocation;
+}
+export interface AuthoredApplicationDesignDocument {
+    source: string;
+    title: string;
+    content: string;
+    digest: string;
+    links: readonly AuthoredDesignLink[];
+    computations: readonly AuthoredComputation[];
+}
+export interface ConcreteTypeDeclaration {
+    name: string;
+    definition: string;
+    location: DesignSourceLocation;
+}
+export interface ExternalTypeBinding {
+    instance: string;
+    external: string;
+    target: {
+        kind: "concrete";
+        name: string;
+    } | {
+        kind: "qualified";
+        instance: string;
+        type: string;
+    };
+    explanation?: string;
+    location: DesignSourceLocation;
+}
+export interface AuthoredVocabularyDocument extends AuthoredApplicationDesignDocument {
+    concreteTypes: readonly ConcreteTypeDeclaration[];
+    bindings: readonly ExternalTypeBinding[];
+}
+/** Parse one explicitly registered, non-vocabulary application design file. */
+export declare function parseApplicationDesignDocument(markdown: string, source?: string): AuthoredApplicationDesignDocument;
+/** Parse the separately registered application vocabulary design file. */
+export declare function parseApplicationVocabularyDocument(markdown: string, source?: string): AuthoredVocabularyDocument;
+export interface SelectedComputationDesign {
+    name: string;
+    /**
+     * Authoritative TypeScript-source shape, when the caller has resolved it.
+     * Runtime parameter reflection cannot establish optionality, so absence means
+     * that input-shape agreement is deliberately not claimed.
+     */
+    inputs?: readonly {
+        name: string;
+        optional: boolean;
+    }[];
+}
+export interface SelectedConceptDesign {
+    instance: string;
+    externalTypes: readonly string[];
+}
+export interface SelectedApplicationDesign {
+    reactions: readonly string[];
+    views: readonly string[];
+    formers: readonly string[];
+    computations: readonly SelectedComputationDesign[];
+    concepts: readonly SelectedConceptDesign[];
+}
+export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "MISSING_VOCABULARY" | "UNNECESSARY_VOCABULARY" | "UNKNOWN_EXTERNAL" | "MISSING_BINDING" | "UNRESOLVED_TYPE_TARGET" | "EXTERNAL_TARGET" | "UNUSED_CONCRETE";
+export interface ApplicationDesignIssue {
+    code: ApplicationDesignIssueCode;
+    message: string;
+    location?: DesignSourceLocation;
+}
+/**
+ * Check parsed documents against the exact selected assembly inventory. The
+ * validator returns all independently actionable issues and performs no I/O.
+ */
+export declare function validateAuthoredApplicationDesign(documents: readonly AuthoredApplicationDesignDocument[], vocabulary: AuthoredVocabularyDocument | undefined, selected: SelectedApplicationDesign): ApplicationDesignIssue[];
+
+=== dist/engine/tooling/authored-design-orchestration.d.ts ===
+/** Config-level orchestration for one selected application's authored design. */
+import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
+import type { AuthoredDeclarationIdentity } from "../reads/declaration-identity.ts";
+import { type ConceptSpec } from "../reactions/concepts/concept-spec.ts";
+import type { ApplicationDesignIssue, AuthoredApplicationDesignDocument, AuthoredVocabularyDocument, DesignLinkKind, SelectedApplicationDesign } from "./authored-application-design.ts";
+import type { DesignSourceLine, DesignSourceLocation } from "./markdown-design-source.ts";
+export interface AuthoredDesignRegistration {
+    vocabulary?: URL;
+    documents: readonly URL[];
+}
+/** One registered file, read once and retained in its normalized full form. */
+export interface LoadedAuthoredDesignSource {
+    url: URL;
+    path: string;
+    content: string;
+    digest: string;
+    lines: readonly DesignSourceLine[];
+}
+/** Required static-source adapter input for config-generated concept provenance. */
+export interface ConceptSpecificationSourceInput {
+    instance: string;
+    url: URL;
+    /** Exact text traced from the default Markdown import; no second file read is performed. */
+    content: string;
+}
+export interface LoadedConceptSpecificationSource extends LoadedAuthoredDesignSource {
+    instance: string;
+    definition: string;
+    definitionLine: number;
+}
+export interface AuthoritativeComputationInput {
+    name: string;
+    inputs: readonly {
+        name: string;
+        optional: boolean;
+    }[];
+}
+export interface ComputationInputAnalysisContext {
+    assembly: Assembly<Record<string, new (...args: never[]) => object>>;
+    /** Vocabulary-owned executable computations selected by this assembly. */
+    computations: readonly {
+        name: string;
+    }[];
+}
+/**
+ * Injection point for source analysis that can prove TypeScript field names and
+ * optionality. The orchestrator never substitutes runtime parameter reflection:
+ * reflection can observe some names but cannot prove optionality.
+ */
+export type ResolveComputationInputs = (context: ComputationInputAnalysisContext) => readonly AuthoritativeComputationInput[] | Promise<readonly AuthoritativeComputationInput[]>;
+export interface AuthoredDeclarationCoverage {
+    kind: DesignLinkKind;
+    identity: string;
+    locations: readonly DesignSourceLocation[];
+}
+export interface SelectedConceptDesignFact {
+    instance: string;
+    definition: string;
+    externalParameters: readonly string[];
+    specification: ConceptSpec;
+}
+/** Equality is over canonical specification content with source positions removed. */
+export interface SharedDefinitionEqualityFact {
+    definition: string;
+    instances: readonly string[];
+    specificationDigest: string;
+    canonicallyEqual: true;
+}
+export interface CheckedAuthoredDesignModel {
+    sources: {
+        vocabulary?: LoadedAuthoredDesignSource;
+        documents: readonly LoadedAuthoredDesignSource[];
+        /** Present when a strict static-source adapter supplied every selected concept source. */
+        concepts?: readonly LoadedConceptSpecificationSource[];
+    };
+    documents: readonly AuthoredApplicationDesignDocument[];
+    /** Parsed declarations only; qualified targets make no unparsed SSF ownership claim. */
+    vocabulary?: AuthoredVocabularyDocument;
+    /** Exact authored declaration inventory, retaining endpoint source identities. */
+    declarations: readonly AuthoredDeclarationIdentity[];
+    /** Projection consumed by the existing pure coverage/vocabulary validator. */
+    selected: SelectedApplicationDesign;
+    concepts: readonly SelectedConceptDesignFact[];
+    sharedDefinitions: readonly SharedDefinitionEqualityFact[];
+    coverage: readonly AuthoredDeclarationCoverage[];
+    /** Explicitly records whether authoritative source analysis covered each computation. */
+    computationInputValidation: readonly {
+        name: string;
+        status: "validated" | "not-claimed";
+    }[];
+}
+export type AuthoredDesignOrchestrationIssue = ApplicationDesignIssue | {
+    code: "MISSING_CONCEPT_SPECIFICATION" | "INCOMPATIBLE_SHARED_DEFINITION";
+    message: string;
+    location?: never;
+};
+export declare class AuthoredDesignCheckError extends Error {
+    readonly issues: readonly AuthoredDesignOrchestrationIssue[];
+    constructor(issues: readonly AuthoredDesignOrchestrationIssue[]);
+}
+/** Load, parse, select, and check the authored design for exactly one assembly. */
+export declare function checkAuthoredDesign(options: {
+    assembly: Assembly<Record<string, new (...args: never[]) => object>>;
+    design: AuthoredDesignRegistration;
+    resolveComputationInputs?: ResolveComputationInputs;
+    conceptSources?: readonly ConceptSpecificationSourceInput[];
+}): Promise<CheckedAuthoredDesignModel>;
+
+=== dist/engine/tooling/computation-source-analysis.d.ts ===
+import type { AuthoritativeComputationInput, ResolveComputationInputs } from "./authored-design-orchestration.ts";
+import { type TypeScriptSourceContext } from "./typescript-shapes.ts";
+/**
+ * Prove the input field names and optionality of the computations registered by one configured
+ * executable vocabulary module. Selection and source registration must agree exactly.
+ */
+export declare function authoritativeComputationInputs(vocabularyModulePath: string, selectedNames: readonly string[], suppliedContext?: TypeScriptSourceContext): readonly AuthoritativeComputationInput[];
+/** Build the command-side adapter injected into authored-design orchestration. */
+export declare function resolveComputationInputsFromSource(vocabularyModulePath: string): ResolveComputationInputs;
+
+=== dist/engine/tooling/concept-source-discovery.d.ts ===
+import { type TypeScriptSourceContext } from "./typescript-shapes.ts";
+/** Static source provenance for one registration selected by a concept set. */
+export interface RegisteredConceptSource {
+    /** The application instance name used as the concept-set property. */
+    conceptName: string;
+    /** The declared name and source of the selected implementation class. */
+    className: string;
+    classPath: string;
+    /** The exact default Markdown import supplying `registerConcept({ spec })`. */
+    specPath: string;
+    /** The file contents imported by that declaration. */
+    specText: string;
+}
+/**
+ * Locate the implementation and exact Markdown source for every registration selected by a
+ * `conceptSet(...)` or `vocabulary(...)` in the supplied module. Static discovery fails closed
+ * rather than guessing through computed registrations or specification construction.
+ */
+export declare function registeredConceptSources(conceptSetPath: string, suppliedContext?: TypeScriptSourceContext): RegisteredConceptSource[];
 
 === dist/engine/tooling/diagnostics.d.ts ===
 import type { EndpointDeclaration } from "../boundary/assembly/endpoint-portability.ts";
@@ -4556,19 +4838,31 @@ export declare function diagnosticsFail(diagnostics: readonly ApplicationDiagnos
 
 === dist/engine/tooling/generated-artifacts.d.ts ===
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
+import { type RegisteredConceptSource } from "./concept-source-discovery.ts";
+import { type TypeScriptSourceContext } from "./typescript-shapes.ts";
 import type { WireProjection } from "./wire-projection.ts";
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 /**
- * What a project's `generated.config.ts` declares. Only `assemble` and `title`
- * are required — every path and name below follows from the title and the
- * config's own location, and each may be overridden.
+ * What a project's `generated.config.ts` declares. `assemble`, `title`, and
+ * `design` are required; generated output paths and names follow from the title
+ * and the config's own location unless overridden.
  */
+export interface GeneratedApplicationDesign {
+    /** Versioned shape of the authored application-design registration. */
+    version: 1;
+    /** The optional application vocabulary-design document. */
+    vocabulary?: URL;
+    /** Every other application-design document, in registration order. */
+    documents: readonly URL[];
+}
 export interface GeneratedApplication {
     assemble: () => InspectableAssembly;
     /** Release resources owned by this generation descriptor after assembly drain. */
     close?: () => void | Promise<void>;
     /** The application's name, used as the document title and to derive the rest. */
     title: string;
+    /** Authored design sources checked for this exact application variant. */
+    design: GeneratedApplicationDesign;
     /** Where generated files are written; defaults to `generated/` beside the config. */
     directory?: URL;
     /** The read-back's filename; defaults to the title, slugged, with `.md`. */
@@ -4582,9 +4876,9 @@ export interface GeneratedApplication {
     /** The wire contract's banner; defaults to one naming the assembly. */
     wireBanner?: string;
     /**
-     * The module whose export anchors generated wire types to concept
+     * The executable module whose export anchors generated wire types to concept
      * signatures; defaults to `src/concept-set.ts` beside the config, exporting
-     * `vocabulary`.
+     * `vocabulary`. This is distinct from the authored `design.vocabulary` document.
      */
     vocabulary?: {
         module?: URL;
@@ -4593,23 +4887,28 @@ export interface GeneratedApplication {
     /** Ordered transport-specific contracts appended after the logical wire. */
     projections?: readonly WireProjection[];
 }
-type ResolvedApplication = GeneratedApplication & {
+export type ResolvedApplication = GeneratedApplication & {
     directory: URL;
     specification: string;
     wire: string;
     wireName: string;
-    /** The specifier the generated wire imports its type anchor from. */
+    /** The executable vocabulary module analyzed at the generated-operation boundary. */
+    vocabularyModule: URL;
+    /** The specifier the generated wire imports its executable type anchor from. */
     vocabularyFrom: {
         from: string;
         export: string;
     };
 };
-/**
- * Fill an application's defaults from its title and the location of the config
- * that declared it.
- */
+export interface GeneratedSourceAnalysis {
+    /** Shared checker context; config checking reuses it for source-shape diagnostics. */
+    context: TypeScriptSourceContext;
+    /** Static registrations corresponding exactly to the selected canonical concepts. */
+    concepts: readonly RegisteredConceptSource[];
+}
+/** Fill and validate defaults relative to the declaring generated config. */
 export declare function resolveApplication(application: GeneratedApplication, config: URL): ResolvedApplication;
-export declare function inspectGenerated<T>(application: ResolvedApplication, inspect: (assembly: InspectableAssembly) => T | Promise<T>): Promise<T>;
+export declare function inspectGenerated<T>(application: ResolvedApplication, inspect: (assembly: InspectableAssembly, sourceAnalysis: GeneratedSourceAnalysis) => T | Promise<T>): Promise<T>;
 export declare function renderGenerated(application: ResolvedApplication): Promise<{
     metrics: {
         reactions: number;
@@ -4651,10 +4950,12 @@ export declare function inspectAssembly(assembly: Assembly<Record<string, new (.
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../boundary/protocol/endpoints.ts";
 import type { WireContractsIR } from "../boundary/wire/wire-contracts.ts";
-import type { AppIR, ComputationInventoryIR, ConceptImplementationProvenanceIR, ConceptInventoryIR } from "../reads/ir.ts";
+import type { AuthoredDeclarationIdentity } from "../reads/declaration-identity.ts";
+import type { AppIR, ComputationInventoryIR, ConceptImplementationProvenanceIR, ConceptInventoryIR, ConceptSpecificationIR } from "../reads/ir.ts";
 import { type GeneratorIdentity } from "../utils/package-version.ts";
+import type { CheckedAuthoredDesignModel } from "./authored-design-orchestration.ts";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
-export interface ManifestEndpointV5 {
+export interface ManifestEndpointV1 {
     name: string;
     path: string;
     reactions: string[];
@@ -4665,26 +4966,206 @@ export interface ManifestEndpointV5 {
         domainError?: true;
     };
 }
-export interface ApplicationManifestV5 {
+export interface ManifestSourceV1 {
+    id: string;
+    kind: "vocabulary" | "document" | "concept";
+    /** Host-independent path, relative to the generated read-back file. */
+    path: string;
+    digest: string;
+    title?: string;
+    definition?: string;
+    /** One-based line used when linking directly to a source-owned definition. */
+    line?: number;
+}
+export interface ManifestSourceLocationV1 {
+    source: string;
+    line: number;
+    column: number;
+}
+export interface ManifestDeclarationV1 extends AuthoredDeclarationIdentity {
+    /** Runtime lookup names are deliberately separate from the authored identity. */
+    runtimeNames: string[];
+    coverage: ManifestSourceLocationV1[];
+}
+export interface ManifestConceptDefinitionV1 {
+    definition: string;
+    source?: string;
+    specification: ConceptSpecificationIR;
+    instances: {
+        name: string;
+        bindings: {
+            external: string;
+            target: {
+                kind: "concrete";
+                name: string;
+            } | {
+                kind: "qualified";
+                instance: string;
+                type: string;
+            };
+            location: ManifestSourceLocationV1;
+        }[];
+    }[];
+}
+export interface ManifestComputationDeclarationV1 {
+    name: string;
+    inputs: {
+        name: string;
+        optional: boolean;
+        type: string;
+    }[];
+    result: string;
+    location: ManifestSourceLocationV1;
+    runtimeInputs?: string[];
+    inputValidation: "validated" | "not-claimed";
+}
+export interface ApplicationDesignManifestV1 {
+    version: 1;
+    checked: boolean;
+    sources: ManifestSourceV1[];
+    declarations: ManifestDeclarationV1[];
+    concepts: ManifestConceptDefinitionV1[];
+    vocabulary?: {
+        source: string;
+        concreteTypes: {
+            name: string;
+            location: ManifestSourceLocationV1;
+        }[];
+        bindings: {
+            instance: string;
+            external: string;
+            target: {
+                kind: "concrete";
+                name: string;
+            } | {
+                kind: "qualified";
+                instance: string;
+                type: string;
+            };
+            location: ManifestSourceLocationV1;
+        }[];
+    };
+    computations: ManifestComputationDeclarationV1[];
+}
+export interface ApplicationManifestV1 {
     format: "sync-engine.application-manifest";
-    version: 5;
+    version: 1;
     generator: GeneratorIdentity;
     digest: string;
     application: AppIR;
     concepts: ConceptInventoryIR[];
     computations: ComputationInventoryIR[];
     conceptImplementations: ConceptImplementationProvenanceIR[];
-    endpoints: ManifestEndpointV5[];
+    endpoints: ManifestEndpointV1[];
     inputContracts: Record<string, InputContractDecl>;
     wire: WireContractsIR;
     diagnostics: ApplicationDiagnostic[];
+    design: ApplicationDesignManifestV1;
 }
+/** Assembly-only facts. Config-only authored design is intentionally absent. */
+export type ApplicationAssemblyFacts = Omit<ApplicationManifestV1, "format" | "version" | "generator" | "digest" | "design">;
+export interface ManifestSourcePaths {
+    /** Convert an absolute checked source path to a read-back-relative POSIX path. */
+    relativePath(path: string): string;
+}
+/** Attach the one checked config model to its exact assembly for all generated consumers. */
+export declare function registerConfiguredAuthoredDesign(assembly: Assembly<Record<string, new (...args: never[]) => object>>, authored: {
+    checked: CheckedAuthoredDesignModel;
+    paths: ManifestSourcePaths;
+}): void;
+/** Read the assembly registry exactly once and derive only executable assembly facts. */
+export declare function applicationAssemblyFacts(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationAssemblyFacts;
 /**
- * Snapshot one assembly's static design. Retained runtime state and uninterpreted concept State
- * sections are excluded.
+ * Build canonical manifest V1. Config-generated callers pass the one checked model for the exact
+ * assembly; assembly-only callers receive an explicit unchecked design block rather than a false
+ * authored-design claim.
  */
-export declare function applicationManifest(assembly: Assembly<Record<string, new (...args: never[]) => object>>): ApplicationManifestV5;
-export declare function renderApplicationManifest(manifest: ApplicationManifestV5): string;
+export declare function applicationManifest(assemblyOrFacts: Assembly<Record<string, new (...args: never[]) => object>> | ApplicationAssemblyFacts, authored?: {
+    checked: CheckedAuthoredDesignModel;
+    paths: ManifestSourcePaths;
+}): ApplicationManifestV1;
+export declare function renderApplicationManifest(manifest: ApplicationManifestV1): string;
+
+=== dist/engine/tooling/markdown-design-source.d.ts ===
+/** A one-based position in an authored Markdown file. */
+export interface DesignSourceLocation {
+    source: string;
+    line: number;
+    column: number;
+}
+export interface DesignSourceLine {
+    text: string;
+    number: number;
+}
+export interface MarkdownFence {
+    info: string;
+    location: DesignSourceLocation;
+    body: readonly DesignSourceLine[];
+}
+export interface MarkdownHeading {
+    level: number;
+    text: string;
+    location: DesignSourceLocation;
+}
+export interface ScannedMarkdown {
+    source: string;
+    content: string;
+    digest: string;
+    lines: readonly DesignSourceLine[];
+    headings: readonly MarkdownHeading[];
+    fences: readonly MarkdownFence[];
+    proseLineNumbers: ReadonlySet<number>;
+}
+/** Canonicalize text-file conventions without discarding authored whitespace. */
+export declare function normalizeDesignContent(markdown: string): string;
+/** Digest the normalized complete document, including ordinary prose. */
+export declare function designContentDigest(markdown: string): string;
+/**
+ * Scan only the Markdown structure needed by authored design files. Fenced
+ * regions are identified once so heading, link, and declaration parsing share
+ * the same view of source lines.
+ */
+export declare function scanDesignMarkdown(markdown: string, source?: string): ScannedMarkdown;
+export declare function exactlyOneH1(markdown: ScannedMarkdown): MarkdownHeading;
+/** Group left-margin declarations with their indented bodies. */
+export declare function declarationGroups(fence: MarkdownFence): readonly {
+    signature: DesignSourceLine;
+    body: readonly DesignSourceLine[];
+}[];
+export declare function indentedBody(lines: readonly DesignSourceLine[]): string;
+
+=== dist/engine/tooling/typescript-shapes.d.ts ===
+import ts from "typescript";
+export interface TypeScriptCheckerContext {
+    program: ts.Program;
+    checker: ts.TypeChecker;
+}
+export interface TypeScriptSourceContext extends TypeScriptCheckerContext {
+    source: ts.SourceFile;
+    options: ts.CompilerOptions;
+}
+/** Load a TypeScript project context for an executable source module. */
+export declare function typeScriptSourceContext(sourcePath: string): TypeScriptSourceContext;
+export interface ShapeField {
+    name: string;
+    optional: boolean;
+}
+export type ShapeResolution = {
+    ok: true;
+    fields: readonly ShapeField[];
+} | {
+    ok: false;
+    type: string;
+    operation: string;
+    detail: string;
+    site: ts.Node;
+};
+/** Compare field names and optionality without assigning meaning to their types or order. */
+export declare function shapesEqual(left: readonly ShapeField[], right: readonly ShapeField[]): boolean;
+/** Resolve one finite object shape from a declared TypeScript type. */
+export declare function shapeOfTypeNode(typeNode: ts.TypeNode, sourceNode: ts.Node, context: TypeScriptCheckerContext): ShapeResolution;
+/** Resolve an action result object or a query row from a method's return type. */
+export declare function resultShapeOfMethod(method: ts.MethodDeclaration, kind: "action" | "query", context: TypeScriptCheckerContext): ShapeResolution;
 
 === dist/engine/tooling/wire-projection.d.ts ===
 import type { WireProjectionFacts } from "../boundary/gateway/transport-binding.ts";
@@ -4910,13 +5391,13 @@ export { applicationDiagnostics, diagnosticsFail } from "../engine/tooling/diagn
 export type { ApplicationDiagnostic, DiagnosticCode, DiagnosticSeverity, } from "../engine/tooling/diagnostics.ts";
 export { applicationManifest, renderApplicationManifest } from "../engine/tooling/manifest.ts";
 export { applicationManifestDigest, parseApplicationManifest, validateApplicationManifest, } from "../engine/tooling/application-manifest-format.ts";
-export type { ApplicationManifestV5, ManifestEndpointV5 } from "../engine/tooling/manifest.ts";
+export type { ApplicationManifestV1, ManifestEndpointV1 } from "../engine/tooling/manifest.ts";
 export { parseSpec as parseConceptSpecification } from "../engine/reactions/concepts/concept-spec.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
 export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";
 export { renderInputContracts } from "../engine/boundary/protocol/endpoints.ts";
-export type { ActionTriggerIR, AppIR, ChannelTriggerIR, ComputationInventoryIR, ConceptImplementationProvenanceIR, ConceptInventoryIR, ConceptSpecificationIR, ConsequenceIR, FormerIR, FormerNodeIR, FormerSourceIR, PatternIR, QueryRefIR, ReactionIR, SpecificationActionIR, SpecificationDocumentationIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationTypeIR, SpliceIR, TriggerIR, UnloweredIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR, } from "../engine/reads/ir.ts";
+export type { ActionTriggerIR, AppIR, ChannelTriggerIR, ComputationInventoryIR, ConceptImplementationProvenanceIR, ConceptInventoryIR, ConceptSpecificationIR, ConsequenceIR, FormerIR, FormerNodeIR, FormerSourceIR, PatternIR, QueryRefIR, ReactionIR, SpecificationActionIR, SpecificationExternalTypeIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationStateIR, SpecificationTypeIR, SpliceIR, TriggerIR, UnloweredIR, ValueIR, ViewIR, ViewOpIR, WhereOpIR, } from "../engine/reads/ir.ts";
 export type { WireContractsIR, WireEndpoint, WireOptions, } from "../engine/boundary/wire/wire-contracts.ts";
 export type { WireRenderOptions } from "../engine/boundary/wire/wire-renderer.ts";
 export type { WireType } from "../engine/boundary/wire/wire-types.ts";
