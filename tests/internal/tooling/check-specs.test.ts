@@ -41,16 +41,44 @@ import spec from "./spec.md" with { type: "text" };
 export const sessioning = registerConcept({ class: SessioningConcept, spec });
 `;
 
-/** Write one concept directory: its parsed declarations, optional state prose, and class body. */
+function strictActions(source: string): string {
+  const lines = source.split("\n");
+  const normalized: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    normalized.push(line);
+    if (line === "" || /^\s/.test(line)) continue;
+    const next = lines[index + 1];
+    if (next !== undefined && /^\s/.test(next)) {
+      if (next.trim() === "then") normalized.push("  where true");
+      continue;
+    }
+    const fields = /: return \(([^)]*)\)/.exec(line)?.[1] ?? "";
+    const names = fields
+      .split(",")
+      .map((field) => field.trim().split(/[?:]/, 1)[0])
+      .filter((name) => name !== "");
+    normalized.push(
+      "  where true",
+      "  then",
+      `    return${names.length > 0 ? ` ${names.join(", ")}` : ""}`,
+    );
+  }
+  return normalized.join("\n");
+}
+
+/** Write one strict concept document and its registered class implementation. */
 async function concept(actions: string, body: string, queries = "", state = ""): Promise<string> {
   const where = join(directory, "sessioning");
+  const stateBody = state.replace(/^```state\n/, "").replace(/\n```$/, "");
   await mkdir(where, { recursive: true });
   await writeFile(
     join(where, "spec.md"),
     `# Sessioning\n\n## Purpose\n\nIdentify a caller.\n\n## Principle\n\nA session expires.\n\n` +
-      (state === "" ? "" : `## State\n\n${state}\n\n`) +
-      `## Actions\n\n\`\`\`actions\n${actions}\n\`\`\`\n` +
-      (queries === "" ? "" : `\n## Queries\n\n\`\`\`queries\n${queries}\n\`\`\`\n`),
+      `## Types\n\n\`\`\`types\n\`\`\`\n\n` +
+      `## State\n\n\`\`\`state\n${stateBody}\n\`\`\`\n\n` +
+      `## Actions\n\n\`\`\`actions\n${strictActions(actions)}\n\`\`\`\n\n` +
+      `## Queries\n\n\`\`\`queries\n${queries}\n\`\`\`\n`,
   );
   await writeFile(join(where, "sessioning.ts"), `export class SessioningConcept {\n${body}\n}\n`);
   await writeFile(join(where, "registry.ts"), REGISTRY);
@@ -751,19 +779,17 @@ describe("concept discovery", () => {
     );
   });
 
-  test("rejects ambiguous or incomplete discovery roots before loading them", async () => {
-    await expect(checkCommand(["--vocabulary-module"])).rejects.toThrow(
-      "--vocabulary-module path | --config path",
+  test("rejects removed, duplicate, or incomplete config selection before loading", async () => {
+    await expect(checkCommand(["--config"])).rejects.toThrow("sync-engine check [--config path]");
+    await expect(checkCommand(["--vocabulary-module", "one.ts"])).rejects.toThrow(
+      "sync-engine check [--config path]",
     );
-    await expect(
-      checkCommand(["--vocabulary-module", "one.ts", "--config", "generated.config.ts"]),
-    ).rejects.toThrow("--vocabulary-module path | --config path");
-    await expect(
-      checkCommand(["--config", "generated.config.ts", "--vocabulary-module", "one.ts"]),
-    ).rejects.toThrow("--vocabulary-module path | --config path");
+    await expect(checkCommand(["--config", "one.ts", "--config", "two.ts"])).rejects.toThrow(
+      "sync-engine check [--config path]",
+    );
   });
 
-  test("the CLI supports direct registration with nonconventional Markdown", async () => {
+  test("the CLI checks direct registration selected by the default config", async () => {
     const root = resolve(import.meta.dirname, "../../..");
     const project = await mkdtemp(join(root, "tests/.sync-engine-discovery-"));
     try {
@@ -772,7 +798,9 @@ describe("concept discovery", () => {
       await writeFile(
         join(project, "design", "concepts", "Sessioning.md"),
         "# Sessioning\n\n## Purpose\n\nIdentify a caller.\n\n## Principle\n\nA session expires.\n\n" +
-          "## Actions\n\n```actions\nend (session: Session) : return (ok: Flag)\n  then\n    return ok\n```\n",
+          "## Types\n\n```types\n```\n\n## State\n\n```state\n```\n\n" +
+          "## Actions\n\n```actions\nend (session: Session) : return (ok: Flag)\n  where true\n  then\n    return ok\n```\n\n" +
+          "## Queries\n\n```queries\n```\n",
       );
       await writeFile(join(project, "src", "unregistered-spec.md"), "not a specification");
       await writeFile(
@@ -788,7 +816,23 @@ describe("concept discovery", () => {
           'import { SessioningConcept } from "./sessioning.ts";\n' +
           'import spec from "../design/concepts/Sessioning.md" with { type: "text" };\n' +
           "const Sessioning = registerConcept({ class: SessioningConcept, spec });\n" +
-          "export const { vocabulary } = conceptSet({ Sessioning });\n",
+          "export const applicationConcepts = conceptSet({ Sessioning });\n" +
+          "export const { vocabulary } = applicationConcepts;\n",
+      );
+      await writeFile(
+        join(project, "generated.config.ts"),
+        'import { assemble } from "@mit-sdg/sync-engine/assembly";\n' +
+          'import { applicationConcepts, vocabulary } from "./src/application-concepts.ts";\n' +
+          "export default {\n" +
+          '  title: "Session application",\n' +
+          "  design: { version: 1, documents: [] },\n" +
+          '  vocabulary: { module: new URL("./src/application-concepts.ts", import.meta.url) },\n' +
+          "  assemble: () => assemble({\n" +
+          "    vocabulary,\n" +
+          "    instances: applicationConcepts.implementations(),\n" +
+          "    composition: {},\n" +
+          "  }),\n" +
+          "};\n",
       );
 
       expect(registeredClassSources(join(project, "src", "application-concepts.ts"))).toEqual([
@@ -800,19 +844,15 @@ describe("concept discovery", () => {
           specText: await readFile(join(project, "design", "concepts", "Sessioning.md"), "utf8"),
         },
       ]);
-      const checked = spawnSync(
-        "bun",
-        [
-          join(root, "src/command/main.ts"),
-          "check",
-          "--vocabulary-module",
-          "src/application-concepts.ts",
-        ],
-        { cwd: project, encoding: "utf8" },
-      );
+      const checked = spawnSync("bun", [join(root, "src/command/main.ts"), "check"], {
+        cwd: project,
+        encoding: "utf8",
+      });
       expect({ status: checked.status, stdout: checked.stdout, stderr: checked.stderr }).toEqual({
         status: 0,
-        stdout: "Concept action/query source check passed for 1 concepts.\n",
+        stdout:
+          "Concept action/query source check passed for 1 concepts.\n" +
+          "Application diagnostic check passed with 0 advisories.\n",
         stderr: "",
       });
     } finally {

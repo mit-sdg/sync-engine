@@ -138,9 +138,9 @@ describe("generated application artifacts", () => {
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
-    Check registered concepts against erased TypeScript source and optionally inspect application diagnostics.
-    Without a config, uses src/concept-set.ts as a compatibility default.\n`;
+  sync-engine check [--config path] [--fail-on-warnings]
+    Check the configured application, including concept TypeScript source agreement and application diagnostics.
+    The configuration path defaults to generated.config.ts.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,
       encoding: "utf8",
@@ -191,20 +191,17 @@ describe("generated application artifacts", () => {
 
       const unknown = run("check", "--unknown");
       expect(unknown.status).toBe(1);
-      expect(unknown.stderr).toContain(
-        "sync-engine check [--vocabulary-module path | --config path]",
-      );
+      expect(unknown.stderr).toContain("sync-engine check [--config path]");
 
-      const twoRoots = run(
-        "check",
-        "--vocabulary-module",
-        "src/application-concepts.ts",
-        "--config",
-        "generated.config.ts",
-      );
-      expect(twoRoots.status).toBe(1);
-      expect(twoRoots.stderr).toContain("--vocabulary-module path | --config path");
+      const removedMode = run("check", "--vocabulary-module", "src/application-concepts.ts");
+      expect(removedMode.status).toBe(1);
+      expect(removedMode.stderr).toContain("sync-engine check [--config path]");
       expect(existsSync(join(temporary, "imported"))).toBe(false);
+
+      await rm(join(temporary, "generated.config.ts"));
+      const missingDefault = run("check");
+      expect(missingDefault.status).toBe(1);
+      expect(missingDefault.stderr).toContain("Configuration does not exist: generated.config.ts");
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }

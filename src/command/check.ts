@@ -3,10 +3,10 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
-import { applicationManifest } from "@engine/tooling/manifest";
+import { applicationManifest, type ApplicationManifestV5 } from "@engine/tooling/manifest";
 import { diagnosticsFail } from "@engine/tooling/diagnostics";
-import { inspectGenerated } from "@engine/tooling/generated-artifacts";
-import { assembledConcepts, loadRegisteredConcepts } from "./concept-discovery.ts";
+import { inspectGenerated, type ResolvedApplication } from "@engine/tooling/generated-artifacts";
+import { assembledConcepts } from "./concept-discovery.ts";
 import { registeredClassSources } from "./concept-source-discovery.ts";
 import { filesBelow } from "./files-below.ts";
 import { loadGeneratedApplication } from "./generated-config.ts";
@@ -393,59 +393,15 @@ export async function conceptDirectories(
     .sort();
 }
 
-const usage = `sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
-  Check registered concepts against erased TypeScript source and optionally inspect application diagnostics.
-  Without a config, uses src/concept-set.ts as a compatibility default.`;
+const usage = `sync-engine check [--config path] [--fail-on-warnings]
+  Check the configured application, including concept TypeScript source agreement and application diagnostics.
+  The configuration path defaults to generated.config.ts.`;
 
-export async function checkCommand(args: readonly string[]): Promise<void> {
-  let vocabularyModuleArgument: string | undefined;
-  let configPath: string | undefined;
-  let failOnWarnings = false;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === "--vocabulary-module" && vocabularyModuleArgument === undefined) {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("-") || configPath !== undefined) {
-        throw new Error(usage);
-      }
-      vocabularyModuleArgument = value;
-      index += 1;
-      continue;
-    }
-    if (argument === "--config" && configPath === undefined) {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("-") || vocabularyModuleArgument !== undefined) {
-        throw new Error(usage);
-      }
-      configPath = value;
-      index += 1;
-      continue;
-    }
-    if (argument === "--fail-on-warnings" && !failOnWarnings) {
-      failOnWarnings = true;
-      continue;
-    }
-    throw new Error(usage);
-  }
-  const root = process.cwd();
-  const application =
-    configPath === undefined ? undefined : await loadGeneratedApplication(configPath, root);
-  const vocabularyModulePath =
-    application !== undefined
-      ? resolve(fileURLToPath(application.directory), application.vocabularyFrom.from)
-      : resolve(root, vocabularyModuleArgument ?? "src/concept-set.ts");
-  if (!existsSync(vocabularyModulePath)) {
-    throw new Error(`Vocabulary module does not exist: ${relative(root, vocabularyModulePath)}`);
-  }
-
-  const manifest =
-    application === undefined
-      ? undefined
-      : await inspectGenerated(application, (assembled) => applicationManifest(assembled));
-  const concepts =
-    manifest === undefined
-      ? await loadRegisteredConcepts(vocabularyModulePath)
-      : assembledConcepts(manifest);
+function conceptSourceFailures(
+  vocabularyModulePath: string,
+  concepts: ReturnType<typeof assembledConcepts>,
+  root: string,
+): string[] {
   const sources = registeredClassSources(vocabularyModulePath);
   const failures: string[] = [];
   for (const concept of concepts) {
@@ -472,22 +428,77 @@ export async function checkCommand(args: readonly string[]): Promise<void> {
       ),
     );
   }
-  if (failures.length > 0) {
-    throw new Error(
-      `Concept action/query source check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
-    );
-  }
+  return failures;
+}
+
+function assertConceptSources(failures: readonly string[]): void {
+  if (failures.length === 0) return;
+  throw new Error(
+    `Concept action/query source check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
+  );
+}
+
+async function checkConfiguredApplication(
+  application: ResolvedApplication,
+  root: string,
+  failOnWarnings: boolean,
+): Promise<void> {
+  const manifest = await inspectGenerated(application, (assembled) =>
+    applicationManifest(assembled),
+  );
+  const vocabularyModulePath = resolve(
+    fileURLToPath(application.directory),
+    application.vocabularyFrom.from,
+  );
+  const concepts = assembledConcepts(manifest);
+  assertConceptSources(conceptSourceFailures(vocabularyModulePath, concepts, root));
   console.log(`Concept action/query source check passed for ${concepts.length} concepts.`);
 
-  if (manifest !== undefined) {
-    const diagnostics = manifest.diagnostics;
-    for (const diagnostic of diagnostics) {
-      console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
-    }
-    const policy = failOnWarnings ? "warnings" : "errors";
-    if (diagnosticsFail(diagnostics, policy)) {
-      throw new Error(`Application diagnostic check failed with policy "${policy}".`);
-    }
-    console.log(`Application diagnostic check passed with ${diagnostics.length} advisories.`);
+  // Authored-design loading and coverage belongs at this exact config/manifest boundary.
+  // Its orchestrator should be called here before the existing application diagnostics policy.
+  reportApplicationDiagnostics(manifest, failOnWarnings);
+}
+
+function reportApplicationDiagnostics(
+  manifest: ApplicationManifestV5,
+  failOnWarnings: boolean,
+): void {
+  const diagnostics = manifest.diagnostics;
+  for (const diagnostic of diagnostics) {
+    console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
   }
+  const policy = failOnWarnings ? "warnings" : "errors";
+  if (diagnosticsFail(diagnostics, policy)) {
+    throw new Error(`Application diagnostic check failed with policy "${policy}".`);
+  }
+  console.log(`Application diagnostic check passed with ${diagnostics.length} advisories.`);
+}
+
+export async function checkCommand(args: readonly string[]): Promise<void> {
+  let configPath = "generated.config.ts";
+  let hasConfigArgument = false;
+  let failOnWarnings = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--config" && !hasConfigArgument) {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("-")) throw new Error(usage);
+      configPath = value;
+      hasConfigArgument = true;
+      index += 1;
+      continue;
+    }
+    if (argument === "--fail-on-warnings" && !failOnWarnings) {
+      failOnWarnings = true;
+      continue;
+    }
+    throw new Error(usage);
+  }
+
+  const root = process.cwd();
+  if (!existsSync(resolve(root, configPath))) {
+    throw new Error(`Configuration does not exist: ${configPath}`);
+  }
+  const application = await loadGeneratedApplication(configPath, root);
+  await checkConfiguredApplication(application, root, failOnWarnings);
 }
