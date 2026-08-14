@@ -15,7 +15,10 @@ import {
   loadRegisteredConcepts,
   registeredConcepts,
 } from "@command/concept-discovery";
-import { registeredClassSources } from "@command/concept-source-discovery";
+import {
+  registeredClassSources,
+  registeredConceptSources,
+} from "@command/concept-source-discovery";
 import { assemble } from "@engine/boundary/assembly/assembly-facade";
 import { conceptSet, registerConcept } from "@engine/boundary/assembly/concept-set";
 import { vocabulary as declareVocabulary } from "@engine/reactions/authoring/refs";
@@ -539,6 +542,8 @@ describe("concept discovery", () => {
         className: "SessioningConcept",
         classPath: join(conventional, "sessioning.ts"),
         conceptName: "Sessioning",
+        specPath: join(design, "Sessioning.md"),
+        specText: await readFile(join(design, "Sessioning.md"), "utf8"),
       },
     ]);
   });
@@ -636,8 +641,114 @@ describe("concept discovery", () => {
         className: "SessioningConcept",
         classPath: join(where, "sessioning.ts"),
         conceptName: "Sessioning",
+        specPath: join(where, "spec.md"),
+        specText: await readFile(join(where, "spec.md"), "utf8"),
       },
     ]);
+  });
+
+  test("traces class and Markdown aliases through mapped imports and registration maps", async () => {
+    const design = join(directory, "authored", "design");
+    const implementation = join(directory, "shared", "implementation.ts");
+    await mkdir(design, { recursive: true });
+    await mkdir(dirname(implementation), { recursive: true });
+    await writeFile(join(design, "Sessioning.md"), "# Sessioning\n");
+    await writeFile(implementation, "export class SessioningConcept {}\n");
+    await writeFile(
+      join(directory, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          noEmit: true,
+          paths: {
+            "@design/*": ["authored/design/*"],
+            "@shared/*": ["shared/*"],
+          },
+        },
+        include: ["**/*.ts"],
+      }),
+    );
+    await writeFile(
+      join(directory, "registry.ts"),
+      'import { registerConcept } from "@mit-sdg/sync-engine/assembly";\n' +
+        'import { SessioningConcept as ImportedClass } from "@shared/implementation.ts";\n' +
+        'import importedSpec from "@design/Sessioning.md" with { type: "text" };\n' +
+        "const LocalClass = ImportedClass;\n" +
+        "const localSpec = importedSpec;\n" +
+        "export const registered = registerConcept({ class: LocalClass, spec: localSpec });\n",
+    );
+    await writeFile(
+      join(directory, "registrations.ts"),
+      'import { registered as selected } from "./registry.ts";\n' +
+        "export const registrations = { SessionInstance: selected };\n",
+    );
+    const source = join(directory, "concept-set.ts");
+    await writeFile(
+      source,
+      'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\n' +
+        'import { registrations } from "./registrations.ts";\n' +
+        "export const selected = conceptSet({ ...registrations });\n",
+    );
+
+    expect(registeredConceptSources(source)).toEqual([
+      {
+        className: "SessioningConcept",
+        classPath: implementation,
+        conceptName: "SessionInstance",
+        specPath: join(design, "Sessioning.md"),
+        specText: "# Sessioning\n",
+      },
+    ]);
+  });
+
+  test("fails closed on constructed and unresolvable selected specifications", async () => {
+    await writeFile(join(directory, "implementation.ts"), "export class Concept {}\n");
+    const source = join(directory, "concept-set.ts");
+    const prefix =
+      'import { conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";\n' +
+      'import { Concept } from "./implementation.ts";\n';
+
+    await writeFile(
+      source,
+      prefix +
+        'import spec from "./authored.md" with { type: "text" };\n' +
+        'const selected = registerConcept({ class: Concept, spec: spec + "" });\n' +
+        "export const set = conceptSet({ Selected: selected });\n",
+    );
+    await writeFile(join(directory, "authored.md"), "# Authored\n");
+    expect(() => registeredClassSources(source)).toThrow("spec is constructed, dynamic");
+
+    await writeFile(
+      source,
+      prefix +
+        'import spec from "./missing.md" with { type: "text" };\n' +
+        "const selected = registerConcept({ class: Concept, spec });\n" +
+        "export const set = conceptSet({ Selected: selected });\n",
+    );
+    expect(() => registeredClassSources(source)).toThrow(
+      "default specification import `./missing.md` cannot be resolved",
+    );
+  });
+
+  test("rejects ambiguous selected instance names", async () => {
+    await writeFile(join(directory, "spec.md"), "# Shared\n");
+    await writeFile(join(directory, "implementation.ts"), "export class Concept {}\n");
+    const source = join(directory, "concept-set.ts");
+    await writeFile(
+      source,
+      'import { conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";\n' +
+        'import { Concept } from "./implementation.ts";\n' +
+        'import spec from "./spec.md" with { type: "text" };\n' +
+        "const registration = registerConcept({ class: Concept, spec });\n" +
+        "export const first = conceptSet({ Same: registration });\n" +
+        "export const second = conceptSet({ Same: registration });\n",
+    );
+
+    expect(() => registeredClassSources(source)).toThrow(
+      "selected concept instance `Same` is ambiguous",
+    );
   });
 
   test("rejects ambiguous or incomplete discovery roots before loading them", async () => {
@@ -685,6 +796,8 @@ describe("concept discovery", () => {
           className: "SessioningConcept",
           classPath: join(project, "src", "sessioning.ts"),
           conceptName: "Sessioning",
+          specPath: join(project, "design", "concepts", "Sessioning.md"),
+          specText: await readFile(join(project, "design", "concepts", "Sessioning.md"), "utf8"),
         },
       ]);
       const checked = spawnSync(
