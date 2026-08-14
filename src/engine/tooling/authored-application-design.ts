@@ -379,7 +379,12 @@ export function parseApplicationVocabularyDocument(
 
 export interface SelectedComputationDesign {
   name: string;
-  inputs: readonly { name: string; optional: boolean }[];
+  /**
+   * Authoritative TypeScript-source shape, when the caller has resolved it.
+   * Runtime parameter reflection cannot establish optionality, so absence means
+   * that input-shape agreement is deliberately not claimed.
+   */
+  inputs?: readonly { name: string; optional: boolean }[];
 }
 
 export interface SelectedConceptDesign {
@@ -402,6 +407,7 @@ export type ApplicationDesignIssueCode =
   | "UNREGISTERED_COMPUTATION"
   | "COMPUTATION_INPUT_MISMATCH"
   | "MISSING_VOCABULARY"
+  | "UNNECESSARY_VOCABULARY"
   | "UNKNOWN_EXTERNAL"
   | "MISSING_BINDING"
   | "UNRESOLVED_TYPE_TARGET"
@@ -484,7 +490,10 @@ export function validateAuthoredApplicationDesign(
         message: `authored computation ${JSON.stringify(computation.name)} is not selected.`,
         location: computation.location,
       });
-    } else if (fieldShape(computation.inputs) !== fieldShape(executable.inputs)) {
+    } else if (
+      executable.inputs !== undefined &&
+      fieldShape(computation.inputs) !== fieldShape(executable.inputs)
+    ) {
       issues.push({
         code: "COMPUTATION_INPUT_MISMATCH",
         message: `computation ${JSON.stringify(computation.name)} declares inputs (${fieldShape(computation.inputs)}), but executable inputs are (${fieldShape(executable.inputs)}).`,
@@ -512,6 +521,17 @@ export function validateAuthoredApplicationDesign(
       });
     }
     return issues;
+  }
+
+  if (
+    vocabulary.concreteTypes.length === 0 &&
+    [...concepts.values()].every((externals) => externals.size === 0)
+  ) {
+    issues.push({
+      code: "UNNECESSARY_VOCABULARY",
+      message:
+        "application vocabulary is registered, but the selected concepts have no external parameters and it declares no concrete types.",
+    });
   }
 
   const concrete = new Set(vocabulary.concreteTypes.map(({ name }) => name));
