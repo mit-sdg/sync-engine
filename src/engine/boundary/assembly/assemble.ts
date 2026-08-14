@@ -487,6 +487,9 @@ export function assemble<T extends Record<string, ConceptClass>>(
   const endpoints: EndpointDeclaration[] = [];
   const views: Array<readonly [RelationView, AuthoredDeclarationIdentity]> = [];
   const formers: Array<readonly [FormerRef, AuthoredDeclarationIdentity]> = [];
+  const firstContainerPaths = new WeakMap<object, string>();
+  const activeContainers = new WeakSet<object>();
+  const shownContainerPath = (path: string): string => (path === "" ? "<composition>" : path);
 
   const visit = (value: unknown, name: string): void => {
     if (isReaction(value)) {
@@ -543,8 +546,22 @@ export function assemble<T extends Record<string, ConceptClass>>(
       return;
     }
     if (isWalkable(value)) {
-      for (const [key, child] of Object.entries(value)) {
-        visit(child, name === "" ? key : `${name}.${key}`);
+      const first = firstContainerPaths.get(value);
+      if (first !== undefined) {
+        const kind = activeContainers.has(value) ? "cyclic container" : "shared container alias";
+        throw new Error(
+          `assemble: ${kind} first appears at ${JSON.stringify(shownContainerPath(first))} ` +
+            `and appears again at ${JSON.stringify(shownContainerPath(name))}.`,
+        );
+      }
+      firstContainerPaths.set(value, name);
+      activeContainers.add(value);
+      try {
+        for (const [key, child] of Object.entries(value)) {
+          visit(child, name === "" ? key : `${name}.${key}`);
+        }
+      } finally {
+        activeContainers.delete(value);
       }
     }
     // Anything else — helpers, constants, computations — is authoring

@@ -682,8 +682,11 @@ function projectManifest(): ApplicationManifestV1 {
       validators: { input: false, output: false },
     },
   ];
-  manifest.concepts.find(({ name }) => name === "Selecting")!.specification =
-    parseConceptSpecification(selectingSpec);
+  const selecting = manifest.concepts.find(({ name }) => name === "Selecting")!;
+  const specification = parseConceptSpecification(selectingSpec);
+  selecting.purpose = specification.purpose;
+  selecting.principle = specification.principle;
+  selecting.specification = specification;
   return redigest(manifest);
 }
 
@@ -1259,7 +1262,10 @@ describe("application impact analysis", () => {
       version: parsed.version,
       format: parsed.format,
     } as typeof parsed;
-    manifest.concepts.find(({ name }) => name === "Selecting")!.specification = reordered;
+    const selecting = manifest.concepts.find(({ name }) => name === "Selecting")!;
+    selecting.purpose = reordered.purpose;
+    selecting.principle = reordered.principle;
+    selecting.specification = reordered;
     redigest(manifest);
     const sourceIndex = indexApplicationSources({
       manifest,

@@ -1,5 +1,6 @@
 /** Parse the complete version-1 authored contract of one concept definition. */
 
+import { createHash } from "node:crypto";
 import type {
   ConceptSpecificationIR,
   SpecificationActionIR,
@@ -13,6 +14,7 @@ import type {
   SpecificationTypeIR,
 } from "@engine/reads/ir";
 import type { QueryPromise } from "@engine/reads/query-metadata";
+import { isDesignIdentifier } from "@engine/utils/design-identifiers";
 
 export type SpecLocation = SpecificationLocationIR;
 export type SpecType = SpecificationTypeIR;
@@ -27,7 +29,6 @@ export type ConceptSpec = ConceptSpecificationIR;
 
 const SECTION_NAMES = ["Purpose", "Principle", "Types", "State", "Actions", "Queries"] as const;
 const PROMISES = new Set<string>(["one", "optional", "many"]);
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const REFUSE = /^refuse\s+(\S+)\s+("(?:[^"\\]|\\.)*")$/;
 const RETURN = /^return(?:\s+([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*))?$/;
 
@@ -51,6 +52,7 @@ interface FenceMarker {
   character: "`" | "~";
   length: number;
   info: string;
+  indentation: number;
 }
 
 function at(line: SourceLine, column = 1): SpecLocation {
@@ -64,12 +66,13 @@ function fail(what: string, line?: SourceLine, column = 1): never {
 }
 
 function markerOf(line: string): FenceMarker | undefined {
-  const match = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
-  if (match === null) return undefined;
+  const match = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(line);
+  if (match === null || (match[2][0] === "`" && match[3].includes("`"))) return undefined;
   return {
-    character: match[1][0] as "`" | "~",
-    length: match[1].length,
-    info: match[2].trim(),
+    character: match[2][0] as "`" | "~",
+    length: match[2].length,
+    info: match[3].trim(),
+    indentation: match[1].length,
   };
 }
 
@@ -110,7 +113,7 @@ function documentOf(lines: readonly SourceLine[]): {
   if (h1s.length === 0) fail("the document has no concept-definition H1");
   if (h1s.length > 1) fail("the document has more than one H1", h1s[1].line);
   const h1 = h1s[0];
-  if (!IDENTIFIER.test(h1.name)) {
+  if (!isDesignIdentifier(h1.name)) {
     fail(`the definition name "${h1.name}" must be an identifier`, h1.line);
   }
   const h2s = headings.filter(({ level }) => level === 2);
@@ -209,7 +212,8 @@ function fencedSection(
       closing = index;
       break;
     }
-    contents.push(line);
+    const removable = Math.min(open.indentation, /^ */.exec(line.text)?.[0].length ?? 0);
+    contents.push({ ...line, text: line.text.slice(removable) });
   }
   if (closing < 0) fail(`the ${language} fence is never closed`, opening);
   const following = section.lines.slice(closing + 1);
@@ -229,7 +233,7 @@ function fencedSection(
       following.find(({ text }) => markerOf(text) !== undefined),
     );
   }
-  return { contents, prose, location: at(opening) };
+  return { contents, prose, location: at(opening, open.indentation + 1) };
 }
 
 function declarationsOf(fence: readonly SourceLine[]): DeclarationGroup[] {
@@ -446,7 +450,7 @@ function branchesOf(
 
 function parseAction(group: DeclarationGroup): SpecAction {
   const signature = new SignatureParser(group.signature).parse();
-  if (!IDENTIFIER.test(signature.name) || signature.name.startsWith("_"))
+  if (!isDesignIdentifier(signature.name) || signature.name.startsWith("_"))
     fail(`"${signature.name}" is not an action name — queries begin with "_"`, group.signature);
   if (signature.resolution !== "return")
     fail("an action's signature resolves with `: return (…)`", group.signature);
@@ -463,7 +467,7 @@ function parseAction(group: DeclarationGroup): SpecAction {
 
 function parseQuery(group: DeclarationGroup): SpecQuery {
   const signature = new SignatureParser(group.signature).parse();
-  if (!signature.name.startsWith("_") || !IDENTIFIER.test(signature.name))
+  if (!signature.name.startsWith("_") || !isDesignIdentifier(signature.name))
     fail(`"${signature.name}" is not a query name — queries begin with "_"`, group.signature);
   if (!PROMISES.has(signature.resolution))
     fail(
@@ -511,17 +515,31 @@ function externalTypesOf(fence: readonly SourceLine[]): SpecExternalType[] {
   );
 }
 
+const sourceDigests = new WeakMap<ConceptSpec, string>();
+
+function normalizedSource(markdown: string): string {
+  const withoutBom = markdown.startsWith("\uFEFF") ? markdown.slice(1) : markdown;
+  const newlines = withoutBom.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+  return newlines.endsWith("\n") ? newlines : `${newlines}\n`;
+}
+
+function sourceDigest(markdown: string): string {
+  return `sha256-${createHash("sha256").update(normalizedSource(markdown), "utf8").digest("hex")}`;
+}
+
+/** The normalized full-source digest retained for a specification parsed in this process. */
+export function specificationSourceDigest(specification: ConceptSpec): string | undefined {
+  return sourceDigests.get(specification);
+}
+
 /** Parse imported Markdown as the strict version-1 concept-specification format. */
 export function parseSpec(markdown: string): ConceptSpec {
   if (typeof markdown !== "string" || markdown.trim() === "")
     throw new Error(
       'spec takes the specification\'s markdown text — import it with { type: "text" }.',
     );
-  const lines = markdown
-    .replaceAll("\r\n", "\n")
-    .replaceAll("\r", "\n")
-    .split("\n")
-    .map((text, index) => ({ text, number: index + 1 }));
+  const normalized = normalizedSource(markdown);
+  const lines = normalized.split("\n").map((text, index) => ({ text, number: index + 1 }));
   const { definitionName, sections } = documentOf(lines);
   const [purpose, principle, types, state, actions, queries] = sections;
   const typesFence = fencedSection(types, "types");
@@ -534,7 +552,7 @@ export function parseSpec(markdown: string): ConceptSpec {
       text: "## Actions",
       number: actions.location.line,
     });
-  return {
+  const specification: ConceptSpec = {
     format: "sync-engine.concept-specification",
     version: 1,
     definitionName,
@@ -549,6 +567,8 @@ export function parseSpec(markdown: string): ConceptSpec {
     actions: parsedActions,
     queries: parseEach(queryFence.contents, parseQuery, "query"),
   };
+  sourceDigests.set(specification, sourceDigest(normalized));
+  return specification;
 }
 
 /** Canonical compatibility ignores source positions but retains every authored contract value. */

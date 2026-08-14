@@ -1,5 +1,7 @@
 /** Stable identities assigned to authored declarations by the selected composition. */
 
+import { invalidAuthoredPathSegment } from "@engine/utils/design-identifiers";
+
 export type AuthoredDeclarationKind = "reaction" | "view" | "former";
 export type AuthoredDeclarationSource = AuthoredDeclarationKind | "endpoint";
 
@@ -12,15 +14,12 @@ export interface AuthoredDeclarationIdentity {
   readonly source?: "endpoint";
 }
 
-const PATH_SEGMENT = /^[A-Za-z_][A-Za-z0-9_-]*$/;
-
 /** Validate and construct one selected composition identity. */
 export function authoredDeclarationIdentity(
   source: AuthoredDeclarationSource,
   identity: string,
 ): AuthoredDeclarationIdentity {
-  const segments = identity.split(".");
-  const invalid = segments.find((segment) => !PATH_SEGMENT.test(segment));
+  const invalid = invalidAuthoredPathSegment(identity);
   if (invalid !== undefined) {
     throw new Error(
       `assemble: ${source} declaration path ${JSON.stringify(identity)} has invalid segment ` +

@@ -84,9 +84,23 @@ function manifestFor(options: ManifestOptions): ApplicationManifestV1 {
       },
       ...options.concepts.map((concept) => ({
         name: concept.name,
-        actions: (concept.actions ?? ["run"]).map((name) => ({ name })),
-        queries: (concept.queries ?? ["_read"]).map((name) => ({ name })),
-        ...(concept.specification === undefined ? {} : { specification: concept.specification }),
+        actions:
+          concept.specification?.actions.map(({ name, refusals }) => ({
+            name,
+            refusals: refusals.map(({ code }) => code).sort(),
+          })) ?? (concept.actions ?? ["run"]).map((name) => ({ name })),
+        queries:
+          concept.specification?.queries.map(({ name, promise }) => ({
+            name,
+            returns: promise,
+          })) ?? (concept.queries ?? ["_read"]).map((name) => ({ name })),
+        ...(concept.specification === undefined
+          ? {}
+          : {
+              purpose: concept.specification.purpose,
+              principle: concept.specification.principle,
+              specification: concept.specification,
+            }),
       })),
     ],
     conceptImplementations: [

@@ -186,6 +186,23 @@ describe("assemble", () => {
     }
   });
 
+  test("rejects cyclic composition containers with first and current dotted paths", () => {
+    const cycle: Record<string, unknown> = {};
+    cycle.nested = { back: cycle };
+
+    expect(() => assemble({ vocabulary: vocab, composition: { Forum: cycle } })).toThrow(
+      'cyclic container first appears at "Forum" and appears again at "Forum.nested.back"',
+    );
+  });
+
+  test("rejects shared composition container aliases with both dotted paths", () => {
+    const shared = { helper: 1 };
+
+    expect(() =>
+      assemble({ vocabulary: vocab, composition: { Forum: shared, Archive: shared } }),
+    ).toThrow('shared container alias first appears at "Forum" and appears again at "Archive"');
+  });
+
   test("validates every segment of a selected declaration path", () => {
     const Valid = reaction(() =>
       when(Counting.increment({}).responds()).then(Echoing.hear({ text: "valid" })),

@@ -14,6 +14,11 @@ import type {
   WhereOpIR,
 } from "@engine/reads/ir";
 import { canonicalDigest, canonicalValue } from "@engine/utils/canonical-json";
+import {
+  isAuthoredDeclarationPath,
+  isAuthoredPathSegment,
+  isDesignIdentifier,
+} from "@engine/utils/design-identifiers";
 import { setOwn } from "@engine/utils/own-property";
 import { ordinal } from "@engine/utils/ordinal";
 import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
@@ -133,6 +138,16 @@ function nonemptyString(value: unknown, path: string): asserts value is string {
 
 function boolean(value: unknown, path: string): asserts value is boolean {
   if (typeof value !== "boolean") fail(path, "expected a boolean");
+}
+
+function designIdentifier(value: unknown, path: string): asserts value is string {
+  nonemptyString(value, path);
+  if (!isDesignIdentifier(value)) fail(path, "expected an authored identifier");
+}
+
+function authoredPathSegment(value: unknown, path: string): asserts value is string {
+  nonemptyString(value, path);
+  if (!isAuthoredPathSegment(value)) fail(path, "expected an authored path segment");
 }
 
 function literal<const Values extends readonly (string | number | boolean)[]>(
@@ -292,6 +307,9 @@ function assertAuthoredIdentity(value: unknown, path: string): void {
   const data = shape(value, path, ["kind", "identity"], ["source"]);
   literal(data.kind, `${path}.kind`, ["reaction", "view", "former"] as const);
   nonemptyString(data.identity, `${path}.identity`);
+  if (!isAuthoredDeclarationPath(data.identity)) {
+    fail(`${path}.identity`, "expected a dotted authored declaration path");
+  }
   if (data.source !== undefined) {
     if (data.kind !== "reaction")
       fail(`${path}.source`, "endpoint provenance belongs to a reaction");
@@ -489,16 +507,44 @@ function assertApplication(value: unknown, path: string): asserts value is AppIR
   const data = shape(value, path, ["reactions", "views", "formers", "unlowered"]);
   for (const [index, reaction] of array(data.reactions, `${path}.reactions`).entries()) {
     assertReaction(reaction, `${path}.reactions[${index}]`);
+    const authored = record(reaction, `${path}.reactions[${index}]`).authored;
+    if (
+      authored !== undefined &&
+      record(authored, `${path}.reactions[${index}].authored`).kind !== "reaction"
+    )
+      fail(`${path}.reactions[${index}].authored.kind`, 'expected "reaction"');
   }
   for (const [index, view] of array(data.views, `${path}.views`).entries()) {
     assertView(view, `${path}.views[${index}]`);
+    const authored = record(view, `${path}.views[${index}]`).authored;
+    if (
+      authored !== undefined &&
+      record(authored, `${path}.views[${index}].authored`).kind !== "view"
+    )
+      fail(`${path}.views[${index}].authored.kind`, 'expected "view"');
   }
   for (const [index, former] of array(data.formers, `${path}.formers`).entries()) {
     assertFormer(former, `${path}.formers[${index}]`);
+    const authored = record(former, `${path}.formers[${index}]`).authored;
+    if (
+      authored !== undefined &&
+      record(authored, `${path}.formers[${index}].authored`).kind !== "former"
+    )
+      fail(`${path}.formers[${index}].authored.kind`, 'expected "former"');
   }
   for (const [index, unlowered] of array(data.unlowered, `${path}.unlowered`).entries()) {
     assertUnlowered(unlowered, `${path}.unlowered[${index}]`);
+    const authored = record(unlowered, `${path}.unlowered[${index}]`).authored;
+    if (
+      authored !== undefined &&
+      record(authored, `${path}.unlowered[${index}].authored`).kind !== "reaction"
+    )
+      fail(`${path}.unlowered[${index}].authored.kind`, 'expected "reaction"');
   }
+  uniqueFieldIndexes(data.reactions, `${path}.reactions`, "name");
+  uniqueFieldIndexes(data.views, `${path}.views`, "name");
+  uniqueFieldIndexes(data.formers, `${path}.formers`, "name");
+  uniqueFieldIndexes(data.unlowered, `${path}.unlowered`, "name");
 }
 
 function assertLocation(value: unknown, path: string): void {
@@ -512,6 +558,9 @@ function assertSpecificationType(value: unknown, path: string): void {
   if (candidate.kind === "named") {
     const data = shape(value, path, ["kind", "name", "arguments", "location"]);
     nonemptyString(data.name, `${path}.name`);
+    if (!data.name.split(".").every(isDesignIdentifier)) {
+      fail(`${path}.name`, "expected a named type made of authored identifiers");
+    }
     for (const [index, argument] of array(data.arguments, `${path}.arguments`).entries()) {
       assertSpecificationType(argument, `${path}.arguments[${index}]`);
     }
@@ -520,7 +569,9 @@ function assertSpecificationType(value: unknown, path: string): void {
   }
   if (candidate.kind === "union") {
     const data = shape(value, path, ["kind", "members", "location"]);
-    for (const [index, member] of array(data.members, `${path}.members`).entries()) {
+    const members = array(data.members, `${path}.members`);
+    if (members.length < 2) fail(`${path}.members`, "expected at least two union members");
+    for (const [index, member] of members.entries()) {
       assertSpecificationType(member, `${path}.members[${index}]`);
     }
     assertLocation(data.location, `${path}.location`);
@@ -536,7 +587,7 @@ function assertSpecificationType(value: unknown, path: string): void {
 
 function assertSpecificationField(value: unknown, path: string): void {
   const data = shape(value, path, ["name", "optional", "type", "location"]);
-  nonemptyString(data.name, `${path}.name`);
+  designIdentifier(data.name, `${path}.name`);
   boolean(data.optional, `${path}.optional`);
   assertSpecificationType(data.type, `${path}.type`);
   assertLocation(data.location, `${path}.location`);
@@ -549,6 +600,7 @@ function assertSpecificationResult(value: unknown, path: string): void {
     for (const [index, field] of array(data.fields, `${path}.fields`).entries()) {
       assertSpecificationField(field, `${path}.fields[${index}]`);
     }
+    uniqueFieldIndexes(data.fields, `${path}.fields`, "name");
     assertLocation(data.location, `${path}.location`);
     return;
   }
@@ -580,13 +632,13 @@ function assertSpecification(
     fail(`${path}.format`, 'expected "sync-engine.concept-specification"');
   }
   if (data.version !== 1) fail(`${path}.version`, "expected 1");
-  nonemptyString(data.definitionName, `${path}.definitionName`);
+  designIdentifier(data.definitionName, `${path}.definitionName`);
   nonemptyString(data.purpose, `${path}.purpose`);
   nonemptyString(data.principle, `${path}.principle`);
   for (const [index, external] of array(data.externalTypes, `${path}.externalTypes`).entries()) {
     const externalPath = `${path}.externalTypes[${index}]`;
     const item = shape(external, externalPath, ["name", "explanation", "location"]);
-    nonemptyString(item.name, `${externalPath}.name`);
+    designIdentifier(item.name, `${externalPath}.name`);
     string(item.explanation, `${externalPath}.explanation`);
     assertLocation(item.location, `${externalPath}.location`);
   }
@@ -595,7 +647,9 @@ function assertSpecification(
   string(state.body, `${path}.state.body`);
   string(state.prose, `${path}.state.prose`);
   assertLocation(state.location, `${path}.state.location`);
-  for (const [index, action] of array(data.actions, `${path}.actions`).entries()) {
+  const parsedActions = array(data.actions, `${path}.actions`);
+  if (parsedActions.length === 0) fail(`${path}.actions`, "expected at least one action");
+  for (const [index, action] of parsedActions.entries()) {
     const actionPath = `${path}.actions[${index}]`;
     const item = shape(action, actionPath, [
       "name",
@@ -606,10 +660,19 @@ function assertSpecification(
       "refusals",
       "location",
     ]);
-    nonemptyString(item.name, `${actionPath}.name`);
+    designIdentifier(item.name, `${actionPath}.name`);
+    if ((item.name as string).startsWith("_"))
+      fail(`${actionPath}.name`, "action names cannot begin with an underscore");
     uniqueNonemptyStrings(item.inputs, `${actionPath}.inputs`);
     for (const [fieldIndex, field] of array(item.parameters, `${actionPath}.parameters`).entries())
       assertSpecificationField(field, `${actionPath}.parameters[${fieldIndex}]`);
+    const parameterIndexes = uniqueFieldIndexes(
+      item.parameters,
+      `${actionPath}.parameters`,
+      "name",
+    );
+    if (!sameCanonicalValue(item.inputs, [...parameterIndexes.keys()]))
+      fail(`${actionPath}.inputs`, "does not match parameter names and order");
     assertSpecificationResult(item.result, `${actionPath}.result`);
     if (record(item.result, `${actionPath}.result`).kind !== "fields")
       fail(`${actionPath}.result.kind`, 'expected "fields"');
@@ -621,9 +684,12 @@ function assertSpecification(
       const refusalPath = `${actionPath}.refusals[${refusalIndex}]`;
       const refusalItem = shape(refusal, refusalPath, ["code", "message", "location"]);
       nonemptyString(refusalItem.code, `${refusalPath}.code`);
+      if (/\s/u.test(refusalItem.code as string))
+        fail(`${refusalPath}.code`, "refusal codes cannot contain whitespace");
       nonemptyString(refusalItem.message, `${refusalPath}.message`);
       assertLocation(refusalItem.location, `${refusalPath}.location`);
     }
+    uniqueFieldIndexes(item.refusals, `${actionPath}.refusals`, "code");
     assertLocation(item.location, `${actionPath}.location`);
   }
   uniqueFieldIndexes(data.actions, `${path}.actions`, "name");
@@ -638,10 +704,15 @@ function assertSpecification(
       "promise",
       "location",
     ]);
-    nonemptyString(item.name, `${queryPath}.name`);
+    designIdentifier(item.name, `${queryPath}.name`);
+    if (!(item.name as string).startsWith("_"))
+      fail(`${queryPath}.name`, "query names must begin with an underscore");
     uniqueNonemptyStrings(item.inputs, `${queryPath}.inputs`);
     for (const [fieldIndex, field] of array(item.parameters, `${queryPath}.parameters`).entries())
       assertSpecificationField(field, `${queryPath}.parameters[${fieldIndex}]`);
+    const parameterIndexes = uniqueFieldIndexes(item.parameters, `${queryPath}.parameters`, "name");
+    if (!sameCanonicalValue(item.inputs, [...parameterIndexes.keys()]))
+      fail(`${queryPath}.inputs`, "does not match parameter names and order");
     assertSpecificationResult(item.result, `${queryPath}.result`);
     if (record(item.result, `${queryPath}.result`).kind !== "fields")
       fail(`${queryPath}.result.kind`, 'expected "fields"');
@@ -971,13 +1042,13 @@ function assertVocabularyTarget(value: unknown, path: string): void {
   const candidate = record(value, path);
   if (candidate.kind === "concrete") {
     const data = shape(value, path, ["kind", "name"]);
-    nonemptyString(data.name, `${path}.name`);
+    authoredPathSegment(data.name, `${path}.name`);
     return;
   }
   if (candidate.kind === "qualified") {
     const data = shape(value, path, ["kind", "instance", "type"]);
-    nonemptyString(data.instance, `${path}.instance`);
-    nonemptyString(data.type, `${path}.type`);
+    authoredPathSegment(data.instance, `${path}.instance`);
+    authoredPathSegment(data.type, `${path}.type`);
     return;
   }
   fail(`${path}.kind`, 'expected "concrete" or "qualified"');
@@ -1060,18 +1131,20 @@ function assertDesign(value: unknown, path: string): void {
     ).entries()) {
       const instancePath = `${conceptPath}.instances[${instanceIndex}]`;
       const selected = shape(instance, instancePath, ["name", "bindings"]);
-      nonemptyString(selected.name, `${instancePath}.name`);
+      authoredPathSegment(selected.name, `${instancePath}.name`);
       for (const [bindingIndex, binding] of array(
         selected.bindings,
         `${instancePath}.bindings`,
       ).entries()) {
         const bindingPath = `${instancePath}.bindings[${bindingIndex}]`;
         const bound = shape(binding, bindingPath, ["external", "target", "location"]);
-        nonemptyString(bound.external, `${bindingPath}.external`);
+        designIdentifier(bound.external, `${bindingPath}.external`);
         assertVocabularyTarget(bound.target, `${bindingPath}.target`);
         assertDesignLocation(bound.location, `${bindingPath}.location`, sourceIds);
       }
+      uniqueFieldIndexes(selected.bindings, `${instancePath}.bindings`, "external");
     }
+    uniqueFieldIndexes(item.instances, `${conceptPath}.instances`, "name");
   }
   if (data.vocabulary !== undefined) {
     const vocabulary = shape(data.vocabulary, `${path}.vocabulary`, [
@@ -1088,7 +1161,7 @@ function assertDesign(value: unknown, path: string): void {
     ).entries()) {
       const concretePath = `${path}.vocabulary.concreteTypes[${index}]`;
       const item = shape(concrete, concretePath, ["name", "location"]);
-      nonemptyString(item.name, `${concretePath}.name`);
+      authoredPathSegment(item.name, `${concretePath}.name`);
       assertDesignLocation(item.location, `${concretePath}.location`, sourceIds);
     }
     for (const [index, binding] of array(
@@ -1097,10 +1170,22 @@ function assertDesign(value: unknown, path: string): void {
     ).entries()) {
       const bindingPath = `${path}.vocabulary.bindings[${index}]`;
       const item = shape(binding, bindingPath, ["instance", "external", "target", "location"]);
-      nonemptyString(item.instance, `${bindingPath}.instance`);
-      nonemptyString(item.external, `${bindingPath}.external`);
+      authoredPathSegment(item.instance, `${bindingPath}.instance`);
+      designIdentifier(item.external, `${bindingPath}.external`);
       assertVocabularyTarget(item.target, `${bindingPath}.target`);
       assertDesignLocation(item.location, `${bindingPath}.location`, sourceIds);
+    }
+    uniqueFieldIndexes(vocabulary.concreteTypes, `${path}.vocabulary.concreteTypes`, "name");
+    const bindingKeys = new Set<string>();
+    for (const [index, binding] of array(
+      vocabulary.bindings,
+      `${path}.vocabulary.bindings`,
+    ).entries()) {
+      const item = record(binding, `${path}.vocabulary.bindings[${index}]`);
+      const key = `${item.instance as string}\0${item.external as string}`;
+      if (bindingKeys.has(key))
+        fail(`${path}.vocabulary.bindings[${index}].external`, "duplicates an earlier binding");
+      bindingKeys.add(key);
     }
   }
   for (const [index, computation] of array(data.computations, `${path}.computations`).entries()) {
@@ -1111,14 +1196,15 @@ function assertDesign(value: unknown, path: string): void {
       ["name", "inputs", "result", "location", "inputValidation"],
       ["runtimeInputs"],
     );
-    nonemptyString(item.name, `${computationPath}.name`);
+    designIdentifier(item.name, `${computationPath}.name`);
     for (const [inputIndex, input] of array(item.inputs, `${computationPath}.inputs`).entries()) {
       const inputPath = `${computationPath}.inputs[${inputIndex}]`;
       const field = shape(input, inputPath, ["name", "optional", "type"]);
-      nonemptyString(field.name, `${inputPath}.name`);
+      designIdentifier(field.name, `${inputPath}.name`);
       boolean(field.optional, `${inputPath}.optional`);
       nonemptyString(field.type, `${inputPath}.type`);
     }
+    uniqueFieldIndexes(item.inputs, `${computationPath}.inputs`, "name");
     nonemptyString(item.result, `${computationPath}.result`);
     assertDesignLocation(item.location, `${computationPath}.location`, sourceIds);
     literal(item.inputValidation, `${computationPath}.inputValidation`, [
@@ -1128,6 +1214,7 @@ function assertDesign(value: unknown, path: string): void {
     if (item.runtimeInputs !== undefined)
       uniqueNonemptyStrings(item.runtimeInputs, `${computationPath}.runtimeInputs`);
   }
+  uniqueFieldIndexes(data.computations, `${path}.computations`, "name");
   if (
     data.checked === true &&
     array(data.declarations, `${path}.declarations`).some(
@@ -1146,6 +1233,63 @@ function assertDesign(value: unknown, path: string): void {
     fail(path, "unchecked design blocks must not contain authored-design claims");
 }
 
+function assertInventorySpecificationAgreement(concept: DataRecord, path: string): void {
+  if (concept.specification === undefined) return;
+  const specification = record(concept.specification, `${path}.specification`);
+  for (const field of ["purpose", "principle"] as const) {
+    if (concept[field] !== specification[field])
+      fail(`${path}.${field}`, `does not match ${path}.specification.${field}`);
+  }
+
+  for (const [kind, inventoryValue, specificationValue] of [
+    ["actions", concept.actions, specification.actions],
+    ["queries", concept.queries, specification.queries],
+  ] as const) {
+    const inventoryPath = `${path}.${kind}`;
+    const specificationPath = `${path}.specification.${kind}`;
+    const inventory = uniqueFieldIndexes(inventoryValue, inventoryPath, "name");
+    const specified = uniqueFieldIndexes(specificationValue, specificationPath, "name");
+    for (const [name, specificationIndex] of specified) {
+      const inventoryIndex = inventory.get(name);
+      if (inventoryIndex === undefined)
+        fail(inventoryPath, `omits specified member ${JSON.stringify(name)}`);
+      const item = record(
+        array(inventoryValue, inventoryPath)[inventoryIndex],
+        `${inventoryPath}[${inventoryIndex}]`,
+      );
+      const declaration = record(
+        array(specificationValue, specificationPath)[specificationIndex],
+        `${specificationPath}[${specificationIndex}]`,
+      );
+      if (item.roles !== undefined) {
+        const expectedRoles = [...(declaration.inputs as string[])].sort(ordinal);
+        if (!sameCanonicalValue(item.roles, expectedRoles))
+          fail(`${inventoryPath}[${inventoryIndex}].roles`, "does not match specification inputs");
+      }
+      if (kind === "actions") {
+        const expectedRefusals = array(
+          declaration.refusals,
+          `${specificationPath}[${specificationIndex}].refusals`,
+        )
+          .map((refusal) => record(refusal, specificationPath).code as string)
+          .sort(ordinal);
+        const actualRefusals = item.refusals ?? [];
+        if (!sameCanonicalValue(actualRefusals, expectedRefusals))
+          fail(
+            `${inventoryPath}[${inventoryIndex}].refusals`,
+            "does not match specification refusals",
+          );
+      } else if (item.returns !== declaration.promise) {
+        fail(`${inventoryPath}[${inventoryIndex}].returns`, "does not match specification promise");
+      }
+    }
+    for (const [name, inventoryIndex] of inventory) {
+      if (!specified.has(name))
+        fail(`${inventoryPath}[${inventoryIndex}].name`, "has no matching specification member");
+    }
+  }
+}
+
 function assertManifestCrossFields(data: DataRecord): void {
   const conceptIndexes = uniqueFieldIndexes(data.concepts, "$.concepts", "name");
   if (!conceptIndexes.has("RequestBoundary")) {
@@ -1155,6 +1299,7 @@ function assertManifestCrossFields(data: DataRecord): void {
     const conceptData = record(concept, `$.concepts[${index}]`);
     uniqueFieldIndexes(conceptData.actions, `$.concepts[${index}].actions`, "name");
     uniqueFieldIndexes(conceptData.queries, `$.concepts[${index}].queries`, "name");
+    assertInventorySpecificationAgreement(conceptData, `$.concepts[${index}]`);
   }
 
   const implementationIndexes = uniqueFieldIndexes(

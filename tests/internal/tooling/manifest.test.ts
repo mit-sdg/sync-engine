@@ -20,7 +20,10 @@ import {
   renderWireTypes,
   validateApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
+import type { ApplicationManifestV1 } from "@mit-sdg/sync-engine/tooling";
 import type { AppIR, ActionTriggerIR } from "@engine/reads/ir";
+import { parseSpec } from "@engine/reactions/concepts/concept-spec";
+import { canonicalDigest } from "@engine/utils/canonical-json";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
@@ -43,6 +46,11 @@ const First = endpoint(
 const Second = endpoint("/shared", ({ value }) =>
   receive({ value }).then(respond({ source: "second", value })),
 );
+
+function reseal<T extends { digest: string }>(value: T): T {
+  const { digest: _digest, ...body } = value;
+  return { ...value, digest: canonicalDigest(body) };
+}
 
 function application(reverse = false) {
   return assemble({
@@ -1010,6 +1018,114 @@ describe("application manifest", () => {
 
     expect(() => validateApplicationManifest(old)).toThrow(/\$\.version.*expected 1/);
     expect(() => parseApplicationManifest(JSON.stringify(old))).toThrow(/\$\.version.*expected 1/);
+  });
+
+  test("rejects digest-valid concept and authored-identity states no parser can produce", () => {
+    const specification = parseSpec(`# Example
+
+## Purpose
+
+Exercise decoder invariants.
+
+## Principle
+
+One valid operation remains inspectable.
+
+## Types
+
+\`\`\`types
+\`\`\`
+
+## State
+
+\`\`\`state
+opaque
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+perform(value: String) : return (result: String)
+  where true
+  then
+    return result
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+_get(value: String) : optional (result: String)
+\`\`\`
+`);
+    const base = applicationManifest(application());
+    const seed = reseal({
+      ...base,
+      concepts: [
+        ...base.concepts,
+        {
+          name: "Example",
+          purpose: specification.purpose,
+          principle: specification.principle,
+          specification,
+          actions: [{ name: "perform", roles: ["value"] }],
+          queries: [{ name: "_get", roles: ["value"], returns: "optional" as const }],
+        },
+      ],
+      conceptImplementations: [
+        ...base.conceptImplementations,
+        {
+          concept: "Example",
+          canonical: { owner: "application" as const },
+          selected: { via: "default" as const },
+        },
+      ],
+    });
+    expect(() => validateApplicationManifest(seed)).not.toThrow();
+
+    const rejects = (
+      mutate: (manifest: ApplicationManifestV1) => void,
+      expected: string | RegExp,
+    ) => {
+      const forged = structuredClone(seed);
+      mutate(forged);
+      const digestValid = reseal(forged);
+      expect(() => parseApplicationManifest(JSON.stringify(digestValid))).toThrow(expected);
+    };
+    const example = (manifest: ApplicationManifestV1) => manifest.concepts.at(-1)!;
+
+    rejects((manifest) => {
+      example(manifest).specification!.actions = [];
+    }, "$.concepts[1].specification.actions");
+    rejects((manifest) => {
+      example(manifest).specification!.actions[0].inputs = ["other"];
+    }, "$.concepts[1].specification.actions[0].inputs");
+    rejects((manifest) => {
+      const action = example(manifest).specification!.actions[0] as unknown as {
+        parameters: unknown[];
+      };
+      action.parameters.push(structuredClone(action.parameters[0]));
+    }, "$.concepts[1].specification.actions[0].parameters[1].name");
+    rejects((manifest) => {
+      const result = example(manifest).specification!.actions[0].result as unknown as {
+        fields: unknown[];
+      };
+      result.fields.push(structuredClone(result.fields[0]));
+    }, "$.concepts[1].specification.actions[0].result.fields[1].name");
+    rejects((manifest) => {
+      example(manifest).specification!.actions[0].name = "_perform";
+    }, "$.concepts[1].specification.actions[0].name");
+    rejects((manifest) => {
+      example(manifest).specification!.queries[0].name = "get";
+    }, "$.concepts[1].specification.queries[0].name");
+    rejects((manifest) => {
+      example(manifest).actions[0].roles = ["forged"];
+    }, "$.concepts[1].actions[0].roles");
+    rejects((manifest) => {
+      manifest.application.reactions[0].authored = {
+        kind: "reaction",
+        identity: "Forum.bad segment",
+      };
+    }, "$.application.reactions[0].authored.identity");
   });
 
   test("rejects malformed computation and implementation inventories", () => {

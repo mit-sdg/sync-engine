@@ -75,6 +75,17 @@ ${value.queries}
 `;
 }
 
+function indentFences(markdown: string, spaces: number): string {
+  let inFence = false;
+  return markdown
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith("```")) inFence = !inFence;
+      return inFence || line.startsWith("```") ? `${" ".repeat(spaces)}${line}` : line;
+    })
+    .join("\n");
+}
+
 describe("concept specification document structure", () => {
   test("retains the definition identity and requires the exact H1/H2 skeleton", () => {
     expect(parseSpec(specification()).definitionName).toBe("Inviting");
@@ -92,6 +103,15 @@ describe("concept specification document structure", () => {
       ),
     ).toThrow("must be ordered");
     expect(() => parseSpec(`${specification()}\n# Again\n`)).toThrow("more than one H1");
+  });
+
+  test("recognizes CommonMark structural fences indented by at most three spaces", () => {
+    for (const indentation of [0, 1, 2, 3]) {
+      expect(parseSpec(indentFences(specification(), indentation)).actions[0].name).toBe("invite");
+    }
+    expect(() => parseSpec(indentFences(specification(), 4))).toThrow(
+      "must begin with a types fence",
+    );
   });
 
   test("requires nonempty Purpose and Principle prose", () => {
