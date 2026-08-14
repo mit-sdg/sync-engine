@@ -264,6 +264,19 @@ function wildcardMatch(pattern: string, value: string): string | undefined {
     : undefined;
 }
 
+function hasTextImportAttribute(imported: MarkdownImport): boolean {
+  const attributes = imported.declaration.attributes;
+  if (attributes?.token !== ts.SyntaxKind.WithKeyword || attributes.elements.length !== 1) {
+    return false;
+  }
+  const [attribute] = attributes.elements;
+  const name =
+    ts.isIdentifier(attribute.name) || ts.isStringLiteral(attribute.name)
+      ? attribute.name.text
+      : undefined;
+  return name === "type" && ts.isStringLiteral(attribute.value) && attribute.value.text === "text";
+}
+
 function textImportPath(imported: MarkdownImport, context: DiscoveryContext): string {
   const importer = imported.declaration.getSourceFile();
   const specifier = imported.specifier;
@@ -422,6 +435,12 @@ export function registeredConceptSources(
       return failure(
         imported.declaration.getSourceFile(),
         `registration \`${entry.name}\` specification import does not resolve to Markdown`,
+      );
+    }
+    if (!hasTextImportAttribute(imported)) {
+      return failure(
+        imported.declaration.getSourceFile(),
+        `registration \`${entry.name}\` default Markdown import must use with { type: "text" }`,
       );
     }
 

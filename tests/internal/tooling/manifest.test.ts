@@ -989,6 +989,105 @@ describe("application manifest", () => {
     expect(forward).toMatch(/"defaults": \{\n\s+"a": 2,\n\s+"z": 1/);
   });
 
+  test("accepts the full former-node and wire-origin vocabulary of manifest V1", () => {
+    const enriched = structuredClone(applicationManifest(application()));
+    const source = {
+      op: "find",
+      query: { concept: "Looking", query: "_get" },
+      in: { item: { $var: "item" } },
+      out: { item: { $var: "found" } },
+    };
+    enriched.application.formers = [
+      {
+        name: "RichFormer",
+        ins: ["item"],
+        bindings: ["item"],
+        promise: "optional",
+        body: {
+          node: "record",
+          where: [{ op: "compute", computation: "lt", in: {}, out: "computed" }],
+          entries: {
+            leaf: { node: "leaf", var: "item" },
+            nested: { node: "former", former: "OtherFormer", in: {}, whether: true },
+            rows: {
+              node: "each",
+              from: source,
+              arranged: { by: "item", order: "descending" },
+              as: { node: "leaf", var: "found" },
+            },
+            count: { node: "count", from: source, where: [] },
+            first: {
+              node: "first",
+              from: source,
+              value: "found",
+              arranged: { order: "newest" },
+            },
+            distinct: { node: "distinct", from: source, value: "found" },
+          },
+          splices: [{ fragment: "OtherFormer", in: {}, whether: true }],
+        },
+      },
+    ] as never;
+    enriched.wire.endpoints[0].input = {
+      kind: "reference",
+      allOf: [
+        { source: "action-input", concept: "Looking", member: "open", path: ["item"] },
+        { source: "literal", value: "fixed" },
+        { source: "number" },
+      ],
+      sites: ["RichFormer"],
+    };
+
+    expect(applicationManifestDigest(enriched)).toMatch(/^fnv1a64-/);
+  });
+
+  test("rejects JavaScript values that cannot be canonical manifest JSON", () => {
+    const invalidValues: { value: unknown; message: RegExp }[] = [];
+    const withNumber = structuredClone(applicationManifest(application()));
+    withNumber.generator.version = Number.NaN as never;
+    invalidValues.push({ value: withNumber, message: /finite JSON number/ });
+
+    const withUndefined = structuredClone(applicationManifest(application()));
+    withUndefined.generator.version = undefined as never;
+    invalidValues.push({ value: withUndefined, message: /received undefined/ });
+
+    const withDate = structuredClone(applicationManifest(application()));
+    withDate.generator = new Date() as never;
+    invalidValues.push({ value: withDate, message: /plain JSON object/ });
+
+    const cyclic = structuredClone(applicationManifest(application()));
+    (cyclic.design as unknown as Record<string, unknown>).cycle = cyclic;
+    invalidValues.push({ value: cyclic, message: /contains a cycle/ });
+
+    const withSymbol = structuredClone(applicationManifest(application()));
+    Object.defineProperty(withSymbol.generator, Symbol("hidden"), {
+      value: true,
+      enumerable: true,
+    });
+    invalidValues.push({ value: withSymbol, message: /symbol keys/ });
+
+    const withGetter = structuredClone(applicationManifest(application()));
+    Object.defineProperty(withGetter.generator, "version", {
+      enumerable: true,
+      get: () => "1.0.0",
+    });
+    invalidValues.push({ value: withGetter, message: /enumerable data property/ });
+
+    const sparse = structuredClone(applicationManifest(application()));
+    const sparseDiagnostics: unknown[] = [];
+    sparseDiagnostics.length = 1;
+    sparse.diagnostics = sparseDiagnostics as never;
+    invalidValues.push({ value: sparse, message: /enumerable JSON array element/ });
+
+    const decoratedArray = structuredClone(applicationManifest(application()));
+    Object.assign(decoratedArray.diagnostics, { note: "not an index" });
+    invalidValues.push({ value: decoratedArray, message: /non-index properties/ });
+
+    for (const { value, message } of invalidValues) {
+      expect(() => validateApplicationManifest(value)).toThrow(message);
+    }
+  });
+
   test("validates, parses, and recomputes the format-owned canonical digest", () => {
     const manifest = applicationManifest(application());
     expect(applicationManifestDigest(manifest)).toBe(manifest.digest);

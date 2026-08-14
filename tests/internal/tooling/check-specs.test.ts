@@ -748,6 +748,17 @@ describe("concept discovery", () => {
     await writeFile(
       source,
       prefix +
+        'import spec from "./authored.md";\n' +
+        "const selected = registerConcept({ class: Concept, spec });\n" +
+        "export const set = conceptSet({ Selected: selected });\n",
+    );
+    expect(() => registeredConceptSources(source)).toThrow(
+      'default Markdown import must use with { type: "text" }',
+    );
+
+    await writeFile(
+      source,
+      prefix +
         'import spec from "./missing.md" with { type: "text" };\n' +
         "const selected = registerConcept({ class: Concept, spec });\n" +
         "export const set = conceptSet({ Selected: selected });\n",
@@ -786,7 +797,7 @@ describe("concept discovery", () => {
     );
   });
 
-  test("the CLI checks direct registration selected by the default config", async () => {
+  test("the CLI source-checks reflected inputs on direct and inherited selected methods", async () => {
     const root = resolve(import.meta.dirname, "../../..");
     const project = await mkdtemp(join(root, "tests/.sync-engine-discovery-"));
     try {
@@ -796,16 +807,18 @@ describe("concept discovery", () => {
         join(project, "design", "concepts", "Sessioning.md"),
         "# Sessioning\n\n## Purpose\n\nIdentify a caller.\n\n## Principle\n\nA session expires.\n\n" +
           "## Types\n\n```types\n```\n\n## State\n\n```state\n```\n\n" +
-          "## Actions\n\n```actions\nend (session: Session) : return (ok: Flag)\n  where true\n  then\n    return ok\n```\n\n" +
+          "## Actions\n\n```actions\nend (session: Session) : return (ok: Flag)\n  where true\n  then\n    return ok\nstart (session: Session) : return (ok: Flag)\n  where true\n  then\n    return ok\n```\n\n" +
           "## Queries\n\n```queries\n```\n",
       );
       await writeFile(join(project, "src", "unregistered-spec.md"), "not a specification");
       await writeFile(
         join(project, "src", "sessioning.ts"),
         "class SessioningBase {\n" +
-          "  end(_: { session: string }) { return { ok: true }; }\n" +
+          "  end({ session }: { session?: string }) { return { ok: Boolean(session) }; }\n" +
           "}\n" +
-          "export class SessioningConcept extends SessioningBase {}\n",
+          "export class SessioningConcept extends SessioningBase {\n" +
+          "  start({ session }: { session?: string }) { return { ok: Boolean(session) }; }\n" +
+          "}\n",
       );
       await writeFile(
         join(project, "src", "application-concepts.ts"),
@@ -845,13 +858,14 @@ describe("concept discovery", () => {
         cwd: project,
         encoding: "utf8",
       });
-      expect({ status: checked.status, stdout: checked.stdout, stderr: checked.stderr }).toEqual({
-        status: 0,
-        stdout:
-          "Concept action/query source check passed for 1 concepts.\n" +
-          "Application diagnostic check passed with 0 advisories.\n",
-        stderr: "",
-      });
+      expect(checked.status).toBe(1);
+      expect(checked.stdout).toBe("");
+      expect(checked.stderr).toContain(
+        "the action `end` declares the inputs `session` but the class takes `session?`",
+      );
+      expect(checked.stderr).toContain(
+        "the action `start` declares the inputs `session` but the class takes `session?`",
+      );
     } finally {
       await rm(project, { recursive: true, force: true });
     }

@@ -1,4 +1,4 @@
-import spec from "./spec.md";
+import spec from "./spec.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, no, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";

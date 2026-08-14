@@ -275,19 +275,15 @@ function compare(
       continue;
     }
 
-    const checkInputs =
-      options.sourceInputMembers === undefined || options.sourceInputMembers.has(declaration.name);
-    if (checkInputs) {
-      if (!member.inputs.ok) {
-        report(
-          `the ${kind} \`${declaration.name}\` parameter ${failureDetail(member.inputs, locationBase)}`,
-        );
-      } else if (!shapesEqual(declaration.parameters, member.inputs.fields)) {
-        report(
-          `the ${kind} \`${declaration.name}\` declares the inputs ${listed(declaration.parameters)} ` +
-            `but the class takes ${listed(member.inputs.fields)}`,
-        );
-      }
+    if (!member.inputs.ok) {
+      report(
+        `the ${kind} \`${declaration.name}\` parameter ${failureDetail(member.inputs, locationBase)}`,
+      );
+    } else if (!shapesEqual(declaration.parameters, member.inputs.fields)) {
+      report(
+        `the ${kind} \`${declaration.name}\` declares the inputs ${listed(declaration.parameters)} ` +
+          `but the class takes ${listed(member.inputs.fields)}`,
+      );
     }
 
     const resultLabel = kind === "action" ? "successful result" : "row";

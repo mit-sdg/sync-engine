@@ -8,6 +8,7 @@ import type { AuthoredDeclarationIdentity } from "@engine/reads/declaration-iden
 import {
   parseSpec,
   specificationsAreCompatible,
+  specificationSourceDigest,
   type ConceptSpec,
 } from "@engine/reactions/concepts/concept-spec";
 import { canonicalDigest } from "@engine/utils/canonical-json";
@@ -384,10 +385,10 @@ export async function checkAuthoredDesign(options: {
       }
       const path = localPath(source.url, `conceptSources[${JSON.stringify(instance)}].url`);
       const scanned = scanDesignMarkdown(source.content, path);
-      const parsed = parseSpec(scanned.content);
-      if (!specificationsAreCompatible(parsed, specification)) {
+      parseSpec(scanned.content);
+      if (scanned.digest !== specificationSourceDigest(specification)) {
         throw new Error(
-          `authored design: traced concept source for ${JSON.stringify(instance)} does not match its registered specification.`,
+          `authored design: traced concept source for ${JSON.stringify(instance)} does not exactly match its registered spec text.`,
         );
       }
       return {

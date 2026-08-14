@@ -119,6 +119,19 @@ score(values: List<Number>) : Number
     ["# One\n# Two\n[x](reaction:A.B)\n", /exactly one H1/],
     ["# One\n[x](reaction:A.*)\n", /exact non-wildcard/],
     ["# One\n```computations\nf(x: String) : String\n```\n", /indented prose body/],
+    ["# One\n```computations\nnot a signature\n  Explains it.\n```\n", /needs `name/],
+    [
+      "# One\n```computations\nf(value String) : String\n  Explains it.\n```\n",
+      /invalid computation input/,
+    ],
+    [
+      "# One\n```computations\nf(value: Map<String) : String\n  Explains it.\n```\n",
+      /unbalanced delimiters/,
+    ],
+    [
+      "# One\n```computations\nf(value: String, value: Number) : String\n  Explains it.\n```\n",
+      /declared twice/,
+    ],
     ["# One\nBackground only.\n", /must cite/],
   ])("rejects malformed registered documents", (markdown, message) => {
     expect(() => parseApplicationDesignDocument(markdown, "bad.md")).toThrow(message);
@@ -233,6 +246,10 @@ formatName(person: Person) : String
     ["# V\n```types\nconcrete Person\n```\n", /prose definition/],
     ["# V\n```types\nA.B becomes C\n```\n", /accepts only/],
     ["# V\n```types\nA.B is C\nA.B is D\n```\n", /bound twice/],
+    [
+      "# V\n```types\nconcrete Person\n  A person.\nconcrete Person\n  Again.\n```\n",
+      /declared twice/,
+    ],
   ])("rejects malformed vocabulary", (markdown, message) => {
     expect(() => parseApplicationVocabularyDocument(markdown)).toThrow(message);
   });
@@ -325,6 +342,68 @@ Comments.User is Other.External
         "EXTERNAL_TARGET",
         "MISSING_BINDING",
         "UNUSED_CONCRETE",
+      ]),
+    );
+  });
+
+  test("reports duplicate and unselected computations and every invalid binding category", () => {
+    const first = parseApplicationDesignDocument(
+      `# First
+
+[run](reaction:Forum.Run).
+
+\`\`\`computations
+extra() : String
+  Produces extra text.
+duplicate() : String
+  First definition.
+\`\`\`
+`,
+      "first.md",
+    );
+    const second = parseApplicationDesignDocument(
+      `# Second
+
+[run](reaction:Forum.Run).
+
+\`\`\`computations
+duplicate() : String
+  Second definition.
+\`\`\`
+`,
+      "second.md",
+    );
+    const vocabulary = parseApplicationVocabularyDocument(
+      `# Vocabulary
+
+\`\`\`types
+concrete Person
+  A person.
+Unknown.User is Person
+Comments.Missing is Person
+Comments.User is MissingType
+Comments.Target is Absent.Value
+\`\`\`
+`,
+      "vocabulary.md",
+    );
+
+    const codes = validateAuthoredApplicationDesign([first, second], vocabulary, {
+      reactions: ["Forum.Run"],
+      views: [],
+      formers: [],
+      computations: [{ name: "selected" }],
+      concepts: [{ instance: "Comments", externalTypes: ["User", "Target", "Unbound"] }],
+    }).map(({ code }) => code);
+
+    expect(codes).toEqual(
+      expect.arrayContaining([
+        "DUPLICATE_COMPUTATION",
+        "UNREGISTERED_COMPUTATION",
+        "MISSING_COVERAGE",
+        "UNKNOWN_EXTERNAL",
+        "UNRESOLVED_TYPE_TARGET",
+        "MISSING_BINDING",
       ]),
     );
   });

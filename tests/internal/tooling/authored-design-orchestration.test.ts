@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
@@ -9,6 +9,8 @@ import {
   AuthoredDesignCheckError,
   checkAuthoredDesign,
 } from "@engine/tooling/authored-design-orchestration";
+import { validateApplicationManifest } from "@engine/tooling/application-manifest-format";
+import { applicationManifest } from "@engine/tooling/manifest";
 
 const temporaryDirectories: string[] = [];
 
@@ -64,7 +66,7 @@ const words = vocabulary({
   },
 });
 
-const Publish = endpoint("/publish", () => receive().then(respond()));
+const Publish = endpoint("/publish", () => receive().then(respond()), { input: {} });
 
 function application() {
   return assemble({ vocabulary: words, composition: { Forum: { Publish } } });
@@ -77,9 +79,12 @@ async function fixture(design: string, vocabularyDesign?: string) {
   await writeFile(designPath, design);
   const vocabularyPath = join(directory, "vocabulary.md");
   if (vocabularyDesign !== undefined) await writeFile(vocabularyPath, vocabularyDesign);
+  const conceptPath = join(directory, "Commenting.md");
+  await writeFile(conceptPath, commentingSpec);
   return {
     documents: [pathToFileURL(designPath)],
     ...(vocabularyDesign === undefined ? {} : { vocabulary: pathToFileURL(vocabularyPath) }),
+    concept: pathToFileURL(conceptPath),
   };
 }
 
@@ -114,6 +119,11 @@ describe("authored design orchestration", () => {
           expect(computations).toEqual([{ name: "normalize" }]);
           return [{ name: "normalize", inputs: [{ name: "value", optional: true }] }];
         },
+        conceptSources: ["PostComments", "AnswerComments"].map((instance) => ({
+          instance,
+          url: design.concept,
+          content: commentingSpec,
+        })),
       });
 
       expect(checked.sources.documents[0]).toMatchObject({
@@ -153,6 +163,45 @@ describe("authored design orchestration", () => {
       expect(checked.computationInputValidation).toEqual([
         { name: "normalize", status: "validated" },
       ]);
+
+      const manifest = applicationManifest(assembly, {
+        checked,
+        paths: { relativePath: (path) => basename(path) },
+      });
+      expect(() => validateApplicationManifest(manifest)).not.toThrow();
+      expect(manifest.design).toMatchObject({
+        checked: true,
+        sources: expect.arrayContaining([
+          expect.objectContaining({ kind: "concept", path: "Commenting.md" }),
+        ]),
+        computations: [expect.objectContaining({ inputValidation: "validated" })],
+      });
+    } finally {
+      await assembly.beginDrain();
+    }
+  });
+
+  test("rejects traced concept text that only differs in source placement", async () => {
+    const design = await fixture(
+      "# Forum\n\n[Publish](reaction:Forum.Publish).\n",
+      vocabularyDesign,
+    );
+    const assembly = application();
+    try {
+      const shifted = commentingSpec.replace("## Purpose", "\n## Purpose");
+      await expect(
+        checkAuthoredDesign({
+          assembly,
+          design,
+          conceptSources: ["PostComments", "AnswerComments"].map((instance) => ({
+            instance,
+            url: design.concept,
+            content: shifted,
+          })),
+        }),
+      ).rejects.toThrow(
+        'traced concept source for "AnswerComments" does not exactly match its registered spec text',
+      );
     } finally {
       await assembly.beginDrain();
     }

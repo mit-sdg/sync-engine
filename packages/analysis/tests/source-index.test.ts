@@ -549,7 +549,7 @@ assemble({ vocabulary: words, instances: { Storage: new FloorStorage(), ...dynam
       "shared.ts": `import { conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { endpoint } from "@mit-sdg/sync-engine/boundary";
 import { reaction } from "@mit-sdg/sync-engine/language";
-import spec from "./odd.md";
+import spec from "./odd.md" with { type: "text" };
 class OddCanonical { choose() { return "😀"; } _read() {} }
 const odd = registerConcept({ class: OddCanonical, spec });
 export const set = conceptSet({ Odd: odd });
