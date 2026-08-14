@@ -13,6 +13,13 @@ duplicate. Bo leaves; a second attempt to leave is refused because Bo no longer
 belongs. When Cy tries to join an unknown gathering, it is refused because the
 gathering does not exist.
 
+## Types
+
+```types
+external Person
+  The external identity of a host or member.
+```
+
 ## State
 
 ```state
@@ -31,6 +38,7 @@ at most one Membership has each gathering and member pair
 
 ```actions
 create (name: String, host: Person) : return (gathering: Gathering)
+  where true
   then
     add a new gathering with name and host
     add a new membership with gathering and member host
@@ -72,8 +80,3 @@ _members (gathering: Gathering) : many (member: Person)
 _membership (gathering: Gathering, member: Person) : one (joined: Flag)
   answers false when Person is not a member or Gathering is unknown
 ```
-
-## Types
-
-`Gathering` and `Membership` are identities allocated by Gathering. `Person` is
-an opaque external identity. `String` is owned text. `Flag` is a Boolean value.

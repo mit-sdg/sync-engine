@@ -13,6 +13,15 @@ change Mina's alerts. Mina acknowledges the failed-checkout alert; her delayed-
 deployment alert and Jo's alert remain. Trying to acknowledge the first alert
 again is refused because it is no longer open.
 
+## Types
+
+```types
+external Person
+  The recipient of an alert.
+external Subject
+  The matter requiring the recipient's attention.
+```
+
 ## State
 
 ```state
@@ -25,6 +34,7 @@ a set of Alerts with
 
 ```actions
 raise (recipient: Person, subject: Subject) : return (alert: Alert)
+  where true
   then
     add a new alert with recipient and subject
     return alert
@@ -46,8 +56,3 @@ _openFor (recipient: Person) : many (alert: Alert, subject: Subject)
   answers no rows for a Person with no open Alerts
   orders rows by when each Alert was raised
 ```
-
-## Types
-
-`Alert` is an identity allocated by Alerting. `Person` and `Subject` are opaque
-external identities.

@@ -13,6 +13,17 @@ sees the alert and acknowledges it. A second acknowledgement and an acknowledgem
 by Jo are refused. Replaying the original raise after acknowledgement does not reopen
 the matter.
 
+## Types
+
+```types
+external Recipient
+  The identity expected to acknowledge an alert.
+external Subject
+  The matter requiring attention.
+external Cause
+  The event or condition that raised the alert.
+```
+
 ## State
 
 ```state
@@ -32,7 +43,8 @@ at most one Alert has each recipient and cause pair
 raise (recipient: Recipient, subject: Subject, cause: Cause, at: DateTime) : return (alert: Alert)
   where an Alert has recipient and cause and the same subject
   then
-    return that alert
+    bind alert to that Alert
+    return alert
   where an Alert has recipient and cause but a different subject
   then
     refuse ALERT_CAUSE_CONFLICT "This alert cause is already associated with another subject for the recipient."
@@ -60,9 +72,3 @@ _openFor (recipient: Recipient) : many (alert: Alert, subject: Subject, cause: C
 _get (alert: Alert) : optional (recipient: Recipient, subject: Subject, cause: Cause, raisedAt: DateTime, open: Flag)
   answers no row for an unknown Alert
 ```
-
-## Types
-
-`Alert` is an identity allocated by Alerting. `Recipient`, `Subject`, and `Cause` are
-opaque external identities. `DateTime` is an absolute instant. `Flag` is a Boolean
-value.

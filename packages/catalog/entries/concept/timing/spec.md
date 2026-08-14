@@ -11,11 +11,26 @@ When the configured reader supplies DateTime `t1`, `_now` answers `t1`. A caller
 reuse that returned value for every effect that belongs to the same event. After the
 reader advances to `t2`, a later uncached evaluation answers `t2`.
 
+## Types
+
+```types
+```
+
 ## State
 
 ```state
 a read function
   read () -> DateTime
+```
+
+## Actions
+
+```actions
+read () : return (time: DateTime)
+  where true
+  then
+    obtain time from the configured reader
+    return time
 ```
 
 ## Queries
@@ -24,7 +39,3 @@ a read function
 _now () : one (time: DateTime)
   answers one DateTime obtained from the configured reader
 ```
-
-## Types
-
-`DateTime` is an absolute wall-clock instant.

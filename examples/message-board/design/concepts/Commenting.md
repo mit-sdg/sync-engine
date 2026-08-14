@@ -13,6 +13,17 @@ listed for `topic-7` in arrival order. Bo's attempt to retract `comment-1` is
 refused, leaving both attachments. Ari retracts `comment-1`; a second attempt is
 refused because the comment is unknown, and only Bo's attachment remains.
 
+## Types
+
+```types
+external Target
+  The object receiving the attachment.
+external Author
+  The identity that authored the attachment.
+external Content
+  The externally owned content attached to the target.
+```
+
 ## State
 
 ```state
@@ -26,6 +37,7 @@ a seq of Comments with
 
 ```actions
 add (target: Target, author: Author, content: Content) : return (comment: Comment)
+  where true
   then
     add a new comment with target, author, and content
     return comment
@@ -50,8 +62,3 @@ _for (target: Target) : many (comment: Comment, author: Author, content: Content
   answers in arrival order
   answers no rows for a target with no comments
 ```
-
-## Types
-
-`Comment` is an identity Commenting allocates for each attachment. `Target`,
-`Author`, and `Content` are opaque external identities.

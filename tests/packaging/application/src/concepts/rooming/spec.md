@@ -10,6 +10,11 @@ Mara opens Checkout latency and receives a room. Opening another room with the
 same name is refused because the first room is already open. She closes the
 room; a second close is refused because the room is no longer open.
 
+## Types
+
+```types
+```
+
 ## State
 
 ```state

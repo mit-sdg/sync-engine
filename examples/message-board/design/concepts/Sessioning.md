@@ -13,6 +13,13 @@ returns a row whose subject is `ari`, and `current` resolves the session to
 refused. An invented or expired session is refused in the same way, and
 `_active` returns no row for it.
 
+## Types
+
+```types
+external Subject
+  The external identity represented by a session.
+```
+
 ## State
 
 ```state
@@ -25,6 +32,7 @@ a set of Sessions with
 
 ```actions
 start (subject: Subject) : return (session: Session, expiresAt: Time)
+  where true
   then
     delete every expired session
     add a new opaque session for subject expiring 30 minutes from now
@@ -37,7 +45,8 @@ current (session: Session) : return (subject: Subject)
     refuse UNKNOWN_SESSION "This session is not active."
   where session is active
   then
-    return its subject
+    bind subject to the Session's subject
+    return subject
 
 end (session: Session) : return (ended: Flag)
   where session is unknown, ended, or expired
@@ -47,7 +56,8 @@ end (session: Session) : return (ended: Flag)
   where session is active
   then
     delete session
-    return ended true
+    set ended to true
+    return ended
 ```
 
 ## Queries
@@ -57,8 +67,3 @@ _active (session: Session) : optional (subject: Subject, expiresAt: Time)
   answers no row for an unknown, ended, or expired Session
   does not delete an expired Session
 ```
-
-## Types
-
-`Session` is an opaque identity allocated by Sessioning. `Subject` is an opaque
-external identity. `Time` is an absolute instant.

@@ -13,6 +13,15 @@ changes the displayed name without losing its assignments. A duplicate name and 
 duplicate application are refused. Removing the customer label assignment leaves the
 immediate assignment intact.
 
+## Types
+
+```types
+external Scope
+  The context in which label names are unique.
+external Item
+  The object classified by a label.
+```
+
 ## State
 
 ```state
@@ -91,8 +100,3 @@ _for (scope: Scope, item: Item) : many (label: Label, name: String)
 _items (label: Label) : many (item: Item)
   answers no rows for an unknown Label or a Label with no Applications
 ```
-
-## Types
-
-`Label` is an identity allocated by Labeling. `Scope` and `Item` are opaque external
-identities. `String` is owned text. Names are case-sensitive and retained exactly.

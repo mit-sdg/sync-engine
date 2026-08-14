@@ -12,6 +12,15 @@ subject is refused. Ari cannot approve the request. Bo approves it, after which 
 second decision and Ari's withdrawal are refused. A later request may create a new
 review of the same subject without changing the first decision.
 
+## Types
+
+```types
+external Subject
+  The object submitted for review.
+external Person
+  The external identity of a requester or reviewer.
+```
+
 ## State
 
 ```state
@@ -83,9 +92,3 @@ _pendingFor (reviewer: Person) : many (review: Review, subject: Subject, request
 _history (subject: Subject) : many (review: Review, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt: DateTime | undefined)
   orders rows by requestedAt and then Review identity
 ```
-
-## Types
-
-`Review` is an identity allocated by Approving. `Subject` and `Person` are opaque
-external identities. `ReviewStatus` is `pending`, `approved`, `rejected`, or
-`withdrawn`. `String` is owned text. `DateTime` is an absolute instant.

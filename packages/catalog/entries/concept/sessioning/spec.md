@@ -12,6 +12,13 @@ its subject and expiry and `current` resolves it to `ari`. Ending the session ma
 unknown. An invented, ended, or expired session is refused in the same way. A session
 expires 30 minutes after it starts and does not extend when used.
 
+## Types
+
+```types
+external Subject
+  The external identity represented by a session.
+```
+
 ## State
 
 ```state
@@ -24,6 +31,7 @@ a set of Sessions with
 
 ```actions
 start (subject: Subject) : return (session: Session, expiresAt: DateTime)
+  where true
   then
     add a new opaque Session for subject expiring 30 minutes after the trusted current time
     return session and expiresAt
@@ -34,7 +42,8 @@ current (session: Session) : return (subject: Subject)
     refuse UNKNOWN_SESSION "This session is not active."
   where session is active at the trusted current time
   then
-    return its subject
+    bind subject to the Session's subject
+    return subject
 
 end (session: Session) : return (ended: Flag)
   where session is unknown, ended, or expired at the trusted current time
@@ -43,7 +52,8 @@ end (session: Session) : return (ended: Flag)
   where session is active at the trusted current time
   then
     remove the Session from active use
-    return ended true
+    set ended to true
+    return ended
 ```
 
 ## Queries
@@ -52,9 +62,3 @@ end (session: Session) : return (ended: Flag)
 _active (session: Session) : optional (subject: Subject, expiresAt: DateTime)
   answers no row for an unknown, ended, or expired Session
 ```
-
-## Types
-
-`Session` is an unguessable bearer value allocated by Sessioning. `Subject` is an
-opaque external identity. `DateTime` is an absolute instant. `Flag` is a Boolean
-value.

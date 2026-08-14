@@ -10,6 +10,13 @@ next move.
 Checkout latency starts with investigation as its mitigation. Mara chooses a
 rollback instead, and the rollback becomes current for that room.
 
+## Types
+
+```types
+external Room
+  The operations room for which one mitigation is current.
+```
+
 ## State
 
 ```state
@@ -24,6 +31,7 @@ a Current set of Selections
 
 ```actions
 choose (room: Room, mitigation: String) : return (selection: Selection)
+  where true
   then
     remove any selection with room from current
     add a new selection with room and mitigation

@@ -12,6 +12,11 @@ as registered, and another registration of `ari` is refused.
 Authenticating `ari` with the wrong password is refused. The correct password
 authenticates Ari as `ari`, returning only the username.
 
+## Types
+
+```types
+```
+
 ## State
 
 ```state
@@ -54,9 +59,3 @@ authenticate (username: Username, password: Password) : return (username: Userna
 _registered (username: Username) : one (registered: Flag)
   answers false for an unknown Username
 ```
-
-## Types
-
-`Username` is a caller-chosen account name. `Password` is transient input.
-`Salt` is a fresh per-account value. `Secret` is a one-way verifier derived from
-a password and that account's salt.
