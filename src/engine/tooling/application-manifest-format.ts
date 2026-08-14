@@ -759,6 +759,12 @@ function assertWireOrigin(value: unknown, path: string): void {
     shape(value, path, ["source"]);
     return;
   }
+  if (candidate.source === "computation-input" || candidate.source === "computation-output") {
+    const data = shape(value, path, ["source", "computation", "path"]);
+    nonemptyString(data.computation, `${path}.computation`);
+    strings(data.path, `${path}.path`);
+    return;
+  }
   literal(candidate.source, `${path}.source`, [
     "action-input",
     "action-output",

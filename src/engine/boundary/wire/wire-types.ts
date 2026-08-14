@@ -7,6 +7,11 @@ export type WireOrigin =
       member: string;
       path: string[];
     }
+  | {
+      source: "computation-input" | "computation-output";
+      computation: string;
+      path: string[];
+    }
   | { source: "literal"; value: null | boolean | number | string }
   | { source: "number" };
 

@@ -488,7 +488,10 @@ generated endpoint input and output types.
 concept, action, optional `by`, output, and outcome summary; it omits input,
 action id, flow, and timestamp. Inspection reports only evidence retained by
 the internal occurrence index and applies redaction again. `WireContractsIR`, `WireEndpoint`, and
-`WireType` name derived wire data.
+`WireType` name derived wire data. A `WireType` reference origin uses concept,
+member, and path for action/query signatures. The `computation-input` and
+`computation-output` origins instead use computation and path to identify the
+registered vocabulary computation's `fn` parameter or awaited result.
 `WireEndpoint.inputAdmissionError` preserves whether framework input admission
 contributed `INVALID_INPUT`, so production projection remains distinct from a
 registered domain refusal using the same code.

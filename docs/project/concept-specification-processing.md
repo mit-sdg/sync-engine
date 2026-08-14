@@ -211,8 +211,9 @@ query:
 A direct instrumented query call returns the implementation result without
 passing through `queryRows`; the promise is not checked on that path.
 
-TypeScript class signatures, not Markdown types or results, drive authoring types
-and wire provenance.
+TypeScript concept class signatures and registered vocabulary computation
+function signatures, not Markdown types or results, drive authoring types and
+wire provenance.
 
 `ConceptInventoryIR.specification` is optional, so concepts declared without a
 specification retain the narrower inventory. Registered concepts carry the

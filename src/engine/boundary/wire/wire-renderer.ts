@@ -72,6 +72,10 @@ function originType(origin: WireOrigin): string {
       return `AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)[${JSON.stringify(origin.concept)}][${JSON.stringify(origin.member)}]>>, ${JSON.stringify(origin.path)}>`;
     case "query-output":
       return `AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)[${JSON.stringify(origin.concept)}][${JSON.stringify(origin.member)}]>>>, ${JSON.stringify(origin.path)}>`;
+    case "computation-input":
+      return `AtPath<Parameters<(typeof ApplicationVocabulary.computations)[${JSON.stringify(origin.computation)}]["fn"]>[0], ${JSON.stringify(origin.path)}>`;
+    case "computation-output":
+      return `AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.computations)[${JSON.stringify(origin.computation)}]["fn"]>>, ${JSON.stringify(origin.path)}>`;
   }
 }
 

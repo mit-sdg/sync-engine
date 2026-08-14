@@ -235,6 +235,14 @@ adapters consume its transport-neutral shapes. `assembly/` composes protocol,
 invocation, wire, reaction, and read capabilities. `gateway/` exposes the
 verified server-adapter seam; lower layers do not depend on adapters.
 
+Wire provenance adds every constraint on one variable to the same cell and
+keeps detached view alternatives separate until they merge. Because
+`compute(...)` is vocabulary-only, its input paths and output variable point to
+the registered computation function signature; the renderer resolves those
+origins through `ApplicationVocabulary.computations[name].fn` and awaits the
+result type. Closed `holds` lines also represent generic standard relations, so
+they retain their existing behavior and do not create vocabulary anchors.
+
 `src/engine/boundary/assembly/concept-set.ts` turns plain concept registrations
 and optional named computation functions into a vocabulary, typed computation
 references, default implementations, floor-specific implementation factories,

@@ -17,6 +17,7 @@ import {
   diagnosticsFail,
   parseApplicationManifest,
   renderApplicationManifest,
+  renderWireTypes,
   validateApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
 import type { AppIR, ActionTriggerIR } from "@engine/reads/ir";
@@ -372,6 +373,36 @@ describe("application manifest", () => {
 
     expect(fallbacks).toHaveLength(1);
     expect(fallbacks[0]?.endpoint?.path).toBe("/filtering-compute");
+  });
+
+  test("strict wire leaves anchor variables used only by vocabulary computations", () => {
+    const setup = vocabulary({
+      concepts: {},
+      computations: {
+        setupSecretMatches: ({ secret }: { secret: string }) => secret === "expected",
+      },
+    });
+    const RegisterAdmin = endpoint("/setup/register-admin", ({ setupSecret, valid }) =>
+      receive({ setupSecret })
+        .where(compute(setup.computations.setupSecretMatches, { secret: setupSecret }, valid))
+        .then(respond({ valid })),
+    );
+    const manifest = applicationManifest(
+      assemble({ vocabulary: setup, composition: { RegisterAdmin } }),
+    );
+
+    expect(manifest.diagnostics.filter(({ code }) => code === "UNRESOLVED_WIRE_LEAF")).toEqual([]);
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+    const rendered = renderWireTypes(manifest.wire, {
+      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+      strictLeaves: true,
+    });
+    expect(rendered).toContain(
+      '"setupSecret": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.computations)["setupSecretMatches"]["fn"]>[0], ["secret"]>>;',
+    );
+    expect(rendered).toContain(
+      '"valid": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.computations)["setupSecretMatches"]["fn"]>>, []>>;',
+    );
   });
 
   test("keeps authored earlier reads as endpoint guards", () => {

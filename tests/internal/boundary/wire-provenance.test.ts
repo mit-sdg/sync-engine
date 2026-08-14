@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
 import type { AppIR, PatternIR } from "@sync-engine/internal/reads/ir";
 import { wireContracts } from "@sync-engine/internal/boundary/wire/wire-contracts";
+import {
+  applyOpsProvenance,
+  referenceOf,
+} from "@sync-engine/internal/boundary/wire/wire-provenance";
 import type { WireType } from "@sync-engine/internal/boundary/wire/wire-types";
 
 const variable = (name: string): { $var: string } => ({ $var: name });
@@ -591,6 +595,117 @@ describe("endpoint wire provenance", () => {
               path: ["amount"],
             },
           ],
+        },
+      ],
+    });
+  });
+
+  test("keeps computation constraints intersected and standard relations unanchored", () => {
+    const env: Parameters<typeof applyOpsProvenance>[0] = new Map();
+    applyOpsProvenance(
+      env,
+      [
+        {
+          op: "holds",
+          computation: "lt",
+          in: { left: variable("value"), right: 10 },
+        },
+        {
+          op: "compute",
+          computation: "normalize",
+          in: { value: variable("value") },
+          out: "normalized",
+        },
+        {
+          op: "compute",
+          computation: "accepts",
+          in: { candidate: variable("value") },
+          out: "accepted",
+        },
+      ],
+      new Map(),
+      "ComputationConstraints where",
+    );
+
+    expect(referenceOf(env.get("value"))).toMatchObject({
+      alternatives: [
+        [
+          {
+            source: "computation-input",
+            computation: "accepts",
+            path: ["candidate"],
+          },
+          {
+            source: "computation-input",
+            computation: "normalize",
+            path: ["value"],
+          },
+        ],
+      ],
+    });
+  });
+
+  test("follows vocabulary computation inputs and outputs", () => {
+    const computationApp: AppIR = {
+      unlowered: [],
+      views: [],
+      formers: [],
+      reactions: [
+        {
+          name: "RegisterAdmin",
+          when: [
+            {
+              kind: "action",
+              concept: "RequestBoundary",
+              action: "request",
+              input: {
+                path: "/setup/register-admin",
+                setupSecret: variable("setupSecret"),
+                requestId: variable("requestId"),
+              },
+              output: {},
+            },
+          ],
+          where: [
+            {
+              op: "compute",
+              computation: "setupSecretMatches",
+              in: { secret: variable("setupSecret") },
+              out: "valid",
+            },
+          ],
+          then: [
+            {
+              kind: "request",
+              concept: "RequestBoundary",
+              action: "respond",
+              input: { requestId: variable("requestId"), valid: variable("valid") },
+            },
+          ],
+        },
+      ],
+    };
+    const endpoint = wireContracts(computationApp, {
+      contracts: { "/setup/register-admin": { required: ["setupSecret"] } },
+    }).endpoints[0];
+
+    expect(field(endpoint.input, "setupSecret")).toMatchObject({
+      kind: "reference",
+      allOf: [
+        {
+          source: "computation-input",
+          computation: "setupSecretMatches",
+          path: ["secret"],
+        },
+      ],
+    });
+    expect(field(endpoint.output, "valid")).toMatchObject({
+      kind: "reference",
+      allOf: [
+        {
+          source: "computation-output",
+          computation: "setupSecretMatches",
+          path: [],
         },
       ],
     });
