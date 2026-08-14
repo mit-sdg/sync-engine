@@ -195,12 +195,12 @@ describe("assemble", () => {
     );
   });
 
-  test("rejects shared composition container aliases with both dotted paths", () => {
+  test("permits inert shared composition containers", () => {
     const shared = { helper: 1 };
 
     expect(() =>
       assemble({ vocabulary: vocab, composition: { Forum: shared, Archive: shared } }),
-    ).toThrow('shared container alias first appears at "Forum" and appears again at "Archive"');
+    ).not.toThrow();
   });
 
   test("validates every segment of a selected declaration path", () => {
