@@ -447,7 +447,7 @@ export function registeredConceptSources(
     return {
       conceptName: entry.name,
       className: implementation.name.text,
-      classPath: implementation.getSourceFile().fileName,
+      classPath: resolve(implementation.getSourceFile().fileName),
       specPath,
       specText: readFileSync(specPath, "utf8"),
     };

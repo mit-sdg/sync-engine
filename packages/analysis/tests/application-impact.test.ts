@@ -456,8 +456,8 @@ Touching a note updates the feed.[touch]
   return {
     manifest: redigest(manifest),
     files: {
-      "/project/design/forum.md": designText,
-      "/project/design/SharedNotes.md": specificationText,
+      [resolve("/project", "design", "forum.md")]: designText,
+      [resolve("/project", "design", "SharedNotes.md")]: specificationText,
     },
   };
 }
@@ -919,7 +919,7 @@ describe("application impact analysis", () => {
       projectRoot: "/project",
       designSourceBasePath: "generated",
       readFile: (path) =>
-        path === "/project/design/forum.md" ? `${files[path]}stale\n` : files[path],
+        path === resolve("/project", "design", "forum.md") ? `${files[path]}stale\n` : files[path],
     });
     expect(staleSourceIndex.issues).toContainEqual(
       expect.objectContaining({ code: "DESIGN_SOURCE_MISMATCH" }),
