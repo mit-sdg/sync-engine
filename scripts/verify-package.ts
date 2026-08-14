@@ -483,6 +483,11 @@ const specification = [
   "",
   "Writing a note returns its identity.",
   "",
+  "## Types",
+  "",
+  fence + "types",
+  fence,
+  "",
   "## State",
   "",
   fence + "state",
@@ -493,7 +498,8 @@ const specification = [
   "## Actions",
   "",
   fence + "actions",
-  "write (text: String) : return (note: Note)",
+  "write(text: String) : return (note: Note)",
+  "  where true",
   "  then",
   "    add a new note with text",
   "    return note",
@@ -784,6 +790,28 @@ async function verifySetupAndExamples(
   run("bun", ["run", "start"], standalone);
 }
 
+async function inlineMultiInstanceConceptSpecifications(clientProject: string): Promise<void> {
+  const runtimePath = resolve(clientProject, "dist/contract.js");
+  let runtime = await readFile(runtimePath, "utf8");
+  const imports = [
+    ["effectsSpecification", "Effects.md"],
+    ["entriesSpecification", "Entries.md"],
+    ["faultingSpecification", "Faulting.md"],
+  ] as const;
+  for (const [binding, filename] of imports) {
+    const statement = `import ${binding} from "../design/concepts/${filename}" with { type: "text" };`;
+    if (!runtime.includes(statement)) {
+      throw new Error(`multi-instance client output omits the authored ${filename} import`);
+    }
+    const specification = await readFile(
+      resolve(clientProject, "design/concepts", filename),
+      "utf8",
+    );
+    runtime = runtime.replace(statement, `const ${binding} = ${JSON.stringify(specification)};`);
+  }
+  await writeFile(runtimePath, runtime);
+}
+
 async function verifyMultiInstance(artifacts: ReadonlyMap<string, PackedWorkspace>): Promise<void> {
   const multiInstance = resolve(temporary, "multi-instance");
   await cp(resolve(root, "packages/http/tests/packaging/multi-instance"), multiInstance, {
@@ -822,6 +850,9 @@ async function verifyMultiInstance(artifacts: ReadonlyMap<string, PackedWorkspac
     [resolve(clientProject, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.json"],
     clientProject,
   );
+  // Node does not load Markdown modules. Tooling checks the authored imports,
+  // then the packed runtime receives the exact checked text as ordinary JS.
+  await inlineMultiInstanceConceptSpecifications(clientProject);
 
   restoreWorkspaceDependencyVersions(clientManifest, artifacts);
   await writePackageManifest(clientManifestPath, clientManifest);

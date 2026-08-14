@@ -28,6 +28,10 @@ class Cataloging {
 
 class Remembering {
   constructor(readonly store = "memory") {}
+
+  remember(_: Record<string, never>) {
+    return {};
+  }
 }
 
 class PersistentCataloging extends Cataloging {
@@ -36,9 +40,56 @@ class PersistentCataloging extends Cataloging {
   }
 }
 
-/** A specification document with the given fences under the required prose. */
-function specFor(body = ""): string {
-  return `# Concept\n\n## Purpose\n\nKeep a catalog.\n\n## Principle\n\nA missing item is refused.\n${body}`;
+interface SpecificationParts {
+  readonly actions?: string;
+  readonly name?: string;
+  readonly queries?: string;
+  readonly state?: string;
+  readonly types?: string;
+}
+
+/** Build a complete strict specification while varying only declarations under test. */
+function specFor({
+  actions = "remember() : return ()\n  where true\n  then\n    return",
+  name = "Remembering",
+  queries = "",
+  state = "a set of Items",
+  types = "",
+}: SpecificationParts = {}): string {
+  return `# ${name}
+
+## Purpose
+
+Keep a catalog.
+
+## Principle
+
+A missing item is refused.
+
+## Types
+
+\`\`\`types
+${types}
+\`\`\`
+
+## State
+
+\`\`\`state
+${state}
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+${actions}
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+${queries}
+\`\`\`
+`;
 }
 
 const bare = specFor();
@@ -46,26 +97,21 @@ const bare = specFor();
 const withoutLocations = (value: unknown): unknown =>
   JSON.parse(JSON.stringify(value, (key, item) => (key === "location" ? undefined : item)));
 
-const catalogingSpec = specFor(`
-## Actions
-
-\`\`\`actions
-find () : return ()
+const catalogingActions = `find() : return ()
   where the item is absent
   then
     refuse ITEM_NOT_FOUND "There is no such item."
 
-misplaced () : return ()
+misplaced() : return ()
+  where true
   then
-    return
-\`\`\`
-
-## Queries
-
-\`\`\`queries
-_find () : optional (item: Item)
-\`\`\`
-`);
+    return`;
+const catalogingQueries = "_find() : optional (item: Item)";
+const catalogingSpec = specFor({
+  actions: catalogingActions,
+  name: "Cataloging",
+  queries: catalogingQueries,
+});
 
 const cataloging = registerConcept({
   class: Cataloging,
@@ -162,23 +208,24 @@ describe("external concept registration", () => {
 });
 
 describe("parsed declarations and class methods", () => {
-  test("state notation is absent from registration and every generated design surface", () => {
+  test("raw state is retained in registration and manifests but omitted from read-back", () => {
     const marker = "STATE_ONLY_SENTINEL";
+    const state = `${marker}\nthere are no methods and the database has an incompatible field {]`;
     const registration = registerConcept({
       class: Cataloging,
-      spec: catalogingSpec.replace(
-        "## Actions",
-        `## State\n\n\`\`\`state\n${marker}\n` +
-          "there are no methods and the database has an incompatible field {]\n" +
-          "```\n\n## Actions",
-      ),
+      spec: specFor({
+        actions: catalogingActions,
+        name: "Cataloging",
+        queries: catalogingQueries,
+        state,
+      }),
       refusals: { ITEM_NOT_FOUND: MissingItem },
     });
 
-    expect(withoutLocations(registration.specification)).toEqual(
+    expect(withoutLocations(registration.specification)).not.toEqual(
       withoutLocations(cataloging.specification),
     );
-    expect(registration.specification).not.toHaveProperty("state");
+    expect(registration.specification.state.body).toBe(state);
 
     const set = conceptSet({ Cataloging: registration });
     const Find = endpoint("/find", () =>
@@ -198,7 +245,7 @@ describe("parsed declarations and class methods", () => {
       app: manifest.application,
     });
 
-    expect(JSON.stringify(manifest)).not.toContain(marker);
+    expect(JSON.stringify(manifest)).toContain(marker);
     expect(readBack).not.toContain(marker);
     expect(manifest.endpoints[0]?.validators).toEqual({ input: false, output: false });
   });
@@ -207,24 +254,37 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Remembering,
-        spec: specFor("\n## Actions\n\n```actions\nforget () : return ()\n```\n"),
+        spec: specFor({
+          actions: "forget() : return ()\n  where true\n  then\n    return",
+        }),
       }),
     ).toThrow(/declares the action `forget`, which the class does not implement/);
   });
 
   test("an action the specification does not declare fails by name", () => {
-    expect(() => registerConcept({ class: Cataloging, spec: bare })).toThrow(
-      /implements the action `find`, `misplaced`, which the specification does not declare/,
-    );
+    const findOnly = specFor({
+      actions: catalogingActions.split("\n\nmisplaced", 1)[0],
+      name: "Cataloging",
+      queries: catalogingQueries,
+    });
+    expect(() =>
+      registerConcept({
+        class: Cataloging,
+        spec: findOnly,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+      }),
+    ).toThrow(/implements the action `misplaced`, which the specification does not declare/);
   });
 
   test("a query the specification does not declare fails by name", () => {
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: specFor(
-          "\n## Actions\n\n```actions\nfind () : return ()\nmisplaced () : return ()\n```\n",
-        ),
+        spec: specFor({
+          actions:
+            "find() : return ()\n  where true\n  then\n    return\n\n" +
+            "misplaced() : return ()\n  where true\n  then\n    return",
+        }),
       }),
     ).toThrow(/implements the query `_find`, which the specification does not declare/);
   });
@@ -238,9 +298,9 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Shelving,
-        spec: specFor(
-          "\n## Actions\n\n```actions\nshelve (item: Item, aisle: Aisle) : return ()\n```\n",
-        ),
+        spec: specFor({
+          actions: "shelve(item: Item, aisle: Aisle) : return ()\n  where true\n  then\n    return",
+        }),
       }),
     ).toThrow(/`shelve` declares the inputs `item`, `aisle` but the class takes `item`, `shelf`/);
   });
@@ -250,12 +310,13 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: specFor(
-          "\n## Actions\n\n```actions\nfind () : return ()\n  then\n" +
-            '    refuse ITEM_NOT_FOUND "There is no such item."\n' +
-            "misplaced (shelf: Shelf) : return ()\n```\n" +
-            "\n## Queries\n\n```queries\n_find () : optional (item: Item)\n```\n",
-        ),
+        spec: specFor({
+          actions:
+            "find() : return ()\n  where true\n  then\n" +
+            '    refuse ITEM_NOT_FOUND "There is no such item."\n\n' +
+            "misplaced(shelf: Shelf) : return ()\n  where true\n  then\n    return",
+          queries: catalogingQueries,
+        }),
         refusals: { ITEM_NOT_FOUND: MissingItem },
       }),
     ).not.toThrow();
@@ -281,13 +342,14 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: specFor(
-          "\n## Actions\n\n```actions\nfind () : return ()\n  then\n" +
-            '    refuse ITEM_NOT_FOUND "There is no such item."\n' +
-            "misplaced () : return ()\n  then\n" +
-            '    refuse SHELVED_WRONG "The item sits on the wrong shelf."\n```\n' +
-            "\n## Queries\n\n```queries\n_find () : optional (item: Item)\n```\n",
-        ),
+        spec: specFor({
+          actions:
+            "find() : return ()\n  where true\n  then\n" +
+            '    refuse ITEM_NOT_FOUND "There is no such item."\n\n' +
+            "misplaced() : return ()\n  where true\n  then\n" +
+            '    refuse SHELVED_WRONG "The item sits on the wrong shelf."',
+          queries: catalogingQueries,
+        }),
         refusals: { ITEM_NOT_FOUND: MissingItem, SHELVED_WRONG: MissingItem },
       }),
     ).toThrow(/share one Error class/);

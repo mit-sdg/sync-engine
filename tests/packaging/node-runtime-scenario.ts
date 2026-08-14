@@ -12,6 +12,11 @@ Keep short notes.
 
 Writing a note returns its identity.
 
+## Types
+
+\`\`\`types
+\`\`\`
+
 ## State
 
 \`\`\`state
@@ -22,7 +27,8 @@ a set of Notes with
 ## Actions
 
 \`\`\`actions
-write (text: String) : return (note: Note)
+write(text: String) : return (note: Note)
+  where true
   then
     add a new note with text
     return note
