@@ -70,7 +70,7 @@ fulfill (reservation: Reservation, claimant: Claimant, at: DateTime) : return (r
 _blocking (resource: Resource) : optional (reservation: Reservation, claimant: Claimant, status: ReservationStatus, reservedAt: DateTime)
   answers the active or fulfilled Reservation for the Resource
   answers no row when the Resource is available
-_get (reservation: Reservation) : optional (resource: Resource, claimant: Claimant, status: ReservationStatus, reservedAt: DateTime, endedAt: DateTime | undefined)
+_get (reservation: Reservation) : optional (resource: Resource, claimant: Claimant, status: ReservationStatus, reservedAt: DateTime, endedAt?: DateTime)
   answers no row for an unknown Reservation
 _activeFor (claimant: Claimant) : many (reservation: Reservation, resource: Resource, reservedAt: DateTime)
   orders active Reservations by reservedAt and then Reservation identity

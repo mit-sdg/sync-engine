@@ -85,10 +85,10 @@ withdraw (review: Review, requester: Person, at: DateTime) : return (review: Rev
 ## Queries
 
 ```queries
-_get (review: Review) : optional (subject: Subject, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt: DateTime | undefined, reason: String | undefined)
+_get (review: Review) : optional (subject: Subject, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt?: DateTime, reason?: String)
   answers no row for an unknown Review
 _pendingFor (reviewer: Person) : many (review: Review, subject: Subject, requester: Person, requestedAt: DateTime)
   orders rows by requestedAt and then Review identity
-_history (subject: Subject) : many (review: Review, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt: DateTime | undefined)
+_history (subject: Subject) : many (review: Review, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt?: DateTime)
   orders rows by requestedAt and then Review identity
 ```

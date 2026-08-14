@@ -56,8 +56,8 @@ clear (scope: Scope) : return (selection: Selection)
 ## Queries
 
 ```queries
-_current (scope: Scope) : optional (selection: Selection, item: Item)
+_current (scope: Scope) : optional (selection: Selection, scope: Scope, item: Item)
   answers no row for a Scope with no current Selection
-_get (selection: Selection) : optional (scope: Scope, item: Item)
+_get (selection: Selection) : optional (selection: Selection, scope: Scope, item: Item)
   answers no row for an unknown Selection
 ```

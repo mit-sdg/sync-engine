@@ -72,7 +72,7 @@ close (discussion: Discussion) : return ()
 ```queries
 _openFor (subject: Subject) : optional (discussion: Discussion)
   answers no row for a Subject with no open Discussion
-_responses (discussion: Discussion) : many (response: Response, author: Person, text: String)
+_responses (discussion: Discussion) : many (response: Response, discussion: Discussion, author: Person, text: String)
   answers no rows for a Discussion with no Responses
   orders rows by when each Response was added
 ```

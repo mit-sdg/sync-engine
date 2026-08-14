@@ -52,7 +52,7 @@ acknowledge (alert: Alert) : return (alert: Alert)
 ## Queries
 
 ```queries
-_openFor (recipient: Person) : many (alert: Alert, subject: Subject)
+_openFor (recipient: Person) : many (alert: Alert, recipient: Person, subject: Subject)
   answers no rows for a Person with no open Alerts
   orders rows by when each Alert was raised
 ```

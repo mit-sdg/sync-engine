@@ -72,7 +72,7 @@ leave (gathering: Gathering, member: Person) : return (membership: Membership)
 ## Queries
 
 ```queries
-_get (gathering: Gathering) : optional (name: String, host: Person)
+_get (gathering: Gathering) : optional (gathering: Gathering, name: String, host: Person)
   answers no row for an unknown Gathering
 _members (gathering: Gathering) : many (member: Person)
   answers no rows for an unknown Gathering

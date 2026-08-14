@@ -15,6 +15,7 @@ authenticates Ari as `ari`, returning only the username.
 ## Types
 
 ```types
+
 ```
 
 ## State
