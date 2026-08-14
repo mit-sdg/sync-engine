@@ -380,7 +380,7 @@ interface RenderDesign {
       }[];
     }[];
   }[];
-  vocabulary?: { concreteTypes: { name: string; location: RenderDesignLocation }[] };
+  types?: { concreteTypes: { name: string; location: RenderDesignLocation }[] };
   computations: {
     name: string;
     inputs: { name: string; optional: boolean; type: string }[];
@@ -532,9 +532,9 @@ export function renderApp(spec: AppSpecIR): string {
       lines.push(renderCheckedConcept(spec.design, concept));
   }
 
-  if (spec.design?.checked === true && spec.design.vocabulary !== undefined) {
-    lines.push("## Application vocabulary", "", "Concrete types:", "");
-    for (const concrete of spec.design.vocabulary.concreteTypes) {
+  if (spec.design?.checked === true && spec.design.types !== undefined) {
+    lines.push("## Application types", "", "Concrete types:", "");
+    for (const concrete of spec.design.types.concreteTypes) {
       lines.push(`- \`${concrete.name}\` — ${sourceLink(spec.design, concrete.location)}.`);
     }
     lines.push("");

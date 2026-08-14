@@ -14,7 +14,7 @@ export interface SetupResult {
 }
 
 const IDENTIFIERS: Readonly<Record<string, readonly string[]>> = {
-  "src/vocabulary.ts": ["applicationConcepts", "vocabulary"],
+  "src/concepts.ts": ["applicationConcepts"],
   "src/assembly.ts": ["assembleApplication"],
 };
 
@@ -199,19 +199,19 @@ export async function setupProject(directory = "."): Promise<SetupResult> {
     const contents = existing.get(path);
     return contents !== undefined && exportsIdentifiers(contents, IDENTIFIERS[path] ?? []);
   };
-  if (eligible.has("src/assembly.ts") && !canUse("src/vocabulary.ts")) {
+  if (eligible.has("src/assembly.ts") && !canUse("src/concepts.ts")) {
     eligible.delete("src/assembly.ts");
     guidance.push(
-      "Integration required: src/assembly.ts needs applicationConcepts and vocabulary exports from src/vocabulary.ts.",
+      "Integration required: src/assembly.ts needs the applicationConcepts export from src/concepts.ts.",
     );
   }
   if (
     eligible.has("generated.config.ts") &&
-    (!canUse("src/assembly.ts") || !canUse("src/vocabulary.ts"))
+    (!canUse("src/assembly.ts") || !canUse("src/concepts.ts"))
   ) {
     eligible.delete("generated.config.ts");
     guidance.push(
-      "Integration required: generated.config.ts must name the application's assembly function and vocabulary module.",
+      "Integration required: generated.config.ts needs the application's assembly and concept-set modules.",
     );
   }
   if (eligible.has("src/main.ts") && !canUse("src/assembly.ts")) {
@@ -223,7 +223,7 @@ export async function setupProject(directory = "."): Promise<SetupResult> {
 
   const order = [
     "tsconfig.json",
-    "src/vocabulary.ts",
+    "src/concepts.ts",
     "src/assembly.ts",
     "generated.config.ts",
     "src/main.ts",

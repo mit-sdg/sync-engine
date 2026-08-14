@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
-import { vocabulary } from "@catalog/concepts";
+import { applicationConcepts } from "@catalog/concepts";
 import { catalogRegistrations } from "@catalog/registrations";
 import { compositions } from "./workshop-selection.ts";
 
@@ -87,7 +87,7 @@ function stringField(value: Record<string, unknown>, field: string): string {
 
 async function exerciseWorkshopSelection(instances: WorkshopInstances): Promise<void> {
   const application = assemble({
-    vocabulary,
+    conceptSet: applicationConcepts,
     instances: { Gathering: instances.Gathering, Selecting: instances.Selecting } as never,
     composition: { ChooseWorkshopItem, CreateWorkshop, GetWorkshop, JoinWorkshop },
   });

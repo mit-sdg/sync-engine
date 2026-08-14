@@ -103,7 +103,7 @@ describe("artifact plans", () => {
       specificationBanner: "<!-- Ping specification -->",
       wire: "wire.ts",
       wireBanner: "// Ping wire",
-      vocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
+      conceptSet: { from: "../src/concept-set.ts", export: "vocabulary" },
       strictLeaves: true,
       projections: [
         {
@@ -197,7 +197,7 @@ _items(catalog: Catalog) : many (item: String)
     });
     const set = conceptSet({ Cataloging: registration });
     const manifest = applicationManifest(
-      assemble({ vocabulary: set.vocabulary, instances: set.implementations(), composition: {} }),
+      assemble({ conceptSet: set, instances: set.implementations(), composition: {} }),
     );
     const authored = manifest.concepts.find(({ name }) => name === "Cataloging")?.specification;
     expect(authored?.state.body).toBe("catalogs: set Catalog");
@@ -210,7 +210,7 @@ _items(catalog: Catalog) : many (item: String)
     expect(content).not.toContain("catalogs: set Catalog");
   });
 
-  test("strict wire planning requires a vocabulary anchor", () => {
+  test("strict wire planning requires a concept-set anchor", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
     const manifest = applicationManifest(
       assemble({
@@ -220,7 +220,7 @@ _items(catalog: Catalog) : many (item: String)
     );
 
     expect(() => planGenerated(manifest, { title: "Ping", strictLeaves: true })).toThrow(
-      "strictLeaves requires a vocabulary type anchor",
+      "strictLeaves requires a concept-set type anchor",
     );
   });
 
@@ -276,7 +276,7 @@ _items(catalog: Catalog) : many (item: String)
     });
     const options = {
       title: "Ping",
-      vocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
+      conceptSet: { from: "../src/concept-set.ts", export: "vocabulary" },
     };
 
     expect(() =>

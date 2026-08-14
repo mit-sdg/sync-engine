@@ -1,4 +1,4 @@
-# Message Board Vocabulary
+# Message Board Application Types
 
 The board uses account usernames wherever another concept needs an author or
 session subject. Comments attach directly to post identities. Comment bodies are

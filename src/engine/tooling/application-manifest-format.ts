@@ -1038,7 +1038,7 @@ function assertDesignLocation(value: unknown, path: string, sourceIds: ReadonlyS
   integer(data.column, `${path}.column`, 1);
 }
 
-function assertVocabularyTarget(value: unknown, path: string): void {
+function assertTypeBindingTarget(value: unknown, path: string): void {
   const candidate = record(value, path);
   if (candidate.kind === "concrete") {
     const data = shape(value, path, ["kind", "name"]);
@@ -1059,7 +1059,7 @@ function assertDesign(value: unknown, path: string): void {
     value,
     path,
     ["version", "checked", "sources", "declarations", "concepts", "computations"],
-    ["vocabulary"],
+    ["types"],
   );
   if (data.version !== 1) fail(`${path}.version`, "expected 1");
   boolean(data.checked, `${path}.checked`);
@@ -1075,7 +1075,7 @@ function assertDesign(value: unknown, path: string): void {
     nonemptyString(item.id, `${sourcePath}.id`);
     if (sourceIds.has(item.id)) fail(`${sourcePath}.id`, "duplicates an earlier source id");
     sourceIds.add(item.id);
-    literal(item.kind, `${sourcePath}.kind`, ["vocabulary", "document", "concept"] as const);
+    literal(item.kind, `${sourcePath}.kind`, ["document", "concept"] as const);
     nonemptyString(item.path, `${sourcePath}.path`);
     if (
       (item.path as string).startsWith("/") ||
@@ -1139,52 +1139,39 @@ function assertDesign(value: unknown, path: string): void {
         const bindingPath = `${instancePath}.bindings[${bindingIndex}]`;
         const bound = shape(binding, bindingPath, ["external", "target", "location"]);
         designIdentifier(bound.external, `${bindingPath}.external`);
-        assertVocabularyTarget(bound.target, `${bindingPath}.target`);
+        assertTypeBindingTarget(bound.target, `${bindingPath}.target`);
         assertDesignLocation(bound.location, `${bindingPath}.location`, sourceIds);
       }
       uniqueFieldIndexes(selected.bindings, `${instancePath}.bindings`, "external");
     }
     uniqueFieldIndexes(item.instances, `${conceptPath}.instances`, "name");
   }
-  if (data.vocabulary !== undefined) {
-    const vocabulary = shape(data.vocabulary, `${path}.vocabulary`, [
-      "source",
-      "concreteTypes",
-      "bindings",
-    ]);
-    nonemptyString(vocabulary.source, `${path}.vocabulary.source`);
-    if (!sourceIds.has(vocabulary.source))
-      fail(`${path}.vocabulary.source`, "does not name the vocabulary source");
+  if (data.types !== undefined) {
+    const types = shape(data.types, `${path}.types`, ["concreteTypes", "bindings"]);
     for (const [index, concrete] of array(
-      vocabulary.concreteTypes,
-      `${path}.vocabulary.concreteTypes`,
+      types.concreteTypes,
+      `${path}.types.concreteTypes`,
     ).entries()) {
-      const concretePath = `${path}.vocabulary.concreteTypes[${index}]`;
+      const concretePath = `${path}.types.concreteTypes[${index}]`;
       const item = shape(concrete, concretePath, ["name", "location"]);
       authoredPathSegment(item.name, `${concretePath}.name`);
       assertDesignLocation(item.location, `${concretePath}.location`, sourceIds);
     }
-    for (const [index, binding] of array(
-      vocabulary.bindings,
-      `${path}.vocabulary.bindings`,
-    ).entries()) {
-      const bindingPath = `${path}.vocabulary.bindings[${index}]`;
+    for (const [index, binding] of array(types.bindings, `${path}.types.bindings`).entries()) {
+      const bindingPath = `${path}.types.bindings[${index}]`;
       const item = shape(binding, bindingPath, ["instance", "external", "target", "location"]);
       authoredPathSegment(item.instance, `${bindingPath}.instance`);
       designIdentifier(item.external, `${bindingPath}.external`);
-      assertVocabularyTarget(item.target, `${bindingPath}.target`);
+      assertTypeBindingTarget(item.target, `${bindingPath}.target`);
       assertDesignLocation(item.location, `${bindingPath}.location`, sourceIds);
     }
-    uniqueFieldIndexes(vocabulary.concreteTypes, `${path}.vocabulary.concreteTypes`, "name");
+    uniqueFieldIndexes(types.concreteTypes, `${path}.types.concreteTypes`, "name");
     const bindingKeys = new Set<string>();
-    for (const [index, binding] of array(
-      vocabulary.bindings,
-      `${path}.vocabulary.bindings`,
-    ).entries()) {
-      const item = record(binding, `${path}.vocabulary.bindings[${index}]`);
+    for (const [index, binding] of array(types.bindings, `${path}.types.bindings`).entries()) {
+      const item = record(binding, `${path}.types.bindings[${index}]`);
       const key = `${item.instance as string}\0${item.external as string}`;
       if (bindingKeys.has(key))
-        fail(`${path}.vocabulary.bindings[${index}].external`, "duplicates an earlier binding");
+        fail(`${path}.types.bindings[${index}].external`, "duplicates an earlier binding");
       bindingKeys.add(key);
     }
   }
@@ -1228,7 +1215,7 @@ function assertDesign(value: unknown, path: string): void {
       array(data.declarations, `${path}.declarations`).length > 0 ||
       array(data.concepts, `${path}.concepts`).length > 0 ||
       array(data.computations, `${path}.computations`).length > 0 ||
-      data.vocabulary !== undefined)
+      data.types !== undefined)
   )
     fail(path, "unchecked design blocks must not contain authored-design claims");
 }

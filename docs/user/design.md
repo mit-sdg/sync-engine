@@ -40,8 +40,8 @@ rule and permits a concept to participate in another composition.
 Keep authored intent, executable declarations, and generated evidence distinct.
 A concept specification records reusable concept-local behavior. Registered
 application prose records the decisions realized by selected reactions, views,
-and formers. A separately registered vocabulary resolves every concept-external
-type for that application.
+and formers. `types` fences in those registered documents resolve every
+concept-external type for that application.
 
 Application prose is ordinary Markdown with one nonempty H1. Organize it around
 natural application topics and place exact `reaction:`, `view:`, and `former:`
@@ -56,8 +56,8 @@ path; wildcards and implied descendants do not exist. The checker resolves the
 link but does not judge whether the surrounding prose describes the declaration
 honestly. That correspondence remains a review responsibility.
 
-The vocabulary document uses `concrete` to introduce an application type and
-`is` to bind one selected concept instance's external parameter directly:
+An application `types` fence uses `concrete` to introduce an application type
+and `is` to bind one selected concept instance's external parameter directly:
 
 ```types
 concrete Person
@@ -73,7 +73,7 @@ assignability, or provide runtime validation. Chains, bindings to external
 parameters, missing bindings, and unused concrete declarations are invalid.
 
 Named computations may be declared in `computations` fences anywhere in
-registered application prose, including vocabulary. Each executable computation
+registered application prose, including a dedicated types document. Each executable computation
 has exactly one declaration. Views remain distinct because they express
 application decisions over current state rather than pure computations.
 

@@ -15,18 +15,22 @@ layout separate from executable source and generated evidence.
 
 - The application convention now keeps concept specifications under
   `design/concepts/`, lean composition explanations under
-  `design/compositions/`, and an optional `design/vocabulary.md`. Executable
-  declarations live under `src/concepts/`, `src/compositions/`, and
-  `src/vocabulary.ts`; focused tests live under matching `tests/` directories.
-  These paths are conventions rather than registration or runtime semantics.
-- `sync-engine setup` now creates `src/vocabulary.ts` and no placeholder design
-  or composition file. Its generated descriptor names that vocabulary module.
-- `sync-engine check` discovers the selected runtime registrations instead of
-  scanning Markdown roots. With `--config`, the assembled application's
-  application-owned concepts are authoritative. Without a config,
-  `--vocabulary-module` selects a module whose `vocabulary` export retains the
-  registrations. The no-option compatibility default remains
-  `src/concept-set.ts`; unregistered Markdown is ignored.
+  `design/compositions/`, and optional application types in `types` fences in
+  any registered design document. Executable declarations live under
+  `src/concepts/`, `src/compositions/`, and `src/concepts.ts`; focused tests live
+  under matching `tests/` directories. These paths are conventions rather than
+  registration or runtime semantics.
+- `sync-engine setup` now creates `src/concepts.ts` and no placeholder design or
+  composition file. Its generated descriptor uses the conventional
+  `applicationConcepts` export.
+- `sync-engine check` discovers selected registrations from the required
+  generated config instead of scanning Markdown roots. The assembled
+  application's concepts are authoritative; the old `--vocabulary-module` and
+  no-config modes are removed. Unregistered Markdown is ignored.
+- `conceptSet(...)` is now the application-facing assembly value. Pass it as
+  `assemble({ conceptSet, composition })`; the nested `set.vocabulary` projection
+  is removed. The lower-level `vocabulary(...)` declaration remains available
+  for callers without registered specifications or implementation floors.
 - Removed the `--concepts` check option. Source analysis now locates only the
   class declarations needed for TypeScript-erased input names and follows
   supported direct or imported registrations and registration-map spreads.
@@ -45,17 +49,18 @@ layout separate from executable source and generated evidence.
 
 Existing applications do not have to move files solely to keep registration or
 runtime behavior. To adopt the layout, move authored Markdown under `design/`,
-map `@design/*` to that directory, collect registrations in
-`src/vocabulary.ts`, and keep executable composition groups and focused tests in
-the matching `src/compositions/` and `tests/` directories. Configure
-`generated.config.ts` with `vocabulary.module` when the module is not the legacy
-`src/concept-set.ts` default.
+map `@design/*` to that directory, collect registrations in `src/concepts.ts`,
+and keep executable composition groups and focused tests in the matching
+`src/compositions/` and `tests/` directories. Configure `generated.config.ts`
+with `conceptSet.module` when the module is not the conventional
+`src/concepts.ts` default.
 
-Replace `sync-engine check --concepts ...` with `--config <path>` for
-assembly-driven discovery or `--vocabulary-module <path>` for an explicitly
-selected unconfigured vocabulary. Ensure the `conceptSet(...)` registration map
-and registered class imports use the supported statically resolvable forms
-listed in the CLI reference.
+Replace `sync-engine check --concepts ...` and `--vocabulary-module ...` with a
+generated config and `--config <path>`. Pass the registered concept set directly
+to `assemble`, move any dedicated vocabulary Markdown to an ordinary registered
+file such as `design/types.md`, and place its URL in `design.documents`. Ensure
+the `conceptSet(...)` registration map and registered class imports use the
+supported statically resolvable forms listed in the CLI reference.
 
 Catalog users must select and copy source themselves from `catalog show` and
 `catalog source`, then adapt, test, and maintain it as application-owned source.

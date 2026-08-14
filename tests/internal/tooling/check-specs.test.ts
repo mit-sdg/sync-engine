@@ -18,7 +18,6 @@ import {
 import { registeredConceptSources } from "@engine/tooling/concept-source-discovery";
 import { assemble } from "@engine/boundary/assembly/assembly-facade";
 import { conceptSet, registerConcept } from "@engine/boundary/assembly/concept-set";
-import { vocabulary as declareVocabulary } from "@engine/reactions/authoring/refs";
 import { applicationManifest } from "@engine/tooling/manifest";
 
 let directory = "";
@@ -596,10 +595,10 @@ describe("concept discovery", () => {
         sourceInputMembers: new Set(["end"]),
       },
     ];
-    expect(registeredConcepts(selected.vocabulary)).toMatchObject(expected);
+    expect(registeredConcepts(selected)).toMatchObject(expected);
 
     const assembled = assemble({
-      vocabulary: selected.vocabulary,
+      conceptSet: selected,
       instances: selected.implementations(),
       composition: {},
     });
@@ -628,19 +627,15 @@ describe("concept discovery", () => {
     await assembled.beginDrain();
   });
 
-  test("runtime discovery rejects a missing vocabulary or specification", async () => {
-    expect(() => registeredConcepts(null)).toThrow("vocabulary export must be an object");
-    class UnspecifiedConcept {
-      act() {}
-    }
-    const unspecified = declareVocabulary({ concepts: { Unspecified: UnspecifiedConcept } });
-    expect(() => registeredConcepts(unspecified)).toThrow(
-      'Concept-set registration "Unspecified" has no specification',
-    );
+  test("runtime discovery rejects a missing concept set", async () => {
+    expect(() => registeredConcepts(null)).toThrow("Concept-set export must be an object");
+    expect(() => registeredConcepts({})).toThrow("expected a registered concept set");
 
-    const module = join(directory, "missing-vocabulary.mjs");
+    const module = join(directory, "missing-concept-set.mjs");
     await writeFile(module, "export const other = {};\n");
-    await expect(loadRegisteredConcepts(module)).rejects.toThrow('does not export "vocabulary"');
+    await expect(loadRegisteredConcepts(module)).rejects.toThrow(
+      'does not export "applicationConcepts"',
+    );
   });
 
   test("follows object-spread registration maps to class imports", async () => {
@@ -826,19 +821,18 @@ describe("concept discovery", () => {
           'import { SessioningConcept } from "./sessioning.ts";\n' +
           'import spec from "../design/concepts/Sessioning.md" with { type: "text" };\n' +
           "const Sessioning = registerConcept({ class: SessioningConcept, spec });\n" +
-          "export const applicationConcepts = conceptSet({ Sessioning });\n" +
-          "export const { vocabulary } = applicationConcepts;\n",
+          "export const applicationConcepts = conceptSet({ Sessioning });\n",
       );
       await writeFile(
         join(project, "generated.config.ts"),
         'import { assemble } from "@mit-sdg/sync-engine/assembly";\n' +
-          'import { applicationConcepts, vocabulary } from "./src/application-concepts.ts";\n' +
+          'import { applicationConcepts } from "./src/application-concepts.ts";\n' +
           "export default {\n" +
           '  title: "Session application",\n' +
           "  design: { version: 1, documents: [] },\n" +
-          '  vocabulary: { module: new URL("./src/application-concepts.ts", import.meta.url) },\n' +
+          '  conceptSet: { module: new URL("./src/application-concepts.ts", import.meta.url) },\n' +
           "  assemble: () => assemble({\n" +
-          "    vocabulary,\n" +
+          "    conceptSet: applicationConcepts,\n" +
           "    instances: applicationConcepts.implementations(),\n" +
           "    composition: {},\n" +
           "  }),\n" +

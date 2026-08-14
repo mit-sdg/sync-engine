@@ -75,9 +75,9 @@ changing the four concept classes.
 | -------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `design/concepts/*.md`                                         | Registered concept specifications                                |
 | `design/compositions/*.md`                                     | Composition-group intent and shared view/former design           |
-| `design/vocabulary.md`                                         | Cross-concept identity-role bindings                             |
+| `design/types.md`                                              | Application concrete types and cross-concept bindings            |
 | `src/concepts/`                                                | PascalCase concept classes and adjacent registries               |
-| `src/vocabulary.ts`                                            | Design vocabulary, named concept set, and deterministic floor    |
+| `src/concepts.ts`                                              | Named concept set, typed references, and deterministic floor     |
 | `src/compositions/Room.ts`                                     | Room endpoint groups and the single owning path for room formers |
 | `src/compositions/Contributions.ts`                            | Contribution endpoint and structured policy variants             |
 | `src/compositions/Mitigation*.ts`                              | Independently selectable reaction groups                         |
@@ -87,7 +87,7 @@ changing the four concept classes.
 | `src/scenario.ts`                                              | Complete local-gateway workflow                                  |
 | `tests/concepts/`                                              | Concept principle tests                                          |
 | `tests/compositions/`                                          | Workflow, reaction-pack, policy, former, and client behavior     |
-| `generated.config.ts`                                          | Artifact configuration anchored to `src/vocabulary.ts`           |
+| `generated.config.ts`                                          | Artifact configuration anchored to `src/concepts.ts`             |
 | [`generated/operations-room.md`](generated/operations-room.md) | Pinned assembled read-back                                       |
 | [`generated/wire.ts`](generated/wire.ts)                       | Pinned TypeScript wire contract                                  |
 

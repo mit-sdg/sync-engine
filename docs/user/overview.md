@@ -14,13 +14,13 @@ An application design has three distinct parts:
    Purpose, Principle, external Types, raw State, Actions, and Queries.
 2. **Application design prose** explains application behavior and links each
    selected reaction, view, and former to the decision it realizes.
-3. The **application vocabulary** resolves every concept-external type to a
+3. **Application type declarations** resolve every concept-external type to a
    concrete application type or a type owned by another selected concept.
 
 These parts answer different questions. A concept specification explains a
 mechanism without naming an application. Application prose explains why
-selected declarations are present. Vocabulary records how otherwise-independent
-concept type parameters meet in this assembly.
+selected declarations are present. Application type bindings record how otherwise-independent concept parameters
+meet in this assembly.
 
 There is no required `application.md`, design directory layout, or one-to-one
 pairing between prose and source modules. Introductions, history, and unresolved
@@ -30,7 +30,7 @@ design files participate in checking.
 ## From authored design to runtime
 
 ```text
-concept specifications + registered application prose + vocabulary
+concept specifications + registered application documents
                               |
                               v
 classes + registrations + reactions + views + formers + endpoints
@@ -46,9 +46,10 @@ classes + registrations + reactions + views + formers + endpoints
 ```
 
 `registerConcept` connects a concept class to imported specification text.
-`conceptSet` gives each selected instance its application name. Composition
-builds reaction, endpoint, view, and former declarations. `assemble` installs
-the selected declarations and implementations.
+`conceptSet` gives each selected instance its application name and supplies the
+object passed to `assemble`. Composition builds reaction, endpoint, view, and
+former declarations. `assemble` installs the selected declarations and
+implementations.
 
 Runtime assembly does not load application design Markdown. Consequently a
 production process does not fail merely because authored documentation is not
@@ -73,10 +74,10 @@ Registration and source checking compare machine-readable declaration shape
 with TypeScript. Natural-language conditions, effects, and query meaning remain
 design contracts and test responsibilities.
 
-## Application vocabulary closes type parameters
+## Application types close external parameters
 
-A configured vocabulary document contains application concrete types and a
-direct binding for every external type of every selected concept instance:
+A `types` fence in any registered application document can contain concrete
+types and direct bindings for selected concept instances:
 
 ```types
 concrete Person
@@ -138,7 +139,7 @@ is similar.
 
 ## Computations are application design
 
-Registered application documents, including the vocabulary document, may
+Registered application documents, including a dedicated types document, may
 contain any number of `computations` fences. There is no required
 `computations.md`. A declaration has a signature and a required indented prose
 body:
@@ -160,15 +161,17 @@ Each generated config selects one assembly and its own design corpus:
 ```text
 design: {
   version: 1,
-  vocabulary: new URL("./design/vocabulary.md", import.meta.url),
-  documents: [new URL("./design/forum.md", import.meta.url)],
+  documents: [
+    new URL("./design/types.md", import.meta.url),
+    new URL("./design/forum.md", import.meta.url),
+  ],
 }
 ```
 
 `documents` contains explicit local `file:` URLs. Documents may be elsewhere in
-a monorepo. A vocabulary URL is required when selected concepts expose external
-types or the application declares concrete types. A design with neither uses
-`design: { version: 1, documents: [] }`.
+a monorepo. Any document may contain `types` fences, and the checker combines
+the declarations across the registered corpus. An application with no
+application-level declarations uses `design: { version: 1, documents: [] }`.
 
 A second supported application variant uses a second config. Shared documents
 can be reused only when every typed reference resolves in each selected
@@ -181,7 +184,7 @@ Design tooling retains normalized source contents in provenance, so a prose-only
 change changes input digests. Generated read-back links to source files and
 one-based lines rather than copying application prose. It reports selected
 reaction lowering, views, formers, computations, concept signatures and
-instances, and resolved vocabulary bindings.
+instances, and resolved application type bindings.
 
 The runtime still serializes action bodies only per concept instance within one
 assembly. It does not provide transactions across actions, persistence, replay,

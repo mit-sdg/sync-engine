@@ -59,7 +59,7 @@ describe("concept definition identity in a selected concept set", () => {
     });
     const set = conceptSet({ PostComments: first, AnswerComments: second });
 
-    expect(set.vocabulary).toBeDefined();
+    expect(set.concepts).toBeDefined();
     expect(first.specification.definitionName).toBe("Commenting");
     expect(second.specification.definitionName).toBe("Commenting");
   });

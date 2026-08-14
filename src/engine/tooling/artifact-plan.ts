@@ -31,7 +31,7 @@ interface GeneratedPlanOptions {
   wire?: string;
   wireName?: string;
   wireBanner?: string;
-  vocabulary?: { from: string; export: string };
+  conceptSet?: { from: string; export: string };
   strictLeaves?: boolean;
   /** Ordered contracts derived from the logical wire by transport packages. */
   projections?: readonly PlannedWireProjection[];
@@ -110,7 +110,7 @@ export function planGenerated(
   reserveTypeName(wireName, "wire");
   reserveTypeName("AppWideError", "logical app-wide error");
   reserveTypeName("Json", "logical JSON");
-  if (options.vocabulary !== undefined) {
+  if (options.conceptSet !== undefined) {
     for (const name of wireHelperNames([manifest.wire, ...projections.map(({ wire }) => wire)])) {
       reserveTypeName(name, "logical helper");
     }
@@ -146,7 +146,7 @@ export function planGenerated(
   const logicalWire = renderWireTypes(manifest.wire, {
     moduleName: wireName,
     banner: wireBanner,
-    ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }),
+    ...(options.conceptSet === undefined ? {} : { conceptSet: options.conceptSet }),
     sharedWires: projections.map(({ wire }) => wire),
     strictLeaves: options.strictLeaves ?? false,
   });
@@ -157,7 +157,7 @@ export function planGenerated(
       renderWireTypes(projection.wire, {
         moduleName: projection.name,
         appWideErrorName: projection.render?.appWideErrorName ?? `${projection.name}AppWideError`,
-        ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }),
+        ...(options.conceptSet === undefined ? {} : { conceptSet: options.conceptSet }),
         strictLeaves: options.strictLeaves ?? false,
         preamble: false,
       }),

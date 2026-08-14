@@ -19,7 +19,7 @@ import { SelectingMongoConcept } from "../entries/concept/selecting/selecting.mo
 import { TimingConcept } from "../entries/concept/timing/timing.ts";
 import { TrashingMemoryConcept } from "../entries/concept/trashing/trashing.memory.ts";
 import { TrashingMongoConcept } from "../entries/concept/trashing/trashing.mongo.ts";
-import { vocabulary } from "../entries/_typecheck/concept-set.ts";
+import { applicationConcepts } from "../entries/_typecheck/concept-set.ts";
 import { compositions as incidentCompositions } from "../entries/recipe/incident-room/incident-room.ts";
 import { compositions as boardCompositions } from "../entries/recipe/recoverable-board/recoverable-board.ts";
 
@@ -165,7 +165,7 @@ function incidentApplication(
   overrides: Partial<IncidentInstances> = {},
 ) {
   return assemble({
-    vocabulary,
+    conceptSet: applicationConcepts,
     instances: { ...instances, ...overrides } as never,
     composition: incidentComposition,
     queryCache: "none",
@@ -174,7 +174,7 @@ function incidentApplication(
 
 function boardApplication(instances: BoardInstances) {
   return assemble({
-    vocabulary,
+    conceptSet: applicationConcepts,
     instances: instances as never,
     composition: boardComposition,
     queryCache: "none",

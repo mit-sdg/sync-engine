@@ -5,8 +5,9 @@ export default {
   title: "Operations room",
   design: {
     version: 1,
-    vocabulary: new URL("./design/vocabulary.md", import.meta.url),
-    documents: [new URL("./design/operations-room.md", import.meta.url)],
+    documents: [
+      new URL("./design/types.md", import.meta.url),
+      new URL("./design/operations-room.md", import.meta.url),
+    ],
   },
-  vocabulary: { module: new URL("./src/vocabulary.ts", import.meta.url) },
 };

@@ -21,14 +21,14 @@ causal flow, and any asking reaction.
 
 ## Assembly
 
-One installed vocabulary, concept implementation set, and composition, with its
+One installed concept set, concept implementation set, and composition, with its
 own execution lifecycle and occurrence index. Creating another assembly creates
 another runtime.
 
 ## Authored design
 
-Application-owned concept specifications, explicitly configured application
-prose, and an application vocabulary. It is distinct from executable TypeScript
+Application-owned concept specifications and explicitly configured application
+documents containing prose, application types, and computations. It is distinct from executable TypeScript
 declarations and generated read-back.
 
 ## Binding
@@ -61,7 +61,7 @@ natural-language behavior are not runtime schemas.
 
 A named complete implementation map for one concept set, with host-owned
 resources and `close()`. The host owns its lifecycle. A floor selects
-implementations without changing vocabulary or specifications.
+implementations without changing the concept set or specifications.
 
 ## Consequence
 
@@ -167,7 +167,7 @@ state.
 ## Portable behavior
 
 A declaration whose canonical JSON can be registered against the same named
-vocabulary. Ordinary assemblies and generated contracts contain portable
+concept set. Ordinary assemblies and generated contracts contain portable
 behavior only.
 
 ## Principle
@@ -226,11 +226,16 @@ cardinality.
 
 ## Vocabulary
 
-The named action, query, and optional computation references for a concept set,
-together with concept metadata. Vocabulary references are inert until resolved
-against an engine. A separately configured authored vocabulary document declares
-application concrete types and directly binds every selected concept-external
-parameter; it is not the runtime vocabulary object.
+The lower-level runtime declaration containing named action, query, and optional
+computation references together with concept metadata. `conceptSet` creates this
+declaration internally for ordinary config-based applications. Vocabulary
+references are inert until resolved against an engine.
+
+## Application types
+
+Concrete application types and direct bindings for selected concept-external
+parameters. They are declared in `types` fences in any registered application
+design document and are checked by tooling rather than loaded at runtime.
 
 ## Wire contract
 

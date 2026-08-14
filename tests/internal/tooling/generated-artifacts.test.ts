@@ -90,7 +90,7 @@ describe("generated application artifacts", () => {
             directory: new URL("./generated/", import.meta.url),
             title: "Application",
             design: loginDesign,
-            vocabulary: { module: languageModule },
+            conceptSet: { module: languageModule },
           },
           configUrl,
         ),
@@ -118,7 +118,7 @@ describe("generated application artifacts", () => {
           directory: new URL("./not-written/", import.meta.url),
           title: "Single check",
           design: loginDesign,
-          vocabulary: { module: languageModule },
+          conceptSet: { module: languageModule },
         },
         configUrl,
       ),
@@ -168,7 +168,7 @@ export const vocabulary = declareVocabulary({
           directory: new URL("./not-written/", import.meta.url),
           title: "Fresh source analysis",
           design: loginDesign,
-          vocabulary: { module: pathToFileURL(modulePath) },
+          conceptSet: { module: pathToFileURL(modulePath) },
         },
         configUrl,
       );
@@ -302,7 +302,7 @@ export const vocabulary = declareVocabulary({
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
           design: loginCurrentDesign,
-          vocabulary: { module: languageModule },
+          conceptSet: { module: languageModule },
           projections: [
             httpWire({
               name: "ApplicationWireHttp",
@@ -345,7 +345,7 @@ export const vocabulary = declareVocabulary({
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
           design: loginCurrentDesign,
-          vocabulary: { module: languageModule },
+          conceptSet: { module: languageModule },
           projections: [
             httpWire({
               name: "ApplicationWireHttp",
@@ -373,7 +373,7 @@ export const vocabulary = declareVocabulary({
         directory: new URL("./not-written/", import.meta.url),
         title: "Incomplete application",
         design: apiClosureDesign,
-        vocabulary: { module: languageModule },
+        conceptSet: { module: languageModule },
       },
       configUrl,
     );
@@ -414,7 +414,7 @@ export const vocabulary = declareVocabulary({
         directory,
         title: "Rejected local endpoint",
         design: closureDesign,
-        vocabulary: { module: languageModule },
+        conceptSet: { module: languageModule },
       },
       configUrl,
     );
@@ -439,7 +439,7 @@ export const vocabulary = declareVocabulary({
         specification: "%2e%2e/escape.md",
         title: "Unsafe path application",
         design: emptyDesign,
-        vocabulary: { module: conceptFreeModule },
+        conceptSet: { module: conceptFreeModule },
       },
       configUrl,
     );
@@ -479,7 +479,7 @@ export const vocabulary = declareVocabulary({
         authored: true,
       },
       {
-        label: "executable vocabulary module",
+        label: "concept-set module",
         directory: new URL("./fixtures/generated-artifacts/concept-free/", import.meta.url),
         specification: "vocabulary.ts",
         authored: false,
@@ -497,7 +497,7 @@ export const vocabulary = declareVocabulary({
           specification: collision.specification,
           title: "Colliding application",
           design: collision.authored ? loginDesign : emptyDesign,
-          vocabulary: { module: collision.authored ? languageModule : conceptFreeModule },
+          conceptSet: { module: collision.authored ? languageModule : conceptFreeModule },
         },
         configUrl,
       );
@@ -522,7 +522,7 @@ export const vocabulary = declareVocabulary({
           specification: "design-alias.md",
           title: "Aliased collision",
           design: loginDesign,
-          vocabulary: { module: languageModule },
+          conceptSet: { module: languageModule },
         },
         configUrl,
       );
@@ -544,7 +544,7 @@ export const vocabulary = declareVocabulary({
         directory,
         title: "Filesystem application",
         design: emptyDesign,
-        vocabulary: { module: conceptFreeModule },
+        conceptSet: { module: conceptFreeModule },
       },
       configUrl,
     );
@@ -583,7 +583,7 @@ export const vocabulary = declareVocabulary({
         specification: "blocked.md",
         title: "Blocked application",
         design: emptyDesign,
-        vocabulary: { module: conceptFreeModule },
+        conceptSet: { module: conceptFreeModule },
       },
       configUrl,
     );
@@ -621,7 +621,7 @@ export const vocabulary = declareVocabulary({
         directory: new URL("./not-written/", import.meta.url),
         title: "Lifecycle application",
         design: loginDesign,
-        vocabulary: { module: languageModule },
+        conceptSet: { module: languageModule },
       },
       configUrl,
     );
@@ -643,7 +643,7 @@ export const vocabulary = declareVocabulary({
         },
         title: "Failed lifecycle application",
         design: emptyDesign,
-        vocabulary: { module: languageModule },
+        conceptSet: { module: languageModule },
       },
       configUrl,
     );
@@ -662,7 +662,10 @@ describe("an artifact configuration's defaults", () => {
         join(directory, "generated.config.ts"),
         'export default { assemble() {}, title: "Loaded application", design: { version: 1, documents: [] } };\n',
       );
-      await writeFile(join(directory, "src/concept-set.ts"), "export const vocabulary = {};\n");
+      await writeFile(
+        join(directory, "src/concepts.ts"),
+        "export const applicationConcepts = {};\n",
+      );
       const resolved = await loadGeneratedApplication("generated.config.ts", directory);
       expect(resolved.title).toBe("Loaded application");
     } finally {
@@ -677,9 +680,9 @@ describe("an artifact configuration's defaults", () => {
       const sharedDirectory = join(root, "shared-design");
       await mkdir(applicationDirectory, { recursive: true });
       await mkdir(sharedDirectory, { recursive: true });
-      const vocabularyDesign = pathToFileURL(join(applicationDirectory, "vocabulary.md"));
+      const typesDesign = pathToFileURL(join(applicationDirectory, "types.md"));
       const sharedDesign = pathToFileURL(join(sharedDirectory, "behavior.md"));
-      await writeFile(vocabularyDesign, "# Vocabulary\n");
+      await writeFile(typesDesign, "# Application types\n");
       await writeFile(sharedDesign, "# Shared behavior\n");
       const localConfig = pathToFileURL(join(applicationDirectory, "generated.config.ts"));
 
@@ -687,16 +690,15 @@ describe("an artifact configuration's defaults", () => {
         {
           assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
           title: "Registered design",
-          design: { version: 1, vocabulary: vocabularyDesign, documents: [sharedDesign] },
-          vocabulary: { module: languageModule },
+          design: { version: 1, documents: [typesDesign, sharedDesign] },
+          conceptSet: { module: languageModule },
         },
         localConfig,
       );
 
       expect(resolved.design).toEqual({
         version: 1,
-        vocabulary: vocabularyDesign,
-        documents: [sharedDesign],
+        documents: [typesDesign, sharedDesign],
       });
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -707,7 +709,7 @@ describe("an artifact configuration's defaults", () => {
     const application = {
       assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
       title: "Design validation",
-      vocabulary: { module: languageModule },
+      conceptSet: { module: languageModule },
     };
     const resolveDesign = (design?: unknown) =>
       resolveApplication(
@@ -717,6 +719,9 @@ describe("an artifact configuration's defaults", () => {
 
     expect(() => resolveDesign()).toThrow("design block is required");
     expect(() => resolveDesign({ version: 2, documents: [] })).toThrow("design.version must be 1");
+    expect(() => resolveDesign({ version: 1, vocabulary: configUrl, documents: [] })).toThrow(
+      "design.vocabulary was removed",
+    );
     expect(() => resolveDesign({ version: 1 })).toThrow("design.documents must be an array");
     expect(() => resolveDesign({ version: 1, documents: ["design.md"] })).toThrow(
       "design.documents[0] must be a URL",
@@ -734,15 +739,21 @@ describe("an artifact configuration's defaults", () => {
       "design.documents[1] duplicates design.documents[0]",
     );
     expect(() =>
-      resolveDesign({ version: 1, vocabulary: configUrl, documents: [configUrl] }),
-    ).toThrow("design.documents[0] duplicates design.vocabulary");
+      resolveApplication(
+        { ...application, design: emptyDesign, vocabulary: { module: languageModule } } as never,
+        configUrl,
+      ),
+    ).toThrow("top-level vocabulary was replaced by conceptSet");
   });
 
-  test("a title and an assembly are enough with the compatibility source name", async () => {
+  test("a title and an assembly use the conventional concept-set source", async () => {
     const directory = await mkdtemp(join(tmpdir(), "sync-engine-default-config-"));
     try {
       await mkdir(join(directory, "src"));
-      await writeFile(join(directory, "src/concept-set.ts"), "export const vocabulary = {};\n");
+      await writeFile(
+        join(directory, "src/concepts.ts"),
+        "export const applicationConcepts = {};\n",
+      );
       const compatibilityConfigUrl = pathToFileURL(join(directory, "generated.config.ts"));
       const resolved = resolveApplication(
         {
@@ -758,14 +769,14 @@ describe("an artifact configuration's defaults", () => {
         wire: resolved.wire,
         wireName: resolved.wireName,
         wireBanner: resolved.wireBanner,
-        vocabularyFrom: resolved.vocabularyFrom,
+        conceptSetFrom: resolved.conceptSetFrom,
       }).toEqual({
         directory: new URL("./generated/", compatibilityConfigUrl).href,
         specification: "reading-circle.md",
         wire: "wire.ts",
         wireName: "ReadingCircleWire",
         wireBanner: undefined,
-        vocabularyFrom: { from: "../src/concept-set.ts", export: "vocabulary" },
+        conceptSetFrom: { from: "../src/concepts.ts", export: "applicationConcepts" },
       });
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -782,14 +793,14 @@ describe("an artifact configuration's defaults", () => {
         specificationBanner: "<!-- Project specification -->",
         wireName: "CircleContracts",
         wireBanner: "// Project wire contract",
-        vocabulary: { module: languageModule, export: "words" },
+        conceptSet: { module: languageModule, export: "words" },
       },
       configUrl,
     );
     const rendered = await renderGenerated(resolved);
     expect(resolved.specification).toBe("book.md");
     expect(resolved.wireName).toBe("CircleContracts");
-    expect(resolved.vocabularyFrom.export).toBe("words");
+    expect(resolved.conceptSetFrom.export).toBe("words");
     expect(
       rendered.specification.startsWith(
         `<!-- Project specification -->\n<!-- Manifest producer: ${PACKAGE_NAME}@${PACKAGE_VERSION}; concept specification: sync-engine.concept-specification@1; renderer: ${PACKAGE_NAME}@${PACKAGE_VERSION}. -->`,
@@ -802,18 +813,18 @@ describe("an artifact configuration's defaults", () => {
     ).toBe(true);
   });
 
-  test("a vocabulary module that is not there fails by path", () => {
+  test("a concept-set module that is not there fails by path", () => {
     expect(() =>
       resolveApplication(
         {
           assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
           title: "Reading circle",
           design: emptyDesign,
-          vocabulary: { module: new URL("./absent/concept-set.ts", import.meta.url) },
+          conceptSet: { module: new URL("./absent/concept-set.ts", import.meta.url) },
         },
         configUrl,
       ),
-    ).toThrow(/no vocabulary module at .*absent[/\\]concept-set\.ts/);
+    ).toThrow(/no concept-set module at .*absent[/\\]concept-set\.ts/);
   });
 
   test("a configuration without a title fails", () => {

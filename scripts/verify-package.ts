@@ -537,8 +537,7 @@ type ScenarioWire = {
 };
 
 const application = assemble({
-  vocabulary: notingConcepts.vocabulary,
-  instances: notingConcepts.implementations(),
+  conceptSet: notingConcepts,
   composition: { WriteNote },
 });
 const gateway = createGateway<ScenarioWire>({ application });

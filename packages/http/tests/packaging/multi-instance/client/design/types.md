@@ -1,4 +1,4 @@
-# Multi-instance vocabulary
+# Multi-instance application types
 
 The entry, observation, and fault contracts refer to the same caller-supplied domain operation identity.
 

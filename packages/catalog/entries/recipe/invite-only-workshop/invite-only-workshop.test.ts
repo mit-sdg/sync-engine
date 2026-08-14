@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
-import { applicationConcepts, vocabulary } from "@catalog/concepts";
+import { applicationConcepts } from "@catalog/concepts";
 import { compositions } from "./invite-only-workshop.ts";
 
 const { AcceptWorkshopInvitation, CreateInviteOnlyWorkshop, RepairAcceptedWorkshopInvitation } =
@@ -90,7 +90,7 @@ for (const floor of ["memory", "mongo"] as const) {
           };
 
           const application = assemble({
-            vocabulary,
+            conceptSet: applicationConcepts,
             instances: instances as never,
             composition,
           });

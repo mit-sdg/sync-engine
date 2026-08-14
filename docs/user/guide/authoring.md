@@ -1,7 +1,7 @@
 # Author an application design
 
 This guide adds the complete version-1 design contract to a config-based
-sync-engine application: strict concept specifications, application vocabulary,
+sync-engine application: strict concept specifications, application types,
 typed prose coverage, computations, and generated evidence. It applies to the
 breaking beta contract described in the current reference pages. Older concept
 files, manifests, generated artifacts, and `--vocabulary-module` workflows must
@@ -55,19 +55,20 @@ Verify the specification before continuing:
 sync-engine check --config generated.config.ts
 ```
 
-At this stage, vocabulary and coverage errors are expected if those documents
-are not registered yet. Concept grammar, source provenance, unresolved
+At this stage, type-binding and coverage errors are expected if the application
+documents are not registered yet. Concept grammar, source provenance, unresolved
 TypeScript shapes, result fields, optionality, and refusal mappings should not
 be left unresolved.
 
-## 3. Register the application vocabulary
+## 3. Declare application types
 
-Create one vocabulary document when any selected concept declares an external
-type or the application needs a concrete type. It has one nonempty H1, one
-`types` fence, and may contain surrounding prose.
+Put `types` fences in any registered application-design document. A small
+application can keep its type declarations beside the prose that explains them;
+a larger application can use a dedicated `design/types.md`. There is no special
+filename or separately registered type document.
 
 Declare each concrete type with a nonempty definition, then bind every selected
-external parameter exactly once:
+external parameter exactly once across all registered documents:
 
 ```types
 concrete Person
@@ -85,8 +86,9 @@ parameters. The right side directly names a concrete type or a type owned by a
 selected concept instance. Do not create chains, bind to another external
 parameter, or leave a concrete type unused.
 
-The executable vocabulary module neither imports nor exports this Markdown.
-Register it only through the generated config's `design.vocabulary` URL.
+The concept-set module neither imports nor exports this Markdown. Register the
+document containing the fence in the generated config's `design.documents`
+array.
 
 ## 4. Explain application decisions with typed links
 
@@ -121,8 +123,8 @@ unless they also explain selected declarations. There is no required
 
 ## 5. Declare computations where they are explained
 
-Put `computations` fences in any registered application document, including the
-vocabulary document. Each executable computation needs exactly one declaration
+Put `computations` fences in any registered application document, including a
+dedicated types document. Each executable computation needs exactly one declaration
 with a nonempty indented body:
 
 ```computations
@@ -146,8 +148,8 @@ export default {
   title: "Forum",
   design: {
     version: 1,
-    vocabulary: new URL("./design/vocabulary.md", import.meta.url),
     documents: [
+      new URL("./design/types.md", import.meta.url),
       new URL("./design/forum.md", import.meta.url),
       new URL("./design/access.md", import.meta.url),
     ],
@@ -156,10 +158,10 @@ export default {
 ```
 
 Every URL must use the local `file:` scheme. Relative URLs may point outside the
-application directory, including elsewhere in a monorepo. Omit `vocabulary`
-only when there are no selected external types and no concrete declarations.
-Use this explicit empty form when there is no application-level declaration to
-explain:
+application directory, including elsewhere in a monorepo. Type declarations and
+bindings may be split across these documents; names and external bindings remain
+globally unique. Use this explicit empty form when there is no application-level
+declaration to explain:
 
 ```text
 design: { version: 1, documents: [] }
@@ -181,8 +183,8 @@ sync-engine artifacts check
 ```
 
 `check` defaults to `generated.config.ts`. It fails on malformed concept files,
-unresolvable concept source and TypeScript shapes, incomplete vocabulary,
-unresolved typed links, or missing reaction/view/former/computation coverage.
+unresolvable concept source and TypeScript shapes, incomplete application type
+bindings, unresolved typed links, or missing reaction/view/former/computation coverage.
 Artifact pinning and checking enforce the same complete design contract.
 
 Review generated diffs. Read-back links each covered declaration to every
@@ -196,8 +198,8 @@ hand-edit generated output.
 
 ## 8. Verify behavior separately
 
-The design checker establishes declaration shape, source provenance, vocabulary
-closure, and exact coverage. It does not prove natural-language conditions,
+The design checker establishes declaration shape, source provenance, application
+type closure, and exact coverage. It does not prove natural-language conditions,
 effects, State semantics, computation semantics, persistence, transactions, or
 runtime validation.
 
@@ -217,12 +219,12 @@ by the old format.
 3. Preserve State in one raw fence; do not translate it into an invented SSF
    dialect.
 4. Rewrite action branches and query result rows into the structured grammar.
-5. Replace vocabulary edges and executable vocabulary Markdown imports with one
-   configured vocabulary document using `concrete` and `is`.
+5. Replace vocabulary edges and executable Markdown imports with `types` fences
+   using `concrete` and `is` in registered application documents.
 6. Remove composition `spec` imports and add exact typed links to registered
    application prose.
 7. Add declarations for every executable computation.
-8. Add `design: { version: 1, vocabulary?, documents }` to each generated config.
+8. Add `design: { version: 1, documents }` to each generated config.
 9. Remove `--vocabulary-module`; run `sync-engine check` or pass `--config`.
 10. Regenerate every manifest and generated artifact, then rerun tests.
 

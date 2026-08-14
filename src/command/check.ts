@@ -452,9 +452,9 @@ async function checkConfiguredApplication(
       sourceAnalysis,
     }),
   );
-  const vocabularyModulePath = fileURLToPath(application.vocabularyModule);
+  const conceptSetModulePath = fileURLToPath(application.conceptSetModule);
   const concepts = assembledConcepts(manifest);
-  assertConceptSources(conceptSourceFailures(vocabularyModulePath, concepts, sourceAnalysis, root));
+  assertConceptSources(conceptSourceFailures(conceptSetModulePath, concepts, sourceAnalysis, root));
   console.log(`Concept action/query source check passed for ${concepts.length} concepts.`);
 
   // Authored-design loading and coverage belongs at this exact config/manifest boundary.

@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
-import { applicationConcepts, vocabulary } from "@catalog/concepts";
+import { applicationConcepts } from "@catalog/concepts";
 import { compositions } from "./ranked-discussion.ts";
 
 const { CloseRankedDiscussion, OpenRankedDiscussion, RespondToDiscussion } =
@@ -71,7 +71,7 @@ for (const floor of ["memory", "mongo"] as const) {
       async () => {
         await withFloor(floor, async (instances) => {
           const application = assemble({
-            vocabulary,
+            conceptSet: applicationConcepts,
             instances: instances as never,
             composition,
           });

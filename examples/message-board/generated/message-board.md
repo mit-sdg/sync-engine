@@ -47,9 +47,9 @@ Defined in [Commenting](../design/concepts/Commenting.md), line 1.
 #### Selected instances and bindings
 
 - `Commenting`
-  - `Commenting.Author` is `Authenticating.Username` — [Message Board Vocabulary](../design/vocabulary.md), line 18.
-  - `Commenting.Target` is `Posting.Post` — [Message Board Vocabulary](../design/vocabulary.md), line 21.
-  - `Commenting.Content` is `CommentContent` — [Message Board Vocabulary](../design/vocabulary.md), line 24.
+  - `Commenting.Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 18.
+  - `Commenting.Target` is `Posting.Post` — [Message Board Application Types](../design/types.md), line 21.
+  - `Commenting.Content` is `CommentContent` — [Message Board Application Types](../design/types.md), line 24.
 
 ### Posting
 
@@ -68,7 +68,7 @@ Defined in [Posting](../design/concepts/Posting.md), line 1.
 #### Selected instances and bindings
 
 - `Posting`
-  - `Posting.Author` is `Authenticating.Username` — [Message Board Vocabulary](../design/vocabulary.md), line 15.
+  - `Posting.Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 15.
 
 ### Sessioning
 
@@ -89,13 +89,13 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 #### Selected instances and bindings
 
 - `Sessioning`
-  - `Sessioning.Subject` is `Authenticating.Username` — [Message Board Vocabulary](../design/vocabulary.md), line 12.
+  - `Sessioning.Subject` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 12.
 
-## Application vocabulary
+## Application types
 
 Concrete types:
 
-- `CommentContent` — [Message Board Vocabulary](../design/vocabulary.md), line 9.
+- `CommentContent` — [Message Board Application Types](../design/types.md), line 9.
 
 ## Formers
 

@@ -37,9 +37,7 @@ type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => obj
 export interface GeneratedApplicationDesign {
   /** Versioned shape of the authored application-design registration. */
   version: 1;
-  /** The optional application vocabulary-design document. */
-  vocabulary?: URL;
-  /** Every other application-design document, in registration order. */
+  /** Every application-design document, in registration order. */
   documents: readonly URL[];
 }
 
@@ -64,11 +62,11 @@ export interface GeneratedApplication {
   /** The wire contract's banner; defaults to one naming the assembly. */
   wireBanner?: string;
   /**
-   * The executable module whose export anchors generated wire types to concept
-   * signatures; defaults to `src/concept-set.ts` beside the config, exporting
-   * `vocabulary`. This is distinct from the authored `design.vocabulary` document.
+   * The module whose exported concept set anchors generated wire types and source
+   * analysis; defaults to `src/concepts.ts` beside the config, exporting
+   * `applicationConcepts`.
    */
-  vocabulary?: { module?: URL; export?: string };
+  conceptSet?: { module?: URL; export?: string };
   /** Ordered transport-specific contracts appended after the logical wire. */
   projections?: readonly WireProjection[];
 }
@@ -78,10 +76,10 @@ export type ResolvedApplication = GeneratedApplication & {
   specification: string;
   wire: string;
   wireName: string;
-  /** The executable vocabulary module analyzed at the generated-operation boundary. */
-  vocabularyModule: URL;
-  /** The specifier the generated wire imports its executable type anchor from. */
-  vocabularyFrom: { from: string; export: string };
+  /** The concept-set module analyzed at the generated-operation boundary. */
+  conceptSetModule: URL;
+  /** The specifier the generated wire imports its concept-set type anchor from. */
+  conceptSetFrom: { from: string; export: string };
 };
 
 export interface GeneratedSourceAnalysis {
@@ -98,11 +96,11 @@ interface OperationSourceAnalysis {
 }
 
 /** Source analysis belongs to one inspection so later operations always observe disk edits. */
-function sourceAnalysisForOperation(vocabularyModulePath: string): OperationSourceAnalysis {
-  const context = typeScriptSourceContext(vocabularyModulePath);
+function sourceAnalysisForOperation(conceptSetModulePath: string): OperationSourceAnalysis {
+  const context = typeScriptSourceContext(conceptSetModulePath);
   return {
     context,
-    concepts: registeredConceptSources(vocabularyModulePath, context),
+    concepts: registeredConceptSources(conceptSetModulePath, context),
     computationInputs: new Map(),
   };
 }
@@ -137,44 +135,37 @@ function resolveDesign(value: unknown): GeneratedApplicationDesign {
   if (design.version !== 1) {
     throw new Error("generated config: design.version must be 1.");
   }
+  if (design.vocabulary !== undefined) {
+    throw new Error(
+      "generated config: design.vocabulary was removed; list documents containing `types` fences in design.documents.",
+    );
+  }
   if (!Array.isArray(design.documents)) {
     throw new Error(
       "generated config: design.documents must be an array (use [] when there are no design documents).",
     );
   }
 
-  const vocabulary =
-    design.vocabulary === undefined
-      ? undefined
-      : {
-          label: "design.vocabulary",
-          ...requiredDesignUrl(design.vocabulary, "design.vocabulary"),
-        };
   const documents = design.documents.map((document, index) => {
     const label = `design.documents[${index}]`;
     return { label, ...requiredDesignUrl(document, label) };
   });
-  const registered = [...(vocabulary === undefined ? [] : [vocabulary]), ...documents];
 
   const firstRegistration = new Map<string, string>();
-  for (const source of registered) {
+  for (const source of documents) {
     const first = firstRegistration.get(source.path);
     if (first !== undefined) {
       throw new Error(`generated config: ${source.label} duplicates ${first}: ${source.path}.`);
     }
     firstRegistration.set(source.path, source.label);
   }
-  for (const source of registered) {
+  for (const source of documents) {
     if (!existsSync(source.path)) {
       throw new Error(`generated config: ${source.label} does not exist: ${source.path}.`);
     }
   }
 
-  return {
-    version: 1,
-    ...(vocabulary === undefined ? {} : { vocabulary: vocabulary.url }),
-    documents: documents.map(({ url }) => url),
-  };
+  return { version: 1, documents: documents.map(({ url }) => url) };
 }
 
 /** Fill and validate defaults relative to the declaring generated config. */
@@ -185,6 +176,11 @@ export function resolveApplication(
   if (typeof application !== "object" || application === null || Array.isArray(application)) {
     throw new Error(
       "generated config: default export must be an application configuration object.",
+    );
+  }
+  if ((application as { vocabulary?: unknown }).vocabulary !== undefined) {
+    throw new Error(
+      "generated config: top-level vocabulary was replaced by conceptSet; point conceptSet.module at the application concept-set export.",
     );
   }
   if (typeof application.title !== "string" || application.title.trim() === "") {
@@ -201,11 +197,11 @@ export function resolveApplication(
   }
   const design = resolveDesign(application.design);
   const directory = application.directory ?? new URL("./generated/", config);
-  const module = application.vocabulary?.module ?? new URL("./src/concept-set.ts", config);
+  const module = application.conceptSet?.module ?? new URL("./src/concepts.ts", config);
   if (!existsSync(module)) {
     throw new Error(
-      `generated config: no vocabulary module at ${fileURLToPath(module)} — ` +
-        "point `vocabulary.module` at the file exporting the concept set.",
+      `generated config: no concept-set module at ${fileURLToPath(module)} — ` +
+        "point `conceptSet.module` at the file exporting the application concept set.",
     );
   }
   const resolved: ResolvedApplication = {
@@ -214,11 +210,11 @@ export function resolveApplication(
     directory,
     specification: application.specification ?? `${slug(application.title)}.md`,
     wire: application.wire ?? "wire.ts",
-    vocabularyModule: module,
+    conceptSetModule: module,
     wireName: application.wireName ?? `${pascal(application.title)}Wire`,
-    vocabularyFrom: {
+    conceptSetFrom: {
       from: posix.normalize(specifierFrom(directory, module)),
-      export: application.vocabulary?.export ?? "vocabulary",
+      export: application.conceptSet?.export ?? "applicationConcepts",
     },
   };
   configurationSource.set(resolved, config);
@@ -229,8 +225,8 @@ async function prepareConfiguredDesign(
   application: ResolvedApplication,
   assembled: InspectableAssembly,
 ): Promise<GeneratedSourceAnalysis> {
-  const vocabularyModulePath = fileURLToPath(application.vocabularyModule);
-  const sourceAnalysis = sourceAnalysisForOperation(vocabularyModulePath);
+  const conceptSetModulePath = fileURLToPath(application.conceptSetModule);
+  const sourceAnalysis = sourceAnalysisForOperation(conceptSetModulePath);
   const concepts = sourceAnalysis.concepts;
   const uncheckedManifest = applicationManifest(assembled);
   const selectedConcepts = uncheckedManifest.conceptImplementations.filter(
@@ -241,12 +237,12 @@ async function prepareConfiguredDesign(
     const source = sourcesByInstance.get(selected.concept);
     if (source === undefined) {
       throw new Error(
-        `generated source analysis: selected concept ${JSON.stringify(selected.concept)} is absent from the executable vocabulary module.`,
+        `generated source analysis: selected concept ${JSON.stringify(selected.concept)} is absent from the configured concept-set module.`,
       );
     }
     if (source.className !== selected.canonical.constructorName) {
       throw new Error(
-        `generated source analysis: selected concept ${JSON.stringify(selected.concept)} uses canonical class ${JSON.stringify(selected.canonical.constructorName)}, but the executable vocabulary module registers ${JSON.stringify(source.className)}.`,
+        `generated source analysis: selected concept ${JSON.stringify(selected.concept)} uses canonical class ${JSON.stringify(selected.canonical.constructorName)}, but the configured concept-set module registers ${JSON.stringify(source.className)}.`,
       );
     }
   }
@@ -254,7 +250,7 @@ async function prepareConfiguredDesign(
   const extra = concepts.find(({ conceptName }) => !selectedNames.has(conceptName));
   if (extra !== undefined) {
     throw new Error(
-      `generated source analysis: executable vocabulary module registers unselected concept ${JSON.stringify(extra.conceptName)}.`,
+      `generated source analysis: configured concept-set module registers unselected concept ${JSON.stringify(extra.conceptName)}.`,
     );
   }
 
@@ -272,7 +268,7 @@ async function prepareConfiguredDesign(
       const cached = sourceAnalysis.computationInputs.get(key);
       if (cached !== undefined) return cached;
       const inputs = authoritativeComputationInputs(
-        vocabularyModulePath,
+        conceptSetModulePath,
         names,
         sourceAnalysis.context,
       );
@@ -323,7 +319,7 @@ async function completeGeneratedPlan(
       wire: application.wire,
       wireName: application.wireName,
       wireBanner: application.wireBanner,
-      vocabulary: application.vocabularyFrom,
+      conceptSet: application.conceptSetFrom,
       strictLeaves: true,
       projections,
     }),
@@ -394,12 +390,6 @@ async function safeArtifactTargets(
   const inputs: Array<{ label: string; path: string }> = [];
   const config = configurationSource.get(application);
   if (config !== undefined) inputs.push({ label: "generated config", path: fileURLToPath(config) });
-  if (application.design.vocabulary !== undefined) {
-    inputs.push({
-      label: "vocabulary design document",
-      path: fileURLToPath(application.design.vocabulary),
-    });
-  }
   application.design.documents.forEach((document, index) =>
     inputs.push({
       label: `design document ${index + 1}`,
@@ -407,8 +397,8 @@ async function safeArtifactTargets(
     }),
   );
   inputs.push({
-    label: "executable vocabulary module",
-    path: fileURLToPath(application.vocabularyModule),
+    label: "concept-set module",
+    path: fileURLToPath(application.conceptSetModule),
   });
   for (const concept of sourceAnalysis.concepts) {
     inputs.push(

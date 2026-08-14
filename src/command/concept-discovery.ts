@@ -1,5 +1,11 @@
 import { pathToFileURL } from "node:url";
+import {
+  conceptSetVocabulary,
+  type AnyRegisteredConcept,
+  type RegisteredConceptSet,
+} from "@engine/boundary/assembly/concept-set";
 import { vocabularyClasses, vocabularyMetadata } from "@engine/reactions/authoring/refs";
+import type { ComputationFn } from "@engine/reads/computations";
 import type { ConceptSpec } from "@engine/reactions/concepts/concept-spec";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
 import type { ApplicationManifestV1 } from "@engine/tooling/manifest";
@@ -12,13 +18,19 @@ export interface RegisteredSourceConcept {
   sourceInputMembers: ReadonlySet<string>;
 }
 
-/** Read the registrations retained by the vocabulary that conceptSet produced. */
-export function registeredConcepts(vocabulary: unknown): RegisteredSourceConcept[] {
-  if (vocabulary === null || typeof vocabulary !== "object") {
-    throw new Error("Concept-set vocabulary export must be an object.");
+/** Read the registrations retained by an application concept set. */
+export function registeredConcepts(conceptSet: unknown): RegisteredSourceConcept[] {
+  if (conceptSet === null || typeof conceptSet !== "object") {
+    throw new Error("Concept-set export must be an object.");
   }
-  const classes = vocabularyClasses(vocabulary as never);
-  const metadata = vocabularyMetadata(vocabulary);
+  const declaration = conceptSetVocabulary(
+    conceptSet as RegisteredConceptSet<
+      Record<string, AnyRegisteredConcept>,
+      Record<string, ComputationFn>
+    >,
+  );
+  const classes = vocabularyClasses(declaration);
+  const metadata = vocabularyMetadata(declaration);
   return Object.entries(classes).map(([name, conceptClass]) => {
     const specification = metadata[name]?.specification;
     if (specification === undefined) {
@@ -69,10 +81,10 @@ export function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSo
   });
 }
 
-/** Import the explicitly selected vocabulary module when no assembly config is used. */
+/** Import an explicitly selected concept-set module. */
 export async function loadRegisteredConcepts(
   modulePath: string,
-  exportName = "vocabulary",
+  exportName = "applicationConcepts",
 ): Promise<RegisteredSourceConcept[]> {
   const loaded = (await import(pathToFileURL(modulePath).href)) as Record<string, unknown>;
   if (!(exportName in loaded)) {

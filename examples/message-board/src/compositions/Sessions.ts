@@ -7,7 +7,7 @@
  */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 
-import { concepts } from "../vocabulary.ts";
+import { concepts } from "../concepts.ts";
 import {
   credentialsInput,
   issuedSessionOutput,

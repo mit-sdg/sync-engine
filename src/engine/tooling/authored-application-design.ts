@@ -43,6 +43,8 @@ export interface AuthoredApplicationDesignDocument {
   digest: string;
   links: readonly AuthoredDesignLink[];
   computations: readonly AuthoredComputation[];
+  concreteTypes: readonly ConcreteTypeDeclaration[];
+  bindings: readonly ExternalTypeBinding[];
 }
 
 export interface ConcreteTypeDeclaration {
@@ -59,11 +61,6 @@ export interface ExternalTypeBinding {
     | { kind: "qualified"; instance: string; type: string };
   explanation?: string;
   location: DesignSourceLocation;
-}
-
-export interface AuthoredVocabularyDocument extends AuthoredApplicationDesignDocument {
-  concreteTypes: readonly ConcreteTypeDeclaration[];
-  bindings: readonly ExternalTypeBinding[];
 }
 
 const SEGMENT = "[A-Za-z_][A-Za-z0-9_-]*";
@@ -238,6 +235,9 @@ function baseDocument(
 ): { scanned: ScannedMarkdown; document: AuthoredApplicationDesignDocument } {
   const scanned = scanDesignMarkdown(markdown, source);
   const title = exactlyOneH1(scanned).text;
+  const types = scanned.fences
+    .filter(({ info }) => info === "types")
+    .map((fence) => typesOf(scanned, fence));
   return {
     scanned,
     document: {
@@ -247,11 +247,13 @@ function baseDocument(
       digest: scanned.digest,
       links: linksOf(scanned),
       computations: computationsOf(scanned),
+      concreteTypes: types.flatMap(({ concreteTypes }) => concreteTypes),
+      bindings: types.flatMap(({ bindings }) => bindings),
     },
   };
 }
 
-/** Parse one explicitly registered, non-vocabulary application design file. */
+/** Parse one explicitly registered application design file. */
 export function parseApplicationDesignDocument(
   markdown: string,
   source = "<design>",
@@ -261,18 +263,20 @@ export function parseApplicationDesignDocument(
     !document.links.some(
       ({ kind }) => kind === "reaction" || kind === "view" || kind === "former",
     ) &&
-    document.computations.length === 0
+    document.computations.length === 0 &&
+    document.concreteTypes.length === 0 &&
+    document.bindings.length === 0
   ) {
     fail(
       scanned,
       1,
-      "registered design document must cite a reaction, view, or former, or define a computation",
+      "registered design document must cite a reaction, view, or former, or define a computation or application type",
     );
   }
   return document;
 }
 
-function vocabularyOf(
+function typesOf(
   scanned: ScannedMarkdown,
   fence: MarkdownFence,
 ): {
@@ -281,8 +285,6 @@ function vocabularyOf(
 } {
   const concreteTypes: ConcreteTypeDeclaration[] = [];
   const bindings: ExternalTypeBinding[] = [];
-  const concreteNames = new Set<string>();
-  const boundExternals = new Set<string>();
   for (const group of declarationGroups(fence)) {
     const concrete = new RegExp(`^concrete\\s+(${SEGMENT})\\s*$`).exec(group.signature.text);
     const binding = new RegExp(
@@ -296,13 +298,6 @@ function vocabularyOf(
           group.signature.number,
           `concrete type ${JSON.stringify(concrete[1])} needs an indented prose definition`,
         );
-      if (concreteNames.has(concrete[1]))
-        fail(
-          scanned,
-          group.signature.number,
-          `concrete type ${JSON.stringify(concrete[1])} is declared twice`,
-        );
-      concreteNames.add(concrete[1]);
       concreteTypes.push({
         name: concrete[1],
         definition: body,
@@ -311,14 +306,6 @@ function vocabularyOf(
       continue;
     }
     if (binding !== null) {
-      const key = `${binding[1]}.${binding[2]}`;
-      if (boundExternals.has(key))
-        fail(
-          scanned,
-          group.signature.number,
-          `external type ${JSON.stringify(key)} is bound twice`,
-        );
-      boundExternals.add(key);
       bindings.push({
         instance: binding[1],
         external: binding[2],
@@ -338,18 +325,6 @@ function vocabularyOf(
     );
   }
   return { concreteTypes, bindings };
-}
-
-/** Parse the separately registered application vocabulary design file. */
-export function parseApplicationVocabularyDocument(
-  markdown: string,
-  source = "<vocabulary>",
-): AuthoredVocabularyDocument {
-  const { scanned, document } = baseDocument(markdown, source);
-  const fences = scanned.fences.filter(({ info }) => info === "types");
-  if (fences.length !== 1)
-    fail(scanned, 1, "vocabulary document must contain exactly one `types` fence");
-  return { ...document, ...vocabularyOf(scanned, fences[0]) };
 }
 
 export interface SelectedComputationDesign {
@@ -381,8 +356,8 @@ export type ApplicationDesignIssueCode =
   | "DUPLICATE_COMPUTATION"
   | "UNREGISTERED_COMPUTATION"
   | "COMPUTATION_INPUT_MISMATCH"
-  | "MISSING_VOCABULARY"
-  | "UNNECESSARY_VOCABULARY"
+  | "DUPLICATE_CONCRETE_TYPE"
+  | "DUPLICATE_TYPE_BINDING"
   | "UNKNOWN_EXTERNAL"
   | "MISSING_BINDING"
   | "UNRESOLVED_TYPE_TARGET"
@@ -408,11 +383,10 @@ function fieldShape(fields: readonly { name: string; optional: boolean }[]): str
  */
 export function validateAuthoredApplicationDesign(
   documents: readonly AuthoredApplicationDesignDocument[],
-  vocabulary: AuthoredVocabularyDocument | undefined,
   selected: SelectedApplicationDesign,
 ): ApplicationDesignIssue[] {
   const issues: ApplicationDesignIssue[] = [];
-  const corpus = vocabulary === undefined ? [...documents] : [...documents, vocabulary];
+  const corpus = documents;
   const selectedByKind: Record<Exclude<DesignLinkKind, "computation">, Set<string>> = {
     reaction: new Set(selected.reactions),
     view: new Set(selected.views),
@@ -488,40 +462,40 @@ export function validateAuthoredApplicationDesign(
   const concepts = new Map(
     selected.concepts.map((concept) => [concept.instance, new Set(concept.externalTypes)]),
   );
-  if (vocabulary === undefined) {
-    if ([...concepts.values()].some((externals) => externals.size > 0)) {
+  const concrete = new Map<string, ConcreteTypeDeclaration>();
+  for (const declaration of corpus.flatMap(({ concreteTypes }) => concreteTypes)) {
+    if (concrete.has(declaration.name)) {
       issues.push({
-        code: "MISSING_VOCABULARY",
-        message: "selected concept external types require an application vocabulary.",
+        code: "DUPLICATE_CONCRETE_TYPE",
+        message: `concrete type ${JSON.stringify(declaration.name)} has more than one application declaration.`,
+        location: declaration.location,
       });
+      continue;
     }
-    return issues;
+    concrete.set(declaration.name, declaration);
   }
 
-  if (
-    vocabulary.concreteTypes.length === 0 &&
-    [...concepts.values()].every((externals) => externals.size === 0)
-  ) {
-    issues.push({
-      code: "UNNECESSARY_VOCABULARY",
-      message:
-        "application vocabulary is registered, but the selected concepts have no external parameters and it declares no concrete types.",
-    });
-  }
-
-  const concrete = new Set(vocabulary.concreteTypes.map(({ name }) => name));
   const usedConcrete = new Set<string>();
   const bindings = new Map<string, ExternalTypeBinding>();
-  for (const binding of vocabulary.bindings) {
+  for (const binding of corpus.flatMap(({ bindings: declared }) => declared)) {
     const externals = concepts.get(binding.instance);
     const key = `${binding.instance}.${binding.external}`;
+    if (bindings.has(key)) {
+      issues.push({
+        code: "DUPLICATE_TYPE_BINDING",
+        message: `external type ${JSON.stringify(key)} has more than one application binding.`,
+        location: binding.location,
+      });
+    } else if (externals !== undefined && externals.has(binding.external)) {
+      bindings.set(key, binding);
+    }
     if (externals === undefined || !externals.has(binding.external)) {
       issues.push({
         code: "UNKNOWN_EXTERNAL",
         message: `binding left side ${JSON.stringify(key)} is not a selected external type.`,
         location: binding.location,
       });
-    } else bindings.set(key, binding);
+    }
 
     if (binding.target.kind === "concrete") {
       if (!concrete.has(binding.target.name)) {
@@ -554,11 +528,11 @@ export function validateAuthoredApplicationDesign(
       if (!bindings.has(key))
         issues.push({
           code: "MISSING_BINDING",
-          message: `selected external type ${JSON.stringify(key)} has no vocabulary binding.`,
+          message: `selected external type ${JSON.stringify(key)} has no application type binding.`,
         });
     }
   }
-  for (const declaration of vocabulary.concreteTypes) {
+  for (const declaration of concrete.values()) {
     if (!usedConcrete.has(declaration.name)) {
       issues.push({
         code: "UNUSED_CONCRETE",

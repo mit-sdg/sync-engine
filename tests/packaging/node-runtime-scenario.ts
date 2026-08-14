@@ -63,7 +63,7 @@ type ScenarioWire = {
 };
 
 const application = assemble({
-  vocabulary: notingConcepts.vocabulary,
+  conceptSet: notingConcepts,
   instances: notingConcepts.implementations(),
   composition: { WriteNote },
 });

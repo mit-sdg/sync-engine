@@ -6,16 +6,15 @@ and [CLI reference](../user/reference/cli.md) own the consumer contract. This
 page owns implementation relationships, enforcement limits, and deferred design
 questions.
 
-## Three inputs, one selected design
+## Two input families, one selected design
 
-Tooling combines three authored inputs for the exact assembly selected by one
-generated config:
+Tooling combines two authored input families for the exact assembly selected by
+one generated config:
 
 | Input                             | Machine-readable contribution                                                                          |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Registered concept specifications | Definition identity, external parameters, raw State, structured actions/queries, and source provenance |
-| Registered application prose      | Exact reaction/view/former links, computation definitions, full normalized source, and locations       |
-| Registered vocabulary             | Concrete types, direct external bindings, prose locations, and any application links/computations      |
+| Registered application documents  | Links, computations, concrete types, external bindings, full normalized source, and locations          |
 
 The executable assembly supplies selected concept instances, authored reaction
 and endpoint trees, named views, named formers, and executable computations.
@@ -28,10 +27,10 @@ corpus from directories, composition modules, or conventional filenames.
 generated config
   -> statically resolve design URLs and concept-spec imports
   -> assemble the selected variant
-  -> parse concept, vocabulary, and application documents
+  -> parse concept specifications and application documents
   -> resolve TypeScript declaration shapes
   -> join definition and instance identities
-  -> validate vocabulary and declaration coverage
+  -> validate application types and declaration coverage
   -> canonicalize provenance and source digests
   -> inspect lowering and executable contracts
   -> emit manifest/read-back/wire or compare pinned artifacts
@@ -70,7 +69,7 @@ must not add a partial parser, heuristic type scan, or private dialect.
 
 Consequently source checking cannot yet prove state-owned type use, external
 parameter use, State/storage agreement, or the final owned type on a qualified
-vocabulary target. These absent proofs are explicit limitations rather than
+type-binding target. These absent proofs are explicit limitations rather than
 warnings generated from guesses.
 
 ## Static source agreement
@@ -100,11 +99,12 @@ changing definition identity. Generated read-back renders one definition
 contract and lists its selected instances and bindings rather than duplicating
 the contract.
 
-## Vocabulary processing
+## Application-type processing
 
-The configured vocabulary document has one nonempty H1 and one `types` fence.
-The parser records `concrete` declarations with required prose definitions and
+Any registered application document can contain `types` fences. The parser
+records `concrete` declarations with required prose definitions and
 `ConceptInstance.External is Target` bindings with optional explanations.
+Validation combines every fence in the registered corpus.
 
 Validation joins against the exact selected assembly and enforces:
 
@@ -119,14 +119,15 @@ Validation joins against the exact selected assembly and enforces:
 The current unparsed-State boundary permits checking the target instance but not
 proving its final owned type name. That proof remains deferred.
 
-Vocabulary is also an application document. Its prose is included in digests
-and may contain typed links and computation fences. Executable vocabulary source
-has no Markdown import/export path; config URL is the sole registration path.
+The containing document's prose is included in digests and may also contain
+typed links and computation fences. The concept-set source has no Markdown
+import/export path; `design.documents` is the sole registration path.
 
 ## Application-document processing
 
 Each configured document is a local `file:` URL and contains one nonempty H1.
-No other heading structure has parser significance. The Markdown link parser
+No other heading structure has parser significance. `types` and `computations`
+fences may appear in any of these documents. The Markdown link parser
 supports inline and standard reference-style links with the destination schemes
 `reaction:`, `view:`, `former:`, and `computation:`.
 
@@ -170,7 +171,7 @@ input digest.
 
 The application manifest resets to `sync-engine.application-manifest`, version
 `1`. It retains raw State, structured declarations, definition/instance joins,
-vocabulary resolution, source locations, and design digests. Old manifest
+application-type resolution, source locations, and design digests. Old manifest
 versions are rejected without upconversion.
 
 Generated Markdown links to prose rather than copying it. Paths are relative and
@@ -186,16 +187,16 @@ TypeScript concept class signatures and registered vocabulary computation
 function signatures, not Markdown types or results, drive authoring types and
 wire provenance.
 
-| Property                                                      | Enforcement owner                               |
-| ------------------------------------------------------------- | ----------------------------------------------- |
-| Section and fence grammar                                     | Concept/vocabulary/application document parsers |
-| Source text and TypeScript shape agreement                    | Config-based static checker                     |
-| Selected definition/instance inventory                        | Assembly inspection plus checker join           |
-| Vocabulary closure                                            | Design checker                                  |
-| Reaction/view/former/computation coverage                     | Design checker                                  |
-| Design source digests and links                               | Manifest/artifact tooling                       |
-| Query cardinality during evaluated reads                      | Runtime read evaluation                         |
-| Prose truth, State meaning, storage, transactions, durability | Review and tests                                |
+| Property                                                      | Enforcement owner                        |
+| ------------------------------------------------------------- | ---------------------------------------- |
+| Section and fence grammar                                     | Concept and application document parsers |
+| Source text and TypeScript shape agreement                    | Config-based static checker              |
+| Selected definition/instance inventory                        | Assembly inspection plus checker join    |
+| Application-type closure                                      | Design checker                           |
+| Reaction/view/former/computation coverage                     | Design checker                           |
+| Design source digests and links                               | Manifest/artifact tooling                |
+| Query cardinality during evaluated reads                      | Runtime read evaluation                  |
+| Prose truth, State meaning, storage, transactions, durability | Review and tests                         |
 
 Repository-owned catalog validation may use internal validation until a
 supported low-level checker is designed. The installed CLI no longer exposes
@@ -205,14 +206,13 @@ supported low-level checker is designed. The installed CLI no longer exposes
 
 Implementation and repository migration replace the old format in one break:
 there is no compatibility flag, legacy parser, automatic detection, old-manifest
-decoder, runtime composition/vocabulary Markdown import, or partial artifact
+decoder, runtime composition/design Markdown import, or partial artifact
 success. Examples, catalog data, packaging fixtures, tests, declarations, docs,
 and generated artifacts must move together before downstream applications.
 
 ## Deferred design questions
 
-1. **SSF grammar and parser.** Choose the final external grammar, parse State into structured IR, validate owned and parameter types, and compare vocabulary targets with state-owned types. Do not implement a partial approximation now.
+1. **SSF grammar and parser.** Choose the final external grammar, parse State into structured IR, validate owned and parameter types, and compare type-binding targets with state-owned types. Do not implement a partial approximation now.
 2. **Concrete-type taxonomy.** Reconsider whether provisional `concrete` should distinguish application-owned, platform-owned, and externally supplied types.
 3. **Reaction-tree granularity.** Reconsider whether authored reaction and endpoint trees should require branch- or consequence-level design coverage.
 4. **Low-level concept checker.** Design a supported concept-only checker to replace the removed `--vocabulary-module` mode without weakening config-based application guarantees.
-5. **Generated-config shape.** `design: { version, vocabulary?, documents }` is accepted for version 1 but may be revisited with a future versioned contract.

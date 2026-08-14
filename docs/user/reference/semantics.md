@@ -617,14 +617,14 @@ define their own projection failures and error codes.
 ## Generated wire
 
 With a [generated wire contract](../guide/authoring.md#7-check-and-generate)
-and vocabulary type anchor, endpoint leaves refer to concept action parameters,
+and concept-set type anchor, endpoint leaves refer to concept action parameters,
 action results, query rows, and registered vocabulary computation parameters
 and awaited results. A variable used in a `compute(...)` input follows the
 corresponding path in the computation function's input parameter. Its output
 variable follows the awaited return type, whether the operation binds that
 variable or constrains an existing binding. Constraints on one binding
 intersect; alternatives remain unions. Built-in standard relations and
-`custom(...)` do not invent vocabulary signature anchors.
+`custom(...)` do not invent concept-set signature anchors.
 
 The response structure and absence rules come from the endpoint and its
 formers. The generated module applies the same JSON projection as the clients,
@@ -642,11 +642,11 @@ module contains the logical contract followed by each named transport contract.
 The contract named by `wireName` retains the logical application inputs,
 outputs, and refusal codes for a local or custom client. A projector may derive
 a transport contract from those logical facts. All contracts share generated
-type helpers and the vocabulary anchor. Core records every projector package
+type helpers and the concept-set anchor. Core records every projector package
 and version in generated provenance.
 
 Projection planning validates all names before rendering. The logical wire,
-every projected wire, each app-wide error type, `Json`, and vocabulary helper
+every projected wire, each app-wide error type, `Json`, and concept-set helper
 types must have distinct valid TypeScript identifiers. Provenance package names
 must be nonblank, and provenance versions must be valid SemVer. Core
 evaluates projectors in declaration order, and a projector or validation failure
@@ -658,7 +658,7 @@ no decoder for previous manifest versions. A beta upgrade across this reset
 requires regenerating all manifests and generated artifacts.
 
 The manifest inventories selected computations, canonical concept definitions,
-application instances, raw concept State, resolved vocabulary, executable
+application instances, raw concept State, resolved application types, executable
 application identities, implementation provenance, registered design source
 locations, and normalized-source digests. It does not retain executable
 computation functions or runtime occurrence state.
@@ -669,7 +669,7 @@ former, computation, concept, concrete type, and binding to every applicable
 authored source location. It shows structured concept signatures,
 cardinalities, refusals, definition/instance relationships, and executable
 lowering. It does not copy application prose, Purpose, Principle, raw State,
-action/query bodies, vocabulary explanations, or computation bodies. These
+action/query bodies, type-binding explanations, or computation bodies. These
 authored statements do not become runtime validation or executable assertions.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)

@@ -239,13 +239,13 @@ Wire provenance adds every constraint on one variable to the same cell and
 keeps detached view alternatives separate until they merge. Because
 `compute(...)` is vocabulary-only, its input paths and output variable point to
 the registered computation function signature; the renderer resolves those
-origins through `ApplicationVocabulary.computations[name].fn` and awaits the
+origins through `ApplicationConceptSet.computations[name].fn` and awaits the
 result type. Closed `holds` lines also represent generic standard relations, so
-they retain their existing behavior and do not create vocabulary anchors.
+they retain their existing behavior and do not create concept-set anchors.
 
 `src/engine/boundary/assembly/concept-set.ts` turns plain concept registrations
-and optional named computation functions into a vocabulary, typed computation
-references, default implementations, floor-specific implementation factories,
+and optional named computation functions into one application-facing concept
+set with typed references, default implementations, floor-specific factories,
 complete implementation maps, and refusal metadata. A host-created
 `ConceptFloor` descriptor separately groups one such map with resources and a
 `close()` operation. Private process-wide WeakMap associations retain named-floor
@@ -276,24 +276,23 @@ append-only JSONL audit destination. It does not own the engine's occurrence
 index, load an existing file, replay entries, or expose a close operation.
 
 The generated config is the tooling root for one application variant. Its
-`design.version`, optional vocabulary URL, and document URLs explicitly select
-the application-level authored corpus. Selected concept registrations supply
-imported concept Markdown. Tooling resolves these local sources, parses the
-three authored contracts, joins them with the exact selected assembly, and
-checks vocabulary and declaration coverage. Runtime assembly remains independent
+`design.version` and document URLs explicitly select the application-level
+authored corpus. Any registered document may contain application `types` fences. Selected concept registrations supply
+imported concept Markdown. Tooling resolves these local sources, parses the authored concept and application contracts, joins them with the exact
+selected assembly, and checks application types and declaration coverage. Runtime assembly remains independent
 of authored Markdown availability.
 
 `src/engine/tooling/inspection.ts` projects one assembly into executable app IR,
 concept inventories, input contracts, and diagnostic read-back. Design
 processing augments those facts with concept definition/instance identities,
-raw State, resolved vocabulary, exact authored declaration links, computation
+raw State, resolved application types, exact authored declaration links, computation
 signatures, normalized document provenance, and source locations. The manifest
 schema is `sync-engine.application-manifest` version 1; previous manifest
 versions are not decoded.
 
 Artifact planning validates the complete design before rendering either output.
 Generated Markdown reports reaction lowering, views, formers, structured concept
-contracts, vocabulary resolution, computations, and every covering source
+contracts, application type bindings, computations, and every covering source
 location. It links to authored prose rather than copying it. Full normalized
 document contents contribute to input digests, so prose-only changes invalidate
 pinned artifacts. Generated wire remains derived from executable boundary facts

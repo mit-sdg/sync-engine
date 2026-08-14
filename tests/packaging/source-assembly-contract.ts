@@ -3,6 +3,7 @@ import type {
   ActionRefusal,
   AssemblyOptions,
   ConceptImplementation,
+  ImplementationOverrides,
   LogEntry,
   LogSink,
 } from "@sync-engine/assembly";
@@ -245,16 +246,13 @@ const replacementSet = conceptSet({
 replacementSet.implementations("own", undefined);
 replacementSet.implementations("inherited", undefined);
 assemble({
-  vocabulary: replacementSet.vocabulary,
+  conceptSet: replacementSet,
   composition: {},
   instances: { Replacing: ownMethodReplacement },
 });
 
-assemble({
-  vocabulary: replacementSet.vocabulary,
-  composition: {},
-  instances: {
-    // @ts-expect-error Public assembly replacements must implement the callable protocol.
-    Replacing: { state: new Map<string, string>() },
-  },
-});
+const malformedOverrides: ImplementationOverrides<typeof replacementSet> = {
+  // @ts-expect-error Public assembly replacements must implement the callable protocol.
+  Replacing: { state: new Map<string, string>() },
+};
+void malformedOverrides;

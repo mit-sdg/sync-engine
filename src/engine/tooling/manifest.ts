@@ -35,7 +35,7 @@ export interface ManifestEndpointV1 {
 
 export interface ManifestSourceV1 {
   id: string;
-  kind: "vocabulary" | "document" | "concept";
+  kind: "document" | "concept";
   /** Host-independent path, relative to the generated read-back file. */
   path: string;
   digest: string;
@@ -88,8 +88,7 @@ export interface ApplicationDesignManifestV1 {
   sources: ManifestSourceV1[];
   declarations: ManifestDeclarationV1[];
   concepts: ManifestConceptDefinitionV1[];
-  vocabulary?: {
-    source: string;
+  types?: {
     concreteTypes: { name: string; location: ManifestSourceLocationV1 }[];
     bindings: {
       instance: string;
@@ -316,11 +315,6 @@ function checkedDesign(
     sources.push({ id, kind, path: paths.relativePath(path), digest, ...extra });
     return id;
   };
-  if (checked.sources.vocabulary !== undefined) {
-    add("vocabulary", checked.sources.vocabulary.path, checked.sources.vocabulary.digest, {
-      title: checked.vocabulary?.title,
-    });
-  }
   checked.sources.documents.forEach((source, index) =>
     add("document", source.path, source.digest, { title: checked.documents[index]?.title }),
   );
@@ -343,7 +337,7 @@ function checkedDesign(
       )?.locations ?? []
     ).map((item) => location(item, sourceIds)),
   }));
-  const bindings = checked.vocabulary?.bindings ?? [];
+  const bindings = checked.documents.flatMap(({ bindings: declared }) => declared);
   const concepts = checked.sharedDefinitions.map((shared) => {
     const selected = checked.concepts.filter(({ definition }) => definition === shared.definition);
     const first = selected[0];
@@ -367,10 +361,7 @@ function checkedDesign(
     };
   });
   const declarationsByName = new Map(
-    checked.documents
-      .flatMap(({ computations }) => computations)
-      .concat(checked.vocabulary?.computations ?? [])
-      .map((item) => [item.name, item]),
+    checked.documents.flatMap(({ computations }) => computations).map((item) => [item.name, item]),
   );
   const validation = new Map(
     checked.computationInputValidation.map((item) => [item.name, item.status]),
@@ -394,16 +385,20 @@ function checkedDesign(
     sources,
     declarations,
     concepts,
-    ...(checked.vocabulary === undefined
+    ...(checked.documents.every(
+      ({ concreteTypes, bindings: declared }) =>
+        concreteTypes.length === 0 && declared.length === 0,
+    )
       ? {}
       : {
-          vocabulary: {
-            source: sourceIds.get(checked.vocabulary.source)!,
-            concreteTypes: checked.vocabulary.concreteTypes.map(({ name, location: at }) => ({
-              name,
-              location: location(at, sourceIds),
-            })),
-            bindings: checked.vocabulary.bindings.map((binding) => ({
+          types: {
+            concreteTypes: checked.documents.flatMap(({ concreteTypes }) =>
+              concreteTypes.map(({ name, location: at }) => ({
+                name,
+                location: location(at, sourceIds),
+              })),
+            ),
+            bindings: bindings.map((binding) => ({
               instance: binding.instance,
               external: binding.external,
               target: binding.target,

@@ -1,13 +1,13 @@
 import { assemble, type ImplementationOverrides } from "@mit-sdg/sync-engine/assembly";
 import { composition as readingCircleComposition } from "./compositions/ReadingCircle.ts";
-import { readingCircleConcepts, vocabulary } from "./vocabulary.ts";
+import { applicationConcepts } from "./concepts.ts";
 
-export type ReadingCircleOverrides = ImplementationOverrides<typeof vocabulary>;
+export type ReadingCircleOverrides = ImplementationOverrides<typeof applicationConcepts>;
 
 export function assembleReadingCircle(instances: ReadingCircleOverrides = {}) {
   return assemble({
-    vocabulary,
-    instances: { ...readingCircleConcepts.implementations(), ...instances },
+    conceptSet: applicationConcepts,
+    instances: { ...applicationConcepts.implementations(), ...instances },
     composition: { ReadingCircle: readingCircleComposition },
   });
 }

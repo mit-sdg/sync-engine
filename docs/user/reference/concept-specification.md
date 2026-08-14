@@ -115,7 +115,7 @@ external Name
 
 An external type is an opaque parameter supplied by each application that uses
 the concept. The explanation is retained as documentation. The `external`
-keyword is required; concrete types and bindings are application vocabulary,
+keyword is required; concrete types and bindings are application design,
 not concept-local declarations.
 
 ## `State`
@@ -133,11 +133,11 @@ Because State is unparsed, tooling does not yet prove:
 
 - that action and query types are state-owned or external;
 - that every external type is used; or
-- that a qualified vocabulary target is introduced by the target concept's
+- that a qualified type-binding target is introduced by the target concept's
   State.
 
 The checker still inventories external declarations and checks every required
-application vocabulary binding. State changes affect canonical design digests
+application type binding. State changes affect canonical design digests
 even before SSF parsing is available.
 
 ## `Actions`

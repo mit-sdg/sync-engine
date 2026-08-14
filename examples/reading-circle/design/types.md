@@ -1,4 +1,4 @@
-# Reading Circle Vocabulary
+# Reading Circle Application Types
 
 People host and join circles and author discussion responses under one shared
 application identity. A reading is supplied by the application; selecting it

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   parseApplicationDesignDocument,
-  parseApplicationVocabularyDocument,
   validateAuthoredApplicationDesign,
 } from "@engine/tooling/authored-application-design";
 import {
@@ -211,10 +210,10 @@ A \`[code forgery](view:Forged.*)\` is inert.
   });
 });
 
-describe("application vocabulary design", () => {
+describe("application type declarations", () => {
   test("parses concrete declarations, direct bindings, optional explanations, prose, and computations", () => {
-    const vocabulary = parseApplicationVocabularyDocument(
-      `# Forum vocabulary
+    const typesDocument = parseApplicationDesignDocument(
+      `# Forum application types
 
 Institution identities are used throughout. [refresh](reaction:Forum.Refresh)
 
@@ -233,17 +232,17 @@ formatName(person: Person) : String
   Formats a person's public name.
 \`\`\`
 `,
-      "design/vocabulary.md",
+      "design/types.md",
     );
 
-    expect(vocabulary.concreteTypes).toEqual([
+    expect(typesDocument.concreteTypes).toEqual([
       {
         name: "Person",
         definition: "A stable identity supplied by the institution.",
-        location: { source: "design/vocabulary.md", line: 6, column: 1 },
+        location: { source: "design/types.md", line: 6, column: 1 },
       },
     ]);
-    expect(vocabulary.bindings).toEqual([
+    expect(typesDocument.bindings).toEqual([
       expect.objectContaining({
         instance: "PostComments",
         external: "User",
@@ -256,25 +255,49 @@ formatName(person: Person) : String
         target: { kind: "qualified", instance: "Posting", type: "Post" },
       }),
     ]);
-    expect(vocabulary.computations).toHaveLength(1);
+    expect(typesDocument.computations).toHaveLength(1);
+  });
+
+  test("combines types fences across registered documents and reports global duplicates", () => {
+    const concrete = parseApplicationDesignDocument(
+      "# Shared types\n\n```types\nconcrete Person\n  An application identity.\n```\n",
+      "types.md",
+    );
+    const bindings = parseApplicationDesignDocument(
+      "# Identity bindings\n\n```types\nComments.User is Person\n```\n",
+      "comments.md",
+    );
+    const duplicate = parseApplicationDesignDocument(
+      "# Duplicate declarations\n\n```types\nconcrete Person\n  A duplicate identity.\nComments.User is Person\n```\n",
+      "duplicate.md",
+    );
+    const selected = {
+      reactions: [],
+      views: [],
+      formers: [],
+      computations: [],
+      concepts: [{ instance: "Comments", externalTypes: ["User"] }],
+    };
+
+    expect(validateAuthoredApplicationDesign([concrete, bindings], selected)).toEqual([]);
+    expect(
+      validateAuthoredApplicationDesign([concrete, bindings, duplicate], selected).map(
+        ({ code }) => code,
+      ),
+    ).toEqual(expect.arrayContaining(["DUPLICATE_CONCRETE_TYPE", "DUPLICATE_TYPE_BINDING"]));
   });
 
   test.each([
-    ["# V\n", /exactly one `types` fence/],
+    ["# V\n", /must cite/],
     ["# V\n```types\nconcrete Person\n```\n", /prose definition/],
     ["# V\n```types\nA.B becomes C\n```\n", /accepts only/],
-    ["# V\n```types\nA.B is C\nA.B is D\n```\n", /bound twice/],
-    [
-      "# V\n```types\nconcrete Person\n  A person.\nconcrete Person\n  Again.\n```\n",
-      /declared twice/,
-    ],
-  ])("rejects malformed vocabulary", (markdown, message) => {
-    expect(() => parseApplicationVocabularyDocument(markdown)).toThrow(message);
+  ])("rejects malformed type declarations", (markdown, message) => {
+    expect(() => parseApplicationDesignDocument(markdown)).toThrow(message);
   });
 });
 
 describe("authored application design validation", () => {
-  test("checks exact coverage, computation shapes, and vocabulary invariants", () => {
+  test("checks exact coverage, computation shapes, and application-type invariants", () => {
     const document = parseApplicationDesignDocument(
       `# Forum
 
@@ -288,7 +311,7 @@ formatName(person: Person) : String
 `,
       "design/forum.md",
     );
-    const vocabulary = parseApplicationVocabularyDocument(
+    const typesDocument = parseApplicationDesignDocument(
       `# Vocabulary
 
 \`\`\`types
@@ -299,11 +322,11 @@ Comments.User is Person
 Comments.Target is Posting.Post
 \`\`\`
 `,
-      "design/vocabulary.md",
+      "design/types.md",
     );
 
     expect(
-      validateAuthoredApplicationDesign([document], vocabulary, {
+      validateAuthoredApplicationDesign([document, typesDocument], {
         reactions: ["Forum.Refresh"],
         views: ["Forum.Feed"],
         formers: ["Forum.FormFeed"],
@@ -316,7 +339,7 @@ Comments.Target is Posting.Post
     ).toEqual([]);
   });
 
-  test("returns independent resolution, coverage, computation, and vocabulary issues", () => {
+  test("returns independent resolution, coverage, computation, and application-type issues", () => {
     const document = parseApplicationDesignDocument(
       `# Design
 
@@ -329,7 +352,7 @@ extra(value?: String) : String
 `,
       "design.md",
     );
-    const vocabulary = parseApplicationVocabularyDocument(
+    const typesDocument = parseApplicationDesignDocument(
       `# Vocabulary
 
 \`\`\`types
@@ -339,9 +362,9 @@ concrete Unused
 Comments.User is Other.External
 \`\`\`
 `,
-      "vocabulary.md",
+      "types.md",
     );
-    const codes = validateAuthoredApplicationDesign([document], vocabulary, {
+    const codes = validateAuthoredApplicationDesign([document, typesDocument], {
       reactions: ["Forum.Expected"],
       views: [],
       formers: [],
@@ -391,7 +414,7 @@ duplicate() : String
 `,
       "second.md",
     );
-    const vocabulary = parseApplicationVocabularyDocument(
+    const typesDocument = parseApplicationDesignDocument(
       `# Vocabulary
 
 \`\`\`types
@@ -403,10 +426,10 @@ Comments.User is MissingType
 Comments.Target is Absent.Value
 \`\`\`
 `,
-      "vocabulary.md",
+      "types.md",
     );
 
-    const codes = validateAuthoredApplicationDesign([first, second], vocabulary, {
+    const codes = validateAuthoredApplicationDesign([first, second, typesDocument], {
       reactions: ["Forum.Run"],
       views: [],
       formers: [],

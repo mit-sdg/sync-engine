@@ -15,13 +15,11 @@ import { canonicalDigest } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
 import {
   parseApplicationDesignDocument,
-  parseApplicationVocabularyDocument,
   validateAuthoredApplicationDesign,
 } from "./authored-application-design.ts";
 import type {
   ApplicationDesignIssue,
   AuthoredApplicationDesignDocument,
-  AuthoredVocabularyDocument,
   DesignLinkKind,
   SelectedApplicationDesign,
 } from "./authored-application-design.ts";
@@ -29,7 +27,6 @@ import { scanDesignMarkdown } from "./markdown-design-source.ts";
 import type { DesignSourceLine, DesignSourceLocation } from "./markdown-design-source.ts";
 
 export interface AuthoredDesignRegistration {
-  vocabulary?: URL;
   documents: readonly URL[];
 }
 
@@ -99,17 +96,14 @@ export interface SharedDefinitionEqualityFact {
 
 export interface CheckedAuthoredDesignModel {
   sources: {
-    vocabulary?: LoadedAuthoredDesignSource;
     documents: readonly LoadedAuthoredDesignSource[];
     /** Present when a strict static-source adapter supplied every selected concept source. */
     concepts?: readonly LoadedConceptSpecificationSource[];
   };
   documents: readonly AuthoredApplicationDesignDocument[];
-  /** Parsed declarations only; qualified targets make no unparsed SSF ownership claim. */
-  vocabulary?: AuthoredVocabularyDocument;
   /** Exact authored declaration inventory, retaining endpoint source identities. */
   declarations: readonly AuthoredDeclarationIdentity[];
-  /** Projection consumed by the existing pure coverage/vocabulary validator. */
+  /** Projection consumed by the pure coverage and application-type validator. */
   selected: SelectedApplicationDesign;
   concepts: readonly SelectedConceptDesignFact[];
   sharedDefinitions: readonly SharedDefinitionEqualityFact[];
@@ -189,20 +183,13 @@ async function loadSource(url: URL, label: string): Promise<LoadedAuthoredDesign
   };
 }
 
-async function loadRegistration(registration: AuthoredDesignRegistration): Promise<{
-  vocabulary?: LoadedAuthoredDesignSource;
-  documents: LoadedAuthoredDesignSource[];
-}> {
-  const entries = [
-    ...(registration.vocabulary === undefined
-      ? []
-      : [{ url: registration.vocabulary, label: "design.vocabulary", vocabulary: true as const }]),
-    ...registration.documents.map((url, index) => ({
-      url,
-      label: `design.documents[${index}]`,
-      vocabulary: false as const,
-    })),
-  ];
+async function loadRegistration(
+  registration: AuthoredDesignRegistration,
+): Promise<LoadedAuthoredDesignSource[]> {
+  const entries = registration.documents.map((url, index) => ({
+    url,
+    label: `design.documents[${index}]`,
+  }));
   const paths = new Map<string, string>();
   for (const entry of entries) {
     const path = localPath(entry.url, entry.label);
@@ -214,12 +201,7 @@ async function loadRegistration(registration: AuthoredDesignRegistration): Promi
   }
 
   // There is exactly one readFile call for every validated, distinct local URL.
-  const loaded = await Promise.all(entries.map((entry) => loadSource(entry.url, entry.label)));
-  const vocabularyIndex = entries.findIndex(({ vocabulary }) => vocabulary);
-  return {
-    ...(vocabularyIndex < 0 ? {} : { vocabulary: loaded[vocabularyIndex] }),
-    documents: loaded.filter((_, index) => !entries[index].vocabulary),
-  };
+  return Promise.all(entries.map((entry) => loadSource(entry.url, entry.label)));
 }
 
 function withoutLocations(specification: ConceptSpec): unknown {
@@ -280,14 +262,10 @@ export async function checkAuthoredDesign(options: {
   resolveComputationInputs?: ResolveComputationInputs;
   conceptSources?: readonly ConceptSpecificationSourceInput[];
 }): Promise<CheckedAuthoredDesignModel> {
-  const sources = await loadRegistration(options.design);
-  const documents = sources.documents.map((source) =>
+  const designSources = await loadRegistration(options.design);
+  const documents = designSources.map((source) =>
     parseApplicationDesignDocument(source.content, source.path),
   );
-  const vocabulary =
-    sources.vocabulary === undefined
-      ? undefined
-      : parseApplicationVocabularyDocument(sources.vocabulary.content, sources.vocabulary.path);
 
   const assembled = assemblyBehind(options.assembly);
   const declarations = assembled.authoredDeclarations;
@@ -434,20 +412,21 @@ export async function checkAuthoredDesign(options: {
     })),
   };
 
-  const validationIssues = validateAuthoredApplicationDesign(documents, vocabulary, selected);
+  const validationIssues = validateAuthoredApplicationDesign(documents, selected);
   const issues = [...orchestrationIssues, ...validationIssues];
   if (issues.length > 0) throw new AuthoredDesignCheckError(issues);
 
-  const corpus = vocabulary === undefined ? documents : [...documents, vocabulary];
   return {
-    sources: { ...sources, ...(conceptSources === undefined ? {} : { concepts: conceptSources }) },
+    sources: {
+      documents: designSources,
+      ...(conceptSources === undefined ? {} : { concepts: conceptSources }),
+    },
     documents,
-    ...(vocabulary === undefined ? {} : { vocabulary }),
     declarations,
     selected,
     concepts,
     sharedDefinitions,
-    coverage: coverageOf(selected, corpus),
+    coverage: coverageOf(selected, documents),
     computationInputValidation: executableComputations.map(({ name }) => ({
       name,
       status: inputsByComputation.has(name) ? "validated" : "not-claimed",

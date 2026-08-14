@@ -8,9 +8,14 @@ export default {
   wireName: "MultiInstanceWire",
   design: {
     version: 1,
-    vocabulary: new URL("./design/vocabulary.md", import.meta.url),
-    documents: [new URL("./design/application.md", import.meta.url)],
+    documents: [
+      new URL("./design/types.md", import.meta.url),
+      new URL("./design/application.md", import.meta.url),
+    ],
   },
-  vocabulary: { module: new URL("./src/contract.ts", import.meta.url) },
+  conceptSet: {
+    module: new URL("./src/contract.ts", import.meta.url),
+    export: "multiInstanceConcepts",
+  },
   projections: [httpWire({ policy: multiInstanceHttpPolicy, name: "MultiInstanceHttpWire" })],
 };

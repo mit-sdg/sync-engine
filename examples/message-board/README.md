@@ -75,8 +75,8 @@ Before adding a comment, the endpoint checks that its target post exists.
 
 The authored application design lives under `design/`: concept specifications
 state each independent concept's contract, composition specifications state how
-the application connects them, and `design/vocabulary.md` records cross-concept
-identity interpretations. Principle tests live under `tests/concepts/`. The
+the application connects them, and `design/types.md` records application types
+and cross-concept bindings. Principle tests live under `tests/concepts/`. The
 [technical notes](TECHNICAL.md) describe implementation choices, endpoint
 branches, HTTP policy, cookie projection, runtime validation, execution limits,
 failure boundaries, session cleanup, generated contracts, and network-test
@@ -120,9 +120,9 @@ composition, or contract change, then review both generated files.
 | ---------------------------------------------------------- | --------------------------------------------------------------- |
 | `design/concepts/*.md`                                     | Standalone concept specifications                               |
 | `design/compositions/*.md`                                 | Host-independent application composition design                 |
-| `design/vocabulary.md`                                     | Cross-concept type interpretations                              |
+| `design/types.md`                                          | Application concrete types and cross-concept bindings           |
 | `src/concepts/*.ts`, `src/concepts/*.registry.ts`          | Concept implementations and registrations                       |
-| `src/vocabulary.ts`                                        | Application concept set and vocabulary design export            |
+| `src/concepts.ts`                                          | Application concept set and typed composition references        |
 | `src/compositions/Sessions.ts`                             | Session endpoint groups and their authored specification        |
 | `src/compositions/Board.ts`                                | Board endpoint groups, owned former, and authored specification |
 | `src/compositions/validators.ts`                           | Runtime endpoint validator helpers                              |

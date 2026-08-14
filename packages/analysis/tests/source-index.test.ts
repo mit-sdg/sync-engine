@@ -561,11 +561,11 @@ export function compositionFactory() {
 `,
       "one.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { set, compositionFactory } from "./shared.ts";
-export function buildOne() { return assemble({ vocabulary: set.vocabulary, composition: compositionFactory() }); }
+export function buildOne() { return assemble({ conceptSet: set, composition: compositionFactory() }); }
 `,
       "two.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { set, compositionFactory } from "./shared.ts";
-export function buildTwo() { return assemble({ vocabulary: set.vocabulary, composition: compositionFactory() }); }
+export function buildTwo() { return assemble({ conceptSet: set, composition: compositionFactory() }); }
 `,
       "root.ts": `export { buildTwo as selected } from "./two.ts";`,
     };
@@ -704,11 +704,11 @@ assemble({ vocabulary: three, composition: {} });
 `,
     };
     expect(index(depthManifest, depthFiles).issues).not.toContainEqual(
-      expect.objectContaining({ code: "UNRESOLVED_VOCABULARY_SOURCE" }),
+      expect.objectContaining({ code: "UNRESOLVED_CONCEPT_SET_SOURCE" }),
     );
     expect(
       index(depthManifest, depthFiles, { limits: { maxStaticResolutionDepth: 1 } }).issues,
-    ).toContainEqual(expect.objectContaining({ code: "UNRESOLVED_VOCABULARY_SOURCE" }));
+    ).toContainEqual(expect.objectContaining({ code: "UNRESOLVED_CONCEPT_SET_SOURCE" }));
 
     const alternativesManifest = manifestFor({ concepts: [], computations: ["selected"] });
     const alternativesFiles = {
@@ -782,7 +782,7 @@ export const application = assemble({ vocabulary: words, composition: { React } 
       "app.ts": `import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 const registration = registerConcept();
 const set = conceptSet({ Logical: registration });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `,
     });
     expect(missingRegistration.issues).toContainEqual(
@@ -1111,7 +1111,7 @@ import spec from ${JSON.stringify(specifier)};
 class LogicalCanonical { run() {} _read() {} }
 const logical = registerConcept({ class: LogicalCanonical, spec });
 const set = conceptSet({ Logical: logical });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `;
     const scenarios = {
       AMBIGUOUS_DESIGN_SOURCE: {
@@ -1142,7 +1142,7 @@ assemble({ vocabulary: words, composition: {} });
           "app.ts": `import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 declare const dynamicRegistration: unknown;
 const set = conceptSet({ Logical: dynamicRegistration });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `,
         },
       },
@@ -1156,11 +1156,11 @@ const one = registerConcept({ class: One, spec: "# one" });
 const two = registerConcept({ class: Two, spec: "# two" });
 declare const choose: boolean;
 const set = conceptSet({ Logical: choose ? one : two });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `,
         },
       },
-      UNRESOLVED_VOCABULARY_SOURCE: {
+      UNRESOLVED_CONCEPT_SET_SOURCE: {
         manifest: { concepts: [] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
@@ -1169,7 +1169,7 @@ assemble({ vocabulary: dynamicVocabulary, composition: {} });
 `,
         },
       },
-      AMBIGUOUS_VOCABULARY_SOURCE: {
+      AMBIGUOUS_CONCEPT_SET_SOURCE: {
         manifest: { concepts: [] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
@@ -1280,7 +1280,7 @@ import spec from ${JSON.stringify(specifier)};
 class LogicalCanonical { choose() {} _read() {} }
 const logical = registerConcept({ class: LogicalCanonical, spec });
 const set = conceptSet({ Logical: logical });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `;
     const dynamicManifest = manifestFor({
       concepts: [{ name: "Logical", constructorName: "LogicalCanonical" }],
@@ -1291,7 +1291,7 @@ class LogicalCanonical { run() {} _read() {} }
 declare const dynamicSpec: unknown;
 const logical = registerConcept({ class: LogicalCanonical, spec: dynamicSpec });
 const set = conceptSet({ Logical: logical });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `,
     });
     expect(dynamic.issues).toContainEqual(

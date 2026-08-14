@@ -152,7 +152,7 @@ function applicationWith(extra: Record<string, unknown> = {}) {
     { input: { required: ["session"] } },
   );
   return assemble({
-    vocabulary: set.vocabulary,
+    conceptSet: set,
     composition: { Login, Logout, Me, Register, Rotate, Token, ...extra },
   });
 }

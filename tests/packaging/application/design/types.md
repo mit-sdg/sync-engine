@@ -1,4 +1,4 @@
-# Operations room vocabulary
+# Operations room application types
 
 Mitigating refers to rooms created by Rooming instead of defining a second room
 identity. The binding keeps mitigation history attached to the same identity

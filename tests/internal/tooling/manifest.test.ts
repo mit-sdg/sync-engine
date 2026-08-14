@@ -402,14 +402,14 @@ describe("application manifest", () => {
     expect(manifest.diagnostics.filter(({ code }) => code === "UNRESOLVED_WIRE_LEAF")).toEqual([]);
     expect(() => validateApplicationManifest(manifest)).not.toThrow();
     const rendered = renderWireTypes(manifest.wire, {
-      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+      conceptSet: { from: "./vocabulary.ts", export: "vocabulary" },
       strictLeaves: true,
     });
     expect(rendered).toContain(
-      '"setupSecret": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.computations)["setupSecretMatches"]["fn"]>[0], ["secret"]>>;',
+      '"setupSecret": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.computations)["setupSecretMatches"]["fn"]>[0], ["secret"]>>;',
     );
     expect(rendered).toContain(
-      '"valid": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.computations)["setupSecretMatches"]["fn"]>>, []>>;',
+      '"valid": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.computations)["setupSecretMatches"]["fn"]>>, []>>;',
     );
   });
 

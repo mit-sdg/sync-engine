@@ -66,6 +66,11 @@ union-typed query reference is rejected outright so the input argument cannot
 select or mask one possible query; choose one concrete query before calling
 `count`.
 
+`vocabulary` is the lower-level declaration API for callers that do not use
+registered specifications or implementation floors. Config-based applications
+normally use `conceptSet` from `/assembly`, which creates this declaration
+internally.
+
 Concept entries accepted by `vocabulary` are either a concept class or
 `{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals? }`.
 `QueryPromise` is `"one" | "optional" | "many"`.
@@ -94,19 +99,20 @@ formers](semantics.md#views-and-formers).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
 ### Assembly construction
 
 ```ts
-assemble(options: AssemblyOptions): Assembly
+assemble(options: ConceptSetAssemblyOptions | AssemblyOptions): Assembly
 ```
 
 | `AssemblyOptions` field | Required    | Default / effect                                                                                             |
 | ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `vocabulary`            | yes         | Declared application vocabulary                                                                              |
+| `conceptSet`            | yes¹        | Registered application concept set                                                                           |
+| `vocabulary`            | yes¹        | Lower-level declaration alternative to `conceptSet`                                                          |
 | `composition`           | yes         | Reactions, endpoints, views, and formers to register                                                         |
 | `initialize`            | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
 | `instances`             | no          | Ready implementations by concept name; each overrides `initialize`                                           |
@@ -118,6 +124,10 @@ assemble(options: AssemblyOptions): Assembly
 | `observers`             | no          | No operational observers                                                                                     |
 | `rawFaultReporter`      | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
 | `redaction`             | no          | Universal sensitive-field patterns only                                                                      |
+
+¹ Supply exactly one of `conceptSet` or the lower-level `vocabulary`. Config-based
+applications use `conceptSet`; `vocabulary` remains available for declarations
+that do not use registered specifications or implementation floors.
 
 `RetentionPolicy` is `"keepAll" | { window: number }`. A retention window must
 be a finite, non-negative integer. Window enforcement runs automatically only
@@ -171,7 +181,7 @@ sensitive host sink.
 | ----------------- | ----------------------------------------------------------------- |
 | `registerConcept` | `registerConcept({ class, spec, refusals?, floors? })`            |
 | `conceptSet`      | `conceptSet({ ...registeredConcepts }, computations?)`            |
-| `conceptFloor`    | `conceptFloor(vocabulary, { name, instances, resources, close })` |
+| `conceptFloor`    | `conceptFloor(conceptSet, { name, instances, resources, close })` |
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
 `ConceptFloor` name those descriptors. Floor names must be non-empty, and each
@@ -189,9 +199,9 @@ that type restriction, selection fails at runtime. The zero-argument
 constructed without required arguments; otherwise use a named floor.
 
 The optional second `conceptSet` argument supplies named pure computations.
-The set exposes inferred references under `set.computations` and
-`set.vocabulary.computations`. Compose raw records before constructing one set;
-refs from separate vocabularies cannot be combined.
+The set exposes inferred references under `set.computations`. Compose raw
+records before constructing one set; refs from separate concept sets cannot be
+combined.
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`
@@ -383,7 +393,7 @@ transport package.
 
 `WireProjectionFacts` is the immutable route and logical-wire input passed to a
 generated projection. It remains transport-neutral; core owns strict leaf
-checks, vocabulary anchoring, rendering, provenance, and atomic artifact
+checks, concept-set anchoring, rendering, provenance, and atomic artifact
 writes.
 
 ### Framework errors
@@ -505,7 +515,7 @@ The application manifest has format `sync-engine.application-manifest`, version
 `1`, and is canonical JSON-round-trippable application data. This is a hard
 schema reset; earlier manifest versions are rejected without upconversion. It
 contains executable application and wire facts plus structured concept
-contracts, raw State, definition and instance identities, resolved vocabulary,
+contracts, raw State, definition and instance identities, resolved application types,
 computation signatures, registered design source locations, normalized-source
 digests, implementation provenance, validators, and diagnostics. It excludes
 runtime functions, constructor arguments, resources, object identity,
@@ -517,9 +527,9 @@ distinguishes `standard` from `vocabulary`; `inputs` is present only when the
 function's top-level destructuring can be read conservatively. The manifest
 sorts entries by name and never carries the function itself.
 
-`ConceptImplementationProvenanceIR` separates a vocabulary concept's canonical
+`ConceptImplementationProvenanceIR` separates a concept set's canonical
 class from the implementation selected by assembly. RequestBoundary is
-core-owned and selected through `core`, and an application vocabulary cannot
+core-owned and selected through `core`, and an application concept set cannot
 reuse that name. Application concepts report `default`, `initialize`, or
 `instances`. Constructor names are descriptive and omitted for anonymous or
 structural `Object` values; selected constructor names and `floor` can occur only
@@ -544,7 +554,7 @@ into runtime schemas.
 Each concept inventory may carry a `sync-engine.concept-specification`
 version-1 subtree with the definition name, external types, normalized raw
 State, structured actions and queries, refusals, and source locations. Selected
-application inventories separately retain instance names and vocabulary
+application inventories separately retain instance names and concept-set
 bindings.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
@@ -591,7 +601,7 @@ a separate public name for that aggregate argument type.
 | ------------------------- | ----------------------------------------------------------------------- |
 | `moduleName`              | `"WireContracts"`                                                       |
 | `banner`                  | Two-line core generator banner; a supplied string replaces it           |
-| `vocabulary`              | No type anchor; `{ from, export }` enables signature references         |
+| `conceptSet`              | No type anchor; `{ from, export }` enables signature references         |
 | `strictLeaves`            | `false`; `true` requires an anchor and rejects unresolved `Json` leaves |
 | `appWideErrorName`        | `"AppWideError"`                                                        |
 | `preamble`                | `true`; set `false` when appending another contract to one module       |
@@ -608,21 +618,21 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. `GeneratedApplication` names the
 descriptor type exported from `/tooling`.
 
-| Field                 | Required    | Default                                                    |
-| --------------------- | ----------- | ---------------------------------------------------------- |
-| `assemble`            | yes         | Synchronous function that returns the application assembly |
-| `title`               | yes         | Application title used to derive names                     |
-| `close`               | no          | Runs after the generated assembly drains                   |
-| `directory`           | no          | `new URL("./generated/", configUrl)`                       |
-| `specification`       | no          | Slugged title plus `.md`                                   |
-| `specificationBanner` | no          | Generated-from comment followed by mandatory provenance    |
-| `wire`                | no          | `"wire.ts"`                                                |
-| `wireName`            | no          | Pascal-cased title plus `Wire`                             |
-| `wireBanner`          | no          | Exact package/version generator banner                     |
-| `design.version`      | yes         | Must be `1`                                                |
-| `design.vocabulary`   | conditional | Local URL required for selected external/concrete types    |
-| `design.documents`    | yes         | Explicit local application-design URLs; may be empty       |
-| `projections`         | no          | Ordered transport-specific projections                     |
+| Field                 | Required | Default                                                          |
+| --------------------- | -------- | ---------------------------------------------------------------- |
+| `assemble`            | yes      | Synchronous function that returns the application assembly       |
+| `title`               | yes      | Application title used to derive names                           |
+| `close`               | no       | Runs after the generated assembly drains                         |
+| `directory`           | no       | `new URL("./generated/", configUrl)`                             |
+| `specification`       | no       | Slugged title plus `.md`                                         |
+| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance          |
+| `wire`                | no       | `"wire.ts"`                                                      |
+| `wireName`            | no       | Pascal-cased title plus `Wire`                                   |
+| `wireBanner`          | no       | Exact package/version generator banner                           |
+| `design.version`      | yes      | Must be `1`                                                      |
+| `design.documents`    | yes      | Local design URLs; may contain `types` fences or be empty        |
+| `conceptSet`          | no       | Source anchor; defaults to `src/concepts.ts#applicationConcepts` |
+| `projections`         | no       | Ordered transport-specific projections                           |
 
 The default specification banner consists of these comments:
 
@@ -635,13 +645,13 @@ A custom specification banner replaces the first comment but still receives
 the mandatory provenance comment. The default wire banner is
 `// Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit.`
 A custom wire banner receives a second mandatory generator line. Artifact
-generation always uses the vocabulary anchor with strict leaves. Every
+generation always uses the concept-set anchor with strict leaves. Every
 `WireProjection` receives frozen `WireProjectionFacts` and returns a named
 `WireContractsIR`; core selects the shared preamble, rendering options, ordering,
 strict-leaf checks, and provenance. A projection list can be empty or contain
 multiple transport contracts in one wire module. `projections` must be an array,
 and each entry must provide `project(facts)`. The logical wire name, projected
-wire names, app-wide error names, `Json`, and generated vocabulary-helper names
+wire names, app-wide error names, `Json`, and generated concept-set helper names
 must be distinct TypeScript identifiers. Projection provenance must contain a
 nonblank package name and a valid SemVer version. Projector versions are
 not restricted to 1.x. Artifact planning separately requires the manifest's

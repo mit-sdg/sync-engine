@@ -4,9 +4,9 @@ import { compositionFor as contributionComposition } from "./compositions/Contri
 import { composition as mitigationAlertsComposition } from "./compositions/MitigationAlerts.ts";
 import { composition as mitigationDiscussionComposition } from "./compositions/MitigationDiscussion.ts";
 import { composition as roomComposition } from "./compositions/Room.ts";
-import { operationsRoomConcepts, vocabulary } from "./vocabulary.ts";
+import { applicationConcepts } from "./concepts.ts";
 
-export type OperationsRoomOverrides = ImplementationOverrides<typeof vocabulary>;
+export type OperationsRoomOverrides = ImplementationOverrides<typeof applicationConcepts>;
 
 export interface OperationsRoomOptions {
   alerts?: boolean;
@@ -24,8 +24,8 @@ export function assembleOperationsRoom({
   const policy = contributions === "responders" ? "Responders" : "Host";
 
   return assemble({
-    vocabulary,
-    instances: { ...operationsRoomConcepts.implementations(), ...instances },
+    conceptSet: applicationConcepts,
+    instances: { ...applicationConcepts.implementations(), ...instances },
     composition: {
       Room: roomComposition,
       ...(discussion ? { MitigationDiscussion: mitigationDiscussionComposition } : {}),

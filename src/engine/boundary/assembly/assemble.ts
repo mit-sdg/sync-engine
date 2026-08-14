@@ -51,6 +51,12 @@ import type {
 } from "@engine/reactions/types";
 import { standardComputations, type ComputationFn } from "@engine/reads/computations";
 import {
+  conceptSetVocabulary,
+  type AnyRegisteredConcept,
+  type ConceptClassesOfSet,
+  type RegisteredConceptSet,
+} from "./concept-set.ts";
+import {
   AuthoredDeclarationIdentities,
   type AuthoredDeclarationIdentity,
 } from "@engine/reads/declaration-identity";
@@ -209,8 +215,6 @@ export interface AssembleBaseOptions<
   T extends Record<string, ConceptClass>,
   I extends ConceptInstances<T> = ConceptInstances<T>,
 > {
-  /** The concept vocabulary: every name bound to its canonical class. */
-  vocabulary: DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>;
   /** Constructor args per name; classes callable without arguments may be omitted. */
   initialize?: ConceptInitializers<T>;
   /** Ready instances per name; these take precedence over `initialize`. */
@@ -240,6 +244,22 @@ export interface AssembleBaseOptions<
 
 type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> &
   RequiredConstructionSources<T>;
+
+type VocabularyAssemblyOptions<
+  TEntries extends Record<string, ConceptEntry>,
+  TComputations extends Record<string, ComputationFn>,
+> = AssembleOptions<ConceptClassesOf<TEntries>> & {
+  vocabulary: DeclaredVocabulary<TEntries, TComputations>;
+  conceptSet?: never;
+};
+
+type ConceptSetAssemblyOptions<
+  S extends Record<string, AnyRegisteredConcept>,
+  TComputations extends Record<string, ComputationFn>,
+> = AssembleOptions<ConceptClassesOfSet<S>> & {
+  conceptSet: RegisteredConceptSet<S, TComputations>;
+  vocabulary?: never;
+};
 
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
   engine: Reacting;
@@ -346,16 +366,31 @@ const respondRaceObserver: EngineObserver = {
  * the refusal funnel, and return the engine with its invoker.
  */
 export function assemble<
+  S extends Record<string, AnyRegisteredConcept>,
+  TComputations extends Record<string, ComputationFn>,
+>(options: ConceptSetAssemblyOptions<S, TComputations>): AssembledApp<ConceptClassesOfSet<S>>;
+export function assemble<
   TEntries extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 >(
-  options: Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary"> & {
-    vocabulary: DeclaredVocabulary<TEntries, TComputations>;
-  },
+  options: VocabularyAssemblyOptions<TEntries, TComputations>,
 ): AssembledApp<ConceptClassesOf<TEntries>>;
 export function assemble<T extends Record<string, ConceptClass>>(
-  options: AssembleOptions<T>,
+  options: AssembleOptions<T> & {
+    conceptSet?: RegisteredConceptSet<
+      Record<string, AnyRegisteredConcept>,
+      Record<string, ComputationFn>
+    >;
+    vocabulary?: DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>;
+  },
 ): AssembledApp<T> {
+  if ((options.conceptSet === undefined) === (options.vocabulary === undefined)) {
+    throw new Error("assemble: supply exactly one conceptSet or vocabulary declaration.");
+  }
+  const vocabularyDeclaration =
+    options.conceptSet === undefined
+      ? options.vocabulary!
+      : conceptSetVocabulary(options.conceptSet);
   if (options.queryCache !== undefined && !["memoize", "none"].includes(options.queryCache)) {
     throw new Error('assemble: queryCache must be "memoize" or "none".');
   }
@@ -370,7 +405,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.queryCache,
   );
   engine.logging = options.logging ?? Logging.OFF;
-  const declaredComputations = vocabularyComputations(options.vocabulary);
+  const declaredComputations = vocabularyComputations(vocabularyDeclaration);
   engine.registerComputations(declaredComputations);
   const computations: ComputationInventoryIR[] = [
     ...standardComputations,
@@ -409,7 +444,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   ];
 
   // ── Concepts: instances win, initialize supplies args, no-arg classes default-construct ──
-  const classes = vocabularyClasses(options.vocabulary);
+  const classes = vocabularyClasses(vocabularyDeclaration);
   if (Object.hasOwn(classes, "RequestBoundary")) {
     throw new Error('assemble: "RequestBoundary" is reserved for the core request boundary.');
   }
@@ -421,7 +456,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     }
   }
   const concepts: Record<string, object> = {};
-  const metadataByName = vocabularyMetadata(options.vocabulary);
+  const metadataByName = vocabularyMetadata(vocabularyDeclaration);
   for (const [name, cls] of Object.entries(classes)) {
     const supplied = options.instances as Record<string, object> | undefined;
     const provided =

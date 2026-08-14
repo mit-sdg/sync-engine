@@ -1,5 +1,5 @@
 import { reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../vocabulary.ts";
+import { concepts } from "../concepts.ts";
 
 const { Discussing, Selecting } = concepts;
 

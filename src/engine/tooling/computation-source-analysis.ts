@@ -287,14 +287,14 @@ function inputsOf(
 
 /**
  * Prove the input field names and optionality of the computations registered by one configured
- * executable vocabulary module. Selection and source registration must agree exactly.
+ * configured concept-set module. Selection and source registration must agree exactly.
  */
 export function authoritativeComputationInputs(
-  vocabularyModulePath: string,
+  conceptSetModulePath: string,
   selectedNames: readonly string[],
   suppliedContext?: TypeScriptSourceContext,
 ): readonly AuthoritativeComputationInput[] {
-  const context = suppliedContext ?? typeScriptSourceContext(vocabularyModulePath);
+  const context = suppliedContext ?? typeScriptSourceContext(conceptSetModulePath);
   const calls: { call: ts.CallExpression; kind: RegistrationKind }[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
@@ -331,11 +331,11 @@ export function authoritativeComputationInputs(
 
 /** Build the command-side adapter injected into authored-design orchestration. */
 export function resolveComputationInputsFromSource(
-  vocabularyModulePath: string,
+  conceptSetModulePath: string,
 ): ResolveComputationInputs {
   return ({ computations }) =>
     authoritativeComputationInputs(
-      vocabularyModulePath,
+      conceptSetModulePath,
       computations.map(({ name }) => name),
     );
 }

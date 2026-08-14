@@ -20,18 +20,15 @@ describe("sync-engine setup", () => {
       const first = await setupProject(root);
       expect(first.written).toEqual([
         "tsconfig.json",
-        "src/vocabulary.ts",
+        "src/concepts.ts",
         "src/assembly.ts",
         "generated.config.ts",
         "src/main.ts",
       ]);
-      expect(await readFile(join(root, "src/vocabulary.ts"), "utf8")).toContain("conceptSet({})");
+      expect(await readFile(join(root, "src/concepts.ts"), "utf8")).toContain("conceptSet({})");
       expect(await readFile(join(root, "src/assembly.ts"), "utf8")).toContain("composition: {}");
       const generatedConfig = await readFile(join(root, "generated.config.ts"), "utf8");
       expect(generatedConfig).toContain("design: { version: 1, documents: [] }");
-      expect(generatedConfig).toContain(
-        'vocabulary: { module: new URL("./src/vocabulary.ts", import.meta.url) }',
-      );
       expect(await readFile(join(root, "tsconfig.json"), "utf8")).toContain('"types": ["node"]');
       expect(first.guidance.join("\n")).toContain("@types/node");
       const second = await setupProject(root);
@@ -48,9 +45,9 @@ describe("sync-engine setup", () => {
       await import("node:fs/promises").then(({ mkdir }) =>
         mkdir(join(root, "src"), { recursive: true }),
       );
-      await writeFile(join(root, "src/vocabulary.ts"), "export const custom = {};\n");
+      await writeFile(join(root, "src/concepts.ts"), "export const custom = {};\n");
       const result = await setupProject(root);
-      expect(await readFile(join(root, "src/vocabulary.ts"), "utf8")).toBe(
+      expect(await readFile(join(root, "src/concepts.ts"), "utf8")).toBe(
         "export const custom = {};\n",
       );
       expect(result.written).not.toContain("src/assembly.ts");
@@ -60,20 +57,20 @@ describe("sync-engine setup", () => {
     }
   });
 
-  test("does not create a descriptor for an incompatible application vocabulary", async () => {
+  test("does not create a descriptor for an incompatible application concept set", async () => {
     const root = await project();
     try {
       await import("node:fs/promises").then(({ mkdir }) =>
         mkdir(join(root, "src"), { recursive: true }),
       );
-      await writeFile(join(root, "src/vocabulary.ts"), "export const custom = {};\n");
+      await writeFile(join(root, "src/concepts.ts"), "export const custom = {};\n");
       await writeFile(
         join(root, "src/assembly.ts"),
         "export function assembleApplication() { return {}; }\n",
       );
       const result = await setupProject(root);
       expect(result.written).not.toContain("generated.config.ts");
-      expect(result.guidance.join("\n")).toContain("vocabulary module");
+      expect(result.guidance.join("\n")).toContain("concept-set module");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -85,10 +82,7 @@ describe("sync-engine setup", () => {
       await import("node:fs/promises").then(({ mkdir }) =>
         mkdir(join(root, "src"), { recursive: true }),
       );
-      await writeFile(
-        join(root, "src/vocabulary.ts"),
-        "// export const applicationConcepts = {}; export const vocabulary = {};\n",
-      );
+      await writeFile(join(root, "src/concepts.ts"), "// export const applicationConcepts = {};\n");
       const result = await setupProject(root);
       expect(result.written).not.toContain("src/assembly.ts");
       expect(result.guidance.join("\n")).toContain("src/assembly.ts");

@@ -1022,25 +1022,30 @@ export function indexApplicationSourcesWithController<
   }
 
   let assemblyObject: SourceInput | undefined;
-  let vocabularyProperty: StaticProperty | undefined;
+  let selectionProperty: StaticProperty | undefined;
   let origin: VocabularyOrigin | undefined;
   if (assembly !== undefined) {
     const [argument] = assembly.call.arguments;
     if (argument !== undefined) {
       assemblyObject = staticValue(argument);
-      const property = resolverFor(assemblyObject).property(assemblyObject, "vocabulary");
+      const resolver = resolverFor(assemblyObject);
+      const selectedSet = resolver.property(assemblyObject, "conceptSet");
+      const property =
+        selectedSet.kind === "resolved"
+          ? selectedSet
+          : resolver.property(assemblyObject, "vocabulary");
       if (property.kind === "resolved") {
-        vocabularyProperty = property.value;
+        selectionProperty = property.value;
         const resolution = vocabularyOrigin(property.value.value);
         if (resolution.kind === "resolved") origin = resolution.value;
         else {
           reportFor(
             resolution.kind === "ambiguous"
-              ? "AMBIGUOUS_VOCABULARY_SOURCE"
-              : "UNRESOLVED_VOCABULARY_SOURCE",
+              ? "AMBIGUOUS_CONCEPT_SET_SOURCE"
+              : "UNRESOLVED_CONCEPT_SET_SOURCE",
             resolution.kind === "ambiguous"
-              ? "The selected assembly has multiple possible vocabulary sources."
-              : "The selected assembly vocabulary could not be resolved statically.",
+              ? "The selected assembly has multiple possible concept-set sources."
+              : "The selected assembly concept set could not be resolved statically.",
             undefined,
             undefined,
             "nodes" in resolution ? rangesForNodes(resolution.nodes) : undefined,
@@ -1049,9 +1054,9 @@ export function indexApplicationSourcesWithController<
       } else {
         reportFor(
           property.kind === "ambiguous"
-            ? "AMBIGUOUS_VOCABULARY_SOURCE"
-            : "UNRESOLVED_VOCABULARY_SOURCE",
-          "The selected assembly does not expose one static vocabulary property.",
+            ? "AMBIGUOUS_CONCEPT_SET_SOURCE"
+            : "UNRESOLVED_CONCEPT_SET_SOURCE",
+          "The selected assembly does not expose one static conceptSet property.",
           undefined,
           undefined,
           "nodes" in property ? rangesForNodes(property.nodes) : undefined,
@@ -1099,7 +1104,7 @@ export function indexApplicationSourcesWithController<
         reportFor(
           origin.kind === "concept-set"
             ? "MISSING_CONCEPT_REGISTRATION"
-            : "UNRESOLVED_VOCABULARY_SOURCE",
+            : "UNRESOLVED_CONCEPT_SET_SOURCE",
           `No source declaration was resolved for concept ${implementation.concept}.`,
           ref,
           "declaration",
@@ -1362,7 +1367,7 @@ export function indexApplicationSourcesWithController<
       }
     }
 
-    let selectionNode = vocabularyProperty?.declaration;
+    let selectionNode = selectionProperty?.declaration;
     let selectedValue: StaticResolution<StaticValue> | undefined;
     if (implementation.selected.via === "default" || implementation.selected.via === "initialize") {
       selectedValue =

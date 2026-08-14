@@ -34,4 +34,4 @@ export const applicationConcepts = conceptSet({
   Trashing: trashing,
   Upvoting: upvoting,
 });
-export const { concepts, vocabulary } = applicationConcepts;
+export const { concepts } = applicationConcepts;

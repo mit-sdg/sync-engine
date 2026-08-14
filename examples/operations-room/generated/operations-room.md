@@ -25,8 +25,8 @@ Defined in [Alerting](../design/concepts/Alerting.md), line 1.
 #### Selected instances and bindings
 
 - `Alerting`
-  - `Alerting.Person` is `Person` — [Operations Room Vocabulary](../design/vocabulary.md), line 29.
-  - `Alerting.Subject` is `Selecting.Selection` — [Operations Room Vocabulary](../design/vocabulary.md), line 32.
+  - `Alerting.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 29.
+  - `Alerting.Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 32.
 
 ### Discussing
 
@@ -49,8 +49,8 @@ Defined in [Discussing](../design/concepts/Discussing.md), line 1.
 #### Selected instances and bindings
 
 - `Discussing`
-  - `Discussing.Subject` is `Selecting.Selection` — [Operations Room Vocabulary](../design/vocabulary.md), line 23.
-  - `Discussing.Person` is `Person` — [Operations Room Vocabulary](../design/vocabulary.md), line 26.
+  - `Discussing.Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 23.
+  - `Discussing.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 26.
 
 ### Gathering
 
@@ -75,7 +75,7 @@ Defined in [Gathering](../design/concepts/Gathering.md), line 1.
 #### Selected instances and bindings
 
 - `Gathering`
-  - `Gathering.Person` is `Person` — [Operations Room Vocabulary](../design/vocabulary.md), line 14.
+  - `Gathering.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 14.
 
 ### Selecting
 
@@ -95,15 +95,15 @@ Defined in [Selecting](../design/concepts/Selecting.md), line 1.
 #### Selected instances and bindings
 
 - `Selecting`
-  - `Selecting.Scope` is `Gathering.Gathering` — [Operations Room Vocabulary](../design/vocabulary.md), line 17.
-  - `Selecting.Item` is `Mitigation` — [Operations Room Vocabulary](../design/vocabulary.md), line 20.
+  - `Selecting.Scope` is `Gathering.Gathering` — [Operations Room Application Types](../design/types.md), line 17.
+  - `Selecting.Item` is `Mitigation` — [Operations Room Application Types](../design/types.md), line 20.
 
-## Application vocabulary
+## Application types
 
 Concrete types:
 
-- `Person` — [Operations Room Vocabulary](../design/vocabulary.md), line 8.
-- `Mitigation` — [Operations Room Vocabulary](../design/vocabulary.md), line 11.
+- `Person` — [Operations Room Application Types](../design/types.md), line 8.
+- `Mitigation` — [Operations Room Application Types](../design/types.md), line 11.
 
 ## Views
 

@@ -72,23 +72,25 @@ function application() {
   return assemble({ vocabulary: words, composition: { Forum: { Publish } } });
 }
 
-async function fixture(design: string, vocabularyDesign?: string) {
+async function fixture(design: string, typesDesign?: string) {
   const directory = await mkdtemp(join(process.cwd(), ".authored-design-"));
   temporaryDirectories.push(directory);
   const designPath = join(directory, "forum.md");
   await writeFile(designPath, design);
-  const vocabularyPath = join(directory, "vocabulary.md");
-  if (vocabularyDesign !== undefined) await writeFile(vocabularyPath, vocabularyDesign);
+  const typesPath = join(directory, "types.md");
+  if (typesDesign !== undefined) await writeFile(typesPath, typesDesign);
   const conceptPath = join(directory, "Commenting.md");
   await writeFile(conceptPath, commentingSpec);
   return {
-    documents: [pathToFileURL(designPath)],
-    ...(vocabularyDesign === undefined ? {} : { vocabulary: pathToFileURL(vocabularyPath) }),
+    documents: [
+      pathToFileURL(designPath),
+      ...(typesDesign === undefined ? [] : [pathToFileURL(typesPath)]),
+    ],
     concept: pathToFileURL(conceptPath),
   };
 }
 
-const vocabularyDesign = `# Vocabulary
+const typesDesign = `# Application types
 
 \`\`\`types
 concrete Person
@@ -108,7 +110,7 @@ describe("authored design orchestration", () => {
         "normalize(value?: String) : String\r\n" +
         "  Normalizes display text.\r\n" +
         "```\r\n",
-      vocabularyDesign,
+      typesDesign,
     );
     const assembly = application();
     try {
@@ -182,10 +184,7 @@ describe("authored design orchestration", () => {
   });
 
   test("rejects traced concept text that only differs in source placement", async () => {
-    const design = await fixture(
-      "# Forum\n\n[Publish](reaction:Forum.Publish).\n",
-      vocabularyDesign,
-    );
+    const design = await fixture("# Forum\n\n[Publish](reaction:Forum.Publish).\n", typesDesign);
     const assembly = application();
     try {
       const shifted = commentingSpec.replace("## Purpose", "\n## Purpose");
@@ -218,7 +217,7 @@ normalize(value: String) : String
   Normalizes display text.
 \`\`\`
 `,
-      vocabularyDesign,
+      typesDesign,
     );
     const assembly = application();
     try {
@@ -232,7 +231,7 @@ normalize(value: String) : String
     }
   });
 
-  test("fails with deterministic aggregate coverage, shape, and vocabulary diagnostics", async () => {
+  test("fails with deterministic aggregate coverage, shape, and type-binding diagnostics", async () => {
     const design = await fixture(
       `# Forum
 
@@ -257,28 +256,24 @@ normalize(value: String) : String
       expect((failure as AuthoredDesignCheckError).issues.map(({ code }) => code)).toEqual([
         "UNRESOLVED_LINK",
         "COMPUTATION_INPUT_MISMATCH",
+        "MISSING_BINDING",
+        "MISSING_BINDING",
         "MISSING_COVERAGE",
-        "MISSING_VOCABULARY",
       ]);
       expect((failure as Error).message).toContain('selected reaction "Forum.Publish"');
-      expect((failure as Error).message).toContain("4 issues");
+      expect((failure as Error).message).toContain("5 issues");
     } finally {
       await assembly.beginDrain();
     }
   });
 
-  test("rejects a semantically unnecessary vocabulary after inspecting the assembly", async () => {
+  test("needs no application type declaration when the assembly has no external types", async () => {
     const emptyWords = vocabulary({ concepts: {}, computations: {} });
     const Empty = endpoint("/empty", () => receive().then(respond()));
     const assembly = assemble({ vocabulary: emptyWords, composition: { Empty } });
-    const design = await fixture(
-      "# Empty\n\n[Empty](reaction:Empty).\n",
-      "# Empty vocabulary\n\n```types\n```\n",
-    );
+    const design = await fixture("# Empty\n\n[Empty](reaction:Empty).\n");
     try {
-      await expect(checkAuthoredDesign({ assembly, design })).rejects.toThrow(
-        "UNNECESSARY_VOCABULARY",
-      );
+      await expect(checkAuthoredDesign({ assembly, design })).resolves.toBeDefined();
     } finally {
       await assembly.beginDrain();
     }

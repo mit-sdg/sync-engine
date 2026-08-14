@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { expect } from "vite-plus/test";
-import { applicationConcepts, vocabulary } from "@catalog/concepts";
+import { applicationConcepts } from "@catalog/concepts";
 import { compositions } from "./review-queue.ts";
 
 const { ApproveQueuedReview, RejectQueuedReview, WithdrawQueuedReview } =
@@ -23,7 +23,7 @@ const composition = {
 };
 
 export function assembleReviewQueue(instances: CatalogInstances) {
-  return assemble({ vocabulary, instances, composition, queryCache: "none" });
+  return assemble({ conceptSet: applicationConcepts, instances, composition, queryCache: "none" });
 }
 
 async function invoke(

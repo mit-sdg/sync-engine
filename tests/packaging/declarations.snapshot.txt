@@ -10,9 +10,9 @@ export { Refuse } from "../engine/reactions/concepts/refuse.ts";
 export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/logging.ts";
 
 === dist/assembly/index.d.ts ===
-/** Install a vocabulary and its composition into one coherent running system. */
+/** Install an application concept set and composition into one coherent running system. */
 export { assemble } from "../engine/boundary/assembly/assembly-facade.ts";
-export type { Assembly, AssemblyOptions } from "../engine/boundary/assembly/assembly-facade.ts";
+export type { Assembly, AssemblyOptions, ConceptSetAssemblyOptions, } from "../engine/boundary/assembly/assembly-facade.ts";
 export { conceptFloor, conceptSet, registerConcept } from "../engine/boundary/assembly/concept-set.ts";
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
 export { FileLogSink } from "../engine/hosting/file-store.ts";
@@ -66,11 +66,11 @@ export interface RegisteredSourceConcept {
     /** Members whose input names TypeScript erased before runtime registration. */
     sourceInputMembers: ReadonlySet<string>;
 }
-/** Read the registrations retained by the vocabulary that conceptSet produced. */
-export declare function registeredConcepts(vocabulary: unknown): RegisteredSourceConcept[];
+/** Read the registrations retained by an application concept set. */
+export declare function registeredConcepts(conceptSet: unknown): RegisteredSourceConcept[];
 /** Read the same registration facts from an assembled application's manifest. */
 export declare function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSourceConcept[];
-/** Import the explicitly selected vocabulary module when no assembly config is used. */
+/** Import an explicitly selected concept-set module. */
 export declare function loadRegisteredConcepts(modulePath: string, exportName?: string): Promise<RegisteredSourceConcept[]>;
 
 === dist/command/files-below.d.ts ===
@@ -114,6 +114,7 @@ import type { OperationalObserver, RawFaultReporter } from "../../reactions/runt
 import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
 import { type ComputationFn } from "../../reads/computations.ts";
+import { type AnyRegisteredConcept, type ConceptClassesOfSet, type RegisteredConceptSet } from "./concept-set.ts";
 import { type AuthoredDeclarationIdentity } from "../../reads/declaration-identity.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
 import type { ComputationInventoryIR, ConceptImplementationProvenanceIR } from "../../reads/ir.ts";
@@ -167,8 +168,6 @@ export type RequiredConstructionSources<T extends Record<string, ConceptClass>> 
     instances: Record<RequiredConstructorName<T>, object>;
 };
 export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I extends ConceptInstances<T> = ConceptInstances<T>> {
-    /** The concept vocabulary: every name bound to its canonical class. */
-    vocabulary: DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>;
     /** Constructor args per name; classes callable without arguments may be omitted. */
     initialize?: ConceptInitializers<T>;
     /** Ready instances per name; these take precedence over `initialize`. */
@@ -196,6 +195,14 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     redaction?: RedactionPolicy;
 }
 type AssembleOptions<T extends Record<string, ConceptClass>> = AssembleBaseOptions<T> & RequiredConstructionSources<T>;
+type VocabularyAssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = AssembleOptions<ConceptClassesOf<TEntries>> & {
+    vocabulary: DeclaredVocabulary<TEntries, TComputations>;
+    conceptSet?: never;
+};
+type ConceptSetAssemblyOptions<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>> = AssembleOptions<ConceptClassesOfSet<S>> & {
+    conceptSet: RegisteredConceptSet<S, TComputations>;
+    vocabulary?: never;
+};
 export interface AssembledApp<T extends Record<string, ConceptClass>> {
     engine: Reacting;
     invoker: Invoker<ContractShape>;
@@ -227,24 +234,31 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
  * contracts (declared first, then derived from the reactions themselves), attach
  * the refusal funnel, and return the engine with its invoker.
  */
-export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: Omit<AssembleOptions<ConceptClassesOf<TEntries>>, "vocabulary"> & {
-    vocabulary: DeclaredVocabulary<TEntries, TComputations>;
-}): AssembledApp<ConceptClassesOf<TEntries>>;
+export declare function assemble<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>>(options: ConceptSetAssemblyOptions<S, TComputations>): AssembledApp<ConceptClassesOfSet<S>>;
+export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: VocabularyAssemblyOptions<TEntries, TComputations>): AssembledApp<ConceptClassesOf<TEntries>>;
 export {};
 
 === dist/engine/boundary/assembly/assembly-facade.d.ts ===
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { AssembleBaseOptions, AssembledApp, RequiredConstructionSources } from "./assemble.ts";
-import type { ConceptImplementation } from "./concept-set.ts";
+import type { AnyRegisteredConcept, ConceptClassesOfSet, ConceptImplementation, RegisteredConceptSet } from "./concept-set.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
 export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
-export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = Omit<AssembleBaseOptions<ConceptClassesOf<TEntries>, {
-    [Name in keyof ConceptClassesOf<TEntries>]?: ConceptImplementation<ConceptClassesOf<TEntries>[Name]>;
-}>, "vocabulary"> & RequiredConstructionSources<ConceptClassesOf<TEntries>> & {
+type BaseAssemblyOptions<T extends Record<string, new (...args: never[]) => object>> = AssembleBaseOptions<T, {
+    [Name in keyof T]?: ConceptImplementation<T[Name]>;
+}> & RequiredConstructionSources<T>;
+export type AssemblyOptions<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>> = BaseAssemblyOptions<ConceptClassesOf<TEntries>> & {
     vocabulary: DeclaredVocabulary<TEntries, TComputations>;
+    conceptSet?: never;
 };
+export type ConceptSetAssemblyOptions<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>> = BaseAssemblyOptions<ConceptClassesOfSet<S>> & {
+    conceptSet: RegisteredConceptSet<S, TComputations>;
+    vocabulary?: never;
+};
+export declare function assemble<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>>(options: ConceptSetAssemblyOptions<S, TComputations>): Assembly<ConceptClassesOfSet<S>>;
 export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: AssemblyOptions<TEntries, TComputations>): Assembly<ConceptClassesOf<TEntries>>;
+export {};
 
 === dist/engine/boundary/assembly/assembly-registry.d.ts ===
 import type { AssembledApp } from "./assemble.ts";
@@ -261,17 +275,19 @@ type ImplementationMember<Member> = Member extends (...args: infer Args) => infe
 export type ConceptImplementation<C extends ConceptClass> = object & {
     [Name in keyof InstanceType<C> as InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never]: ImplementationMember<InstanceType<C>[Name]>;
 };
-export type Implementations<V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>> = V extends DeclaredVocabulary<infer Entries, Record<string, ComputationFn>> ? {
-    [Name in keyof ConceptClassesOf<Entries>]: ConceptImplementation<ConceptClassesOf<Entries>[Name]>;
-} : never;
-export type ImplementationOverrides<V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>> = Partial<Implementations<V>>;
-export interface ConceptFloor<V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>> {
+type AnyConceptSelection = DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>> | RegisteredConceptSet<Record<string, AnyRegistration>, Record<string, ComputationFn>>;
+type EntriesOfSelection<V extends AnyConceptSelection> = V extends RegisteredConceptSet<infer Registrations, Record<string, ComputationFn>> ? EntriesOf<Registrations> : V extends DeclaredVocabulary<infer Entries, Record<string, ComputationFn>> ? Entries : never;
+export type Implementations<V extends AnyConceptSelection> = {
+    [Name in keyof ConceptClassesOf<EntriesOfSelection<V>>]: ConceptImplementation<ConceptClassesOf<EntriesOfSelection<V>>[Name]>;
+};
+export type ImplementationOverrides<V extends AnyConceptSelection> = Partial<Implementations<V>>;
+export interface ConceptFloor<V extends AnyConceptSelection> {
     name: string;
     instances: Implementations<V>;
     resources: readonly string[];
     close(): Promise<void>;
 }
-export declare function conceptFloor<V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>>(vocabularyDeclaration: V, floor: ConceptFloor<V>): ConceptFloor<V>;
+export declare function conceptFloor<V extends AnyConceptSelection>(selection: V, floor: ConceptFloor<V>): ConceptFloor<V>;
 /**
  * Builds one concept instance for a named floor. The registered concept name
  * arrives as the second argument, so a registry never has to spell its own
@@ -295,6 +311,7 @@ export type RegisteredConcept<C extends ConceptClass, F extends Record<string, F
 export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
 export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>>(registration: ConceptRegistration<C, F>): RegisteredConcept<C, F>;
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
+export type AnyRegisteredConcept = AnyRegistration;
 type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
     [Name in keyof S]: {
@@ -307,6 +324,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     };
 };
 type VocabularyOf<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn> = Record<never, never>> = DeclaredVocabulary<EntriesOf<S>, Computations>;
+export type ConceptClassesOfSet<S extends Record<string, AnyRegistration>> = ConceptClassesOf<EntriesOf<S>>;
 type DeclaredFloorNames<S extends Record<string, AnyRegistration>> = {
     [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? keyof F : never;
 }[keyof S] & string;
@@ -323,12 +341,13 @@ type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> 
     [Name in keyof S]: S[Name] extends RegisteredConcept<infer C, infer _F> ? [] extends ConstructorParameters<C> ? never : Name : Name;
 }[keyof S];
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn> = Record<never, never>> {
-    vocabulary: VocabularyOf<S, Computations>;
     concepts: VocabularyOf<S, Computations>["concepts"];
     computations: VocabularyOf<S, Computations>["computations"];
     implementations(...args: [RequiredConstructorRegistration<S>] extends [never] ? [] : [never]): Implementations<VocabularyOf<S, Computations>>;
     implementations<Floor extends CompleteFloorNames<S>>(floor: Floor, context: FloorContext<S, Floor>): Implementations<VocabularyOf<S, Computations>>;
 }
+/** Internal bridge from the application-facing concept set to its runtime declaration. */
+export declare function conceptSetVocabulary<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn>>(set: RegisteredConceptSet<S, Computations>): VocabularyOf<S, Computations>;
 export declare function conceptSet<const S extends Record<string, AnyRegistration>, const Computations extends Record<string, ComputationFn> = Record<never, never>>(registrations: S, computations?: Computations & CheckedComputationFns<Computations>): RegisteredConceptSet<S, Computations>;
 export {};
 
@@ -946,7 +965,7 @@ export interface WireRenderOptions {
     moduleName?: string;
     /** Replace the default generated-file banner. */
     banner?: string;
-    vocabulary?: {
+    conceptSet?: {
         from: string;
         export: string;
     };
@@ -959,7 +978,7 @@ export interface WireRenderOptions {
     sharedWires?: readonly WireContractsIR[];
 }
 declare const WIRE_HELPERS: {
-    readonly ApplicationVocabulary: "";
+    readonly ApplicationConceptSet: "";
     readonly AtPath: "type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : never : T;";
     readonly QueryRow: "type QueryRow<T> = T extends readonly (infer Row)[] ? Row : T;";
     readonly AllOf: "type AllOf<T extends readonly unknown[]> = T extends readonly [infer Head, ...infer Rest] ? Head & AllOf<Rest> : unknown;";
@@ -4074,7 +4093,7 @@ interface RenderDesign {
             }[];
         }[];
     }[];
-    vocabulary?: {
+    types?: {
         concreteTypes: {
             name: string;
             location: RenderDesignLocation;
@@ -4555,7 +4574,7 @@ interface GeneratedPlanOptions {
     wire?: string;
     wireName?: string;
     wireBanner?: string;
-    vocabulary?: {
+    conceptSet?: {
         from: string;
         export: string;
     };
@@ -4612,6 +4631,8 @@ export interface AuthoredApplicationDesignDocument {
     digest: string;
     links: readonly AuthoredDesignLink[];
     computations: readonly AuthoredComputation[];
+    concreteTypes: readonly ConcreteTypeDeclaration[];
+    bindings: readonly ExternalTypeBinding[];
 }
 export interface ConcreteTypeDeclaration {
     name: string;
@@ -4632,14 +4653,8 @@ export interface ExternalTypeBinding {
     explanation?: string;
     location: DesignSourceLocation;
 }
-export interface AuthoredVocabularyDocument extends AuthoredApplicationDesignDocument {
-    concreteTypes: readonly ConcreteTypeDeclaration[];
-    bindings: readonly ExternalTypeBinding[];
-}
-/** Parse one explicitly registered, non-vocabulary application design file. */
+/** Parse one explicitly registered application design file. */
 export declare function parseApplicationDesignDocument(markdown: string, source?: string): AuthoredApplicationDesignDocument;
-/** Parse the separately registered application vocabulary design file. */
-export declare function parseApplicationVocabularyDocument(markdown: string, source?: string): AuthoredVocabularyDocument;
 export interface SelectedComputationDesign {
     name: string;
     /**
@@ -4663,7 +4678,7 @@ export interface SelectedApplicationDesign {
     computations: readonly SelectedComputationDesign[];
     concepts: readonly SelectedConceptDesign[];
 }
-export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "MISSING_VOCABULARY" | "UNNECESSARY_VOCABULARY" | "UNKNOWN_EXTERNAL" | "MISSING_BINDING" | "UNRESOLVED_TYPE_TARGET" | "EXTERNAL_TARGET" | "UNUSED_CONCRETE";
+export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING" | "UNKNOWN_EXTERNAL" | "MISSING_BINDING" | "UNRESOLVED_TYPE_TARGET" | "EXTERNAL_TARGET" | "UNUSED_CONCRETE";
 export interface ApplicationDesignIssue {
     code: ApplicationDesignIssueCode;
     message: string;
@@ -4673,17 +4688,16 @@ export interface ApplicationDesignIssue {
  * Check parsed documents against the exact selected assembly inventory. The
  * validator returns all independently actionable issues and performs no I/O.
  */
-export declare function validateAuthoredApplicationDesign(documents: readonly AuthoredApplicationDesignDocument[], vocabulary: AuthoredVocabularyDocument | undefined, selected: SelectedApplicationDesign): ApplicationDesignIssue[];
+export declare function validateAuthoredApplicationDesign(documents: readonly AuthoredApplicationDesignDocument[], selected: SelectedApplicationDesign): ApplicationDesignIssue[];
 
 === dist/engine/tooling/authored-design-orchestration.d.ts ===
 /** Config-level orchestration for one selected application's authored design. */
 import type { Assembly } from "../boundary/assembly/assembly-facade.ts";
 import type { AuthoredDeclarationIdentity } from "../reads/declaration-identity.ts";
 import { type ConceptSpec } from "../reactions/concepts/concept-spec.ts";
-import type { ApplicationDesignIssue, AuthoredApplicationDesignDocument, AuthoredVocabularyDocument, DesignLinkKind, SelectedApplicationDesign } from "./authored-application-design.ts";
+import type { ApplicationDesignIssue, AuthoredApplicationDesignDocument, DesignLinkKind, SelectedApplicationDesign } from "./authored-application-design.ts";
 import type { DesignSourceLine, DesignSourceLocation } from "./markdown-design-source.ts";
 export interface AuthoredDesignRegistration {
-    vocabulary?: URL;
     documents: readonly URL[];
 }
 /** One registered file, read once and retained in its normalized full form. */
@@ -4746,17 +4760,14 @@ export interface SharedDefinitionEqualityFact {
 }
 export interface CheckedAuthoredDesignModel {
     sources: {
-        vocabulary?: LoadedAuthoredDesignSource;
         documents: readonly LoadedAuthoredDesignSource[];
         /** Present when a strict static-source adapter supplied every selected concept source. */
         concepts?: readonly LoadedConceptSpecificationSource[];
     };
     documents: readonly AuthoredApplicationDesignDocument[];
-    /** Parsed declarations only; qualified targets make no unparsed SSF ownership claim. */
-    vocabulary?: AuthoredVocabularyDocument;
     /** Exact authored declaration inventory, retaining endpoint source identities. */
     declarations: readonly AuthoredDeclarationIdentity[];
-    /** Projection consumed by the existing pure coverage/vocabulary validator. */
+    /** Projection consumed by the pure coverage and application-type validator. */
     selected: SelectedApplicationDesign;
     concepts: readonly SelectedConceptDesignFact[];
     sharedDefinitions: readonly SharedDefinitionEqualityFact[];
@@ -4789,11 +4800,11 @@ import type { AuthoritativeComputationInput, ResolveComputationInputs } from "./
 import { type TypeScriptSourceContext } from "./typescript-shapes.ts";
 /**
  * Prove the input field names and optionality of the computations registered by one configured
- * executable vocabulary module. Selection and source registration must agree exactly.
+ * configured concept-set module. Selection and source registration must agree exactly.
  */
-export declare function authoritativeComputationInputs(vocabularyModulePath: string, selectedNames: readonly string[], suppliedContext?: TypeScriptSourceContext): readonly AuthoritativeComputationInput[];
+export declare function authoritativeComputationInputs(conceptSetModulePath: string, selectedNames: readonly string[], suppliedContext?: TypeScriptSourceContext): readonly AuthoritativeComputationInput[];
 /** Build the command-side adapter injected into authored-design orchestration. */
-export declare function resolveComputationInputsFromSource(vocabularyModulePath: string): ResolveComputationInputs;
+export declare function resolveComputationInputsFromSource(conceptSetModulePath: string): ResolveComputationInputs;
 
 === dist/engine/tooling/concept-source-discovery.d.ts ===
 import { type TypeScriptSourceContext } from "./typescript-shapes.ts";
@@ -4852,9 +4863,7 @@ type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => obj
 export interface GeneratedApplicationDesign {
     /** Versioned shape of the authored application-design registration. */
     version: 1;
-    /** The optional application vocabulary-design document. */
-    vocabulary?: URL;
-    /** Every other application-design document, in registration order. */
+    /** Every application-design document, in registration order. */
     documents: readonly URL[];
 }
 export interface GeneratedApplication {
@@ -4878,11 +4887,11 @@ export interface GeneratedApplication {
     /** The wire contract's banner; defaults to one naming the assembly. */
     wireBanner?: string;
     /**
-     * The executable module whose export anchors generated wire types to concept
-     * signatures; defaults to `src/concept-set.ts` beside the config, exporting
-     * `vocabulary`. This is distinct from the authored `design.vocabulary` document.
+     * The module whose exported concept set anchors generated wire types and source
+     * analysis; defaults to `src/concepts.ts` beside the config, exporting
+     * `applicationConcepts`.
      */
-    vocabulary?: {
+    conceptSet?: {
         module?: URL;
         export?: string;
     };
@@ -4894,10 +4903,10 @@ export type ResolvedApplication = GeneratedApplication & {
     specification: string;
     wire: string;
     wireName: string;
-    /** The executable vocabulary module analyzed at the generated-operation boundary. */
-    vocabularyModule: URL;
-    /** The specifier the generated wire imports its executable type anchor from. */
-    vocabularyFrom: {
+    /** The concept-set module analyzed at the generated-operation boundary. */
+    conceptSetModule: URL;
+    /** The specifier the generated wire imports its concept-set type anchor from. */
+    conceptSetFrom: {
         from: string;
         export: string;
     };
@@ -4970,7 +4979,7 @@ export interface ManifestEndpointV1 {
 }
 export interface ManifestSourceV1 {
     id: string;
-    kind: "vocabulary" | "document" | "concept";
+    kind: "document" | "concept";
     /** Host-independent path, relative to the generated read-back file. */
     path: string;
     digest: string;
@@ -5027,8 +5036,7 @@ export interface ApplicationDesignManifestV1 {
     sources: ManifestSourceV1[];
     declarations: ManifestDeclarationV1[];
     concepts: ManifestConceptDefinitionV1[];
-    vocabulary?: {
-        source: string;
+    types?: {
         concreteTypes: {
             name: string;
             location: ManifestSourceLocationV1;

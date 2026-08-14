@@ -1,4 +1,4 @@
-# Operations Room Vocabulary
+# Operations Room Application Types
 
 People host and join rooms, contribute to discussions, and receive alerts under
 one shared application identity. A mitigation is an application-supplied option;

@@ -9,7 +9,7 @@ behavior tests.
 ## 1. Fix the review scope
 
 Start from one generated config. Record the exact assembly variant, configured
-vocabulary URL, and configured application document URLs. Review another variant
+configured application document URLs and every application `types` fence. Review another variant
 from its own config. Do not infer a union of runtime options.
 
 Confirm that every URL is an explicit local `file:` URL. Design files may live
@@ -63,10 +63,10 @@ Do not waive unresolved input, action-result, or query-row shapes as if the
 checker had established agreement. Remember that type-name equivalence and
 State/storage agreement are not proven.
 
-## 4. Review vocabulary closure
+## 4. Review application type closure
 
-When a selected concept has an external type, require one configured vocabulary
-document. Inventory every left side as `ConceptInstance.ExternalType` and check
+When a selected concept has an external type, require one direct binding in a
+`types` fence in the registered application documents. Inventory every left side as `ConceptInstance.ExternalType` and check
 that it is bound exactly once.
 
 For every `is` binding, verify that the right side directly names either:
@@ -120,7 +120,7 @@ still decide whether the prose describes it honestly.
 
 ## 7. Review computations
 
-Search all registered application documents, including vocabulary, for
+Search all registered application documents, including dedicated type documents, for
 `computations` fences. Confirm that every executable computation has exactly one
 nonempty prose declaration and every authored declaration resolves to one
 executable computation. Compare executable input names and optionality.
@@ -165,5 +165,5 @@ links, one-based lines, all design references, and changed input digests.
 
 Reject a mixed migration. Version 1 has no legacy concept parser, automatic
 format detection, compatibility flag, old manifest decoder, or runtime
-composition/vocabulary Markdown import path. All old artifacts must be
+composition or application-type Markdown import path. All old artifacts must be
 regenerated together.

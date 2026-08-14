@@ -29,8 +29,8 @@ Defined in [Discussing](../design/concepts/Discussing.md), line 1.
 #### Selected instances and bindings
 
 - `Discussing`
-  - `Discussing.Subject` is `Selecting.Selection` — [Reading Circle Vocabulary](../design/vocabulary.md), line 23.
-  - `Discussing.Person` is `Person` — [Reading Circle Vocabulary](../design/vocabulary.md), line 26.
+  - `Discussing.Subject` is `Selecting.Selection` — [Reading Circle Application Types](../design/types.md), line 23.
+  - `Discussing.Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 26.
 
 ### Gathering
 
@@ -55,7 +55,7 @@ Defined in [Gathering](../design/concepts/Gathering.md), line 1.
 #### Selected instances and bindings
 
 - `Gathering`
-  - `Gathering.Person` is `Person` — [Reading Circle Vocabulary](../design/vocabulary.md), line 14.
+  - `Gathering.Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 14.
 
 ### Selecting
 
@@ -75,15 +75,15 @@ Defined in [Selecting](../design/concepts/Selecting.md), line 1.
 #### Selected instances and bindings
 
 - `Selecting`
-  - `Selecting.Scope` is `Gathering.Gathering` — [Reading Circle Vocabulary](../design/vocabulary.md), line 17.
-  - `Selecting.Item` is `Reading` — [Reading Circle Vocabulary](../design/vocabulary.md), line 20.
+  - `Selecting.Scope` is `Gathering.Gathering` — [Reading Circle Application Types](../design/types.md), line 17.
+  - `Selecting.Item` is `Reading` — [Reading Circle Application Types](../design/types.md), line 20.
 
-## Application vocabulary
+## Application types
 
 Concrete types:
 
-- `Person` — [Reading Circle Vocabulary](../design/vocabulary.md), line 8.
-- `Reading` — [Reading Circle Vocabulary](../design/vocabulary.md), line 11.
+- `Person` — [Reading Circle Application Types](../design/types.md), line 8.
+- `Reading` — [Reading Circle Application Types](../design/types.md), line 11.
 
 ## Views
 

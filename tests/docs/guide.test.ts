@@ -26,7 +26,7 @@ const repositoryOnlySources = new Map<string, URL[]>([
   [
     new URL("getting-started.md", guideDirectory).pathname,
     [
-      new URL("../../src/command/setup/src/vocabulary.ts", import.meta.url),
+      new URL("../../src/command/setup/src/concepts.ts", import.meta.url),
       new URL("../../src/command/setup/src/assembly.ts", import.meta.url),
     ],
   ],
@@ -89,7 +89,7 @@ describe("guided curriculum", () => {
 
     expect(guide).toContain("sync-engine setup");
     expect(guide).toContain("concept-free");
-    expect(guide).toContain("src/vocabulary.ts");
+    expect(guide).toContain("src/concepts.ts");
     expect(guide).toContain("src/compositions/");
     expect(guide).not.toContain("src/concept-set.ts");
     expect(guide).not.toContain("src/composition.ts");

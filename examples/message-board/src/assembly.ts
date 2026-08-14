@@ -2,9 +2,9 @@ import { assemble, type ImplementationOverrides } from "@mit-sdg/sync-engine/ass
 import type { ExecutionLimits } from "@mit-sdg/sync-engine/boundary";
 import { composition as boardComposition } from "./compositions/Board.ts";
 import { composition as sessionsComposition } from "./compositions/Sessions.ts";
-import { messageBoardConcepts, vocabulary } from "./vocabulary.ts";
+import { applicationConcepts } from "./concepts.ts";
 
-export type MessageBoardOverrides = ImplementationOverrides<typeof vocabulary>;
+export type MessageBoardOverrides = ImplementationOverrides<typeof applicationConcepts>;
 
 export const messageBoardExecutionLimits: ExecutionLimits = {
   maxActiveRootFlows: 100,
@@ -17,8 +17,8 @@ export const messageBoardExecutionLimits: ExecutionLimits = {
 
 export function assembleMessageBoard(instances: MessageBoardOverrides = {}) {
   return assemble({
-    vocabulary,
-    instances: { ...messageBoardConcepts.implementations(), ...instances },
+    conceptSet: applicationConcepts,
+    instances: { ...applicationConcepts.implementations(), ...instances },
     composition: {
       Sessions: sessionsComposition,
       Board: boardComposition,

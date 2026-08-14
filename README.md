@@ -90,7 +90,7 @@ returns a new selection:
 
 ```ts
 import { reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "./vocabulary.ts";
+import { concepts } from "./concepts.ts";
 
 const { Discussing, Selecting } = concepts;
 
@@ -114,7 +114,7 @@ that declaration callable:
 
 ```ts
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { concepts } from "./vocabulary.ts";
+import { concepts } from "./concepts.ts";
 
 const { Selecting } = concepts;
 

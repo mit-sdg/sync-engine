@@ -14,15 +14,15 @@ sets exit status 1. Unknown, repeated, or mutually exclusive options, missing
 values, and extra operands are rejected before configuration is imported or
 files are written.
 
-| Command                                        | Result                                                                                  | Writes files             |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------ |
-| `setup [directory]`                            | Initializes missing concept-free application files in an existing Bun package           | Missing setup files only |
-| `check [--config path]`                        | Checks concept source, registered design, vocabulary, and selected declaration coverage | No                       |
-| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                         | No                       |
-| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                                   | Yes                      |
-| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                                     | Yes                      |
-| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                                   | Yes                      |
-| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                                       | No                       |
+| Command                                        | Result                                                                                | Writes files             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------ |
+| `setup [directory]`                            | Initializes missing concept-free application files in an existing Bun package         | Missing setup files only |
+| `check [--config path]`                        | Checks concept source, registered design, application types, and declaration coverage | No                       |
+| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                       | No                       |
+| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                                 | Yes                      |
+| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                                   | Yes                      |
+| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                                 | Yes                      |
+| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                                     | No                       |
 
 ## `sync-engine setup`
 
@@ -34,7 +34,7 @@ The directory defaults to the current working directory and must contain a
 valid `package.json`. When `packageManager` is present, it must name Bun. The
 command creates neither the directory nor package manifest.
 
-Setup targets `tsconfig.json`, `generated.config.ts`, `src/vocabulary.ts`,
+Setup targets `tsconfig.json`, `generated.config.ts`, `src/concepts.ts`,
 `src/assembly.ts`, and `src/main.ts`. Its concept-free generated config contains
 an explicit `design: { version: 1, documents: [] }` block.
 
@@ -88,14 +88,14 @@ optionality.
 
 The checker does not claim semantic equivalence between authored type names and
 TypeScript types. It retains raw State but does not parse SSF or compare State
-with class fields, storage, or vocabulary target names.
+with class fields, storage, or application type-binding targets.
 
 ### Application-design checks
 
 For the configured design corpus, `check`:
 
 - accepts only explicit local `file:` URLs;
-- parses one optional vocabulary document and every listed prose document;
+- parses links, computations, and application `types` fences in every listed document;
 - inventories all normalized source contents for provenance and digests;
 - validates application `concrete` declarations and direct `is` bindings;
 - resolves every `reaction:`, `view:`, `former:`, and `computation:` link;
@@ -120,14 +120,14 @@ The required application design block is:
 ```text
 design: {
   version: 1,
-  vocabulary?: URL,
   documents: URL[],
 }
 ```
 
-`vocabulary` is required when a selected concept has an external type or the
-application declares a concrete type. `documents` can be empty. All URLs must
-be local `file:` URLs. A separate assembly variant uses a separate config.
+`documents` can be empty. Any listed document may contain `types` fences;
+selected external types require complete bindings across the registered corpus.
+All URLs must be local `file:` URLs. A separate assembly variant uses a separate
+config.
 
 Configuration source must be statically inspectable where a command needs
 source provenance. Import, config, assembly, source, design, and projection
@@ -169,7 +169,7 @@ schema is a hard reset: earlier application-manifest versions are rejected and
 have no compatibility decoder.
 
 The manifest retains normalized raw concept State, structured concept
-declarations, definition and instance identities, resolved vocabulary,
+declarations, definition and instance identities, resolved application types,
 application declaration identities, computation signatures, source locations,
 and digests over registered design contents. It excludes executable functions,
 constructor arguments, floor resources, object identity, occurrence state, and
@@ -188,7 +188,7 @@ Prints generated Markdown read-back. It shows:
 - computation signatures and source links.
 
 It does not copy application prose, Purpose, Principle, raw State, action/query
-bodies, vocabulary explanations, or computation bodies. Concept State remains
+bodies, type-binding explanations, or computation bodies. Concept State remains
 in the manifest and digest even though it is omitted from read-back.
 
 ### `wire`
@@ -212,7 +212,7 @@ directory use relative paths such as `../`.
 
 Every artifact command imports and assembles the selected application before
 exposing output. Local executable-only behavior, invalid declaration identities,
-incomplete design coverage, vocabulary errors, projection errors, and strict
+incomplete design coverage, application-type errors, projection errors, and strict
 wire-provenance failures reject the complete plan.
 
 After inspection, the command drains the assembly. A descriptor may provide a

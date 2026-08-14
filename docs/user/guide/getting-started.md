@@ -1,7 +1,7 @@
 # Getting started
 
 This tutorial initializes and runs a concept-free sync-engine application in
-an existing Bun package. Add registrations to `src/vocabulary.ts`, real
+an existing Bun package. Add registrations to `src/concepts.ts`, real
 composition modules under `src/compositions/`, and runtime options to
 `src/assembly.ts`.
 
@@ -52,18 +52,18 @@ tsconfig.json
 src/
   assembly.ts
   main.ts
-  vocabulary.ts
+  concepts.ts
 ```
 
 ## Stable extension points
 
-`src/vocabulary.ts` starts with no registrations:
+`src/concepts.ts` starts with no registrations:
 
 ```ts
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 
 export const applicationConcepts = conceptSet({});
-export const { concepts, vocabulary } = applicationConcepts;
+export const { concepts } = applicationConcepts;
 ```
 
 A concept-free setup does not create placeholder design or composition files.
@@ -74,12 +74,11 @@ explicit empty application-design contract. Add real composition modules under
 
 ```ts
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { applicationConcepts, vocabulary } from "./vocabulary.ts";
+import { applicationConcepts } from "./concepts.ts";
 
 export function assembleApplication() {
   return assemble({
-    vocabulary,
-    instances: applicationConcepts.implementations(),
+    conceptSet: applicationConcepts,
     composition: {},
   });
 }

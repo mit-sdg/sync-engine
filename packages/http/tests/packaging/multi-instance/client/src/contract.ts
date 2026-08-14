@@ -59,7 +59,6 @@ export const multiInstanceConcepts: RegisteredConceptSet<MultiInstanceRegistrati
   Faulting: faulting,
 });
 const { concepts } = multiInstanceConcepts;
-export const vocabulary: typeof multiInstanceConcepts.vocabulary = multiInstanceConcepts.vocabulary;
 
 const { Effects, Entries, Faulting } = concepts;
 
@@ -106,7 +105,7 @@ export function assembleMultiInstanceContract(): Assembly<{
   Faulting: typeof FaultingContract;
 }> {
   return assemble({
-    vocabulary,
+    conceptSet: multiInstanceConcepts,
     instances: multiInstanceConcepts.implementations(),
     composition,
   });
