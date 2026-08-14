@@ -99,7 +99,7 @@
   },
   "overrides": {
     "@mit-sdg/sync-engine": "file:.",
-    "nanoid": "3.3.17"
+    "nanoid": "3.3.18"
   },
   "engines": {
     "bun": ">=1.3.14 <1.4",
