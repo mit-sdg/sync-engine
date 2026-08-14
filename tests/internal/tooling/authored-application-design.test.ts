@@ -46,6 +46,41 @@ describe("authored application design documents", () => {
     expect(document.digest).toMatch(/^sha256-[0-9a-f]{64}$/);
   });
 
+  test("parses multiline, nested, escaped, and reference links with CommonMark semantics", () => {
+    const document = parseApplicationDesignDocument(
+      `# Design
+
+A [multi
+line with *nested \\] text*][Coverage] and
+[escaped \\[label\\]](
+  <former:Forum.Form>
+  "title"
+).
+
+[Coverage]:
+  reaction:Forum.Refresh
+  "first"
+[COVERAGE]: view:Forged.Duplicate
+`,
+      "design/commonmark.md",
+    );
+
+    expect(document.links).toEqual([
+      expect.objectContaining({
+        kind: "reaction",
+        target: "Forum.Refresh",
+        text: "multi line with nested ] text",
+        location: { source: "design/commonmark.md", line: 3, column: 3 },
+      }),
+      expect.objectContaining({
+        kind: "former",
+        target: "Forum.Form",
+        text: "escaped [label]",
+        location: { source: "design/commonmark.md", line: 5, column: 1 },
+      }),
+    ]);
+  });
+
   test("finds computation fences anywhere and retains signatures and required bodies", () => {
     const document = parseApplicationDesignDocument(
       `Computation design
@@ -103,6 +138,37 @@ Neither \`[inline](reaction:Not.Inline)\` nor <!-- [comment](view:Not.Comment) -
 `,
     );
     expect(document.links.map(({ target }) => target)).toEqual(["Forum.Real"]);
+  });
+
+  test("cannot forge coverage with comments, code, HTML blocks, or images", () => {
+    const document = parseApplicationDesignDocument(
+      `# Real title
+
+<!--
+[comment forgery](reaction:Forged.*)
+-->
+
+    [indented forgery](view:Forged.*)
+
+<div>
+[HTML forgery](former:Forged.*)
+</div>
+
+![image forgery](reaction:Forged.*)
+A \`[code forgery](view:Forged.*)\` is inert.
+
+[real](view:Forum.Real)
+`,
+      "design/adversarial.md",
+    );
+
+    expect(document.links).toEqual([
+      expect.objectContaining({
+        kind: "view",
+        target: "Forum.Real",
+        location: { source: "design/adversarial.md", line: 16, column: 1 },
+      }),
+    ]);
   });
 
   test("normalizes platform newlines and a final newline before digesting full prose", () => {

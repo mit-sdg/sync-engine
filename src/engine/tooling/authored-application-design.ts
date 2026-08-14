@@ -1,3 +1,4 @@
+import { fromMarkdown } from "mdast-util-from-markdown";
 import {
   declarationGroups,
   exactlyOneH1,
@@ -78,10 +79,6 @@ function fail(scanned: ScannedMarkdown, line: number, message: string): never {
   throw new Error(`${scanned.source}:${line}: ${message}.`);
 }
 
-function normalizedLabel(label: string): string {
-  return label.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
-}
-
 function typedLink(
   scanned: ScannedMarkdown,
   destination: string,
@@ -104,79 +101,57 @@ function typedLink(
   return { kind, target, text, location: at(scanned, line, column) };
 }
 
-interface ReferenceDefinition {
-  destination: string;
+interface MarkdownNode {
+  type: string;
+  children?: readonly MarkdownNode[];
+  value?: string;
+  alt?: string | null;
+  url?: string;
+  identifier?: string;
+  position?: { start: { line: number; column: number } };
+}
+
+function descendants(node: MarkdownNode, visit: (node: MarkdownNode) => void): void {
+  visit(node);
+  for (const child of node.children ?? []) descendants(child, visit);
+}
+
+function textOf(node: MarkdownNode): string {
+  if (node.type === "text" || node.type === "inlineCode") return node.value ?? "";
+  if (node.type === "image" || node.type === "imageReference") return node.alt ?? "";
+  if (node.type === "break") return " ";
+  return (node.children ?? []).map(textOf).join("");
 }
 
 function linksOf(scanned: ScannedMarkdown): AuthoredDesignLink[] {
-  const definitions = new Map<string, ReferenceDefinition>();
-  const definitionLines = new Set<number>();
-  const definitionPattern =
-    /^ {0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|(\S+))(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*$/;
-
-  for (const line of scanned.lines) {
-    if (!scanned.proseLineNumbers.has(line.number)) continue;
-    const definition = definitionPattern.exec(line.text);
-    if (definition === null) continue;
-    const label = normalizedLabel(definition[1]);
-    if (definitions.has(label))
-      fail(scanned, line.number, `reference label ${JSON.stringify(label)} is defined twice`);
-    definitions.set(label, { destination: definition[2] ?? definition[3] });
-    definitionLines.add(line.number);
-  }
+  const tree: MarkdownNode = fromMarkdown(scanned.content);
+  const definitions = new Map<string, string>();
+  descendants(tree, (node) => {
+    if (node.type === "definition" && node.identifier !== undefined && node.url !== undefined) {
+      // CommonMark resolves duplicate definitions to their first occurrence.
+      if (!definitions.has(node.identifier)) definitions.set(node.identifier, node.url);
+    }
+  });
 
   const links: AuthoredDesignLink[] = [];
-  for (const line of scanned.lines) {
-    if (!scanned.proseLineNumbers.has(line.number) || definitionLines.has(line.number)) continue;
-    const occupied: { start: number; end: number }[] = [];
-    for (const code of line.text.matchAll(/(`+).*?\1/g)) {
-      occupied.push({ start: code.index, end: code.index + code[0].length });
-    }
-    for (const comment of line.text.matchAll(/<!--.*?-->/g)) {
-      occupied.push({ start: comment.index, end: comment.index + comment[0].length });
-    }
-    const add = (start: number, end: number, destination: string, text: string) => {
-      if (
-        occupied.some((range) => start < range.end && end > range.start) ||
-        (start > 0 && line.text[start - 1] === "\\")
-      ) {
-        return;
-      }
-      const parsed = typedLink(scanned, destination, text, line.number, start + 1);
-      if (parsed !== undefined) links.push(parsed);
-      occupied.push({ start, end });
-    };
-
-    const inline =
-      /(?<!!)\[([^\]\n]+)\]\(\s*(?:<([^>\n]+)>|([^\s)]+))(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g;
-    for (const match of line.text.matchAll(inline)) {
-      const start = match.index;
-      add(start, start + match[0].length, match[2] ?? match[3], match[1]);
-    }
-
-    const fullReference = /(?<!!)\[([^\]\n]+)\]\[([^\]\n]*)\]/g;
-    for (const match of line.text.matchAll(fullReference)) {
-      const start = match.index;
-      const end = start + match[0].length;
-      if (occupied.some((range) => start < range.end && end > range.start)) continue;
-      const label = normalizedLabel(match[2] === "" ? match[1] : match[2]);
-      const definition = definitions.get(label);
-      if (definition !== undefined) add(start, end, definition.destination, match[1]);
-    }
-
-    const shortcut = /(?<!!)\[([^\]\n]+)\]/g;
-    for (const match of line.text.matchAll(shortcut)) {
-      const start = match.index;
-      const end = start + match[0].length;
-      if (occupied.some((range) => start < range.end && end > range.start)) continue;
-      const definition = definitions.get(normalizedLabel(match[1]));
-      if (definition !== undefined) add(start, end, definition.destination, match[1]);
-    }
-  }
-  return links.sort(
-    (left, right) =>
-      left.location.line - right.location.line || left.location.column - right.location.column,
-  );
+  descendants(tree, (node) => {
+    const destination =
+      node.type === "link"
+        ? node.url
+        : node.type === "linkReference" && node.identifier !== undefined
+          ? definitions.get(node.identifier)
+          : undefined;
+    if (destination === undefined || node.position === undefined) return;
+    const parsed = typedLink(
+      scanned,
+      destination,
+      textOf(node).trim().replace(/\s+/g, " "),
+      node.position.start.line,
+      node.position.start.column,
+    );
+    if (parsed !== undefined) links.push(parsed);
+  });
+  return links;
 }
 
 function splitFields(text: string, scanned: ScannedMarkdown, line: number): string[] {
