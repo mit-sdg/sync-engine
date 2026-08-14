@@ -11,7 +11,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
 import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { no, reaction, vocabulary, when, where } from "@sync-engine/language";
+import { former, no, reaction, view, vocabulary, when, where } from "@sync-engine/language";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { wireContracts } from "@sync-engine/tooling";
@@ -80,6 +80,122 @@ describe("assemble", () => {
     expect(app.engine.logging).toBe(Logging.OFF);
     expect((keepAll.engine.Action.store as MemoryStore).policy).toBe("keepAll");
     expect(keepAll.engine.logging).toBe(Logging.TRACE);
+  });
+
+  test("selected nested declarations carry their dotted authored identities through lowering", () => {
+    const Readable = view("the current count", (_inputs, { count }, _bindings) =>
+      where(Counting._current({}).is({ count })),
+    ).one();
+    const Current = former("the current count payload", (_inputs, { count }) =>
+      where(Readable({}).is({ count })).form({ count }),
+    );
+    const Refresh = reaction(() =>
+      when(Counting.increment({}).responds())
+        .where(Readable({}))
+        .then(Echoing.hear({ text: "first" }))
+        .then(Echoing.hear({ text: "second" })),
+    );
+    const app = assemble({
+      vocabulary: vocab,
+      composition: { Forum: { posts: { Refresh, Readable, Current } } },
+    });
+    const exported = app.engine.exportReactions();
+
+    expect(exported.reactions.filter(({ name }) => name.startsWith("Forum.posts.Refresh"))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          authored: { kind: "reaction", identity: "Forum.posts.Refresh" },
+        }),
+      ]),
+    );
+    expect(
+      exported.reactions
+        .filter(({ name }) => name.startsWith("Forum.posts.Refresh"))
+        .every(({ authored }) => authored?.identity === "Forum.posts.Refresh"),
+    ).toBe(true);
+    expect(exported.views.find(({ name }) => name === "the current count")?.authored).toEqual({
+      kind: "view",
+      identity: "Forum.posts.Readable",
+    });
+    expect(
+      exported.formers.find(({ name }) => name === "the current count payload")?.authored,
+    ).toEqual({ kind: "former", identity: "Forum.posts.Current" });
+    expect(app.authoredDeclarations).toEqual([
+      { kind: "former", identity: "Forum.posts.Current" },
+      { kind: "view", identity: "Forum.posts.Readable" },
+      { kind: "reaction", identity: "Forum.posts.Refresh" },
+    ]);
+  });
+
+  test("an endpoint tree gives every lowered runtime reaction one endpoint identity", () => {
+    const NestedEndpoint = endpoint("/nested-identity", () =>
+      receive({})
+        .then(Counting.increment({}))
+        .then(respond({ ok: true })),
+    );
+    const app = assemble({
+      vocabulary: vocab,
+      composition: { Forum: { api: { NestedEndpoint } } },
+    });
+    const lowered = app.engine
+      .exportReactions()
+      .reactions.filter(({ name }) => name.startsWith("Forum.api.NestedEndpoint"));
+
+    expect(lowered.length).toBeGreaterThan(1);
+    expect(
+      lowered.every(
+        ({ authored }) => authored?.kind === "reaction" && authored.source === "endpoint",
+      ),
+    ).toBe(true);
+    expect(lowered.every(({ authored }) => authored?.identity === "Forum.api.NestedEndpoint")).toBe(
+      true,
+    );
+    const coreGenerated = app.engine
+      .exportReactions()
+      .reactions.filter(({ name }) => !name.startsWith("Forum.api.NestedEndpoint"));
+    expect(coreGenerated.length).toBeGreaterThan(0);
+    expect(coreGenerated.every(({ authored }) => authored === undefined)).toBe(true);
+  });
+
+  test("rejects declaration objects installed at multiple paths", () => {
+    const SharedReaction = reaction(() =>
+      when(Counting.increment({}).responds()).then(Echoing.hear({ text: "shared" })),
+    );
+    const SharedEndpoint = endpoint("/shared-object", () =>
+      receive({}).then(respond({ ok: true })),
+    );
+    const SharedView = view("shared view", (_inputs, { count }, _bindings) =>
+      where(Counting._current({}).is({ count })),
+    ).one();
+    const SharedFormer = former("shared former", (_inputs, { count }) =>
+      where(Counting._current({}).is({ count })).form({ count }),
+    );
+
+    for (const [kind, declaration] of [
+      ["reaction", SharedReaction],
+      ["endpoint", SharedEndpoint],
+      ["view", SharedView],
+      ["former", SharedFormer],
+    ] as const) {
+      expect(() =>
+        assemble({
+          vocabulary: vocab,
+          composition: { First: declaration, nested: { Second: declaration } },
+        }),
+      ).toThrow(`same ${kind} declaration object is installed at both "First" and "nested.Second"`);
+    }
+  });
+
+  test("validates every segment of a selected declaration path", () => {
+    const Valid = reaction(() =>
+      when(Counting.increment({}).responds()).then(Echoing.hear({ text: "valid" })),
+    );
+    expect(() =>
+      assemble({ vocabulary: vocab, composition: { Forum: { "bad segment": Valid } } }),
+    ).toThrow('reaction declaration path "Forum.bad segment" has invalid segment "bad segment"');
+    expect(() => assemble({ vocabulary: vocab, composition: { "9Forum": { Valid } } })).toThrow(
+      'invalid segment "9Forum"',
+    );
   });
 
   test("reactions register under their dotted composition path", async () => {

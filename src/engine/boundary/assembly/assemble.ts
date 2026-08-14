@@ -50,6 +50,10 @@ import type {
   WhenBuilder,
 } from "@engine/reactions/types";
 import { standardComputations, type ComputationFn } from "@engine/reads/computations";
+import {
+  AuthoredDeclarationIdentities,
+  type AuthoredDeclarationIdentity,
+} from "@engine/reads/declaration-identity";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
 import type { ComputationInventoryIR, ConceptImplementationProvenanceIR } from "@engine/reads/ir";
 import { isRelationView } from "@engine/reads/lines";
@@ -252,6 +256,8 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   whenIdle(): Promise<void>;
   /** The public route and admission facts a separate gateway may consume. */
   publicInterface: ApplicationInterface;
+  /** Every selected authored declaration, once per installed composition object. */
+  authoredDeclarations: readonly AuthoredDeclarationIdentity[];
   /** Every authored endpoint declaration, independent of lowering. */
   endpoints: readonly EndpointDeclaration[];
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
@@ -474,20 +480,25 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   // ── The composition: tagged exports register under their dotted path ─────
   const reactions: Record<string, Reaction> = {};
+  const authoredReactions: Record<string, AuthoredDeclarationIdentity> = {};
+  const declarationIdentities = new AuthoredDeclarationIdentities();
   const contracts: Record<string, InputContractDecl> = {};
   const validators: Record<string, EndpointValidators> = {};
   const endpoints: EndpointDeclaration[] = [];
-  const views: RelationView[] = [];
-  const formers: FormerRef[] = [];
+  const views: Array<readonly [RelationView, AuthoredDeclarationIdentity]> = [];
+  const formers: Array<readonly [FormerRef, AuthoredDeclarationIdentity]> = [];
 
   const visit = (value: unknown, name: string): void => {
     if (isReaction(value)) {
+      const authored = declarationIdentities.install(value, "reaction", name);
       if (Object.hasOwn(reactions, name))
         throw new Error(`assemble: two reactions named "${name}".`);
       setOwn(reactions, name, value);
+      setOwn(authoredReactions, name, authored);
       return;
     }
     if (isEndpointDef(value)) {
+      const authored = declarationIdentities.install(value, "endpoint", name);
       const declared = value.reaction($vars);
       const declarations = declarationsOf(declared);
       declarations.forEach((entry) => pinToPath(entry, value.path));
@@ -498,6 +509,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
       if (Object.hasOwn(reactions, name))
         throw new Error(`assemble: two reactions named "${name}".`);
       setOwn(reactions, name, () => declared);
+      setOwn(authoredReactions, name, authored);
       if (value.input !== undefined) {
         if (Object.hasOwn(contracts, value.path)) {
           throw new Error(
@@ -523,11 +535,11 @@ export function assemble<T extends Record<string, ConceptClass>>(
       return;
     }
     if (isRelationView(value)) {
-      views.push(value);
+      views.push([value, declarationIdentities.install(value, "view", name)]);
       return;
     }
     if (isFormerRef(value)) {
-      formers.push(value);
+      formers.push([value, declarationIdentities.install(value, "former", name)]);
       return;
     }
     if (isWalkable(value)) {
@@ -542,10 +554,14 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   // Name order, deliberately: registration order carries no meaning.
   const ordered: Record<string, Reaction> = {};
-  for (const name of Object.keys(reactions).sort()) setOwn(ordered, name, reactions[name]);
-  engine.register(ordered);
-  engine.declareViews(...views);
-  engine.declareFormers(...formers);
+  const orderedAuthored: Record<string, AuthoredDeclarationIdentity> = {};
+  for (const name of Object.keys(reactions).sort()) {
+    setOwn(ordered, name, reactions[name]);
+    setOwn(orderedAuthored, name, authoredReactions[name]);
+  }
+  engine.register(ordered, orderedAuthored);
+  engine.declareAuthoredViews(...views);
+  engine.declareAuthoredFormers(...formers);
 
   const app = engine.exportReactions();
   assertApplicationLocality("assemble", app);
@@ -621,6 +637,9 @@ export function assemble<T extends Record<string, ConceptClass>>(
     beginDrain: () => lifecycle.beginDrain(),
     whenIdle: () => lifecycle.whenIdle(),
     publicInterface,
+    authoredDeclarations: [...declarationIdentities.inventory()].sort((left, right) =>
+      ordinal(`${left.identity}\0${left.kind}`, `${right.identity}\0${right.kind}`),
+    ),
     endpoints,
     form: (fused) => engine.form(fused),
   };

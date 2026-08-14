@@ -1,5 +1,6 @@
 /** Lower authored former trees and serialize registered formers. */
 
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { Arranged, FormerNode, FormerRef } from "./former-nodes.ts";
 import { withLive } from "./ir.ts";
 import type { ArrangedIR, FormerIR, FormerNodeIR, FormerSourceIR, FormerWhereOpIR } from "./ir.ts";
@@ -95,9 +96,10 @@ export function lowerFormerBody(slotVars: readonly symbol[], body: FormerNode): 
 }
 
 /** Serialize one former: the registered body already is IR. */
-export function serializeFormer(ref: FormerRef): FormerIR {
+export function serializeFormer(ref: FormerRef, authored?: AuthoredDeclarationIdentity): FormerIR {
   return {
     name: ref.formerName,
+    ...(authored === undefined ? {} : { authored }),
     ins: [...ref.ins],
     bindings: [...ref.bindings],
     promise: ref.promise,

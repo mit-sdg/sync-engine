@@ -14,6 +14,7 @@
  */
 
 import type { ActionPosture, ChannelPosture } from "@engine/reactions/types";
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 
 /** A JSON-safe pattern value: literals, variables, matchers, nested shapes. */
 export type ValueIR =
@@ -160,6 +161,8 @@ export type ViewOpIR =
  */
 export interface ViewIR {
   name: string;
+  /** Selected-composition identity; absent for low-level or imported registrations. */
+  authored?: AuthoredDeclarationIdentity;
   alternatives: ViewOpIR[][];
   ins: string[];
   outs: string[];
@@ -245,6 +248,8 @@ export type FormerNodeIR =
 /** One former: explicit input and free bindings, its promise, and its formed tree. */
 export interface FormerIR {
   name: string;
+  /** Selected-composition identity; absent for low-level or imported registrations. */
+  authored?: AuthoredDeclarationIdentity;
   ins: string[];
   bindings: string[];
   promise: "one" | "optional";
@@ -262,6 +267,8 @@ export interface ConsequenceIR {
 /** One reaction's when / where / then frame, as data. */
 export interface ReactionIR {
   name: string;
+  /** The top-level authored tree this lowered runtime reaction came from. */
+  authored?: AuthoredDeclarationIdentity;
   when: TriggerIR[];
   /**
    * A deferred trigger: qualification waits for a settlement frontier in the
@@ -278,6 +285,8 @@ export interface ReactionIR {
 /** A reaction that could not be lowered to `ReactionIR` — visible, never silent. */
 export interface UnloweredIR {
   name: string;
+  /** The top-level authored tree this local runtime reaction came from. */
+  authored?: AuthoredDeclarationIdentity;
   reason: string;
   /** Inspectable facts retained even though the complete definition is local code. */
   known: {

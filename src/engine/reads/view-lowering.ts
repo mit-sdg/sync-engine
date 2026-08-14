@@ -1,5 +1,6 @@
 /** Lower authored view blocks and serialize registered relation views. */
 
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ViewIR, ViewOpIR, WhereOpIR } from "./ir.ts";
 import type { RelationView } from "./lines.ts";
 import { encodePattern, encodeWhereOp, PatternVariables, queryRefOf } from "./pattern-encoding.ts";
@@ -27,9 +28,10 @@ export function lowerRelationBlocks(
 }
 
 /** Serialize one view: the registered alternatives already are IR. */
-export function serializeView(ref: RelationView): ViewIR {
+export function serializeView(ref: RelationView, authored?: AuthoredDeclarationIdentity): ViewIR {
   return {
     name: ref.viewName,
+    ...(authored === undefined ? {} : { authored }),
     alternatives: ref.alternatives as ViewOpIR[][],
     ins: [...ref.ins],
     outs: [...ref.outs],

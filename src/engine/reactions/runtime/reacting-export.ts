@@ -13,8 +13,12 @@ export function exportReactions(state: {
 }): AppIR {
   return {
     reactions: [...state.loweredReactions].flat(),
-    views: [...state.registry.viewRefs()].map((ref) => serializeView(ref)),
-    formers: [...state.registry.formerRefs()].map((ref) => serializeFormer(ref)),
+    views: [...state.registry.viewRefs()].map((ref) =>
+      serializeView(ref, state.registry.authoredIdentityOf(ref)),
+    ),
+    formers: [...state.registry.formerRefs()].map((ref) =>
+      serializeFormer(ref, state.registry.authoredIdentityOf(ref)),
+    ),
     unlowered: [...state.unloweredReactions],
   };
 }
