@@ -497,8 +497,8 @@ unless `sync-engine check --fail-on-warnings` runs with an application config.
 
 ### Result model and gateway
 
-The [application authoring guide](../guide/authoring.md#application-boundary)
-shows the path from assembly through the fixed gateway and generated client.
+The [application model](../overview.md#generated-evidence-and-runtime-boundaries)
+places the generated contract beside the runtime boundary.
 Semantically, `assemble` gives an application its own boundary and occurrence
 log. The log records what happened in that assembly; it is not concept state.
 `createGateway` decorates the application's `Invoker` with route admission,
@@ -594,9 +594,9 @@ the `ValidatorFault` class. An input-validator throw returns `INVALID_INPUT`
 before an occurrence is recorded. Caller-visible errors contain no thrown
 detail, and reporter failure is isolated from validation settlement. The
 generated TypeScript contract provides static caller checks. Runtime validation
-requires endpoint validators. Optional concept State sections are
-uninterpreted human notation; they do not contribute to endpoint contracts or
-validators, and no schema is inferred from concept specifications.
+requires endpoint validators. Required concept State fences are retained raw for
+design provenance but remain uninterpreted; they do not contribute to endpoint
+contracts or validators, and no schema is inferred from them.
 
 ### Endpoint input contracts
 
@@ -616,7 +616,7 @@ define their own projection failures and error codes.
 
 ## Generated wire
 
-With a [generated wire contract](../guide/authoring.md#generate-the-wire-contract)
+With a [generated wire contract](../guide/authoring.md#7-check-and-generate)
 and vocabulary type anchor, endpoint leaves refer to concept action parameters,
 action results, query rows, and registered vocabulary computation parameters
 and awaited results. A variable used in a `compute(...)` input follows the
@@ -653,36 +653,24 @@ evaluates projectors in declaration order, and a projector or validation failure
 occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
-format and package SemVer. Artifact planning requires
-`sync-engine.application-manifest` version 5, a 1.x core generator identity,
-and SemVer projector provenance. The core generator identity must name
-`@mit-sdg/sync-engine` at a 1.x version. Projector provenance accepts any
-nonblank package name with any valid SemVer version; projector versions
-are not restricted to 1.x. Generator and projector identities may use
-prerelease versions.
+format and package SemVer. The application-manifest schema is version 1 and has
+no decoder for previous manifest versions. A beta upgrade across this reset
+requires regenerating all manifests and generated artifacts.
 
-Manifest V5 inventories every installed computation, including the five standard
-relations and vocabulary computations that no registered definition references.
-It records only the computation name, its standard/vocabulary source, and input
-roles when conservative function inspection can recover them. It does not retain
-the function. For concepts, the vocabulary class remains the canonical contract:
-its action/query roles, query cardinalities, and refusal declarations stay
-authoritative when assembly selects a structural replacement. A separate
-implementation inventory records `default`, `initialize`, or `instances`
-selection, plus the core-owned RequestBoundary. A named floor is retained only
-when WeakMap provenance identifies it without ambiguity; omission does not imply
-that no floor was used.
+The manifest inventories selected computations, canonical concept definitions,
+application instances, raw concept State, resolved vocabulary, executable
+application identities, implementation provenance, registered design source
+locations, and normalized-source digests. It does not retain executable
+computation functions or runtime occurrence state.
 
-Generated Markdown names its manifest producer, the
-`sync-engine.concept-specification` format version, and its renderer package
-version. Each parsed concept contract also carries its own format and version in
-the manifest.
-
-The concept read-back reproduces parsed signatures, member bodies, refusals,
-Types, and extension sections, but excludes State. Its labels distinguish
-registration checks from query cardinality checks performed during evaluated
-reads. Type expressions, result declarations, and behavior prose do not become
-runtime validation or executable assertions.
+Generated Markdown names its manifest producer, concept-specification format,
+and renderer version. It links each selected authored reaction tree, view,
+former, computation, concept, concrete type, and binding to every applicable
+authored source location. It shows structured concept signatures,
+cardinalities, refusals, definition/instance relationships, and executable
+lowering. It does not copy application prose, Purpose, Principle, raw State,
+action/query bodies, vocabulary explanations, or computation bodies. These
+authored statements do not become runtime validation or executable assertions.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 requires explicit input, successful-output, and domain-error validators; none is

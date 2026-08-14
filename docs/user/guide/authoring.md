@@ -1,372 +1,232 @@
-# Application authoring
+# Author an application design
 
-This guide follows the Operations Room application from concept registration
-to a client typed by its generated wire contract. It assumes TypeScript, a Bun
-package with a concept-free assembly, and the [application model](../overview.md).
-The snippets are excerpts from the standalone Operations Room example, not a
-second setup template.
+This guide adds the complete version-1 design contract to a config-based
+sync-engine application: strict concept specifications, application vocabulary,
+typed prose coverage, computations, and generated evidence. It applies to the
+breaking beta contract described in the current reference pages. Older concept
+files, manifests, generated artifacts, and `--vocabulary-module` workflows must
+be replaced rather than mixed with this format.
 
-Use the [Public API](../reference/public-api.md) for signatures and [Execution
-semantics](../reference/semantics.md) for runtime guarantees.
+Read [Designing with concepts](../design.md) before choosing concept boundaries.
+Use the [Public API](../reference/public-api.md) for TypeScript signatures and
+the [concept specification reference](../reference/concept-specification.md) for
+exact file grammar.
 
-## Prerequisites
+## 1. Select the assembly variant
 
-Use a copy of [`examples/operations-room`](../../../examples/operations-room/)
-to run this guide's commands unchanged. When extending the files created by
-[Getting started](getting-started.md), follow the same sequence but adapt the
-module names and package scripts to the application. The example's
-`package.json` supplies every script used below.
+Decide which implementations, reactions, endpoints, views, formers, and
+computations one generated config assembles. Design completeness is checked
+against that exact selection. If the application supports another selection,
+create another config and select the documents appropriate to that variant.
 
-The linked files contain the imports, declarations, and test setup omitted from
-the excerpts.
+Application files may use any sensible layout. The checker follows the config,
+selected assembly, imported concept specifications, and typed links; it does not
+require design and source trees to mirror each other.
 
-## Organize application-owned design
+## 2. Write each concept specification
 
-Configure `@design/*` to resolve to `design/*`, then use these paired locations:
+For every selected application-owned concept definition, create a Markdown file
+with this exact top-level structure:
 
-| Authored design                 | Executable source and focused test                                                     |
-| ------------------------------- | -------------------------------------------------------------------------------------- |
-| `design/concepts/Name.md`       | `src/concepts/Name.ts`, optional `Name.registry.ts`, and `tests/concepts/Name.test.ts` |
-| `design/compositions/Group.md`  | `src/compositions/Group.ts` and `tests/compositions/Group.test.ts`                     |
-| optional `design/vocabulary.md` | `src/vocabulary.ts`                                                                    |
+```text
+# DefinitionName
 
-Do not add a design README or index. A concept registry imports
-`@design/concepts/Name.md`; `src/vocabulary.ts` collects the registrations in
-`conceptSet(...)`. When `design/vocabulary.md` exists, `src/vocabulary.ts`
-imports and exports it as `spec`. The filename is conventional and has no
-special registration or runtime meaning. Each `src/compositions/Group.ts`
-likewise imports and exports `@design/compositions/Group.md` as `spec`.
-
-Write each composition document around its overall purpose. Under
-`## Compositions`, add `###` entries whose names match the larger executable
-reaction or endpoint groups. Add `## Views` or `## Formers` only for reads with
-independent application meaning. Keep the canonical application categories
-separate: `compositions` contains the larger reaction and endpoint groups, while
-`views` and `formers` are separately owned. A self-contained group may export
-all three records; an application with shared read modules may build the same
-shape at assembly. Install every read exactly once. Another group may reuse an
-imported read without re-exporting it.
-
-## Define one behavior
-
-Design the concept's purpose, principle, owned state, actions, queries, and
-expected refusals before writing its class. [Designing with
-concepts](../design.md) gives the criteria.
-
-_Source: [`examples/operations-room/design/concepts/Alerting.md`](../../../examples/operations-room/design/concepts/Alerting.md)_
-
-````text
+## Purpose
+## Principle
+## Types
+## State
 ## Actions
-
-```actions
-raise (recipient: Person, subject: Subject) : return (alert: Alert)
-  then
-    add a new alert with recipient and subject
-    return alert
-
-acknowledge (alert: Alert) : return (alert: Alert)
-  where alert not in alerts
-  then
-    refuse ALERT_NOT_FOUND "There is no such open alert."
-  where alert in alerts
-  then
-    delete alert
-    return alert
-```
-
 ## Queries
-
-```queries
-_openFor (recipient: Person) : many (alert: Alert, subject: Subject)
-  answers no rows for a Person with no open Alerts
-  orders rows by when each Alert was raised
-```
-````
-
-Non-underscore prototype methods are actions; underscore-prefixed methods are
-queries. Use ECMAScript `#private` methods or module functions for helpers.
-
-_Source: [`examples/operations-room/src/concepts/Alerting.ts`](../../../examples/operations-room/src/concepts/Alerting.ts)_
-
-```ts
-  raise({ recipient, subject }: { recipient: string; subject: string }) {
-    const alert = this.freshID();
-    this.alerts.set(alert, { alert, recipient, subject });
-    return { alert };
-  }
-
-  acknowledge({ alert }: { alert: string }) {
-    if (!this.alerts.delete(alert)) throw new AlertNotFound();
-    return { alert };
-  }
-
-  _openFor({ recipient }: { recipient: string }): Alert[] {
-    return [...this.alerts.values()].filter((alert) => alert.recipient === recipient);
-  }
 ```
 
-Test the principle against the class directly, as
-`tests/concepts/Alerting.test.ts` does with deterministic identities. This
-separates concept behavior from assembly and composition.
+Declare concept-external parameters in the sole `types` fence. Put one raw
+`state` fence in State. Declare at least one structured action with explicit
+branches, and put the sole `queries` fence in Queries even when it is empty.
+Do not add application typed links or computations.
 
-_Source: [`examples/operations-room/src/concepts/Alerting.registry.ts`](../../../examples/operations-room/src/concepts/Alerting.registry.ts)_
+Import the file as text and pass it to `registerConcept`. The strict config check
+traces that import and rejects dynamic or unresolvable specification
+construction. The H1 names the reusable definition; the `conceptSet` key names
+each application instance.
 
-```ts
-export const alerting = registerConcept({
-  class: AlertingConcept,
-  spec,
-  refusals: { ALERT_NOT_FOUND: AlertNotFound },
-  floors: {
-    deterministic: ({ identities }: { identities: Record<string, () => string> }, name: string) =>
-      new AlertingConcept(identities[name]),
-  },
-});
+Verify the specification before continuing:
+
+```sh
+sync-engine check --config generated.config.ts
 ```
 
-`conceptSet(...)` gives registrations their application names and derives the
-inert authoring references and vocabulary.
+At this stage, vocabulary and coverage errors are expected if those documents
+are not registered yet. Concept grammar, source provenance, unresolved
+TypeScript shapes, result fields, optionality, and refusal mappings should not
+be left unresolved.
 
-_Source: [`examples/operations-room/src/vocabulary.ts`](../../../examples/operations-room/src/vocabulary.ts)_
+## 3. Register the application vocabulary
 
-```ts
-export const operationsRoomConcepts = conceptSet({
-  Gathering: gathering,
-  Selecting: selecting,
-  Discussing: discussing,
-  Alerting: alerting,
-});
+Create one vocabulary document when any selected concept declares an external
+type or the application needs a concrete type. It has one nonempty H1, one
+`types` fence, and may contain surrounding prose.
 
-export const { concepts, vocabulary } = operationsRoomConcepts;
+Declare each concrete type with a nonempty definition, then bind every selected
+external parameter exactly once:
+
+```types
+concrete Person
+  A stable identity supplied by the institution.
+
+PostComments.User is Person
+  Comment authors use institution identities.
+
+PostComments.Target is Posting.Post
+  Post comments attach to published posts.
 ```
 
-[Concept specification format](../reference/concept-specification.md) defines the parsed
-grammar and registration checks. [Registration and
-floors](../reference/public-api.md#registration-and-floors) defines implementation
-factory context and lifecycle.
+The left side names a selected concept instance and one of its external
+parameters. The right side directly names a concrete type or a type owned by a
+selected concept instance. Do not create chains, bind to another external
+parameter, or leave a concrete type unused.
 
-## Connect independent behaviors
+The executable vocabulary module neither imports nor exports this Markdown.
+Register it only through the generated config's `design.vocabulary` URL.
 
-Keep concept implementations independent of peer concepts and put
-cross-concept decisions in composition. Operations Room installs two reactions
-after a mitigation is selected:
+## 4. Explain application decisions with typed links
 
-_Source: [`examples/operations-room/src/compositions/MitigationDiscussion.ts`](../../../examples/operations-room/src/compositions/MitigationDiscussion.ts)_
+Create one or more ordinary Markdown documents with one nonempty H1. Organize
+each around an application topic rather than around source directories or
+checker categories. A document may explain declarations from several modules.
 
-```ts
-const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
-  when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
-);
+Place exact typed links beside the claims they support:
+
+```md
+Editing a post [refreshes its derived content](reaction:Forum.posts.RefreshDerivedContent).
+The [home feed](former:Forum.feed.HomeFeed) presents the selected posts.
+Visibility follows the [readability policy](view:Forum.posts.Readable).
 ```
 
-The independently selectable alert pack states the other consequence:
+Standard Markdown reference links are also valid:
 
-_Source: [`examples/operations-room/src/compositions/MitigationAlerts.ts`](../../../examples/operations-room/src/compositions/MitigationAlerts.ts)_
+```md
+Editing refreshes derived content.[refresh]
 
-```ts
-const SelectedMitigationAlertsResponders = reaction(({ room, selection, responder }) =>
-  when(Selecting.choose({ scope: room }).responds({ selection }))
-    .where(Gathering._members({ gathering: room }).is({ member: responder }))
-    .then(Alerting.raise({ recipient: responder, subject: selection })),
-);
+[refresh]: reaction:Forum.posts.RefreshDerivedContent
 ```
 
-The first rule asks one consequence. The many-row membership query fans the
-second rule out once per matching responder. Separate reactions keep the two
-consequences independently selectable. A reaction is not a transaction: each
-concept action settles independently, and a later failure does not roll back an
-earlier action. [Designing reactions](../design.md#designing-reactions) covers
-placement; [Reaction semantics](../reference/semantics.md#reactions) defines
-matching and failure.
+Use the declaration's dotted path in the selected composition. Link every
+authored reaction or endpoint tree, every named view, and every named former at
+least once. Do not use wildcards or assume that a parent path covers descendants.
+A helper view or former still needs coverage.
 
-Name reusable or replaceable policy as views:
+Keep introductions, history, and unresolved notes in unregistered documentation
+unless they also explain selected declarations. There is no required
+`application.md`, design README, or directory index.
 
-_Source: [`examples/operations-room/src/compositions/Contributions.ts`](../../../examples/operations-room/src/compositions/Contributions.ts)_
+## 5. Declare computations where they are explained
 
-```ts
-const responderPolicy = {
-  ResponderMayContribute: view(
-    "(responder) may contribute in (room)",
-    ({ responder, room }, _outputs, _bindings) =>
-      where(Gathering._membership({ gathering: room, member: responder }).is({ joined: true })),
-  ).holds(),
-  ResponderMayNotContribute: view(
-    "(responder) may not contribute in (room)",
-    ({ responder, room }, _outputs, _bindings) =>
-      where(Gathering._membership({ gathering: room, member: responder }).is({ joined: false })),
-  ).holds(),
-  denied: "RESPONDERS_ONLY",
-};
+Put `computations` fences in any registered application document, including the
+vocabulary document. Each executable computation needs exactly one declaration
+with a nonempty indented body:
+
+```computations
+invitationMailText(invitation: String, credential: String) : String
+  Produces the plain-text invitation containing the credential and sign-in URL.
 ```
 
-The composition module owns both complete policy variants under its structured
-`views` export. Assembly selects one variant and installs its complementary
-permission and denial views with the matching endpoint pair.
+Input names and optionality must match the executable registration. The result
+is one bare type. Use an optional `computation:invitationMailText` link when
+another passage refers to it. Do not put computations in concept
+specifications.
 
-## Build current-state reads
+## 6. Register explicit design URLs
 
-A former constructs a current result tree from queries, views, or other
-formers:
+Add a required versioned design block to the default export of
+`generated.config.ts`:
 
-_Source: [`examples/operations-room/src/compositions/Room.ts`](../../../examples/operations-room/src/compositions/Room.ts)_
-
-```ts
-const responderRoster = former("the responder roster of (room)", ({ room }, { responder }) =>
-  form({
-    responders: each(Gathering._members({ gathering: room }).is({ member: responder })).form({
-      responder,
-    }),
-  }),
-);
-```
-
-The complete
-[`roomDashboard`](../../../examples/operations-room/src/compositions/Room.ts) combines
-queries from all four concepts and handles optional current state. Use the [read
-construction cookbook](read-construction.md) for `no`, `whether`, folds, splicing, and
-cardinality contrasts; [Views and formers](../reference/semantics.md#views-and-formers)
-defines production behavior.
-
-## Application boundary
-
-### Receive, ask, respond
-
-_Source: [`examples/operations-room/src/compositions/Room.ts`](../../../examples/operations-room/src/compositions/Room.ts)_
-
-```ts
-const ChooseMitigation = endpoint("/rooms/choose-mitigation", ({ room, mitigation, selection }) =>
-  receive({ room, mitigation })
-    .then(Selecting.choose({ scope: room, item: mitigation }).responds({ selection }))
-    .then(respond({ mitigation })),
-);
-```
-
-When a concept action throws a registered refusal class, the boundary returns
-the registered code as a domain error. An unregistered throw instead follows
-the opaque framework-failure path. Case-split endpoints must answer every
-admitted case deliberately; branches have no fall-through priority. See
-[endpoint settlement](../reference/semantics.md#sibling-paths-and-endpoint-settlement).
-
-### Assemble the application
-
-Select implementations and composition before calling `assemble(...)`. Each
-call creates a new process-local runtime; changing an option later does not
-reconfigure an existing assembly:
-
-_Source: [`examples/operations-room/src/assembly.ts`](../../../examples/operations-room/src/assembly.ts)_
-
-```ts
-export function assembleOperationsRoom({
-  alerts = true,
-  contributions = "responders",
-  discussion = true,
-  instances = {},
-}: OperationsRoomOptions = {}) {
-  const policy = contributions === "responders" ? "Responders" : "Host";
-
-  return assemble({
-    vocabulary,
-    instances: { ...operationsRoomConcepts.implementations(), ...instances },
-    composition: {
-      Room: { spec: Room.spec, ...Room.compositions, formers: Room.formers },
-      MitigationDiscussion: {
-        spec: MitigationDiscussion.spec,
-        ...(discussion ? MitigationDiscussion.compositions : {}),
-      },
-      MitigationAlerts: {
-        spec: MitigationAlerts.spec,
-        ...(alerts ? MitigationAlerts.compositions : {}),
-      },
-      Contributions: {
-        spec: Contributions.spec,
-        ...Contributions.compositions.Contributions[policy],
-        views: Contributions.views[policy],
-      },
-    },
-  });
-}
-```
-
-Each top-level group retains its authored `spec`, flattens its canonical
-`compositions` aggregate, and keeps owned `views` or `formers` nested. The
-contribution module owns both policy variants; assembly selects exactly one
-endpoint pair and its views. Assembly walks the resulting records but does not
-invoke function leaves.
-
-[`src/edge.ts`](../../../examples/operations-room/src/edge.ts) places
-`createGateway(...)` in front of the assembly. The gateway provides public
-admission, timeout and abort waiting, optional limits and observers, and ordered
-drain without creating another reaction engine.
-
-### Generate the wire contract
-
-_Source: [`examples/operations-room/generated.config.ts`](../../../examples/operations-room/generated.config.ts)_
-
-```ts
-import { assembleOperationsRoom } from "./src/assembly.ts";
-
+```text
 export default {
-  assemble: assembleOperationsRoom,
-  title: "Operations room",
-  vocabulary: { module: new URL("./src/vocabulary.ts", import.meta.url) },
+  assemble: assembleApplication,
+  title: "Forum",
+  design: {
+    version: 1,
+    vocabulary: new URL("./design/vocabulary.md", import.meta.url),
+    documents: [
+      new URL("./design/forum.md", import.meta.url),
+      new URL("./design/access.md", import.meta.url),
+    ],
+  },
 };
 ```
 
-Pinning updates generated files; checking verifies that committed files match
-the current assembly:
+Every URL must use the local `file:` scheme. Relative URLs may point outside the
+application directory, including elsewhere in a monorepo. Omit `vocabulary`
+only when there are no selected external types and no concrete declarations.
+Use this explicit empty form when there is no application-level declaration to
+explain:
+
+```text
+design: { version: 1, documents: [] }
+```
+
+Do not import application design Markdown into composition source or store
+`spec` strings on assembly records. Typed links and config registration provide
+that connection.
+
+## 7. Check and generate
+
+Run the config-based check from the application package. When the package
+exposes the conventional artifact script, use it to pin, then check directly:
 
 ```sh
+sync-engine check
 bun run artifacts:pin
-bun run artifacts:check
+sync-engine artifacts check
 ```
 
-Do not generate inside an example installed under `node_modules`. Commit the
-generated files, change their owning declarations rather than editing them, and
-keep the generated wire with the vocabulary declarations referenced by its
-type-only import. [Generated descriptor](../reference/public-api.md#generated-descriptor)
-defines configuration; [Generated wire](../reference/semantics.md#generated-wire) defines
-derivation.
+`check` defaults to `generated.config.ts`. It fails on malformed concept files,
+unresolvable concept source and TypeScript shapes, incomplete vocabulary,
+unresolved typed links, or missing reaction/view/former/computation coverage.
+Artifact pinning and checking enforce the same complete design contract.
 
-### Add runtime validation
+Review generated diffs. Read-back links each covered declaration to every
+authored source location and line. It reports lowering and structured
+signatures, but it does not copy application prose, raw concept behavior prose,
+or computation bodies. A prose-only source change still changes the design
+input digest.
 
-Generated TypeScript constrains typed callers but does not validate values at
-runtime. Attach synchronous endpoint validators under the third `endpoint(...)`
-argument's
-`validators.input`, `validators.output`, and `validators.domainError` fields when
-the boundary requires them. [Endpoints](../reference/public-api.md#endpoints) defines
-the result shape; [Runtime validation](../reference/semantics.md#runtime-validation)
-defines ordering and failure.
+Commit the authored files, config, and regenerated artifacts together. Do not
+hand-edit generated output.
 
-### Call the typed client
+## 8. Verify behavior separately
 
-_Source: [`examples/operations-room/src/client.ts`](../../../examples/operations-room/src/client.ts)_
+The design checker establishes declaration shape, source provenance, vocabulary
+closure, and exact coverage. It does not prove natural-language conditions,
+effects, State semantics, computation semantics, persistence, transactions, or
+runtime validation.
 
-```ts
-export type OperationsRoomClient = Client<OperationsRoomWire>;
+Test concept principles directly, composition scenarios through an assembly,
+and storage constraints against the selected backend. Add endpoint validators
+where untyped runtime input crosses the boundary. Then run the application's
+full test and typecheck scripts.
 
-export async function loadRoomDashboard(client: OperationsRoomClient, room: string) {
-  const result = await client.rooms.get({ room });
-  if ("error" in result) return { message: `Could not load the room: ${result.error}` };
-  return result.dashboard;
-}
-```
+## Migrate an older beta application
 
-The `error` check narrows the generated success-or-error union. The [`client`
-API](../reference/public-api.md#client) defines local and custom transports.
+This revision is a hard beta break. Before upgrading, retain the old pinned
+version if rollback is required; new manifests and artifacts cannot be consumed
+by the old format.
 
-## Verify the application
+1. Rewrite every concept file into the six strict ordered sections.
+2. Replace prose Types with explicit `external` declarations.
+3. Preserve State in one raw fence; do not translate it into an invented SSF
+   dialect.
+4. Rewrite action branches and query result rows into the structured grammar.
+5. Replace vocabulary edges and executable vocabulary Markdown imports with one
+   configured vocabulary document using `concrete` and `is`.
+6. Remove composition `spec` imports and add exact typed links to registered
+   application prose.
+7. Add declarations for every executable computation.
+8. Add `design: { version: 1, vocabulary?, documents }` to each generated config.
+9. Remove `--vocabulary-module`; run `sync-engine check` or pass `--config`.
+10. Regenerate every manifest and generated artifact, then rerun tests.
 
-From a standalone copy of `examples/operations-room`, run:
-
-```sh
-bun install
-bun run check
-bun run start
-```
-
-`check` covers formatting, types, tests, and pinned artifacts. `start` prints
-the deterministic dashboard and the `ALREADY_JOINED` refusal from a repeated
-join; a missing refusal fails the scenario. Deployment checks must also cover
-persistence, traffic, and shutdown responsibilities described in [Operational
-limits](../reference/operations.md). [Execution
-semantics](../reference/semantics.md) defines omitted failure and ordering
-details.
+There is no legacy parser, compatibility flag, automatic format detection, or
+old-manifest decoder. Migration failures name the missing or malformed required
+construct. Rollback requires restoring the old authored files, config, package,
+and generated artifacts together.

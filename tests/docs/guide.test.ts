@@ -195,7 +195,12 @@ describe("guided curriculum", () => {
       for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
         const target = match[1];
         const firstPartyRaw = target.startsWith(firstPartyRawPrefix);
-        if (/^(?:https?:|mailto:)/.test(target) && !firstPartyRaw) continue;
+        if (
+          /^(?:https?:|mailto:|reaction:|view:|former:|computation:)/.test(target) &&
+          !firstPartyRaw
+        ) {
+          continue;
+        }
         const hashAt = target.indexOf("#");
         const targetPath = hashAt < 0 ? target : target.slice(0, hashAt);
         const path = firstPartyRaw ? targetPath.slice(firstPartyRawPrefix.length) : targetPath;

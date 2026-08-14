@@ -24,7 +24,7 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 
 ## Authoring
 
-- [Application authoring](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/authoring.md)
+- [Application design authoring](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/authoring.md)
 - [Read construction cookbook](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/read-construction.md)
 - [Concept specification format](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/concept-specification.md)
 - [Command-line reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/cli.md)
@@ -41,7 +41,9 @@ The current release is beta, and only the newest beta is supported. Pin an exact
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
 - Keep concept implementations independent of peer concepts and application composition.
-- Keep application-owned Markdown design distinct from executable declarations and generated read-back.
+- Keep concept specifications, registered application prose, application vocabulary, executable declarations, and generated read-back distinct.
+- Treat the generated config as the design root: use explicit local URLs, exact typed links, and config-based `sync-engine check`; do not use the removed vocabulary-module mode.
+- Concept State is retained raw and SSF checking is deferred; do not infer schemas or vocabulary-owned type proof from it.
 - Treat generated TypeScript as a caller contract. Add explicit validators for
   runtime values.
 - Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.

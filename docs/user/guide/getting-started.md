@@ -38,7 +38,7 @@ this tutorial, add these scripts to `package.json`:
 {
   "scripts": {
     "generate": "sync-engine artifacts pin",
-    "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check && tsc --noEmit",
+    "check": "sync-engine check && sync-engine artifacts check && tsc --noEmit",
     "start": "bun src/main.ts"
   }
 }
@@ -67,8 +67,10 @@ export const { concepts, vocabulary } = applicationConcepts;
 ```
 
 A concept-free setup does not create placeholder design or composition files.
-Add real composition modules under `src/compositions/` when the design calls
-for them. Until then, `src/assembly.ts` assembles an empty composition:
+Its generated config contains `design: { version: 1, documents: [] }`, the
+explicit empty application-design contract. Add real composition modules under
+`src/compositions/` when the design calls for them. Until then,
+`src/assembly.ts` assembles an empty composition:
 
 ```ts
 import { assemble } from "@mit-sdg/sync-engine/assembly";
@@ -93,9 +95,9 @@ bun run check
 bun run start
 ```
 
-`generate` writes the configured read-back and wire contract. `check` compares
-concept specifications with their classes, inspects application diagnostics,
-verifies the generated files, and runs TypeScript. The concept-free application
+`generate` writes the configured read-back and wire contract. `check` defaults
+to `generated.config.ts`, checks concept source and the registered application
+design, verifies generated files, and runs TypeScript. The concept-free application
 has no concepts or endpoints, so `start` prints `[]`.
 
 Rerun `sync-engine setup` to reconcile setup files. It verifies unchanged

@@ -86,7 +86,7 @@ Runtime evaluation checks each fragment's declared promise and faults if it
 produces several rows. A fragment must be record-rooted; the host may be a record
 form or an `each(...).form(...)` selection row.
 
-See [Application authoring](../guide/authoring.md#connect-independent-behaviors),
+See [Application design authoring](../guide/authoring.md),
 [reaction semantics](semantics.md#reactions), and [views and
 formers](semantics.md#views-and-formers).
 
@@ -197,18 +197,15 @@ refs from separate vocabularies cannot be combined.
 descriptor. Assembly does not install, own, or call the floor's `close()`
 method. The host owns floor selection and lifecycle.
 
-`RegisteredConcept.specification` is the machine-readable `ConceptSpec`
-extracted from purpose, principle, structured action and query signatures,
-descriptive bodies, refusal declarations, and source locations. Registration
-checks its member names, recoverable input names, and refusal mappings. Query
-promises are retained as metadata and enforced when a reaction, view, or former
-evaluates a query. Parsed type, result, and prose fields are descriptive contract
-data rather than runtime schemas. An optional State section remains
-uninterpreted human notation and produces no `ConceptSpec` field. Registration
-and source checking do not compare State with class fields, floor
-implementations, databases, or storage. State properties belong in principle,
-implementation, and backend constraint tests; future machine conformance
-requires a separately designed backend-neutral descriptor.
+`RegisteredConcept.specification` is the machine-readable version-1
+`ConceptSpec` extracted from the strict ordered Purpose, Principle, Types, State,
+Actions, and Queries sections. It retains external declarations, normalized raw
+State, structured action branches and outcomes, query choices, and source
+locations. Config-based checking compares member, input, action-result, query-row,
+return-name, optionality, and refusal shapes with resolvable TypeScript source.
+Query choices are enforced when a reaction, view, or former evaluates a query.
+State remains unparsed SSF text and is not compared with class fields, floor
+implementations, databases, or storage.
 
 ### Occurrence index and log sinks
 
@@ -279,10 +276,8 @@ receives exactly the value of the authored response's top-level `error` field.
 | `EndpointValidator`  | `(value: unknown) => ValidationResult`                   |
 | `EndpointValidators` | Optional `input`, `output`, and `domainError` validators |
 
-[Receive, ask, respond](../guide/authoring.md#receive-ask-respond) shows endpoint
-authoring. [Execution
-semantics](semantics.md#sibling-paths-and-endpoint-settlement) defines
-settlement. A stage may state `.afterFlowSettles()` to form its response at a
+[Execution semantics](semantics.md#sibling-paths-and-endpoint-settlement)
+defines endpoint settlement. A stage may state `.afterFlowSettles()` to form its response at a
 settlement frontier. Add conditions that identify any terminal state the
 endpoint requires; see [deferred triggers and settlement
 frontiers](semantics.md#deferred-triggers-and-settlement-frontiers).
@@ -503,20 +498,18 @@ qualifies or the flow finalizes. When absent, qualification happens where the
 trigger lands. Imported IR with another value is rejected. Standalone deferred
 `ReactionIR` must be consumed by a package version that recognizes the field;
 during beta, use the same package version to produce and consume IR. The
-version-5 manifest protects application IR carried inside a manifest from older
-tooling.
+versioned manifest protects application IR carried inside a manifest from
+incompatible tooling.
 
-`ApplicationManifestV5` has format `sync-engine.application-manifest`, version
-`5`, and is static canonical JSON-round-trippable application data. Its
-`generator` records the exact `@mit-sdg/sync-engine` package version. It
-contains the application IR, concept inventories, computation inventory,
-concept-implementation provenance, declaration-owned `ManifestEndpointV5`
-entries, input contracts, wire IR, validator-presence flags, structured
-diagnostics, and `digest`. The digest covers every other manifest field. It
-excludes runtime functions, constructor arguments, resources, source paths,
-object identity, occurrences, timestamps, other runtime state, and
-uninterpreted concept State sections. State notation likewise contributes
-nothing to the assembled read-back or generated wire.
+The application manifest has format `sync-engine.application-manifest`, version
+`1`, and is canonical JSON-round-trippable application data. This is a hard
+schema reset; earlier manifest versions are rejected without upconversion. It
+contains executable application and wire facts plus structured concept
+contracts, raw State, definition and instance identities, resolved vocabulary,
+computation signatures, registered design source locations, normalized-source
+digests, implementation provenance, validators, and diagnostics. It excludes
+runtime functions, constructor arguments, resources, object identity,
+occurrences, timestamps, and other runtime state.
 
 `ComputationInventoryIR` contains every installed computation, including all
 five standard computations and unused vocabulary computations. `source`
@@ -534,26 +527,25 @@ with `instances`. A floor is omitted when provenance is ambiguous. Concept
 member roles, query cardinalities, and refusal semantics come from the canonical
 vocabulary declaration rather than a replacement instance.
 `applicationManifestDigest(...)` recomputes the digest while ignoring the
-supplied `digest` field. `validateApplicationManifest(...)` treats its input as
-untrusted data: it checks the complete top-level version-5 shape, the nested IR
-needed by tooling, inventory uniqueness and cross-field consistency, endpoint,
-input-contract, and logical-wire path agreement, plain JSON portability, and
-exact canonical digest equality. Version 4 is rejected without upconversion.
+supplied `digest` field. `validateApplicationManifest(...)` treats its input as untrusted data: it
+checks the complete top-level version-1 shape, the nested IR needed by tooling,
+inventory uniqueness and cross-field consistency, endpoint, input-contract, and
+logical-wire path agreement, plain JSON portability, and exact canonical digest
+equality. Previous versions are rejected without upconversion.
 Failures identify the offending `$` path. `parseApplicationManifest(...)`
 performs the same checks after JSON parsing and returns data in canonical record-key
 order; neither function imports application code or a manifest-producing config.
 `parseConceptSpecification(...)` exposes the same structured, source-located
-contract used by registration. It parses Purpose, Principle, actions, queries,
-refusals, result declarations, and reader-facing extension sections. It does not
-interpret State prose or turn authored types and behavior sentences into runtime
-schemas or guarantees.
+contract used by registration. It enforces the exact section order, parses
+external declarations and structured action/query choices, and retains raw
+State. It does not interpret SSF, prove prose semantics, or turn authored types
+into runtime schemas.
 
-Each concept inventory may carry a
-`sync-engine.concept-specification` version-1 subtree. The subtree includes
-structured action/query declarations, normalized descriptions, refusal
-messages, ordered Types and extension blocks, and source locations. It excludes
-State. The optional subtree does not change the existing inventory names,
-observed roles, cardinalities, or refusal-code lists.
+Each concept inventory may carry a `sync-engine.concept-specification`
+version-1 subtree with the definition name, external types, normalized raw
+State, structured actions and queries, refusals, and source locations. Selected
+application inventories separately retain instance names and vocabulary
+bindings.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
 view-alternative, and former-node sequences retain semantics.
@@ -616,20 +608,21 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. `GeneratedApplication` names the
 descriptor type exported from `/tooling`.
 
-| Field                 | Required | Default                                                    |
-| --------------------- | -------- | ---------------------------------------------------------- |
-| `assemble`            | yes      | Synchronous function that returns the application assembly |
-| `title`               | yes      | Application title used to derive names                     |
-| `close`               | no       | Runs after the generated assembly drains                   |
-| `directory`           | no       | `new URL("./generated/", configUrl)`                       |
-| `specification`       | no       | Slugged title plus `.md`                                   |
-| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance    |
-| `wire`                | no       | `"wire.ts"`                                                |
-| `wireName`            | no       | Pascal-cased title plus `Wire`                             |
-| `wireBanner`          | no       | Exact package/version generator banner                     |
-| `vocabulary.module`   | no       | `new URL("./src/concept-set.ts", configUrl)`               |
-| `vocabulary.export`   | no       | `"vocabulary"`                                             |
-| `projections`         | no       | Ordered transport-specific projections                     |
+| Field                 | Required    | Default                                                    |
+| --------------------- | ----------- | ---------------------------------------------------------- |
+| `assemble`            | yes         | Synchronous function that returns the application assembly |
+| `title`               | yes         | Application title used to derive names                     |
+| `close`               | no          | Runs after the generated assembly drains                   |
+| `directory`           | no          | `new URL("./generated/", configUrl)`                       |
+| `specification`       | no          | Slugged title plus `.md`                                   |
+| `specificationBanner` | no          | Generated-from comment followed by mandatory provenance    |
+| `wire`                | no          | `"wire.ts"`                                                |
+| `wireName`            | no          | Pascal-cased title plus `Wire`                             |
+| `wireBanner`          | no          | Exact package/version generator banner                     |
+| `design.version`      | yes         | Must be `1`                                                |
+| `design.vocabulary`   | conditional | Local URL required for selected external/concrete types    |
+| `design.documents`    | yes         | Explicit local application-design URLs; may be empty       |
+| `projections`         | no          | Ordered transport-specific projections                     |
 
 The default specification banner consists of these comments:
 
@@ -656,7 +649,7 @@ core generator identity to name `@mit-sdg/sync-engine` at a 1.x version;
 generator and projector provenance may use prerelease versions. Core evaluates
 projections in declaration order and rejects any projection or naming failure
 before an artifact command compares or writes files. The
-[application authoring guide](../guide/authoring.md#generate-the-wire-contract)
+[application authoring guide](../guide/authoring.md#7-check-and-generate)
 shows the application-owned command path; [Generated wire](semantics.md#generated-wire)
 defines derivation guarantees.
 

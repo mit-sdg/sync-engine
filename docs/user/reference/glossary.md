@@ -27,9 +27,9 @@ another runtime.
 
 ## Authored design
 
-Application-owned Markdown that states intended concept contracts, larger
-composition purposes, and optional application-wide vocabulary. It is distinct
-from executable TypeScript declarations and generated read-back.
+Application-owned concept specifications, explicitly configured application
+prose, and an application vocabulary. It is distinct from executable TypeScript
+declarations and generated read-back.
 
 ## Binding
 
@@ -39,9 +39,9 @@ binding; reusing a bound name tests equality.
 ## Composition
 
 The application-level collection of reactions, views, formers, and endpoints.
-Composition connects concepts without adding peer dependencies to them. An
-authored composition document explains larger groups and independently meaningful
-reads; it is not the executable collection itself.
+Composition connects concepts without adding peer dependencies to them.
+Registered application prose may explain declarations from any number of
+composition groups; no paired composition document is required.
 
 ## Concept
 
@@ -51,10 +51,11 @@ concept APIs; composition connects them.
 
 ## Concept specification
 
-A Markdown document containing a concept's purpose, principle, action and query
-declarations, refusals, and reader documentation. Only the contracts in the
-[concept specification reference](concept-specification.md) are enforced. State
-notation and natural-language behavior are not runtime schemas.
+A strict Markdown document containing ordered Purpose, Principle, external
+Types, raw State, structured Actions, and Queries for one reusable definition.
+Only the contracts in the [concept specification
+reference](concept-specification.md) are enforced. Raw State and
+natural-language behavior are not runtime schemas.
 
 ## Concept floor
 
@@ -227,9 +228,9 @@ cardinality.
 
 The named action, query, and optional computation references for a concept set,
 together with concept metadata. Vocabulary references are inert until resolved
-against an engine. An application's optional authored vocabulary document
-records cross-concept type-role edges and named pure computations; it is not the
-runtime vocabulary object.
+against an engine. A separately configured authored vocabulary document declares
+application concrete types and directly binds every selected concept-external
+parameter; it is not the runtime vocabulary object.
 
 ## Wire contract
 

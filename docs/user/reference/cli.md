@@ -1,30 +1,28 @@
 # Command-line reference
 
-The installed `sync-engine` executable initializes concept-free application
-files, compares concept action/query declarations with class source, and checks or generates
-assembly artifacts. It supports the Bun range in the [runtime and toolchain
-policy](../../../SUPPORT.md) and defaults paths to the current working directory.
+The installed `sync-engine` executable initializes application files, checks the
+complete configured design contract, and checks or regenerates assembly
+artifacts. Paths are relative to the current working directory unless stated
+otherwise.
 
 ```text
 sync-engine <command> [arguments]
 ```
 
-`sync-engine`, `sync-engine help`, `sync-engine --help`, and `sync-engine -h`
-print command help and exit successfully. A command error prints the error
-message without a stack and sets exit status 1.
+Help exits successfully. A command error prints a message without a stack and
+sets exit status 1. Unknown, repeated, or mutually exclusive options, missing
+values, and extra operands are rejected before configuration is imported or
+files are written.
 
-Commands accept only the operands and options shown below. Unknown options,
-repeated options, missing option values, and extra operands are rejected before
-a command applies defaults, imports configuration, or writes files.
-
-| Command                                | Result                                                                                | Writes files                                      |
-| -------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `setup [directory]`                    | Initializes missing concept-free application files in an existing Bun package         | Missing setup files only; never edits other files |
-| `check`                                | Compares concept specifications with class source and optionally inspects an assembly | No                                                |
-| `artifacts check`                      | Compares both configured artifacts with the assembly                                  | No                                                |
-| `artifacts pin`                        | Regenerates both configured artifacts                                                 | Yes                                               |
-| `artifacts pin-spec` / `pin-wire`      | Regenerates one configured artifact                                                   | Yes                                               |
-| `artifacts manifest` / `spec` / `wire` | Prints one derived representation to standard output                                  | No                                                |
+| Command                                        | Result                                                                                  | Writes files             |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------ |
+| `setup [directory]`                            | Initializes missing concept-free application files in an existing Bun package           | Missing setup files only |
+| `check [--config path]`                        | Checks concept source, registered design, vocabulary, and selected declaration coverage | No                       |
+| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                         | No                       |
+| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                                   | Yes                      |
+| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                                     | Yes                      |
+| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                                   | Yes                      |
+| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                                       | No                       |
 
 ## `sync-engine setup`
 
@@ -32,106 +30,108 @@ a command applies defaults, imports configuration, or writes files.
 sync-engine setup [directory]
 ```
 
-`setup` initializes the files used by [Getting started](../guide/getting-started.md).
-The directory defaults to the current working directory and must contain a valid
-`package.json`. When present, `packageManager` must name Bun. The command creates
-neither the directory nor package manifest.
+The directory defaults to the current working directory and must contain a
+valid `package.json`. When `packageManager` is present, it must name Bun. The
+command creates neither the directory nor package manifest.
 
-The setup targets are `tsconfig.json`, `generated.config.ts`,
-`src/vocabulary.ts`, `src/assembly.ts`, and `src/main.ts`. A concept-free setup
-creates no placeholder design or composition file. Setup handles each target as follows:
+Setup targets `tsconfig.json`, `generated.config.ts`, `src/vocabulary.ts`,
+`src/assembly.ts`, and `src/main.ts`. Its concept-free generated config contains
+an explicit `design: { version: 1, documents: [] }` block.
 
-- An absent target is eligible to be created.
-- A byte-identical target is reported as verified.
-- Any other existing target remains unchanged and becomes application-owned.
+For each target, setup creates an absent file, verifies a byte-identical file,
+and leaves any other existing file unchanged as application-owned. Before it
+creates a file that imports another setup target, it checks that dependency's
+expected exports. A failed dependency check leaves the dependent file absent
+and prints the required integration.
 
-Before creating a file that imports another setup target, the command checks
-whether the dependency exports the expected identifiers. If the check fails,
-setup leaves the dependent file absent and prints the required integration.
-
-Setup checks `package.json` for the exact core version, a compatible TypeScript
-declaration, `generate` and `start` scripts, and either a `check` or `typecheck`
-script. Missing declarations produce guidance; conflicting package declarations
-and incompatible versions fail the command. Setup checks only whether each
-script is a string, not what the script runs. It never edits `package.json`.
-Setup also does not merge or analyze an existing `tsconfig.json` or
-`generated.config.ts`; those files follow the target rules above.
-
-A second invocation over unchanged output writes nothing. A filesystem failure
-can leave files written earlier in the command because setup does not promise
-an all-or-nothing filesystem transaction.
-
-`sync-engine new` is unsupported. It is parsed as an unknown command, and the
-resulting usage text names `setup`.
+Setup checks the core and TypeScript dependency declarations and the expected
+scripts but never edits `package.json`. It does not merge an existing tsconfig
+or generated config. A second invocation over unchanged output writes nothing.
+Filesystem failures can leave earlier files in place; setup is not an
+all-or-nothing filesystem transaction.
 
 ## `sync-engine check`
 
 ```text
-sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
+sync-engine check [--config path] [--fail-on-warnings]
 ```
 
-With `--config`, `check` calls the descriptor's `assemble` function and uses the
-assembled application's application-owned concept inventory as the registration
-source of truth; built-in engine concepts are excluded. The descriptor's
-`vocabulary.module` is used only to locate TypeScript class
-source; `vocabulary.export` remains the generated wire type anchor and is not
-needed for check discovery.
+A generated application config is required. Its path defaults to
+`generated.config.ts`; `--config path` selects another descriptor. The removed
+`--vocabulary-module` option and no-config concept-set compatibility mode are
+unsupported.
 
-Without a config, `--vocabulary-module` names a module to import and expects its
-`vocabulary` export. With neither option, the command uses
-`src/concept-set.ts` and `vocabulary` in the current project as a compatibility
-convention. The filename has no semantic role. The configured descriptor also
-defaults its vocabulary module to `src/concept-set.ts` beside the descriptor,
-but can point at any module.
+The config must default-export an application descriptor with an `assemble`
+function and a versioned `design` block. The checker assembles the selected
+application once and checks the exact variant returned by that descriptor.
+Built-in engine concepts and core-generated reactions are excluded from
+author-owned coverage requirements.
 
-A registration can be imported from a registry module or created by a direct
-`registerConcept(...)` call in the concept-set module. Unregistered Markdown
-files are not checked.
+### Concept checks
 
-The runtime registration supplies the class and parsed specification, so the
-checker does not statically search for Markdown. The Markdown filename and
-location are unrestricted. Applications conventionally register
-`design/concepts/Sessioning.md` through the `@design/*` path mapping, but that
-layout and an optional registry module are not discovery requirements.
+For each selected application concept, `check`:
 
-The command compares the parsed specification with the registered class's
-action and query names and input keys. It resolves typed parameters through the
-nearest TypeScript project, including imported interfaces, aliases, re-exports,
-intersections, mapped and utility types, and path mappings. Ambiguous or dynamic
-shapes fail closed with their type operation and source location. The command
-does not read State notation as grammar or compare it with class fields or
-storage. [Concept specification format](concept-specification.md) defines the
-accepted grammar, supported source shapes, and uninterpreted boundary.
+- traces the static Markdown import supplying `registerConcept(...).spec`;
+- verifies that the source file matches the registered text;
+- parses the strict ordered version-1 concept format;
+- compares action and query member names;
+- compares input, action-result, and query-row field names and optionality;
+- checks successful branch return names and refusal mappings; and
+- records source provenance.
 
-Static analysis is limited to locating the selected class source needed for
-erased TypeScript input types. The `conceptSet` argument must be an object
-literal or a local variable initialized with one. Properties and object-spread
-registration maps must resolve to direct or imported `registerConcept(...)`
-calls, and each registration's `class` must be a named import whose module
-specifier resolves directly as a filesystem path. Unsupported or unresolved
-class-source shapes fail rather than being omitted.
+Dynamic or unresolvable spec construction fails. TypeScript source analysis
+uses the nearest project configuration and resolves supported aliases,
+interfaces, intersections, mapped and utility types, and imports. Unsupported,
+open, ambiguous, cyclic, or otherwise unresolved shapes fail closed instead of
+being skipped. `field?: T` and `field: T | undefined` have equivalent
+optionality.
 
-`--vocabulary-module` and `--config` are mutually exclusive and may each appear
-at most once. The former `--concepts` filesystem-root option is unsupported;
-use `--vocabulary-module` for an explicit unconfigured root or `--config` for
-assembly-driven discovery. Use the descriptor's `vocabulary.module` when a nondefault source
-module also needs application diagnostics. `--config` prints the diagnostics
-from the same assembly used for discovery; the command assembles and drains the
-application once. `--fail-on-warnings` promotes warning diagnostics only when
-`--config` is present. Without a config, `check` has no application diagnostics
-to promote.
+The checker does not claim semantic equivalence between authored type names and
+TypeScript types. It retains raw State but does not parse SSF or compare State
+with class fields, storage, or vocabulary target names.
 
-Success prints:
+### Application-design checks
+
+For the configured design corpus, `check`:
+
+- accepts only explicit local `file:` URLs;
+- parses one optional vocabulary document and every listed prose document;
+- inventories all normalized source contents for provenance and digests;
+- validates application `concrete` declarations and direct `is` bindings;
+- resolves every `reaction:`, `view:`, `former:`, and `computation:` link;
+- requires coverage for every selected authored reaction/endpoint tree, named
+  view, and named former;
+- requires exactly one declaration for every executable computation; and
+- rejects authored declarations that are absent from the selected assembly.
+
+The checker validates links and coverage, not the truth of ordinary prose. It
+also does not parse State or prove computation-body semantics.
+
+`--fail-on-warnings` promotes application warnings. Errors always fail;
+informational diagnostics remain advisory. The command modifies no files.
+
+## Generated application configuration
+
+Every command in this section imports the same generated descriptor. The config
+path defaults to `generated.config.ts`.
+
+The required application design block is:
 
 ```text
-Concept action/query source check passed for N concepts.
+design: {
+  version: 1,
+  vocabulary?: URL,
+  documents: URL[],
+}
 ```
 
-An empty `conceptSet({})` succeeds and reports zero checked concepts, which
-permits a concept-free setup application. A missing selected module fails.
-The command also fails when registration discovery, specification parsing,
-source resolution, or declaration comparison fails. Findings are collected as
-bullets. The command does not modify files.
+`vocabulary` is required when a selected concept has an external type or the
+application declares a concrete type. `documents` can be empty. All URLs must
+be local `file:` URLs. A separate assembly variant uses a separate config.
+
+Configuration source must be statically inspectable where a command needs
+source provenance. Import, config, assembly, source, design, and projection
+errors occur before artifact comparison or writing.
 
 ## `sync-engine artifacts`
 
@@ -139,99 +139,86 @@ bullets. The command does not modify files.
 sync-engine artifacts <command> [--config path]
 ```
 
-The configuration path defaults to `generated.config.ts`. The module must
-default-export an application descriptor. [Generated descriptor](public-api.md#generated-descriptor)
-lists its fields and defaults.
+All artifact commands enforce the complete configured design contract. Runtime
+`assemble(...)` alone does not load these documents.
 
 ### `check`
 
-Compares the assembled Markdown read-back and wire contract with their
-configured files. Success is silent; a mismatch names the files and exits with
-status 1. `check` does not rewrite artifacts.
+Renders the complete plan and compares generated Markdown and TypeScript with
+their configured paths. Success is silent. A mismatch names affected files and
+exits with status 1. No files are rewritten.
 
 ### `pin`
 
-Renders and validates both artifacts before creating parent directories or
-replacing changed files through same-directory temporary files and renames. It
-skips byte-identical files, deletes no unknown files, and is silent on success.
-Each replacement is atomic, but the pair is not: a later failure leaves completed
-writes in place.
+Renders and validates both outputs before creating parent directories or
+replacing changed files through same-directory temporary files and renames.
+Byte-identical files are skipped and unknown files are not deleted. Each
+replacement is atomic, but the pair is not: a later failure can leave an earlier
+replacement in place.
 
-### `pin-spec`
+### `pin-spec` and `pin-wire`
 
-Renders both artifacts but writes only the assembled Markdown specification.
-
-### `pin-wire`
-
-Renders both artifacts but writes only the TypeScript wire module. The module
-contains the logical contract followed by each configured projection in
-declaration order.
+Both validate the complete artifact plan. `pin-spec` writes only generated
+Markdown; `pin-wire` writes only generated TypeScript. Neither permits a
+successful partial design.
 
 ### `manifest`
 
-Prints `sync-engine.application-manifest` version `5` as canonical JSON. The
-manifest contains application design, declaration-owned endpoints, input and
-wire contracts, validator-presence flags, structured diagnostics, and a digest
-over those fields. It inventories all standard and vocabulary computations,
-including unused vocabulary computations, and records each canonical concept
-class separately from the implementation selected by assembly. Concept member
-roles come from the canonical vocabulary class even when `instances` selects a
-replacement. Concept inventories include the parsed authored contract and source
-locations when a specification is present. The manifest excludes computation
-functions, constructor arguments, floor resources, occurrences, concept State
-sections, source paths, object identity, and other runtime state.
+Prints canonical JSON for `sync-engine.application-manifest`, version `1`. The
+schema is a hard reset: earlier application-manifest versions are rejected and
+have no compatibility decoder.
+
+The manifest retains normalized raw concept State, structured concept
+declarations, definition and instance identities, resolved vocabulary,
+application declaration identities, computation signatures, source locations,
+and digests over registered design contents. It excludes executable functions,
+constructor arguments, floor resources, object identity, occurrence state, and
+other runtime-only values.
 
 ### `spec`
 
-For a valid assembly, prints the assembled read-back and counts of registered
-reactions, views, formers, and every serialized `compute` occurrence, including
-repeated uses of one named computation.
+Prints generated Markdown read-back. It shows:
 
-The concept portion renders authored signatures, behavior prose, refusal
-messages, Types, and extension sections. It distinguishes registration checks,
-evaluated-read cardinality checks, and descriptive fields. Its generated comment
-identifies the manifest producer, concept-specification format, and renderer
-versions.
+- reaction and endpoint lowering with each authored tree's stable identity;
+- named view and former definitions;
+- all source locations that cover each selected declaration;
+- structured concept signatures, cardinalities, refusals, definition names,
+  instances, and source links;
+- concrete types and resolved external bindings; and
+- computation signatures and source links.
+
+It does not copy application prose, Purpose, Principle, raw State, action/query
+bodies, vocabulary explanations, or computation bodies. Concept State remains
+in the manifest and digest even though it is omitted from read-back.
 
 ### `wire`
 
-Prints the generated TypeScript wire module. It contains one shared preamble,
-the logical contract, each configured projection in declaration order, and a
-banner naming every projector package and version.
+Prints the generated TypeScript wire module. Generated TypeScript constrains
+typed callers but does not validate runtime values; endpoint validators remain
+required where runtime validation is needed.
 
-`sync-engine check --config generated.config.ts` prints the same structured
-application diagnostics after checking parsed concept action/query declarations
-against class source. Diagnostics are advisory unless their severity is
-`error`; `--fail-on-warnings` promotes warning diagnostics to a failing check.
+## Provenance and source links
 
-Endpoint overlap and coverage warnings are conservative. [Inspection and
-rendering](public-api.md#inspection-and-rendering) defines each diagnostic
-and the limits of its proof.
+Normalized full contents of every registered application-design document
+participate in generated provenance. A prose-only edit therefore changes the
+artifact input digest.
 
-## Artifact failure conditions
+Generated Markdown uses host-independent relative links to authored files and
+reports exact one-based source lines separately. When several passages cover one
+declaration, all source locations appear. Files outside the application
+directory use relative paths such as `../`.
 
-Every artifact command imports and assembles the application; import,
-configuration, assembly, rendering, and projection failures occur before
-comparison or writing. `projections` must
-be an array whose entries provide `project(facts)`. Logical and projected wire
-names, app-wide error names, and generated helper names must be distinct valid
-TypeScript identifiers, and every projector must provide a nonblank package name
-and a valid SemVer version as provenance. Projector versions are not
-restricted to 1.x.
+## Artifact failure and cleanup
 
-After inspection, the command begins assembly drain and waits for idle before
-returning. A descriptor that owns generation-only resources may supply a
-`close()` callback; the command invokes it after drain, including when inspection
-or rendering fails. This cleanup belongs to the descriptor and does not make
-ordinary assembly own concept-floor or store resources.
+Every artifact command imports and assembles the selected application before
+exposing output. Local executable-only behavior, invalid declaration identities,
+incomplete design coverage, vocabulary errors, projection errors, and strict
+wire-provenance failures reject the complete plan.
 
-Assembly rejects local behavior before any artifact subcommand exposes a route
-or writes a path. [Portable and local
-behavior](semantics.md#portable-and-local-behavior) defines the rejected forms.
-
-Strict wire generation also rejects a leaf that cannot be traced to the
-configured vocabulary type anchor. Generation never emits a successful partial
-wire that silently omits an unsupported endpoint.
+After inspection, the command drains the assembly. A descriptor may provide a
+`close()` callback for generation-only resources; it runs after drain, including
+when inspection or rendering fails. This callback does not transfer ownership
+of ordinary concept-floor or store resources to assembly.
 
 Treat `pin`, `pin-spec`, and `pin-wire` as source-changing operations. Review
-their diffs and run `artifacts check` in continuous integration.
+their diffs and run `sync-engine artifacts check` in continuous integration.

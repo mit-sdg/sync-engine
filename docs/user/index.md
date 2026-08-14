@@ -10,11 +10,11 @@ Start with [Getting started](guide/getting-started.md), then read the
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                   |
 | Design concepts                             | [Designing with concepts](design.md)                                                                                                                       |
-| Organize application design files           | [Organize application-owned design](guide/authoring.md#organize-application-owned-design)                                                                  |
+| Author and register application design      | [Author an application design](guide/authoring.md)                                                                                                         |
 | Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
 | Initialize the first application            | [Getting started](guide/getting-started.md)                                                                                                                |
 | Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                |
-| Call an existing application                | [`client` API](reference/public-api.md#client), then [Call the typed client](guide/authoring.md#call-the-typed-client)                                     |
+| Call an existing application                | [`client` API](reference/public-api.md#client)                                                                                                             |
 | Construct a read                            | [Read construction cookbook](guide/read-construction.md)                                                                                                   |
 | Add persistence, restart, or recovery       | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                        |
 | Determine exact runtime behavior            | [Execution semantics](reference/semantics.md)                                                                                                              |
@@ -50,8 +50,8 @@ under `guide/`.
 | [`docs/user/index.md`](index.md)                                                     | Index        | Human-readable task and document map                    |
 | [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Absolute-link map and constraints for software agents   |
 | [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | Concept-free application setup                          |
-| [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Multi-concept application authoring                     |
-| [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Ordered concept and composition review                  |
+| [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Strict concepts, vocabulary, typed prose, and artifacts |
+| [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Semantic, authored-contract, and coverage review        |
 | [`docs/user/guide/read-construction.md`](guide/read-construction.md)                 | How-to guide | Small tested read constructions and contrasts           |
 | [`docs/user/guide/persistence-recovery.md`](guide/persistence-recovery.md)           | How-to guide | Persistence, restart, occurrence evidence, and recovery |
 | [`docs/user/overview.md`](overview.md)                                               | Explanation  | Application model and guarantee boundaries              |

@@ -102,8 +102,7 @@ export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
 At runtime, a returned `Selecting.choose` occurrence binds `selection` and asks
 `Discussing.open`. Selecting and Discussing remain independently implemented.
 
-See [Connect independent
-behaviors](docs/user/guide/authoring.md#connect-independent-behaviors) for the
+See [Application design authoring](docs/user/guide/authoring.md) for the
 authoring path and [Execution semantics](docs/user/reference/semantics.md) for ordering and
 failure behavior.
 

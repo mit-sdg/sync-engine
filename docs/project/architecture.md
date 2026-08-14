@@ -269,29 +269,44 @@ throws pass to the assembly's raw-fault reporter while caller-visible failures
 stay classified. `transport-binding.ts` snapshots only the facts an external
 server adapter needs.
 
-## Hosting and generated artifacts
+## Authored design and generated artifacts
 
 `src/engine/hosting/file-store.ts` provides `FileLogSink`, a Node-specific
 append-only JSONL audit destination. It does not own the engine's occurrence
 index, load an existing file, replay entries, or expose a close operation.
 
-`src/engine/tooling/inspection.ts` projects one assembly into app IR, concept
-inventories, input contracts, retained occurrence summaries, and diagnostic
-read-back. Assembly also retains JSON-safe computation and selected-implementation
-inventories; `manifest.ts` emits manifest V5 from those same assembly facts and
-its digest. Canonical vocabulary metadata, rather than a replacement instance,
-owns manifest action/query roles, query promises, and refusal contracts.
-`artifact-plan.ts` is the single specification and wire renderer.
-`generated-artifacts.ts` resolves a
-project descriptor, gives its ordered projections immutable logical facts, and
-checks or writes the two pinned files only after the complete plan succeeds.
+The generated config is the tooling root for one application variant. Its
+`design.version`, optional vocabulary URL, and document URLs explicitly select
+the application-level authored corpus. Selected concept registrations supply
+imported concept Markdown. Tooling resolves these local sources, parses the
+three authored contracts, joins them with the exact selected assembly, and
+checks vocabulary and declaration coverage. Runtime assembly remains independent
+of authored Markdown availability.
 
-The installed executable under `src/command/` is an adapter over those
-capabilities. `check.ts` parses supported TypeScript method signatures;
-`artifacts.ts` imports an application descriptor; and `setup.ts` initializes
-missing concept-free application files without merging application-owned files.
-Command code may import engine concerns through `@engine`, but engine concerns
-do not import the command.
+`src/engine/tooling/inspection.ts` projects one assembly into executable app IR,
+concept inventories, input contracts, and diagnostic read-back. Design
+processing augments those facts with concept definition/instance identities,
+raw State, resolved vocabulary, exact authored declaration links, computation
+signatures, normalized document provenance, and source locations. The manifest
+schema is `sync-engine.application-manifest` version 1; previous manifest
+versions are not decoded.
+
+Artifact planning validates the complete design before rendering either output.
+Generated Markdown reports reaction lowering, views, formers, structured concept
+contracts, vocabulary resolution, computations, and every covering source
+location. It links to authored prose rather than copying it. Full normalized
+document contents contribute to input digests, so prose-only changes invalidate
+pinned artifacts. Generated wire remains derived from executable boundary facts
+and does not provide runtime validation.
+
+The installed executable under `src/command/` adapts these capabilities.
+`check` requires a generated config (default `generated.config.ts`) and combines
+strict source/spec agreement with application-design checks. Artifact commands
+use the same complete contract. The old vocabulary-module and unconfigured
+concept-set paths no longer exist. `setup` initializes a concept-free config
+with `design: { version: 1, documents: [] }` without merging application-owned
+files. Command code may import engine concerns through `@engine`, but engine
+concerns do not import the command.
 
 ## Public package boundary
 
