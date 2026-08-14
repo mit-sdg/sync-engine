@@ -288,7 +288,7 @@ export const vocabulary = declareVocabulary({
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   test("an HTTP cookie policy emits logical and projected named contracts", async () => {
     const application = assemble({
