@@ -302,6 +302,117 @@ describe("inputs the runtime cannot see", () => {
   });
 });
 
+describe("input and result shapes", () => {
+  test("treats optional properties and explicit undefined unions equivalently", async () => {
+    const where = await concept(
+      "update (note?: Text, source?: Text) : return (saved?: Text)\n  then\n    return saved",
+      "  update(_: { note?: string; source: string | undefined }): { saved: number | undefined } {\n" +
+        "    return { saved: undefined };\n" +
+        "  }",
+    );
+
+    expect(conceptFailures(where)).toEqual([]);
+  });
+
+  test("reports input optionality independently of semantic type names", async () => {
+    const where = await concept(
+      "update (note?: AuthoredText) : return (saved: AuthoredText)\n  then\n    return saved",
+      "  update(_: { note: number }): { saved: boolean } { return { saved: true }; }",
+    );
+
+    expect(conceptFailures(where)).toEqual([
+      expect.stringContaining("declares the inputs `note?` but the class takes `note`"),
+    ]);
+  });
+
+  test("checks promised action results and reports names and optionality", async () => {
+    const where = await concept(
+      [
+        "save (text: Text) : return (entry: Entry, warning?: Text)",
+        "rename (entry: Entry) : return (entry: Entry, previous?: Text)",
+      ].join("\n"),
+      [
+        "  async save(_: { text: string }): Promise<{ entry: number; warning: string | undefined }> {",
+        "    return { entry: 1, warning: undefined };",
+        "  }",
+        "  rename(_: { entry: string }): { entry: string; prior?: string } {",
+        '    return { entry: "one" };',
+        "  }",
+      ].join("\n"),
+    );
+
+    expect(conceptFailures(where)).toEqual([
+      expect.stringContaining(
+        "`rename` declares the successful result fields `entry`, `previous?` but the class returns `entry`, `prior?`",
+      ),
+    ]);
+  });
+
+  test("checks direct, array, and asynchronous query row shapes", async () => {
+    const where = await concept(
+      "refresh () : return ()\n  then\n    return",
+      [
+        "  refresh() { return {}; }",
+        "  _one(): { item: number } { return { item: 1 }; }",
+        "  _many(): Array<{ item: string; note: string | undefined }> { return []; }",
+        "  async _wrong(): Promise<{ other?: boolean }[]> { return []; }",
+      ].join("\n"),
+      [
+        "_one () : one (item: Item)",
+        "_many () : many (item: Item, note?: Text)",
+        "_wrong () : optional (item?: Item)",
+      ].join("\n"),
+    );
+
+    expect(conceptFailures(where)).toEqual([
+      expect.stringContaining(
+        "`_wrong` declares the row fields `item?` but the class returns `other?`",
+      ),
+    ]);
+  });
+
+  test("fails closed on overloaded concept members", async () => {
+    const where = await concept(
+      "save () : return (entry: Entry)\n  then\n    return entry",
+      [
+        "  save(): { entry: string };",
+        "  save(_: { force?: boolean }): { entry: string };",
+        '  save(_: { force?: boolean } = {}) { return { entry: "one" }; }',
+      ].join("\n"),
+    );
+
+    const failures = conceptFailures(where);
+    expect(failures).toHaveLength(2);
+    expect(failures.every((failure) => failure.includes("method overload"))).toBe(true);
+  });
+
+  test("fails closed when an action result or query row cannot be resolved", async () => {
+    const where = await concept(
+      "save () : return (entry: Entry)\n  then\n    return entry",
+      ["  save(): Imported { return {} as Imported; }", "  _all(): unknown[] { return []; }"].join(
+        "\n",
+      ),
+      "_all () : many (entry: Entry)",
+    );
+    await writeFile(
+      join(where, "sessioning.ts"),
+      'import type { Imported } from "./missing.ts";\n' +
+        "export class SessioningConcept {\n" +
+        "  save(): Imported { return {} as Imported; }\n" +
+        "  _all(): unknown[] { return []; }\n" +
+        "}\n",
+    );
+
+    const failures = conceptFailures(where);
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).toContain(
+      "action `save` successful result type `Imported` cannot be checked",
+    );
+    expect(failures[0]).toContain("Cannot find module './missing.ts'");
+    expect(failures[1]).toContain("query `_all` row type `unknown[]` cannot be checked: unknown");
+  });
+});
+
 describe("uninterpreted state notation", () => {
   test("arbitrary contradictions do not participate in source checking", async () => {
     const where = await concept(
