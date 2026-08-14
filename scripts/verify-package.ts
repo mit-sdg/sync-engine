@@ -174,7 +174,11 @@ async function verifyPackedDocLinks(entries: Set<string>, installed: string): Pr
     const markdown = await readFile(resolve(installed, documentPath), "utf8");
     for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
       const target = match[1];
-      if (/^(?:https?:|mailto:)/.test(target) || target.startsWith("#")) continue;
+      if (
+        /^(?:https?:|mailto:|reaction:|view:|former:|computation:)/.test(target) ||
+        target.startsWith("#")
+      )
+        continue;
       const relativeTarget = target.split("#", 1)[0].replace(/^<|>$/g, "");
       const packedTarget = posix.normalize(posix.join(posix.dirname(documentPath), relativeTarget));
       if (packedTarget.startsWith("../") || !packedPathExists(entries, packedTarget)) {

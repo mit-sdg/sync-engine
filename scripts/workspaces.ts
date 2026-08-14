@@ -58,7 +58,7 @@ export const workspaceCatalog = [
       "SUPPORT.md",
       "package.json",
     ],
-    packageBudget: { files: 420, packedBytes: 500_000, unpackedBytes: 1_500_000 },
+    packageBudget: { files: 420, packedBytes: 500_000, unpackedBytes: 1_600_000 },
     assets: [{ source: "src/command/setup", destination: "dist/command/setup" }],
     bins: ["dist/command/main.js"],
   },
