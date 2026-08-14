@@ -28,7 +28,7 @@ interface ReactionProvenance {
   requestFields: Map<string, ProvenanceCell>;
 }
 
-type ConceptOrigin = Extract<WireOrigin, { concept: string }>;
+type PathOrigin = Extract<WireOrigin, { path: string[] }>;
 
 function originKey(origin: WireOrigin): string {
   return JSON.stringify(origin);
@@ -73,7 +73,7 @@ function detachedEnv(parent: ProvenanceEnv): ProvenanceEnv {
   );
 }
 
-function at(origin: ConceptOrigin, key: string): ConceptOrigin {
+function at(origin: PathOrigin, key: string): PathOrigin {
   return { ...origin, path: [...origin.path, key] };
 }
 
@@ -104,11 +104,11 @@ function patternMayBeAbsent(pattern: PatternIR, env: ProvenanceEnv): boolean {
 function constrainPattern(
   env: ProvenanceEnv,
   pattern: PatternIR,
-  origin: ConceptOrigin,
+  origin: PathOrigin,
   site: string,
   options: { maybeFresh?: boolean } = {},
 ): void {
-  const visit = (value: ValueIR, current: ConceptOrigin): void => {
+  const visit = (value: ValueIR, current: PathOrigin): void => {
     const name = variableName(value);
     if (name !== undefined) {
       const fresh = !env.has(name);
@@ -127,8 +127,15 @@ function constrainPattern(
   for (const [key, value] of Object.entries(pattern)) visit(value, at(origin, key));
 }
 
-function queryOrigin(source: "query-input" | "query-output", query: QueryRefIR): ConceptOrigin {
+function queryOrigin(source: "query-input" | "query-output", query: QueryRefIR): PathOrigin {
   return { source, concept: query.concept, member: query.query, path: [] };
+}
+
+function computationOrigin(
+  source: "computation-input" | "computation-output",
+  computation: string,
+): PathOrigin {
+  return { source, computation, path: [] };
 }
 
 function applyQueryProvenance(
@@ -152,7 +159,7 @@ function applyQueryProvenance(
 function actionOrigin(
   source: "action-input" | "action-output",
   trigger: Pick<ActionTriggerIR, "concept" | "action">,
-): ConceptOrigin {
+): PathOrigin {
   return { source, concept: trigger.concept, member: trigger.action, path: [] };
 }
 
@@ -267,7 +274,14 @@ export function applyOpsProvenance(
         addOrigin(target, { source: "number" }, site);
         break;
       }
-      case "compute":
+      case "compute": {
+        // `compute(...)` admits only vocabulary-owned computations, so both
+        // sides can anchor to the registered function signature. `holds`
+        // also represents generic standard relations and remains unanchored.
+        constrainPattern(env, op.in, computationOrigin("computation-input", op.computation), site);
+        addOrigin(cell(env, op.out), computationOrigin("computation-output", op.computation), site);
+        break;
+      }
       case "custom":
         break;
     }

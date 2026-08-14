@@ -618,8 +618,15 @@ define their own projection failures and error codes.
 
 With a [generated wire contract](../guide/authoring.md#generate-the-wire-contract)
 and vocabulary type anchor, endpoint leaves refer to concept action parameters,
-action results, and query rows;
-the response structure and absence rules come from the endpoint and its
+action results, query rows, and registered vocabulary computation parameters
+and awaited results. A variable used in a `compute(...)` input follows the
+corresponding path in the computation function's input parameter. Its output
+variable follows the awaited return type, whether the operation binds that
+variable or constrains an existing binding. Constraints on one binding
+intersect; alternatives remain unions. Built-in standard relations and
+`custom(...)` do not invent vocabulary signature anchors.
+
+The response structure and absence rules come from the endpoint and its
 formers. The generated module applies the same JSON projection as the clients,
 including `Date` to `string`. Strict generation rejects any leaf that cannot be
 traced to a signature. Without an anchor, the renderer emits a structural

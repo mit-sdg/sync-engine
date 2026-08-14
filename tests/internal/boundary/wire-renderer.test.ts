@@ -442,6 +442,74 @@ export declare const vocabulary: {
     );
   });
 
+  test("the anchored module typechecks computation parameter and result leaves", async () => {
+    const computationWire: WireContractsIR = {
+      appWide: [],
+      endpoints: [
+        {
+          path: "/setup/register-admin",
+          input: {
+            kind: "object",
+            fields: [
+              {
+                key: "setupSecret",
+                type: reference({
+                  source: "computation-input",
+                  computation: "setupSecretMatches",
+                  path: ["secret"],
+                }),
+              },
+            ],
+          },
+          output: {
+            kind: "object",
+            fields: [
+              {
+                key: "valid",
+                type: reference({
+                  source: "computation-output",
+                  computation: "setupSecretMatches",
+                  path: [],
+                }),
+              },
+            ],
+          },
+          errors: [],
+          openError: false,
+        },
+      ],
+    };
+    const wire = renderWireTypes(computationWire, {
+      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+      strictLeaves: true,
+    });
+    const vocabulary = `
+export declare const vocabulary: {
+  concepts: Record<string, never>;
+  computations: {
+    setupSecretMatches: { fn: (input: { secret: string }) => Promise<boolean> };
+  };
+};
+`;
+    const consumer = `
+import type { WireContracts } from "./wire.ts";
+
+const input: WireContracts["/setup/register-admin"]["input"] = { setupSecret: "secret" };
+const output: WireContracts["/setup/register-admin"]["output"] = { valid: true };
+void input;
+void output;
+
+// @ts-expect-error setupSecret follows the computation parameter's string field.
+const wrongInput: WireContracts["/setup/register-admin"]["input"] = { setupSecret: 1 };
+// @ts-expect-error valid follows the awaited computation result.
+const wrongOutput: WireContracts["/setup/register-admin"]["output"] = { valid: "yes" };
+void wrongInput;
+void wrongOutput;
+`;
+
+    await typecheck({ "wire.ts": wire, "vocabulary.ts": vocabulary, "consumer.ts": consumer });
+  });
+
   test("the anchored module typechecks exact client-facing leaves", async () => {
     const wire = renderWireTypes(anchoredFixture, {
       vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
