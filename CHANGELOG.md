@@ -5,7 +5,7 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
-## [Unreleased]
+## [1.0.0-beta.10] - 2026-08-15
 
 This beta replaces the preliminary authored-design workflow with one strict,
 versioned application-design contract and makes registered concept sets the
@@ -80,6 +80,8 @@ config, package version, and generated artifacts together.
 - The release adds no transactions, rollback, replay, distributed
   serialization, accepted-work cancellation, runtime schema validation, or
   exactly-once execution. Existing operational limits remain in force.
+
+[Release][1.0.0-beta.10] | [Changes since 1.0.0-beta.9][1.0.0-beta.10-compare]
 
 ## [1.0.0-beta.9] - 2026-08-13
 
@@ -889,6 +891,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.10]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.10
+[1.0.0-beta.10-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.9...v1.0.0-beta.10
 [1.0.0-beta.9]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.9
 [1.0.0-beta.9-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.8...v1.0.0-beta.9
 [1.0.0-beta.8]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.8

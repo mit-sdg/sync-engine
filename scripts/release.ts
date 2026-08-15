@@ -126,6 +126,8 @@ const requiredHeadings = [
   "Runtime and security support",
 ] as const;
 const releasedChangelogDigests = new Map([
+  ["1.0.0-beta.9", "4ffefcb829845329db9ae7e1e24fa3f444a980e348bc0c290bd97d81ae797f7b"],
+  ["1.0.0-beta.8", "01f76c0c2979338dcc1b18ed9bf70725e869dc3be81a6e30666807a062161dc9"],
   ["1.0.0-beta.7", "efab8a6f95bceca630f2cecc76bf8f45b24ab34a2d6c6600c9f27c30feb25f34"],
   ["1.0.0-beta.6", "05f202994a49062077b236d6888fd06f951c0025784bf31ac941babedfc3a344"],
   ["1.0.0-beta.5", "af1af8e82fb30e1910108d17f3c127012ab1eaa95e592a26dea767018666d603"],
