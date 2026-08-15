@@ -30,6 +30,7 @@ describe("sync-engine Agent Skill", () => {
   test("requires native independent roles and pauses when they are unavailable", async () => {
     const source = await text(entry);
     expect(source).toMatch(/^---\nname: sync-engine\ndescription:/);
+    expect(source).toContain("applications using concept design and @mit-sdg/sync-engine");
     expect(source).toContain("Native subagents are required");
     expect(source).toContain("pause and tell the user");
     expect(source).toContain("do not imitate independence with sequential\n  self-review");
@@ -45,6 +46,22 @@ describe("sync-engine Agent Skill", () => {
     }
   });
 
+  test("offers assumption mode or an unbounded interactive design discussion", async () => {
+    const entrySource = await text(entry);
+    const workflow = await text(references.workflow);
+    expect(entrySource).toContain("discuss the design first (recommended)");
+    expect(entrySource).toContain("proceed with general assumptions");
+    expect(entrySource).toContain("one or\n   two material product questions per turn");
+    expect(workflow).toContain("Before setup, baseline work, or design");
+    expect(workflow).toContain("exactly one or two questions");
+    expect(workflow).toContain("concrete answer options");
+    expect(workflow).toContain("identify one recommended answer");
+    expect(workflow).toContain("continue discussing the design or move to a draft");
+    expect(workflow).toContain("do not impose a cumulative cap");
+    expect(workflow).toContain("Do not ask product-discovery questions");
+    expect(workflow).toContain("candidate Markdown makes them\n   reviewable");
+  });
+
   test("closes and bounds designer context and output", async () => {
     const source = await text(references.design);
     expect(source).toContain("exact complete text directly in each applicable role prompt");
@@ -56,7 +73,7 @@ describe("sync-engine Agent Skill", () => {
     expect(source).toContain("Exactly the application's `design/` directory");
     expect(source).toContain("Markdown under that directory only");
     expect(source).toContain("Complete `concepts/*.md`, `compositions/*.md`, and `types.md`");
-    expect(source).toContain("at most three unresolved product questions");
+    expect(source).toContain("at most two unresolved product questions");
     for (const forbidden of [
       "application TypeScript",
       "generated files",
@@ -78,9 +95,13 @@ describe("sync-engine Agent Skill", () => {
     expect(source).toContain("create a fresh native critic subagent");
     expect(source).toContain("is read-only");
     expect(source).toContain("does not edit files or create a persistent report");
-    expect(source).toContain("at most two repair\nturns");
+    expect(source).toContain("at most two\ncritic-driven repair turns");
     expect(source).toContain("links the actual Markdown");
     expect(source).toContain("approve, revise, or discuss");
+    expect(source).toContain("recommend one next action");
+    expect(source).toContain("without a cumulative cap");
+    expect(source).toContain("user-directed discussion or revision rounds");
+    expect(source).toContain("rerun syntax and fresh criticism");
   });
 
   test("gives implementation roles narrow disjoint contexts", async () => {

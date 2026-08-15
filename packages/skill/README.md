@@ -23,9 +23,13 @@ dependencies are for the agent workflow; they do not change ordinary `sync-engin
 setup` applications.
 
 The entrypoint is [`skills/sync-engine/SKILL.md`](skills/sync-engine/SKILL.md).
-A normal run establishes a working start baseline, asks no more than three material
-product questions, produces a complete Markdown design, obtains an independent
-criticism and user approval, then builds through path-isolated workers.
+A normal run first asks whether you want to discuss the design (recommended) or let
+the agent proceed with general assumptions. It then establishes a working start
+baseline. In discussion mode, the agent asks one or two option-based questions per
+turn, recommends an answer to each, and periodically checks whether you want to keep
+discussing or move to a draft; there is no preset round limit. The workflow then
+produces a complete Markdown design, obtains an independent criticism and user
+approval, and builds through path-isolated workers.
 
 ## The review you receive
 

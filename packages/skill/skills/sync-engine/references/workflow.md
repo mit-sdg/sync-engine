@@ -6,6 +6,9 @@ handback. Role-specific prompt boundaries are in
 
 ## Establish a working baseline
 
+Make the intent choice in [settle the product request](#settle-the-product-request)
+before beginning this baseline.
+
 Read the application's repository instructions and inspect ordinary files and the
 current Git status without changing history. Inspect untracked files directly.
 Do not begin design while setup or the baseline is broken, unless reproducing that
@@ -59,11 +62,42 @@ question.
 
 ## Settle the product request
 
-Ask no more than three questions before design. Ask only when an answer changes a
-visible success, expected refusal, authority, lifecycle, persistence/deletion rule,
-host interaction, or explicit non-goal. Do not ask for information already present.
-Keep the resulting objective, decisions, non-goals, stage, and open issues in
-coordinator context rather than an application file.
+Before setup, baseline work, or design, ask the user to choose one of these modes
+unless the user already chose one explicitly:
+
+1. **Discuss the design first (recommended).** Explore product decisions
+   interactively for as long as the user wants before drafting.
+2. **Proceed with general assumptions.** Do not ask product-discovery questions.
+   Infer reasonable, conservative assumptions from the request and application,
+   record them in coordinator context, and ensure the candidate Markdown makes them
+   reviewable. Ask a blocking question only when no reasonable assumption permits
+   safe setup or a coherent design; explain why the workflow cannot proceed by
+   assumption in that case.
+
+Present the mode selection as one question with those options and explicitly mark
+**Discuss the design first** as recommended.
+
+In discussion mode, use iterative question rounds with no preset total question or
+round limit. Each coordinator turn asks exactly one or two questions. Ask only when
+an answer changes a visible success, expected refusal, authority, lifecycle,
+persistence/deletion rule, host interaction, or explicit non-goal. Do not ask for
+information already present. For every question:
+
+- give concise, concrete answer options, including an other/write-in option when the
+  listed choices may not be exhaustive; and
+- identify one recommended answer with a brief reason grounded in the objective and
+  decisions so far.
+
+After at most two consecutive product-decision rounds, make one of the next turn's
+one or two questions a check-in: continue discussing the design or move to a draft.
+Recommend continuing when material uncertainty remains and drafting when the settled
+request is coherent. If the user chooses to continue, begin another sequence of
+rounds; do not impose a cumulative cap. If the user chooses to draft, proceed with
+all settled answers. Any blocking question in assumption mode uses the same options
+and recommendation format.
+
+Keep the resulting objective, decisions, assumptions, non-goals, stage, and open
+issues in coordinator context rather than an application file.
 
 ## Move from design to implementation
 

@@ -1,6 +1,6 @@
 ---
 name: sync-engine
-description: Design and build @mit-sdg/sync-engine applications through an independent Markdown design review, isolated implementation workers, validation, and user acceptance.
+description: Design and build applications using concept design and @mit-sdg/sync-engine through an independent Markdown design review, isolated implementation workers, validation, and user acceptance.
 license: Apache-2.0
 compatibility: Requires filesystem and shell access, Bun, and native subagents that can be given isolated working directories and mutation boundaries.
 ---
@@ -11,8 +11,9 @@ Use this workflow for application design and implementation, not for changing th
 sync-engine framework itself. The normal path is:
 
 ```text
-setup or existing baseline → up to three product questions → independent design
-→ independent criticism and repair → user reviews Markdown → implementation workers
+intent choice → setup or existing baseline → interactive product discussion or general
+assumptions → independent design → independent criticism and repair → user reviews
+Markdown → implementation workers
 → integration and objective evidence → validation → final acceptance
 ```
 
@@ -37,16 +38,23 @@ setup or existing baseline → up to three product questions → independent des
 
 ## Run the workflow
 
-1. Follow [setup and baseline](references/workflow.md#establish-a-working-baseline).
-2. Ask at most three questions that materially affect product behavior, then record
-   the objective and settled answers in coordinator context.
-3. Run the closed-context designer and independent critic protocol in
+1. Start with the intent choice in
+   [settle the product request](references/workflow.md#settle-the-product-request):
+   ask whether the user wants to discuss the design first (recommended) or wants the
+   agent to proceed with general assumptions.
+2. Follow [setup and baseline](references/workflow.md#establish-a-working-baseline).
+3. In discussion mode, run as many interactive rounds as the user wants. Ask one or
+   two material product questions per turn, give options and a recommended answer for
+   each, and periodically ask whether to continue discussing or move to a draft. In
+   assumption mode, proceed without product-discovery questions and record reasonable
+   assumptions. Keep the objective and settled decisions in coordinator context.
+4. Run the closed-context designer and independent critic protocol in
    [design roles](references/design-roles.md).
-4. Link the actual candidate Markdown in one concise user review. Implementation
+5. Link the actual candidate Markdown in one concise user review. Implementation
    requires clear conversational approval of that reviewed design.
-5. Run the isolated build sequence in
+6. Run the isolated build sequence in
    [implementation roles](references/implementation-roles.md).
-6. Follow [validation and handback](references/workflow.md#validate-and-hand-back).
+7. Follow [validation and handback](references/workflow.md#validate-and-hand-back).
 
 Read repository instructions before acting. For application semantics and authoring,
 use the exact installed core documents identified by the role protocol; do not

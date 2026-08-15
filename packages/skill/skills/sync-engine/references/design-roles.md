@@ -39,7 +39,7 @@ Create one native designer subagent with normal reasoning.
 | May read          | Any Markdown already under that directory and the closed prompt context                               |
 | May write         | Markdown under that directory only                                                                    |
 | Must produce      | Complete `concepts/*.md`, `compositions/*.md`, and `types.md` candidate files needed by the objective |
-| Must return       | Changed file paths and at most three unresolved product questions, and nothing else                   |
+| Must return       | Changed file paths and at most two unresolved product questions, and nothing else                     |
 
 The designer must not inspect application TypeScript, generated files, Git, package
 configuration, tests, framework implementation, or framework API documentation. It
@@ -48,9 +48,12 @@ workflow metadata. One composition document conventionally pairs with one
 `src/compositions/*.ts` module; the Markdown places exact reaction, view, former, and
 computation links beside the application decisions they realize.
 
-If the designer returns a material product question, ask the user and inject the
-settled answer back into the same designer before review. Never answer a product
-question by guessing from implementation source.
+If the designer returns one or two material product questions, ask them in one turn
+using the discussion protocol's concrete options and recommended answer for each,
+then inject the settled answers back into the same designer before review. Continue
+with later one- or two-question turns if the designer identifies further material
+questions; there is no cumulative question cap. Never answer a product question by
+guessing from implementation source.
 
 ## Mechanical syntax pass
 
@@ -91,14 +94,20 @@ result; the coordinator must not ask the designer to manufacture changes.
 
 ## Repair and user review
 
-Return material findings to the original designer subagent. Permit at most two repair
-turns after the initial candidate. Re-run syntax and use a fresh read-only criticism
-of the repaired files when material content changed. If material findings remain
-after the second repair, pause and present the issue to the user rather than silently
-accepting it.
+Return material findings to the original designer subagent. Permit at most two
+critic-driven repair turns after the initial candidate. Re-run syntax and use a fresh
+read-only criticism of the repaired files when material content changed. If material
+findings remain after the second repair, pause and present them to the user as one or
+two decision questions per turn, each with concrete options and a recommended answer,
+rather than silently accepting them. The critic-driven repair limit does not cap
+user-directed discussion or revision rounds.
 
 Present one concise review that links the actual Markdown. Include the objective,
 proposed concepts and composition documents, key decisions, important alternatives,
 non-goals, unresolved concerns, and a one-line syntax/criticism status. Ask the user
-to approve, revise, or discuss. Do not include role mechanics or mechanical command
+to approve, revise, or discuss as explicit options, and recommend one next action
+with a brief reason. If the user chooses revision or discussion, follow the same
+interactive one- or two-question turns without a cumulative cap, return settled
+changes to the original designer, rerun syntax and fresh criticism, and present the
+updated Markdown for approval. Do not include role mechanics or mechanical command
 output unless explaining a failure.
