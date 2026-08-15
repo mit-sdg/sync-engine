@@ -12,17 +12,8 @@ const {
   RevokeWorkshopInvitation,
 } = compositions.InvitationManagement;
 
-type Floor = "memory" | "mongo";
+type Floor = "memory";
 type Instances = ReturnType<(typeof applicationConceptSet)["implementations"]>;
-interface MongoFloorLease {
-  database: unknown;
-  close(): Promise<void>;
-}
-const openMongoFloor = (
-  globalThis as typeof globalThis & {
-    __catalogMongoFloor?: () => Promise<MongoFloorLease>;
-  }
-).__catalogMongoFloor;
 const implementations = applicationConceptSet.implementations as unknown as (
   floor: Floor,
   context: object,
@@ -41,13 +32,7 @@ async function withFloor(
   floor: Floor,
   run: (instances: Instances) => Promise<void>,
 ): Promise<void> {
-  const lease = floor === "mongo" ? await openMongoFloor?.() : undefined;
-  if (floor === "mongo" && lease === undefined) return;
-  try {
-    await run(implementations(floor, lease === undefined ? {} : { db: lease.database }));
-  } finally {
-    await lease?.close();
-  }
+  await run(implementations(floor, {}));
 }
 
 function value(result: { ok: true; value: unknown } | { ok: false; error: unknown }) {
@@ -65,12 +50,9 @@ const composition = {
   RevokeWorkshopInvitation,
 };
 
-for (const floor of ["memory", "mongo"] as const) {
+for (const floor of ["memory"] as const) {
   describe(`Invite-only Workshop ${floor} floor`, () => {
-    test.skipIf(
-      (floor === "memory" && !memoryFloorAvailable) ||
-        (floor === "mongo" && openMongoFloor === undefined),
-    )(
+    test.skipIf(!memoryFloorAvailable)(
       "repairs an accepted invitation after its membership consequence faults",
       async () => {
         await withFloor(floor, async (instances) => {

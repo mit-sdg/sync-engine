@@ -4,13 +4,8 @@ import spec from "./spec.md" with { type: "text" };
 //#floor memory
 import { AuditingMemoryConcept } from "./auditing.memory.ts";
 //#endfloor
-//#floor mongo
-import type { Db } from "mongodb";
-import { AuditingMongoConcept } from "./auditing.mongo.ts";
-//#endfloor
 
 //#class memory AuditingMemoryConcept
-//#class mongo AuditingMongoConcept
 export const auditing = registerConcept({
   class: AuditingMemoryConcept, // selected-class
   spec,
@@ -22,9 +17,6 @@ export const auditing = registerConcept({
   floors: {
     //#floor memory
     memory: (_context: {}) => new AuditingMemoryConcept(),
-    //#endfloor
-    //#floor mongo
-    mongo: ({ db }: { db: Db }) => new AuditingMongoConcept(db),
     //#endfloor
   },
 });

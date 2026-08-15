@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local indexes with injectable identity allocation and retained closed alerts.",
       "sources": ["alerting.memory.ts", "alerting.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB alerts with injectable identities, atomic recipient-cause deduplication, and conditional acknowledgement.",
-      "sources": ["alerting.mongo.ts", "alerting.mongo.test.ts"]
     }
   }
 }

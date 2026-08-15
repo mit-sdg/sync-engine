@@ -9,10 +9,6 @@
     "memory": {
       "summary": "A process-local implementation with an injectable wall-clock reader.",
       "sources": []
-    },
-    "mongo": {
-      "summary": "The same process-local implementation, without MongoDB storage.",
-      "sources": []
     }
   }
 }

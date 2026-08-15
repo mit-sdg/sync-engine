@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local state with injectable identity allocation.",
       "sources": ["selecting.memory.ts", "selecting.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB replica set or sharded deployment using transactions to retain history and advance one current projection.",
-      "sources": ["selecting.mongo.ts", "selecting.mongo.test.ts"]
     }
   }
 }

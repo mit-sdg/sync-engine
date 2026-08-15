@@ -7,17 +7,8 @@ const { CancelMemberReservation, FulfillMemberReservation, ReserveForMember } =
   compositions.Reservations;
 const { GetMemberReservations } = compositions.ReservationLists;
 
-type Floor = "memory" | "mongo";
+type Floor = "memory";
 type Instances = ReturnType<(typeof applicationConceptSet)["implementations"]>;
-interface MongoFloorLease {
-  database: unknown;
-  close(): Promise<void>;
-}
-const openMongoFloor = (
-  globalThis as typeof globalThis & {
-    __catalogMongoFloor?: () => Promise<MongoFloorLease>;
-  }
-).__catalogMongoFloor;
 const implementations = applicationConceptSet.implementations as unknown as (
   floor: Floor,
   context: object,
@@ -36,13 +27,7 @@ async function withFloor(
   floor: Floor,
   run: (instances: Instances) => Promise<void>,
 ): Promise<void> {
-  const lease = floor === "mongo" ? await openMongoFloor?.() : undefined;
-  if (floor === "mongo" && lease === undefined) return;
-  try {
-    await run(implementations(floor, lease === undefined ? {} : { db: lease.database }));
-  } finally {
-    await lease?.close();
-  }
+  await run(implementations(floor, {}));
 }
 
 function value(result: Awaited<ReturnType<ReturnType<typeof assemble>["invoker"]["invoke"]>>) {
@@ -50,12 +35,9 @@ function value(result: Awaited<ReturnType<ReturnType<typeof assemble>["invoker"]
   return result.value as Record<string, unknown>;
 }
 
-for (const floor of ["memory", "mongo"] as const) {
+for (const floor of ["memory"] as const) {
   describe(`Member Reservations ${floor} floor`, () => {
-    test.skipIf(
-      (floor === "memory" && !memoryFloorAvailable) ||
-        (floor === "mongo" && openMongoFloor === undefined),
-    )(
+    test.skipIf(!memoryFloorAvailable)(
       "keeps Reserving authoritative and preserves claimant ownership",
       async () => {
         await withFloor(floor, async (instances) => {

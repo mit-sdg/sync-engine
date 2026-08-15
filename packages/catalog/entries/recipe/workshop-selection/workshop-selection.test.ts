@@ -26,30 +26,10 @@ interface WorkshopInstances {
   Selecting: object & SelectingTestImplementation;
 }
 
-interface TestDatabase {
-  admin(): {
-    command(input: Record<string, unknown>): Promise<Record<string, unknown>>;
-  };
-  dropDatabase(): Promise<unknown>;
-}
-
-interface TestMongoClient {
-  connect(): Promise<unknown>;
-  db(name: string): TestDatabase;
-  close(): Promise<unknown>;
-}
-
-type TestMongoClientConstructor = new (uri: string) => TestMongoClient;
-
 const registrations = catalogRegistrations as unknown as Record<
   "Gathering" | "Selecting",
   RegistrationWithFloors
 >;
-const environment = (
-  globalThis as unknown as { process: { env: Record<string, string | undefined> } }
-).process.env;
-const mongoEnabled =
-  environment.MONGODB_URI !== undefined && environment.CATALOG_SKIP_MONGO !== "1";
 
 function floorAvailable(floor: string): boolean {
   return [registrations.Gathering, registrations.Selecting].every((registration) =>
@@ -163,25 +143,6 @@ async function exerciseWorkshopSelection(instances: WorkshopInstances): Promise<
   });
 }
 
-async function mongoClientConstructor(): Promise<TestMongoClientConstructor> {
-  const packageName = "mongodb";
-  const loaded: unknown = await import(packageName);
-  if (!record(loaded) || typeof loaded.MongoClient !== "function")
-    throw new Error("The mongodb package does not export MongoClient.");
-  return loaded.MongoClient as TestMongoClientConstructor;
-}
-
-async function requireTransactionTopology(db: TestDatabase): Promise<void> {
-  const hello = await db.admin().command({ hello: 1 });
-  if (
-    typeof hello.logicalSessionTimeoutMinutes !== "number" ||
-    (typeof hello.setName !== "string" && hello.msg !== "isdbgrid")
-  )
-    throw new Error(
-      "Workshop Selection's Mongo floor requires a transaction-capable replica set or sharded cluster.",
-    );
-}
-
 test("exports only the declared endpoint composition members", () => {
   expect(CreateWorkshop).toBeDefined();
   expect(JoinWorkshop).toBeDefined();
@@ -192,24 +153,5 @@ test("exports only the declared endpoint composition members", () => {
 describe.skipIf(!floorAvailable("memory"))("Workshop Selection memory", () => {
   test("returns exact endpoint results and refusals with real concepts", async () => {
     await exerciseWorkshopSelection(workshopInstances("memory", {}));
-  });
-});
-
-describe.skipIf(!mongoEnabled || !floorAvailable("mongo"))("Workshop Selection mongo", () => {
-  test("returns the same exact endpoint results and refusals with real concepts", async () => {
-    const MongoClient = await mongoClientConstructor();
-    const client = new MongoClient(environment.MONGODB_URI ?? "");
-    await client.connect();
-    const db = client.db(`catalog_workshop_selection_${crypto.randomUUID()}`);
-    try {
-      await requireTransactionTopology(db);
-      await exerciseWorkshopSelection(workshopInstances("mongo", { db }));
-    } finally {
-      try {
-        await db.dropDatabase();
-      } finally {
-        await client.close();
-      }
-    }
   });
 });

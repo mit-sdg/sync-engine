@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local disposition records with explicit transition times.",
       "sources": ["trashing.memory.ts", "trashing.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB disposition records with unique Items and conditional transitions.",
-      "sources": ["trashing.mongo.ts", "trashing.mongo.test.ts"]
     }
   }
 }

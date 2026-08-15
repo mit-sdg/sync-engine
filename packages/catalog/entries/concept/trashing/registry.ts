@@ -4,13 +4,8 @@ import spec from "./spec.md" with { type: "text" };
 //#floor memory
 import { TrashingMemoryConcept } from "./trashing.memory.ts";
 //#endfloor
-//#floor mongo
-import type { Db } from "mongodb";
-import { TrashingMongoConcept } from "./trashing.mongo.ts";
-//#endfloor
 
 //#class memory TrashingMemoryConcept
-//#class mongo TrashingMongoConcept
 export const trashing = registerConcept({
   class: TrashingMemoryConcept, // selected-class
   spec,
@@ -22,9 +17,6 @@ export const trashing = registerConcept({
   floors: {
     //#floor memory
     memory: (_context: {}) => new TrashingMemoryConcept(),
-    //#endfloor
-    //#floor mongo
-    mongo: ({ db }: { db: Db }) => new TrashingMongoConcept(db),
     //#endfloor
   },
 });

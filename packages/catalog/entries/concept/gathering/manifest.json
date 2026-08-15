@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local state with injectable identity allocation.",
       "sources": ["gathering.memory.ts", "gathering.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB replica set or sharded deployment using transactions for coherent creation and ordered membership.",
-      "sources": ["gathering.mongo.ts", "gathering.mongo.test.ts"]
     }
   }
 }

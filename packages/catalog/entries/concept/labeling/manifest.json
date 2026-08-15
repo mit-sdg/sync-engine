@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local stable Labels and application sets with injectable identities.",
       "sources": ["labeling.memory.ts", "labeling.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB Labels and applications protected by compound unique indexes.",
-      "sources": ["labeling.mongo.ts", "labeling.mongo.test.ts"]
     }
   }
 }

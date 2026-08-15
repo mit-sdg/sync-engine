@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local invitation state with injectable identity allocation.",
       "sources": ["inviting.memory.ts", "inviting.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "A MongoDB collection with pending-pair uniqueness and conditional decision transitions.",
-      "sources": ["inviting.mongo.ts", "inviting.mongo.test.ts"]
     }
   }
 }

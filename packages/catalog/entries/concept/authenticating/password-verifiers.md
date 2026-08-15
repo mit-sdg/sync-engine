@@ -1,8 +1,7 @@
 # Authenticating password-verifier strategy
 
 Authenticating delegates password derivation and checking to an injected
-`PasswordVerifierStrategy`. The memory and Mongo implementations use the same
-strategy contract. This file describes implementation security configuration;
+`PasswordVerifierStrategy`. This file describes implementation security configuration;
 the algorithm and cost are not part of the [concept specification](spec.md) or
 its observable behavior.
 
@@ -27,15 +26,10 @@ provide those controls.
 
 ## Injection contract
 
-Pass dependencies when constructing either implementation:
+Pass dependencies when constructing the implementation:
 
 ```ts
 const authenticating = new AuthenticatingMemoryConcept({
-  passwordVerifier,
-  freshSalt,
-});
-
-const persistentAuthenticating = new AuthenticatingMongoConcept(db, {
   passwordVerifier,
   freshSalt,
 });
@@ -63,8 +57,8 @@ storage.
 A replacement strategy must continue to verify every stored format until those
 records have been migrated. Its `create` method writes only the new format, and
 `needsUpgrade` returns `true` for an accepted old format. After a successful
-`authenticate`, both implementations derive a fresh verifier and conditionally
-replace the exact salt and verifier that were checked. A concurrent password
+`authenticate`, the implementation derives a fresh verifier and conditionally
+replaces the exact salt and verifier that were checked. A concurrent password
 change or unregister prevents that maintenance write from replacing newer
 state. `changePassword` also writes the current format with a fresh salt.
 

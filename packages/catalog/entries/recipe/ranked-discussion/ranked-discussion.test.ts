@@ -8,17 +8,8 @@ const { CloseRankedDiscussion, OpenRankedDiscussion, RespondToDiscussion } =
 const { DownvoteResponse, UnvoteResponse, UpvoteResponse } = compositions.ResponseVoting;
 const { GetRankedDiscussion } = compositions.DiscussionPages;
 
-type Floor = "memory" | "mongo";
+type Floor = "memory";
 type Instances = ReturnType<(typeof applicationConceptSet)["implementations"]>;
-interface MongoFloorLease {
-  database: unknown;
-  close(): Promise<void>;
-}
-const openMongoFloor = (
-  globalThis as typeof globalThis & {
-    __catalogMongoFloor?: () => Promise<MongoFloorLease>;
-  }
-).__catalogMongoFloor;
 const implementations = applicationConceptSet.implementations as unknown as (
   floor: Floor,
   context: object,
@@ -37,13 +28,7 @@ async function withFloor(
   floor: Floor,
   run: (instances: Instances) => Promise<void>,
 ): Promise<void> {
-  const lease = floor === "mongo" ? await openMongoFloor?.() : undefined;
-  if (floor === "mongo" && lease === undefined) return;
-  try {
-    await run(implementations(floor, lease === undefined ? {} : { db: lease.database }));
-  } finally {
-    await lease?.close();
-  }
+  await run(implementations(floor, {}));
 }
 
 function value(result: { ok: true; value: unknown } | { ok: false; error: unknown }) {
@@ -61,12 +46,9 @@ const composition = {
   UpvoteResponse,
 };
 
-for (const floor of ["memory", "mongo"] as const) {
+for (const floor of ["memory"] as const) {
   describe(`Ranked Discussion ${floor} floor`, () => {
-    test.skipIf(
-      (floor === "memory" && !memoryFloorAvailable) ||
-        (floor === "mongo" && openMongoFloor === undefined),
-    )(
+    test.skipIf(!memoryFloorAvailable)(
       "validates responses before voting and forms aggregate scores",
       async () => {
         await withFloor(floor, async (instances) => {

@@ -16,10 +16,6 @@
     "memory": {
       "summary": "Process-local accounts with an injected versioned password-verifier strategy.",
       "sources": ["authenticating.memory.ts", "authenticating.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB accounts with unique usernames and conditional credential replacement.",
-      "sources": ["authenticating.mongo.ts", "authenticating.mongo.test.ts"]
     }
   }
 }

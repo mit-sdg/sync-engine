@@ -4,13 +4,8 @@ import spec from "./spec.md" with { type: "text" };
 //#floor memory
 import { SessioningMemoryConcept } from "./sessioning.memory.ts";
 //#endfloor
-//#floor mongo
-import type { Db } from "mongodb";
-import { SessioningMongoConcept } from "./sessioning.mongo.ts";
-//#endfloor
 
 //#class memory SessioningMemoryConcept
-//#class mongo SessioningMongoConcept
 export const sessioning = registerConcept({
   class: SessioningMemoryConcept, // selected-class
   spec,
@@ -18,9 +13,6 @@ export const sessioning = registerConcept({
   floors: {
     //#floor memory
     memory: (_context: {}) => new SessioningMemoryConcept(),
-    //#endfloor
-    //#floor mongo
-    mongo: ({ db }: { db: Db }) => new SessioningMongoConcept(db),
     //#endfloor
   },
 });

@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local state with an injected trusted clock and secure bearer source.",
       "sources": ["sessioning.memory.ts", "sessioning.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB digest records with logical expiry checks and a cleanup-only TTL index.",
-      "sources": ["sessioning.mongo.ts", "sessioning.mongo.test.ts"]
     }
   }
 }

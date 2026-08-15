@@ -13,7 +13,7 @@ describe("catalog registry", () => {
     if (concept?.kind !== "concept") throw new Error("missing selecting concept");
     expect(concept.design).toBe("spec.md");
     expect(CatalogRegistry.sources(concept).map(({ selector }) => selector)).toContain(
-      "mongo/selecting.mongo.ts",
+      "memory/selecting.memory.ts",
     );
 
     const recipe = registry.entries.get("recipe/workshop-selection");
