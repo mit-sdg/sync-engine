@@ -18,7 +18,7 @@ These commands create a Bun package and pin the tutorial's core release:
 mkdir workshop-app
 cd workshop-app
 bun init -y
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.10
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.11
 ```
 
 ## Initialize the application files
@@ -27,11 +27,11 @@ bun add --exact @mit-sdg/sync-engine@1.0.0-beta.10
 bunx sync-engine setup
 ```
 
-`setup` completes missing supported package fields: exact compatible TypeScript and
-`@types/node` development dependencies and the standard `generate`, `check`, and
-`start` scripts. It preserves every existing compatible declaration and every
-existing script, even when a script differs from the default. After a manifest edit it
-runs `bun install`.
+`setup` completes missing supported package fields: the canonical Bun
+`packageManager`, exact compatible TypeScript and `@types/node` development
+dependencies, and the standard `generate`, `check`, and `start` scripts. It preserves
+every existing compatible declaration and every existing script, even when a script
+differs from the default. After a manifest edit it runs `bun install`.
 
 The command never replaces existing source, config, or tsconfig. It creates this
 concept-free structure only where files are absent; `src/main.ts` is the initial host

@@ -32,13 +32,15 @@ sync-engine setup [directory]
 ```
 
 The directory defaults to the current working directory and must already contain a
-valid `package.json`. When `packageManager` is present, it must name Bun. The command
-creates neither the directory nor package manifest.
+valid `package.json`. Setup adds the installed package's canonical Bun
+`packageManager` when the field is absent. An existing `packageManager` must name Bun
+and is preserved. The command creates neither the directory nor package manifest.
 
 Setup validates dependency declarations across `dependencies`, `devDependencies`, and
 `peerDependencies`. Different declarations for the same managed package are a
-conflict. It applies these changes only when the package is absent:
+conflict. It completes these missing managed fields:
 
+- adds the canonical Bun `packageManager` field;
 - adds the exact installed `@mit-sdg/sync-engine` version to `dependencies`;
 - adds an exact compatible TypeScript version to `devDependencies`;
 - adds an exact compatible `@types/node` version to `devDependencies`; and

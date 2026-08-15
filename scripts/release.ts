@@ -266,18 +266,23 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
       if (peerVersion !== undefined)
         peerDependencies[peer.packageName] = compatiblePeer(peerVersion);
     }
-    if (workspace.rootRuntimeDependencies.length > 0) {
-      const dependencies = object(manifest.dependencies) ?? {};
-      manifest.dependencies = dependencies;
-      for (const dependency of workspace.rootRuntimeDependencies) {
-        const range = rootDependencies[dependency];
-        if (typeof range !== "string") {
-          throw new Error(`package.json is missing dependencies.${dependency}`);
-        }
-        dependencies[dependency] = range;
-        delete peerDependencies[dependency];
+    const dependencies = object(manifest.dependencies) ?? {};
+    for (const dependency of workspace.rootRuntimeDependencies) {
+      const range = rootDependencies[dependency];
+      if (typeof range !== "string") {
+        throw new Error(`package.json is missing dependencies.${dependency}`);
       }
+      dependencies[dependency] = range;
+      delete peerDependencies[dependency];
     }
+    for (const dependencyWorkspace of releaseWorkspaces) {
+      if (!(dependencyWorkspace.packageName in dependencies)) continue;
+      dependencies[dependencyWorkspace.packageName] = workspaceVersions.get(
+        dependencyWorkspace.packageName,
+      );
+    }
+    if (Object.keys(dependencies).length > 0) manifest.dependencies = dependencies;
+    else delete manifest.dependencies;
     if (Object.keys(peerDependencies).length > 0) manifest.peerDependencies = peerDependencies;
     else delete manifest.peerDependencies;
     projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);

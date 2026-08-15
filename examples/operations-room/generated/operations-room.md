@@ -1,5 +1,5 @@
 <!-- Generated from the Operations room assembly. Do not edit. -->
-<!-- Manifest producer: @mit-sdg/sync-engine@1.0.0-beta.10; concept specification: sync-engine.concept-specification@1; renderer: @mit-sdg/sync-engine@1.0.0-beta.10. -->
+<!-- Manifest producer: @mit-sdg/sync-engine@1.0.0-beta.11; concept specification: sync-engine.concept-specification@1; renderer: @mit-sdg/sync-engine@1.0.0-beta.11. -->
 
 # Operations room — assembled read-back
 

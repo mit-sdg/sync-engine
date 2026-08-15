@@ -20,6 +20,7 @@ const packageManifest = JSON.parse(validSources.get("package.json") ?? "") as {
 };
 const currentVersion = packageManifest.version;
 const analysisManifest = "packages/analysis/package.json";
+const skillManifest = "packages/skill/package.json";
 const currentChangelog = validSources.get("CHANGELOG.md") ?? "";
 const changelogVersions = [...currentChangelog.matchAll(/^## \[([^\]]+)\]/gm)].map(
   (match) => match[1] ?? "",
@@ -100,10 +101,13 @@ describe("release source facts", () => {
       delete manifest.dependencies;
       manifest.peerDependencies.typescript = "stale";
     });
+    editManifest(sources, skillManifest, (manifest) => {
+      manifest.dependencies["@mit-sdg/sync-engine-analysis"] = "stale";
+    });
 
     expect(checkRelease(sources)).toEqual(
       expect.arrayContaining(
-        [releaseManifestPaths[0], analysisManifest, ownedDependencyManifests[0]].map(
+        [releaseManifestPaths[0], analysisManifest, skillManifest, ownedDependencyManifests[0]].map(
           (path) => `${path}: release-owned facts are stale; run bun run release:update`,
         ),
       ),
@@ -122,6 +126,10 @@ describe("release source facts", () => {
       "@mit-sdg/sync-engine": currentVersion,
     });
     expect(projectedAnalysis.dependencies).toEqual({ typescript: ">=6 <7" });
+    expect(JSON.parse(projected.get(skillManifest) ?? "").dependencies).toEqual({
+      "@mit-sdg/sync-engine-analysis": currentVersion,
+      "@mit-sdg/sync-engine-catalog": currentVersion,
+    });
     for (const [path, source] of projected) sources.set(path, source);
     expect(checkRelease(sources)).toEqual([]);
   });

@@ -211,6 +211,7 @@ function ensureScripts(manifest: Record<string, unknown>): boolean {
 
 interface PackageRequirements {
   version: string;
+  packageManager: string;
   typescriptRange: string;
   nodeTypesRange: string;
 }
@@ -219,6 +220,10 @@ function updateManifest(manifest: Record<string, unknown>, required: PackageRequ
   const typescriptVersion = exactMinimum(required.typescriptRange, "TypeScript");
   const nodeTypesVersion = exactMinimum(required.nodeTypesRange, "@types/node");
   let changed = false;
+  if (manifest.packageManager === undefined) {
+    manifest.packageManager = required.packageManager;
+    changed = true;
+  }
   changed =
     ensureDependency(
       manifest,
@@ -283,11 +288,13 @@ export async function setupProject(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
   ) as {
     version: string;
+    packageManager: string;
     dependencies: { typescript: string };
     devDependencies: { "@types/node": string };
   };
   const manifestUpdated = updateManifest(manifest, {
     version: packageManifest.version,
+    packageManager: packageManifest.packageManager,
     typescriptRange: packageManifest.dependencies.typescript,
     nodeTypesRange: packageManifest.devDependencies["@types/node"],
   });
