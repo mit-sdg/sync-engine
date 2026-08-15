@@ -14,6 +14,10 @@ describe("catalog documentation", () => {
       "schema: 2",
       "implementations",
       "selector",
+      "simplify",
+      "split",
+      "combine",
+      "rename",
     ])
       expect(reference).toContain(term);
     for (const removed of ["catalog add", "catalog.lock", "generated.ts", "src/concept-set.ts"])

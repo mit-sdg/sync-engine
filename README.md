@@ -4,6 +4,7 @@
 [![npm: analysis](https://img.shields.io/npm/v/@mit-sdg/sync-engine-analysis/beta?label=analysis)](https://www.npmjs.com/package/@mit-sdg/sync-engine-analysis)
 [![npm: HTTP](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
 [![npm: catalog](https://img.shields.io/npm/v/@mit-sdg/sync-engine-catalog/beta?label=catalog)](https://www.npmjs.com/package/@mit-sdg/sync-engine-catalog)
+[![npm: skill](https://img.shields.io/npm/v/@mit-sdg/sync-engine-skill/beta?label=skill)](https://www.npmjs.com/package/@mit-sdg/sync-engine-skill)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine is an ESM-only TypeScript library for composing independently
@@ -44,6 +45,7 @@ bun add @mit-sdg/sync-engine@beta
 | [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/README.md) | Deterministic IR queries and optional TypeScript project/source evidence |
 | [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)         | Maintained HTTP handler, Fetch client, and generated wire projection     |
 | [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)   | CLI-only read-only browser for curated concept and recipe source         |
+| [`@mit-sdg/sync-engine-skill`](https://github.com/mit-sdg/sync-engine/blob/main/packages/skill/README.md)       | Independent design review and isolated implementation Agent Skill        |
 
 ## Create your first application
 
@@ -57,12 +59,12 @@ bun add --exact @mit-sdg/sync-engine@beta
 bunx --package @mit-sdg/sync-engine@beta sync-engine setup
 ```
 
-For a reproducible evaluation, replace `@beta` with a pinned version. `setup`
-never edits `package.json` or overwrites an application file. It reports missing
-dependencies and scripts as guidance.
+For a reproducible evaluation, replace `@beta` with a pinned version. `setup` adds
+missing compatible development dependencies and standard scripts, runs Bun
+installation after a manifest edit, and creates only absent source/config templates.
+It never overwrites existing source, config, or tsconfig.
 
-[Getting started](docs/user/guide/getting-started.md) adds the development
-dependencies and verifies the empty application.
+[Getting started](docs/user/guide/getting-started.md) verifies the empty application.
 
 ## Documentation
 

@@ -7,6 +7,46 @@ Install analysis and core at the same exact beta version. The package is
 ESM-only and supports Node.js 24 (`>=24 <25`). Project analysis also installs
 TypeScript `>=6 <7` as a runtime dependency; importing `/ir` does not load it.
 
+## `sync-engine-analysis` command
+
+```text
+sync-engine-analysis <command> [arguments] [options]
+```
+
+The package bin has no corresponding root JavaScript export. It obtains the exact V1
+manifest by running the installed core's `sync-engine artifacts manifest` command.
+The core config behavior is therefore the only application code execution performed
+by the command. The analysis command does not write application files.
+
+| Command             | Input               | Project analyzer | Result                                                                |
+| ------------------- | ------------------- | ---------------- | --------------------------------------------------------------------- |
+| `summary`           | none                | no               | Counts by design kind and index issue count.                          |
+| `search <terms...>` | token-AND query     | no               | Matching references, fields, and bounded snippets.                    |
+| `describe <ref>`    | one exact reference | no               | Definition summary and compact declaration data.                      |
+| `sources <ref>`     | one exact reference | yes              | Attributed paths, line/column ranges, roles, resolutions, and issues. |
+| `impact <ref>`      | one exact reference | no               | Bounded possible-impact entries and completeness.                     |
+| `diagnostics`       | none                | yes              | Manifest, TypeScript, index, source, and analysis findings.           |
+
+References use `concept:Name`, `action:Concept.name`, `query:Concept.name`,
+`reaction:Name`, `view:Name`, `former:Name`, `computation:Name`, or
+`endpoint:Name:/path`. A canonical JSON tuple emitted as `key` is also accepted.
+Names are exact and malformed or unknown references fail.
+
+The nearest ancestor `generated.config.ts` is the default config. `--config <path>`
+selects another file. Source-aware commands default `--root` to the config directory,
+`--tsconfig` to `tsconfig.json`, and `--design-base` to `generated`, the standard generated read-back directory. `--offset` defaults to 0. `--limit` defaults to 25 and accepts 1 through 100. `--json` selects a bounded
+structured projection; JSON above 512 KiB and Markdown above 64 KiB fail rather than
+being truncated into misleading or invalid output. Manifest acquisition is bounded
+to 64 MiB.
+
+Success writes only the result to stdout. Help writes usage to stdout. Invalid
+arguments, missing configuration or executables, core manifest failures, malformed
+manifests, unavailable project analysis, and analysis failures write one explanation
+to stderr and exit nonzero. No partial result is written. Source-aware analysis is
+static and reports unresolved or ambiguous attribution; all impact and attribution
+remain evidence rather than runtime proof. The internal `local-analysis` source label
+is not a Git identity.
+
 ## `ir`
 
 `@mit-sdg/sync-engine-analysis/ir`

@@ -14,15 +14,16 @@ sets exit status 1. Unknown, repeated, or mutually exclusive options, missing
 values, and extra operands are rejected before configuration is imported or
 files are written.
 
-| Command                                        | Result                                                                                | Writes files             |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------ |
-| `setup [directory]`                            | Initializes missing concept-free application files in an existing Bun package         | Missing setup files only |
-| `check [--config path]`                        | Checks concept source, registered design, application types, and declaration coverage | No                       |
-| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                       | No                       |
-| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                                 | Yes                      |
-| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                                   | Yes                      |
-| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                                 | Yes                      |
-| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                                     | No                       |
+| Command                                        | Result                                                                                | Writes files                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files         | `package.json`, Bun install, missing templates |
+| `check-concepts <paths...>`                    | Parses explicit draft concept specifications without loading the application          | No                                             |
+| `check [--config path]`                        | Checks concept source, registered design, application types, and declaration coverage | No                                             |
+| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                       | No                                             |
+| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                                 | Yes                                            |
+| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                                   | Yes                                            |
+| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                                 | Yes                                            |
+| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                                     | No                                             |
 
 ## `sync-engine setup`
 
@@ -30,25 +31,71 @@ files are written.
 sync-engine setup [directory]
 ```
 
-The directory defaults to the current working directory and must contain a
-valid `package.json`. When `packageManager` is present, it must name Bun. The
-command creates neither the directory nor package manifest.
+The directory defaults to the current working directory and must already contain a
+valid `package.json`. When `packageManager` is present, it must name Bun. The command
+creates neither the directory nor package manifest.
+
+Setup validates dependency declarations across `dependencies`, `devDependencies`, and
+`peerDependencies`. Different declarations for the same managed package are a
+conflict. It applies these changes only when the package is absent:
+
+- adds the exact installed `@mit-sdg/sync-engine` version to `dependencies`;
+- adds an exact compatible TypeScript version to `devDependencies`;
+- adds an exact compatible `@types/node` version to `devDependencies`; and
+- adds missing `generate`, `check`, and `start` scripts.
+
+The standard scripts are:
+
+```json
+{
+  "generate": "sync-engine artifacts pin",
+  "check": "sync-engine check && sync-engine artifacts check && tsc --noEmit",
+  "start": "bun src/main.ts"
+}
+```
+
+An existing compatible dependency declaration is preserved in its existing section.
+The core declaration must equal the running core version; TypeScript and `@types/node`
+ranges must be subsets of the supported ranges. Every existing script is preserved,
+even when its command differs from the standard. Invalid fields, conflicting
+declarations, and incompatible ranges fail before `package.json` is written.
+
+When the manifest changes, setup writes `package.json` and then runs `bun install`
+before writing templates. An installation failure is reported as partial failure: the
+manifest, and any Bun lockfile work, may remain changed, while setup source and
+configuration templates remain unwritten. Rerun setup after correcting installation.
+An unchanged manifest does not run installation, so an unchanged second invocation is
+idempotent.
 
 Setup targets `tsconfig.json`, `generated.config.ts`, `src/concepts.ts`,
 `src/assembly.ts`, and `src/main.ts`. Its concept-free generated config contains
-an explicit `design: { version: 1, documents: [] }` block.
+`design: { version: 1, documents: [] }`. For each target, setup creates an absent file,
+verifies a byte-identical file, and leaves every other existing file unchanged as
+application-owned. It never merges or rewrites existing source, config, or tsconfig.
+Before creating a file that imports another setup target, it checks that dependency's
+expected exports. A failed dependency check leaves the dependent file absent and
+prints the required integration.
 
-For each target, setup creates an absent file, verifies a byte-identical file,
-and leaves any other existing file unchanged as application-owned. Before it
-creates a file that imports another setup target, it checks that dependency's
-expected exports. A failed dependency check leaves the dependent file absent
-and prints the required integration.
+Template writes are not one filesystem transaction. A filesystem failure reports how
+many templates were written; existing application files remain untouched, and a later
+setup can complete the missing files.
 
-Setup checks the core and TypeScript dependency declarations and the expected
-scripts but never edits `package.json`. It does not merge an existing tsconfig
-or generated config. A second invocation over unchanged output writes nothing.
-Filesystem failures can leave earlier files in place; setup is not an
-all-or-nothing filesystem transaction.
+## `sync-engine check-concepts`
+
+```text
+sync-engine check-concepts <paths...>
+```
+
+Each operand is an explicit concept Markdown file. At least one path is required and
+options are not accepted. The command checks files in operand order with the strict
+version-1 concept parser. Success prints only the number of parsed files. The first
+missing, non-regular, unreadable, or invalid file produces a path-attributed error and
+exit status 1.
+
+This command does not discover files, load a generated config, inspect TypeScript or
+Git, compare revisions, compute evidence identities, or write files. It establishes
+syntax only. Use config-based `sync-engine check` after registration to check source
+provenance and TypeScript member agreement.
 
 ## `sync-engine check`
 

@@ -39,9 +39,11 @@ binding; reusing a bound name tests equality.
 ## Composition
 
 The application-level collection of reactions, views, formers, and endpoints.
-Composition connects concepts without adding peer dependencies to them.
-Registered application prose may explain declarations from any number of
-composition groups; no paired composition document is required.
+Composition connects concepts without adding peer dependencies to them. New
+applications conventionally pair one `design/compositions/*.md` document with each
+`src/compositions/*.ts` responsibility. Registration permits prose to explain any
+number of composition groups; the pairing is recommended for authors and reviewers,
+not required by the checker.
 
 ## Concept
 

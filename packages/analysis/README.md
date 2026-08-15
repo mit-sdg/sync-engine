@@ -34,6 +34,39 @@ bun add --exact @mit-sdg/sync-engine@1.0.0-beta.10 @mit-sdg/sync-engine-analysis
 The ESM package supports Node.js `>=24 <25`. Project analysis depends on
 TypeScript `>=6 <7`; importing `/ir` does not load it.
 
+## Use the context-selection command
+
+Installing the package exposes `sync-engine-analysis`, a read-only command that asks
+the installed core command for an exact Application Manifest V1. Run it from an
+application root or a nested directory; it finds the nearest
+`generated.config.ts`. Use `--config` when the configuration has another path.
+
+```sh
+sync-engine-analysis summary
+sync-engine-analysis search message author --limit 20
+sync-engine-analysis describe action:Messages.create
+sync-engine-analysis sources reaction:RecordMessage
+sync-engine-analysis impact action:Messages.create
+sync-engine-analysis diagnostics
+```
+
+`summary`, `search`, `describe`, and `impact` inspect only the manifest and do not
+load TypeScript project analysis. `sources` and `diagnostics` statically analyze the
+checkout using the config directory as the project root, `tsconfig.json` as the
+project configuration, and `generated` as the standard read-back directory used to
+resolve manifest design links. They do not import application source. Use `--root`,
+`--tsconfig`, or `--design-base` when those defaults do not match the project.
+
+Default output is compact deterministic Markdown. `--json` emits a bounded JSON
+projection, not the package's persisted formats. Paged commands accept `--offset`
+and `--limit`; the default limit is 25 and the maximum is 100. Analysis reports
+possible relationships and source attribution, not proof that runtime behavior will
+occur. The source label used during a command is an internal local-analysis label,
+not a Git revision claim.
+
+See the [command reference](public-surface.md#sync-engine-analysis-command) for exact
+reference syntax, options, bounds, and failures.
+
 ## Choose `/ir` or `/project`
 
 There is no root export from `@mit-sdg/sync-engine-analysis`, and deep imports

@@ -170,8 +170,8 @@ describe("release source facts", () => {
     ],
     [
       "analysis TypeScript runtime dependency",
-      `    "packages/analysis": {\n      "name": "@mit-sdg/sync-engine-analysis",\n      "version": "${currentVersion}",\n      "dependencies": {\n        "typescript": ">=6 <7"`,
-      `    "packages/analysis": {\n      "name": "@mit-sdg/sync-engine-analysis",\n      "version": "${currentVersion}",\n      "dependencies": {\n        "typescript": "workspace:*"`,
+      `    "packages/analysis": {\n      "name": "@mit-sdg/sync-engine-analysis",\n      "version": "${currentVersion}",\n      "bin": {\n        "sync-engine-analysis": "./dist/command.js",\n      },\n      "dependencies": {\n        "typescript": ">=6 <7"`,
+      `    "packages/analysis": {\n      "name": "@mit-sdg/sync-engine-analysis",\n      "version": "${currentVersion}",\n      "bin": {\n        "sync-engine-analysis": "./dist/command.js",\n      },\n      "dependencies": {\n        "typescript": "workspace:*"`,
     ],
     [
       "core registry resolution",

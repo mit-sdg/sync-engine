@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
@@ -6,17 +7,32 @@ import semver from "semver";
 import ts from "typescript";
 import { filesBelow } from "./files-below.ts";
 
+export type SetupInstaller = (root: string) => Promise<void>;
+
+export interface SetupOptions {
+  /** Override installation for tests, or use false for an explicit offline dry install. */
+  readonly install?: SetupInstaller | false;
+}
+
 export interface SetupResult {
   readonly root: string;
+  readonly manifestUpdated: boolean;
+  readonly installation: "completed" | "not-needed" | "skipped";
   readonly written: readonly string[];
   readonly verified: readonly string[];
   readonly guidance: readonly string[];
 }
 
+const CORE = "@mit-sdg/sync-engine";
 const IDENTIFIERS: Readonly<Record<string, readonly string[]>> = {
   "src/concepts.ts": ["applicationConceptSet"],
   "src/assembly.ts": ["assembleApplication"],
 };
+const STANDARD_SCRIPTS = {
+  generate: "sync-engine artifacts pin",
+  check: "sync-engine check && sync-engine artifacts check && tsc --noEmit",
+  start: "bun src/main.ts",
+} as const;
 
 function setupDirectory(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "setup");
@@ -56,8 +72,9 @@ function exportsIdentifiers(source: string, identifiers: readonly string[]): boo
     fileName: "setup-target.ts",
     reportDiagnostics: true,
   }).diagnostics;
-  if (diagnostics?.some((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error))
+  if (diagnostics?.some((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error)) {
     return false;
+  }
   const file = ts.createSourceFile("setup-target.ts", source, ts.ScriptTarget.Latest, true);
   const exported = new Set<string>();
   const hasExport = (node: ts.Node): boolean =>
@@ -66,8 +83,9 @@ function exportsIdentifiers(source: string, identifiers: readonly string[]): boo
       true;
   for (const statement of file.statements) {
     if (ts.isExportDeclaration(statement) && statement.exportClause !== undefined) {
-      if (ts.isNamedExports(statement.exportClause))
+      if (ts.isNamedExports(statement.exportClause)) {
         for (const element of statement.exportClause.elements) exported.add(element.name.text);
+      }
       continue;
     }
     if (!hasExport(statement)) continue;
@@ -79,92 +97,188 @@ function exportsIdentifiers(source: string, identifiers: readonly string[]): boo
       if (statement.name !== undefined) exported.add(statement.name.text);
       continue;
     }
-    if (ts.isVariableStatement(statement))
-      for (const declaration of statement.declarationList.declarations)
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name)) exported.add(declaration.name.text);
+      }
+    }
   }
   return identifiers.every((identifier) => exported.has(identifier));
 }
 
-function dependencyGuidance(
+const DEPENDENCY_SECTIONS = ["dependencies", "devDependencies", "peerDependencies"] as const;
+
+type DependencySection = (typeof DEPENDENCY_SECTIONS)[number];
+
+function dependencySection(
   manifest: Record<string, unknown>,
-  version: string,
-  typescriptRange: string,
-  nodeTypesRange: string,
-): string[] {
-  const all = ["dependencies", "devDependencies", "peerDependencies"].flatMap((key) => {
-    const value = manifest[key];
-    return typeof value === "object" && value !== null && !Array.isArray(value)
-      ? Object.entries(value as Record<string, unknown>)
-      : [];
-  });
-  const guidance: string[] = [];
-  const requirements = (name: string): string[] =>
-    all
-      .filter(([candidate]) => candidate === name)
-      .map(([, range]) => range)
-      .filter((range): range is string => typeof range === "string");
-  const core = requirements("@mit-sdg/sync-engine");
-  if (new Set(core).size > 1)
-    throw new Error("sync-engine setup: conflicting @mit-sdg/sync-engine package declarations.");
-  if (core.length === 0)
-    guidance.push(`Dependency required: bun add --exact @mit-sdg/sync-engine@${version}`);
-  else if (core[0] !== version)
-    throw new Error(
-      `sync-engine setup: @mit-sdg/sync-engine must be declared at ${version}; found ${core[0]}.`,
-    );
-  const nodeTypes = requirements("@types/node");
-  if (new Set(nodeTypes).size > 1)
-    throw new Error("sync-engine setup: conflicting @types/node package declarations.");
-  if (nodeTypes.length === 0)
-    guidance.push(
-      `Development dependency required: bun add --dev --exact @types/node@"${nodeTypesRange}"`,
-    );
-  const typescript = requirements("typescript");
-  if (new Set(typescript).size > 1)
-    throw new Error("sync-engine setup: conflicting TypeScript package declarations.");
-  if (typescript.length === 0)
-    guidance.push(
-      `Development dependency recommended: bun add --dev --exact typescript@"${typescriptRange}"`,
-    );
-  else if (
-    !(semver.valid(typescript[0]) !== null
-      ? semver.satisfies(typescript[0], typescriptRange)
-      : semver.subset(typescript[0] ?? "", typescriptRange))
-  )
-    throw new Error(
-      `sync-engine setup: TypeScript ${typescript[0]} is incompatible with ${typescriptRange}.`,
-    );
-  const scripts = manifest.scripts;
-  const records =
-    typeof scripts === "object" && scripts !== null && !Array.isArray(scripts)
-      ? (scripts as Record<string, unknown>)
-      : {};
-  if (typeof records.generate !== "string")
-    guidance.push('package.json script: "generate": "sync-engine artifacts pin"');
-  if (typeof records.check !== "string" && typeof records.typecheck !== "string") {
-    guidance.push('package.json script: "check": "sync-engine check && tsc --noEmit"');
+  key: DependencySection,
+  create = false,
+): Record<string, string> | undefined {
+  const value = manifest[key];
+  if (value === undefined) {
+    if (!create) return undefined;
+    const created: Record<string, string> = {};
+    manifest[key] = created;
+    return created;
   }
-  if (typeof records.start !== "string")
-    guidance.push('package.json script: "start": "bun src/main.ts"');
-  return guidance;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`sync-engine setup: package.json ${key} must be an object.`);
+  }
+  for (const [name, range] of Object.entries(value)) {
+    if (typeof range !== "string") {
+      throw new Error(`sync-engine setup: package.json ${key}.${name} must be a string.`);
+    }
+  }
+  return value as Record<string, string>;
 }
 
-/** Initialize missing concept-free application files in an existing Bun package. */
-export async function setupProject(directory = "."): Promise<SetupResult> {
+function requirements(
+  manifest: Record<string, unknown>,
+  name: string,
+): Array<{ section: DependencySection; range: string }> {
+  return DEPENDENCY_SECTIONS.flatMap((section) => {
+    const dependencies = dependencySection(manifest, section);
+    const range = dependencies?.[name];
+    return range === undefined ? [] : [{ section, range }];
+  });
+}
+
+function rangeWithin(candidate: string, supported: string): boolean {
+  try {
+    return semver.validRange(candidate) !== null && semver.subset(candidate, supported);
+  } catch {
+    return false;
+  }
+}
+
+function exactMinimum(range: string, label: string): string {
+  const minimum = semver.minVersion(range)?.version;
+  if (minimum === undefined) {
+    throw new Error(`sync-engine setup: the installed package has an invalid ${label} range.`);
+  }
+  return minimum;
+}
+
+function ensureDependency(
+  manifest: Record<string, unknown>,
+  name: string,
+  destination: "dependencies" | "devDependencies",
+  exact: string,
+  compatible: (range: string) => boolean,
+): boolean {
+  const declared = requirements(manifest, name);
+  if (new Set(declared.map(({ range }) => range)).size > 1) {
+    throw new Error(`sync-engine setup: conflicting ${name} package declarations.`);
+  }
+  if (declared.length > 0) {
+    const range = declared[0]?.range ?? "";
+    if (!compatible(range)) {
+      throw new Error(`sync-engine setup: ${name} ${range} is incompatible with ${exact}.`);
+    }
+    return false;
+  }
+  dependencySection(manifest, destination, true)![name] = exact;
+  return true;
+}
+
+function ensureScripts(manifest: Record<string, unknown>): boolean {
+  const value = manifest.scripts;
+  let scripts: Record<string, string>;
+  if (value === undefined) {
+    scripts = {};
+    manifest.scripts = scripts;
+  } else {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new Error("sync-engine setup: package.json scripts must be an object.");
+    }
+    for (const [name, command] of Object.entries(value)) {
+      if (typeof command !== "string") {
+        throw new Error(`sync-engine setup: package.json scripts.${name} must be a string.`);
+      }
+    }
+    scripts = value as Record<string, string>;
+  }
+
+  let changed = false;
+  for (const [name, command] of Object.entries(STANDARD_SCRIPTS)) {
+    if (scripts[name] !== undefined) continue;
+    scripts[name] = command;
+    changed = true;
+  }
+  return changed;
+}
+
+interface PackageRequirements {
+  version: string;
+  typescriptRange: string;
+  nodeTypesRange: string;
+}
+
+function updateManifest(manifest: Record<string, unknown>, required: PackageRequirements): boolean {
+  const typescriptVersion = exactMinimum(required.typescriptRange, "TypeScript");
+  const nodeTypesVersion = exactMinimum(required.nodeTypesRange, "@types/node");
+  let changed = false;
+  changed =
+    ensureDependency(
+      manifest,
+      CORE,
+      "dependencies",
+      required.version,
+      (range) => range === required.version,
+    ) || changed;
+  changed =
+    ensureDependency(manifest, "typescript", "devDependencies", typescriptVersion, (range) =>
+      rangeWithin(range, required.typescriptRange),
+    ) || changed;
+  changed =
+    ensureDependency(manifest, "@types/node", "devDependencies", nodeTypesVersion, (range) =>
+      rangeWithin(range, required.nodeTypesRange),
+    ) || changed;
+  changed = ensureScripts(manifest) || changed;
+  return changed;
+}
+
+async function bunInstall(root: string): Promise<void> {
+  await new Promise<void>((resolveInstall, rejectInstall) => {
+    const child = spawn("bun", ["install"], { cwd: root, stdio: "inherit" });
+    child.once("error", rejectInstall);
+    child.once("close", (code, signal) => {
+      if (code === 0) resolveInstall();
+      else {
+        rejectInstall(
+          new Error(
+            signal === null
+              ? `bun install exited with status ${String(code)}`
+              : `bun install ended from signal ${signal}`,
+          ),
+        );
+      }
+    });
+  });
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Initialize a supported concept-free application without replacing application-owned files. */
+export async function setupProject(
+  directory = ".",
+  options: SetupOptions = {},
+): Promise<SetupResult> {
   const root = resolve(process.cwd(), directory);
-  if (!existsSync(root))
+  if (!existsSync(root)) {
     throw new Error(`sync-engine setup: directory does not exist: ${directory}`);
+  }
   const packagePath = resolve(root, "package.json");
   if (!existsSync(packagePath)) {
     throw new Error(
       `sync-engine setup: ${directory} has no package.json. Create a Bun package first with \`bun init -y\`.`,
     );
   }
-  const manifest = packageObject(
-    await readFile(packagePath, "utf8"),
-    relative(process.cwd(), packagePath),
-  );
+  const manifestSource = await readFile(packagePath, "utf8");
+  const manifest = packageObject(manifestSource, relative(process.cwd(), packagePath));
   const packageManifest = JSON.parse(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
   ) as {
@@ -172,6 +286,34 @@ export async function setupProject(directory = "."): Promise<SetupResult> {
     dependencies: { typescript: string };
     devDependencies: { "@types/node": string };
   };
+  const manifestUpdated = updateManifest(manifest, {
+    version: packageManifest.version,
+    typescriptRange: packageManifest.dependencies.typescript,
+    nodeTypesRange: packageManifest.devDependencies["@types/node"],
+  });
+
+  const guidance: string[] = [];
+  let installation: SetupResult["installation"] = "not-needed";
+  if (manifestUpdated) {
+    await writeFile(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
+    if (options.install === false) {
+      installation = "skipped";
+      guidance.push(
+        "Bun installation was explicitly skipped; run `bun install` before validation.",
+      );
+    } else {
+      try {
+        await (options.install ?? bunInstall)(root);
+        installation = "completed";
+      } catch (error) {
+        throw new Error(
+          `sync-engine setup: package.json was updated, but Bun installation failed (${describe(error)}). ` +
+            "No setup source or configuration files were written; fix the installation and rerun setup.",
+        );
+      }
+    }
+  }
+
   const source = await templates();
   const existing = new Map<string, string>();
   for (const path of source.keys()) {
@@ -181,12 +323,6 @@ export async function setupProject(directory = "."): Promise<SetupResult> {
 
   const verified: string[] = [];
   const eligible = new Set<string>();
-  const guidance = dependencyGuidance(
-    manifest,
-    packageManifest.version,
-    packageManifest.dependencies.typescript,
-    packageManifest.devDependencies["@types/node"],
-  );
   for (const [path, contents] of source) {
     const current = existing.get(path);
     if (current === contents) verified.push(path);
@@ -229,12 +365,26 @@ export async function setupProject(directory = "."): Promise<SetupResult> {
     "src/main.ts",
   ];
   const written: string[] = [];
-  for (const path of order) {
-    if (!eligible.has(path)) continue;
-    const target = resolve(root, path);
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, source.get(path) ?? "");
-    written.push(path);
+  try {
+    for (const path of order) {
+      if (!eligible.has(path)) continue;
+      const target = resolve(root, path);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, source.get(path) ?? "", { flag: "wx" });
+      written.push(path);
+    }
+  } catch (error) {
+    throw new Error(
+      `sync-engine setup: wrote ${written.length} setup file${written.length === 1 ? "" : "s"} before failing ` +
+        `(${describe(error)}). Existing application files were not replaced; rerun setup after fixing the filesystem error.`,
+    );
   }
-  return { root, written, verified: verified.sort(), guidance };
+  return {
+    root,
+    manifestUpdated,
+    installation,
+    written,
+    verified: verified.sort(),
+    guidance,
+  };
 }

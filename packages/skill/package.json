@@ -1,0 +1,38 @@
+{
+  "name": "@mit-sdg/sync-engine-skill",
+  "version": "1.0.0-beta.10",
+  "description": "Agent Skill for independently designed and reviewed sync-engine applications",
+  "keywords": [
+    "agent-skills",
+    "sync-engine"
+  ],
+  "homepage": "https://github.com/mit-sdg/sync-engine#readme",
+  "bugs": "https://github.com/mit-sdg/sync-engine/issues",
+  "license": "Apache-2.0",
+  "author": "Barish Namazov and Eagon Meng",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mit-sdg/sync-engine",
+    "directory": "packages/skill"
+  },
+  "files": [
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "skills"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {},
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "dependencies": {
+    "@mit-sdg/sync-engine-analysis": "1.0.0-beta.10",
+    "@mit-sdg/sync-engine-catalog": "1.0.0-beta.10"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

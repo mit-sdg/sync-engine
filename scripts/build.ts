@@ -66,6 +66,7 @@ async function rewriteRepositoryAliases(workspace: Workspace): Promise<void> {
 }
 
 async function buildWorkspace(workspace: Workspace): Promise<void> {
+  if (workspace.buildConfig === undefined) return;
   const source = workspacePath(root, workspace, workspace.sourceDirectory);
   const dist = workspacePath(root, workspace, workspace.distDirectory);
   await rejectForbiddenWorkspaceImports(workspace, source, [".ts"]);

@@ -30,10 +30,11 @@ Configure these external settings manually and recheck them before every tag:
   verify `can_admins_bypass=false`. Publication begins automatically after the
   unprivileged verification job succeeds.
 - Configure npm trusted publishing for `@mit-sdg/sync-engine`,
-  `@mit-sdg/sync-engine-analysis`, `@mit-sdg/sync-engine-http`, and
-  `@mit-sdg/sync-engine-catalog`. Each publisher uses GitHub organization
-  `mit-sdg`, repository `sync-engine`, workflow `.github/workflows/publish.yml`,
-  and environment `npm`. Verify every publisher identity before each release.
+  `@mit-sdg/sync-engine-analysis`, `@mit-sdg/sync-engine-http`,
+  `@mit-sdg/sync-engine-catalog`, and `@mit-sdg/sync-engine-skill`. Each
+  publisher uses GitHub organization `mit-sdg`, repository `sync-engine`,
+  workflow `.github/workflows/publish.yml`, and environment `npm`. Verify every
+  publisher identity before each release.
 - Before the first release of a new workspace, bootstrap its npm package under
   the `mit-sdg` organization, set public access, and verify ownership before
   configuring the trusted publisher. Do not bootstrap with the intended release
@@ -60,9 +61,10 @@ exact tagged commit.
 
 Confirm that the exact version is unused for every published workspace:
 `@mit-sdg/sync-engine`, `@mit-sdg/sync-engine-analysis`,
-`@mit-sdg/sync-engine-http`, and `@mit-sdg/sync-engine-catalog`. Beta versions
-have the form `1.0.0-beta.N`, with no leading zero in `N`, and use the `beta`
-dist-tag. Never reuse an npm version or move an existing release tag.
+`@mit-sdg/sync-engine-http`, `@mit-sdg/sync-engine-catalog`, and
+`@mit-sdg/sync-engine-skill`. Beta versions have the form `1.0.0-beta.N`, with
+no leading zero in `N`, and use the `beta` dist-tag. Never reuse an npm version
+or move an existing release tag.
 
 ### Version surfaces
 

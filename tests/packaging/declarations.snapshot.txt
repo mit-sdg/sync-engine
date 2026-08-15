@@ -53,6 +53,15 @@ export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientReque
 === dist/command/artifacts.d.ts ===
 export declare function artifactsCommand(args: readonly string[]): Promise<void>;
 
+=== dist/command/check-concepts.d.ts ===
+export interface CheckedConceptSpecification {
+    readonly path: string;
+    readonly definition: string;
+}
+/** Parse explicit draft concept files without consulting an application or writing evidence. */
+export declare function checkConceptFiles(paths: readonly string[], root?: string): Promise<readonly CheckedConceptSpecification[]>;
+export declare function checkConceptsCommand(args: readonly string[]): Promise<void>;
+
 === dist/command/check.d.ts ===
 export declare function conceptFailures(directory: string, projectRoot?: string): string[];
 export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;
@@ -87,14 +96,21 @@ export declare function loadGeneratedApplication(configPath: string, root: strin
 export {};
 
 === dist/command/setup.d.ts ===
+export type SetupInstaller = (root: string) => Promise<void>;
+export interface SetupOptions {
+    /** Override installation for tests, or use false for an explicit offline dry install. */
+    readonly install?: SetupInstaller | false;
+}
 export interface SetupResult {
     readonly root: string;
+    readonly manifestUpdated: boolean;
+    readonly installation: "completed" | "not-needed" | "skipped";
     readonly written: readonly string[];
     readonly verified: readonly string[];
     readonly guidance: readonly string[];
 }
-/** Initialize missing concept-free application files in an existing Bun package. */
-export declare function setupProject(directory?: string): Promise<SetupResult>;
+/** Initialize a supported concept-free application without replacing application-owned files. */
+export declare function setupProject(directory?: string, options?: SetupOptions): Promise<SetupResult>;
 
 === dist/engine/boundary/assembly/assemble.d.ts ===
 /**

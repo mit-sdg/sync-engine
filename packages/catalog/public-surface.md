@@ -1,6 +1,12 @@
 # Catalog command reference
 
-`@mit-sdg/sync-engine-catalog` exposes only the `catalog` executable. The executable reads assets shipped in its own package. It never writes, installs, locks, generates, inspects a user project, or modifies project files. The package has no runtime import API.
+`@mit-sdg/sync-engine-catalog` exposes only the `catalog` executable. The executable
+reads assets shipped in its own package. It never writes, installs, locks, generates,
+inspects a user project, or modifies project files. The package has no runtime import
+API.
+
+An entry is an adaptable example, not a required name, destination, or contract.
+Consumers may copy, simplify, split, combine, rename, or reject its design and source.
 
 ## Commands
 

@@ -19,9 +19,12 @@ computations one generated config assembles. Design completeness is checked
 against that exact selection. If the application supports another selection,
 create another config and select the documents appropriate to that variant.
 
-Application files may use any sensible layout. The checker follows the config,
-selected assembly, imported concept specifications, and typed links; it does not
-require design and source trees to mirror each other.
+For a new application, use `design/concepts/*.md`,
+`design/compositions/*.md`, and `design/types.md`. Pair each composition document
+with one `src/compositions/*.ts` module that realizes its linked decisions. The
+checker follows the config, selected assembly, imported specifications, and typed
+links rather than enforcing that layout, so an established application may use a
+different explicit mapping.
 
 Application-owned concepts should normally keep one flat specification per
 definition under `design/concepts/`, named by its H1 identity:
@@ -77,23 +80,21 @@ The strict config check traces that import and rejects dynamic or unresolvable
 specification construction. The H1 names the reusable definition; the
 `conceptSet` key names each application instance.
 
-Verify the specification before continuing:
+Before implementation, verify the draft grammar without loading an application:
 
 ```sh
-sync-engine check --config generated.config.ts
+sync-engine check-concepts design/concepts/*.md
 ```
 
-At this stage, type-binding and coverage errors are expected if the application
-documents are not registered yet. Concept grammar, source provenance, unresolved
-TypeScript shapes, result fields, optionality, and refusal mappings should not
-be left unresolved.
+After registering the implementation, run config-based `sync-engine check` to add
+source provenance, TypeScript shapes, result fields, optionality, and refusal mapping.
+Do not leave those diagnostics unresolved.
 
 ## 3. Declare application types
 
-Put `types` fences in any registered application-design document. A small
-application can keep its type declarations beside the prose that explains them;
-a larger application can use a dedicated `design/types.md`. There is no special
-filename or separately registered type document.
+Put the application `types` fence in `design/types.md` and register that document in
+the generated config. The checker can parse a fence in any registered application
+document, but one dedicated file keeps application-wide identity closure visible.
 
 Declare each concrete type with a nonempty definition, then bind every selected
 external parameter exactly once across all registered documents:
@@ -120,9 +121,12 @@ array.
 
 ## 4. Explain application decisions with typed links
 
-Create one or more ordinary Markdown documents with one nonempty H1. Organize
-each around an application topic rather than around source directories or
-checker categories. A document may explain declarations from several modules.
+Create one ordinary Markdown document per composition source responsibility, each
+with one nonempty H1. Organize it around application decisions rather than checker
+categories, and pair it conventionally with a same-responsibility module under
+`src/compositions/`. The checker permits a document to explain several modules (or
+several documents to explain one), but use that flexibility only when the mapping
+remains clearer.
 
 Place exact typed links beside the claims they support:
 
@@ -151,8 +155,10 @@ unless they also explain selected declarations. There is no required
 
 ## 5. Declare computations where they are explained
 
-Put `computations` fences in any registered application document, including a
-dedicated types document. Each executable computation needs exactly one declaration
+Put each `computations` fence in the composition document whose decisions use it, or
+in `design/types.md` when several modules share its meaning. The checker accepts the
+fence in any registered application document. Each executable computation needs
+exactly one declaration
 with a nonempty indented body:
 
 ```computations
