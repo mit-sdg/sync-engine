@@ -30,10 +30,14 @@ function capture(pattern: RegExp, description: string): string {
 const files = capture(/Test Files\s+(\d+) passed/, "the passed file count");
 const tests = capture(/Tests\s+(\d+) passed/, "the passed test count");
 const duration = capture(/Duration\s+(\S+)/, "the duration");
-const statements = capture(/^Statements\s*:\s*([\d.]+)%/m, "statement coverage");
-const branches = capture(/^Branches\s*:\s*([\d.]+)%/m, "branch coverage");
-const functions = capture(/^Functions\s*:\s*([\d.]+)%/m, "function coverage");
-const lines = capture(/^Lines\s*:\s*([\d.]+)%/m, "line coverage");
+const totals = report.match(
+  /^All files\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|/m,
+);
+if (totals === null) {
+  writeCompleteCommandOutput(output);
+  throw new Error("Coverage output omitted the all-files totals.");
+}
+const [, statements, branches, functions, lines] = totals;
 
 console.log(`Coverage tests passed (${files} files, ${tests} tests; ${duration}).`);
 console.log(
