@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import { QuietCommandFailure, runQuietCommand } from "./command-output.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const gates = [
@@ -15,7 +15,26 @@ const gates = [
   ["audit"],
 ] as const;
 
+const diagnosticKeys = new Set<string>();
+let failedStatus: number | undefined;
+
 for (const args of gates) {
-  console.log(`\n$ bun ${args.join(" ")}`);
-  execFileSync("bun", [...args], { cwd: root, env: process.env, stdio: "inherit" });
+  try {
+    runQuietCommand("bun", args, {
+      cwd: root,
+      diagnosticKeys,
+      env: process.env,
+      stdin: "inherit",
+    });
+  } catch (error) {
+    if (!(error instanceof QuietCommandFailure)) throw error;
+    failedStatus = error.status;
+    break;
+  }
+}
+
+if (failedStatus === undefined) {
+  console.log(`Release verification passed (${gates.length} gates).`);
+} else {
+  process.exitCode = failedStatus;
 }

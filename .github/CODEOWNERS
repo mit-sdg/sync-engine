@@ -14,6 +14,8 @@
 /scripts/release.ts @BarishNamazov @eagonmeng
 /scripts/check-release.ts @BarishNamazov @eagonmeng
 /scripts/check-release-source.ts @BarishNamazov @eagonmeng
+/scripts/command-output.ts @BarishNamazov @eagonmeng
+/scripts/coverage.ts @BarishNamazov @eagonmeng
 /scripts/verify-release.ts @BarishNamazov @eagonmeng
 /scripts/verify-package.ts @BarishNamazov @eagonmeng
 /scripts/update-release-manifests.ts @BarishNamazov @eagonmeng

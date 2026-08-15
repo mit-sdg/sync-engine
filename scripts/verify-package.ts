@@ -6,6 +6,7 @@ import { dirname, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { applicationExamples } from "../examples/register.ts";
 import { filesBelow } from "../src/command/files-below.ts";
+import { runQuietCommand } from "./command-output.ts";
 import { workspaceBuildOrder, workspaceById, workspacePath, type Workspace } from "./workspaces.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -85,11 +86,11 @@ function run(command: string, args: string[], cwd = root, timeout?: number): voi
   // Reuse the Bun executable that launched this check. A toolchain shim may
   // require package-manager metadata that intentionally npm-only consumers omit.
   const executable = command === "bun" ? process.execPath : command;
-  execFileSync(executable, args, {
+  runQuietCommand(executable, args, {
     cwd,
+    displayCommand: command,
     env: commandEnv(),
-    stdio: "inherit",
-    ...(timeout === undefined ? {} : { timeout }),
+    timeout,
   });
 }
 
@@ -130,16 +131,12 @@ function packageEntrypoint(workspace: Workspace, entrypoint: string): string {
 }
 
 function packWithNpm(cwd: string, destination: string): NpmPackResult {
-  const output = execFileSync(
+  const { stdout } = runQuietCommand(
     npmCommand(),
     ["pack", "--json", "--loglevel=error", "--pack-destination", destination],
-    {
-      cwd,
-      env: commandEnv(),
-      encoding: "utf8",
-      stdio: ["inherit", "pipe", "inherit"],
-    },
+    { cwd, env: commandEnv() },
   );
+  const output = stdout.toString("utf8");
   const jsonStart = output.search(/^\[/m);
   if (jsonStart === -1) throw new Error("npm pack did not emit its JSON manifest");
   const parsed = JSON.parse(output.slice(jsonStart)) as NpmPackResult[];
@@ -295,14 +292,14 @@ async function verifyPackedWorkspace(
 
   const tarball = resolve(temporary, packed.filename);
   const packedManifest = JSON.parse(
-    execFileSync("tar", ["-xOzf", tarball, "package/package.json"], { encoding: "utf8" }),
+    runQuietCommand("tar", ["-xOzf", tarball, "package/package.json"]).stdout.toString("utf8"),
   ) as PackageManifest;
   if (packedManifest.name !== manifest.name || packedManifest.version !== manifest.version) {
     throw new Error(`${workspace.id} packed manifest identity differs from its source manifest`);
   }
   verifyManifestPolicy(workspace, packedManifest);
   manifest = packedManifest;
-  const listing = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
+  const listing = runQuietCommand("tar", ["-tzf", tarball]).stdout.toString("utf8");
   const entries = new Set(listing.trim().split(/\r?\n/));
   if (
     workspace.id === coreWorkspace.id &&
@@ -786,16 +783,16 @@ registerHooks({ resolve(specifier, context, nextResolve) { const result = nextRe
 process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes("sync-engine-analysis/dist/project/")); if (forbidden.length) { console.error("manifest-only analysis loaded project analysis", forbidden); process.exitCode = 91; } });
 `,
   );
-  execFileSync(analysisBin, ["summary"], {
+  runQuietCommand(analysisBin, ["summary"], {
     cwd: nested,
     env: { ...commandEnv(), NODE_OPTIONS: `--import=${isolationHook}` },
-    stdio: "inherit",
   });
   try {
     execFileSync(analysisBin, ["describe", "malformed"], {
       cwd: nested,
       env: commandEnv(),
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
     });
     throw new Error("packed analysis accepted a malformed reference");
   } catch (error) {
@@ -1058,6 +1055,7 @@ try {
   await verifyMultiInstance(artifacts);
   await verifySetupAndExamples(artifacts, coreConsumer);
   await copyVerifiedTarballs(artifacts);
+  console.log("Package verification passed for core, analysis, HTTP, catalog, and skill.");
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }
