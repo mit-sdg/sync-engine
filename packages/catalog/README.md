@@ -5,7 +5,7 @@
 Install it as a development dependency, then browse:
 
 ```sh
-bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.9
+bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.10
 bunx catalog list
 bunx catalog show recipe/workshop-selection
 bunx catalog source recipe/workshop-selection workshop-selection.ts
