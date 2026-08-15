@@ -325,16 +325,16 @@ problems, replacement value, or useful tests. The concept owns the generic inter
 composition owns application policy.
 
 Syncpress is the primary command-line example. Generic
-[Commanding](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog/entries/concept/commanding)
+[Commanding](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/commanding/spec.md)
 owns captured words, operator output, and exit status but knows no Syncpress command.
 [`command-line.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/command-line.ts)
 interprets words and formats usage as application computations, while
 [`commanding.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/commanding.ts)
 connects those application decisions to Commanding and
-[Holding](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog/entries/concept/holding).
+[Holding](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/holding/spec.md).
 The actual [`cli.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/cli.ts) is a
 thin call into the assembled application. Likewise,
-[Filing](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog/entries/concept/filing)
+[Filing](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/filing/spec.md)
 owns complete byte-tree loading and logical path policy instead of scattering direct
 filesystem reads through publishing rules.
 

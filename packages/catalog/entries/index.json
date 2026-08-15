@@ -1,7 +1,4 @@
 [
-  "concept/commanding/manifest.json",
-  "concept/filing/manifest.json",
-  "concept/holding/manifest.json",
   "concept/gathering/manifest.json",
   "concept/selecting/manifest.json",
   "concept/timing/manifest.json",

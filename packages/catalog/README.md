@@ -8,9 +8,9 @@ source:
 ```sh
 bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.10
 bunx catalog list
-bunx catalog show concept/commanding
+bunx catalog show concept/labeling
 bunx catalog show recipe/workshop-selection
-bunx catalog source concept/commanding node/commanding.ts
+bunx catalog source concept/labeling memory/labeling.memory.ts
 ```
 
 `show` labels the entry's design and lists selectors accepted by `source`. Concept implementation selectors include their implementation name, for example:

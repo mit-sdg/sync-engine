@@ -719,15 +719,11 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
   );
   run("bun", [command, "list"], consumer);
   run("bun", [command, "show", "recipe/workshop-selection"], consumer);
-  for (const entry of ["concept/commanding", "concept/filing", "concept/holding"]) {
-    run("bun", [command, "show", entry], consumer);
-  }
   run(
     "bun",
     [command, "source", "concept/selecting", "memory/selecting.memory.ts", "--raw"],
     consumer,
   );
-  run("bun", [command, "source", "concept/filing", "node/filing.ts", "--raw"], consumer);
 }
 
 async function verifySkillAlone(artifacts: ReadonlyMap<string, PackedWorkspace>): Promise<void> {

@@ -24,33 +24,6 @@ describe("catalog documentation", () => {
       expect(reference).not.toContain(removed);
   });
 
-  test("ships the Commanding, Filing, and Holding design and implementation assets", async () => {
-    const root = new URL("../entries/concept/", import.meta.url);
-    for (const name of ["commanding", "filing", "holding"]) {
-      const manifest = JSON.parse(
-        await readFile(new URL(`${name}/manifest.json`, root), "utf8"),
-      ) as {
-        summary: string;
-        design: string;
-        implementations: Record<string, { sources: string[] }>;
-      };
-      expect(manifest.summary.length).toBeGreaterThan(40);
-      expect(manifest.design).toBe("spec.md");
-      expect(Object.values(manifest.implementations).flatMap(({ sources }) => sources)).toEqual(
-        expect.arrayContaining([`${name}.ts`, `${name}.test.ts`]),
-      );
-      expect(await readFile(new URL(`${name}/spec.md`, root), "utf8")).toContain(
-        `# ${name[0]?.toUpperCase()}${name.slice(1)}`,
-      );
-      expect(await readFile(new URL(`${name}/${name}.conformance.ts`, root), "utf8")).toContain(
-        `${name}Conformance`,
-      );
-      expect(await readFile(new URL(`${name}/registry.ts`, root), "utf8")).toContain(
-        "registerConcept",
-      );
-    }
-  });
-
   test("keeps every recipe on the structured design and export convention", async () => {
     const root = new URL("../entries/recipe/", import.meta.url);
     for (const name of await readdir(root)) {
