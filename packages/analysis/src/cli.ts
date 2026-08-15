@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseApplicationManifest, type ApplicationManifestV1 } from "@mit-sdg/sync-engine/tooling";
@@ -168,27 +168,61 @@ function ancestors(start: string): string[] {
   }
 }
 
-async function coreCommand(cwd: string): Promise<string> {
-  const sourcePath = await realpath(fileURLToPath(import.meta.url));
-  const suffix = process.platform === "win32" ? "sync-engine.cmd" : "sync-engine";
-  const candidates = [...ancestors(cwd), ...ancestors(dirname(sourcePath))].map((directory) =>
-    resolve(directory, "node_modules", ".bin", suffix),
-  );
-  const command = candidates.find((candidate) => existsSync(candidate));
-  if (command === undefined) {
-    throw new Error(
-      "Cannot find the installed sync-engine executable; install the matching core package",
-    );
+interface CoreCommand {
+  readonly executable: string;
+  readonly leadingArguments: readonly string[];
+}
+
+async function packagedCoreCommand(manifestPath: string): Promise<CoreCommand | undefined> {
+  if (!existsSync(manifestPath)) return undefined;
+  try {
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      name?: unknown;
+      bin?: unknown;
+    };
+    if (manifest.name !== "@mit-sdg/sync-engine") return undefined;
+    const target =
+      typeof manifest.bin === "string"
+        ? manifest.bin
+        : typeof manifest.bin === "object" &&
+            manifest.bin !== null &&
+            "sync-engine" in manifest.bin &&
+            typeof manifest.bin["sync-engine"] === "string"
+          ? manifest.bin["sync-engine"]
+          : undefined;
+    if (target === undefined) return undefined;
+    const entrypoint = resolve(dirname(manifestPath), target);
+    return existsSync(entrypoint)
+      ? { executable: process.execPath, leadingArguments: [entrypoint] }
+      : undefined;
+  } catch {
+    return undefined;
   }
-  return command;
+}
+
+async function coreCommand(cwd: string): Promise<CoreCommand> {
+  const sourcePath = await realpath(fileURLToPath(import.meta.url));
+  const directories = [...new Set([...ancestors(cwd), ...ancestors(dirname(sourcePath))])];
+  for (const directory of directories) {
+    for (const manifestPath of [
+      resolve(directory, "node_modules", "@mit-sdg", "sync-engine", "package.json"),
+      resolve(directory, "package.json"),
+    ]) {
+      const command = await packagedCoreCommand(manifestPath);
+      if (command !== undefined) return command;
+    }
+  }
+  throw new Error(
+    "Cannot find the installed sync-engine executable; install the matching core package",
+  );
 }
 
 async function loadManifestFromCore(configPath: string): Promise<ApplicationManifestV1> {
   const command = await coreCommand(dirname(configPath));
   const source = await new Promise<string>((resolveOutput, reject) => {
     execFile(
-      command,
-      ["artifacts", "manifest", "--config", configPath],
+      command.executable,
+      [...command.leadingArguments, "artifacts", "manifest", "--config", configPath],
       { cwd: dirname(configPath), encoding: "utf8", maxBuffer: MAX_MANIFEST_BYTES },
       (error, stdout, stderr) => {
         if (error !== null) {

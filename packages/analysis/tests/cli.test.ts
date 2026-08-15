@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { analysisCliUsage, runAnalysisCli } from "../src/cli.ts";
@@ -66,26 +66,22 @@ describe("analysis CLI", () => {
     const fixture = applicationProjectFixture();
     fixtures.push(fixture);
     writeFileSync(join(fixture.root, "generated.config.ts"), "export {};\n");
-    const bin = join(fixture.root, "node_modules/.bin");
+    const core = join(fixture.root, "node_modules/@mit-sdg/sync-engine");
     const nested = join(fixture.root, "nested/project");
-    mkdirSync(bin, { recursive: true });
+    mkdirSync(core, { recursive: true });
     mkdirSync(nested, { recursive: true });
-    const manifest = JSON.stringify(fixture.manifest);
-    if (process.platform === "win32") {
-      const script = join(bin, "sync-engine-fake.mjs");
-      writeFileSync(script, `process.stdout.write(${JSON.stringify(manifest)});\n`);
-      writeFileSync(
-        join(bin, "sync-engine.cmd"),
-        `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`,
-      );
-    } else {
-      const command = join(bin, "sync-engine");
-      writeFileSync(
-        command,
-        `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(manifest)});\n`,
-      );
-      chmodSync(command, 0o755);
-    }
+    writeFileSync(
+      join(core, "package.json"),
+      JSON.stringify({
+        name: "@mit-sdg/sync-engine",
+        type: "module",
+        bin: { "sync-engine": "fake.mjs" },
+      }),
+    );
+    writeFileSync(
+      join(core, "fake.mjs"),
+      `process.stdout.write(${JSON.stringify(JSON.stringify(fixture.manifest))});\n`,
+    );
 
     const captured = output();
     await runAnalysisCli(["summary"], { cwd: nested, writeOut: captured.writeOut });

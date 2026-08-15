@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { checkConceptFiles, checkConceptsCommand } from "@command/check-concepts";
 import { describe, expect, test, vi } from "vite-plus/test";
 
@@ -80,8 +81,9 @@ describe("draft concept syntax check", () => {
     const output = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       await checkConceptsCommand([
-        new URL("../../../examples/reading-circle/design/concepts/Gathering.md", import.meta.url)
-          .pathname,
+        fileURLToPath(
+          new URL("../../../examples/reading-circle/design/concepts/Gathering.md", import.meta.url),
+        ),
       ]);
       expect(output).toHaveBeenCalledWith("Concept specification syntax check passed for 1 file.");
     } finally {
