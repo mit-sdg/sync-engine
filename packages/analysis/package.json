@@ -17,6 +17,9 @@
     "url": "https://github.com/mit-sdg/sync-engine",
     "directory": "packages/analysis"
   },
+  "bin": {
+    "sync-engine-analysis": "./dist/command.js"
+  },
   "files": [
     "LICENSE",
     "NOTICE",

@@ -10,6 +10,19 @@ Application composition, concrete application types, typed design links, and
 computations do not belong in a concept specification. They belong in
 [registered application design](../guide/authoring.md#6-register-explicit-design-urls).
 
+For a new application, put one definition per
+`design/concepts/DefinitionName.md`. This is the recommended authoring layout, not a
+path restriction: registration follows the statically resolvable Markdown import.
+Before implementation exists, parse explicit draft files with:
+
+```sh
+sync-engine check-concepts design/concepts/*.md
+```
+
+This command loads no application configuration or TypeScript source, writes nothing,
+and reports only concept grammar failures. Config-based `sync-engine check` adds
+registration provenance and TypeScript agreement after implementation.
+
 ## Document grammar
 
 A specification has exactly one H1 followed by exactly these H2 sections, once
@@ -284,12 +297,12 @@ or auto-detected.
 
 ## Author obligations
 
-Write the concept contract before its implementation. Keep the concept
-independent of application composition, place every local invariant in its
-owning action and State description, and test behavior and storage guarantees
-separately. Then register the imported text, select the registration in a
-`conceptSet`, and run `sync-engine check` against the application's generated
-config.
+Write the concept contract before its implementation and run `sync-engine
+check-concepts` over the draft. Keep the concept independent of application
+composition, place every local invariant in its owning action and State description,
+and test behavior and storage guarantees separately. Then register the imported text,
+select the registration in a `conceptSet`, and run `sync-engine check` against the
+application's generated config.
 
 See [Application authoring](../guide/authoring.md) for the complete workflow and
 [Command-line reference](cli.md#sync-engine-check) for command behavior.

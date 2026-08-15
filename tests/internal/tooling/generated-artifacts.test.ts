@@ -210,7 +210,10 @@ export const vocabulary = declareVocabulary({
     const expected = `Usage: sync-engine <command> [arguments]
 
   sync-engine setup [directory]
-    Initialize missing concept-free application files in an existing Bun package.
+    Complete a Bun package manifest and initialize missing concept-free application files.
+
+  sync-engine check-concepts <paths...>
+    Parse draft concept specifications without loading application code or configuration.
 
   sync-engine artifacts <command> [--config path]
     check      Verify the assembled read-back and wire contract against the assembly.

@@ -12,15 +12,13 @@ For setup behavior in partial or already-authored projects, see the
 ## Prerequisites
 
 Use a Bun version in the [supported range](../../../SUPPORT.md#runtime-and-toolchain).
-These commands pin the tutorial's core release and development dependencies:
+These commands create a Bun package and pin the tutorial's core release:
 
 ```sh
 mkdir workshop-app
 cd workshop-app
 bun init -y
 bun add --exact @mit-sdg/sync-engine@1.0.0-beta.10
-bun add --dev --exact typescript@6
-bun add --dev --exact @types/node@24.0.0
 ```
 
 ## Initialize the application files
@@ -29,22 +27,15 @@ bun add --dev --exact @types/node@24.0.0
 bunx sync-engine setup
 ```
 
-`setup` writes only missing application files. It does not edit
-`package.json` or replace an existing file. It also reports missing dependencies
-and scripts as guidance. Apply that guidance before running the checks. For
-this tutorial, add these scripts to `package.json`:
+`setup` completes missing supported package fields: exact compatible TypeScript and
+`@types/node` development dependencies and the standard `generate`, `check`, and
+`start` scripts. It preserves every existing compatible declaration and every
+existing script, even when a script differs from the default. After a manifest edit it
+runs `bun install`.
 
-```json
-{
-  "scripts": {
-    "generate": "sync-engine artifacts pin",
-    "check": "sync-engine check && sync-engine artifacts check && tsc --noEmit",
-    "start": "bun src/main.ts"
-  }
-}
-```
-
-The command creates this concept-free structure:
+The command never replaces existing source, config, or tsconfig. It creates this
+concept-free structure only where files are absent; `src/main.ts` is the initial host
+entrypoint:
 
 ```text
 generated.config.ts
@@ -104,9 +95,10 @@ to `generated.config.ts`, checks concept source and the registered application
 design, verifies generated files, and runs TypeScript. The concept-free application
 has no concepts or endpoints, so `start` prints `[]`.
 
-Rerun `sync-engine setup` to reconcile setup files. It verifies unchanged
-files. If an application-owned file changed, setup leaves it untouched and
-reports dependent files it cannot verify. It does not migrate those files.
+Rerun `sync-engine setup` to reconcile setup files. With an unchanged manifest it
+does not reinstall. It verifies unchanged templates; if an application-owned file
+changed, setup leaves it untouched and reports dependent files it cannot verify. It
+does not migrate or merge those files.
 
 Continue with [Application authoring](authoring.md). [Execution
 semantics](../reference/semantics.md) defines runtime ordering, failures, and

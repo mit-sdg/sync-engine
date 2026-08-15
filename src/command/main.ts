@@ -3,12 +3,16 @@
 import { artifactsCommand } from "./artifacts.ts";
 import { setupProject } from "./setup.ts";
 import { checkCommand } from "./check.ts";
+import { checkConceptsCommand } from "./check-concepts.ts";
 import { describeError } from "@engine/utils/redaction";
 
 const usage = `Usage: sync-engine <command> [arguments]
 
   sync-engine setup [directory]
-    Initialize missing concept-free application files in an existing Bun package.
+    Complete a Bun package manifest and initialize missing concept-free application files.
+
+  sync-engine check-concepts <paths...>
+    Parse draft concept specifications without loading application code or configuration.
 
   sync-engine artifacts <command> [--config path]
     check      Verify the assembled read-back and wire contract against the assembly.
@@ -37,6 +41,15 @@ async function main(): Promise<void> {
     if (rest.length > 1 || rest[0]?.startsWith("-")) throw new Error(usage);
     const directory = rest[0] ?? ".";
     const result = await setupProject(directory);
+    if (result.manifestUpdated) {
+      console.log(
+        result.installation === "completed"
+          ? `Updated package.json and completed bun install in ${directory}.`
+          : `Updated package.json in ${directory}; bun install was skipped.`,
+      );
+    } else {
+      console.log(`Package manifest already satisfies setup in ${directory}.`);
+    }
     if (result.written.length > 0) {
       console.log(`Wrote ${result.written.length} files into ${directory}:`);
       for (const path of result.written) console.log(`  ${path}`);
@@ -54,6 +67,11 @@ async function main(): Promise<void> {
     console.log(
       "\nNext: apply any guidance, then run bun run generate && bun run check && bun run start",
     );
+    return;
+  }
+
+  if (topic === "check-concepts") {
+    await checkConceptsCommand(rest);
     return;
   }
 

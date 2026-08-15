@@ -11,7 +11,7 @@ Start with [Getting started](guide/getting-started.md), then read the
 | Understand the application model               | [How sync-engine applications fit together](overview.md)                                                                                                   |
 | Design concepts                                | [Designing with concepts](design.md)                                                                                                                       |
 | Author and register application design         | [Author an application design](guide/authoring.md)                                                                                                         |
-| Review a concept design                        | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
+| Review an application design                   | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
 | Initialize the first application               | [Getting started](guide/getting-started.md)                                                                                                                |
 | Study an implemented multi-concept application | [Reading Circle](../../examples/reading-circle/README.md)                                                                                                  |
 | Call an existing application                   | [`client` API](reference/public-api.md#client)                                                                                                             |
@@ -73,6 +73,7 @@ under `guide/`.
 | [HTTP package](https://github.com/mit-sdg/sync-engine/tree/main/packages/http)         | POST/JSON handler, Fetch client, browser policy, and HTTP wire projection              |
 | [Analysis package](https://github.com/mit-sdg/sync-engine/tree/main/packages/analysis) | Manifest and optional checkout-source inspection                                       |
 | [Catalog package](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog)   | Read-only browser for curated concept and recipe source                                |
+| [Agent skill package](https://github.com/mit-sdg/sync-engine/tree/main/packages/skill) | Independent Markdown design review and path-isolated implementation workflow           |
 | [Reading Circle](../../examples/reading-circle/README.md)                              | Shortest complete multi-concept application                                            |
 | [Operations Room](../../examples/operations-room/README.md)                            | Selectable reactions, replaceable policy, and staged formers                           |
 | [Message board](../../examples/message-board/README.md)                                | Complete same-origin browser app, authentication, typed transport, and secure sessions |

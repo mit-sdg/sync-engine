@@ -141,6 +141,7 @@ describe("analysis package public API", () => {
       version: string;
     };
     const manifest = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as {
+      bin: Record<string, string>;
       dependencies: Record<string, string>;
       exports: Record<string, unknown>;
       peerDependencies: Record<string, string>;
@@ -152,6 +153,7 @@ describe("analysis package public API", () => {
     expect(manifest.private).toBeUndefined();
     expect(manifest.publishConfig).toEqual({ access: "public", tag: "beta" });
     expect(manifest.repository.directory).toBe("packages/analysis");
+    expect(manifest.bin).toEqual({ "sync-engine-analysis": "./dist/command.js" });
     expect(manifest.sideEffects).toEqual(["./dist/project/application-project-worker.js"]);
     expect(manifest.peerDependencies).toEqual({ "@mit-sdg/sync-engine": corePackage.version });
     expect(manifest.dependencies).toEqual({

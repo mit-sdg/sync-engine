@@ -55,8 +55,9 @@ inferring an answer from implementation source.
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
 - Keep concept implementations independent of peer concepts and application composition.
-- Keep concept specifications, registered application documents and types, executable declarations, and generated read-back distinct.
-- Treat the generated config as the design root: use explicit local URLs, exact typed links, and config-based `sync-engine check`; do not use the removed vocabulary-module mode.
+- Keep concept specifications, registered composition documents, application types, executable declarations, and generated read-back distinct.
+- For new applications, author `design/concepts/*.md`, `design/compositions/*.md`, and `design/types.md`; conventionally pair one composition document with one source module.
+- Parse draft concepts with `sync-engine check-concepts`, then treat the generated config as the implemented design root: use explicit local URLs, exact typed links, and config-based `sync-engine check`; do not use the removed vocabulary-module mode.
 - Concept State is retained raw and SSF checking is deferred; do not infer schemas or state-owned type proof from it.
 - Treat generated TypeScript as a caller contract. Add explicit validators for
   runtime values.

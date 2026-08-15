@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "id": "concept/filing",
+  "kind": "concept",
+  "summary": "Own stable logical byte trees and replace host-backed contents only after a complete readable load.",
+  "design": "spec.md",
+  "sources": ["filing.conformance.ts", "registry.ts"],
+  "implementations": {
+    "node": {
+      "summary": "A Node-compatible in-process byte-tree implementation with strict filesystem loading and local reference resolution.",
+      "sources": ["filing.ts", "filing.test.ts"]
+    }
+  }
+}

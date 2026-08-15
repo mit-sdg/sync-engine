@@ -1,6 +1,9 @@
 # Contributing catalog entries
 
-The catalog is a read-only collection of designs and source examples. `entries/index.json` defines display order; an unlisted manifest is unavailable.
+The catalog is a read-only collection of adaptable designs and source examples.
+`entries/index.json` defines display order; an unlisted manifest is unavailable. An
+entry must be coherent and tested, but consumers remain free to simplify, split,
+combine, rename, or reject it.
 
 ## Entry shape
 

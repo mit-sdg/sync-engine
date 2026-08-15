@@ -1,172 +1,243 @@
 # Review an application design
 
-Use this procedure before accepting a config-based version-1 application design.
-Review semantic boundaries first, then strict authored contracts and complete
-link coverage, then runtime failure behavior. Generated read-back is evidence of
-what the selected assembly contains; it does not replace authored intent or
-behavior tests.
+Use this procedure to decide whether application Markdown is ready to implement and,
+after implementation, whether the selected assembly still realizes it. Review useful
+capabilities and ownership before syntax or link coverage. A parser can reject an
+invalid contract; it cannot turn the wrong concept boundary into a good one.
 
-## 1. Fix the review scope
+## 1. Fix the product and document scope
 
-Start from one generated config. Record the exact assembly variant, configured
-application document URLs, and every application `types` fence. Review another
-variant from its own config. Do not infer a union of runtime options.
+Write down the current objective, settled product decisions, visible success,
+expected refusals, and explicit non-goals. Review only behavior needed by that scope.
+A plausible future feature is not evidence for adding state or actions now. Reject
+unnecessary behavior or complexity that does not serve the objective.
 
-Confirm that every URL is an explicit local `file:` URL. Design files may live
-anywhere in the checkout; matching source and design directory structures are
-not a criterion. Ignore unregistered introductions, history, and unresolved
-notes unless the config selects them.
+For a new application, expect this authoring layout:
 
-## 2. Review each concept boundary
+```text
+design/concepts/*.md
+design/compositions/*.md
+design/types.md
+```
 
-Stop at the first failed semantic criterion; syntax cannot repair a wrong
-boundary.
+Inventory every Markdown file in those locations. Conventionally, one composition
+document corresponds to one `src/compositions/*.ts` module with the same application
+responsibility. This is an authoring and review recommendation, not a checker
+restriction: an established application may register another local layout or map
+prose to source differently when the mapping remains explicit.
 
-| Criterion         | Evidence                                                                                                   |
-| ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| Purpose           | Names one useful capability and what would be lost without it; the concept can fulfill it alone.           |
-| Principle         | Demonstrates that purpose using only the concept's own actions and queries.                                |
-| Independence      | Does not depend on peer APIs or facts and treats external identities as opaque.                            |
-| State sufficiency | Preconditions, results, and effects follow from owned state, input, or an explicit environment dependency. |
-| Ownership         | Every durable fact has one authority; copies state their update, staleness, and repair rules.              |
-| Actions           | Name semantic transitions, preserve local invariants, and declare expected refusals.                       |
-| Lifecycle         | Covers applicable creation, use, completion, expiry, reversal, retention, deletion, or permanence.         |
-| Durability        | Required race and idempotency guarantees have storage-level enforcement.                                   |
+For an implemented variant, also record its one generated config and the exact
+assembly selection. Do not infer a union of alternatives from several configs.
+Only explicit local `file:` URLs participate in checker coverage.
 
-Trace each purpose commitment to the principle, State, actions, queries, and
-refusals. Trace every owned fact and member back to a purpose commitment. A
-reaction needed only to reconstruct one owner operation is evidence that the
-concept was split incorrectly.
+## 2. Test every proposed concept as a useful capability
 
-## 3. Validate the strict concept contract
+A concept is not justified merely because it matches an entity, table, class, package,
+service, endpoint, or screen. Ask what useful capability would be lost if the concept
+did not exist and whether the concept can demonstrate that capability without a peer.
 
-For every selected concept specification, verify:
+| Criterion          | Evidence required                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Purpose            | Names one useful capability and the loss or failure it prevents, without listing methods                     |
+| Principle          | Starts from understandable state and demonstrates the purpose with only this concept's actions and queries   |
+| Independence       | Names no peer API or peer-owned fact and treats external identities as opaque                                |
+| Completeness       | Can perform its own meaningful lifecycle rather than relying on reactions to reconstruct one owner operation |
+| Restraint          | Contains no behavior, customization, or lifecycle state outside the current objective                        |
+| Change containment | A likely change to this mechanism touches this concept while an unrelated change does not                    |
 
-- one H1 names the reusable definition rather than an application instance;
-- Purpose, Principle, Types, State, Actions, and Queries occur exactly once and
-  in that order, with no subordinate headings;
-- Purpose and Principle are unfenced prose, and Principle is one concrete
-  scenario rather than a container for reference material;
-- Types contains only one `types` fence of explicit `external` declarations;
-  concept-owned and conventional names do not need local declarations;
-- State contains one raw `state` fence and no claim that version 1 parses SSF;
-- Actions contains at least one action, explicit `where`/`then` branches, and
-  exactly one terminal return or refusal per branch;
-- action and query results use parenthesized named fields;
-- query bodies use prose only when State and the signature are insufficient;
-- concept files contain no application typed links or computations; and
-- each refusal sentence states the same rule as its branch condition.
+Trace each purpose commitment into Principle, State, actions, queries, and refusals.
+Trace every state member and action back to the purpose. Reject a broad noun owner
+when independent mechanisms merely share its identity. Also reject a split when
+neither half has a useful principle or one local invariant would become two
+independently failing actions.
 
-If two selected registrations claim the same definition name, compare their
-canonical specifications. They must be identical even when implementation
-classes or floors differ.
+Compare relevant catalog entries as alternatives, not templates. An application may
+copy, simplify, split, combine, rename, or reject a catalog design. Similar names do
+not require similar contracts.
 
-Run the config check and inspect any failed-closed TypeScript shape diagnostic.
-Do not waive unresolved input, action-result, or query-row shapes as if the
-checker had established agreement. Remember that type-name equivalence and
-State/storage agreement are not proven.
+## 3. Find peer leakage and duplicate authority
 
-## 4. Review application type closure
+A concept never calls or imports a peer concept. It may retain an opaque identity that
+another concept also uses, but it must not interpret the identity or copy the peer's
+facts into its own contract.
 
-When a selected concept has an external type, require one direct binding in a
-`types` fence in the registered application documents. Inventory every left side as `ConceptInstance.ExternalType` and check
-that it is bound exactly once.
+For every durable fact, name one semantic owner. When another concept retains a copy,
+require the design to state which copy is authoritative, how updates arrive, permitted
+staleness, divergence detection, and repair. Distinguish a cache from an intentional
+historical snapshot.
 
-For every `is` binding, verify that the right side directly names either:
+Check every precondition, result, and effect against the concept's state and action
+input. A missing fact must be handled by one of these explicit choices:
+
+1. the concept owns and stores it;
+2. the caller supplies it;
+3. an environmental capability supplies it;
+4. the behavior moves to the fact's owner; or
+5. non-critical application policy moves to composition.
+
+The fifth choice permits a read-then-act window. Race-sensitive or security-critical
+rules must remain in the action that owns the changed state.
+
+## 4. Review actions, refusals, and lifecycle
+
+Actions name semantic transitions rather than generic writes such as `setStatus` or
+`updateRecord`. Local invariants and atomic decisions stay in the owner action. Queries
+have no side effects, and their `one`, `optional`, or `many` cardinality states a real
+domain promise.
+
+For each action, review:
+
+- every accepted branch and expected refusal;
+- state after each refusal, including any deliberate recorded attempt;
+- repeated calls and retries;
+- concurrent calls that can contend for one fact;
+- required storage constraints or transactions;
+- reversal versus compensation versus deletion; and
+- the returned identities and facts needed by callers.
+
+Then cover every applicable lifecycle stage: creation, use, completion, expiry,
+reversal, retention, deletion, or deliberate permanence. Do not demand CRUD symmetry
+when the mechanism has no corresponding transition. Do demand an explicit decision
+when the objective makes a stage visible.
+
+## 5. Apply reaction pressure to the boundaries
+
+List the reactions needed to make the proposed concepts useful together. A few rules
+that state independent application decisions support the decomposition. Repeated
+one-to-one pass-through, broad mirroring, or a reaction required after nearly every
+action suggests an artificial split, a missing semantic action, or an explicit
+external-system adapter.
+
+Composition owns application workflow, cross-concept policy, authorization
+observations, notifications, adaptation, and intentional repair. It does not own a
+concept's local invariant, direct storage mutation, or a race-sensitive decision over
+one owner's state.
+
+For every cross-concept relation, record the owners, the event that can make the
+relation false, the repair rule, the permitted false interval, the result of repair
+refusal or fault, and whether repair is automatic. If no false interval is acceptable,
+combine ownership or use one storage transaction that can enforce both facts.
+
+Inspect host and user-interface policy explicitly. Command arguments, filesystem loading,
+clock reads, process holds, and network exchange are strong concept candidates when
+they have observable choices, state, lifecycle, or expected failure. Application
+command grammar and interface policy belong in composition, not in a generic host
+concept. A direct inert adapter is permitted when it introduces none of those
+semantics; do not manufacture a pass-through concept solely to wrap an API call.
+
+## 6. Check application types and external identities
+
+Inventory every `ConceptInstance.ExternalType` and require one direct binding in the
+registered application `types` corpus, conventionally `design/types.md`. A right side
+must directly name either:
 
 - an application `concrete` type with a nonempty prose definition; or
 - a type owned by a selected concept instance.
 
-Reject bindings to external parameters, chains, cycles, duplicate or missing
-bindings, unresolved names, and unused concrete declarations. Several external
-parameters may resolve to the same target.
+Reject chains, cycles, bindings to another external parameter, duplicate or missing
+bindings, unresolved names, and unused concrete declarations. A binding establishes
+identity correspondence, not transferred ownership, runtime validation, or general
+TypeScript assignability.
 
-Because SSF is deferred, treat a qualified owned-type target as checked only up
-to the selected concept instance. Review the intended state ownership manually;
-do not claim that tooling proved the final type name occurs in State.
+Because version 1 retains State without parsing it, manually review whether a
+qualified target is really owned by that concept. Do not claim the checker proved the
+final State type name.
 
-## 5. Review application prose and coverage
+## 7. Review each composition document beside its source responsibility
 
-Read registered prose as prose, not as a generated inventory. It may use any
-heading layout and may explain declarations from several source modules. Check
-that each passage states an application decision and places exact links beside
-the claims they support.
+A composition document should explain application decisions, not repeat a generated
+inventory. Place each exact typed link next to the decision it realizes. Under the
+recommended pairing, compare `design/compositions/<name>.md` with
+`src/compositions/<name>.ts`; helper modules may remain unpaired when they introduce no
+independent application decision.
 
-Build a bidirectional coverage table for the selected assembly:
+Build this bidirectional coverage table for an implemented assembly:
 
-| Declaration                        | Required evidence                                               |
+| Executable declaration             | Authored evidence                                               |
 | ---------------------------------- | --------------------------------------------------------------- |
 | Authored reaction or endpoint tree | At least one exact `reaction:` link to its selected dotted path |
 | Named view                         | At least one exact `view:` link                                 |
 | Named former                       | At least one exact `former:` link                               |
 | Executable computation             | Exactly one `computations` declaration                          |
 
-Resolve every typed link. Reject wildcards, namespace-only claims, implied
-children, wrong link kinds, and references to declarations absent from this
-variant. Retain multiple honest references; there is no primary marker.
+Reject wildcards, namespace-only claims, implied children, wrong link kinds, and links
+to declarations absent from the selected variant. Retain multiple honest references;
+there is no primary marker. A resolved link proves identity and coverage, not the
+truth of surrounding prose.
 
-Review every named view and former, including helpers. For reactions and
-endpoints, version 1 covers the top-level authored tree, not each lowered stage
-or branch. Confirm that core-generated boundary and outcome reactions, rather
-than missing authored declarations, account for any exemption.
+Review authorization as an application decision. For each protected effect identify
+the requesting actor, authenticated identity, resource, owner of each consulted fact,
+condition, and enforcement point. A request-body identifier is a claim, not
+authentication. Composition may provide early policy denial, but an owner action must
+still enforce any rule that direct calls cannot bypass.
 
-## 6. Review identity and installation
+## 8. Validate the strict concept grammar
 
-Check each authored dotted path segment for the allowed identifier grammar.
-Confirm that one declaration object is not installed under multiple composition
-paths. Reusing a view or former by import is valid; reinstalling or re-exporting
-it under another path is not.
+Before implementation, parse the explicit draft files without loading application
+code:
 
-Compare source locations in generated read-back with the prose passages that
-claim coverage. A link proves only that a declaration was cited. Reviewers must
-still decide whether the prose describes it honestly.
+```sh
+sync-engine check-concepts design/concepts/*.md
+```
 
-## 7. Review computations
+For every concept, also verify manually that:
 
-Search all registered application documents, including dedicated type documents, for
-`computations` fences. Confirm that every executable computation has exactly one
-nonempty prose declaration and every authored declaration resolves to one
-executable computation. Compare executable input names and optionality.
+- one H1 names the reusable definition rather than an application instance;
+- Purpose, Principle, Types, State, Actions, and Queries occur exactly once, in that
+  order, with no subordinate headings;
+- Purpose and Principle are unfenced prose, and Principle is one concrete scenario
+  rather than a container for reference material;
+- Types contains one `types` fence with only explicit `external` declarations;
+  concept-owned and conventional names do not need local declarations;
+- State contains one raw `state` fence and does not claim that version 1 validates
+  SSF;
+- every action has explicit `where`/`then` branches and one terminal return or refusal
+  per branch;
+- action results and query rows use parenthesized named fields;
+- query prose adds only meaning not already evident from State and signature;
+- concept files contain no application links or computations; and
+- each refusal sentence states the same rule as its branch condition.
 
-Do not infer TypeScript-equivalent semantic types, body correctness, or runtime
-validation from this check. Optional `computation:` links elsewhere must resolve
-but do not replace the sole definition.
+Parser success establishes grammar only. Purpose, ownership, lifecycle, prose
+conditions, and State meaning remain review obligations.
 
-## 8. Trace runtime scenarios
+## 9. Verify the implemented variant
 
-For each representative scenario, follow every matching rule and record state
-after each failure:
-
-| Scenario                 | Review question                                                              |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| Ordinary success         | Does the selected design deliver its purpose?                                |
-| Expected refusal         | Is the code stable, and is partial state ruled out or explicitly documented? |
-| Unauthorized request     | Which authenticated fact, owner, and enforcement point produce denial?       |
-| Duplicate or retry       | Is repetition meaningful, refused, or durably deduplicated?                  |
-| Concurrent actions       | Which decisions race, and where does storage coordinate them?                |
-| Partial chain or fan-out | Which effects remain, and what repairs them?                                 |
-| Timeout or abort         | Which accepted work continues after the caller stops waiting?                |
-| Process interruption     | Which concept-owned state supports recovery?                                 |
-
-A composition read can provide an early denial, but a security-critical rule
-must remain in the owner action so direct calls cannot bypass it. Do not describe
-a multi-action path as atomic unless one owner and transaction establish that
-property.
-
-## 9. Verify provenance and migration state
-
-Run:
+After registration and composition exist, run:
 
 ```sh
 sync-engine check
 sync-engine artifacts check
 ```
 
-Confirm that `check` used `generated.config.ts` or the intended explicit
-`--config`, and that no script still uses `--vocabulary-module`. Review source
-links, one-based lines, all design references, and changed input digests.
+Inspect failed-closed TypeScript shape diagnostics; do not waive unresolved input,
+action-result, or query-row shapes. Confirm definition-name duplicates have identical
+canonical specifications, every selected external type is bound, every typed link
+resolves, every executable computation has one declaration, and generated source
+locations point to the prose that honestly covers each declaration.
 
-Reject a mixed migration. Version 1 has no legacy concept parser, automatic
-format detection, compatibility flag, old manifest decoder, or runtime
-composition or application-type Markdown import path. All old artifacts must be
-regenerated together.
+Generated read-back is evidence of the selected assembly, not a replacement for
+Markdown or behavior tests. Registration does not prove semantic type equivalence,
+State/storage agreement, natural-language effects, persistence, transactions, or
+durability.
+
+## 10. Trace objective-driven scenarios
+
+Finish with scenarios that can disprove the design:
+
+| Scenario                 | Review question                                                         |
+| ------------------------ | ----------------------------------------------------------------------- |
+| Ordinary success         | Does the selected design deliver the stated purpose?                    |
+| Expected refusal         | Is the code stable, and is partial state absent or explicitly recorded? |
+| Unauthorized request     | Which authenticated fact, owner, and enforcement point deny it?         |
+| Duplicate or retry       | Is repetition meaningful, refused, or durably deduplicated?             |
+| Concurrent actions       | Which decisions race, and where does storage coordinate them?           |
+| Partial chain or fan-out | Which effects remain, and what repairs or compensates them?             |
+| Timeout or abort         | Which accepted work continues after the caller stops waiting?           |
+| Process interruption     | Which concept-owned state supports cleanup or recovery?                 |
+
+Do not describe a multi-action path as atomic unless one owner and transaction
+establish that property. The engine does not detect reaction cycles, roll back prior
+actions, cancel accepted work, or provide exactly-once execution; use the
+[execution semantics](../reference/semantics.md) and
+[operational limits](../reference/operations.md) when those assumptions matter.

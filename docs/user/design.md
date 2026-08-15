@@ -38,30 +38,48 @@ rule and permits a concept to participate in another composition.
 ## Recording the application design
 
 Keep authored intent, executable declarations, and generated evidence distinct.
-A concept specification records reusable concept-local behavior. For
-application-owned concepts, prefer `design/concepts/DefinitionName.md`; explicit
-registration imports remain authoritative, so packages and established
-repositories may use another layout. Registered application prose records the
-decisions realized by selected reactions, views, and formers. `types` fences in
-those registered documents resolve every concept-external type for that
-application. Concept specifications are imported by `registerConcept` and are
-not application documents listed again in `design.documents`.
+A concept specification records reusable concept-local behavior. Registered
+application prose records the decisions realized by selected reactions, views, and
+formers, while `types` fences in those documents resolve every concept-external type
+for that application. Concept specifications are imported by `registerConcept` and
+are not application documents listed again in `design.documents`.
 
-Application prose is ordinary Markdown with one nonempty H1. Organize it around
-natural application topics and place exact `reaction:`, `view:`, and `former:`
-links beside the claims they support. There is no required heading scheme,
-`application.md`, design index, source-tree mirror, or one-document-per-module
-rule. Only documents listed by local URL in a generated config are enforced;
-general introductions, history, and unresolved notes can remain unregistered.
+For a new application, use `design/concepts/*.md`, `design/compositions/*.md`, and
+`design/types.md` in this authoring layout:
 
-Every selected authored reaction or endpoint tree, every named view, and every
-named former requires coverage. One link names one exact dotted composition
-path; wildcards and implied descendants do not exist. The checker resolves the
-link but does not judge whether the surrounding prose describes the declaration
-honestly. That correspondence remains a review responsibility.
+```text
+design/
+  concepts/*.md
+  compositions/*.md
+  types.md
+src/
+  concepts/<name>/...
+  compositions/*.ts
+```
 
-An application `types` fence uses `concrete` to introduce an application type
-and `is` to bind one selected concept instance's external parameter directly:
+Each concept document is one reusable concept-local contract. `design/types.md`
+closes the application's external types. Each composition document conventionally
+pairs with one `src/compositions/*.ts` module and explains the application decisions
+realized by that module. Put exact `reaction:`, `view:`, `former:`, and
+`computation:` links next to the prose claims they support; do not separate a design
+memo from a mechanical link inventory.
+
+This layout is a strict recommendation for authors and reviewers, not a checker
+restriction. The checker follows imported concept specifications and the explicit
+local URLs in a generated config. It still permits another directory layout, several
+documents for one source module, or one document covering several modules. There is
+no required `application.md` or design index. Use that flexibility when it has a
+concrete benefit, not merely to make ownership harder to see.
+
+Composition prose is ordinary Markdown with one nonempty H1. Every selected authored
+reaction or endpoint tree, every named view, and every named former requires coverage.
+One link names one exact dotted composition path; wildcards and implied descendants do
+not exist. The checker resolves a link but cannot judge whether the surrounding prose
+states the declaration's decision honestly.
+
+`design/types.md` normally contains the registered `types` fence. Use `concrete` to
+introduce an application type and `is` to bind one selected concept instance's
+external parameter directly:
 
 ```types
 concrete Person
@@ -72,19 +90,18 @@ PostComments.Target is Posting.Post
 ```
 
 A right side names either a concrete type or a type owned by a selected concept
-instance. Bindings do not transfer ownership, establish TypeScript
-assignability, or provide runtime validation. Chains, bindings to external
-parameters, missing bindings, and unused concrete declarations are invalid.
+instance. Bindings do not transfer ownership, establish TypeScript assignability, or
+provide runtime validation. Chains, bindings to external parameters, missing
+bindings, and unused concrete declarations are invalid.
 
-Named computations may be declared in `computations` fences anywhere in
-registered application prose, including a dedicated types document. Each executable computation
-has exactly one declaration. Views remain distinct because they express
-application decisions over current state rather than pure computations.
+Declare named computations in `computations` fences in the composition document that
+uses them, or in `design/types.md` when several modules share their meaning. Each
+executable computation has exactly one declaration. Views remain distinct because
+they express application decisions over current state rather than pure computations.
 
 These files state design intent. TypeScript classes, registrations, reactions,
-endpoints, views, and formers are executable declarations. Generated read-back
-links the selected declarations back to authored source and does not replace
-either layer.
+endpoints, views, and formers are executable declarations. Generated read-back links
+the selected declarations back to authored source and does not replace either layer.
 
 ## Purpose and principle
 
@@ -105,7 +122,10 @@ mechanisms.
 
 Reduce a broad goal to a concrete capability or failure. Several mechanisms can
 serve one goal while imposing different state, authority, lifecycle, and failure
-rules. Name application-specific scope explicitly.
+rules. Name application-specific scope explicitly. Do not add actions, lifecycle
+states, customization, or future-proofing that the requested capability does not
+need. A smaller complete mechanism is preferable to speculative behavior that creates
+new authority and failure cases.
 
 A principle is one concrete prose scenario that demonstrates the purpose. Start
 from empty state, perform setup through the concept's own actions, observe
@@ -276,6 +296,54 @@ Use a familiar concept name only when its observable choices, lifecycle, and
 refusals match that mechanism. Otherwise narrow or rename it. A candidate
 suitable in every domain is often a utility or data structure. Test change
 containment by naming likely changes and the concepts or rules each would touch.
+
+### Modularity across one familiar entity
+
+A shared entity identity does not make every behavior concerning that entity one
+concept. Commons and the catalog keep
+[Labeling](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog/entries/concept/labeling)
+and
+[Trashing](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog/entries/concept/trashing)
+independent of the item whose identity they receive. Labeling owns scoped names and
+many-to-many applications. Trashing owns the reversible-to-permanent removal
+lifecycle. Neither owns the peer item's content, and neither needs to know whether the
+opaque item is a post, answer, or file. Composition decides where trashed items are
+hidden and which peer histories are cleared after purge.
+
+Putting labels and removal fields on one large `Post` owner would couple unrelated
+purposes, authorities, and lifecycles. Splitting a label's name from its applications,
+on the other hand, would reconstruct Labeling's own uniqueness and assignment
+invariants through reactions. The useful capability and its principle—not the noun
+`post`—settle both decisions.
+
+### Host and external interactions are design candidates
+
+Command-line arguments and streams, filesystems, clocks, process signals, and network
+peers can change observable application behavior. Strongly prefer representing such
+an interaction as a concept when it has semantic choices, state, lifecycle, expected
+problems, replacement value, or useful tests. The concept owns the generic interaction;
+composition owns application policy.
+
+Syncpress is the primary command-line example. Generic
+[Commanding](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog/entries/concept/commanding)
+owns captured words, operator output, and exit status but knows no Syncpress command.
+[`command-line.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/command-line.ts)
+interprets words and formats usage as application computations, while
+[`commanding.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/compositions/commanding.ts)
+connects those application decisions to Commanding and
+[Holding](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog/entries/concept/holding).
+The actual [`cli.ts`](https://github.com/mit-sdg/syncpress/blob/main/src/cli.ts) is a
+thin call into the assembled application. Likewise,
+[Filing](https://github.com/mit-sdg/sync-engine/tree/main/packages/catalog/entries/concept/filing)
+owns complete byte-tree loading and logical path policy instead of scattering direct
+filesystem reads through publishing rules.
+
+This is strong guidance, not a universal validity rule. A direct adapter is reasonable
+when it is inert: it adds no durable fact, application policy, lifecycle, retry or
+failure decision, and has no independent useful principle. An injected function may
+also be enough for a purely implementation-level dependency. State the exception and
+keep the adapter thin; do not invent a pass-through concept merely to eliminate every
+host API call.
 
 ## Designing reactions
 

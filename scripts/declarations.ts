@@ -41,6 +41,9 @@ async function validateDeclarations(workspace: Workspace): Promise<void> {
 }
 
 async function renderSnapshot(workspace: Workspace): Promise<string> {
+  if (workspace.buildConfig === undefined) {
+    throw new Error(`${workspace.id} has a declaration snapshot but no build configuration`);
+  }
   const files = await declarationsFor(workspace);
   const sections = await Promise.all(
     files.map(async (path) => {

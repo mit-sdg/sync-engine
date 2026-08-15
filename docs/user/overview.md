@@ -22,10 +22,12 @@ mechanism without naming an application. Application prose explains why
 selected declarations are present. Application type bindings record how otherwise-independent concept parameters
 meet in this assembly.
 
-There is no required `application.md`, design directory layout, or one-to-one
-pairing between prose and source modules. Introductions, history, and unresolved
-notes may remain ordinary unregistered Markdown. Only explicitly configured
-design files participate in checking.
+New applications should use `design/concepts/*.md`,
+`design/compositions/*.md`, and `design/types.md`, conventionally pairing each
+composition document with one `src/compositions/*.ts` module. This is an authoring
+rule rather than a checker restriction: there is no required `application.md`, and
+only explicitly configured local design files participate in checking. Introductions,
+history, and unresolved notes may remain ordinary unregistered Markdown.
 
 ## From authored design to runtime
 
@@ -106,9 +108,10 @@ It reports no heuristic approximation of that missing proof.
 
 ## Application prose covers executable decisions
 
-Registered application documents are ordinary Markdown with one nonempty H1.
-They have no prescribed heading layout. Authors place typed links beside design
-claims or as Markdown citations:
+Registered composition documents are ordinary Markdown with one nonempty H1. They
+have no prescribed heading layout. Authors place typed links beside design claims or
+as Markdown citations; under the recommended layout, those claims explain the
+application decisions in the paired composition source module:
 
 ```md
 Editing a post [refreshes its derived content](reaction:Forum.posts.RefreshDerivedContent).

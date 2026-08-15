@@ -43,11 +43,13 @@ function shellLines(markdown: string): string[] {
 
 async function json(path: string): Promise<{
   name?: string;
+  version?: string;
   publishConfig?: { tag?: string };
   scripts?: Record<string, string>;
 }> {
   return JSON.parse(await readFile(new URL(path, root), "utf8")) as {
     name?: string;
+    version?: string;
     publishConfig?: { tag?: string };
     scripts?: Record<string, string>;
   };
@@ -135,7 +137,17 @@ describe("executable documentation examples", () => {
         await mkdir(project);
         await writeFile(
           join(project, "package.json"),
-          '{"name":"workshop-app","packageManager":"bun@1.3.14"}\n',
+          `${JSON.stringify({
+            name: "workshop-app",
+            packageManager: "bun@1.3.14",
+            dependencies: { "@mit-sdg/sync-engine": manifest.version },
+            devDependencies: { typescript: "^6.0.0", "@types/node": "^24.0.0" },
+            scripts: {
+              generate: "sync-engine artifacts pin",
+              check: "sync-engine check && sync-engine artifacts check && tsc --noEmit",
+              start: "bun src/main.ts",
+            },
+          })}\n`,
         );
       });
       const result = spawnSync(

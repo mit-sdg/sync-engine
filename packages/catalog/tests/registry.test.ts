@@ -7,7 +7,21 @@ import { CatalogRegistry } from "../src/registry.ts";
 describe("catalog registry", () => {
   test("loads the curated index and exposes plain asset selectors", async () => {
     const registry = await CatalogRegistry.load();
-    expect([...registry.entries.keys()]).toHaveLength(24);
+    expect([...registry.entries.keys()]).toHaveLength(27);
+    for (const [id, selector] of [
+      ["concept/commanding", "node/commanding.ts"],
+      ["concept/filing", "node/filing.ts"],
+      ["concept/holding", "node/holding.ts"],
+    ] as const) {
+      const added = registry.entries.get(id);
+      expect(added?.kind).toBe("concept");
+      if (added?.kind !== "concept") throw new Error(`missing ${id}`);
+      expect(added.summary.length).toBeGreaterThan(40);
+      expect(CatalogRegistry.sources(added).map(({ selector: found }) => found)).toContain(
+        selector,
+      );
+    }
+
     const concept = registry.entries.get("concept/selecting");
     expect(concept?.kind).toBe("concept");
     if (concept?.kind !== "concept") throw new Error("missing selecting concept");

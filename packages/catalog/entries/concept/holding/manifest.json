@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "id": "concept/holding",
+  "kind": "concept",
+  "summary": "Hold long-running work until an operator stop request while guaranteeing listener cleanup.",
+  "design": "spec.md",
+  "sources": ["holding.conformance.ts", "registry.ts"],
+  "implementations": {
+    "node": {
+      "summary": "A Node-compatible SIGINT/SIGTERM implementation with injectable stop listeners.",
+      "sources": ["holding.ts", "holding.test.ts"]
+    }
+  }
+}

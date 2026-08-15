@@ -357,8 +357,10 @@ async function verifyInstalledWorkspace(
   installed: string,
 ): Promise<void> {
   await verifyPackedDocLinks(artifact.entries, installed);
+  const dist = resolve(installed, "dist");
+  if (!existsSync(dist)) return;
   for (const path of await filesBelow(
-    resolve(installed, "dist"),
+    dist,
     (name) => name.endsWith(".js") || name.endsWith(".d.ts"),
   )) {
     const source = await readFile(path, "utf8");
@@ -717,11 +719,116 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
   );
   run("bun", [command, "list"], consumer);
   run("bun", [command, "show", "recipe/workshop-selection"], consumer);
+  for (const entry of ["concept/commanding", "concept/filing", "concept/holding"]) {
+    run("bun", [command, "show", entry], consumer);
+  }
   run(
     "bun",
     [command, "source", "concept/selecting", "memory/selecting.memory.ts", "--raw"],
     consumer,
   );
+  run("bun", [command, "source", "concept/filing", "node/filing.ts", "--raw"], consumer);
+}
+
+async function verifySkillAlone(artifacts: ReadonlyMap<string, PackedWorkspace>): Promise<void> {
+  const skill = workspaceArtifact(artifacts, workspaceById("skill"));
+  const consumer = resolve(temporary, "skill-only");
+  await mkdir(consumer, { recursive: true });
+  const analysis = workspaceArtifact(artifacts, workspaceById("analysis"));
+  const catalog = workspaceArtifact(artifacts, workspaceById("catalog"));
+  const core = workspaceArtifact(artifacts, coreWorkspace);
+  if (
+    skill.manifest.dependencies?.[analysis.workspace.packageName] !== analysis.manifest.version ||
+    skill.manifest.dependencies?.[catalog.workspace.packageName] !== catalog.manifest.version
+  ) {
+    throw new Error("skill must depend on the exact matching analysis and catalog versions");
+  }
+  await writePackageManifest(resolve(consumer, "package.json"), {
+    name: "skill-only",
+    version: "1.0.0",
+    private: true,
+    type: "module",
+    packageManager: "bun@1.3.14",
+    dependencies: {
+      [skill.workspace.packageName]: tarballSpecifier(consumer, skill.tarball),
+      [analysis.workspace.packageName]: tarballSpecifier(consumer, analysis.tarball),
+      [catalog.workspace.packageName]: tarballSpecifier(consumer, catalog.tarball),
+      [core.workspace.packageName]: tarballSpecifier(consumer, core.tarball),
+    },
+  });
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], consumer);
+  for (const required of ["sync-engine", "sync-engine-analysis", "catalog"]) {
+    if (!existsSync(resolve(consumer, "node_modules/.bin", required))) {
+      throw new Error(`skill installation did not expose ${required}`);
+    }
+  }
+  await mkdir(resolve(consumer, "src"), { recursive: true });
+  await writeFile(
+    resolve(consumer, "src/concepts.ts"),
+    `import { conceptSet } from "@mit-sdg/sync-engine/assembly";
+export const applicationConceptSet = conceptSet({});
+`,
+  );
+  await writeFile(
+    resolve(consumer, "generated.config.ts"),
+    `import { assemble } from "@mit-sdg/sync-engine/assembly";
+import { applicationConceptSet } from "./src/concepts.ts";
+export default { title: "Packed analysis", design: { version: 1, documents: [] }, assemble: () => assemble({ conceptSet: applicationConceptSet, composition: {} }) };
+`,
+  );
+  const nested = resolve(consumer, "nested/project");
+  await mkdir(nested, { recursive: true });
+  const analysisBin = resolve(consumer, "node_modules/.bin/sync-engine-analysis");
+  run(analysisBin, ["summary"], nested);
+  run(analysisBin, ["search", "nothing", "--json", "--limit", "1"], nested);
+  const isolationHook = resolve(consumer, "analysis-cli-isolation.mjs");
+  await writeFile(
+    isolationHook,
+    `import { registerHooks } from "node:module";
+const loaded = [];
+registerHooks({ resolve(specifier, context, nextResolve) { const result = nextResolve(specifier, context); loaded.push(result.url); return result; } });
+process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes("sync-engine-analysis/dist/project/")); if (forbidden.length) { console.error("manifest-only analysis loaded project analysis", forbidden); process.exitCode = 91; } });
+`,
+  );
+  execFileSync(analysisBin, ["summary"], {
+    cwd: nested,
+    env: { ...commandEnv(), NODE_OPTIONS: `--import=${isolationHook}` },
+    stdio: "inherit",
+  });
+  try {
+    execFileSync(analysisBin, ["describe", "malformed"], {
+      cwd: nested,
+      env: commandEnv(),
+      encoding: "utf8",
+    });
+    throw new Error("packed analysis accepted a malformed reference");
+  } catch (error) {
+    const failure = error as { status?: number; stdout?: string; stderr?: string };
+    if (
+      failure.status !== 1 ||
+      failure.stdout !== "" ||
+      !failure.stderr?.includes("Malformed reference")
+    ) {
+      throw error;
+    }
+  }
+  const installed = resolve(consumer, "node_modules", ...skill.workspace.packageName.split("/"));
+  const entry = await readFile(resolve(installed, "skills/sync-engine/SKILL.md"), "utf8");
+  if (
+    !entry.startsWith("---\nname: sync-engine\ndescription:") ||
+    !entry.includes("Native subagents are required")
+  ) {
+    throw new Error("skill package does not contain the required sync-engine Agent Skill");
+  }
+  if (skill.manifest.bin !== undefined) {
+    throw new Error("documentation-only skill package unexpectedly declares an executable");
+  }
+  const bin = resolve(
+    consumer,
+    "node_modules/.bin",
+    process.platform === "win32" ? "sync-engine-skill.cmd" : "sync-engine-skill",
+  );
+  if (existsSync(bin)) throw new Error("skill-only installation exposed an obsolete executable");
 }
 
 async function verifySetupAndExamples(
@@ -951,6 +1058,7 @@ try {
   const coreConsumer = await verifyCoreOnlyConsumer(artifacts);
   await verifyCombinedConsumer(artifacts);
   await verifyCatalogAlone(artifacts);
+  await verifySkillAlone(artifacts);
   await verifyMultiInstance(artifacts);
   await verifySetupAndExamples(artifacts, coreConsumer);
   await copyVerifiedTarballs(artifacts);
